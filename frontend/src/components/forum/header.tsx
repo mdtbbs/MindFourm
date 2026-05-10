@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import { Search, User, LogOut, Shield } from 'lucide-react';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
+  const router = useRouter();
   const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
 
   const handleLogin = () => {
@@ -15,7 +17,7 @@ export default function Header() {
 
   const handleLogout = async () => {
     await logout();
-    window.location.href = '/';
+    router.push('/');
   };
 
   return (
@@ -69,6 +71,7 @@ export default function Header() {
                   onClick={handleLogout}
                   className="p-2 text-surface-600 hover:text-red-600 transition-colors"
                   title="退出登录"
+                  aria-label="退出登录"
                 >
                   <LogOut className="w-5 h-5" />
                 </button>
