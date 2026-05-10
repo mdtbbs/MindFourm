@@ -17,7 +17,7 @@ export default function AdminLogsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const page = Number(searchParams.get('page')) || 1;
+  const page = Number(searchParams?.get('page')) || 1;
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +173,7 @@ export default function AdminLogsPage() {
               <Pagination
                 currentPage={page}
                 totalPages={totalPages}
-                basePath={pathname}
+                basePath={pathname ?? '/admin/logs'}
               />
             </div>
           )}

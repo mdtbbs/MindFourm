@@ -17,8 +17,9 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
 
+  const userRole = user?.role ?? '';
   const filteredNavItems = navItems.filter((item) =>
-    item.roles.includes(user?.role || '')
+    item.roles.some((r) => r === userRole)
   );
 
   return (

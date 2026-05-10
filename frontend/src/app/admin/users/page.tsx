@@ -54,7 +54,8 @@ export default function AdminUsersPage() {
     setUpdating(userId);
     setUpdateError(null);
     try {
-      const updated = await adminApi.updateUserRole(userId, role);
+      const narrowedRole = role === 'guest' ? 'user' : role;
+      const updated = await adminApi.updateUserRole(userId, narrowedRole);
       setUsers((prev) => prev.map((u) => (u.id === userId ? updated : u)));
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Failed to update role');
@@ -78,9 +79,7 @@ export default function AdminUsersPage() {
 
   if (error) {
     return (
-      <Alert variant="danger" title="Error">
-        {error}
-      </Alert>
+      <Alert type="error" message={error} />
     );
   }
 
@@ -94,9 +93,7 @@ export default function AdminUsersPage() {
       </div>
 
       {updateError && (
-        <Alert variant="danger" title="Update Failed" onClose={() => setUpdateError(null)}>
-          {updateError}
-        </Alert>
+        <Alert type="error" message={updateError} />
       )}
 
       <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">

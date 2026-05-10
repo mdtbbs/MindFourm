@@ -24,7 +24,7 @@ export default function AdminPostsPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<Record<number, boolean>>({});
 
-  const currentPage = Number(searchParams.get('page')) || 1;
+  const currentPage = Number(searchParams?.get('page')) || 1;
 
   const fetchPosts = useCallback(
     async (pageNum: number) => {

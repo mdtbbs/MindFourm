@@ -9,7 +9,7 @@ export default function CallbackPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const code = searchParams.get('code');
+    const code = searchParams?.get('code');
 
     if (!code) {
       setError('登录失败：缺少授权码');
