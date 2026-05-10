@@ -1,10 +1,12 @@
 // User types
+export type UserRole = 'guest' | 'user' | 'moderator' | 'admin';
+
 export interface User {
   id: number;
   mindauthId: number;
   username: string;
   email: string;
-  role: 'guest' | 'user' | 'moderator' | 'admin';
+  role: UserRole;
   createdAt: string;
 }
 
@@ -51,7 +53,7 @@ export interface Post {
   category_name: string | null;
   category_slug: string | null;
   author_mindauth_id: number;
-  author_role: string;
+  author_role: UserRole;
   tags: Tag[];
   replies?: Reply[];
 }
@@ -86,7 +88,7 @@ export interface Reply {
   created_at: string;
   updated_at: string;
   author_mindauth_id: number;
-  author_role: string;
+  author_role: UserRole;
 }
 
 export interface ReplyListResponse {
@@ -118,7 +120,7 @@ export interface AdminLog {
 }
 
 export interface UpdateRoleInput {
-  role: 'user' | 'moderator' | 'admin';
+  role: Exclude<UserRole, 'guest'>;
 }
 
 // API response wrapper
