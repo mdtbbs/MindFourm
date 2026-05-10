@@ -12,7 +12,6 @@ interface SidebarProps {
 export default function Sidebar({ categories, tags, selectedCategory }: SidebarProps) {
   return (
     <aside className="space-y-6">
-      {/* Categories */}
       <div className="bg-white rounded-lg border border-surface-200 p-4">
         <h3 className="font-semibold text-surface-900 mb-3">分类</h3>
         <nav className="space-y-1">
@@ -45,7 +44,6 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
         </nav>
       </div>
 
-      {/* Tags */}
       {tags.length > 0 && (
         <div className="bg-white rounded-lg border border-surface-200 p-4">
           <h3 className="font-semibold text-surface-900 mb-3">热门标签</h3>
