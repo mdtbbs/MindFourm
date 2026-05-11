@@ -1,3 +1,4 @@
+const Response = require('../utils/response');
 const { PERMISSIONS, ROLES } = require('../utils/constants');
 
 function hasRole(userRole, requiredRoles) {
@@ -9,17 +10,13 @@ function requirePermission(permission) {
     const user = ctx.state.user;
 
     if (!user) {
-      ctx.status = 401;
-      ctx.body = { success: false, message: 'Authentication required' };
-      return;
+      return Response.error(ctx, 'Authentication required', 401, 'UNAUTHENTICATED');
     }
 
     const requiredRoles = PERMISSIONS[permission];
 
     if (!requiredRoles || !hasRole(user.role, requiredRoles)) {
-      ctx.status = 403;
-      ctx.body = { success: false, message: 'Insufficient permissions' };
-      return;
+      return Response.error(ctx, 'Insufficient permissions', 403, 'FORBIDDEN');
     }
 
     return next();
@@ -31,9 +28,7 @@ function requireOwnershipOrPermission(permission, getResourceUserId) {
     const user = ctx.state.user;
 
     if (!user) {
-      ctx.status = 401;
-      ctx.body = { success: false, message: 'Authentication required' };
-      return;
+      return Response.error(ctx, 'Authentication required', 401, 'UNAUTHENTICATED');
     }
 
     const resourceUserId = await getResourceUserId(ctx);
@@ -41,9 +36,7 @@ function requireOwnershipOrPermission(permission, getResourceUserId) {
     const hasElevatedPermission = hasRole(user.role, PERMISSIONS[permission]);
 
     if (!isOwner && !hasElevatedPermission) {
-      ctx.status = 403;
-      ctx.body = { success: false, message: 'You can only modify your own content' };
-      return;
+      return Response.error(ctx, 'You can only modify your own content', 403, 'FORBIDDEN');
     }
 
     return next();
@@ -54,9 +47,7 @@ function requireAdmin(ctx, next) {
   const user = ctx.state.user;
 
   if (!user || user.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { success: false, message: 'Admin access required' };
-    return;
+    return Response.error(ctx, 'Admin access required', 403, 'FORBIDDEN');
   }
 
   return next();
@@ -66,9 +57,7 @@ function requireModerator(ctx, next) {
   const user = ctx.state.user;
 
   if (!user || (user.role !== 'moderator' && user.role !== 'admin')) {
-    ctx.status = 403;
-    ctx.body = { success: false, message: 'Moderator access required' };
-    return;
+    return Response.error(ctx, 'Moderator access required', 403, 'FORBIDDEN');
   }
 
   return next();

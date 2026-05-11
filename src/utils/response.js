@@ -13,13 +13,9 @@ class Response {
     ctx.body = { success: true, data, pagination };
   }
 
-  static error(ctx, message, status = 400, errors = null) {
+  static error(ctx, message, status = 400, code = null) {
     ctx.status = status;
-    ctx.body = {
-      success: false,
-      message,
-      ...(errors && { errors })
-    };
+    ctx.body = { success: false, message, code };
   }
 
   static unauthorized(ctx, message = 'Unauthorized') {

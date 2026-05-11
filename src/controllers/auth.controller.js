@@ -23,7 +23,7 @@ class AuthController {
   }
 
   static async callback(ctx) {
-    const { code } = ctx.query;
+    const { code, state } = ctx.query;
 
     if (!code) {
       Response.error(ctx, 'Missing authorization code', 400);
@@ -45,15 +45,10 @@ class AuthController {
       httpOnly: true
     });
 
-    Response.success(ctx, {
-      user: {
-        id: user.id,
-        mindauthId: mindauthUser.id,
-        username: mindauthUser.username,
-        email: mindauthUser.email,
-        role: user.role
-      }
-    });
+    // Redirect browser to forum frontend, back to the original page
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const redirectPath = state ? decodeURIComponent(state) : '/';
+    ctx.redirect(`${frontendUrl}${redirectPath}`);
   }
 
   static async verifySession(ctx) {

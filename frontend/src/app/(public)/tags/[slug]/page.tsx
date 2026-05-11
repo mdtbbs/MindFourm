@@ -1,19 +1,22 @@
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import { PostListResponse } from '@/types';
+import { notFound } from 'next/navigation';
+
+const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchPosts(page: number, slug: string): Promise<PostListResponse> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/tags/${slug}/posts?page=${page}&limit=20`, { cache: 'no-store' });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const res = await fetch(`${API_BASE}/api/v1/tags/${slug}/posts?page=${page}&limit=20`, { next: { tags: ['posts'] } });
+    if (!res.ok) notFound();
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     return {
       data: json.data || [],
       pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
     };
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message === 'NEXT_NOT_FOUND') throw e;
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
   }
 }

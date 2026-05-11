@@ -1,4 +1,4 @@
--- users: 本地用户映射表
+-- users
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     mindauth_id INTEGER UNIQUE NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- categories: 分类表（扁平结构）
+-- categories
 CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS categories (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- posts: 帖子表
+-- posts
 CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -32,11 +32,11 @@ CREATE TABLE IF NOT EXISTS posts (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     deleted_at DATETIME,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (category_id) REFERENCES categories(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 
--- replies: 回复表（扁平+引用）
+-- replies
 CREATE TABLE IF NOT EXISTS replies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id INTEGER NOT NULL,
@@ -48,12 +48,12 @@ CREATE TABLE IF NOT EXISTS replies (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     deleted_at DATETIME,
-    FOREIGN KEY (post_id) REFERENCES posts(id),
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (parent_reply_id) REFERENCES replies(id)
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (parent_reply_id) REFERENCES replies(id) ON DELETE CASCADE
 );
 
--- tags: 标签表
+-- tags
 CREATE TABLE IF NOT EXISTS tags (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,
@@ -61,16 +61,16 @@ CREATE TABLE IF NOT EXISTS tags (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- post_tags: 帖子-标签关联表
+-- post_tags
 CREATE TABLE IF NOT EXISTS post_tags (
     post_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (post_id, tag_id),
-    FOREIGN KEY (post_id) REFERENCES posts(id),
-    FOREIGN KEY (tag_id) REFERENCES tags(id)
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
--- sessions: 本地会话表
+-- sessions
 CREATE TABLE IF NOT EXISTS sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -78,10 +78,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     mindauth_token TEXT,
     expires_at DATETIME NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- operation_logs: 操作日志表
+-- operation_logs
 CREATE TABLE IF NOT EXISTS operation_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
@@ -92,23 +92,27 @@ CREATE TABLE IF NOT EXISTS operation_logs (
     ip_address TEXT,
     user_agent TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
 CREATE INDEX IF NOT EXISTS idx_posts_category_id ON posts(category_id);
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
-CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_posts_deleted_at ON posts(deleted_at);
+CREATE INDEX IF NOT EXISTS idx_posts_pinned_created ON posts(is_pinned DESC, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_replies_post_id ON replies(post_id);
 CREATE INDEX IF NOT EXISTS idx_replies_user_id ON replies(user_id);
 CREATE INDEX IF NOT EXISTS idx_replies_parent_id ON replies(parent_reply_id);
 CREATE INDEX IF NOT EXISTS idx_replies_status ON replies(status);
+CREATE INDEX IF NOT EXISTS idx_replies_post_created ON replies(post_id, created_at);
 
 CREATE INDEX IF NOT EXISTS idx_users_mindauth_id ON users(mindauth_id);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+CREATE INDEX IF NOT EXISTS idx_tags_slug ON tags(slug);
+CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories(slug);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(session_token);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
@@ -118,3 +122,4 @@ CREATE INDEX IF NOT EXISTS idx_logs_user_id ON operation_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_logs_action ON operation_logs(action);
 CREATE INDEX IF NOT EXISTS idx_logs_target ON operation_logs(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_logs_created_at ON operation_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_logs_user_action ON operation_logs(user_id, action);

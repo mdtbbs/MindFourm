@@ -1,5 +1,6 @@
 const Response = require('../utils/response');
 const PostService = require('../services/post.service');
+const ReplyService = require('../services/reply.service');
 const LogService = require('../services/log.service');
 const { LOG_ACTIONS } = require('../utils/constants');
 
@@ -29,9 +30,13 @@ class PostController {
 
     PostService.incrementViewCount(parseInt(id));
 
-    const replies = PostService.getReplies ? [] : [];
+    const { page: repliesPage, limit: repliesLimit } = ctx.query;
+    const repliesResult = ReplyService.getByPostId(parseInt(id), {
+      page: parseInt(repliesPage) || 1,
+      limit: parseInt(repliesLimit) || 20
+    });
 
-    Response.success(ctx, { ...post, replies });
+    Response.success(ctx, { ...post, replies: repliesResult.data, repliesPagination: repliesResult.pagination });
   }
 
   static create(ctx) {

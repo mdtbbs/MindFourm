@@ -4,10 +4,13 @@ import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import { Category, Post, Tag, PostListResponse } from '@/types';
 
+export const revalidate = 30;
+
+const API_BASE = process.env.API_URL || 'http://localhost:4000';
+
 async function fetchCategories(): Promise<Category[]> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/categories`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
@@ -18,8 +21,7 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchTags(): Promise<Tag[]> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/tags`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/tags`, { next: { tags: ['tags'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
@@ -30,12 +32,11 @@ async function fetchTags(): Promise<Tag[]> {
 
 async function fetchPosts(page: number, categoryId?: number): Promise<PostListResponse> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
     const qs = new URLSearchParams();
     qs.set('page', String(page));
     qs.set('limit', '20');
     if (categoryId) qs.set('category_id', String(categoryId));
-    const res = await fetch(`${baseUrl}/api/posts?${qs}`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/posts?${qs}`, { next: { tags: ['posts'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };

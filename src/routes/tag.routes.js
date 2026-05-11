@@ -1,9 +1,14 @@
 const Router = require('@koa/router');
 const TagController = require('../controllers/tag.controller');
 
-const router = new Router({ prefix: '/api/tags' });
+function createRoutes(basePrefix = '/api') {
+  const router = new Router({ prefix: `${basePrefix}/tags` });
 
-router.get('/', TagController.list);
-router.get('/:slug/posts', TagController.getPostsByTag);
+  router.get('/', TagController.list);
+  router.get('/:slug/posts', TagController.getPostsByTag);
 
-module.exports = router;
+  return router;
+}
+
+module.exports = createRoutes();
+module.exports.createRoutes = createRoutes;

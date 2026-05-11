@@ -5,7 +5,8 @@ async function errorHandler(ctx, next) {
     ctx.status = err.status || 500;
     ctx.body = {
       success: false,
-      message: err.message || 'Internal server error'
+      message: err.message || 'Internal server error',
+      code: err.code || null
     };
 
     if (ctx.status === 500) {

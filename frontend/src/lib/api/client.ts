@@ -21,6 +21,7 @@ async function request<T>(
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Version': '1',
         ...options.headers,
       },
       credentials: 'include',

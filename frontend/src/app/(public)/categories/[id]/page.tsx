@@ -1,14 +1,17 @@
-import { categoryApi, tagApi } from '@/lib/api/client';
+import { Metadata } from 'next';
 import Sidebar from '@/components/forum/sidebar';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import { Category, Tag, PostListResponse } from '@/types';
 import { notFound } from 'next/navigation';
 
+export const revalidate = 300;
+
+const API_BASE = process.env.API_URL || 'http://localhost:4000';
+
 async function fetchPosts(page: number, categoryId: number): Promise<PostListResponse> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/posts?page=${page}&limit=20&category_id=${categoryId}`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/posts?page=${page}&limit=20&category_id=${categoryId}`, { next: { tags: ['posts'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -23,8 +26,7 @@ async function fetchPosts(page: number, categoryId: number): Promise<PostListRes
 
 async function fetchCategories(): Promise<Category[]> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/categories`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
@@ -35,14 +37,36 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchTags(): Promise<Tag[]> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/tags`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/tags`, { next: { tags: ['tags'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
   } catch {
     return [];
   }
+}
+
+async function fetchCategory(id: number): Promise<Category | null> {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/categories/${id}`, { next: { tags: ['categories'] } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.success ? json.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const category = await fetchCategory(parseInt(params.id));
+  if (!category) return { title: 'Not Found' };
+  return {
+    title: `${category.name} | MindForum`,
+    openGraph: {
+      title: `${category.name} | MindForum`,
+      type: 'website',
+    },
+  };
 }
 
 export default async function CategoryPage({
@@ -56,7 +80,7 @@ export default async function CategoryPage({
   const page = parseInt(searchParams.page || '1');
 
   const [category, postsResult, categories, tags] = await Promise.all([
-    categoryApi.getById(categoryId).catch(() => null),
+    fetchCategory(categoryId),
     fetchPosts(page, categoryId),
     fetchCategories(),
     fetchTags(),

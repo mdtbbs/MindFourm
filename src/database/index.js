@@ -14,8 +14,8 @@ function initialize() {
   }
 
   db = new Database(dbPath);
-
   db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
 
   const schemaPath = path.join(__dirname, 'schema.sql');
@@ -25,10 +25,10 @@ function initialize() {
   // Add username/email columns if they don't exist (migration)
   try {
     db.exec('ALTER TABLE users ADD COLUMN username TEXT');
+  } catch (e) { /* already exists */ }
+  try {
     db.exec('ALTER TABLE users ADD COLUMN email TEXT');
-  } catch (e) {
-    // Columns already exist, ignore error
-  }
+  } catch (e) { /* already exists */ }
 
   console.log(`Database initialized at ${dbPath}`);
   return db;

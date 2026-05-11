@@ -15,12 +15,16 @@ class ReplyService {
 
     const contentHtml = parseMarkdown(finalContent);
 
-    const result = db.prepare(`
+    const insertReply = db.prepare(`
       INSERT INTO replies (post_id, user_id, parent_reply_id, content, content_html)
       VALUES (?, ?, ?, ?, ?)
-    `).run(post_id, user_id, parent_reply_id, finalContent, contentHtml);
+    `);
 
-    return this.getById(result.lastInsertRowid);
+    const result = db.transaction(() => {
+      return insertReply.run(post_id, user_id, parent_reply_id, finalContent, contentHtml).lastInsertRowid;
+    })();
+
+    return this.getById(result);
   }
 
   static getById(id) {

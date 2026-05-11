@@ -2,24 +2,28 @@ const db = require('../database');
 const { parseMarkdown } = require('../utils/markdown');
 const { POST_STATUS } = require('../utils/constants');
 const TagService = require('./tag.service');
-const LogService = require('./log.service');
 
 class PostService {
   static create({ user_id, title, content, category_id, tags, status = POST_STATUS.draft }) {
     const contentHtml = parseMarkdown(content);
 
-    const result = db.prepare(`
+    const insertPost = db.prepare(`
       INSERT INTO posts (user_id, title, content, content_html, category_id, status)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(user_id, title, content, contentHtml, category_id, status);
+    `);
 
-    const post = this.getById(result.lastInsertRowid);
+    const result = db.transaction(() => {
+      const r = insertPost.run(user_id, title, content, contentHtml, category_id, status);
+      const postId = r.lastInsertRowid;
 
-    if (tags && tags.length > 0) {
-      TagService.attachTags(post.id, tags);
-    }
+      if (tags && tags.length > 0) {
+        TagService.attachTags(postId, tags);
+      }
 
-    return post;
+      return postId;
+    })();
+
+    return this.getById(result);
   }
 
   static getById(id) {
@@ -115,14 +119,16 @@ class PostService {
     fields.push('updated_at = CURRENT_TIMESTAMP');
     values.push(id);
 
-    db.prepare(`UPDATE posts SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    db.transaction(() => {
+      db.prepare(`UPDATE posts SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 
-    if (updates.tags !== undefined) {
-      TagService.detachTags(id);
-      if (updates.tags.length > 0) {
-        TagService.attachTags(id, updates.tags);
+      if (updates.tags !== undefined) {
+        TagService.detachTags(id);
+        if (updates.tags.length > 0) {
+          TagService.attachTags(id, updates.tags);
+        }
       }
-    }
+    })();
 
     return this.getById(id);
   }

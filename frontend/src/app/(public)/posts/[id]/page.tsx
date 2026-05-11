@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { Metadata } from 'next';
 import { categoryApi } from '@/lib/api/client';
 import PostContent from '@/components/forum/post-content';
 import ReplyItem from '@/components/forum/reply-item';
@@ -6,10 +7,13 @@ import Pagination from '@/components/ui/pagination';
 import Link from 'next/link';
 import { Category, Post, ReplyListResponse } from '@/types';
 
+export const revalidate = 60;
+
+const API_BASE = process.env.API_URL || 'http://localhost:4000';
+
 async function fetchPost(id: number): Promise<Post | null> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/posts/${id}`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/posts/${id}`, { next: { tags: [`post-${id}`] } });
     if (!res.ok) return null;
     const json = await res.json();
     return json.success ? json.data : null;
@@ -20,7 +24,10 @@ async function fetchPost(id: number): Promise<Post | null> {
 
 async function fetchCategories(): Promise<Category[]> {
   try {
-    return await categoryApi.getList();
+    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.success ? json.data : [];
   } catch {
     return [];
   }
@@ -28,8 +35,7 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchReplies(postId: number, page: number): Promise<ReplyListResponse> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/posts/${postId}/replies?page=${page}&limit=50`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/posts/${postId}/replies?page=${page}&limit=50`, { next: { tags: [`post-${postId}-replies`] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
@@ -40,6 +46,20 @@ async function fetchReplies(postId: number, page: number): Promise<ReplyListResp
   } catch {
     return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
   }
+}
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const post = await fetchPost(parseInt(params.id));
+  if (!post) return { title: 'Not Found' };
+  return {
+    title: `${post.title} | MindForum`,
+    description: post.content.slice(0, 160),
+    openGraph: {
+      title: `${post.title} | MindForum`,
+      description: post.content.slice(0, 160),
+      type: 'article',
+    },
+  };
 }
 
 export default async function PostDetailPage({
@@ -97,6 +117,8 @@ export default async function PostDetailPage({
                 key={reply.id}
                 reply={reply}
                 index={(page - 1) * 50 + index}
+                onQuote={() => {}}
+                onReply={() => {}}
               />
             ))}
           </div>

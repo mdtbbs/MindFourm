@@ -3,11 +3,13 @@ import Pagination from '@/components/ui/pagination';
 import Badge from '@/components/ui/badge';
 import { PostListResponse, UserRole } from '@/types';
 import { Calendar } from 'lucide-react';
+import { notFound } from 'next/navigation';
+
+const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchUserPosts(userId: number, page: number): Promise<PostListResponse> {
   try {
-    const baseUrl = process.env.API_URL || 'http://localhost:4000';
-    const res = await fetch(`${baseUrl}/api/posts?page=${page}&limit=20&user_id=${userId}`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/api/v1/posts?page=${page}&limit=20&user_id=${userId}`, { next: { tags: ['posts'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -16,7 +18,7 @@ async function fetchUserPosts(userId: number, page: number): Promise<PostListRes
       pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
     };
   } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    notFound();
   }
 }
 
@@ -46,7 +48,6 @@ export default async function UserProfilePage({
       {/* User Info Card */}
       <div className="bg-white rounded-lg border border-surface-200 p-6 mb-8">
         <div className="flex items-start gap-6">
-          {/* Avatar placeholder */}
           <div className="w-20 h-20 rounded-full bg-primary-100 flex items-center justify-center text-2xl font-bold text-primary-600">
             {displayName.charAt(0).toUpperCase()}
           </div>

@@ -11,8 +11,12 @@ export default function Header() {
   const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
 
   const handleLogin = () => {
-    const redirectUrl = encodeURIComponent(`${window.location.origin}/api/auth/callback`);
-    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}`;
+    const redirectUrl = encodeURIComponent('http://localhost:4000/api/auth/callback');
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
+    const currentPath = typeof window !== 'undefined'
+      ? encodeURIComponent(window.location.pathname + window.location.search)
+      : '';
+    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;
   };
 
   const handleLogout = async () => {

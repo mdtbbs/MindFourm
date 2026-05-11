@@ -10,6 +10,7 @@ export default function CallbackPage() {
 
   useEffect(() => {
     const code = searchParams?.get('code');
+    const state = searchParams?.get('state');
 
     if (!code) {
       setError('登录失败：缺少授权码');
@@ -17,10 +18,10 @@ export default function CallbackPage() {
       return;
     }
 
-    // Backend handles the callback and sets the forum_session cookie
-    // We just need to redirect to home after a brief delay
+    // Redirect to home or original page
+    const redirectPath = state ? decodeURIComponent(state) : '/';
     setTimeout(() => {
-      router.push('/');
+      router.push(redirectPath);
     }, 1000);
   }, []);
 
