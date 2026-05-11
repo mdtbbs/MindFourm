@@ -1,7 +1,22 @@
-import { tagApi } from '@/lib/api/client';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
-import { Post, Tag, PostListResponse } from '@/types';
+import { PostListResponse } from '@/types';
+
+async function fetchPosts(page: number, slug: string): Promise<PostListResponse> {
+  try {
+    const baseUrl = process.env.API_URL || 'http://localhost:4000';
+    const res = await fetch(`${baseUrl}/api/tags/${slug}/posts?page=${page}&limit=20`, { cache: 'no-store' });
+    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const json = await res.json();
+    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    return {
+      data: json.data || [],
+      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+    };
+  } catch {
+    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+  }
+}
 
 export default async function TagPage({
   params,
@@ -13,18 +28,9 @@ export default async function TagPage({
   const slug = params.slug;
   const page = parseInt(searchParams.page || '1');
 
-  let postsResult: PostListResponse = {
-    data: [],
-    pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
-  };
+  const postsResult = await fetchPosts(page, slug);
 
-  try {
-    postsResult = await tagApi.getPostsByTag(slug, page);
-  } catch {
-    // No posts for this tag
-  }
-
-  const tagName = postsResult.data.length > 0
+  const tagName = postsResult.data.length > 0 && postsResult.data[0].tags
     ? postsResult.data[0].tags.find((t) => t.slug === slug)?.name
     : null;
 

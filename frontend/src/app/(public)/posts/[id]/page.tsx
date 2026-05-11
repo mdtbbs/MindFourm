@@ -1,15 +1,18 @@
 import { notFound } from 'next/navigation';
-import { postApi, replyApi, categoryApi } from '@/lib/api/client';
+import { categoryApi } from '@/lib/api/client';
 import PostContent from '@/components/forum/post-content';
 import ReplyItem from '@/components/forum/reply-item';
-import ReplyEditor from '@/components/forum/reply-editor';
 import Pagination from '@/components/ui/pagination';
 import Link from 'next/link';
-import { Category, Post, Reply, ReplyListResponse, UserRole } from '@/types';
+import { Category, Post, ReplyListResponse } from '@/types';
 
 async function fetchPost(id: number): Promise<Post | null> {
   try {
-    return await postApi.getById(id);
+    const baseUrl = process.env.API_URL || 'http://localhost:4000';
+    const res = await fetch(`${baseUrl}/api/posts/${id}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.success ? json.data : null;
   } catch {
     return null;
   }
@@ -25,7 +28,15 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchReplies(postId: number, page: number): Promise<ReplyListResponse> {
   try {
-    return await replyApi.getByPost(postId, { page, limit: 50 });
+    const baseUrl = process.env.API_URL || 'http://localhost:4000';
+    const res = await fetch(`${baseUrl}/api/posts/${postId}/replies?page=${page}&limit=50`, { cache: 'no-store' });
+    if (!res.ok) return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
+    const json = await res.json();
+    if (!json.success) return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
+    return {
+      data: json.data || [],
+      pagination: json.pagination || { page: 1, limit: 50, total: 0, totalPages: 1 },
+    };
   } catch {
     return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
   }
@@ -86,8 +97,6 @@ export default async function PostDetailPage({
                 key={reply.id}
                 reply={reply}
                 index={(page - 1) * 50 + index}
-                onQuote={() => {}}
-                onReply={() => {}}
               />
             ))}
           </div>
@@ -97,17 +106,6 @@ export default async function PostDetailPage({
           currentPage={repliesResult.pagination.page}
           totalPages={repliesResult.pagination.totalPages}
           basePath={`/posts/${postId}`}
-        />
-      </div>
-
-      {/* Reply Editor */}
-      <div className="mt-8">
-        <ReplyEditor
-          postId={postId}
-          onSubmit={async (content, parentReplyId) => {
-            // Client-side submission will be wired up later
-            console.log('Submit reply:', { content, parentReplyId });
-          }}
         />
       </div>
     </div>

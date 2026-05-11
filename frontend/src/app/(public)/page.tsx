@@ -6,7 +6,11 @@ import { Category, Post, Tag, PostListResponse } from '@/types';
 
 async function fetchCategories(): Promise<Category[]> {
   try {
-    return await categoryApi.getList();
+    const baseUrl = process.env.API_URL || 'http://localhost:4000';
+    const res = await fetch(`${baseUrl}/api/categories`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.success ? json.data : [];
   } catch {
     return [];
   }
@@ -14,7 +18,11 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchTags(): Promise<Tag[]> {
   try {
-    return await tagApi.getList();
+    const baseUrl = process.env.API_URL || 'http://localhost:4000';
+    const res = await fetch(`${baseUrl}/api/tags`, { cache: 'no-store' });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.success ? json.data : [];
   } catch {
     return [];
   }
@@ -22,12 +30,19 @@ async function fetchTags(): Promise<Tag[]> {
 
 async function fetchPosts(page: number, categoryId?: number): Promise<PostListResponse> {
   try {
-    const params: { page: number; limit: number; category_id?: number } = {
-      page,
-      limit: 20,
+    const baseUrl = process.env.API_URL || 'http://localhost:4000';
+    const qs = new URLSearchParams();
+    qs.set('page', String(page));
+    qs.set('limit', '20');
+    if (categoryId) qs.set('category_id', String(categoryId));
+    const res = await fetch(`${baseUrl}/api/posts?${qs}`, { cache: 'no-store' });
+    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const json = await res.json();
+    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    return {
+      data: json.data || [],
+      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
     };
-    if (categoryId) params.category_id = categoryId;
-    return await postApi.getList(params);
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
   }

@@ -1,6 +1,6 @@
 import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog } from '@/types';
 
-const API_BASE = '';
+const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 function buildQueryString(params: Record<string, string | number | undefined>): string {
   const qs = new URLSearchParams();

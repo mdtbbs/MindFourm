@@ -51,7 +51,7 @@ export default function PostCard({ post }: PostCardProps) {
               </Link>
             )}
 
-            {post.tags.length > 0 && (
+            {post.tags && post.tags.length > 0 && (
               <div className="flex gap-1">
                 {post.tags.slice(0, 3).map((tag) => (
                   <Badge key={tag.id} variant="primary">

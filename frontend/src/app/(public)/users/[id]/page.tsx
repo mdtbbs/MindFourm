@@ -1,9 +1,24 @@
-import { postApi } from '@/lib/api/client';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import Badge from '@/components/ui/badge';
-import { Post, User, UserRole, PostListResponse } from '@/types';
+import { PostListResponse, UserRole } from '@/types';
 import { Calendar } from 'lucide-react';
+
+async function fetchUserPosts(userId: number, page: number): Promise<PostListResponse> {
+  try {
+    const baseUrl = process.env.API_URL || 'http://localhost:4000';
+    const res = await fetch(`${baseUrl}/api/posts?page=${page}&limit=20&user_id=${userId}`, { cache: 'no-store' });
+    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const json = await res.json();
+    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    return {
+      data: json.data || [],
+      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+    };
+  } catch {
+    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+  }
+}
 
 export default async function UserProfilePage({
   params,
@@ -16,24 +31,15 @@ export default async function UserProfilePage({
   const page = parseInt(searchParams.page || '1');
   const tab = searchParams.tab || 'posts';
 
-  let postsResult: PostListResponse = {
-    data: [],
-    pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
-  };
-
-  try {
-    postsResult = await postApi.getList({ page, limit: 20, user_id: userId });
-  } catch {
-    // API error
-  }
+  const postsResult = await fetchUserPosts(userId, page);
 
   // User info from first post's author data, or show ID only
-  const firstPost = postsResult.data[0];
+  const firstPost = postsResult.data[0] || null;
   const displayName = firstPost
     ? `User ${firstPost.author_mindauth_id}`
     : `User #${userId}`;
   const displayRole = (firstPost?.author_role || 'user') as UserRole;
-  const firstSeen = firstPost?.created_at;
+  const firstSeen = firstPost?.created_at || null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
