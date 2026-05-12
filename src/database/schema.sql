@@ -123,3 +123,30 @@ CREATE INDEX IF NOT EXISTS idx_logs_action ON operation_logs(action);
 CREATE INDEX IF NOT EXISTS idx_logs_target ON operation_logs(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_logs_created_at ON operation_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_logs_user_action ON operation_logs(user_id, action);
+
+-- settings (key-value store for admin configuration)
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_settings_category ON settings(category);
+
+-- bans (IP/user blocking)
+CREATE TABLE IF NOT EXISTS bans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ban_type TEXT NOT NULL,
+    value TEXT NOT NULL,
+    reason TEXT,
+    created_by INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_active INTEGER DEFAULT 1,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_bans_type ON bans(ban_type);
+CREATE INDEX IF NOT EXISTS idx_bans_active ON bans(is_active);
+CREATE INDEX IF NOT EXISTS idx_bans_value ON bans(value);
