@@ -46,8 +46,9 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onQuote(reply)}
+          onClick={handleQuote}
           className="text-surface-600"
+          disabled={!handleQuote}
         >
           <Quote className="w-4 h-4 mr-1" />
           引用
@@ -55,8 +56,9 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => onReply(reply)}
+          onClick={handleReply}
           className="text-surface-600"
+          disabled={!handleReply}
         >
           <ReplyIcon className="w-4 h-4 mr-1" />
           回复

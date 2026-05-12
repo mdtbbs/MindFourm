@@ -49,7 +49,13 @@ async function request<T>(
   }
 
   // Handle wrapped responses { success: true, data: ... }
+  // But don't unwrap if data itself looks like a paginated response (has pagination or total)
   if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
+    const inner = (data as { data: unknown }).data;
+    if (typeof inner === 'object' && inner !== null && 'pagination' in inner) {
+      // Paginated response - return the whole inner data object
+      return inner as T;
+    }
     return (data as { data: T }).data;
   }
 
