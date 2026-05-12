@@ -137,3 +137,47 @@ export interface FormState<T> {
   isSubmitting: boolean;
   submitted: boolean;
 }
+
+// Admin panel types
+export interface AdminStats {
+  total_posts: number;
+  total_replies: number;
+  total_users: number;
+  active_24h: number;
+  today_posts: number;
+  today_replies: number;
+  today_users: number;
+  activity_7d: number[];
+}
+
+export interface AdminBan {
+  id: number;
+  ban_type: string;
+  value: string;
+  reason: string | null;
+  created_by: number;
+  created_at: string;
+  is_active: boolean;
+  creator_name: string | null;
+}
+
+export interface AdminBanListResponse {
+  data: AdminBan[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+}
+
+export interface CreateBanInput {
+  ban_type: 'ip' | 'ip_range' | 'user';
+  value: string;
+  reason?: string;
+}
+
+export interface ModerationItem {
+  id: number;
+  item_type: 'post' | 'reply';
+  title?: string;
+  content: string;
+  author_username: string;
+  created_at: string;
+  post_id?: number;
+}

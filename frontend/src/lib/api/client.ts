@@ -1,4 +1,4 @@
-import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog } from '@/types';
+import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem } from '@/types';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -168,4 +168,53 @@ export const adminApi = {
     request<{ data: User[]; pagination: PostListResponse['pagination'] }>(
       `/api/admin/users${buildQueryString({ page: params?.page, limit: params?.limit })}`
     ),
+  getStats: () =>
+    request<AdminStats>('/api/admin/stats'),
+  getSettings: (category?: string) =>
+    request<Record<string, string>>(`/api/admin/settings${category ? `/${category}` : ''}`),
+  updateSettings: (category: string, data: Record<string, string>) =>
+    request<Record<string, string>>(`/api/admin/settings/${category}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  getTags: () =>
+    request<Tag[]>('/api/admin/tags'),
+  createTag: (data: { name: string; slug?: string }) =>
+    request<Tag>('/api/admin/tags', { method: 'POST', body: JSON.stringify(data) }),
+  updateTag: (id: number, data: { name?: string; slug?: string }) =>
+    request<Tag>(`/api/admin/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTag: (id: number) =>
+    request<void>(`/api/admin/tags/${id}`, { method: 'DELETE' }),
+  mergeTags: (from_tag_id: number, to_tag_id: number) =>
+    request<{ message: string }>('/api/admin/tags/merge', {
+      method: 'POST', body: JSON.stringify({ from_tag_id, to_tag_id }),
+    }),
+  getModeration: (params?: { page?: number; limit?: number; type?: string }) =>
+    request<{ data: ModerationItem[]; pagination: PostListResponse['pagination'] }>(
+      `/api/admin/moderation${buildQueryString({ page: params?.page, limit: params?.limit, type: params?.type })}`
+    ),
+  approvePost: (id: number) =>
+    request<{ message: string }>(`/api/admin/moderation/${id}/approve`, { method: 'PUT' }),
+  rejectPost: (id: number) =>
+    request<{ message: string }>(`/api/admin/moderation/${id}/reject`, { method: 'PUT' }),
+  getBans: (params?: { page?: number; limit?: number; ban_type?: string; is_active?: string }) =>
+    request<AdminBanListResponse>(`/api/admin/bans${buildQueryString({ page: params?.page, limit: params?.limit, ban_type: params?.ban_type, is_active: params?.is_active })}`),
+  createBan: (data: CreateBanInput) =>
+    request<AdminBan>('/api/admin/bans', { method: 'POST', body: JSON.stringify(data) }),
+  updateBan: (id: number, data: Partial<CreateBanInput>) =>
+    request<AdminBan>(`/api/admin/bans/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deactivateBan: (id: number) =>
+    request<AdminBan>(`/api/admin/bans/${id}`, { method: 'DELETE' }),
+  cleanupSessions: () =>
+    request<{ message: string }>('/api/admin/cleanup/sessions', { method: 'POST' }),
+  cleanupLogs: () =>
+    request<{ message: string }>('/api/admin/cleanup/logs', { method: 'POST' }),
+  cleanupSoftDeleted: () =>
+    request<{ message: string }>('/api/admin/cleanup/soft-deleted', { method: 'POST' }),
+  bulkDeletePosts: (post_ids: number[]) =>
+    request<{ message: string }>('/api/admin/posts', { method: 'DELETE', body: JSON.stringify({ post_ids }) }),
+  bulkPinPosts: (post_ids: number[], is_pinned: boolean) =>
+    request<{ message: string }>('/api/admin/posts/pin', { method: 'PUT', body: JSON.stringify({ post_ids, is_pinned }) }),
+  bulkMovePosts: (post_ids: number[], category_id: number) =>
+    request<{ message: string }>('/api/admin/posts/move', { method: 'PUT', body: JSON.stringify({ post_ids, category_id }) }),
 };
