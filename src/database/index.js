@@ -30,6 +30,10 @@ function initialize() {
     db.exec('ALTER TABLE users ADD COLUMN email TEXT');
   } catch (e) { /* already exists */ }
 
+  // Seed default settings for admin panel
+  const SettingService = require('../services/setting.service');
+  SettingService.seedDefaults();
+
   console.log(`Database initialized at ${dbPath}`);
   return db;
 }
