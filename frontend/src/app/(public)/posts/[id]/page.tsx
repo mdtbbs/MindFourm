@@ -117,8 +117,6 @@ export default async function PostDetailPage({
                 key={reply.id}
                 reply={reply}
                 index={(page - 1) * 50 + index}
-                onQuote={() => {}}
-                onReply={() => {}}
               />
             ))}
           </div>

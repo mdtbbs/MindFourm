@@ -9,11 +9,13 @@ import { Quote, Reply as ReplyIcon } from 'lucide-react';
 interface ReplyItemProps {
   reply: Reply;
   index: number;
-  onQuote: (reply: Reply) => void;
-  onReply: (reply: Reply) => void;
+  onQuote?: (reply: Reply) => void;
+  onReply?: (reply: Reply) => void;
 }
 
 export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemProps) {
+  const handleQuote = onQuote ? () => onQuote(reply) : undefined;
+  const handleReply = onReply ? () => onReply(reply) : undefined;
   function formatTime(dateStr: string): string {
     return new Date(dateStr).toLocaleString('zh-CN');
   }
