@@ -1,8 +1,9 @@
 const POST_SCHEMA = {
   title: { required: true, type: 'string', minLength: 1, maxLength: 200 },
-  content: { required: true, type: 'string', minLength: 1 },
+  content: { required: true, type: 'string', minLength: 10 },
   category_id: { type: 'number' },
-  status: { enum: ['draft', 'published'] }
+  status: { enum: ['draft', 'published'] },
+  tags: { type: 'array', maxItems: 5, itemMaxLength: 30 }
 };
 
 const REPLY_SCHEMA = {

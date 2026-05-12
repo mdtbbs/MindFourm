@@ -37,6 +37,22 @@ function validate(schema) {
       if (rules.enum && !rules.enum.includes(value)) {
         errors.push({ field, message: `${field} must be one of: ${rules.enum.join(', ')}` });
       }
+
+      if (rules.type === 'array' && !Array.isArray(value)) {
+        errors.push({ field, message: `${field} must be an array` });
+      }
+
+      if (rules.type === 'array' && Array.isArray(value) && rules.maxItems && value.length > rules.maxItems) {
+        errors.push({ field, message: `${field} must have at most ${rules.maxItems} items` });
+      }
+
+      if (rules.type === 'array' && Array.isArray(value) && rules.itemMaxLength) {
+        value.forEach((item, i) => {
+          if (typeof item === 'string' && item.length > rules.itemMaxLength) {
+            errors.push({ field, message: `${field}[${i}] must be at most ${rules.itemMaxLength} characters` });
+          }
+        });
+      }
     }
 
     if (errors.length > 0) {
