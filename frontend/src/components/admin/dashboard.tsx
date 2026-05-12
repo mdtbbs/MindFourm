@@ -1,62 +1,89 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileText, MessageSquare, Users, TrendingUp } from 'lucide-react';
+import { adminApi } from '@/lib/api/client';
+import type { AdminStats } from '@/types';
 
-const stats = [
-  { label: '总帖子数', value: '--', icon: FileText, color: 'text-primary-600' },
-  { label: '总回复数', value: '--', icon: MessageSquare, color: 'text-green-600' },
-  { label: '总用户数', value: '--', icon: Users, color: 'text-yellow-600' },
-  { label: '今日新增', value: '--', icon: TrendingUp, color: 'text-blue-600' },
+const quickLinks = [
+  { href: '/admin/settings/basic', label: 'Site Settings', icon: '◼' },
+  { href: '/admin/posts', label: 'Posts', icon: '▣' },
+  { href: '/admin/content/moderation', label: 'Moderation', icon: '△' },
+  { href: '/admin/system/bans', label: 'Bans', icon: '⊘' },
+  { href: '/admin/categories', label: 'Categories', icon: '▤' },
+  { href: '/admin/logs', label: 'Logs', icon: '▦' },
 ];
 
-export default function Dashboard() {
-  return (
-    <div>
-      <h2 className="text-2xl font-bold text-surface-900 mb-6">仪表盘</h2>
+const chartDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-white rounded-lg border border-surface-200 p-6"
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-surface-500">{stat.label}</span>
-              <stat.icon className={`w-5 h-5 ${stat.color}`} />
-            </div>
-            <p className="text-2xl font-bold text-surface-900">{stat.value}</p>
+export default function Dashboard() {
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    adminApi.getStats()
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const statCards = [
+    { label: 'POSTS', value: stats?.total_posts ?? '--', trend: stats ? `+${stats.today_posts} today` : '' },
+    { label: 'REPLIES', value: stats?.total_replies ?? '--', trend: stats ? `+${stats.today_replies} today` : '' },
+    { label: 'USERS', value: stats?.total_users ?? '--', trend: stats ? `+${stats.today_users} today` : '' },
+    { label: 'ACTIVE 24H', value: stats?.active_24h ?? '--', trend: '' },
+  ];
+
+  const maxActivity = stats ? Math.max(...stats.activity_7d, 1) : 1;
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-surface-900" /></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-px bg-surface-200 border border-surface-200">
+        {statCards.map((card) => (
+          <div key={card.label} className="bg-white p-6">
+            <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">{card.label}</div>
+            <div className="text-3xl font-light text-surface-900">{card.value}</div>
+            {card.trend && <div className="text-xs text-surface-400 mt-2">{card.trend}</div>}
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-lg border border-surface-200 p-6">
-        <h3 className="font-semibold text-surface-900 mb-4">快捷入口</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Link
-            href="/admin/categories"
-            className="p-4 bg-surface-50 rounded-lg hover:bg-surface-100 transition-colors text-center"
-          >
-            <p className="font-medium text-surface-900">分类管理</p>
-          </Link>
-          <Link
-            href="/admin/users"
-            className="p-4 bg-surface-50 rounded-lg hover:bg-surface-100 transition-colors text-center"
-          >
-            <p className="font-medium text-surface-900">用户管理</p>
-          </Link>
-          <Link
-            href="/admin/posts"
-            className="p-4 bg-surface-50 rounded-lg hover:bg-surface-100 transition-colors text-center"
-          >
-            <p className="font-medium text-surface-900">帖子管理</p>
-          </Link>
-          <Link
-            href="/admin/logs"
-            className="p-4 bg-surface-50 rounded-lg hover:bg-surface-100 transition-colors text-center"
-          >
-            <p className="font-medium text-surface-900">操作日志</p>
-          </Link>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Activity chart */}
+        <div className="lg:col-span-2 bg-white border border-surface-200">
+          <div className="px-5 py-4 border-b border-surface-200">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">7-Day Activity</h3>
+          </div>
+          <div className="flex items-end justify-center gap-2 h-36 px-5 py-6">
+            {stats?.activity_7d.map((val, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <div className="w-5 bg-surface-300 rounded-sm" style={{ height: `${Math.max((val / maxActivity) * 120, 4)}px` }} />
+                <span className="text-xs text-surface-400 font-mono">{chartDays[i]}</span>
+              </div>
+            ))}
+            {!stats && <span className="text-surface-400">No data</span>}
+          </div>
+        </div>
+
+        {/* Quick access */}
+        <div className="bg-white border border-surface-200">
+          <div className="px-5 py-4 border-b border-surface-200">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">Quick Access</h3>
+          </div>
+          <div>
+            {quickLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="flex items-center gap-3 px-5 py-3 text-sm text-surface-600 border-b border-surface-100 hover:bg-surface-50 hover:text-surface-900 transition-colors last:border-b-0">
+                <span className="opacity-50">{link.icon}</span>
+                {link.label}
+                <span className="ml-auto text-surface-300">→</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </div>
