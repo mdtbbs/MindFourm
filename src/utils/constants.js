@@ -30,7 +30,22 @@ const LOG_ACTIONS = {
   USER_ROLE_CHANGE: 'user_role_change',
   CATEGORY_CREATE: 'category_create',
   CATEGORY_EDIT: 'category_edit',
-  CATEGORY_DELETE: 'category_delete'
+  CATEGORY_DELETE: 'category_delete',
+  SETTINGS_UPDATE: 'settings_update',
+  POST_BULK_DELETE: 'post_bulk_delete',
+  POST_BULK_PIN: 'post_bulk_pin',
+  POST_BULK_MOVE: 'post_bulk_move',
+  TAG_CREATE: 'tag_create',
+  TAG_UPDATE: 'tag_update',
+  TAG_DELETE: 'tag_delete',
+  TAG_MERGE: 'tag_merge',
+  MODERATION_APPROVE: 'moderation_approve',
+  MODERATION_REJECT: 'moderation_reject',
+  BAN_CREATE: 'ban_create',
+  BAN_DEACTIVATE: 'ban_deactivate',
+  CLEANUP_SESSIONS: 'cleanup_sessions',
+  CLEANUP_LOGS: 'cleanup_logs',
+  CLEANUP_SOFT_DELETED: 'cleanup_soft_deleted'
 };
 
 const PERMISSIONS = {
