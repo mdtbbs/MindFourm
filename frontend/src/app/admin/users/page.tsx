@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api/client';
 import type { User, UserRole } from '@/types';
 import Badge from '@/components/ui/badge';
+import Button from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import Alert from '@/components/ui/alert';
 import Pagination from '@/components/ui/pagination';
@@ -31,12 +32,14 @@ export default function AdminUsersPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [updating, setUpdating] = useState<number | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await adminApi.getUsers({ page, limit: PAGE_SIZE });
+      const res = await adminApi.getUsers({ page, limit: PAGE_SIZE, search: searchQuery || undefined });
       setUsers(res.data);
       setTotalPages(res.pagination.totalPages);
     } catch (err) {
@@ -44,7 +47,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, [page, searchQuery]);
 
   useEffect(() => {
     fetchUsers();
@@ -69,6 +72,12 @@ export default function AdminUsersPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchQuery(search);
+    setPage(1);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -78,9 +87,7 @@ export default function AdminUsersPage() {
   }
 
   if (error) {
-    return (
-      <Alert type="error" message={error} />
-    );
+    return <Alert type="error" message={error} />;
   }
 
   return (
@@ -90,11 +97,25 @@ export default function AdminUsersPage() {
         <p className="text-sm text-surface-500 mt-1">
           View and manage registered users and their roles.
         </p>
+        <form onSubmit={handleSearch} className="flex gap-2 mt-4">
+          <input
+            className="px-3 py-2 border border-surface-200 rounded text-sm w-64"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by username or email..."
+          />
+          <Button type="submit" size="sm">
+            Search
+          </Button>
+          {searchQuery && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setSearchQuery(''); setPage(1); }}>
+              Clear
+            </Button>
+          )}
+        </form>
       </div>
 
-      {updateError && (
-        <Alert type="error" message={updateError} />
-      )}
+      {updateError && <Alert type="error" message={updateError} />}
 
       <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
         <div className="overflow-x-auto">

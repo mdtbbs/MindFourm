@@ -164,9 +164,9 @@ export const adminApi = {
     request<{ data: AdminLog[]; pagination: PostListResponse['pagination'] }>(
       `/api/admin/logs${buildQueryString({ page: params?.page, limit: params?.limit })}`
     ),
-  getUsers: (params?: { page?: number; limit?: number }) =>
+  getUsers: (params?: { page?: number; limit?: number; search?: string }) =>
     request<{ data: User[]; pagination: PostListResponse['pagination'] }>(
-      `/api/admin/users${buildQueryString({ page: params?.page, limit: params?.limit })}`
+      `/api/admin/users${buildQueryString({ page: params?.page, limit: params?.limit, search: params?.search })}`
     ),
   getStats: () =>
     request<AdminStats>('/api/admin/stats'),
