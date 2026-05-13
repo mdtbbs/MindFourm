@@ -30,19 +30,30 @@ async function fetchTags(): Promise<Tag[]> {
   }
 }
 
-async function fetchPosts(page: number, categoryId?: number): Promise<PostListResponse> {
+async function fetchSettings(): Promise<Record<string, string>> {
+  try {
+    const res = await fetch(`${API_BASE}/api/settings`, { next: { revalidate: 60 } });
+    if (!res.ok) return {};
+    const json = await res.json();
+    return json.success ? json.data : {};
+  } catch {
+    return {};
+  }
+}
+
+async function fetchPosts(page: number, limit: number, categoryId?: number): Promise<PostListResponse> {
   try {
     const qs = new URLSearchParams();
     qs.set('page', String(page));
-    qs.set('limit', '20');
+    qs.set('limit', String(limit));
     if (categoryId) qs.set('category_id', String(categoryId));
     const res = await fetch(`${API_BASE}/api/v1/posts?${qs}`, { next: { tags: ['posts'] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
     const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
     return {
       data: json.data || [],
-      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+      pagination: json.pagination || { page: 1, limit, total: 0, totalPages: 1 },
     };
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -57,10 +68,13 @@ export default async function HomePage({
   const page = parseInt(searchParams.page || '1');
   const categoryId = searchParams.category_id ? parseInt(searchParams.category_id) : undefined;
 
+  const settings = await fetchSettings();
+  const postsPerPage = parseInt(settings?.posts_per_page || '20');
+
   const [categories, tags, postsResult] = await Promise.all([
     fetchCategories(),
     fetchTags(),
-    fetchPosts(page, categoryId),
+    fetchPosts(page, postsPerPage, categoryId),
   ]);
 
   return (

@@ -2,7 +2,7 @@ const Router = require('@koa/router');
 const { authMiddleware } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { requireOwnershipOrPermission } = require('../middleware/permission');
-const { REPLY_SCHEMA } = require('../validators/common.validator');
+const { getReplySchema } = require('../validators/common.validator');
 const ReplyController = require('../controllers/reply.controller');
 const ReplyService = require('../services/reply.service');
 
@@ -13,7 +13,7 @@ function createPostRoutes(basePrefix = '/api') {
 
   router.post('/:postId/replies',
     authMiddleware({ required: true, roles: ['user', 'moderator', 'admin'] }),
-    validate(REPLY_SCHEMA),
+    validate(getReplySchema()),
     ReplyController.create
   );
 
@@ -29,7 +29,7 @@ function createReplyRoutes(basePrefix = '/api') {
       const reply = ReplyService.getById(parseInt(ctx.params.id));
       return reply?.user_id;
     }),
-    validate(REPLY_SCHEMA),
+    validate(getReplySchema()),
     ReplyController.update
   );
 

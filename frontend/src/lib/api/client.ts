@@ -66,6 +66,11 @@ async function request<T>(
   return data as T;
 }
 
+// Public settings (no auth)
+export const settingsApi = {
+  get: () => request<Record<string, string>>('/api/settings'),
+};
+
 // Auth APIs
 export const authApi = {
   check: () => request<{ authenticated: boolean; user?: User }>('/api/auth/check'),

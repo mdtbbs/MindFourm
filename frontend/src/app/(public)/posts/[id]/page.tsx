@@ -33,33 +33,55 @@ async function fetchCategories(): Promise<Category[]> {
   }
 }
 
-async function fetchReplies(postId: number, page: number): Promise<ReplyListResponse> {
+async function fetchReplies(postId: number, page: number, limit: number): Promise<ReplyListResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/posts/${postId}/replies?page=${page}&limit=50`, { next: { tags: [`post-${postId}-replies`] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
+    const res = await fetch(`${API_BASE}/api/v1/posts/${postId}/replies?page=${page}&limit=${limit}`, { next: { tags: [`post-${postId}-replies`] } });
+    if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
     const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
+    if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
     return {
       data: json.data || [],
-      pagination: json.pagination || { page: 1, limit: 50, total: 0, totalPages: 1 },
+      pagination: json.pagination || { page: 1, limit, total: 0, totalPages: 1 },
     };
   } catch {
-    return { data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 1 } };
+    return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
+  }
+}
+
+async function fetchSettings(): Promise<Record<string, string>> {
+  try {
+    const res = await fetch(`${API_BASE}/api/settings`, { next: { revalidate: 60 } });
+    if (!res.ok) return {};
+    const json = await res.json();
+    return json.success ? json.data : {};
+  } catch {
+    return {};
   }
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const post = await fetchPost(parseInt(params.id));
+  const [post, settings] = await Promise.all([
+    fetchPost(parseInt(params.id)),
+    fetchSettings(),
+  ]);
   if (!post) return { title: 'Not Found' };
-  return {
-    title: `${post.title} | MindForum`,
+  const titleSuffix = settings.seo_title_suffix || ' | MindForum';
+  const meta: Metadata = {
+    title: `${post.title}${titleSuffix}`,
     description: post.content.slice(0, 160),
     openGraph: {
-      title: `${post.title} | MindForum`,
+      title: `${post.title}${titleSuffix}`,
       description: post.content.slice(0, 160),
       type: 'article',
     },
   };
+  if (settings.seo_og_image) {
+    meta.openGraph = {
+      ...meta.openGraph,
+      images: [settings.seo_og_image],
+    };
+  }
+  return meta;
 }
 
 export default async function PostDetailPage({
@@ -72,10 +94,13 @@ export default async function PostDetailPage({
   const postId = parseInt(params.id);
   const page = parseInt(searchParams.page || '1');
 
+  const settings = await fetchSettings();
+  const repliesPerPage = parseInt(settings?.replies_per_page || '50');
+
   const [post, categories, repliesResult] = await Promise.all([
     fetchPost(postId),
     fetchCategories(),
-    fetchReplies(postId, page),
+    fetchReplies(postId, page, repliesPerPage),
   ]);
 
   if (!post) {
@@ -116,7 +141,7 @@ export default async function PostDetailPage({
               <ReplyItem
                 key={reply.id}
                 reply={reply}
-                index={(page - 1) * 50 + index}
+                index={(page - 1) * repliesPerPage + index}
               />
             ))}
           </div>

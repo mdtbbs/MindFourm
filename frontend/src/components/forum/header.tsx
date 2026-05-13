@@ -3,12 +3,16 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
+import { useSettings } from '@/lib/settings/context';
 import { Search, User, LogOut, Shield } from 'lucide-react';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
+  const settings = useSettings();
   const router = useRouter();
   const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
+  const siteName = settings.site_name || 'MindForum';
+  const logoUrl = settings.site_logo_url || '';
 
   const handleLogin = () => {
     const redirectUrl = encodeURIComponent('http://localhost:4000/api/auth/callback');
@@ -30,7 +34,11 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <span className="text-xl font-bold text-primary-600">MindForum</span>
+            {logoUrl ? (
+              <img src={logoUrl} alt={siteName} className="h-8 object-contain" />
+            ) : (
+              <span className="text-xl font-bold text-primary-600">{siteName}</span>
+            )}
           </Link>
 
           {/* Search */}

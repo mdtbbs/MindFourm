@@ -65,11 +65,11 @@ function validate(schema) {
 
 // Keep legacy exports for backward compatibility
 function validatePost() {
-  return validate(require('../validators/common.validator').POST_SCHEMA);
+  return validate(require('../validators/common.validator').getPostSchema());
 }
 
 function validateReply() {
-  return validate(require('../validators/common.validator').REPLY_SCHEMA);
+  return validate(require('../validators/common.validator').getReplySchema());
 }
 
 function validateCategory() {
