@@ -1,52 +1,14 @@
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
-import { categoryApi } from '@/lib/api/client';
 import PostContent from '@/components/forum/post-content';
 import ReplyItem from '@/components/forum/reply-item';
 import Pagination from '@/components/ui/pagination';
 import Link from 'next/link';
-import { Category, Post, ReplyListResponse } from '@/types';
+import { Post } from '@/types';
 
 export const revalidate = 60;
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
-async function fetchPost(id: number): Promise<Post | null> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/posts/${id}`, { next: { tags: [`post-${id}`] } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.success ? json.data : null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchCategories(): Promise<Category[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
-}
-
-async function fetchReplies(postId: number, page: number, limit: number): Promise<ReplyListResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/posts/${postId}/replies?page=${page}&limit=${limit}`, { next: { tags: [`post-${postId}-replies`] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
-    return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit, total: 0, totalPages: 1 },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
-  }
-}
 
 async function fetchSettings(): Promise<Record<string, string>> {
   try {
@@ -60,11 +22,13 @@ async function fetchSettings(): Promise<Record<string, string>> {
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const [post, settings] = await Promise.all([
-    fetchPost(parseInt(params.id)),
-    fetchSettings(),
-  ]);
+  const res = await fetch(`${API_BASE}/api/v1/posts/${params.id}`, { next: { tags: [`post-${params.id}`] } });
+  if (!res.ok) return { title: 'Not Found' };
+  const json = await res.json();
+  const post = json.success ? json.data : null;
   if (!post) return { title: 'Not Found' };
+
+  const settings = await fetchSettings();
   const titleSuffix = settings.seo_title_suffix || ' | MindForum';
   const meta: Metadata = {
     title: `${post.title}${titleSuffix}`,
@@ -76,10 +40,7 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
     },
   };
   if (settings.seo_og_image) {
-    meta.openGraph = {
-      ...meta.openGraph,
-      images: [settings.seo_og_image],
-    };
+    meta.openGraph = { ...meta.openGraph, images: [settings.seo_og_image] };
   }
   return meta;
 }
@@ -97,15 +58,16 @@ export default async function PostDetailPage({
   const settings = await fetchSettings();
   const repliesPerPage = parseInt(settings?.replies_per_page || '50');
 
-  const [post, categories, repliesResult] = await Promise.all([
-    fetchPost(postId),
-    fetchCategories(),
-    fetchReplies(postId, page, repliesPerPage),
-  ]);
+  const res = await fetch(`${API_BASE}/api/v1/posts/${postId}?page=${page}&limit=${repliesPerPage}`, { next: { tags: [`post-${postId}`] } });
+  if (!res.ok) return notFound();
+  const json = await res.json();
+  if (!json.success) return notFound();
 
-  if (!post) {
-    return notFound();
-  }
+  const post = json.data;
+  const repliesResult = {
+    data: post.replies || [],
+    pagination: post.repliesPagination || { page: 1, limit: repliesPerPage, total: 0, totalPages: 1 },
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -137,7 +99,7 @@ export default async function PostDetailPage({
           <div className="text-center py-8 text-surface-500">暂无回复</div>
         ) : (
           <div className="space-y-4">
-            {repliesResult.data.map((reply, index) => (
+            {repliesResult.data.map((reply: any, index: number) => (
               <ReplyItem
                 key={reply.id}
                 reply={reply}
