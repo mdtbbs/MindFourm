@@ -1,11 +1,37 @@
 const db = require('../database');
 
+const BAN_CACHE_TTL_MS = 10_000;
+let activeBanCache = { ips: new Set(), ipRanges: [], users: new Set(), refreshedAt: 0 };
+
+function refreshBanCache() {
+  const now = Date.now();
+  if (now - activeBanCache.refreshedAt < BAN_CACHE_TTL_MS) return;
+
+  const bans = db.prepare("SELECT ban_type, value FROM bans WHERE is_active = 1").all();
+  activeBanCache = {
+    ips: new Set(),
+    ipRanges: [],
+    users: new Set(),
+    refreshedAt: now,
+  };
+  for (const ban of bans) {
+    if (ban.ban_type === 'ip') activeBanCache.ips.add(ban.value);
+    else if (ban.ban_type === 'ip_range') activeBanCache.ipRanges.push(ban.value);
+    else if (ban.ban_type === 'user') activeBanCache.users.add(ban.value);
+  }
+}
+
+function invalidateBanCache() {
+  activeBanCache.refreshedAt = 0;
+}
+
 class BanService {
   static create({ ban_type, value, reason, created_by }) {
     const result = db.prepare(`
       INSERT INTO bans (ban_type, value, reason, created_by)
       VALUES (?, ?, ?, ?)
     `).run(ban_type, value, reason || null, created_by);
+    invalidateBanCache();
     return db.prepare('SELECT * FROM bans WHERE id = ?').get(result.lastInsertRowid);
   }
 
@@ -42,23 +68,27 @@ class BanService {
     if (fields.length === 0) return this.getById(id);
     values.push(id);
     db.prepare(`UPDATE bans SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    invalidateBanCache();
     return this.getById(id);
   }
 
   static deactivate(id) {
+    invalidateBanCache();
     return this.update(id, { is_active: false });
   }
 
   static isActive(type, value) {
+    refreshBanCache();
+    if (type === 'ip') return activeBanCache.ips.has(value);
+    if (type === 'user') return activeBanCache.users.has(value);
     return db.prepare('SELECT 1 FROM bans WHERE ban_type = ? AND value = ? AND is_active = 1').get(type, value);
   }
 
   static checkIp(ip) {
-    if (this.isActive('ip', ip)) return true;
-
-    const ranges = db.prepare("SELECT value FROM bans WHERE ban_type = 'ip_range' AND is_active = 1").all();
-    for (const row of ranges) {
-      if (this.ipInRange(ip, row.value)) return true;
+    refreshBanCache();
+    if (activeBanCache.ips.has(ip)) return true;
+    for (const range of activeBanCache.ipRanges) {
+      if (this.ipInRange(ip, range)) return true;
     }
     return false;
   }

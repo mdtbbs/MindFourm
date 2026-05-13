@@ -15,12 +15,6 @@ class LogService {
       ip_address || null,
       user_agent || null
     );
-
-    // Auto-cleanup: keep at most 10000 rows
-    const count = db.prepare('SELECT COUNT(*) as cnt FROM operation_logs').get();
-    if (count.cnt > 10000) {
-      db.prepare('DELETE FROM operation_logs WHERE id IN (SELECT id FROM operation_logs ORDER BY created_at ASC LIMIT 5000)').run();
-    }
   }
 
   static getLogs({ page = 1, limit = 50, user_id, action, target_type }) {
