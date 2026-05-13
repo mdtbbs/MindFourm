@@ -24,6 +24,16 @@ export default function Header() {
     window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;
   };
 
+  const handleRegister = () => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
+    const currentPath = typeof window !== 'undefined'
+      ? encodeURIComponent(window.location.pathname + window.location.search)
+      : '';
+    window.location.href = `${mindauthUrl}/register?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;
+  };
+
   const handleSearch = (query: string) => {
     if (query.trim()) {
       router.push(`/search?q=${encodeURIComponent(query.trim())}`);
@@ -97,12 +107,20 @@ export default function Header() {
                 </button>
               </>
             ) : (
-              <button
-                onClick={handleLogin}
-                className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-              >
-                登录
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleRegister}
+                  className="px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+                >
+                  注册
+                </button>
+                <button
+                  onClick={handleLogin}
+                  className="text-sm text-surface-600 hover:text-primary-600 transition-colors"
+                >
+                  登录
+                </button>
+              </div>
             )}
           </div>
         </div>
