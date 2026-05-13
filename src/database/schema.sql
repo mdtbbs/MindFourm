@@ -170,6 +170,5 @@ CREATE INDEX IF NOT EXISTS idx_logs_list ON operation_logs(created_at DESC, user
 -- Composite index for session validation
 CREATE INDEX IF NOT EXISTS idx_sessions_validate ON sessions(session_token, expires_at);
 
--- Composite index for post_tags lookups
-CREATE INDEX IF NOT EXISTS idx_post_tags_post ON post_tags(post_id);
+-- Composite index for post_tags reverse lookups (tag_id-only queries, not covered by PK)
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id);
