@@ -16,7 +16,13 @@ class PostController {
       user_id: parseInt(user_id) || null
     });
 
-    Response.paginated(ctx, result.data, result.pagination);
+    // Strip content_html to reduce payload size
+    const trimmed = result.data.map(p => {
+      const { content_html, ...rest } = p;
+      return rest;
+    });
+
+    Response.paginated(ctx, trimmed, result.pagination);
   }
 
   static getById(ctx) {
