@@ -29,6 +29,18 @@ app.use(bodyParser({
 app.use(routes.routes());
 app.use(routes.allowedMethods());
 
+// Cache-Control for static-like API responses
+app.use(async (ctx, next) => {
+  await next();
+  if (ctx.status === 200) {
+    if (ctx.path === '/api/categories' || ctx.path === '/api/tags') {
+      ctx.set('Cache-Control', 'public, max-age=60');
+    } else if (ctx.path === '/api/settings') {
+      ctx.set('Cache-Control', 'public, max-age=30');
+    }
+  }
+});
+
 app.use((ctx) => {
   ctx.status = 404;
   ctx.body = { success: false, message: 'Not found' };
