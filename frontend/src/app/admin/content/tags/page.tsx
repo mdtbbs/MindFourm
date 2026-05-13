@@ -72,7 +72,7 @@ export default function TagsPage() {
           {tags.map((tag) => (
             <span key={tag.id} className="inline-flex items-center gap-2 px-3 py-1.5 bg-surface-50 border border-surface-200 rounded text-sm text-surface-600">
               {tag.name}
-              <span className="text-xs text-surface-400 font-mono">{(tag as any).post_count ?? 0}</span>
+              <span className="text-xs text-surface-400 font-mono">{tag.post_count ?? 0}</span>
               <button onClick={() => handleDelete(tag)} className="text-surface-300 hover:text-surface-600">&times;</button>
             </span>
           ))}

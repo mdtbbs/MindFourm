@@ -114,7 +114,8 @@ export default async function HomePage({
           <Pagination
             currentPage={postsResult.pagination.page}
             totalPages={postsResult.pagination.totalPages}
-            basePath={categoryId ? `/categories/${categoryId}` : '/'}
+            basePath="/"
+            queryParams={categoryId ? { category_id: String(categoryId) } : {}}
           />
         </div>
       </div>

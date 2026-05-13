@@ -95,6 +95,8 @@ class BanService {
 
   static ipInRange(ip, cidr) {
     if (!cidr.includes('/')) return ip === cidr;
+    // IPv6 not supported — skip gracefully
+    if (ip.includes(':') || cidr.includes(':')) return false;
     const [base, bits] = cidr.split('/');
     const mask = ~((1 << (32 - parseInt(bits))) - 1);
     const ipNum = this.ipToNum(ip);

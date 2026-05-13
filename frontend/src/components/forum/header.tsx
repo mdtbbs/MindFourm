@@ -15,12 +15,19 @@ export default function Header() {
   const logoUrl = settings.site_logo_url || '';
 
   const handleLogin = () => {
-    const redirectUrl = encodeURIComponent('http://localhost:4000/api/auth/callback');
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
     const currentPath = typeof window !== 'undefined'
       ? encodeURIComponent(window.location.pathname + window.location.search)
       : '';
     window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;
+  };
+
+  const handleSearch = (query: string) => {
+    if (query.trim()) {
+      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+    }
   };
 
   const handleLogout = async () => {
@@ -49,6 +56,7 @@ export default function Header() {
                 type="text"
                 placeholder="搜索帖子..."
                 className="w-full pl-10 pr-4 py-2 bg-surface-100 rounded-lg border-0 focus:ring-2 focus:ring-primary-500 text-sm"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch((e.target as HTMLInputElement).value); }}
               />
             </div>
           </div>

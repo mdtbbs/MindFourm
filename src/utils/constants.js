@@ -9,12 +9,14 @@ const ROLE_NAMES = ['guest', 'user', 'moderator', 'admin'];
 
 const POST_STATUS = {
   draft: 'draft',
+  pending: 'pending',
   published: 'published',
   deleted: 'deleted'
 };
 
 const REPLY_STATUS = {
   active: 'active',
+  pending: 'pending',
   deleted: 'deleted'
 };
 

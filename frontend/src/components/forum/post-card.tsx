@@ -63,7 +63,7 @@ export default function PostCard({ post }: PostCardProps) {
 
             <span className="flex items-center gap-1">
               <MessageSquare className="w-3.5 h-3.5" />
-              {post.view_count || 0} 回复
+              {(post as any).reply_count || 0} 回复
             </span>
 
             <span className="flex items-center gap-1">

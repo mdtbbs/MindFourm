@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
 import { Eye, Edit3 } from 'lucide-react';
+import Alert from '@/components/ui/alert';
 
 interface ReplyEditorProps {
   postId: number;
@@ -23,12 +24,14 @@ export default function ReplyEditor({
   const [content, setContent] = useState('');
   const [preview, setPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
 
     setIsSubmitting(true);
+    setError(null);
     try {
       await onSubmit(
         content,
@@ -36,7 +39,7 @@ export default function ReplyEditor({
       );
       setContent('');
     } catch (err) {
-      console.error('Failed to submit reply:', err);
+      setError(err instanceof Error ? err.message : '提交失败，请重试');
     } finally {
       setIsSubmitting(false);
     }
@@ -56,6 +59,8 @@ export default function ReplyEditor({
             引用 #{quoteReply.id} 的内容
           </div>
         )}
+
+        {error && <Alert type="error" message={error} />}
 
         <div className="mb-4 flex items-center gap-2">
           <button

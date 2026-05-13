@@ -35,6 +35,7 @@ export interface Tag {
   name: string;
   slug: string;
   created_at: string;
+  post_count?: number;
 }
 
 // Post types

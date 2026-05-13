@@ -67,7 +67,8 @@ class PostService {
 
     const posts = db.prepare(`
       SELECT p.*, c.name as category_name,
-             u.mindauth_id as author_mindauth_id, u.role as author_role
+             u.mindauth_id as author_mindauth_id, u.role as author_role,
+             (SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL) as reply_count
       FROM posts p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN users u ON p.user_id = u.id

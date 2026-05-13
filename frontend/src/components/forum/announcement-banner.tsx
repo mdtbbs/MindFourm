@@ -7,17 +7,28 @@ export default function AnnouncementBanner() {
   const settings = useSettings();
   const [dismissed, setDismissed] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setDismissed(localStorage.getItem('announcement_dismissed') === 'true');
+    }
+  }, []);
+
   const enabled = settings.announce_enabled === 'true';
   const content = settings.announce_content || '';
 
   if (!enabled || !content.trim() || dismissed) return null;
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    localStorage.setItem('announcement_dismissed', 'true');
+  };
 
   return (
     <div className="bg-amber-50 border border-amber-200 px-4 py-3">
       <div className="max-w-7xl mx-auto flex items-start justify-between gap-4">
         <p className="text-sm text-amber-800 flex-1">{content}</p>
         <button
-          onClick={() => setDismissed(true)}
+          onClick={handleDismiss}
           className="text-amber-500 hover:text-amber-700 text-lg leading-none shrink-0"
           aria-label="关闭公告"
         >

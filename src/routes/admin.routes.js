@@ -9,10 +9,10 @@ function createRoutes(basePrefix = '/api') {
   const router = new Router({ prefix: `${basePrefix}/admin` });
 
   // === Stats ===
-  router.get('/stats', authMiddleware({ required: true }), AdminController.getStats);
+  router.get('/stats', authMiddleware({ required: true }), requireModerator, AdminController.getStats);
 
   // === Badge counts ===
-  router.get('/badge-counts', authMiddleware({ required: true }), AdminController.getBadgeCounts);
+  router.get('/badge-counts', authMiddleware({ required: true }), requireModerator, AdminController.getBadgeCounts);
 
   // === Settings ===
   router.get('/settings', authMiddleware({ required: true }), requireAdmin, AdminController.getSettings);

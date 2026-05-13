@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import PostContent from '@/components/forum/post-content';
 import ReplyItem from '@/components/forum/reply-item';
+import ReplyForm from '@/components/forum/reply-form';
 import Pagination from '@/components/ui/pagination';
 import Link from 'next/link';
 import { Post } from '@/types';
@@ -112,6 +113,12 @@ export default async function PostDetailPage({
           totalPages={pagination.totalPages}
           basePath={`/posts/${postId}`}
         />
+      </div>
+
+      {/* Reply Form */}
+      <div className="mt-8">
+        <ReplyForm postId={postId} onReplyCreated={() => window.location.reload()} />
+      </div>
       </div>
     </div>
   );

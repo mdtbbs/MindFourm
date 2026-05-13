@@ -4,7 +4,7 @@ const BASE_POST_SCHEMA = {
   title: { required: true, type: 'string' },
   content: { required: true, type: 'string' },
   category_id: { type: 'number' },
-  status: { enum: ['draft', 'published'] },
+  status: { enum: ['draft', 'pending', 'published'] },
   tags: { type: 'array' }
 };
 

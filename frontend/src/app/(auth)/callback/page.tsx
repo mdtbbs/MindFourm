@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { authApi } from '@/lib/api/client';
 
 export default function CallbackPage() {
   const router = useRouter();
@@ -18,11 +19,21 @@ export default function CallbackPage() {
       return;
     }
 
-    // Redirect to home or original page
-    const redirectPath = state ? decodeURIComponent(state) : '/';
-    setTimeout(() => {
-      router.push(redirectPath);
-    }, 1000);
+    // After backend sets the session cookie, verify it's active
+    authApi.check()
+      .then((result) => {
+        if (result.authenticated) {
+          const redirectPath = state ? decodeURIComponent(state) : '/';
+          router.push(redirectPath);
+        } else {
+          setError('登录失败：会话未建立');
+          setTimeout(() => router.push('/'), 3000);
+        }
+      })
+      .catch(() => {
+        setError('登录失败：无法验证会话');
+        setTimeout(() => router.push('/'), 3000);
+      });
   }, []);
 
   if (error) {
@@ -40,7 +51,7 @@ export default function CallbackPage() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4" />
-        <p className="text-surface-500">登录成功，正在跳转...</p>
+        <p className="text-surface-500">登录成功，正在验证...</p>
       </div>
     </div>
   );

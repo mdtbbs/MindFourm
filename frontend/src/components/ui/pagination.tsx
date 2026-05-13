@@ -7,6 +7,7 @@ interface PaginationProps {
   totalPages: number;
   basePath: string;
   className?: string;
+  queryParams?: Record<string, string | number>;
 }
 
 export default function Pagination({
@@ -14,17 +15,25 @@ export default function Pagination({
   totalPages,
   basePath,
   className = '',
+  queryParams = {},
 }: PaginationProps) {
   if (totalPages <= 1) return null;
 
-  const getPageUrl = (page: number) =>
-    page === 1 ? basePath : `${basePath}?page=${page}`;
+  const buildUrl = (page: number) => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set('page', String(page));
+    for (const [key, value] of Object.entries(queryParams)) {
+      if (value !== undefined && value !== '') params.set(key, String(value));
+    }
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  };
 
   return (
     <nav className={`flex items-center justify-center space-x-1 ${className}`}>
       {currentPage > 1 && (
         <Link
-          href={getPageUrl(currentPage - 1)}
+          href={buildUrl(currentPage - 1)}
           className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 rounded"
         >
           上一页
@@ -49,7 +58,7 @@ export default function Pagination({
                 </span>
               ) : (
                 <Link
-                  href={getPageUrl(page)}
+                  href={buildUrl(page)}
                   className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 rounded"
                 >
                   {page}
@@ -60,7 +69,7 @@ export default function Pagination({
         })}
       {currentPage < totalPages && (
         <Link
-          href={getPageUrl(currentPage + 1)}
+          href={buildUrl(currentPage + 1)}
           className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 rounded"
         >
           下一页
