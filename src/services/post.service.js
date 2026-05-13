@@ -78,6 +78,14 @@ class PostService {
 
     const countResult = db.prepare(`SELECT COUNT(*) as total FROM posts p WHERE ${whereClause}`).get(...params);
 
+    // Batch-fetch tags for all posts in one query
+    if (posts.length > 0) {
+      const tagMap = TagService.getPostTagsForMultiplePosts(posts.map(p => p.id));
+      for (const post of posts) {
+        post.tags = tagMap[post.id] || [];
+      }
+    }
+
     return {
       data: posts,
       pagination: {
