@@ -11,6 +11,9 @@ function createRoutes(basePrefix = '/api') {
   // === Stats ===
   router.get('/stats', authMiddleware({ required: true }), AdminController.getStats);
 
+  // === Badge counts ===
+  router.get('/badge-counts', authMiddleware({ required: true }), AdminController.getBadgeCounts);
+
   // === Settings ===
   router.get('/settings', authMiddleware({ required: true }), requireAdmin, AdminController.getSettings);
   router.get('/settings/:category', authMiddleware({ required: true }), requireAdmin, AdminController.getSettings);

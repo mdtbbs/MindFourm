@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
@@ -47,10 +48,27 @@ const navSections = [
   },
 ];
 
+function Badge({ count }: { count: number }) {
+  if (!count) return null;
+  return (
+    <span className="ml-auto text-xs bg-surface-600 text-surface-100 rounded-full px-1.5 py-0.5 font-semibold">
+      {count}
+    </span>
+  );
+}
+
 export default function AdminSidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
   const userRole = user?.role ?? '';
+  const [badges, setBadges] = useState({ moderation_pending: 0, announce_active: 0 });
+
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/admin/badge-counts`)
+      .then(r => r.json())
+      .then(j => { if (j.success) setBadges(j.data); })
+      .catch(() => {});
+  }, []);
 
   return (
     <aside className="w-64 bg-surface-900 text-surface-300 min-h-screen border-r border-surface-800">
@@ -71,6 +89,8 @@ export default function AdminSidebar() {
               </div>
               {visibleItems.map((item) => {
                 const isActive = pathname === item.href || (item.href !== '/admin' && pathname?.startsWith(item.href));
+                const badgeCount = item.href === '/admin/content/moderation' ? badges.moderation_pending
+                  : item.href === '/admin/settings/announce' ? badges.announce_active : 0;
                 return (
                   <Link
                     key={item.href}
@@ -83,6 +103,7 @@ export default function AdminSidebar() {
                   >
                     <span className="w-5 text-center text-base opacity-60">{item.icon}</span>
                     {item.label}
+                    <Badge count={badgeCount} />
                   </Link>
                 );
               })}

@@ -1,6 +1,7 @@
 const Router = require('@koa/router');
 const { authMiddleware } = require('../middleware/auth');
 const { requireOwnershipOrPermission } = require('../middleware/permission');
+const { createDynamicRateLimit } = require('../middleware/rate-limit');
 const ReplyController = require('../controllers/reply.controller');
 const ReplyService = require('../services/reply.service');
 
@@ -19,6 +20,7 @@ function createPostRoutes(basePrefix = '/api') {
 
   router.post('/:postId/replies',
     authMiddleware({ required: true, roles: ['user', 'moderator', 'admin'] }),
+    createDynamicRateLimit('reply_create', 'rate_reply_max', 'rate_reply_window_min', { max: 30, windowMin: 60 }),
     validateReply(),
     ReplyController.create
   );

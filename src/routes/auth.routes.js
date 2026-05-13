@@ -1,5 +1,6 @@
 const Router = require('@koa/router');
 const { authMiddleware } = require('../middleware/auth');
+const { createDynamicRateLimit } = require('../middleware/rate-limit');
 const AuthController = require('../controllers/auth.controller');
 
 function createRoutes(basePrefix = '/api') {
@@ -7,7 +8,10 @@ function createRoutes(basePrefix = '/api') {
 
   router.get('/check', authMiddleware({ required: false }), AuthController.check);
   router.get('/callback', AuthController.callback);
-  router.post('/verify-session', AuthController.verifySession);
+  router.post('/verify-session',
+    createDynamicRateLimit('login', 'rate_login_max', 'rate_login_lock_min', { max: 5, windowMin: 15 }),
+    AuthController.verifySession
+  );
   router.post('/logout', authMiddleware({ required: true }), AuthController.logout);
 
   return router;

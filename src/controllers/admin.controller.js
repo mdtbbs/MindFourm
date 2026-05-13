@@ -83,6 +83,15 @@ class AdminController {
     Response.success(ctx, stats);
   }
 
+  // ====== NEW: Badge counts for sidebar ======
+  static getBadgeCounts(ctx) {
+    const moderationCount = db.prepare(`
+      SELECT (SELECT COUNT(*) FROM posts WHERE status = 'pending') + (SELECT COUNT(*) FROM replies WHERE status = 'pending') as total
+    `).get().total;
+    const announceActive = SettingService.get('announce_enabled') === 'true' ? 1 : 0;
+    Response.success(ctx, { moderation_pending: moderationCount, announce_active: announceActive });
+  }
+
   // ====== NEW: Settings ======
   static getSettings(ctx) {
     const { category } = ctx.params;

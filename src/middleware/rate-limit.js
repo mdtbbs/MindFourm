@@ -29,8 +29,28 @@ function createRateLimitMiddleware({ key, max, windowMs, identifierFn }) {
   };
 }
 
+/**
+ * Create rate limit middleware that reads values from settings at request time.
+ * @param {string} configKey - e.g. 'post_create', 'reply_create', 'login'
+ * @param {string} maxKey - settings key for max count, e.g. 'rate_post_max'
+ * @param {string} windowKey - settings key for window in minutes, e.g. 'rate_post_window_min'
+ * @param {object} defaults - fallback { max, windowMin } if settings not available
+ */
+function createDynamicRateLimit(configKey, maxKey, windowKey, defaults) {
+  return (ctx, next) => {
+    const SettingService = require('../services/setting.service');
+    const max = SettingService.getNumber(maxKey) ?? defaults.max;
+    const windowMin = SettingService.getNumber(windowKey) ?? defaults.windowMin;
+    const identifier = ctx.state.user ? `user:${ctx.state.user.id}` : `ip:${ctx.ip}`;
+    if (!rateLimit({ key: configKey, max, windowMs: windowMin * 60 * 1000, identifier })) {
+      return Response.error(ctx, 'Rate limit exceeded', 429, 'RATE_LIMITED');
+    }
+    return next();
+  };
+}
+
 function resetStore(key) {
   if (key) stores.delete(key); else stores.clear();
 }
 
-module.exports = { createRateLimitMiddleware, rateLimit, resetStore };
+module.exports = { createRateLimitMiddleware, createDynamicRateLimit, rateLimit, resetStore };
