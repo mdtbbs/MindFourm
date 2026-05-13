@@ -150,3 +150,26 @@ CREATE TABLE IF NOT EXISTS bans (
 CREATE INDEX IF NOT EXISTS idx_bans_type ON bans(ban_type);
 CREATE INDEX IF NOT EXISTS idx_bans_active ON bans(is_active);
 CREATE INDEX IF NOT EXISTS idx_bans_value ON bans(value);
+
+-- Composite index for main post listing query (filter + sort)
+CREATE INDEX IF NOT EXISTS idx_posts_list ON posts(deleted_at, status, is_pinned DESC, created_at DESC);
+
+-- Composite index for reply listing with deleted_at filter
+CREATE INDEX IF NOT EXISTS idx_replies_list ON replies(post_id, deleted_at, created_at ASC);
+
+-- Indexes for user search (username/email LIKE)
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Composite index for ban lookups
+CREATE INDEX IF NOT EXISTS idx_bans_lookup ON bans(ban_type, value, is_active);
+
+-- Composite index for log listing
+CREATE INDEX IF NOT EXISTS idx_logs_list ON operation_logs(created_at DESC, user_id, action);
+
+-- Composite index for session validation
+CREATE INDEX IF NOT EXISTS idx_sessions_validate ON sessions(session_token, expires_at);
+
+-- Composite index for post_tags lookups
+CREATE INDEX IF NOT EXISTS idx_post_tags_post ON post_tags(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id);
