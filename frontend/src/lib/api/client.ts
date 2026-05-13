@@ -48,15 +48,19 @@ async function request<T>(
     throw new Error('Invalid JSON response');
   }
 
-  // Handle wrapped responses { success: true, data: ... }
-  // But don't unwrap if data itself looks like a paginated response (has pagination or total)
+  // Handle wrapped responses { success: true, data: [...], pagination: {...} }
+  // For paginated responses, return { data, pagination }
   if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
-    const inner = (data as { data: unknown }).data;
+    const d = data as { data: unknown; pagination?: unknown };
+    if (d.pagination !== undefined) {
+      return { data: d.data, pagination: d.pagination } as T;
+    }
+    // Non-paginated: unwrap just the data
+    const inner = d.data;
     if (typeof inner === 'object' && inner !== null && 'pagination' in inner) {
-      // Paginated response - return the whole inner data object
       return inner as T;
     }
-    return (data as { data: T }).data;
+    return d.data as T;
   }
 
   return data as T;
