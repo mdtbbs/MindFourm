@@ -1,10 +1,16 @@
 const Router = require('@koa/router');
 const { authMiddleware } = require('../middleware/auth');
-const { validate } = require('../middleware/validate');
 const { requireOwnershipOrPermission } = require('../middleware/permission');
-const { getPostSchema } = require('../validators/common.validator');
 const PostController = require('../controllers/post.controller');
 const PostService = require('../services/post.service');
+
+function validatePost() {
+  return (ctx, next) => {
+    const { validate } = require('../middleware/validate');
+    const { getPostSchema } = require('../validators/common.validator');
+    return validate(getPostSchema())(ctx, next);
+  };
+}
 
 function createRoutes(basePrefix = '/api') {
   const router = new Router({ prefix: `${basePrefix}/posts` });
@@ -14,7 +20,7 @@ function createRoutes(basePrefix = '/api') {
 
   router.post('/',
     authMiddleware({ required: true, roles: ['user', 'moderator', 'admin'] }),
-    validate(getPostSchema()),
+    validatePost(),
     PostController.create
   );
 
@@ -24,7 +30,7 @@ function createRoutes(basePrefix = '/api') {
       const post = PostService.getById(parseInt(ctx.params.id));
       return post?.user_id;
     }),
-    validate(getPostSchema()),
+    validatePost(),
     PostController.update
   );
 

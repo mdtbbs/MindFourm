@@ -21,11 +21,15 @@ async function fetchSettings(): Promise<Record<string, string>> {
   }
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const res = await fetch(`${API_BASE}/api/v1/posts/${params.id}`, { next: { tags: [`post-${params.id}`] } });
-  if (!res.ok) return { title: 'Not Found' };
+async function fetchPost(id: number, page: number, limit: number) {
+  const res = await fetch(`${API_BASE}/api/v1/posts/${id}?page=${page}&limit=${limit}`, { next: { tags: [`post-${id}`] } });
+  if (!res.ok) return null;
   const json = await res.json();
-  const post = json.success ? json.data : null;
+  return json.success ? json.data : null;
+}
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const post = await fetchPost(parseInt(params.id), 1, 1);
   if (!post) return { title: 'Not Found' };
 
   const settings = await fetchSettings();
@@ -56,19 +60,13 @@ export default async function PostDetailPage({
   const page = parseInt(searchParams.page || '1');
 
   const settings = await fetchSettings();
-  const repliesPerPage = parseInt(settings?.replies_per_page || '50');
+  const repliesPerPage = parseInt(settings.replies_per_page || '50');
+  const post = await fetchPost(postId, page, repliesPerPage);
 
-  const res = await fetch(`${API_BASE}/api/v1/posts/${postId}?page=${page}&limit=${repliesPerPage}`, { next: { tags: [`post-${postId}`] } });
-  if (!res.ok) return notFound();
-  const json = await res.json();
-  if (!json.success) return notFound();
+  if (!post) return <div className="max-w-4xl mx-auto px-4 py-8">帖子不存在</div>;
 
-  const post = json.data;
-  const repliesResult = {
-    data: post.replies || [],
-    pagination: post.repliesPagination || { page: 1, limit: repliesPerPage, total: 0, totalPages: 1 },
-  };
-
+  const replies = post.replies?.data ?? [];
+  const pagination = post.replies?.pagination ?? { page: 1, totalPages: 1, total: 0 };
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
@@ -92,14 +90,14 @@ export default async function PostDetailPage({
       {/* Replies */}
       <div className="mt-8 space-y-4">
         <h2 className="text-lg font-semibold text-surface-900">
-          回复 ({repliesResult.pagination.total})
+          回复 ({pagination.total})
         </h2>
 
-        {repliesResult.data.length === 0 ? (
+        {replies.length === 0 ? (
           <div className="text-center py-8 text-surface-500">暂无回复</div>
         ) : (
           <div className="space-y-4">
-            {repliesResult.data.map((reply: any, index: number) => (
+            {replies.map((reply: any, index: number) => (
               <ReplyItem
                 key={reply.id}
                 reply={reply}
@@ -110,8 +108,8 @@ export default async function PostDetailPage({
         )}
 
         <Pagination
-          currentPage={repliesResult.pagination.page}
-          totalPages={repliesResult.pagination.totalPages}
+          currentPage={pagination.page}
+          totalPages={pagination.totalPages}
           basePath={`/posts/${postId}`}
         />
       </div>
