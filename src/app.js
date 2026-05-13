@@ -1,6 +1,7 @@
 const Koa = require('koa');
 const bodyParser = require('koa-bodyparser');
 const cors = require('@koa/cors');
+const compress = require('koa-compress');
 const { errorHandler } = require('./middleware/error');
 const routes = require('./routes');
 const config = require('./config');
@@ -8,6 +9,11 @@ const config = require('./config');
 const app = new Koa();
 
 app.proxy = true;
+
+app.use(compress({
+  gzip: { threshold: 1024 },
+  deflate: { threshold: 1024 }
+}));
 
 app.use(errorHandler);
 
@@ -17,7 +23,7 @@ app.use(cors({
 }));
 
 app.use(bodyParser({
-  json: { limit: '10mb' }
+  json: { limit: '1mb' }
 }));
 
 app.use(routes.routes());
