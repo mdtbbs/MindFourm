@@ -34,31 +34,31 @@ export default function DisplaySettingsPage() {
   return (
     <div className="bg-white border border-surface-200">
       <div className="px-6 py-4 border-b border-surface-200">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">Display Settings</h2>
-        <p className="text-xs text-surface-400 mt-1">Control homepage and list display behavior</p>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">显示设置</h2>
+        <p className="text-xs text-surface-400 mt-1">控制首页和列表显示行为</p>
       </div>
       <div className="p-6 space-y-6">
         {message && <Alert type="success" message={message} />}
         {error && <Alert type="error" message={error} />}
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Posts Per Page</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">每页帖子数</label>
           <input type="number" className="w-32 px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.posts_per_page ?? '20'} onChange={(e) => update('posts_per_page', e.target.value)} />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Default Sort</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">默认排序</label>
           <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={values.default_sort ?? 'newest'} onChange={(e) => update('default_sort', e.target.value)}>
-            <option value="newest">Newest first</option>
-            <option value="popular">Most popular</option>
-            <option value="replies">Most replies</option>
+            <option value="newest">最新发布</option>
+            <option value="popular">最热</option>
+            <option value="replies">最多回复</option>
           </select>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Replies Per Page</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">每页回复数</label>
           <input type="number" className="w-32 px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.replies_per_page ?? '50'} onChange={(e) => update('replies_per_page', e.target.value)} />
-          <p className="text-xs text-surface-400 mt-1">Number of replies per page in post detail view</p>
+          <p className="text-xs text-surface-400 mt-1">帖子详情中每页显示的回数</p>
         </div>
       </div>
       <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">

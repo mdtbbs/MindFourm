@@ -6,11 +6,11 @@ import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 
 const fields = [
-  { key: 'title_min_length', label: 'Title Min Length', unit: 'chars' },
-  { key: 'title_max_length', label: 'Title Max Length', unit: 'chars' },
-  { key: 'content_min_length', label: 'Content Min Length', unit: 'chars' },
-  { key: 'max_tags_per_post', label: 'Max Tags Per Post', unit: '' },
-  { key: 'max_tag_length', label: 'Max Tag Length', unit: 'chars' },
+  { key: 'title_min_length', label: '标题最小长度', unit: '字符' },
+  { key: 'title_max_length', label: '标题最大长度', unit: '字符' },
+  { key: 'content_min_length', label: '内容最小长度', unit: '字符' },
+  { key: 'max_tags_per_post', label: '每帖最多标签', unit: '' },
+  { key: 'max_tag_length', label: '标签最大长度', unit: '字符' },
 ];
 
 export default function RulesPage() {
@@ -42,8 +42,8 @@ export default function RulesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-surface-900">Posting Rules</h1>
-        <p className="text-sm text-surface-500 mt-1">Content length and tag limits for posts and replies</p>
+        <h1 className="text-xl font-bold text-surface-900">发帖规则</h1>
+        <p className="text-sm text-surface-500 mt-1">设置帖子和回复的内容长度及标签限制</p>
       </div>
 
       {message && <Alert type="success" message={message} />}
@@ -51,7 +51,7 @@ export default function RulesPage() {
 
       <div className="bg-white border border-surface-200">
         <div className="px-6 py-4 border-b border-surface-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">Content Limits</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">内容限制</h2>
         </div>
         <div className="p-6 space-y-6">
           {fields.map((f) => (

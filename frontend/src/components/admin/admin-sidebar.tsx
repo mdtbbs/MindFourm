@@ -6,43 +6,43 @@ import { useAuth } from '@/lib/auth/context';
 
 const navSections = [
   {
-    title: 'Overview',
+    title: '概览',
     items: [
-      { href: '/admin', label: 'Dashboard', icon: '◈', roles: ['admin', 'moderator'] },
+      { href: '/admin', label: '仪表盘', icon: '◈', roles: ['admin', 'moderator'] },
     ],
   },
   {
-    title: 'Site',
+    title: '站点',
     items: [
-      { href: '/admin/settings/basic', label: 'Basic Info', icon: '◼', roles: ['admin'] },
-      { href: '/admin/settings/announce', label: 'Announcements', icon: '◻', roles: ['admin'] },
-      { href: '/admin/settings/display', label: 'Display', icon: '▭', roles: ['admin'] },
-      { href: '/admin/settings/seo', label: 'SEO', icon: '◇', roles: ['admin'] },
+      { href: '/admin/settings/basic', label: '基本信息', icon: '◼', roles: ['admin'] },
+      { href: '/admin/settings/announce', label: '公告管理', icon: '◻', roles: ['admin'] },
+      { href: '/admin/settings/display', label: '显示设置', icon: '▭', roles: ['admin'] },
+      { href: '/admin/settings/seo', label: 'SEO 设置', icon: '◇', roles: ['admin'] },
     ],
   },
   {
-    title: 'Content',
+    title: '内容',
     items: [
-      { href: '/admin/posts', label: 'Posts', icon: '▣', roles: ['admin', 'moderator'] },
-      { href: '/admin/content/tags', label: 'Tags', icon: '⧫', roles: ['admin'] },
-      { href: '/admin/content/moderation', label: 'Moderation', icon: '△', roles: ['admin', 'moderator'] },
+      { href: '/admin/posts', label: '帖子管理', icon: '▣', roles: ['admin', 'moderator'] },
+      { href: '/admin/content/tags', label: '标签管理', icon: '⧫', roles: ['admin'] },
+      { href: '/admin/content/moderation', label: '审核队列', icon: '△', roles: ['admin', 'moderator'] },
     ],
   },
   {
-    title: 'System',
+    title: '系统',
     items: [
-      { href: '/admin/system/rules', label: 'Posting Rules', icon: '⊠', roles: ['admin'] },
-      { href: '/admin/system/rate-limits', label: 'Rate Limits', icon: '◷', roles: ['admin'] },
-      { href: '/admin/system/bans', label: 'Bans', icon: '⊘', roles: ['admin'] },
-      { href: '/admin/system/cleanup', label: 'Data Cleanup', icon: '◎', roles: ['admin'] },
+      { href: '/admin/system/rules', label: '发帖规则', icon: '⊠', roles: ['admin'] },
+      { href: '/admin/system/rate-limits', label: '限流设置', icon: '◷', roles: ['admin'] },
+      { href: '/admin/system/bans', label: '封禁管理', icon: '⊘', roles: ['admin'] },
+      { href: '/admin/system/cleanup', label: '数据清理', icon: '◎', roles: ['admin'] },
     ],
   },
   {
-    title: 'Manage',
+    title: '管理',
     items: [
-      { href: '/admin/categories', label: 'Categories', icon: '▤', roles: ['admin'] },
-      { href: '/admin/users', label: 'Users', icon: '⬡', roles: ['admin'] },
-      { href: '/admin/logs', label: 'Logs', icon: '▦', roles: ['admin'] },
+      { href: '/admin/categories', label: '分类管理', icon: '▤', roles: ['admin'] },
+      { href: '/admin/users', label: '用户管理', icon: '⬡', roles: ['admin'] },
+      { href: '/admin/logs', label: '系统日志', icon: '▦', roles: ['admin'] },
     ],
   },
 ];
@@ -56,7 +56,7 @@ export default function AdminSidebar() {
     <aside className="w-64 bg-surface-900 text-surface-300 min-h-screen border-r border-surface-800">
       <div className="p-6 border-b border-surface-800">
         <h2 className="text-sm font-bold text-white tracking-wide">MINDFORUM</h2>
-        <p className="text-xs text-surface-500 mt-1 tracking-widest uppercase">Administration</p>
+        <p className="text-xs text-surface-500 mt-1 tracking-widest">管理后台</p>
       </div>
       <nav className="py-3">
         {navSections.map((section) => {

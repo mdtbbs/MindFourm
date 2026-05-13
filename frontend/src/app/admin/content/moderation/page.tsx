@@ -40,12 +40,12 @@ export default function ModerationPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-surface-900">Content Moderation</h1>
-          <p className="text-sm text-surface-500 mt-1">Review pending posts and replies</p>
+          <h1 className="text-xl font-bold text-surface-900">内容审核</h1>
+          <p className="text-sm text-surface-500 mt-1">审核待处理的帖子和回复</p>
         </div>
         <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={filter} onChange={(e) => setFilter(e.target.value)}>
-          <option value="posts">Posts</option>
-          <option value="replies">Replies</option>
+          <option value="posts">帖子</option>
+          <option value="replies">回复</option>
         </select>
       </div>
 
@@ -54,7 +54,7 @@ export default function ModerationPage() {
 
       <div className="bg-white border border-surface-200 overflow-hidden">
         {items.length === 0 ? (
-          <div className="p-8 text-center text-surface-400">No pending items</div>
+          <div className="p-8 text-center text-surface-400">暂无待审核内容</div>
         ) : (
           <div>
             {items.map((item) => (
@@ -68,8 +68,8 @@ export default function ModerationPage() {
                   <p className="text-sm text-surface-700 truncate">{item.content}</p>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => handleApprove(item.id)}>Approve</Button>
-                  <Button variant="danger" size="sm" onClick={() => handleReject(item.id)}>Reject</Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleApprove(item.id)}>通过</Button>
+                  <Button variant="danger" size="sm" onClick={() => handleReject(item.id)}>拒绝</Button>
                 </div>
               </div>
             ))}

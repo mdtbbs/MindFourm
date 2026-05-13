@@ -39,8 +39,8 @@ export default function AnnounceSettingsPage() {
   return (
     <div className="bg-white border border-surface-200">
       <div className="px-6 py-4 border-b border-surface-200">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">Announcements</h2>
-        <p className="text-xs text-surface-400 mt-1">Homepage banner announcements, Markdown supported</p>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">公告设置</h2>
+        <p className="text-xs text-surface-400 mt-1">首页横幅公告，支持 Markdown</p>
       </div>
       <div className="p-6 space-y-6">
         {message && <Alert type="success" message={message} />}
@@ -48,12 +48,12 @@ export default function AnnounceSettingsPage() {
         <div>
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={values.announce_enabled === 'true'} onChange={(e) => update('announce_enabled', e.target.checked ? 'true' : 'false')} className="w-4 h-4 accent-surface-900" />
-            <span className="text-sm text-surface-700">Enable announcements</span>
+            <span className="text-sm text-surface-700">启用公告</span>
           </label>
         </div>
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Content</label>
-          <textarea className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400 min-h-[120px]" value={values.announce_content ?? ''} onChange={(e) => update('announce_content', e.target.value)} placeholder="Announcement text (Markdown supported)" />
+          <textarea className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400 min-h-[120px]" value={values.announce_content ?? ''} onChange={(e) => update('announce_content', e.target.value)} placeholder="公告内容（支持 Markdown）" />
         </div>
       </div>
       <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">

@@ -6,12 +6,12 @@ import { adminApi } from '@/lib/api/client';
 import type { AdminStats } from '@/types';
 
 const quickLinks = [
-  { href: '/admin/settings/basic', label: 'Site Settings', icon: '◼' },
-  { href: '/admin/posts', label: 'Posts', icon: '▣' },
-  { href: '/admin/content/moderation', label: 'Moderation', icon: '△' },
-  { href: '/admin/system/bans', label: 'Bans', icon: '⊘' },
-  { href: '/admin/categories', label: 'Categories', icon: '▤' },
-  { href: '/admin/logs', label: 'Logs', icon: '▦' },
+  { href: '/admin/settings/basic', label: '站点设置', icon: '◼' },
+  { href: '/admin/posts', label: '帖子管理', icon: '▣' },
+  { href: '/admin/content/moderation', label: '内容审核', icon: '△' },
+  { href: '/admin/system/bans', label: '封禁管理', icon: '⊘' },
+  { href: '/admin/categories', label: '分类管理', icon: '▤' },
+  { href: '/admin/logs', label: '操作日志', icon: '▦' },
 ];
 
 const chartDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -28,10 +28,10 @@ export default function Dashboard() {
   }, []);
 
   const statCards = [
-    { label: 'POSTS', value: stats?.total_posts ?? '--', trend: stats ? `+${stats.today_posts} today` : '' },
-    { label: 'REPLIES', value: stats?.total_replies ?? '--', trend: stats ? `+${stats.today_replies} today` : '' },
-    { label: 'USERS', value: stats?.total_users ?? '--', trend: stats ? `+${stats.today_users} today` : '' },
-    { label: 'ACTIVE 24H', value: stats?.active_24h ?? '--', trend: '' },
+    { label: '帖子', value: stats?.total_posts ?? '--', trend: stats ? `今日 +${stats.today_posts}` : '' },
+    { label: '回复', value: stats?.total_replies ?? '--', trend: stats ? `今日 +${stats.today_replies}` : '' },
+    { label: '用户', value: stats?.total_users ?? '--', trend: stats ? `今日 +${stats.today_users}` : '' },
+    { label: '24小时活跃', value: stats?.active_24h ?? '--', trend: '' },
   ];
 
   const maxActivity = stats ? Math.max(...stats.activity_7d, 1) : 1;
@@ -57,7 +57,7 @@ export default function Dashboard() {
         {/* Activity chart */}
         <div className="lg:col-span-2 bg-white border border-surface-200">
           <div className="px-5 py-4 border-b border-surface-200">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">7-Day Activity</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">7 日活动</h3>
           </div>
           <div className="flex items-end justify-center gap-2 h-36 px-5 py-6">
             {stats?.activity_7d.map((val, i) => (
@@ -66,14 +66,14 @@ export default function Dashboard() {
                 <span className="text-xs text-surface-400 font-mono">{chartDays[i]}</span>
               </div>
             ))}
-            {!stats && <span className="text-surface-400">No data</span>}
+            {!stats && <span className="text-surface-400">暂无数据</span>}
           </div>
         </div>
 
         {/* Quick access */}
         <div className="bg-white border border-surface-200">
           <div className="px-5 py-4 border-b border-surface-200">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">Quick Access</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">快捷入口</h3>
           </div>
           <div>
             {quickLinks.map((link) => (

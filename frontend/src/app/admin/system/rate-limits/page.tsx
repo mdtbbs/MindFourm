@@ -6,10 +6,10 @@ import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 
 const groups = [
-  { title: 'Post Creation', fields: [{ key: 'rate_post_max', label: 'Max posts' }, { key: 'rate_post_window_min', label: 'Time window (min)' }] },
-  { title: 'Reply Creation', fields: [{ key: 'rate_reply_max', label: 'Max replies' }, { key: 'rate_reply_window_min', label: 'Time window (min)' }, { key: 'rate_reply_newuser_cooldown_sec', label: 'New user cooldown (sec)' }] },
-  { title: 'Login Attempts', fields: [{ key: 'rate_login_max', label: 'Max attempts' }, { key: 'rate_login_lock_min', label: 'Lock duration (min)' }] },
-  { title: 'API Requests', fields: [{ key: 'rate_api_max', label: 'Requests per min' }] },
+  { title: '发帖频率', fields: [{ key: 'rate_post_max', label: '最大帖子数' }, { key: 'rate_post_window_min', label: '时间窗口（分钟）' }] },
+  { title: '回复频率', fields: [{ key: 'rate_reply_max', label: '最大回复数' }, { key: 'rate_reply_window_min', label: '时间窗口（分钟）' }, { key: 'rate_reply_newuser_cooldown_sec', label: '新用户冷却（秒）' }] },
+  { title: '登录尝试', fields: [{ key: 'rate_login_max', label: '最大尝试次数' }, { key: 'rate_login_lock_min', label: '锁定时间（分钟）' }] },
+  { title: 'API 请求', fields: [{ key: 'rate_api_max', label: '每分钟请求数' }] },
 ];
 
 export default function RateLimitsPage() {
@@ -41,8 +41,8 @@ export default function RateLimitsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-surface-900">Rate Limits</h1>
-        <p className="text-sm text-surface-500 mt-1">Prevent abuse by controlling action frequency</p>
+        <h1 className="text-xl font-bold text-surface-900">限流设置</h1>
+        <p className="text-sm text-surface-500 mt-1">通过控制操作频率防止滥用</p>
       </div>
 
       {message && <Alert type="success" message={message} />}

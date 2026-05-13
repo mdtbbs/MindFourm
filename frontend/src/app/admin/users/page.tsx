@@ -19,9 +19,9 @@ const roleVariant: Record<UserRole, 'default' | 'primary' | 'success' | 'warning
 };
 
 const roleOptions: { value: UserRole; label: string }[] = [
-  { value: 'user', label: 'User' },
-  { value: 'moderator', label: 'Moderator' },
-  { value: 'admin', label: 'Admin' },
+  { value: 'user', label: '用户' },
+  { value: 'moderator', label: '版主' },
+  { value: 'admin', label: '管理员' },
 ];
 
 export default function AdminUsersPage() {
@@ -81,7 +81,7 @@ export default function AdminUsersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <div className="text-surface-500">Loading users...</div>
+        <div className="text-surface-500">加载用户中...</div>
       </div>
     );
   }
@@ -93,23 +93,23 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-surface-900">User Management</h1>
+        <h1 className="text-2xl font-bold text-surface-900">用户管理</h1>
         <p className="text-sm text-surface-500 mt-1">
-          View and manage registered users and their roles.
+          查看和管理注册用户及其角色。
         </p>
         <form onSubmit={handleSearch} className="flex gap-2 mt-4">
           <input
             className="px-3 py-2 border border-surface-200 rounded text-sm w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by username or email..."
+            placeholder="搜索用户名或邮箱..."
           />
           <Button type="submit" size="sm">
-            Search
+            搜索
           </Button>
           {searchQuery && (
             <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setSearchQuery(''); setPage(1); }}>
-              Clear
+              清除
             </Button>
           )}
         </form>
@@ -123,12 +123,12 @@ export default function AdminUsersPage() {
             <thead className="bg-surface-50 border-b border-surface-200">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-surface-600">ID</th>
-                <th className="text-left px-4 py-3 font-medium text-surface-600">Username</th>
-                <th className="text-left px-4 py-3 font-medium text-surface-600">Email</th>
-                <th className="text-left px-4 py-3 font-medium text-surface-600">Role</th>
+                <th className="text-left px-4 py-3 font-medium text-surface-600">用户名</th>
+                <th className="text-left px-4 py-3 font-medium text-surface-600">邮箱</th>
+                <th className="text-left px-4 py-3 font-medium text-surface-600">角色</th>
                 <th className="text-left px-4 py-3 font-medium text-surface-600">MindAuth ID</th>
-                <th className="text-left px-4 py-3 font-medium text-surface-600">Created</th>
-                <th className="text-left px-4 py-3 font-medium text-surface-600">Actions</th>
+                <th className="text-left px-4 py-3 font-medium text-surface-600">创建时间</th>
+                <th className="text-left px-4 py-3 font-medium text-surface-600">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-100">
@@ -161,7 +161,7 @@ export default function AdminUsersPage() {
         </div>
 
         {users.length === 0 && (
-          <div className="text-center py-12 text-surface-500">No users found.</div>
+          <div className="text-center py-12 text-surface-500">暂无用户。</div>
         )}
       </div>
 

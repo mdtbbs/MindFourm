@@ -41,8 +41,8 @@ export default function CleanupPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-surface-900">Data Cleanup</h1>
-        <p className="text-sm text-surface-500 mt-1">Automated rules and manual tools for database maintenance</p>
+        <h1 className="text-xl font-bold text-surface-900">数据清理</h1>
+        <p className="text-sm text-surface-500 mt-1">自动清理规则和手动维护工具</p>
       </div>
 
       {message && <Alert type="success" message={message} />}
@@ -51,25 +51,25 @@ export default function CleanupPage() {
       {/* Auto cleanup rules */}
       <div className="bg-white border border-surface-200">
         <div className="px-6 py-4 border-b border-surface-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">Auto Cleanup Rules</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">自动清理规则</h2>
         </div>
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-surface-50 border border-surface-200 p-5">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">Audit Logs</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">审计日志</h3>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-surface-600">Retention days</span>
+              <span className="text-sm text-surface-600">保留天数</span>
               <input type="number" className="w-20 px-2 py-1 border border-surface-200 rounded text-sm text-center font-mono" value={values.cleanup_log_retention_days ?? '90'} onChange={(e) => update('cleanup_log_retention_days', e.target.value)} />
             </div>
-            <p className="text-xs text-surface-400">Delete oldest when exceeding limit</p>
+            <p className="text-xs text-surface-400">超出限制时删除最旧记录</p>
           </div>
 
           <div className="bg-surface-50 border border-surface-200 p-5">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">Soft Deleted</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">软删除数据</h3>
             <div className="flex justify-between items-center mb-2">
-              <span className="text-sm text-surface-600">Retention days</span>
+              <span className="text-sm text-surface-600">保留天数</span>
               <input type="number" className="w-20 px-2 py-1 border border-surface-200 rounded text-sm text-center font-mono" value={values.cleanup_soft_delete_retention_days ?? '30'} onChange={(e) => update('cleanup_soft_delete_retention_days', e.target.value)} />
             </div>
-            <p className="text-xs text-surface-400">Permanent delete after retention</p>
+            <p className="text-xs text-surface-400">保留期后永久删除</p>
           </div>
         </div>
         <div className="px-6 py-4 border-t border-surface-200 flex justify-end gap-2">
@@ -81,12 +81,12 @@ export default function CleanupPage() {
       {/* Manual cleanup */}
       <div className="bg-white border border-surface-200">
         <div className="px-6 py-4 border-b border-surface-200">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">Manual Cleanup</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">手动清理</h2>
         </div>
         <div className="p-6 flex gap-3 flex-wrap">
-          <Button variant="danger" onClick={() => runCleanup('cleanupSessions')}>Clear Expired Sessions</Button>
-          <Button variant="danger" onClick={() => runCleanup('cleanupLogs')}>Clear Old Logs</Button>
-          <Button variant="danger" onClick={() => runCleanup('cleanupSoftDeleted')}>Purge Soft Deleted</Button>
+          <Button variant="danger" onClick={() => runCleanup('cleanupSessions')}>清除过期会话</Button>
+          <Button variant="danger" onClick={() => runCleanup('cleanupLogs')}>清除旧日志</Button>
+          <Button variant="danger" onClick={() => runCleanup('cleanupSoftDeleted')}>清除软删除数据</Button>
         </div>
       </div>
     </div>

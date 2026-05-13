@@ -46,38 +46,38 @@ export default function BasicSettingsPage() {
   return (
     <div className="bg-white border border-surface-200">
       <div className="px-6 py-4 border-b border-surface-200">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">Site Identity</h2>
-        <p className="text-xs text-surface-400 mt-1">Displayed in browser title, navigation bar and footer</p>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">站点信息</h2>
+        <p className="text-xs text-surface-400 mt-1">显示在浏览器标题、导航栏和页脚</p>
       </div>
       <div className="p-6 space-y-6">
         {message && <Alert type="success" message={message} />}
         {error && <Alert type="error" message={error} />}
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Forum Name</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">论坛名称</label>
           <input className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.site_name ?? ''} onChange={(e) => update('site_name', e.target.value)} />
-          <p className="text-xs text-surface-400 mt-1">Appears in browser title, navigation and footer</p>
+          <p className="text-xs text-surface-400 mt-1">显示在浏览器标题、导航和页脚</p>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Tagline</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">标语</label>
           <input className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.site_tagline ?? ''} onChange={(e) => update('site_tagline', e.target.value)} />
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Description</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">描述</label>
           <textarea className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400 min-h-[80px]" value={values.site_description ?? ''} onChange={(e) => update('site_description', e.target.value)} />
-          <p className="text-xs text-surface-400 mt-1">Used on homepage and for SEO</p>
+          <p className="text-xs text-surface-400 mt-1">用于首页和 SEO</p>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Logo URL</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Logo 地址</label>
           <input className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.site_logo_url ?? ''} onChange={(e) => update('site_logo_url', e.target.value)} placeholder="/logo.png" />
-          <p className="text-xs text-surface-400 mt-1">Leave empty to display text logo</p>
+          <p className="text-xs text-surface-400 mt-1">留空则显示文字 Logo</p>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Footer Copyright</label>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">页脚版权信息</label>
           <input className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.site_footer ?? ''} onChange={(e) => update('site_footer', e.target.value)} />
         </div>
       </div>

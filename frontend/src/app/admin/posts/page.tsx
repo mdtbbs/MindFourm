@@ -83,11 +83,11 @@ export default function AdminPostsPage() {
       setActionError(null);
       await adminApi.pinPost(post.id, !post.is_pinned);
       showActionSuccess(
-        post.is_pinned ? `Post "${post.title}" unpinned` : `Post "${post.title}" pinned`
+        post.is_pinned ? `帖子「${post.title}」已取消置顶` : `帖子「${post.title}」已置顶`
       );
       await fetchPosts(currentPage);
     } catch (err) {
-      showActionError(err instanceof Error ? err.message : 'Failed to toggle pin');
+      showActionError(err instanceof Error ? err.message : '取消置顶失败');
     } finally {
       setButtonLoading(post.id, false);
     }
@@ -98,26 +98,26 @@ export default function AdminPostsPage() {
       setButtonLoading(postId, true);
       setActionError(null);
       await adminApi.movePost(postId, categoryId);
-      showActionSuccess('Post moved successfully');
+      showActionSuccess('帖子移动成功');
       await fetchPosts(currentPage);
     } catch (err) {
-      showActionError(err instanceof Error ? err.message : 'Failed to move post');
+      showActionError(err instanceof Error ? err.message : '移动帖子失败');
     } finally {
       setButtonLoading(postId, false);
     }
   };
 
   const handleDelete = async (post: Post) => {
-    if (!confirm(`Delete post "${post.title}"? This action cannot be undone.`)) return;
+    if (!confirm(`确定删除帖子「${post.title}」？此操作不可撤销。`)) return;
     try {
       setButtonLoading(post.id, true);
       setActionError(null);
       await postApi.delete(post.id);
-      showActionSuccess(`Post "${post.title}" deleted`);
+      showActionSuccess(`帖子「${post.title}」已删除`);
       const nextPage = posts.length === 1 && currentPage > 1 ? currentPage - 1 : currentPage;
       router.push(nextPage === 1 ? '/admin/posts' : `/admin/posts?page=${nextPage}`);
     } catch (err) {
-      showActionError(err instanceof Error ? err.message : 'Failed to delete post');
+      showActionError(err instanceof Error ? err.message : '删除帖子失败');
     } finally {
       setButtonLoading(post.id, false);
     }
@@ -137,11 +137,11 @@ export default function AdminPostsPage() {
 
   const handleBulkDelete = async () => {
     if (!selectedIds.length) return;
-    if (!confirm(`Delete ${selectedIds.length} selected posts?`)) return;
+    if (!confirm(`确定删除选中的 ${selectedIds.length} 个帖子？`)) return;
     setBulkActionLoading(true);
     try {
       await adminApi.bulkDeletePosts(selectedIds);
-      showActionSuccess(`${selectedIds.length} posts deleted`);
+      showActionSuccess(`已删除 ${selectedIds.length} 个帖子`);
       setSelectedIds([]);
       await fetchPosts(currentPage);
     } catch (err) {
@@ -156,7 +156,7 @@ export default function AdminPostsPage() {
     setBulkActionLoading(true);
     try {
       await adminApi.bulkPinPosts(selectedIds, isPinned);
-      showActionSuccess(`${selectedIds.length} posts ${isPinned ? 'pinned' : 'unpinned'}`);
+      showActionSuccess(`已${isPinned ? '置顶' : '取消置顶'} ${selectedIds.length} 个帖子`);
       await fetchPosts(currentPage);
     } catch (err) {
       showActionError(err instanceof Error ? err.message : 'Failed');
@@ -166,14 +166,14 @@ export default function AdminPostsPage() {
   };
 
   const moveSelectOptions = [
-    { value: '', label: 'Move to...' },
+    { value: '', label: '移动到...' },
     ...categories.map((c) => ({ value: c.id, label: c.name })),
   ];
 
   if (loading && posts.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-surface-500">Loading posts...</p>
+        <p className="text-surface-500">加载帖子中...</p>
       </div>
     );
   }
@@ -182,7 +182,7 @@ export default function AdminPostsPage() {
     return (
       <div className="space-y-4">
         <Alert type="error" message={error} />
-        <Button onClick={() => fetchPosts(currentPage)}>Retry</Button>
+        <Button onClick={() => fetchPosts(currentPage)}>重试</Button>
       </div>
     );
   }
@@ -190,16 +190,16 @@ export default function AdminPostsPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-surface-900">Post Management</h1>
+        <h1 className="text-xl font-bold text-surface-900">帖子管理</h1>
         <span className="text-sm text-surface-500">
-          {posts.length} post{posts.length !== 1 ? 's' : ''} on this page
+          本页 {posts.length} 个帖子
         </span>
       </div>
 
       {selectedIds.length > 0 && (
         <div className="bg-white border border-surface-200 px-4 py-3 flex items-center gap-4">
           <span className="text-sm text-surface-600">
-            {selectedIds.length} selected
+            已选择 {selectedIds.length} 项
           </span>
           <Button
             variant="danger"
@@ -207,7 +207,7 @@ export default function AdminPostsPage() {
             disabled={bulkActionLoading}
             onClick={handleBulkDelete}
           >
-            Delete Selected
+            删除选中
           </Button>
           <Button
             variant="ghost"
@@ -215,7 +215,7 @@ export default function AdminPostsPage() {
             disabled={bulkActionLoading}
             onClick={() => handleBulkPin(true)}
           >
-            Pin Selected
+            置顶选中
           </Button>
           <Button
             variant="ghost"
@@ -223,14 +223,14 @@ export default function AdminPostsPage() {
             disabled={bulkActionLoading}
             onClick={() => handleBulkPin(false)}
           >
-            Unpin Selected
+            取消置顶选中
           </Button>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setSelectedIds([])}
           >
-            Clear
+            Clear Selection
           </Button>
         </div>
       )}
@@ -252,12 +252,12 @@ export default function AdminPostsPage() {
                   />
                 </th>
                 <th className="px-4 py-3 font-semibold">ID</th>
-                <th className="px-4 py-3 font-semibold">Title</th>
-                <th className="px-4 py-3 font-semibold">Category</th>
-                <th className="px-4 py-3 font-semibold text-center">Pinned</th>
-                <th className="px-4 py-3 font-semibold text-center">Views</th>
-                <th className="px-4 py-3 font-semibold">Created</th>
-                <th className="px-4 py-3 font-semibold">Actions</th>
+                <th className="px-4 py-3 font-semibold">标题</th>
+                <th className="px-4 py-3 font-semibold">分类</th>
+                <th className="px-4 py-3 font-semibold text-center">置顶</th>
+                <th className="px-4 py-3 font-semibold text-center">浏览</th>
+                <th className="px-4 py-3 font-semibold">创建时间</th>
+                <th className="px-4 py-3 font-semibold">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-surface-100">
@@ -277,12 +277,12 @@ export default function AdminPostsPage() {
                   </td>
                   <td className="px-4 py-3 text-surface-700">
                     {post.category_name ?? (
-                      <span className="text-surface-400 italic">No category</span>
+                      <span className="text-surface-400 italic">无分类</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-center">
                     {post.is_pinned ? (
-                      <Badge variant="warning">Pinned</Badge>
+                      <Badge variant="warning">已置顶</Badge>
                     ) : (
                       <span className="text-surface-400">—</span>
                     )}
@@ -299,7 +299,7 @@ export default function AdminPostsPage() {
                         disabled={actionInProgress[post.id]}
                         onClick={() => handleTogglePin(post)}
                       >
-                        {post.is_pinned ? 'Unpin' : 'Pin'}
+                        {post.is_pinned ? '取消置顶' : '置顶'}
                       </Button>
 
                       <Select
@@ -320,7 +320,7 @@ export default function AdminPostsPage() {
                         disabled={actionInProgress[post.id]}
                         onClick={() => handleDelete(post)}
                       >
-                        Delete
+                        删除
                       </Button>
                     </div>
                   </td>
@@ -329,7 +329,7 @@ export default function AdminPostsPage() {
               {posts.length === 0 && !loading && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-surface-500">
-                    No posts found.
+                    暂无帖子。
                   </td>
                 </tr>
               )}

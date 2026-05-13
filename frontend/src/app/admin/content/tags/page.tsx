@@ -56,8 +56,8 @@ export default function TagsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-surface-900">Tag Management</h1>
-        <p className="text-sm text-surface-500 mt-1">Create, edit, delete and merge tags</p>
+        <h1 className="text-xl font-bold text-surface-900">标签管理</h1>
+        <p className="text-sm text-surface-500 mt-1">创建、编辑、删除和合并标签</p>
       </div>
 
       {message && <Alert type="success" message={message} />}
@@ -66,7 +66,7 @@ export default function TagsPage() {
       {/* Tags list */}
       <div className="bg-white border border-surface-200">
         <div className="px-5 py-4 border-b border-surface-200">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-surface-600">Existing Tags</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-surface-600">现有标签</h2>
         </div>
         <div className="flex flex-wrap gap-2 p-4">
           {tags.map((tag) => (
@@ -76,43 +76,43 @@ export default function TagsPage() {
               <button onClick={() => handleDelete(tag)} className="text-surface-300 hover:text-surface-600">&times;</button>
             </span>
           ))}
-          {tags.length === 0 && <span className="text-surface-400 text-sm">No tags</span>}
+          {tags.length === 0 && <span className="text-surface-400 text-sm">暂无标签</span>}
         </div>
       </div>
 
       {/* Create tag */}
       <div className="bg-white border border-surface-200">
         <div className="px-5 py-4 border-b border-surface-200">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-surface-600">New Tag</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-surface-600">创建标签</h2>
         </div>
         <div className="p-4 flex gap-2 items-end">
           <div>
-            <label className="block text-xs text-surface-500 mb-1">Name</label>
-            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Tag name" />
+            <label className="block text-xs text-surface-500 mb-1">名称</label>
+            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="标签名称" />
           </div>
           <div>
-            <label className="block text-xs text-surface-500 mb-1">Slug (optional)</label>
-            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} placeholder="auto-generated" />
+            <label className="block text-xs text-surface-500 mb-1">别名（可选）</label>
+            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={newSlug} onChange={(e) => setNewSlug(e.target.value)} placeholder="自动生成" />
           </div>
-          <Button onClick={handleCreate}>Create</Button>
+          <Button onClick={handleCreate}>创建</Button>
         </div>
       </div>
 
       {/* Merge tags */}
       <div className="bg-white border border-surface-200">
         <div className="px-5 py-4 border-b border-surface-200">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-surface-600">Merge Tags</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-surface-600">合并标签</h2>
         </div>
         <div className="p-4 flex gap-2 items-end">
           <div>
-            <label className="block text-xs text-surface-500 mb-1">From</label>
-            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={mergeFrom} onChange={(e) => setMergeFrom(e.target.value)} placeholder="Source tag name" />
+            <label className="block text-xs text-surface-500 mb-1">来源</label>
+            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={mergeFrom} onChange={(e) => setMergeFrom(e.target.value)} placeholder="来源标签名称" />
           </div>
           <div>
-            <label className="block text-xs text-surface-500 mb-1">Into</label>
-            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={mergeTo} onChange={(e) => setMergeTo(e.target.value)} placeholder="Target tag name" />
+            <label className="block text-xs text-surface-500 mb-1">合并到</label>
+            <input className="px-3 py-2 border border-surface-200 rounded text-sm" value={mergeTo} onChange={(e) => setMergeTo(e.target.value)} placeholder="目标标签名称" />
           </div>
-          <Button variant="ghost" onClick={handleMerge}>Merge</Button>
+          <Button variant="ghost" onClick={handleMerge}>合并</Button>
         </div>
       </div>
     </div>
