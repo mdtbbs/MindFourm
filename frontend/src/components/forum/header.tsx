@@ -65,6 +65,7 @@ export default function Header() {
               <input
                 type="text"
                 placeholder="搜索帖子..."
+                aria-label="搜索帖子"
                 className="w-full pl-10 pr-4 py-1.5 sm:py-2 bg-surface-100 rounded-lg border-0 focus:ring-2 focus:ring-primary-500 text-sm"
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSearch((e.target as HTMLInputElement).value); }}
               />

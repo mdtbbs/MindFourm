@@ -57,7 +57,7 @@ export default function BansPage() {
         <div className="bg-white border border-surface-200 p-4 flex gap-2 items-end">
           <div>
             <label className="block text-xs text-surface-500 mb-1">类型</label>
-            <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={form.ban_type} onChange={(e) => setForm({ ...form, ban_type: e.target.value as any })}>
+            <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={form.ban_type} onChange={(e) => setForm({ ...form, ban_type: e.target.value as CreateBanInput['ban_type'] })}>
               <option value="ip">IP</option>
               <option value="ip_range">IP 范围</option>
               <option value="user">用户</option>
@@ -80,6 +80,7 @@ export default function BansPage() {
         {bans.length === 0 ? (
           <div className="p-8 text-center text-surface-400">暂无封禁记录</div>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-surface-50 border-b border-surface-200">
               <tr>
@@ -106,6 +107,7 @@ export default function BansPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

@@ -3,6 +3,7 @@ import Sidebar from '@/components/forum/sidebar';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import { Category, Post, Tag, PostListResponse } from '@/types';
+import Link from 'next/link';
 
 export const revalidate = 30;
 
@@ -100,8 +101,14 @@ export default async function HomePage({
           </div>
 
           {postsResult.data.length === 0 ? (
-            <div className="text-center py-12 text-surface-500">
-              暂无帖子
+            <div className="text-center py-12">
+              <p className="text-surface-500 mb-4">暂无帖子</p>
+              <Link
+                href="/posts/new"
+                className="inline-flex items-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                发布第一篇帖子
+              </Link>
             </div>
           ) : (
             <div className="space-y-3">

@@ -4,46 +4,50 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
+import {
+  LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
+  AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText
+} from 'lucide-react';
 
 const navSections = [
   {
     title: '概览',
     items: [
-      { href: '/admin', label: '仪表盘', icon: '◈', roles: ['admin', 'moderator'] },
+      { href: '/admin', label: '仪表盘', icon: LayoutDashboard, roles: ['admin', 'moderator'] },
     ],
   },
   {
     title: '站点',
     items: [
-      { href: '/admin/settings/basic', label: '基本信息', icon: '◼', roles: ['admin'] },
-      { href: '/admin/settings/announce', label: '公告管理', icon: '◻', roles: ['admin'] },
-      { href: '/admin/settings/display', label: '显示设置', icon: '▭', roles: ['admin'] },
-      { href: '/admin/settings/seo', label: 'SEO 设置', icon: '◇', roles: ['admin'] },
+      { href: '/admin/settings/basic', label: '基本信息', icon: Settings, roles: ['admin'] },
+      { href: '/admin/settings/announce', label: '公告管理', icon: Megaphone, roles: ['admin'] },
+      { href: '/admin/settings/display', label: '显示设置', icon: Palette, roles: ['admin'] },
+      { href: '/admin/settings/seo', label: 'SEO 设置', icon: Search, roles: ['admin'] },
     ],
   },
   {
     title: '内容',
     items: [
-      { href: '/admin/posts', label: '帖子管理', icon: '▣', roles: ['admin', 'moderator'] },
-      { href: '/admin/content/tags', label: '标签管理', icon: '⧫', roles: ['admin'] },
-      { href: '/admin/content/moderation', label: '审核队列', icon: '△', roles: ['admin', 'moderator'] },
+      { href: '/admin/posts', label: '帖子管理', icon: FileText, roles: ['admin', 'moderator'] },
+      { href: '/admin/content/tags', label: '标签管理', icon: Tag, roles: ['admin'] },
+      { href: '/admin/content/moderation', label: '审核队列', icon: AlertTriangle, roles: ['admin', 'moderator'] },
     ],
   },
   {
     title: '系统',
     items: [
-      { href: '/admin/system/rules', label: '发帖规则', icon: '⊠', roles: ['admin'] },
-      { href: '/admin/system/rate-limits', label: '限流设置', icon: '◷', roles: ['admin'] },
-      { href: '/admin/system/bans', label: '封禁管理', icon: '⊘', roles: ['admin'] },
-      { href: '/admin/system/cleanup', label: '数据清理', icon: '◎', roles: ['admin'] },
+      { href: '/admin/system/rules', label: '发帖规则', icon: FileCheck, roles: ['admin'] },
+      { href: '/admin/system/rate-limits', label: '限流设置', icon: Clock, roles: ['admin'] },
+      { href: '/admin/system/bans', label: '封禁管理', icon: Ban, roles: ['admin'] },
+      { href: '/admin/system/cleanup', label: '数据清理', icon: Trash2, roles: ['admin'] },
     ],
   },
   {
     title: '管理',
     items: [
-      { href: '/admin/categories', label: '分类管理', icon: '▤', roles: ['admin'] },
-      { href: '/admin/users', label: '用户管理', icon: '⬡', roles: ['admin'] },
-      { href: '/admin/logs', label: '系统日志', icon: '▦', roles: ['admin'] },
+      { href: '/admin/categories', label: '分类管理', icon: FolderTree, roles: ['admin'] },
+      { href: '/admin/users', label: '用户管理', icon: Users, roles: ['admin'] },
+      { href: '/admin/logs', label: '系统日志', icon: ScrollText, roles: ['admin'] },
     ],
   },
 ];
@@ -101,7 +105,7 @@ export default function AdminSidebar() {
                         : 'text-surface-400 hover:bg-surface-800/50 hover:text-white'
                     }`}
                   >
-                    <span className="w-5 text-center text-base opacity-60">{item.icon}</span>
+                    <item.icon className="w-4 h-4 shrink-0 opacity-60" />
                     {item.label}
                     <Badge count={badgeCount} />
                   </Link>

@@ -37,7 +37,7 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
       </div>
 
       {/* Reply Actions */}
-      <div className="px-4 py-2 bg-surface-50 border-t border-surface-200 flex items-center gap-2">
+      <div className="px-4 py-3 bg-surface-50 border-t border-surface-200 flex items-center gap-2">
         <Button
           variant="ghost"
           size="sm"

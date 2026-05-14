@@ -34,7 +34,8 @@ export default function Pagination({
       {currentPage > 1 && (
         <Link
           href={buildUrl(currentPage - 1)}
-          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 rounded"
+          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-lg"
+          aria-label="上一页"
         >
           上一页
         </Link>
@@ -53,13 +54,14 @@ export default function Pagination({
             <span key={page} className="inline-flex items-center">
               {showEllipsis && <span className="px-2 text-surface-400">...</span>}
               {page === currentPage ? (
-                <span className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded font-medium">
+                <span className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg font-medium">
                   {page}
                 </span>
               ) : (
                 <Link
                   href={buildUrl(page)}
-                  className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 rounded"
+                  className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-lg"
+                  aria-label={`第${page}页`}
                 >
                   {page}
                 </Link>
@@ -70,7 +72,8 @@ export default function Pagination({
       {currentPage < totalPages && (
         <Link
           href={buildUrl(currentPage + 1)}
-          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 rounded"
+          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-lg"
+          aria-label="下一页"
         >
           下一页
         </Link>

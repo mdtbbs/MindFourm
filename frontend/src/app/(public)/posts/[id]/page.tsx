@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import PostContent from '@/components/forum/post-content';
 import ReplyItem from '@/components/forum/reply-item';
-import ReplyForm from '@/components/forum/reply-form';
+import ReplyFormWrapper from '@/components/forum/reply-form-wrapper';
 import Pagination from '@/components/ui/pagination';
 import Link from 'next/link';
 import { Post } from '@/types';
@@ -96,7 +96,7 @@ export default async function PostDetailPage({
         </h2>
 
         {replies.length === 0 ? (
-          <div className="text-center py-8 text-surface-500">暂无回复</div>
+          <div className="text-center py-8 text-surface-500">暂无回复，快来抢沙发吧</div>
         ) : (
           <div className="space-y-4">
             {replies.map((reply: any, index: number) => (
@@ -118,7 +118,7 @@ export default async function PostDetailPage({
 
       {/* Reply Form */}
       <div className="mt-8">
-        <ReplyForm postId={postId} onReplyCreated={() => window.location.reload()} />
+        <ReplyFormWrapper postId={postId} />
       </div>
     </div>
   );

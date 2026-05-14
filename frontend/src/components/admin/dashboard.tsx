@@ -4,14 +4,16 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { adminApi } from '@/lib/api/client';
 import type { AdminStats } from '@/types';
+import { Settings, FileText, AlertTriangle, Ban, FolderTree, ScrollText } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 const quickLinks = [
-  { href: '/admin/settings/basic', label: '站点设置', icon: '◼' },
-  { href: '/admin/posts', label: '帖子管理', icon: '▣' },
-  { href: '/admin/content/moderation', label: '内容审核', icon: '△' },
-  { href: '/admin/system/bans', label: '封禁管理', icon: '⊘' },
-  { href: '/admin/categories', label: '分类管理', icon: '▤' },
-  { href: '/admin/logs', label: '操作日志', icon: '▦' },
+  { href: '/admin/settings/basic', label: '站点设置', icon: Settings },
+  { href: '/admin/posts', label: '帖子管理', icon: FileText },
+  { href: '/admin/content/moderation', label: '内容审核', icon: AlertTriangle },
+  { href: '/admin/system/bans', label: '封禁管理', icon: Ban },
+  { href: '/admin/categories', label: '分类管理', icon: FolderTree },
+  { href: '/admin/logs', label: '操作日志', icon: ScrollText },
 ];
 
 const chartDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -37,7 +39,7 @@ export default function Dashboard() {
   const maxActivity = stats ? Math.max(...stats.activity_7d, 1) : 1;
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-surface-900" /></div>;
+    return <div className="flex items-center justify-center h-64"><LoadingSpinner size="lg" /></div>;
   }
 
   return (
@@ -78,7 +80,7 @@ export default function Dashboard() {
           <div>
             {quickLinks.map((link) => (
               <Link key={link.href} href={link.href} className="flex items-center gap-3 px-5 py-3 text-sm text-surface-600 border-b border-surface-100 hover:bg-surface-50 hover:text-surface-900 transition-colors last:border-b-0">
-                <span className="opacity-50">{link.icon}</span>
+                <link.icon className="w-4 h-4 shrink-0 opacity-50" />
                 {link.label}
                 <span className="ml-auto text-surface-300">→</span>
               </Link>
