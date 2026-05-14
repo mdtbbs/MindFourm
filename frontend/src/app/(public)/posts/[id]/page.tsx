@@ -87,7 +87,7 @@ export default async function PostDetailPage({
       </nav>
 
       {/* Post Content */}
-      <PostContent post={post} />
+      <PostContent post={post} postId={postId} />
 
       {/* Replies */}
       <div className="mt-8 space-y-4">

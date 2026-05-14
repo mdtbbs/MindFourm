@@ -4,10 +4,12 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Post, UserRole } from '@/types';
 import Badge from '@/components/ui/badge';
 import Button from '@/components/ui/button';
+import BookmarkButton from '@/components/forum/bookmark-button';
 import { Pin, Move, Trash2 } from 'lucide-react';
 
 interface PostContentProps {
   post: Post;
+  postId?: number;
   currentUserRole?: UserRole | null;
   onPin?: () => void;
   onMove?: () => void;
@@ -16,6 +18,7 @@ interface PostContentProps {
 
 export default function PostContent({
   post,
+  postId,
   currentUserRole,
   onPin,
   onMove,
@@ -63,6 +66,7 @@ export default function PostContent({
 
       {/* Actions */}
       <div className="px-6 py-4 bg-surface-50 border-t border-surface-200 flex items-center gap-2">
+        {postId && <BookmarkButton postId={postId} />}
         {canModerate && onPin && (
           <Button
             variant="ghost"
