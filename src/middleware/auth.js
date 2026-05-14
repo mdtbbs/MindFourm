@@ -32,7 +32,7 @@ function authMiddleware(options = {}) {
     }
 
     // If session has mindauth_token, verify it with MindAuth
-    // For OAuth sessions (no mindauth_token), we trust the mindauth_id stored in users table
+    // For OAuth sessions (no mindauth_token), we trust the user data from the JOIN query
     let userInfo = null;
     if (session.mindauth_token) {
       userInfo = await AuthService.verifyMindAuthSession(session.mindauth_token);
@@ -47,8 +47,13 @@ function authMiddleware(options = {}) {
         return next();
       }
     } else {
-      // OAuth session - get user info from database
-      userInfo = AuthService.getUserByMindauthId(session.mindauth_id);
+      // OAuth session — use data already fetched from the JOIN in validateSession
+      userInfo = {
+        id: session.mindauth_id,
+        username: session.username,
+        email: session.email,
+        created_at: session.user_created_at
+      };
     }
 
     ctx.state.user = {

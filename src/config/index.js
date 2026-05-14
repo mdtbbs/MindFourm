@@ -3,8 +3,9 @@ const path = require('path');
 
 module.exports = {
   app: {
-    port: parseInt(process.env.PORT) || 4000,
-    env: process.env.NODE_ENV || 'development'
+    port: parseInt(process.env.PORT, 10) || 4000,
+    env: process.env.NODE_ENV || 'development',
+    baseUrl: process.env.BASE_URL || 'http://localhost:3000'
   },
 
   database: {

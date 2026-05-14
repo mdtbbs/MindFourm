@@ -32,6 +32,9 @@ function requireOwnershipOrPermission(permission, getResourceUserId) {
     }
 
     const resourceUserId = await getResourceUserId(ctx);
+    if (!resourceUserId) {
+      return Response.error(ctx, 'Resource not found', 404, 'NOT_FOUND');
+    }
     const isOwner = resourceUserId === user.id;
     const hasElevatedPermission = hasRole(user.role, PERMISSIONS[permission]);
 

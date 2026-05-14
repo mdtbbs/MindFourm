@@ -26,6 +26,12 @@ router.use(async (ctx, next) => {
   return next();
 });
 
+// Health check
+router.get('/api/health', (ctx) => {
+  ctx.status = 200;
+  ctx.body = { status: 'ok', timestamp: new Date().toISOString() };
+});
+
 // Public settings (no auth) — returns only non-sensitive settings
 const PUBLIC_SETTING_KEYS = [
   'site_name', 'site_tagline', 'site_description', 'site_logo_url', 'site_footer',

@@ -40,14 +40,25 @@ class AuthController {
     const user = AuthService.getOrCreateUser(mindauthUser);
     const sessionToken = AuthService.createSession(user.id);
 
-    ctx.cookies.set('forum_session', sessionToken, {
+    const cookieOpts = {
       maxAge: config.session.maxAge,
-      httpOnly: true
-    });
+      httpOnly: true,
+      secure: config.app.env === 'production',
+      sameSite: 'lax'
+    };
+
+    ctx.cookies.set('forum_session', sessionToken, cookieOpts);
 
     // Redirect browser to forum frontend, back to the original page
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const redirectPath = state ? decodeURIComponent(state) : '/';
+    const frontendUrl = config.app.baseUrl;
+    let redirectPath = '/';
+    if (state) {
+      const decoded = decodeURIComponent(state);
+      // Only allow relative paths to prevent open redirect
+      if (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes('://')) {
+        redirectPath = decoded;
+      }
+    }
     ctx.redirect(`${frontendUrl}${redirectPath}`);
   }
 
@@ -69,10 +80,14 @@ class AuthController {
     const user = AuthService.getOrCreateUser(mindauthUser);
     const forumSessionToken = AuthService.createSession(user.id, session_token);
 
-    ctx.cookies.set('forum_session', forumSessionToken, {
+    const cookieOpts = {
       maxAge: config.session.maxAge,
-      httpOnly: true
-    });
+      httpOnly: true,
+      secure: config.app.env === 'production',
+      sameSite: 'lax'
+    };
+
+    ctx.cookies.set('forum_session', forumSessionToken, cookieOpts);
 
     Response.success(ctx, {
       user: {

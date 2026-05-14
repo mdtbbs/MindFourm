@@ -46,10 +46,11 @@ class AuthService {
       const result = db.prepare('INSERT INTO users (mindauth_id, username, email, role) VALUES (?, ?, ?, ?)').run(mindauthUser.id, mindauthUser.username, mindauthUser.email, 'user');
       user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
     } else {
-      // Update username/email if changed
+      // Update username/email only if changed
       if (user.username !== mindauthUser.username || user.email !== mindauthUser.email) {
         db.prepare('UPDATE users SET username = ?, email = ? WHERE mindauth_id = ?').run(mindauthUser.username, mindauthUser.email, mindauthUser.id);
-        user = db.prepare('SELECT * FROM users WHERE mindauth_id = ?').get(mindauthUser.id);
+        user.username = mindauthUser.username;
+        user.email = mindauthUser.email;
       }
     }
 
@@ -70,7 +71,7 @@ class AuthService {
 
   static validateSession(sessionToken) {
     const session = db.prepare(`
-      SELECT s.*, u.role, u.mindauth_id
+      SELECT s.*, u.role, u.mindauth_id, u.username, u.email, u.created_at as user_created_at
       FROM sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.session_token = ? AND s.expires_at > ?

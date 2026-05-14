@@ -25,10 +25,14 @@ function initialize() {
   // Add username/email columns if they don't exist (migration)
   try {
     db.exec('ALTER TABLE users ADD COLUMN username TEXT');
-  } catch (e) { /* already exists */ }
+  } catch (e) {
+    if (!e.message.includes('duplicate')) console.warn('Schema migration: username column already exists');
+  }
   try {
     db.exec('ALTER TABLE users ADD COLUMN email TEXT');
-  } catch (e) { /* already exists */ }
+  } catch (e) {
+    if (!e.message.includes('duplicate')) console.warn('Schema migration: email column already exists');
+  }
 
   // Seed default settings for admin panel
   const SettingService = require('../services/setting.service');

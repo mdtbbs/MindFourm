@@ -10,7 +10,7 @@ async function errorHandler(ctx, next) {
     };
 
     if (ctx.status === 500) {
-      console.error('Server error:', err);
+      console.error(`[${new Date().toISOString()}] ${ctx.method} ${ctx.path} —`, err);
     }
   }
 }
