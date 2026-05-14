@@ -46,9 +46,10 @@ export interface Post {
   title: string;
   content: string;
   content_html: string;
-  status: 'draft' | 'published' | 'deleted';
+  status: 'draft' | 'published' | 'pending' | 'deleted';
   is_pinned: boolean;
   view_count: number;
+  reply_count: number;
   created_at: string;
   updated_at: string;
   category_name: string | null;
@@ -85,7 +86,7 @@ export interface Reply {
   parent_reply_id: number | null;
   content: string;
   content_html: string;
-  status: 'active' | 'deleted';
+  status: 'active' | 'pending' | 'deleted';
   created_at: string;
   updated_at: string;
   author_mindauth_id: number;
@@ -181,4 +182,67 @@ export interface ModerationItem {
   author_username: string;
   created_at: string;
   post_id?: number;
+}
+
+// Phase 2: User Profile
+export interface UserProfile {
+  id: number;
+  mindauth_id: number;
+  username: string | null;
+  email: string | null;
+  role: UserRole;
+  avatar_url: string | null;
+  bio: string | null;
+  created_at: string;
+  post_count: number;
+  reply_count: number;
+}
+
+// Phase 2: Bookmarks
+export interface Bookmark {
+  id: number;
+  created_at: string;
+  post_id: number;
+  title: string;
+  status: 'draft' | 'published' | 'pending' | 'deleted';
+  category_name: string | null;
+  category_id: number | null;
+  author_mindauth_id: number;
+  author_role: UserRole;
+}
+
+export interface BookmarkListResponse {
+  data: Bookmark[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Phase 2: Notifications
+export interface Notification {
+  id: number;
+  user_id: number;
+  type: 'reply' | 'mention';
+  actor_id: number;
+  actor_name: string;
+  actor_avatar: string | null;
+  post_id: number | null;
+  post_title: string | null;
+  reply_id: number | null;
+  content: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  data: Notification[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }

@@ -1,4 +1,4 @@
-import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem } from '@/types';
+import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse } from '@/types';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -27,7 +27,7 @@ function setCache(key: string, data: unknown): void {
 
 function invalidateCache(pathPrefix: string): void {
   for (const key of cache.keys()) {
-    if (key.endsWith(`:${pathPrefix}`)) cache.delete(key);
+    if (key.includes(pathPrefix)) cache.delete(key);
   }
 }
 
@@ -53,15 +53,15 @@ async function request<T>(
     if (cached !== null) return cached;
   }
 
+  const isFormData = options.body instanceof FormData;
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Version': '1',
-        ...options.headers,
-      },
+      headers: isFormData
+        ? { 'X-API-Version': '1', ...options.headers }
+        : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...options.headers },
       credentials: 'include',
     });
   } catch (err) {
@@ -316,4 +316,57 @@ export const adminApi = {
     clearCache();
     return request<{ message: string }>('/api/admin/posts/move', { method: 'PUT', body: JSON.stringify({ post_ids, category_id }) });
   },
+};
+
+// User APIs
+export const userApi = {
+  getById: (id: number) => request<UserProfile>(`/api/v1/users/${id}`),
+  getMyProfile: () => request<UserProfile>('/api/v1/users/me'),
+  updateProfile: (data: { username?: string; bio?: string }) =>
+    request<UserProfile>('/api/v1/users/me/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  uploadAvatar: (formData: FormData) =>
+    request<{ avatar_url: string }>('/api/v1/users/me/avatar', {
+      method: 'POST',
+      body: formData,
+    }),
+  removeAvatar: () =>
+    request<void>('/api/v1/users/me/avatar', { method: 'DELETE' }),
+  getMyReplies: (params?: { page?: number; limit?: number }) =>
+    request<ReplyListResponse>(`/api/v1/users/me/replies${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+    })}`),
+};
+
+// Bookmark APIs
+export const bookmarkApi = {
+  list: (params?: { page?: number; limit?: number }) =>
+    request<BookmarkListResponse>(`/api/v1/bookmarks${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+    })}`),
+  check: (postId: number) =>
+    request<{ bookmarked: boolean }>(`/api/v1/bookmarks/check/${postId}`),
+  add: (postId: number) =>
+    request<Bookmark>(`/api/v1/bookmarks/${postId}`, { method: 'POST' }),
+  remove: (postId: number) =>
+    request<void>(`/api/v1/bookmarks/${postId}`, { method: 'DELETE' }),
+};
+
+// Notification APIs
+export const notificationApi = {
+  list: (params?: { page?: number; limit?: number }) =>
+    request<NotificationListResponse>(`/api/v1/notifications${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+    })}`),
+  unreadCount: () =>
+    request<{ count: number }>('/api/v1/notifications/unread-count'),
+  markAsRead: (id: number) =>
+    request<void>(`/api/v1/notifications/${id}/read`, { method: 'PUT' }),
+  markAllAsRead: () =>
+    request<void>('/api/v1/notifications/read-all', { method: 'PUT' }),
 };
