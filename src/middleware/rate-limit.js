@@ -3,6 +3,20 @@ const Response = require('../utils/response');
 // In-memory store: Map<key, Map<identifier, { count, resetTime }>>
 const stores = new Map();
 
+// Cleanup interval: prune expired entries every 5 minutes
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+const cleanupTimer = setInterval(() => {
+  const now = Date.now();
+  for (const [key, store] of stores.entries()) {
+    for (const [identifier, record] of store.entries()) {
+      if (now > record.resetTime) store.delete(identifier);
+    }
+    if (store.size === 0) stores.delete(key);
+  }
+}, CLEANUP_INTERVAL_MS);
+// Prevent cleanup timer from keeping process alive
+if (cleanupTimer.unref) cleanupTimer.unref();
+
 function rateLimit({ key, max, windowMs, identifier }) {
   let store = stores.get(key);
   if (!store) { store = new Map(); stores.set(key, store); }

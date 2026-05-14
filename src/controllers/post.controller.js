@@ -6,14 +6,15 @@ const { LOG_ACTIONS } = require('../utils/constants');
 
 class PostController {
   static list(ctx) {
-    const { page, limit, category_id, status, user_id } = ctx.query;
+    const { page, limit, category_id, status, user_id, search } = ctx.query;
 
     const result = PostService.getList({
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 20,
       category_id: parseInt(category_id) || null,
       status: status || 'published',
-      user_id: parseInt(user_id) || null
+      user_id: parseInt(user_id) || null,
+      search: search || null
     });
 
     // Strip content_html to reduce payload size

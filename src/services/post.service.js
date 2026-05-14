@@ -43,7 +43,7 @@ class PostService {
     return post;
   }
 
-  static getList({ page = 1, limit = 20, category_id, status = POST_STATUS.published, user_id }) {
+  static getList({ page = 1, limit = 20, category_id, status = POST_STATUS.published, user_id, search }) {
     const offset = (page - 1) * limit;
     const whereClauses = ['p.deleted_at IS NULL'];
     const params = [];
@@ -61,6 +61,11 @@ class PostService {
     if (user_id) {
       whereClauses.push('p.user_id = ?');
       params.push(user_id);
+    }
+
+    if (search) {
+      whereClauses.push('(p.title LIKE ? OR p.content LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
     }
 
     const whereClause = whereClauses.join(' AND ');

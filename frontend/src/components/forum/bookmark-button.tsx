@@ -14,17 +14,24 @@ interface BookmarkButtonProps {
 export default function BookmarkButton({ postId }: BookmarkButtonProps) {
   const { user } = useAuth();
   const [bookmarked, setBookmarked] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Check bookmark status on mount (only for authenticated users)
   useEffect(() => {
+    let cancelled = false;
     if (!user) return;
+    setChecking(true);
     bookmarkApi.check(postId)
-      .then((res) => setBookmarked(res.bookmarked))
+      .then((res) => { if (!cancelled) setBookmarked(res.bookmarked); })
       .catch(() => {
-        // Silently ignore check failures
-      });
+        if (!cancelled) {
+          setTimeout(() => setError(null), 5000);
+        }
+      })
+      .finally(() => { if (!cancelled) setChecking(false); });
+    return () => { cancelled = true; };
   }, [postId, user]);
 
   if (!user) return null;
@@ -45,6 +52,7 @@ export default function BookmarkButton({ postId }: BookmarkButtonProps) {
     } catch (err) {
       setBookmarked(previousState);
       setError(err instanceof Error ? err.message : '操作失败');
+      setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -56,10 +64,12 @@ export default function BookmarkButton({ postId }: BookmarkButtonProps) {
         variant="ghost"
         size="sm"
         onClick={handleToggle}
-        disabled={loading}
+        disabled={loading || checking}
+        aria-label={bookmarked ? '取消收藏' : '收藏此帖'}
+        aria-pressed={bookmarked}
         className={bookmarked ? 'text-amber-600' : 'text-surface-600'}
       >
-        {loading ? (
+        {loading || checking ? (
           <Loader2 className="w-4 h-4 mr-1 animate-spin" />
         ) : bookmarked ? (
           <BookmarkCheck className="w-4 h-4 mr-1" />

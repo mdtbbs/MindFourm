@@ -56,7 +56,7 @@ function validate(schema) {
     }
 
     if (errors.length > 0) {
-      return Response.error(ctx, 'Validation failed', 422, 'VALIDATION_ERROR');
+      return Response.error(ctx, 'Validation failed', 422, 'VALIDATION_ERROR', errors);
     }
 
     return next();

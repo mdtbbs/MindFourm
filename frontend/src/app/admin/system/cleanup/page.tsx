@@ -29,9 +29,17 @@ export default function CleanupPage() {
 
   const update = (k: string, v: string) => setValues((p) => ({ ...p, [k]: v }));
 
-  const runCleanup = async (endpoint: string) => {
+  const cleanupActions: Record<string, () => Promise<{ message: string }>> = {
+    cleanupSessions: adminApi.cleanupSessions,
+    cleanupLogs: adminApi.cleanupLogs,
+    cleanupSoftDeleted: adminApi.cleanupSoftDeleted,
+  };
+
+  const runCleanup = async (action: string) => {
+    const fn = cleanupActions[action];
+    if (!fn) return;
     try {
-      const result = await (adminApi as any)[endpoint]();
+      const result = await fn();
       setMessage(result.message);
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
   };
