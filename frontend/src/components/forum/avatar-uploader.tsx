@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import Alert from '@/components/ui/alert';
+
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024; // 2MB
 
 interface AvatarUploaderProps {
   currentAvatar?: string | null;
@@ -16,6 +18,10 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    setPreview(currentAvatar || null);
+  }, [currentAvatar]);
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -25,7 +31,7 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
       return;
     }
 
-    if (file.size > 2 * 1024 * 1024) {
+    if (file.size > MAX_AVATAR_SIZE) {
       setError('图片大小不能超过 2MB');
       return;
     }
@@ -63,7 +69,7 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
     <div className="flex flex-col items-center gap-3">
       <div className="relative w-24 h-24 rounded-full overflow-hidden bg-surface-100 border-2 border-surface-200">
         {preview ? (
-          <img src={preview} alt="Avatar" className="w-full h-full object-cover" />
+          <img src={preview} alt="头像预览" className="w-full h-full object-cover" />
         ) : (
           <div className="flex items-center justify-center h-full">
             <ImageIcon className="w-8 h-8 text-surface-400" />
@@ -79,11 +85,13 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
       <div className="flex gap-2">
         <input
           ref={inputRef}
+          id="avatar-file-input"
           type="file"
           accept="image/jpeg,image/png,image/gif,image/webp"
           onChange={handleFileSelect}
           className="hidden"
           disabled={uploading}
+          aria-label="Upload avatar image"
         />
         <button
           type="button"

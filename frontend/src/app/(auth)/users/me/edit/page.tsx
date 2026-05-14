@@ -25,10 +25,12 @@ export default function ProfileEditPage() {
         setUsername(data.username || '');
         setBio(data.bio || '');
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => setError(err instanceof Error ? err.message : '加载失败'));
   }, []);
 
   const handleSave = async () => {
+    const trimmed = username.trim();
+    if (!trimmed) { setError('昵称不能为空'); return; }
     setSaving(true);
     setError(null);
     setMessage(null);
@@ -47,6 +49,7 @@ export default function ProfileEditPage() {
     const formData = new FormData();
     formData.append('avatar', file);
     const result = await userApi.uploadAvatar(formData);
+    if (!result?.avatar_url) throw new Error('上传失败：服务器未返回头像URL');
     setProfile((prev) => prev ? { ...prev, avatar_url: result.avatar_url } : null);
   };
 
@@ -62,7 +65,7 @@ export default function ProfileEditPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => router.back()} className="p-1 text-surface-500 hover:text-surface-700">
+        <button onClick={() => router.back()} className="p-1 text-surface-500 hover:text-surface-700" aria-label="返回上一页">
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-xl font-bold text-surface-900">编辑资料</h1>
