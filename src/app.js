@@ -28,9 +28,9 @@ app.use(bodyParser({
   json: { limit: '1mb' }
 }));
 
-// Serve uploaded avatars at /uploads/<filename>
-const uploadsDir = path.join(__dirname, '../uploads');
-app.use(serve(uploadsDir, { prefix: '/uploads' }));
+// Serve uploaded avatars at /uploads/avatars/<filename>
+const avatarsDir = path.join(__dirname, '../uploads/avatars');
+app.use(serve(avatarsDir, { prefix: '/uploads/avatars' }));
 
 app.use(routes.routes());
 app.use(routes.allowedMethods());
