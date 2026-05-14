@@ -1,7 +1,6 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Post, UserRole } from '@/types';
 import Badge from '@/components/ui/badge';
 import Button from '@/components/ui/button';
@@ -59,11 +58,7 @@ export default function PostContent({
 
       {/* Content */}
       <div className="p-6">
-        <div className="markdown-content">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {post.content}
-          </ReactMarkdown>
-        </div>
+        <MarkdownRenderer content={post.content} />
       </div>
 
       {/* Actions */}

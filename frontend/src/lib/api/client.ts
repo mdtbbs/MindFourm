@@ -2,6 +2,35 @@ import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListRes
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
+// Simple in-memory cache for GET requests (client-side only)
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
+function getCacheKey(path: string, options: RequestInit): string | null {
+  if (options.method && options.method !== 'GET') return null;
+  return `${options.method || 'GET'}:${path}`;
+}
+
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCache(key: string, data: unknown): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+function invalidateCache(pathPrefix: string): void {
+  for (const key of cache.keys()) {
+    if (key.endsWith(`:${pathPrefix}`)) cache.delete(key);
+  }
+}
+
 function buildQueryString(params: Record<string, string | number | undefined>): string {
   const qs = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -15,6 +44,15 @@ async function request<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
+  const method = options.method || 'GET';
+  const cacheKey = getCacheKey(path, options);
+
+  // Return cached data for GET requests
+  if (cacheKey) {
+    const cached = getCached<T>(cacheKey);
+    if (cached !== null) return cached;
+  }
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -48,22 +86,33 @@ async function request<T>(
     throw new Error('Invalid JSON response');
   }
 
-  // Handle wrapped responses { success: true, data: [...], pagination: {...} }
-  // For paginated responses, return { data, pagination }
+  // Handle wrapped responses
   if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
     const d = data as { data: unknown; pagination?: unknown };
     if (d.pagination !== undefined) {
-      return { data: d.data, pagination: d.pagination } as T;
+      const result = { data: d.data, pagination: d.pagination } as T;
+      if (cacheKey) setCache(cacheKey, result);
+      return result;
     }
-    // Non-paginated: unwrap just the data
     const inner = d.data;
     if (typeof inner === 'object' && inner !== null && 'pagination' in inner) {
-      return inner as T;
+      const result = inner as T;
+      if (cacheKey) setCache(cacheKey, result);
+      return result;
     }
-    return d.data as T;
+    const result = d.data as T;
+    if (cacheKey) setCache(cacheKey, result);
+    return result;
   }
 
-  return data as T;
+  const result = data as T;
+  if (cacheKey) setCache(cacheKey, result);
+  return result;
+}
+
+// Clear cache after mutations
+function clearCache(): void {
+  cache.clear();
 }
 
 // Public settings (no auth)
@@ -84,26 +133,33 @@ export const authApi = {
 
 // Post APIs
 export const postApi = {
-  getList: (params?: { page?: number; limit?: number; category_id?: number; user_id?: number }) =>
+  getList: (params?: { page?: number; limit?: number; category_id?: number; user_id?: number; search?: string }) =>
     request<PostListResponse>(`/api/posts${buildQueryString({
       page: params?.page,
       limit: params?.limit,
       category_id: params?.category_id,
       user_id: params?.user_id,
+      search: params?.search,
     })}`),
   getById: (id: number) => request<Post>(`/api/posts/${id}`),
-  create: (input: CreatePostInput) =>
-    request<Post>('/api/posts', {
+  create: (input: CreatePostInput) => {
+    clearCache();
+    return request<Post>('/api/posts', {
       method: 'POST',
       body: JSON.stringify(input),
-    }),
-  update: (id: number, input: Partial<CreatePostInput>) =>
-    request<Post>(`/api/posts/${id}`, {
+    });
+  },
+  update: (id: number, input: Partial<CreatePostInput>) => {
+    clearCache();
+    return request<Post>(`/api/posts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(input),
-    }),
-  delete: (id: number) =>
-    request<void>(`/api/posts/${id}`, { method: 'DELETE' }),
+    });
+  },
+  delete: (id: number) => {
+    clearCache();
+    return request<void>(`/api/posts/${id}`, { method: 'DELETE' });
+  },
 };
 
 // Reply APIs
@@ -113,18 +169,24 @@ export const replyApi = {
       page: params?.page,
       limit: params?.limit,
     })}`),
-  create: (postId: number, input: CreateReplyInput) =>
-    request<Reply>(`/api/posts/${postId}/replies`, {
+  create: (postId: number, input: CreateReplyInput) => {
+    clearCache();
+    return request<Reply>(`/api/posts/${postId}/replies`, {
       method: 'POST',
       body: JSON.stringify(input),
-    }),
-  update: (id: number, content: string) =>
-    request<Reply>(`/api/replies/${id}`, {
+    });
+  },
+  update: (id: number, content: string) => {
+    clearCache();
+    return request<Reply>(`/api/replies/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ content }),
-    }),
-  delete: (id: number) =>
-    request<void>(`/api/replies/${id}`, { method: 'DELETE' }),
+    });
+  },
+  delete: (id: number) => {
+    clearCache();
+    return request<void>(`/api/replies/${id}`, { method: 'DELETE' });
+  },
 };
 
 // Category APIs
@@ -142,33 +204,43 @@ export const tagApi = {
 
 // Admin APIs
 export const adminApi = {
-  createCategory: (data: { name: string; slug: string; sort_order?: number }) =>
-    request<Category>('/api/admin/categories', {
+  createCategory: (data: { name: string; slug: string; sort_order?: number }) => {
+    clearCache();
+    return request<Category>('/api/admin/categories', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
-  updateCategory: (id: number, data: { name: string; slug: string; sort_order?: number }) =>
-    request<Category>(`/api/admin/categories/${id}`, {
+    });
+  },
+  updateCategory: (id: number, data: { name: string; slug: string; sort_order?: number }) => {
+    clearCache();
+    return request<Category>(`/api/admin/categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
-  deleteCategory: (id: number) =>
-    request<void>(`/api/admin/categories/${id}`, { method: 'DELETE' }),
+    });
+  },
+  deleteCategory: (id: number) => {
+    clearCache();
+    return request<void>(`/api/admin/categories/${id}`, { method: 'DELETE' });
+  },
   updateUserRole: (id: number, role: 'user' | 'moderator' | 'admin') =>
     request<User>(`/api/admin/users/${id}/role`, {
       method: 'PUT',
       body: JSON.stringify({ role }),
     }),
-  pinPost: (id: number, isPinned: boolean) =>
-    request<Post>(`/api/admin/posts/${id}/pin`, {
+  pinPost: (id: number, isPinned: boolean) => {
+    clearCache();
+    return request<Post>(`/api/admin/posts/${id}/pin`, {
       method: 'PUT',
       body: JSON.stringify({ is_pinned: isPinned }),
-    }),
-  movePost: (id: number, category_id: number) =>
-    request<Post>(`/api/admin/posts/${id}/move`, {
+    });
+  },
+  movePost: (id: number, category_id: number) => {
+    clearCache();
+    return request<Post>(`/api/admin/posts/${id}/move`, {
       method: 'PUT',
       body: JSON.stringify({ category_id }),
-    }),
+    });
+  },
   getLogs: (params?: { page?: number; limit?: number }) =>
     request<{ data: AdminLog[]; pagination: PostListResponse['pagination'] }>(
       `/api/admin/logs${buildQueryString({ page: params?.page, limit: params?.limit })}`
@@ -188,24 +260,36 @@ export const adminApi = {
     }),
   getTags: () =>
     request<Tag[]>('/api/admin/tags'),
-  createTag: (data: { name: string; slug?: string }) =>
-    request<Tag>('/api/admin/tags', { method: 'POST', body: JSON.stringify(data) }),
-  updateTag: (id: number, data: { name?: string; slug?: string }) =>
-    request<Tag>(`/api/admin/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteTag: (id: number) =>
-    request<void>(`/api/admin/tags/${id}`, { method: 'DELETE' }),
-  mergeTags: (from_tag_id: number, to_tag_id: number) =>
-    request<{ message: string }>('/api/admin/tags/merge', {
+  createTag: (data: { name: string; slug?: string }) => {
+    clearCache();
+    return request<Tag>('/api/admin/tags', { method: 'POST', body: JSON.stringify(data) });
+  },
+  updateTag: (id: number, data: { name?: string; slug?: string }) => {
+    clearCache();
+    return request<Tag>(`/api/admin/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  deleteTag: (id: number) => {
+    clearCache();
+    return request<void>(`/api/admin/tags/${id}`, { method: 'DELETE' });
+  },
+  mergeTags: (from_tag_id: number, to_tag_id: number) => {
+    clearCache();
+    return request<{ message: string }>('/api/admin/tags/merge', {
       method: 'POST', body: JSON.stringify({ from_tag_id, to_tag_id }),
-    }),
+    });
+  },
   getModeration: (params?: { page?: number; limit?: number; type?: string }) =>
     request<{ data: ModerationItem[]; pagination: PostListResponse['pagination'] }>(
       `/api/admin/moderation${buildQueryString({ page: params?.page, limit: params?.limit, type: params?.type })}`
     ),
-  approvePost: (id: number) =>
-    request<{ message: string }>(`/api/admin/moderation/${id}/approve`, { method: 'PUT' }),
-  rejectPost: (id: number) =>
-    request<{ message: string }>(`/api/admin/moderation/${id}/reject`, { method: 'PUT' }),
+  approvePost: (id: number) => {
+    clearCache();
+    return request<{ message: string }>(`/api/admin/moderation/${id}/approve`, { method: 'PUT' });
+  },
+  rejectPost: (id: number) => {
+    clearCache();
+    return request<{ message: string }>(`/api/admin/moderation/${id}/reject`, { method: 'PUT' });
+  },
   getBans: (params?: { page?: number; limit?: number; ban_type?: string; is_active?: string }) =>
     request<AdminBanListResponse>(`/api/admin/bans${buildQueryString({ page: params?.page, limit: params?.limit, ban_type: params?.ban_type, is_active: params?.is_active })}`),
   createBan: (data: CreateBanInput) =>
@@ -220,10 +304,16 @@ export const adminApi = {
     request<{ message: string }>('/api/admin/cleanup/logs', { method: 'POST' }),
   cleanupSoftDeleted: () =>
     request<{ message: string }>('/api/admin/cleanup/soft-deleted', { method: 'POST' }),
-  bulkDeletePosts: (post_ids: number[]) =>
-    request<{ message: string }>('/api/admin/posts', { method: 'DELETE', body: JSON.stringify({ post_ids }) }),
-  bulkPinPosts: (post_ids: number[], is_pinned: boolean) =>
-    request<{ message: string }>('/api/admin/posts/pin', { method: 'PUT', body: JSON.stringify({ post_ids, is_pinned }) }),
-  bulkMovePosts: (post_ids: number[], category_id: number) =>
-    request<{ message: string }>('/api/admin/posts/move', { method: 'PUT', body: JSON.stringify({ post_ids, category_id }) }),
+  bulkDeletePosts: (post_ids: number[]) => {
+    clearCache();
+    return request<{ message: string }>('/api/admin/posts', { method: 'DELETE', body: JSON.stringify({ post_ids }) });
+  },
+  bulkPinPosts: (post_ids: number[], is_pinned: boolean) => {
+    clearCache();
+    return request<{ message: string }>('/api/admin/posts/pin', { method: 'PUT', body: JSON.stringify({ post_ids, is_pinned }) });
+  },
+  bulkMovePosts: (post_ids: number[], category_id: number) => {
+    clearCache();
+    return request<{ message: string }>('/api/admin/posts/move', { method: 'PUT', body: JSON.stringify({ post_ids, category_id }) });
+  },
 };

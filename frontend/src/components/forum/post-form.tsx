@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { useAuth } from '@/lib/auth/context';
 import { postApi, categoryApi, tagApi } from '@/lib/api/client';
 import { CreatePostInput, Category, Tag } from '@/types';
@@ -246,11 +245,7 @@ export default function PostForm() {
           </div>
 
           {preview ? (
-            <div className="min-h-[200px] p-4 bg-surface-50 rounded-lg border border-surface-200 markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content || '*暂无内容*'}
-              </ReactMarkdown>
-            </div>
+            <MarkdownRenderer content={content} className="min-h-[200px] p-4 bg-surface-50 rounded-lg border border-surface-200" fallback="*暂无内容*" />
           ) : (
             <textarea
               value={content}

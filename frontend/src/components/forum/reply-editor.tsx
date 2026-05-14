@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
 import { Eye, Edit3 } from 'lucide-react';
@@ -86,11 +85,7 @@ export default function ReplyEditor({
         </div>
 
         {preview ? (
-          <div className="min-h-[120px] p-4 bg-surface-50 rounded-lg border border-surface-200 markdown-content">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {content || '*暂无内容*'}
-            </ReactMarkdown>
-          </div>
+          <MarkdownRenderer content={content} className="min-h-[120px] p-4 bg-surface-50 rounded-lg border border-surface-200" fallback="*暂无内容*" />
         ) : (
           <textarea
             value={content}

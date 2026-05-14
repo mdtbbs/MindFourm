@@ -1,7 +1,6 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
 import { Quote, Reply as ReplyIcon } from 'lucide-react';
@@ -34,11 +33,7 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
 
       {/* Reply Content */}
       <div className="p-4">
-        <div className="markdown-content">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {reply.content}
-          </ReactMarkdown>
-        </div>
+        <MarkdownRenderer content={reply.content} />
       </div>
 
       {/* Reply Actions */}

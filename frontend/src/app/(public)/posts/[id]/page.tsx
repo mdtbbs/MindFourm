@@ -30,10 +30,11 @@ async function fetchPost(id: number, page: number, limit: number) {
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const post = await fetchPost(parseInt(params.id), 1, 1);
+  const [post, settings] = await Promise.all([
+    fetchPost(parseInt(params.id), 1, 1),
+    fetchSettings(),
+  ]);
   if (!post) return { title: 'Not Found' };
-
-  const settings = await fetchSettings();
   const titleSuffix = settings.seo_title_suffix || ' | MindForum';
   const meta: Metadata = {
     title: `${post.title}${titleSuffix}`,
@@ -118,7 +119,6 @@ export default async function PostDetailPage({
       {/* Reply Form */}
       <div className="mt-8">
         <ReplyForm postId={postId} onReplyCreated={() => window.location.reload()} />
-      </div>
       </div>
     </div>
   );

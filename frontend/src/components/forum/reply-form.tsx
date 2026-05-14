@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import dynamic from 'next/dynamic';
 import { Reply } from '@/types';
-import ReplyEditor from '@/components/forum/reply-editor';
 import { replyApi } from '@/lib/api/client';
+
+const ReplyEditor = dynamic(() => import('@/components/forum/reply-editor'), {
+  loading: () => <div className="text-center py-4 text-surface-500">加载编辑器...</div>,
+});
 
 interface ReplyFormProps {
   postId: number;
