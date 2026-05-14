@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { ToastProvider } from '@/lib/toast/context';
 import { AuthProvider } from '@/lib/auth/context';
 import { SettingsProvider } from '@/lib/settings/context';
 
@@ -46,7 +47,9 @@ export default function RootLayout({
       <body className={inter.className}>
         <SettingsProvider>
           <AuthProvider>
-            {children}
+            <ToastProvider>
+              {children}
+            </ToastProvider>
           </AuthProvider>
         </SettingsProvider>
       </body>
