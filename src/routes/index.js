@@ -11,6 +11,7 @@ const categoryRoutes = require('./category.routes');
 const { createRoutes: createCategoryRoutes } = require('./category.routes');
 const tagRoutes = require('./tag.routes');
 const { createRoutes: createTagRoutes } = require('./tag.routes');
+const { createRoutes: createUserRoutes } = require('./user.routes');
 const adminRoutes = require('./admin.routes');
 const { createRoutes: createAdminRoutes } = require('./admin.routes');
 
@@ -65,6 +66,7 @@ router.use(createReplyPostRoutes('/api/v1').routes());
 router.use(createReplyRoutes('/api/v1').routes());
 router.use(createCategoryRoutes('/api/v1').routes());
 router.use(createTagRoutes('/api/v1').routes());
+router.use(createUserRoutes('/api/v1').routes());
 router.use(createAdminRoutes('/api/v1').routes());
 
 module.exports = router;

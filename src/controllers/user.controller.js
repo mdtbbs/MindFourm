@@ -46,28 +46,15 @@ class UserController {
       return;
     }
 
+    // koa-body returns a single File object or undefined
+    const avatarFile = Array.isArray(file) ? file[0] : file;
+
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!allowedTypes.includes(avatarFile.mimetype)) {
       Response.error(ctx, 'Only JPEG, PNG, GIF, and WebP images are allowed', 400);
       return;
     }
-
-    // Validate file size (max 2MB)
-    const maxSize = 2 * 1024 * 1024;
-    if (Array.isArray(file)) {
-      if (file[0].size > maxSize) {
-        Response.error(ctx, 'Avatar must be smaller than 2MB', 400);
-        return;
-      }
-    } else {
-      if (file.size > maxSize) {
-        Response.error(ctx, 'Avatar must be smaller than 2MB', 400);
-        return;
-      }
-    }
-
-    const avatarFile = Array.isArray(file) ? file[0] : file;
 
     // Create uploads directory
     const uploadsDir = path.join(__dirname, '../../uploads/avatars');
@@ -76,12 +63,12 @@ class UserController {
     }
 
     // Generate unique filename
-    const ext = path.extname(avatarFile.name) || '.jpg';
+    const ext = path.extname(avatarFile.originalFilename) || '.jpg';
     const filename = `avatar_${ctx.state.user.id}_${crypto.randomBytes(8).toString('hex')}${ext}`;
     const filepath = path.join(uploadsDir, filename);
 
-    // Move file
-    avatarFile.mv(filepath);
+    // Move file (koa-body uses formidable, file is already in temp)
+    fs.renameSync(avatarFile.filepath, filepath);
 
     // Update user
     const avatarUrl = `/uploads/avatars/${filename}`;
