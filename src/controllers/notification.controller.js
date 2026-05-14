@@ -17,7 +17,12 @@ class NotificationController {
   }
 
   static markAsRead(ctx) {
-    NotificationService.markAsRead(parseInt(ctx.params.id), ctx.state.user.id);
+    const id = parseInt(ctx.params.id);
+    if (isNaN(id)) {
+      Response.error(ctx, 'Invalid notification ID', 400);
+      return;
+    }
+    NotificationService.markAsRead(id, ctx.state.user.id);
     Response.success(ctx, { message: 'Marked as read' });
   }
 
