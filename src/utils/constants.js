@@ -47,7 +47,8 @@ const LOG_ACTIONS = {
   BAN_DEACTIVATE: 'ban_deactivate',
   CLEANUP_SESSIONS: 'cleanup_sessions',
   CLEANUP_LOGS: 'cleanup_logs',
-  CLEANUP_SOFT_DELETED: 'cleanup_soft_deleted'
+  CLEANUP_SOFT_DELETED: 'cleanup_soft_deleted',
+  NOTIFICATION_CREATE: 'notification_create'
 };
 
 const PERMISSIONS = {
@@ -68,11 +69,17 @@ const PERMISSIONS = {
   LOGS_VIEW: ['admin']
 };
 
+const NOTIFICATION_TYPES = {
+  reply: 'reply',
+  mention: 'mention'
+};
+
 module.exports = {
   ROLES,
   ROLE_NAMES,
   POST_STATUS,
   REPLY_STATUS,
   LOG_ACTIONS,
-  PERMISSIONS
+  PERMISSIONS,
+  NOTIFICATION_TYPES
 };

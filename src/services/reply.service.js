@@ -1,6 +1,7 @@
 const db = require('../database');
 const { parseMarkdown } = require('../utils/markdown');
-const { REPLY_STATUS } = require('../utils/constants');
+const { REPLY_STATUS, NOTIFICATION_TYPES } = require('../utils/constants');
+const NotificationService = require('./notification.service');
 
 class ReplyService {
   static create({ post_id, user_id, content, parent_reply_id = null }) {
@@ -24,7 +25,21 @@ class ReplyService {
       return insertReply.run(post_id, user_id, parent_reply_id, finalContent, contentHtml).lastInsertRowid;
     })();
 
-    return this.getById(result);
+    const reply = this.getById(result);
+
+    // Notify post author
+    const postAuthor = NotificationService.notifyPostAuthor(post_id, {
+      type: NOTIFICATION_TYPES.reply,
+      actor_id: user_id,
+      reply_id: result,
+      content: content.slice(0, 200)
+    });
+
+    // Notify @mentioned users (skip post author who already got a reply notification)
+    const skipUserIds = postAuthor ? [postAuthor.user_id] : [];
+    NotificationService.notifyMentionedUsers(content, post_id, user_id, result, skipUserIds);
+
+    return reply;
   }
 
   static getById(id) {

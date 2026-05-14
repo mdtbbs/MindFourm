@@ -13,6 +13,7 @@ const tagRoutes = require('./tag.routes');
 const { createRoutes: createTagRoutes } = require('./tag.routes');
 const { createRoutes: createUserRoutes } = require('./user.routes');
 const { createRoutes: createBookmarkRoutes } = require('./bookmark.routes');
+const { createRoutes: createNotificationRoutes } = require('./notification.routes');
 const adminRoutes = require('./admin.routes');
 const { createRoutes: createAdminRoutes } = require('./admin.routes');
 
@@ -69,6 +70,7 @@ router.use(createCategoryRoutes('/api/v1').routes());
 router.use(createTagRoutes('/api/v1').routes());
 router.use(createUserRoutes('/api/v1').routes());
 router.use(createBookmarkRoutes('/api/v1').routes());
+router.use(createNotificationRoutes('/api/v1').routes());
 router.use(createAdminRoutes('/api/v1').routes());
 
 module.exports = router;
