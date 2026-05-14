@@ -86,6 +86,7 @@ export interface Reply {
   parent_reply_id: number | null;
   content: string;
   content_html: string;
+  post_title?: string | null;
   status: 'active' | 'pending' | 'deleted';
   created_at: string;
   updated_at: string;
