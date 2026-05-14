@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
 import { authApi } from '@/lib/api/client';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 interface AuthContextType {
   user: User | null;
@@ -64,6 +65,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     localStorage.removeItem('mindauth_session_token');
   }, []);
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-gray-900">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider
