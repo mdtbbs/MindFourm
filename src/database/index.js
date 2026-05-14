@@ -34,6 +34,18 @@ function initialize() {
     if (!e.message.includes('duplicate')) console.warn('Schema migration: email column already exists');
   }
 
+  // Phase 2: add avatar_url and bio to users
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+  } catch (e) {
+    if (!e.message.includes('duplicate')) console.warn('Schema migration: avatar_url column already exists');
+  }
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN bio TEXT DEFAULT \'\'');
+  } catch (e) {
+    if (!e.message.includes('duplicate')) console.warn('Schema migration: bio column already exists');
+  }
+
   // Seed default settings for admin panel
   const SettingService = require('../services/setting.service');
   SettingService.seedDefaults();

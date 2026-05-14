@@ -172,3 +172,38 @@ CREATE INDEX IF NOT EXISTS idx_sessions_validate ON sessions(session_token, expi
 
 -- Composite index for post_tags reverse lookups (tag_id-only queries, not covered by PK)
 CREATE INDEX IF NOT EXISTS idx_post_tags_tag ON post_tags(tag_id);
+
+-- Phase 2: user profile fields
+-- (Migrated via database/index.js to handle existing tables)
+
+-- Phase 2: bookmarks
+CREATE TABLE IF NOT EXISTS bookmarks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    post_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    UNIQUE(user_id, post_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_post ON bookmarks(post_id);
+
+-- Phase 2: notifications
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,
+    actor_id INTEGER NOT NULL,
+    post_id INTEGER,
+    reply_id INTEGER,
+    content TEXT,
+    is_read INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE SET NULL,
+    FOREIGN KEY (reply_id) REFERENCES replies(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_actor ON notifications(actor_id);
