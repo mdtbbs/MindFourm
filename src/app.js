@@ -2,6 +2,8 @@ const Koa = require('koa');
 const bodyParser = require('koa-bodyparser');
 const cors = require('@koa/cors');
 const compress = require('koa-compress');
+const serve = require('koa-static');
+const path = require('path');
 const { errorHandler } = require('./middleware/error');
 const routes = require('./routes');
 const config = require('./config');
@@ -25,6 +27,10 @@ app.use(cors({
 app.use(bodyParser({
   json: { limit: '1mb' }
 }));
+
+// Serve uploaded avatars at /uploads/<filename>
+const uploadsDir = path.join(__dirname, '../uploads');
+app.use(serve(uploadsDir, { prefix: '/uploads' }));
 
 app.use(routes.routes());
 app.use(routes.allowedMethods());
