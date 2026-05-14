@@ -5,6 +5,7 @@ import { UserProfile, PostListResponse, Reply } from '@/types';
 import { Calendar, MessageSquare, FileText, Bookmark } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import ProfileEditLink from '@/components/forum/profile-edit-link';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -90,6 +91,7 @@ export default async function UserProfilePage({
             </h1>
             <div className="flex items-center gap-3 mb-3">
               <Badge variant={roleVariant}>{profile.role}</Badge>
+              <ProfileEditLink userId={profile.id} />
             </div>
             {profile.bio && (
               <p className="text-sm text-surface-600 mb-3">{profile.bio}</p>
