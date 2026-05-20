@@ -4,6 +4,7 @@ import './globals.css';
 import { ToastProvider } from '@/lib/toast/context';
 import { AuthProvider } from '@/lib/auth/context';
 import { SettingsProvider } from '@/lib/settings/context';
+import { ThemeProvider } from '@/components/forum/theme-toggle';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -43,15 +44,37 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" data-theme="light" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var theme = localStorage.getItem('theme');
+                  if (theme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    // 默认浅色
+                    document.documentElement.setAttribute('data-theme', 'light');
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body className={inter.className}>
-        <SettingsProvider>
-          <AuthProvider>
-            <ToastProvider>
-              {children}
-            </ToastProvider>
-          </AuthProvider>
-        </SettingsProvider>
+        <ThemeProvider>
+          <SettingsProvider>
+            <AuthProvider>
+              <ToastProvider>
+                {children}
+              </ToastProvider>
+            </AuthProvider>
+          </SettingsProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

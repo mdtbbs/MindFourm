@@ -1,14 +1,18 @@
+/* MindBBS 样式 - 使用共享设计系统 */
+@import '../../../../shared-styles/variables.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   html {
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-family);
   }
 
   body {
-    @apply bg-surface-50 text-surface-900;
+    background: var(--bg);
+    color: var(--text);
   }
 
   .markdown-content {
@@ -32,11 +36,11 @@
   }
 
   .markdown-content code {
-    @apply bg-surface-100 px-1.5 py-0.5 rounded text-sm font-mono;
+    @apply bg-surface-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono;
   }
 
   .markdown-content pre {
-    @apply bg-surface-100 p-4 rounded-lg overflow-x-auto;
+    @apply bg-surface-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto;
   }
 
   .markdown-content pre code {
@@ -44,7 +48,7 @@
   }
 
   .markdown-content blockquote {
-    @apply border-l-4 border-primary-500 pl-4 py-2 my-4 bg-surface-100 text-surface-600;
+    @apply border-l-4 border-primary-500 pl-4 py-2 my-4 bg-surface-100 dark:bg-gray-800 text-surface-600 dark:text-gray-300;
   }
 
   .markdown-content ul {
@@ -57,6 +61,10 @@
 
   .markdown-content a {
     @apply text-primary-600 hover:underline;
+  }
+
+  .markdown-content strong a {
+    @apply text-primary-600 dark:text-primary-400 no-underline hover:underline font-semibold;
   }
 
   .markdown-content img {
@@ -73,6 +81,6 @@
   }
 
   .markdown-content th {
-    @apply bg-surface-100 font-semibold;
+    @apply bg-surface-100 dark:bg-gray-800 font-semibold;
   }
 }
