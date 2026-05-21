@@ -11,10 +11,10 @@ class AutoPostService {
     }
 
     // 查找 servers 分类（或使用默认分类）
-    let category = db.get('SELECT id FROM categories WHERE slug = ?', ['servers']);
+    let category = db.prepare('SELECT id FROM categories WHERE slug = ?').get('servers');
     if (!category) {
       // 使用第一个分类作为 fallback
-      category = db.get('SELECT id FROM categories WHERE is_active = 1 ORDER BY sort_order LIMIT 1');
+      category = db.prepare('SELECT id FROM categories WHERE is_active = 1 ORDER BY sort_order LIMIT 1').get();
     }
 
     if (!category) {
@@ -45,17 +45,16 @@ class AutoPostService {
     `.trim();
 
     try {
-      const result = db.run(
+      const result = db.prepare(
         `INSERT INTO posts (user_id, category_id, title, content, content_html, status, server_id, post_type, created_at)
-         VALUES (?, ?, ?, ?, ?, 'published', ?, 'server_announcement', CURRENT_TIMESTAMP)`,
-        [
-          data.owner_id,
-          category.id,
-          title,
-          content,
-          contentHtml,
-          data.server_id,
-        ]
+         VALUES (?, ?, ?, ?, ?, 'published', ?, 'server_announcement', CURRENT_TIMESTAMP)`
+      ).run(
+        data.owner_id,
+        category.id,
+        title,
+        content,
+        contentHtml,
+        data.server_id,
       );
 
       return { success: true, post_id: result.lastInsertRowid };
