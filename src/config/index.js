@@ -19,6 +19,11 @@ module.exports = {
     callbackUrl: process.env.MINDAUTH_CALLBACK_URL || 'http://localhost:4000/api/auth/callback'
   },
 
+  easymanager: {
+    baseUrl: process.env.EASYMANAGER_URL || 'http://localhost:5001',
+    apiKey: process.env.EASYMANAGER_API_KEY || 'forum-service-key-dev'
+  },
+
   session: {
     maxAge: 30 * 24 * 60 * 60 * 1000
   }

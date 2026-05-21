@@ -1,6 +1,7 @@
 const db = require('../database');
 const { parseMarkdown } = require('../utils/markdown');
 const { POST_STATUS } = require('../utils/constants');
+const { encodeCursor, decodeCursor } = require('../utils/cursor');
 const TagService = require('./tag.service');
 
 class PostService {
@@ -166,6 +167,72 @@ class PostService {
   static move(id, categoryId) {
     db.prepare('UPDATE posts SET category_id = ? WHERE id = ?').run(categoryId, id);
     return this.getById(id);
+  }
+
+  static getListCursor({ limit = 20, cursor, category_id, search }) {
+    const whereClauses = ['p.deleted_at IS NULL', 'p.status = ?', 'p.is_pinned = 0'];
+    const params = ['published'];
+
+    if (category_id) {
+      whereClauses.push('p.category_id = ?');
+      params.push(category_id);
+    }
+
+    if (search) {
+      whereClauses.push('(p.title LIKE ? OR p.content LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (cursor) {
+      const [createdAt, id] = decodeCursor(cursor);
+      whereClauses.push('(p.created_at < ? OR (p.created_at = ? AND p.id < ?))');
+      params.push(createdAt, createdAt, parseInt(id));
+    }
+
+    const whereClause = whereClauses.join(' AND ');
+
+    // Fetch limit + 1 to determine has_more
+    const posts = db.prepare(`
+      SELECT p.*, c.name as category_name, c.slug as category_slug,
+             u.mindauth_id as author_mindauth_id, u.role as author_role,
+             (SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL) as reply_count
+      FROM posts p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE ${whereClause}
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT ?
+    `).all(...params, limit + 1);
+
+    // Pinned posts always show first, fetch separately
+    const pinned = db.prepare(`
+      SELECT p.*, c.name as category_name, c.slug as category_slug,
+             u.mindauth_id as author_mindauth_id, u.role as author_role,
+             (SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL) as reply_count
+      FROM posts p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE p.deleted_at IS NULL AND p.status = ? AND p.is_pinned = 1
+      ORDER BY p.created_at DESC
+    `).all('published');
+
+    // Batch-fetch tags
+    const allPosts = [...pinned, ...posts];
+    if (allPosts.length > 0) {
+      const tagMap = TagService.getPostTagsForMultiplePosts(allPosts.map(p => p.id));
+      for (const post of allPosts) {
+        post.tags = tagMap[post.id] || [];
+      }
+    }
+
+    const hasMore = posts.length > limit;
+    if (hasMore) posts.pop();
+
+    const nextCursor = posts.length > 0
+      ? encodeCursor(posts[posts.length - 1].created_at, posts[posts.length - 1].id)
+      : null;
+
+    return { data: allPosts, next_cursor: nextCursor, has_more: hasMore };
   }
 }
 

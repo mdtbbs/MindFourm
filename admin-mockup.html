@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理面板设计 - 黑白灰质感</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --black: #0a0a0a;
+    --dark: #1a1a1a;
+    --gray-900: #2d2d2d;
+    --gray-800: #3a3a3a;
+    --gray-700: #4a4a4a;
+    --gray-600: #6b6b6b;
+    --gray-500: #8a8a8a;
+    --gray-400: #a8a8a8;
+    --gray-300: #c5c5c5;
+    --gray-200: #e0e0e0;
+    --gray-100: #f0f0f0;
+    --gray-50: #f7f7f7;
+    --white: #ffffff;
+    --accent: #555;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    background: var(--gray-100);
+    color: var(--gray-900);
+    line-height: 1.6;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Layout */
+  .app { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 256px;
+    background: var(--black);
+    color: var(--gray-400);
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    overflow-y: auto;
+    z-index: 10;
+    border-right: 1px solid var(--gray-800);
+  }
+  .sidebar-header {
+    padding: 24px 20px;
+    border-bottom: 1px solid var(--gray-800);
+  }
+  .sidebar-header h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .sidebar-header p {
+    font-size: 12px;
+    color: var(--gray-500);
+    margin-top: 4px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .sidebar-nav { padding: 12px 0; }
+  .nav-section { margin-bottom: 4px; }
+  .nav-section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--gray-600);
+    padding: 16px 20px 6px;
+    font-weight: 600;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    font-size: 14px;
+    color: var(--gray-400);
+    cursor: pointer;
+    transition: all 0.12s;
+    border-left: 2px solid transparent;
+    letter-spacing: 0.2px;
+  }
+  .nav-item:hover {
+    background: rgba(255,255,255,0.03);
+    color: var(--gray-300);
+  }
+  .nav-item.active {
+    background: rgba(255,255,255,0.05);
+    color: var(--white);
+    border-left-color: var(--gray-400);
+  }
+  .nav-item .icon {
+    width: 18px;
+    text-align: center;
+    font-size: 15px;
+    filter: grayscale(100%) brightness(1.8);
+    opacity: 0.6;
+    transition: opacity 0.12s;
+  }
+  .nav-item:hover .icon,
+  .nav-item.active .icon { opacity: 0.9; }
+  .nav-item .badge {
+    margin-left: auto;
+    background: var(--gray-700);
+    color: var(--gray-200);
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 3px;
+    font-weight: 500;
+  }
+
+  /* Main */
+  .main { flex: 1; margin-left: 256px; }
+  .topbar {
+    background: var(--white);
+    border-bottom: 1px solid var(--gray-200);
+    padding: 0 24px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .topbar-breadcrumb {
+    font-size: 13px;
+    color: var(--gray-500);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .topbar-breadcrumb span { color: var(--gray-900); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 14px; }
+  .topbar-right { display: flex; align-items: center; gap: 16px; }
+  .topbar-link {
+    font-size: 13px;
+    color: var(--gray-500);
+    text-decoration: none;
+    padding: 6px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    transition: all 0.12s;
+  }
+  .topbar-link:hover { border-color: var(--gray-400); color: var(--gray-900); }
+  .topbar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 16px;
+    border-left: 1px solid var(--gray-200);
+  }
+  .topbar-avatar {
+    width: 30px; height: 30px;
+    background: var(--gray-900);
+    color: var(--white);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 4px;
+  }
+  .topbar-username { font-size: 14px; font-weight: 500; color: var(--gray-900); }
+
+  .content { padding: 24px; max-width: 1280px; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* Page title */
+  .page-title { margin-bottom: 28px; }
+  .page-title h2 {
+    font-size: 26px;
+    font-weight: 500;
+    color: var(--gray-900);
+    letter-spacing: -0.3px;
+  }
+  .page-title p {
+    font-size: 14px;
+    color: var(--gray-500);
+    margin-top: 4px;
+    letter-spacing: 0.3px;
+  }
+  .page-title .actions { display: flex; gap: 8px; margin-top: 16px; }
+
+  /* Stats */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--gray-200); border: 1px solid var(--gray-200); margin-bottom: 24px; }
+  .stat-card { background: var(--white); padding: 24px; }
+  .stat-card .label {
+    font-size: 12px;
+    color: var(--gray-500);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .stat-card .label .icon {
+    filter: grayscale(100%) brightness(1.5);
+    opacity: 0.5;
+    font-size: 16px;
+  }
+  .stat-card .value {
+    font-size: 36px;
+    font-weight: 400;
+    color: var(--gray-900);
+    letter-spacing: -0.5px;
+  }
+  .stat-card .trend {
+    font-size: 12px;
+    margin-top: 8px;
+    color: var(--gray-500);
+    letter-spacing: 0.3px;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--gray-700);
+  }
+  .card-body { padding: 0; }
+  .card-body.padded { padding: 20px; }
+
+  /* Dashboard grid */
+  .dashboard-row { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+
+  /* Quick links */
+  .quick-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    font-size: 14px;
+    color: var(--gray-600);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .quick-link:last-child { border-bottom: none; }
+  .quick-link:hover { background: var(--gray-50); color: var(--gray-900); }
+  .quick-link .icon {
+    filter: grayscale(100%) brightness(1.5);
+    opacity: 0.5;
+    font-size: 14px;
+  }
+  .quick-link .arrow { margin-left: auto; color: var(--gray-300); font-size: 16px; }
+
+  /* Recent items */
+  .recent-item {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--gray-100);
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+  .recent-item:last-child { border-bottom: none; }
+  .recent-item .time {
+    font-size: 12px;
+    color: var(--gray-400);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    min-width: 130px;
+  }
+  .recent-item .desc { font-size: 14px; color: var(--gray-700); }
+
+  /* Chart */
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    height: 140px;
+    padding: 24px 20px 16px;
+  }
+  .chart-bar {
+    width: 20px;
+    background: var(--gray-300);
+    border-radius: 2px 2px 0 0;
+    transition: height 0.3s;
+  }
+  .chart-labels {
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    padding: 0 20px 16px;
+  }
+  .chart-labels span {
+    width: 20px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--gray-400);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: var(--gray-50);
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    border-bottom: 1px solid var(--gray-200);
+  }
+  td {
+    padding: 14px 16px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--gray-100);
+    color: var(--gray-700);
+  }
+  tr:hover td { background: var(--gray-50); }
+
+  /* Forms */
+  .form-group { margin-bottom: 28px; }
+  .form-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-600);
+    margin-bottom: 8px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+  .form-hint {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 6px;
+    letter-spacing: 0.3px;
+  }
+  .form-input {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 15px;
+    color: var(--gray-900);
+    background: var(--white);
+    transition: border-color 0.12s;
+    font-family: inherit;
+  }
+  .form-input:focus {
+    outline: none;
+    border-color: var(--gray-500);
+  }
+  .form-input::placeholder { color: var(--gray-300); }
+  .form-textarea { min-height: 100px; resize: vertical; }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.12s;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-family: inherit;
+  }
+  .btn-primary { background: var(--gray-900); color: var(--white); }
+  .btn-primary:hover { background: var(--black); }
+  .btn-secondary { background: var(--white); color: var(--gray-700); border-color: var(--gray-200); }
+  .btn-secondary:hover { background: var(--gray-50); border-color: var(--gray-300); }
+  .btn-danger { background: var(--white); color: var(--gray-600); border-color: var(--gray-200); }
+  .btn-danger:hover { background: var(--gray-50); border-color: var(--gray-300); color: var(--gray-900); }
+  .btn-sm { padding: 5px 10px; font-size: 11px; letter-spacing: 0.3px; }
+
+  /* Badges */
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+  .badge-green { background: var(--gray-100); color: var(--gray-600); }
+  .badge-red { background: var(--gray-100); color: var(--gray-600); }
+  .badge-yellow { background: var(--gray-100); color: var(--gray-600); }
+  .badge-blue { background: var(--gray-100); color: var(--gray-600); }
+  .badge-gray { background: var(--gray-200); color: var(--gray-500); }
+
+  /* Settings */
+  .settings-grid { display: grid; grid-template-columns: 220px 1fr; gap: 24px; }
+  .settings-nav {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    overflow: hidden;
+    height: fit-content;
+  }
+  .settings-nav-item {
+    display: block;
+    padding: 13px 16px;
+    font-size: 13px;
+    color: var(--gray-600);
+    cursor: pointer;
+    border-bottom: 1px solid var(--gray-100);
+    border-left: 2px solid transparent;
+    letter-spacing: 0.3px;
+    transition: all 0.12s;
+  }
+  .settings-nav-item:hover { background: var(--gray-50); }
+  .settings-nav-item.active { background: var(--gray-50); color: var(--gray-900); border-left-color: var(--gray-900); font-weight: 500; }
+
+  .settings-section {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+  }
+  .settings-section-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .settings-section-header h3 { font-size: 15px; font-weight: 600; color: var(--gray-900); letter-spacing: 0.3px; }
+  .settings-section-header p { font-size: 13px; color: var(--gray-400); margin-top: 4px; }
+  .settings-section-body { padding: 24px; }
+  .settings-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--gray-200);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  /* Toolbar */
+  .content-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-200);
+  }
+  .content-toolbar input {
+    padding: 7px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 13px;
+    width: 200px;
+    color: var(--gray-900);
+    font-family: inherit;
+  }
+  .content-toolbar input:focus { outline: none; border-color: var(--gray-400); }
+  .content-toolbar input::placeholder { color: var(--gray-300); }
+  .content-toolbar select {
+    padding: 7px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--gray-700);
+    font-family: inherit;
+    background: var(--white);
+  }
+  .content-toolbar .spacer { flex: 1; }
+
+  /* Tags */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px; }
+  .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--gray-600);
+    letter-spacing: 0.3px;
+  }
+  .tag-chip .count {
+    background: var(--gray-100);
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--gray-500);
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .tag-chip .delete {
+    cursor: pointer;
+    color: var(--gray-300);
+    font-size: 16px;
+    line-height: 1;
+    transition: color 0.12s;
+  }
+  .tag-chip .delete:hover { color: var(--gray-600); }
+
+  /* Rate limit */
+  .rate-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .rate-card {
+    padding: 20px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+  }
+  .rate-card h4 {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--gray-500);
+  }
+  .rate-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    font-size: 13px;
+    color: var(--gray-600);
+  }
+  .rate-row input {
+    width: 80px;
+    padding: 6px 8px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: center;
+    color: var(--gray-900);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .rate-row input:focus { outline: none; border-color: var(--gray-400); }
+  .rate-row select {
+    padding: 6px 8px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--gray-700);
+    font-family: inherit;
+    background: var(--white);
+  }
+
+  /* Checkbox */
+  .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--gray-700);
+    cursor: pointer;
+  }
+  .checkbox-label input[type="checkbox"] {
+    width: 16px; height: 16px;
+    accent-color: var(--gray-900);
+  }
+
+  /* Pagination */
+  .pagination {
+    padding: 16px;
+    display: flex;
+    justify-content: center;
+    gap: 4px;
+    border-top: 1px solid var(--gray-200);
+  }
+  .pagination span {
+    padding: 7px 13px;
+    font-size: 13px;
+    border-radius: 3px;
+    cursor: pointer;
+    color: var(--gray-600);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    letter-spacing: 0.5px;
+    transition: all 0.12s;
+  }
+  .pagination span:hover { background: var(--gray-50); }
+  .pagination span.active {
+    background: var(--gray-900);
+    color: var(--white);
+  }
+
+  /* Monospace for IDs */
+  .mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; color: var(--gray-600); }
+  .mono-dark { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 13px; color: var(--gray-700); }
+
+  /* Inline stat in toolbar */
+  .inline-stat {
+    font-size: 12px;
+    color: var(--gray-400);
+    letter-spacing: 0.5px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* Clean buttons vertical */
+  .clean-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>MindForum</h2>
+      <p>Administration</p>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <div class="nav-section-title">Overview</div>
+        <div class="nav-item active" onclick="showPage('dashboard', this)">
+          <span class="icon">&#9638;</span> Dashboard
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Site</div>
+        <div class="nav-item" onclick="showPage('site-basic', this)">
+          <span class="icon">&#9632;</span> Basic Info
+        </div>
+        <div class="nav-item" onclick="showPage('site-announce', this)">
+          <span class="icon">&#9651;</span> Announcements
+          <span class="badge">2</span>
+        </div>
+        <div class="nav-item" onclick="showPage('site-display', this)">
+          <span class="icon">&#9633;</span> Display
+        </div>
+        <div class="nav-item" onclick="showPage('site-seo', this)">
+          <span class="icon">&#9671;</span> SEO
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Content</div>
+        <div class="nav-item" onclick="showPage('content-posts', this)">
+          <span class="icon">&#9645;</span> Posts
+        </div>
+        <div class="nav-item" onclick="showPage('content-tags', this)">
+          <span class="icon">&#9672;</span> Tags
+        </div>
+        <div class="nav-item" onclick="showPage('content-review', this)">
+          <span class="icon">&#9650;</span> Moderation
+          <span class="badge">5</span>
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">System</div>
+        <div class="nav-item" onclick="showPage('sys-rules', this)">
+          <span class="icon">&#9644;</span> Posting Rules
+        </div>
+        <div class="nav-item" onclick="showPage('sys-rate', this)">
+          <span class="icon">&#9201;</span> Rate Limits
+        </div>
+        <div class="nav-item" onclick="showPage('sys-ban', this)">
+          <span class="icon">&#9673;</span> Bans
+        </div>
+        <div class="nav-item" onclick="showPage('sys-cleanup', this)">
+          <span class="icon">&#9648;</span> Data Cleanup
+        </div>
+      </div>
+      <div class="nav-section">
+        <div class="nav-section-title">Manage</div>
+        <div class="nav-item" onclick="showPage('categories', this)">
+          <span class="icon">&#9635;</span> Categories
+        </div>
+        <div class="nav-item" onclick="showPage('users', this)">
+          <span class="icon">&#9670;</span> Users
+        </div>
+        <div class="nav-item" onclick="showPage('logs', this)">
+          <span class="icon">&#9636;</span> Logs
+        </div>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-breadcrumb">Admin / <span id="breadcrumb-current">Dashboard</span></div>
+      <div class="topbar-right">
+        <a href="http://localhost:3000" target="_blank" class="topbar-link">View Forum</a>
+        <div class="topbar-user">
+          <div class="topbar-avatar">A</div>
+          <span class="topbar-username">admin</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- ====== DASHBOARD ====== -->
+      <div id="page-dashboard" class="page active">
+        <div class="page-title">
+          <h2>Dashboard</h2>
+          <p>System overview and quick access</p>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="label"><span class="icon">&#9645;</span> Total Posts</div>
+            <div class="value">1,247</div>
+            <div class="trend">+23 today</div>
+          </div>
+          <div class="stat-card">
+            <div class="label"><span class="icon">&#9652;</span> Total Replies</div>
+            <div class="value">8,932</div>
+            <div class="trend">+156 today</div>
+          </div>
+          <div class="stat-card">
+            <div class="label"><span class="icon">&#9670;</span> Total Users</div>
+            <div class="value">342</div>
+            <div class="trend">+8 today</div>
+          </div>
+          <div class="stat-card">
+            <div class="label"><span class="icon">&#9671;</span> Active (24h)</div>
+            <div class="value">67</div>
+            <div class="trend">-3 vs yesterday</div>
+          </div>
+        </div>
+        <div class="dashboard-row">
+          <div class="card">
+            <div class="card-header"><h3>7-Day Activity</h3></div>
+            <div class="card-body">
+              <div class="chart-bars">
+                <div class="chart-bar" style="height:80px;"></div>
+                <div class="chart-bar" style="height:120px;"></div>
+                <div class="chart-bar" style="height:60px;"></div>
+                <div class="chart-bar" style="height:140px;"></div>
+                <div class="chart-bar" style="height:100px;"></div>
+                <div class="chart-bar" style="height:160px;"></div>
+                <div class="chart-bar" style="height:90px;"></div>
+              </div>
+              <div class="chart-labels">
+                <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h3>Quick Access</h3></div>
+            <div class="card-body">
+              <div class="quick-link" onclick="showPage('site-basic',null)"><span class="icon">&#9632;</span> Site Basic Info <span class="arrow">&rarr;</span></div>
+              <div class="quick-link" onclick="showPage('content-posts',null)"><span class="icon">&#9645;</span> Post Management <span class="arrow">&rarr;</span></div>
+              <div class="quick-link" onclick="showPage('content-review',null)"><span class="icon">&#9650;</span> Content Moderation (5) <span class="arrow">&rarr;</span></div>
+              <div class="quick-link" onclick="showPage('sys-rate',null)"><span class="icon">&#9201;</span> Rate Limit Settings <span class="arrow">&rarr;</span></div>
+              <div class="quick-link" onclick="showPage('sys-ban',null)"><span class="icon">&#9673;</span> Ban Management <span class="arrow">&rarr;</span></div>
+              <div class="quick-link" onclick="showPage('categories',null)"><span class="icon">&#9635;</span> Categories <span class="arrow">&rarr;</span></div>
+              <div class="quick-link" onclick="showPage('logs',null)"><span class="icon">&#9636;</span> Audit Logs <span class="arrow">&rarr;</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Recent Actions</h3></div>
+          <div class="card-body">
+            <div class="recent-item"><span class="time">2026-05-12 15:30</span><span class="desc">admin deleted post "Spam Ad" (#42)</span></div>
+            <div class="recent-item"><span class="time">2026-05-12 14:15</span><span class="desc">admin changed testuser role user &rarr; moderator</span></div>
+            <div class="recent-item"><span class="time">2026-05-12 13:20</span><span class="desc">admin created category "Tech Discussion"</span></div>
+            <div class="recent-item"><span class="time">2026-05-12 12:00</span><span class="desc">admin pinned post "Forum Rules" (#1)</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== SITE BASIC ====== -->
+      <div id="page-site-basic" class="page">
+        <div class="page-title">
+          <h2>Basic Info</h2>
+          <p>Forum name, description, logo and site identity</p>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-header">
+            <h3>Site Identity</h3>
+            <p>Displayed in browser title, navigation bar and footer</p>
+          </div>
+          <div class="settings-section-body">
+            <div class="form-group">
+              <label class="form-label">Forum Name</label>
+              <input class="form-input" value="MindForum">
+              <div class="form-hint">Appears in browser title, navigation and footer</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Tagline</label>
+              <input class="form-input" value="Share ideas, exchange experience">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Description</label>
+              <textarea class="form-input form-textarea">A community for technical discussion and knowledge sharing. All developers are welcome.</textarea>
+              <div class="form-hint">Used on homepage and for SEO</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Logo URL</label>
+              <input class="form-input" value="/logo.png" placeholder="/logo.png or full URL">
+              <div class="form-hint">Leave empty to display text logo</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Footer Copyright</label>
+              <input class="form-input" value="© 2026 MindForum">
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== SITE ANNOUNCE ====== -->
+      <div id="page-site-announce" class="page">
+        <div class="page-title">
+          <h2>Announcements</h2>
+          <p>Manage homepage banner announcements, Markdown supported</p>
+          <div class="actions"><button class="btn btn-primary">New Announcement</button></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Title</th><th>Status</th><th>Effective</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr><td><strong>Welcome to MindForum</strong></td><td><span class="badge badge-green">Active</span></td><td class="mono">2026-05-01</td><td><button class="btn btn-secondary btn-sm">Edit</button> <button class="btn btn-danger btn-sm">Disable</button></td></tr>
+              <tr><td><strong>Maintenance Notice</strong></td><td><span class="badge badge-yellow">Draft</span></td><td class="mono">&mdash;</td><td><button class="btn btn-secondary btn-sm">Edit</button> <button class="btn btn-danger btn-sm">Delete</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ====== SITE DISPLAY ====== -->
+      <div id="page-site-display" class="page">
+        <div class="page-title"><h2>Display Settings</h2><p>Control homepage and list display behavior</p></div>
+        <div class="settings-section">
+          <div class="settings-section-header"><h3>Homepage</h3></div>
+          <div class="settings-section-body">
+            <div class="form-group">
+              <label class="form-label">Posts Per Page</label>
+              <input class="form-input" type="number" value="20" style="width:120px;">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Sort</label>
+              <select class="form-input" style="width:200px;"><option>Newest first</option><option>Most popular</option><option>Most replies</option></select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Replies Per Page</label>
+              <input class="form-input" type="number" value="50" style="width:120px;">
+              <div class="form-hint">Number of replies per page in post detail view</div>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== SITE SEO ====== -->
+      <div id="page-site-seo" class="page">
+        <div class="page-title"><h2>SEO Settings</h2><p>Optimize search engine indexing</p></div>
+        <div class="settings-section">
+          <div class="settings-section-header"><h3>Search Engine</h3></div>
+          <div class="settings-section-body">
+            <div class="form-group">
+              <label class="form-label">Title Suffix</label>
+              <input class="form-input" value=" | MindForum">
+              <div class="form-hint">Appended to page titles, e.g. "Post Title | MindForum"</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Default Description</label>
+              <textarea class="form-input form-textarea" style="min-height:80px;">MindForum - A community for technical discussion and knowledge sharing</textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">OG Image URL</label>
+              <input class="form-input" placeholder="https://example.com/og-image.png">
+              <div class="form-hint">Default image for social sharing (recommended 1200×630px)</div>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" checked> Enable sitemap.xml
+              </label>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" checked> Enable robots.txt
+              </label>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== CONTENT POSTS ====== -->
+      <div id="page-content-posts" class="page">
+        <div class="page-title">
+          <h2>Post Management</h2>
+          <p>Search, edit, delete posts. Bulk operations supported.</p>
+        </div>
+        <div class="card">
+          <div class="content-toolbar">
+            <input placeholder="Search title...">
+            <select><option>All categories</option><option>Test</option></select>
+            <select><option>All status</option><option>Published</option><option>Draft</option><option>Deleted</option></select>
+            <span class="spacer"></span>
+            <button class="btn btn-danger btn-sm">Delete Selected</button>
+            <button class="btn btn-secondary btn-sm">Pin Selected</button>
+            <button class="btn btn-secondary btn-sm">Move Selected</button>
+          </div>
+          <table>
+            <thead><tr><th style="width:30px;"><input type="checkbox"></th><th>ID</th><th>Title</th><th>Author</th><th>Category</th><th>Replies</th><th>Views</th><th>Status</th><th>Pinned</th><th>Date</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr><td><input type="checkbox"></td><td class="mono">1</td><td><strong>Forum Rules</strong></td><td>admin</td><td><span class="badge badge-blue">Announce</span></td><td>12</td><td>1,234</td><td><span class="badge badge-green">Published</span></td><td><span class="badge badge-yellow">Yes</span></td><td class="mono">2026-05-01</td><td><button class="btn btn-secondary btn-sm">Edit</button> <button class="btn btn-danger btn-sm">Delete</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="mono">7</td><td><strong>Welcome to MindForum</strong></td><td>admin</td><td><span class="badge badge-blue">Announce</span></td><td>8</td><td>892</td><td><span class="badge badge-green">Published</span></td><td>&mdash;</td><td class="mono">2026-05-05</td><td><button class="btn btn-secondary btn-sm">Edit</button> <button class="btn btn-danger btn-sm">Delete</button></td></tr>
+              <tr><td><input type="checkbox"></td><td class="mono">14</td><td><strong>E2E Test Post</strong></td><td>e2e_user</td><td>&mdash;</td><td>0</td><td>3</td><td><span class="badge badge-gray">Draft</span></td><td>&mdash;</td><td class="mono">2026-05-12</td><td><button class="btn btn-secondary btn-sm">Edit</button> <button class="btn btn-danger btn-sm">Delete</button></td></tr>
+            </tbody>
+          </table>
+          <div class="pagination">
+            <span class="active">1</span><span>2</span><span>3</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== CONTENT TAGS ====== -->
+      <div id="page-content-tags" class="page">
+        <div class="page-title">
+          <h2>Tag Management</h2>
+          <p>Create, edit, delete and merge tags</p>
+          <div class="actions"><button class="btn btn-primary">New Tag</button></div>
+        </div>
+        <div class="card">
+          <div class="content-toolbar">
+            <input placeholder="Search tags...">
+          </div>
+          <div class="tag-list">
+            <div class="tag-chip">test <span class="count">3</span> <span class="delete">&times;</span></div>
+            <div class="tag-chip">javascript <span class="count">12</span> <span class="delete">&times;</span></div>
+            <div class="tag-chip">python <span class="count">8</span> <span class="delete">&times;</span></div>
+            <div class="tag-chip">react <span class="count">5</span> <span class="delete">&times;</span></div>
+            <div class="tag-chip">database <span class="count">15</span> <span class="delete">&times;</span></div>
+            <div class="tag-chip">frontend <span class="count">22</span> <span class="delete">&times;</span></div>
+          </div>
+          <div style="padding:20px;border-top:1px solid var(--gray-200);">
+            <h4 style="font-size:11px;font-weight:600;margin-bottom:12px;letter-spacing:1px;text-transform:uppercase;color:var(--gray-500);">Merge Tags</h4>
+            <div style="display:flex;gap:8px;align-items:end;">
+              <div class="form-group" style="margin:0;flex:1;"><label class="form-label">From</label><input class="form-input" placeholder="Source tag"></div>
+              <div class="form-group" style="margin:0;flex:1;"><label class="form-label">Into</label><input class="form-input" placeholder="Target tag"></div>
+              <button class="btn btn-secondary btn-sm" style="margin-bottom:0;height:36px;">Merge</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== CONTENT REVIEW ====== -->
+      <div id="page-content-review" class="page">
+        <div class="page-title">
+          <h2>Content Moderation</h2>
+          <p>Review new posts and replies before they go live</p>
+        </div>
+        <div class="card">
+          <div class="content-toolbar">
+            <select><option>Pending</option><option>Approved</option><option>Rejected</option></select>
+            <select><option>All types</option><option>Posts</option><option>Replies</option></select>
+          </div>
+          <table>
+            <thead><tr><th>Type</th><th>Content</th><th>Author</th><th>Time</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge badge-blue">Post</span></td><td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">New post awaiting review, content needs admin approval before public display...</td><td>newuser</td><td class="mono">10m ago</td><td><button class="btn btn-primary btn-sm">Approve</button> <button class="btn btn-danger btn-sm">Reject</button></td></tr>
+              <tr><td><span class="badge badge-blue">Post</span></td><td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Sharing some programming tips on frontend performance optimization...</td><td>dev_user</td><td class="mono">30m ago</td><td><button class="btn btn-primary btn-sm">Approve</button> <button class="btn btn-danger btn-sm">Reject</button></td></tr>
+              <tr><td><span class="badge badge-green">Reply</span></td><td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Great approach, I tried something similar and got good results too...</td><td>testuser</td><td class="mono">1h ago</td><td><button class="btn btn-primary btn-sm">Approve</button> <button class="btn btn-danger btn-sm">Reject</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ====== SYS RULES ====== -->
+      <div id="page-sys-rules" class="page">
+        <div class="page-title"><h2>Posting Rules</h2><p>Content length and tag limits for posts and replies</p></div>
+        <div class="settings-section">
+          <div class="settings-section-header"><h3>Content Limits</h3></div>
+          <div class="settings-section-body">
+            <div class="form-group">
+              <label class="form-label">Title Min Length</label>
+              <input class="form-input" type="number" value="2" style="width:120px;"> <span class="form-hint" style="display:inline;margin-left:8px;margin-top:0;">chars</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Title Max Length</label>
+              <input class="form-input" type="number" value="200" style="width:120px;"> <span class="form-hint" style="display:inline;margin-left:8px;margin-top:0;">chars</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Content Min Length</label>
+              <input class="form-input" type="number" value="10" style="width:120px;"> <span class="form-hint" style="display:inline;margin-left:8px;margin-top:0;">chars</span>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Max Tags Per Post</label>
+              <input class="form-input" type="number" value="5" style="width:120px;">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Max Tag Length</label>
+              <input class="form-input" type="number" value="30" style="width:120px;"> <span class="form-hint" style="display:inline;margin-left:8px;margin-top:0;">chars</span>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== SYS RATE LIMIT ====== -->
+      <div id="page-sys-rate" class="page">
+        <div class="page-title"><h2>Rate Limits</h2><p>Prevent abuse by controlling action frequency</p></div>
+        <div class="settings-section">
+          <div class="settings-section-header"><h3>Rate Limiting</h3><p>Maximum operations per user within a time window</p></div>
+          <div class="settings-section-body">
+            <div class="rate-grid">
+              <div class="rate-card">
+                <h4>Post Creation</h4>
+                <div class="rate-row"><span>Max posts</span><input type="number" value="10"></div>
+                <div class="rate-row"><span>Time window (min)</span><input type="number" value="60"></div>
+                <div class="rate-row"><span>On exceed</span><select style="width:100px;"><option>Show error</option></select></div>
+              </div>
+              <div class="rate-card">
+                <h4>Reply Creation</h4>
+                <div class="rate-row"><span>Max replies</span><input type="number" value="30"></div>
+                <div class="rate-row"><span>Time window (min)</span><input type="number" value="60"></div>
+                <div class="rate-row"><span>New user cooldown</span><input type="number" value="5"></div>
+              </div>
+              <div class="rate-card">
+                <h4>Login Attempts</h4>
+                <div class="rate-row"><span>Max attempts</span><input type="number" value="5"></div>
+                <div class="rate-row"><span>Lock duration (min)</span><input type="number" value="15"></div>
+              </div>
+              <div class="rate-card">
+                <h4>API Requests</h4>
+                <div class="rate-row"><span>Requests per min</span><input type="number" value="100"></div>
+                <div class="rate-row"><span>On exceed</span><select style="width:100px;"><option>429</option></select></div>
+              </div>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== SYS BAN ====== -->
+      <div id="page-sys-ban" class="page">
+        <div class="page-title">
+          <h2>Ban Management</h2>
+          <p>Block specific IP addresses or users from accessing the forum</p>
+          <div class="actions"><button class="btn btn-primary">New Ban</button></div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Type</th><th>Value</th><th>Reason</th><th>By</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge badge-gray">IP</span></td><td class="mono-dark">192.168.1.100</td><td>Spam advertising</td><td>admin</td><td class="mono">2026-05-10</td><td><span class="badge badge-red">Banned</span></td><td><button class="btn btn-secondary btn-sm">Unban</button></td></tr>
+              <tr><td><span class="badge badge-gray">User</span></td><td>spam_bot <span class="mono">(15)</span></td><td>Bot account</td><td>admin</td><td class="mono">2026-05-09</td><td><span class="badge badge-red">Banned</span></td><td><button class="btn btn-secondary btn-sm">Unban</button></td></tr>
+              <tr><td><span class="badge badge-gray">IP Range</span></td><td class="mono-dark">10.0.0.0/24</td><td>Suspicious traffic</td><td>admin</td><td class="mono">2026-05-08</td><td><span class="badge badge-red">Banned</span></td><td><button class="btn btn-secondary btn-sm">Unban</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ====== SYS CLEANUP ====== -->
+      <div id="page-sys-cleanup" class="page">
+        <div class="page-title"><h2>Data Cleanup</h2><p>Automated rules and manual tools for database maintenance</p></div>
+        <div class="settings-section">
+          <div class="settings-section-header"><h3>Auto Cleanup Rules</h3></div>
+          <div class="settings-section-body">
+            <div class="rate-grid">
+              <div class="rate-card">
+                <h4>Audit Logs</h4>
+                <div class="rate-row"><span>Retention days</span><input type="number" value="90"></div>
+                <div class="rate-row"><span>Overflow action</span><span style="font-size:11px;color:var(--gray-500);">Delete oldest 5000 ✓</span></div>
+                <div class="rate-row"><span>Current count</span><span class="mono" id="log-count">&mdash;</span></div>
+              </div>
+              <div class="rate-card">
+                <h4>Soft Deleted</h4>
+                <div class="rate-row"><span>Retention days</span><input type="number" value="30"></div>
+                <div class="rate-row"><span>Action</span><select style="width:100px;"><option>Permanent delete</option><option>Keep soft</option></select></div>
+              </div>
+              <div class="rate-card">
+                <h4>Expired Sessions</h4>
+                <div class="rate-row"><span>Session TTL</span><span style="font-size:11px;color:var(--gray-400);">24h (set)</span></div>
+                <div class="rate-row"><span>Cleanup freq</span><select style="width:100px;"><option>Daily</option><option>Hourly</option></select></div>
+              </div>
+              <div class="rate-card">
+                <h4>Manual</h4>
+                <div class="clean-buttons">
+                  <button class="btn btn-danger btn-sm">Clear expired sessions</button>
+                  <button class="btn btn-danger btn-sm">Clear old logs</button>
+                  <button class="btn btn-danger btn-sm">Purge soft deleted</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="settings-footer">
+            <button class="btn btn-secondary">Cancel</button>
+            <button class="btn btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== CATEGORIES ====== -->
+      <div id="page-categories" class="page">
+        <div class="page-title"><h2>Categories</h2><p>Forum category management (existing)</p><div class="actions"><button class="btn btn-primary">New Category</button></div></div>
+        <div class="card"><table>
+          <thead><tr><th>Name</th><th>Slug</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody><tr><td><strong>Test</strong></td><td class="mono">test</td><td>1</td><td><span class="badge badge-green">Active</span></td><td><button class="btn btn-secondary btn-sm">Edit</button> <button class="btn btn-danger btn-sm">Delete</button></td></tr></tbody>
+        </table></div>
+      </div>
+
+      <!-- ====== USERS ====== -->
+      <div id="page-users" class="page">
+        <div class="page-title"><h2>Users</h2><p>User role management (existing)</p></div>
+        <div class="card"><table>
+          <thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">1</td><td><strong>admin</strong></td><td class="mono">admin@mind.com</td><td><span class="badge badge-red">admin</span></td><td>&mdash;</td></tr>
+            <tr><td class="mono">2</td><td>e2e_user</td><td class="mono">e2e@test.com</td><td><span class="badge badge-blue">user</span></td><td><select style="padding:4px 8px;border:1px solid var(--gray-200);border-radius:4px;font-size:12px;font-family:inherit;"><option>user</option><option>moderator</option><option>admin</option></select></td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+      <!-- ====== LOGS ====== -->
+      <div id="page-logs" class="page">
+        <div class="page-title"><h2>Audit Logs</h2><p>Administrator action history (existing)</p></div>
+        <div class="card"><table>
+          <thead><tr><th>User</th><th>Action</th><th>Target</th><th>IP</th><th>Time</th></tr></thead>
+          <tbody>
+            <tr><td>admin</td><td><span class="badge badge-green">post_create</span></td><td class="mono">Post #1</td><td class="mono">127.0.0.1</td><td class="mono">2026-05-12 15:30</td></tr>
+            <tr><td>admin</td><td><span class="badge badge-yellow">post_pin</span></td><td class="mono">Post #1</td><td class="mono">127.0.0.1</td><td class="mono">2026-05-12 14:15</td></tr>
+            <tr><td>admin</td><td><span class="badge badge-blue">user_role</span></td><td class="mono">User #2</td><td class="mono">127.0.0.1</td><td class="mono">2026-05-12 13:20</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+function showPage(pageId, navEl) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById('page-' + pageId);
+  if (page) page.classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (navEl) navEl.classList.add('active');
+  const names = {
+    'dashboard': 'Dashboard', 'site-basic': 'Basic Info', 'site-announce': 'Announcements',
+    'site-display': 'Display', 'site-seo': 'SEO', 'content-posts': 'Posts',
+    'content-tags': 'Tags', 'content-review': 'Moderation', 'sys-rules': 'Posting Rules',
+    'sys-rate': 'Rate Limits', 'sys-ban': 'Bans', 'sys-cleanup': 'Data Cleanup',
+    'categories': 'Categories', 'users': 'Users', 'logs': 'Audit Logs'
+  };
+  document.getElementById('breadcrumb-current').textContent = names[pageId] || pageId;
+}
+
+fetch('http://localhost:4000/api/v1/admin/logs?limit=1')
+  .then(r => r.json())
+  .then(d => {
+    const el = document.getElementById('log-count');
+    if (el && d.pagination) el.textContent = d.pagination.total + ' entries';
+  })
+  .catch(() => {
+    const el = document.getElementById('log-count');
+    if (el) el.textContent = 'N/A';
+  });
+</script>
+</body>
+</html>

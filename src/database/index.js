@@ -46,6 +46,28 @@ function initialize() {
     if (!e.message.includes('duplicate')) console.warn('Schema migration: bio column already exists');
   }
 
+  // Phase 3: add server_id and post_type to posts for server association
+  try {
+    db.exec('ALTER TABLE posts ADD COLUMN server_id INTEGER NULL');
+  } catch (e) {
+    if (!e.message.includes('duplicate')) console.warn('Schema migration: server_id column already exists');
+  }
+  try {
+    db.exec('ALTER TABLE posts ADD COLUMN post_type TEXT DEFAULT \'normal\'');
+  } catch (e) {
+    if (!e.message.includes('duplicate')) console.warn('Schema migration: post_type column already exists');
+  }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_posts_server_id ON posts(server_id)');
+  } catch (e) {
+    console.warn('Schema migration: idx_posts_server_id creation failed', e.message);
+  }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_posts_post_type ON posts(post_type)');
+  } catch (e) {
+    console.warn('Schema migration: idx_posts_post_type creation failed', e.message);
+  }
+
   // Seed default settings for admin panel
   const SettingService = require('../services/setting.service');
   SettingService.seedDefaults();

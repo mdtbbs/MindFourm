@@ -17,6 +17,7 @@ function createRoutes(basePrefix = '/api') {
   const router = new Router({ prefix: `${basePrefix}/posts` });
 
   router.get('/', PostController.list);
+  router.get('/cursor', PostController.listCursor);
   router.get('/:id', PostController.getById);
 
   router.post('/',

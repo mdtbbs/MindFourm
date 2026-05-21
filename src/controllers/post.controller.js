@@ -2,7 +2,9 @@ const Response = require('../utils/response');
 const PostService = require('../services/post.service');
 const ReplyService = require('../services/reply.service');
 const LogService = require('../services/log.service');
-const { LOG_ACTIONS } = require('../utils/constants');
+const NotificationService = require('../services/notification.service');
+const { LOG_ACTIONS, NOTIFICATION_TYPES } = require('../utils/constants');
+const { encodeCursor, decodeCursor } = require('../utils/cursor');
 
 class PostController {
   static list(ctx) {
@@ -58,6 +60,11 @@ class PostController {
       tags,
       status: status || 'draft'
     });
+
+    // Notify @mentioned users in post content
+    if (status === 'published' || status === 'pending') {
+      NotificationService.notifyMentionedUsers(content, post.id, user.id, null);
+    }
 
     LogService.log({
       user_id: user.id,
@@ -125,6 +132,24 @@ class PostController {
     });
 
     Response.success(ctx, { message: 'Post deleted' });
+  }
+
+  static listCursor(ctx) {
+    const { limit, cursor, category_id, search } = ctx.query;
+    const result = PostService.getListCursor({
+      limit: parseInt(limit) || 20,
+      cursor: cursor || null,
+      category_id: category_id ? parseInt(category_id) : null,
+      search: search || null,
+    });
+
+    // Strip content_html
+    const trimmed = result.data.map(p => {
+      const { content_html, ...rest } = p;
+      return rest;
+    });
+
+    Response.success(ctx, { data: trimmed, next_cursor: result.next_cursor, has_more: result.has_more });
   }
 }
 

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
 import { Eye, Edit3 } from 'lucide-react';
 import Alert from '@/components/ui/alert';
+import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 
 interface ReplyEditorProps {
   postId: number;
@@ -25,6 +26,16 @@ export default function ReplyEditor({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const replyId = quoteReply?.id ?? replyToReply?.id;
+  const draft = useDraft('reply', replyId ? `r-${replyId}` : `p-${postId}`);
+  useDraftAutoSave({ content }, draft.save, !!content);
+
+  // Restore draft on mount
+  useEffect(() => {
+    const saved = draft.load();
+    if (saved?.content) setContent(saved.content as string);
+  }, [draft]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
@@ -37,6 +48,7 @@ export default function ReplyEditor({
         quoteReply?.id || replyToReply?.id
       );
       setContent('');
+      draft.clear();
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败，请重试');
     } finally {
@@ -45,16 +57,16 @@ export default function ReplyEditor({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-surface-200 overflow-hidden">
-      <div className="px-4 py-3 bg-surface-50 border-b border-surface-200">
-        <h3 className="font-semibold text-surface-900">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 overflow-hidden">
+      <div className="px-4 py-3 bg-surface-50 dark:bg-gray-800 border-b border-surface-200 dark:border-gray-700">
+        <h3 className="font-semibold text-surface-900 dark:text-gray-100">
           {quoteReply ? '引用回复' : replyToReply ? '回复' : '发表回复'}
         </h3>
       </div>
 
       <form onSubmit={handleSubmit} className="p-4">
         {quoteReply && (
-          <div className="mb-4 p-3 bg-surface-50 border-l-4 border-primary-500 text-sm text-surface-600">
+          <div className="mb-4 p-3 bg-surface-50 dark:bg-gray-800 border-l-4 border-primary-500 text-sm text-surface-600 dark:text-gray-300">
             引用 #{quoteReply.id} 的内容
           </div>
         )}
@@ -85,13 +97,13 @@ export default function ReplyEditor({
         </div>
 
         {preview ? (
-          <MarkdownRenderer content={content} className="min-h-[120px] p-4 bg-surface-50 rounded-lg border border-surface-200" fallback="*暂无内容*" />
+          <MarkdownRenderer content={content} className="min-h-[120px] p-4 bg-surface-50 dark:bg-gray-800 rounded-lg border border-surface-200 dark:border-gray-700" fallback="*暂无内容*" />
         ) : (
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="使用 Markdown 格式编写回复..."
-            className="w-full min-h-[120px] px-3 py-2 border border-surface-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-y"
+            className="w-full min-h-[120px] px-3 py-2 border border-surface-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-y bg-white dark:bg-gray-800 text-surface-900 dark:text-gray-100 placeholder:text-surface-400 dark:placeholder:text-gray-500"
           />
         )}
 

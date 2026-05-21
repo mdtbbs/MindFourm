@@ -30,6 +30,15 @@ class NotificationController {
     NotificationService.markAllAsRead(ctx.state.user.id);
     Response.success(ctx, { message: 'All marked as read' });
   }
+
+  static listCursor(ctx) {
+    const { limit, cursor } = ctx.query;
+    const result = NotificationService.getByUserIdCursor(ctx.state.user.id, {
+      limit: parseInt(limit) || 50,
+      cursor: cursor || null,
+    });
+    Response.success(ctx, { data: result.data, next_cursor: result.next_cursor, has_more: result.has_more });
+  }
 }
 
 module.exports = NotificationController;

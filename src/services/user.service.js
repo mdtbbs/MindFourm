@@ -93,6 +93,16 @@ class UserService {
       pagination: { page, limit, total: countResult.total, totalPages: Math.ceil(countResult.total / limit) }
     };
   }
+
+  static searchByUsername(query, limit = 10) {
+    return db.prepare(`
+      SELECT id, username, avatar_url
+      FROM users
+      WHERE username LIKE ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `).all(`%${query}%`, limit);
+  }
 }
 
 module.exports = UserService;

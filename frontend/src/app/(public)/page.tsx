@@ -2,6 +2,7 @@ import { categoryApi, postApi, tagApi } from '@/lib/api/client';
 import Sidebar from '@/components/forum/sidebar';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
+import ServerSection from '@/components/forum/server-section';
 import { Category, Post, Tag, PostListResponse } from '@/types';
 import Link from 'next/link';
 
@@ -92,8 +93,11 @@ export default async function HomePage({
 
         {/* Main Content */}
         <div className="flex-1 space-y-4">
+          {/* 服务器区域 - 在帖子列表上方 */}
+          <ServerSection />
+
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-surface-900">
+            <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">
               {categoryId
                 ? categories.find((c) => c.id === categoryId)?.name || '分类'
                 : '最新帖子'}
@@ -102,7 +106,7 @@ export default async function HomePage({
 
           {postsResult.data.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-surface-500 mb-4">暂无帖子</p>
+              <p className="text-surface-500 dark:text-gray-400 mb-4">暂无帖子</p>
               <Link
                 href="/posts/new"
                 className="inline-flex items-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"

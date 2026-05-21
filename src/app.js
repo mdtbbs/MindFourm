@@ -20,7 +20,15 @@ app.use(compress({
 app.use(errorHandler);
 
 app.use(cors({
-  origin: config.app.env === 'development' ? '*' : config.app.baseUrl,
+  origin: (ctx) => {
+    const requestOrigin = ctx.get('Origin');
+    // In development, allow any origin that sends credentials
+    // In production, only allow the configured baseUrl
+    if (config.app.env === 'development') {
+      return requestOrigin || config.app.baseUrl;
+    }
+    return config.app.baseUrl;
+  },
   credentials: true
 }));
 
@@ -31,6 +39,18 @@ app.use(bodyParser({
 // Serve uploaded avatars at /uploads/avatars/<filename>
 const avatarsDir = path.join(__dirname, '../uploads/avatars');
 app.use(serve(avatarsDir, { prefix: '/uploads/avatars' }));
+
+// Serve uploaded attachments at /uploads/attachments/<filename>
+const attachmentsDir = path.join(__dirname, '../uploads/attachments');
+app.use(serve(attachmentsDir, { prefix: '/uploads/attachments' }));
+
+// Serve uploaded resources at /uploads/resources/<filename>
+const resourcesDir = path.join(__dirname, '../uploads/resources');
+app.use(serve(resourcesDir, { prefix: '/uploads/resources' }));
+
+// Serve static public files (server application page etc.)
+const publicDir = path.join(__dirname, '../public');
+app.use(serve(publicDir));
 
 app.use(routes.routes());
 app.use(routes.allowedMethods());

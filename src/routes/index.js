@@ -16,6 +16,12 @@ const { createRoutes: createBookmarkRoutes } = require('./bookmark.routes');
 const { createRoutes: createNotificationRoutes } = require('./notification.routes');
 const adminRoutes = require('./admin.routes');
 const { createRoutes: createAdminRoutes } = require('./admin.routes');
+const { createRoutes: createAttachmentRoutes } = require('./attachment.routes');
+const { createRoutes: createMessageRoutes } = require('./message.routes');
+const { createRoutes: createResourceRoutes } = require('./resource.routes');
+const serverRoutes = require('./server.routes');
+const autoPostRoutes = require('./auto-post.routes');
+const { createRoutes: createPostServerRoutes } = require('./post-server.routes');
 
 const router = new Router();
 
@@ -60,6 +66,8 @@ router.use(replyRouter.routes());
 router.use(categoryRoutes.routes());
 router.use(tagRoutes.routes());
 router.use(adminRoutes.routes());
+router.use(serverRoutes.routes());
+router.use(autoPostRoutes.routes());
 
 // v1 routes (mounted directly, factory creates full paths like /api/v1/posts)
 router.use(createAuthRoutes('/api/v1').routes());
@@ -71,6 +79,11 @@ router.use(createTagRoutes('/api/v1').routes());
 router.use(createUserRoutes('/api/v1').routes());
 router.use(createBookmarkRoutes('/api/v1').routes());
 router.use(createNotificationRoutes('/api/v1').routes());
+router.use(createAttachmentRoutes('/api/v1').routes());
+router.use(createMessageRoutes('/api/v1').routes());
+router.use(createResourceRoutes('/api/v1').routes());
 router.use(createAdminRoutes('/api/v1').routes());
+router.use(serverRoutes.routes());
+router.use(createPostServerRoutes('/api/v1').routes());
 
 module.exports = router;

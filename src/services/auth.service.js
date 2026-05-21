@@ -57,14 +57,14 @@ class AuthService {
     return user;
   }
 
-  static createSession(userId, mindauthToken = null) {
+  static createSession(userId) {
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + config.session.maxAge);
 
     db.prepare(`
-      INSERT INTO sessions (user_id, session_token, mindauth_token, expires_at)
-      VALUES (?, ?, ?, ?)
-    `).run(userId, sessionToken, mindauthToken, expiresAt.toISOString());
+      INSERT INTO sessions (user_id, session_token, expires_at)
+      VALUES (?, ?, ?)
+    `).run(userId, sessionToken, expiresAt.toISOString());
 
     return sessionToken;
   }

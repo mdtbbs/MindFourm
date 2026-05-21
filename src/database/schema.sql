@@ -207,3 +207,67 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_notifications_actor ON notifications(actor_id);
+
+-- Attachments for posts and replies
+CREATE TABLE IF NOT EXISTS attachments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id INTEGER,
+    reply_id INTEGER,
+    user_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    mime_type TEXT NOT NULL,
+    download_count INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_id) REFERENCES replies(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_attachments_post ON attachments(post_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_reply ON attachments(reply_id);
+CREATE INDEX IF NOT EXISTS idx_attachments_user ON attachments(user_id);
+
+-- Private messages
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sender_id INTEGER NOT NULL,
+    recipient_id INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    content_html TEXT,
+    is_read INTEGER DEFAULT 0,
+    read_at DATETIME,
+    deleted_by_sender INTEGER DEFAULT 0,
+    deleted_by_recipient INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (recipient_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, is_read, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, recipient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(deleted_by_sender, deleted_by_recipient);
+
+-- Resource center
+CREATE TABLE IF NOT EXISTS resources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    file_name TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    mime_type TEXT NOT NULL,
+    category TEXT,
+    download_count INTEGER DEFAULT 0,
+    is_public INTEGER DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'approved',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_resources_user ON resources(user_id);
+CREATE INDEX IF NOT EXISTS idx_resources_category ON resources(category);
+CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
+CREATE INDEX IF NOT EXISTS idx_resources_public ON resources(is_public, status);
+CREATE INDEX IF NOT EXISTS idx_resources_created ON resources(created_at DESC);

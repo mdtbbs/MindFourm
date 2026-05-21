@@ -26,7 +26,7 @@ function formatTime(dateStr: string): string {
 
 export default function PostCard({ post }: PostCardProps) {
   return (
-    <article className="bg-white rounded-lg border border-surface-200 p-4 hover:border-surface-300 transition-colors">
+    <article className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-4 hover:border-surface-300 dark:hover:border-gray-600 transition-colors">
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -35,7 +35,7 @@ export default function PostCard({ post }: PostCardProps) {
             )}
             <Link
               href={`/posts/${post.id}`}
-              className="text-lg font-semibold text-surface-900 hover:text-primary-600 truncate"
+              className="text-lg font-semibold text-surface-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 truncate"
             >
               {post.title}
             </Link>

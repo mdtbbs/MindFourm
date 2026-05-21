@@ -11,6 +11,10 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import Alert from '@/components/ui/alert';
 import { Eye, Edit3 } from 'lucide-react';
+import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import FileUpload from '@/components/forum/file-upload';
+import AttachmentList from '@/components/forum/attachment-list';
+import { Attachment } from '@/types';
 
 export default function PostForm() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
@@ -29,10 +33,16 @@ export default function PostForm() {
   const [createdPostId, setCreatedPostId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   // Reference data
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+
+  // Draft
+  const draft = useDraft('post');
+  const draftValues = { title, content, categoryId, tagsInput, status };
+  useDraftAutoSave(draftValues, draft.save);
 
   // Validation errors
   const [titleError, setTitleError] = useState<string>('');
@@ -56,6 +66,18 @@ export default function PostForm() {
       cancelled = true;
     };
   }, []);
+
+  // Restore draft on mount
+  useEffect(() => {
+    const saved = draft.load();
+    if (saved) {
+      if (saved.title) setTitle(saved.title as string);
+      if (saved.content) setContent(saved.content as string);
+      if (saved.categoryId) setCategoryId(saved.categoryId as string);
+      if (saved.tagsInput) setTagsInput(saved.tagsInput as string);
+      if (saved.status) setStatus(saved.status as 'draft' | 'published');
+    }
+  }, [draft]);
 
   // Redirect after successful creation
   useEffect(() => {
@@ -113,6 +135,7 @@ export default function PostForm() {
       };
 
       const post = await postApi.create(input);
+      draft.clear();
       setSuccess(true);
       setCreatedPostId(post.id);
     } catch (err) {
@@ -175,8 +198,15 @@ export default function PostForm() {
           className="mb-4"
         />
       )}
+      {draft.hasDraft && (
+        <Alert
+          type="warning"
+          message="检测到未保存的草稿，已自动恢复"
+          className="mb-4"
+        />
+      )}
 
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white rounded-lg border border-surface-200 p-6">
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-6">
         {/* Title */}
         <Input
           label="标题"
@@ -245,14 +275,14 @@ export default function PostForm() {
           </div>
 
           {preview ? (
-            <MarkdownRenderer content={content} className="min-h-[200px] p-4 bg-surface-50 rounded-lg border border-surface-200" fallback="*暂无内容*" />
+            <MarkdownRenderer content={content} className="min-h-[200px] p-4 bg-surface-50 dark:bg-gray-800 rounded-lg border border-surface-200 dark:border-gray-700" fallback="*暂无内容*" />
           ) : (
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="使用 Markdown 格式编写帖子内容..."
-              className={`w-full min-h-[200px] px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-y ${
-                contentError ? 'border-red-500' : 'border-surface-300'
+              className={`w-full min-h-[200px] px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-y bg-white dark:bg-gray-800 text-surface-900 dark:text-gray-100 placeholder:text-surface-400 dark:placeholder:text-gray-500 ${
+                contentError ? 'border-red-500' : 'border-surface-300 dark:border-gray-600'
               }`}
             />
           )}
@@ -260,6 +290,14 @@ export default function PostForm() {
             <p className="text-sm text-red-600 mt-1">{contentError}</p>
           )}
         </div>
+
+        {/* Attachments */}
+        {createdPostId && (
+          <>
+            <FileUpload postId={createdPostId} onUploaded={(newAttachments) => setAttachments((prev) => [...prev, ...newAttachments])} />
+            {attachments.length > 0 && <AttachmentList attachments={attachments} />}
+          </>
+        )}
 
         {/* Status */}
         <div>

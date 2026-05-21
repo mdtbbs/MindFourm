@@ -13,6 +13,9 @@ function createRoutes(basePrefix = '/api') {
   router.delete('/me/avatar', authMiddleware({ required: true }), UserController.removeAvatar);
   router.get('/me/replies', authMiddleware({ required: true }), UserController.getMyReplies);
 
+  // Public: search users by username (for @mentions)
+  router.get('/search', UserController.searchUsers);
+
   // Public: get user profile by ID
   router.get('/:id', UserController.getById);
 

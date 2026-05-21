@@ -4,8 +4,9 @@ import PostContent from '@/components/forum/post-content';
 import ReplyItem from '@/components/forum/reply-item';
 import ReplyFormWrapper from '@/components/forum/reply-form-wrapper';
 import Pagination from '@/components/ui/pagination';
+import AttachmentList from '@/components/forum/attachment-list';
 import Link from 'next/link';
-import { Post } from '@/types';
+import { Post, Attachment } from '@/types';
 
 export const revalidate = 60;
 
@@ -65,6 +66,16 @@ export default async function PostDetailPage({
   const repliesPerPage = parseInt(settings.replies_per_page || '50');
   const post = await fetchPost(postId, page, repliesPerPage);
 
+  // Fetch attachments
+  let attachments: Attachment[] = [];
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/attachments/post/${postId}`);
+    if (res.ok) {
+      const json = await res.json();
+      attachments = json.success ? json.data : [];
+    }
+  } catch { /* ignore */ }
+
   if (!post) return <div className="max-w-4xl mx-auto px-4 py-8">帖子不存在</div>;
 
   const replies = post.replies?.data ?? [];
@@ -88,6 +99,7 @@ export default async function PostDetailPage({
 
       {/* Post Content */}
       <PostContent post={post} postId={postId} />
+      <AttachmentList attachments={attachments} />
 
       {/* Replies */}
       <div className="mt-8 space-y-4">

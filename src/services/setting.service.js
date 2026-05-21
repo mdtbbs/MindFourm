@@ -38,7 +38,14 @@ const DEFAULT_SETTINGS = {
   // Cleanup
   cleanup_log_retention_days: '90',
   cleanup_soft_delete_retention_days: '30',
-  cleanup_session_ttl_hours: '24'
+  cleanup_session_ttl_hours: '24',
+  // Email
+  smtp_host: '',
+  smtp_port: '587',
+  smtp_user: '',
+  smtp_pass: '',
+  smtp_from: '',
+  site_url: 'http://localhost:3000',
 };
 
 const CATEGORY_KEYS = {
@@ -48,7 +55,8 @@ const CATEGORY_KEYS = {
   seo: ['seo_title_suffix', 'seo_default_description', 'seo_og_image', 'seo_sitemap_enabled', 'seo_robots_enabled'],
   rules: ['title_min_length', 'title_max_length', 'content_min_length', 'max_tags_per_post', 'max_tag_length'],
   rate_limit: ['rate_post_max', 'rate_post_window_min', 'rate_reply_max', 'rate_reply_window_min', 'rate_reply_newuser_cooldown_sec', 'rate_login_max', 'rate_login_lock_min', 'rate_api_max'],
-  cleanup: ['cleanup_log_retention_days', 'cleanup_soft_delete_retention_days', 'cleanup_session_ttl_hours']
+  cleanup: ['cleanup_log_retention_days', 'cleanup_soft_delete_retention_days', 'cleanup_session_ttl_hours'],
+  email: ['smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass', 'smtp_from', 'site_url'],
 };
 
 class SettingService {

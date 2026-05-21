@@ -108,6 +108,16 @@ class UserController {
     });
     Response.paginated(ctx, result.data, result.pagination);
   }
+
+  static searchUsers(ctx) {
+    const { q, limit } = ctx.query;
+    if (!q || !q.trim()) {
+      Response.success(ctx, []);
+      return;
+    }
+    const users = UserService.searchByUsername(q.trim(), parseInt(limit) || 10);
+    Response.success(ctx, users);
+  }
 }
 
 module.exports = UserController;

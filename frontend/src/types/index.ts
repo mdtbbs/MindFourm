@@ -228,7 +228,7 @@ export interface BookmarkListResponse {
 export interface Notification {
   id: number;
   user_id: number;
-  type: 'reply' | 'mention';
+  type: 'reply' | 'mention' | 'message';
   actor_id: number;
   actor_name: string;
   actor_avatar: string | null;
@@ -248,4 +248,88 @@ export interface NotificationListResponse {
     total: number;
     totalPages: number;
   };
+}
+
+// Attachments
+export interface Attachment {
+  id: number;
+  post_id: number | null;
+  reply_id: number | null;
+  user_id: number;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  download_count: number;
+  created_at: string;
+}
+
+// Messages
+export interface Message {
+  id: number;
+  sender_id: number;
+  recipient_id: number;
+  sender_name: string;
+  sender_avatar: string | null;
+  content: string;
+  content_html: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface Conversation {
+  user_id: number;
+  username: string;
+  avatar_url: string | null;
+  unread_count: number;
+  last_at: string;
+  last_content: string | null;
+}
+
+// Resources
+export interface Resource {
+  id: number;
+  user_id: number;
+  title: string;
+  description: string | null;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  category: string | null;
+  download_count: number;
+  is_public: boolean;
+  status: string;
+  username: string;
+  avatar_url: string | null;
+  created_at: string;
+}
+
+// Servers (EasyManager integration)
+export interface Server {
+  id: number;
+  name: string;
+  description: string | null;
+  port: number;
+  version: string;
+  status: string;
+  owner_id: number;
+  players: number;
+  playerList: { name: string; id: number; team: number }[];
+  mapName: string;
+  wave: number;
+  created_at: string;
+}
+
+export interface ServerVersion {
+  version: string;
+  download_url: string;
+  is_stable: boolean;
+}
+
+export interface ServerTemplate {
+  id: number;
+  name: string;
+  version: string;
+  is_public: boolean;
 }

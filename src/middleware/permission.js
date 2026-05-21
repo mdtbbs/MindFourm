@@ -66,10 +66,21 @@ function requireModerator(ctx, next) {
   return next();
 }
 
+function requireRole(roles) {
+  return async (ctx, next) => {
+    const user = ctx.state.user;
+    if (!user || !roles.includes(user.role)) {
+      return Response.error(ctx, 'Insufficient permissions', 403, 'FORBIDDEN');
+    }
+    return next();
+  };
+}
+
 module.exports = {
   hasRole,
   requirePermission,
   requireOwnershipOrPermission,
   requireAdmin,
-  requireModerator
+  requireModerator,
+  requireRole,
 };

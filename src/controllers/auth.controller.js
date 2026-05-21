@@ -78,7 +78,7 @@ class AuthController {
     }
 
     const user = AuthService.getOrCreateUser(mindauthUser);
-    const forumSessionToken = AuthService.createSession(user.id, session_token);
+    const forumSessionToken = AuthService.createSession(user.id);
 
     const cookieOpts = {
       maxAge: config.session.maxAge,

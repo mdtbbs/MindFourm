@@ -1,4 +1,4 @@
-import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse } from '@/types';
+import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, Server, ServerVersion, ServerTemplate } from '@/types';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -139,6 +139,13 @@ export const postApi = {
       limit: params?.limit,
       category_id: params?.category_id,
       user_id: params?.user_id,
+      search: params?.search,
+    })}`),
+  getListCursor: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string }) =>
+    request<{ data: Post[]; next_cursor: string | null; has_more: boolean }>(`/api/v1/posts/cursor${buildQueryString({
+      cursor: params?.cursor,
+      limit: params?.limit,
+      category_id: params?.category_id,
       search: params?.search,
     })}`),
   getById: (id: number) => request<Post>(`/api/posts/${id}`),
@@ -363,10 +370,87 @@ export const notificationApi = {
       page: params?.page,
       limit: params?.limit,
     })}`),
+  listCursor: (params?: { cursor?: string; limit?: number }) =>
+    request<{ data: Notification[]; next_cursor: string | null; has_more: boolean }>(`/api/v1/notifications/cursor${buildQueryString({
+      cursor: params?.cursor,
+      limit: params?.limit,
+    })}`),
   unreadCount: () =>
     request<{ count: number }>('/api/v1/notifications/unread-count'),
   markAsRead: (id: number) =>
     request<void>(`/api/v1/notifications/${id}/read`, { method: 'PUT' }),
   markAllAsRead: () =>
     request<void>('/api/v1/notifications/read-all', { method: 'PUT' }),
+};
+
+// Attachment APIs
+export const attachmentApi = {
+  upload: (formData: FormData) =>
+    request<Attachment | Attachment[]>('/api/v1/attachments/upload', {
+      method: 'POST',
+      body: formData,
+    }),
+  getByPost: (postId: number) =>
+    request<Attachment[]>(`/api/v1/attachments/post/${postId}`),
+  download: (id: number) => `${API_BASE}/api/v1/attachments/${id}/download`,
+};
+
+// Message APIs
+export const messageApi = {
+  send: (recipient_id: number, content: string) =>
+    request<Message>('/api/v1/messages', {
+      method: 'POST',
+      body: JSON.stringify({ recipient_id, content }),
+    }),
+  getConversations: (params?: { cursor?: string; limit?: number }) =>
+    request<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }>(
+      `/api/v1/messages${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
+    ),
+  getConversation: (userId: number, params?: { cursor?: string; limit?: number }) =>
+    request<{ data: Message[]; next_cursor: string | null; has_more: boolean }>(
+      `/api/v1/messages/${userId}${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
+    ),
+  unreadCount: () =>
+    request<{ count: number }>('/api/v1/messages/unread-count'),
+  delete: (id: number) =>
+    request<void>(`/api/v1/messages/${id}`, { method: 'DELETE' }),
+};
+
+// Resource APIs
+export const resourceApi = {
+  list: (params?: { cursor?: string; limit?: number; category?: string; search?: string }) =>
+    request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
+      `/api/v1/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category: params?.category, search: params?.search })}`
+    ),
+  getById: (id: number) =>
+    request<Resource>(`/api/v1/resources/${id}`),
+  download: (id: number) => `${API_BASE}/api/v1/resources/${id}/download`,
+  upload: (formData: FormData) =>
+    request<Resource>('/api/v1/resources', {
+      method: 'POST',
+      body: formData,
+    }),
+  delete: (id: number) =>
+    request<void>(`/api/v1/resources/${id}`, { method: 'DELETE' }),
+  getCategories: () =>
+    request<{ category: string; count: number }[]>('/api/v1/resources/categories'),
+};
+
+// Server APIs (EasyManager integration)
+export const serverApi = {
+  getPublicServers: () =>
+    request<{ servers: Server[] }>('/api/servers/public'),
+  getServerBasic: (id: number) =>
+    request<{ server: Server }>(`/api/servers/${id}/basic`),
+  getUserServers: () =>
+    request<{ servers: Server[] }>('/api/servers/my'),
+  applyServer: (data: { name: string; description?: string; version: string; template_id?: number }) =>
+    request<{ server_id: number; message: string }>('/api/servers/apply', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getVersions: () =>
+    request<{ versions: ServerVersion[] }>('/api/servers/versions'),
+  getTemplates: () =>
+    request<{ templates: ServerTemplate[] }>('/api/servers/templates'),
 };

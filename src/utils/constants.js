@@ -48,7 +48,12 @@ const LOG_ACTIONS = {
   CLEANUP_SESSIONS: 'cleanup_sessions',
   CLEANUP_LOGS: 'cleanup_logs',
   CLEANUP_SOFT_DELETED: 'cleanup_soft_deleted',
-  NOTIFICATION_CREATE: 'notification_create'
+  NOTIFICATION_CREATE: 'notification_create',
+  EMAIL_SENT: 'email_sent',
+  EMAIL_FAILED: 'email_failed',
+  MESSAGE_SEND: 'message_send',
+  ATTACHMENT_UPLOAD: 'attachment_upload',
+  ATTACHMENT_DELETE: 'attachment_delete',
 };
 
 const PERMISSIONS = {
@@ -71,7 +76,8 @@ const PERMISSIONS = {
 
 const NOTIFICATION_TYPES = {
   reply: 'reply',
-  mention: 'mention'
+  mention: 'mention',
+  message: 'message',
 };
 
 module.exports = {
