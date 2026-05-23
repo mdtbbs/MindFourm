@@ -4,7 +4,7 @@ import './globals.css';
 import { ToastProvider } from '@/lib/toast/context';
 import { AuthProvider } from '@/lib/auth/context';
 import { SettingsProvider } from '@/lib/settings/context';
-import { ThemeProvider } from '@/components/forum/theme-toggle';
+import { ThemeProvider } from '@mindproject/shared';
 
 const inter = Inter({ subsets: ['latin'] });
 
