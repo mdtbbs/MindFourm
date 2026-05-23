@@ -11,7 +11,9 @@ export default function LoginPage() {
     const redirectUrl = encodeURIComponent(
       `${window.location.origin}/api/auth/callback`
     );
-    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}`;
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
+    const currentPath = window.location.pathname + window.location.search;
+    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(currentPath || '/')}`;
   }, []);
 
   return (
