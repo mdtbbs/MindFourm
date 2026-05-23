@@ -292,16 +292,44 @@ export interface Resource {
   user_id: number;
   title: string;
   description: string | null;
-  file_name: string;
-  file_path: string;
+  resource_type: 'file' | 'external';
+  file_name: string | null;
+  file_path: string | null;
   file_size: number;
-  mime_type: string;
-  category: string | null;
+  mime_type: string | null;
+  external_url: string | null;
+  version: string | null;
+  content: string | null;
+  content_html: string | null;
+  category_id: number | null;
+  category_name: string | null;
+  category_icon: string | null;
   download_count: number;
   is_public: boolean;
   status: string;
   username: string;
   avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+  versions?: ResourceVersion[];
+}
+
+export interface ResourceCategory {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ResourceVersion {
+  id: number;
+  resource_id: number;
+  version: string;
+  file_path: string | null;
   created_at: string;
 }
 
@@ -313,6 +341,7 @@ export interface Server {
   port: number;
   version: string;
   status: string;
+  approval_status?: string;
   owner_id: number;
   players: number;
   playerList: { name: string; id: number; team: number }[];

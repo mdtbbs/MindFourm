@@ -1,28 +1,20 @@
-'use client';
-
-import ReactMarkdown from 'react-markdown';
+import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 interface MarkdownRendererProps {
   content: string;
-  className?: string;
   fallback?: string;
+  className?: string;
 }
 
-export default function MarkdownRenderer({ content, className = '', fallback = '' }: MarkdownRendererProps) {
-  if (!content) return <span className="text-surface-500">{fallback}</span>;
-
-  // Pre-process content to highlight @mentions
-  const processedContent = content.replace(
-    /@([一-龥a-zA-Z0-9_]+)/g,
-    '[@$1](/users/search?q=$1)'
-  );
+export default function MarkdownRenderer({ content, fallback, className }: MarkdownRendererProps) {
+  if (!content || content.trim().length === 0) {
+    return fallback ? <p className="text-[var(--text-muted)]">{fallback}</p> : null;
+  }
 
   return (
-    <div className={`markdown-content ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-        {processedContent}
-      </ReactMarkdown>
+    <div className={`prose prose-sm dark:prose-invert max-w-none ${className || ''}`}>
+      <Markdown remarkPlugins={[remarkGfm]}>{content}</Markdown>
     </div>
   );
 }

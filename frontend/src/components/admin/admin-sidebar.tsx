@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
-  AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText
+  AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
+  Package, AlertCircle, FolderOpen
 } from 'lucide-react';
 
 const navSections = [
@@ -50,6 +51,14 @@ const navSections = [
       { href: '/admin/logs', label: '系统日志', icon: ScrollText, roles: ['admin'] },
     ],
   },
+  {
+    title: '资源',
+    items: [
+      { href: '/admin/resources', label: '资源管理', icon: Package, roles: ['admin', 'moderator'] },
+      { href: '/admin/resources/moderation', label: '资源审批', icon: AlertCircle, roles: ['admin', 'moderator'] },
+      { href: '/admin/resource-categories', label: '类别管理', icon: FolderOpen, roles: ['admin'] },
+    ],
+  },
 ];
 
 function Badge({ count }: { count: number }) {
@@ -68,7 +77,9 @@ export default function AdminSidebar() {
   const [badges, setBadges] = useState({ moderation_pending: 0, announce_active: 0 });
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/admin/badge-counts`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/admin/badge-counts`, {
+      credentials: 'include',
+    })
       .then(r => r.json())
       .then(j => { if (j.success) setBadges(j.data); })
       .catch(() => {});

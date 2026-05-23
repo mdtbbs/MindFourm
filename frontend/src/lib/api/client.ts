@@ -1,4 +1,4 @@
-import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, Server, ServerVersion, ServerTemplate } from '@/types';
+import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate } from '@/types';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -418,9 +418,9 @@ export const messageApi = {
 
 // Resource APIs
 export const resourceApi = {
-  list: (params?: { cursor?: string; limit?: number; category?: string; search?: string }) =>
+  list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/v1/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category: params?.category, search: params?.search })}`
+      `/api/v1/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
     ),
   getById: (id: number) =>
     request<Resource>(`/api/v1/resources/${id}`),
@@ -430,10 +430,70 @@ export const resourceApi = {
       method: 'POST',
       body: formData,
     }),
-  delete: (id: number) =>
-    request<void>(`/api/v1/resources/${id}`, { method: 'DELETE' }),
+  update: (id: number, data: Partial<Resource>) => {
+    clearCache();
+    return request<Resource>(`/api/v1/resources/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  delete: (id: number) => {
+    clearCache();
+    return request<void>(`/api/v1/resources/${id}`, { method: 'DELETE' });
+  },
   getCategories: () =>
-    request<{ category: string; count: number }[]>('/api/v1/resources/categories'),
+    request<ResourceCategory[]>('/api/v1/resources/categories'),
+  getVersions: (id: number) =>
+    request<{ versions: ResourceVersion[] }>(`/api/v1/resources/${id}/versions`),
+  addVersion: (id: number, formData: FormData) => {
+    clearCache();
+    return request<ResourceVersion>(`/api/v1/resources/${id}/versions`, {
+      method: 'POST',
+      body: formData,
+    });
+  },
+};
+
+// Resource Category Admin APIs
+export const resourceCategoryApi = {
+  list: () => request<ResourceCategory[]>('/api/v1/resources/categories'),
+  create: (data: Omit<ResourceCategory, 'id' | 'created_at'>) => {
+    clearCache();
+    return request<ResourceCategory>('/api/v1/resources/categories', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+  update: (id: number, data: Partial<ResourceCategory>) => {
+    clearCache();
+    return request<ResourceCategory>(`/api/v1/resources/categories/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  delete: (id: number) => {
+    clearCache();
+    return request<void>(`/api/v1/resources/categories/${id}`, { method: 'DELETE' });
+  },
+};
+
+// Resource Admin APIs
+export const resourceAdminApi = {
+  list: (params?: { cursor?: string; limit?: number; status?: string; category_id?: number; search?: string; sort?: string }) =>
+    request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
+      `/api/v1/resources/admin${buildQueryString({ cursor: params?.cursor, limit: params?.limit, status: params?.status, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
+    ),
+  updateStatus: (id: number, status: string) => {
+    clearCache();
+    return request<Resource>(`/api/v1/resources/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  },
+  delete: (id: number) => {
+    clearCache();
+    return request<void>(`/api/v1/resources/${id}/admin`, { method: 'DELETE' });
+  },
 };
 
 // Server APIs (EasyManager integration)
