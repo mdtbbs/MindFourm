@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const config = require('../config');
 const db = require('../database');
+const redis = require('../database/redis');
 
 class AuthService {
   static async exchangeCode(code) {
@@ -39,16 +40,22 @@ class AuthService {
     }
   }
 
-  static getOrCreateUser(mindauthUser) {
-    let user = db.prepare('SELECT * FROM users WHERE mindauth_id = ?').get(mindauthUser.id);
+  static async getOrCreateUser(mindauthUser) {
+    let user = await db.queryOne('SELECT * FROM users WHERE mindauth_id = ?', [mindauthUser.id]);
 
     if (!user) {
-      const result = db.prepare('INSERT INTO users (mindauth_id, username, email, role) VALUES (?, ?, ?, ?)').run(mindauthUser.id, mindauthUser.username, mindauthUser.email, 'user');
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+      const result = await db.execute(
+        'INSERT INTO users (mindauth_id, username, email, role) VALUES (?, ?, ?, ?)',
+        [mindauthUser.id, mindauthUser.username, mindauthUser.email, 'user']
+      );
+      user = await db.queryOne('SELECT * FROM users WHERE id = ?', [result.insertId]);
     } else {
       // Update username/email only if changed
       if (user.username !== mindauthUser.username || user.email !== mindauthUser.email) {
-        db.prepare('UPDATE users SET username = ?, email = ? WHERE mindauth_id = ?').run(mindauthUser.username, mindauthUser.email, mindauthUser.id);
+        await db.execute(
+          'UPDATE users SET username = ?, email = ? WHERE mindauth_id = ?',
+          [mindauthUser.username, mindauthUser.email, mindauthUser.id]
+        );
         user.username = mindauthUser.username;
         user.email = mindauthUser.email;
       }
@@ -57,32 +64,58 @@ class AuthService {
     return user;
   }
 
-  static createSession(userId) {
+  static async createSession(userId, ipAddress = null) {
     const sessionToken = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + config.session.maxAge);
+    const ttlSeconds = Math.floor(config.session.maxAge / 1000);
 
-    db.prepare(`
-      INSERT INTO sessions (user_id, session_token, expires_at)
-      VALUES (?, ?, ?)
-    `).run(userId, sessionToken, expiresAt.toISOString());
+    // Store session in Redis hash
+    await redis.hset(`session:${sessionToken}`, 'user_id', userId.toString());
+    await redis.expire(`session:${sessionToken}`, ttlSeconds);
+
+    // Log to MySQL session_audit
+    try {
+      await db.execute(
+        'INSERT INTO session_audit (user_id, session_token, action, ip_address) VALUES (?, ?, ?, ?)',
+        [userId, sessionToken, 'create', ipAddress]
+      );
+    } catch (err) {
+      console.warn('Session audit log failed:', err.message);
+    }
 
     return sessionToken;
   }
 
-  static validateSession(sessionToken) {
-    const session = db.prepare(`
-      SELECT s.*, u.role, u.mindauth_id, u.username, u.email, u.created_at as user_created_at
-      FROM sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.session_token = ? AND s.expires_at > ?
-    `).get(sessionToken, new Date().toISOString());
+  static async validateSession(sessionToken) {
+    // Check Redis first
+    const sessionData = await redis.hgetall(`session:${sessionToken}`);
 
-    return session || null;
+    if (!sessionData || !sessionData.user_id) {
+      return null;
+    }
+
+    // Get user info from MySQL
+    const user = await db.queryOne(
+      'SELECT id, role, mindauth_id, username, email, created_at FROM users WHERE id = ?',
+      [parseInt(sessionData.user_id, 10)]
+    );
+
+    if (!user) {
+      await redis.del(`session:${sessionToken}`);
+      return null;
+    }
+
+    return {
+      user_id: user.id,
+      role: user.role,
+      mindauth_id: user.mindauth_id,
+      username: user.username,
+      email: user.email,
+      user_created_at: user.created_at
+    };
   }
 
-  static getUserByMindauthId(mindauthId) {
-    // For OAuth sessions, get user info from our local database
-    const user = db.prepare('SELECT * FROM users WHERE mindauth_id = ?').get(mindauthId);
+  static async getUserByMindauthId(mindauthId) {
+    const user = await db.queryOne('SELECT * FROM users WHERE mindauth_id = ?', [mindauthId]);
     if (!user) return null;
 
     return {
@@ -93,16 +126,37 @@ class AuthService {
     };
   }
 
-  static destroySession(sessionToken) {
-    db.prepare('DELETE FROM sessions WHERE session_token = ?').run(sessionToken);
+  static async destroySession(sessionToken) {
+    const sessionData = await redis.hgetall(`session:${sessionToken}`);
+    await redis.del(`session:${sessionToken}`);
+
+    // Log to audit
+    if (sessionData && sessionData.user_id) {
+      try {
+        await db.execute(
+          'INSERT INTO session_audit (user_id, session_token, action) VALUES (?, ?, ?)',
+          [parseInt(sessionData.user_id, 10), sessionToken, 'destroy']
+        );
+      } catch (err) {
+        console.warn('Session audit log failed:', err.message);
+      }
+    }
   }
 
-  static destroyAllUserSessions(userId) {
-    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  static async destroyAllUserSessions(userId) {
+    // Find all session keys for this user
+    const keys = await redis.keys('session:*');
+    for (const key of keys) {
+      const data = await redis.hget(key, 'user_id');
+      if (data === userId.toString()) {
+        await redis.del(key);
+      }
+    }
   }
 
-  static cleanExpiredSessions() {
-    db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(new Date().toISOString());
+  static async cleanExpiredSessions() {
+    // Redis handles expiration automatically via TTL
+    console.log('Session cleanup handled by Redis TTL');
   }
 }
 

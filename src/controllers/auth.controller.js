@@ -37,8 +37,8 @@ class AuthController {
       return;
     }
 
-    const user = AuthService.getOrCreateUser(mindauthUser);
-    const sessionToken = AuthService.createSession(user.id);
+    const user = await AuthService.getOrCreateUser(mindauthUser);
+    const sessionToken = await AuthService.createSession(user.id, ctx.ip);
 
     const cookieOpts = {
       maxAge: config.session.maxAge,
@@ -49,12 +49,10 @@ class AuthController {
 
     ctx.cookies.set('forum_session', sessionToken, cookieOpts);
 
-    // Redirect browser to forum frontend, back to the original page
     const frontendUrl = config.app.baseUrl;
     let redirectPath = '/';
     if (state) {
       const decoded = decodeURIComponent(state);
-      // Only allow relative paths to prevent open redirect
       if (decoded.startsWith('/') && !decoded.startsWith('//') && !decoded.includes('://')) {
         redirectPath = decoded;
       }
@@ -77,8 +75,8 @@ class AuthController {
       return;
     }
 
-    const user = AuthService.getOrCreateUser(mindauthUser);
-    const forumSessionToken = AuthService.createSession(user.id);
+    const user = await AuthService.getOrCreateUser(mindauthUser);
+    const forumSessionToken = await AuthService.createSession(user.id);
 
     const cookieOpts = {
       maxAge: config.session.maxAge,
@@ -100,11 +98,11 @@ class AuthController {
     });
   }
 
-  static logout(ctx) {
+  static async logout(ctx) {
     const sessionToken = ctx.cookies.get('forum_session');
 
     if (sessionToken) {
-      AuthService.destroySession(sessionToken);
+      await AuthService.destroySession(sessionToken);
       ctx.cookies.set('forum_session', '', { maxAge: 0 });
     }
 

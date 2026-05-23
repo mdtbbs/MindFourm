@@ -1,8 +1,8 @@
 const db = require('../database');
 
 class CategoryService {
-  static getAll() {
-    return db.prepare(`
+  static async getAll() {
+    return db.query(`
       SELECT c.id, c.name, c.slug, c.sort_order, c.is_active, c.created_at,
              COUNT(p.id) as post_count
       FROM categories c
@@ -10,27 +10,27 @@ class CategoryService {
       WHERE c.is_active = 1
       GROUP BY c.id
       ORDER BY c.sort_order ASC, c.created_at ASC
-    `).all();
+    `);
   }
 
-  static getById(id) {
-    return db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
+  static async getById(id) {
+    return db.queryOne('SELECT * FROM categories WHERE id = ?', [id]);
   }
 
-  static getBySlug(slug) {
-    return db.prepare('SELECT * FROM categories WHERE slug = ?').get(slug);
+  static async getBySlug(slug) {
+    return db.queryOne('SELECT * FROM categories WHERE slug = ?', [slug]);
   }
 
-  static create({ name, slug, sort_order = 0 }) {
-    const result = db.prepare(`
+  static async create({ name, slug, sort_order = 0 }) {
+    const result = await db.execute(`
       INSERT INTO categories (name, slug, sort_order)
       VALUES (?, ?, ?)
-    `).run(name, slug, sort_order);
+    `, [name, slug, sort_order]);
 
-    return this.getById(result.lastInsertRowid);
+    return this.getById(result.insertId);
   }
 
-  static update(id, updates) {
+  static async update(id, updates) {
     const fields = [];
     const values = [];
 
@@ -54,13 +54,13 @@ class CategoryService {
     if (fields.length === 0) return this.getById(id);
 
     values.push(id);
-    db.prepare(`UPDATE categories SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    await db.execute(`UPDATE categories SET ${fields.join(', ')} WHERE id = ?`, values);
 
     return this.getById(id);
   }
 
-  static delete(id) {
-    db.prepare('DELETE FROM categories WHERE id = ?').run(id);
+  static async delete(id) {
+    await db.execute('DELETE FROM categories WHERE id = ?', [id]);
   }
 }
 

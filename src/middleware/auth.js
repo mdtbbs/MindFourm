@@ -19,7 +19,7 @@ function authMiddleware(options = {}) {
       return next();
     }
 
-    const session = AuthService.validateSession(sessionToken);
+    const session = await AuthService.validateSession(sessionToken);
 
     if (!session) {
       if (required) {
@@ -38,6 +38,7 @@ function authMiddleware(options = {}) {
       userInfo = await AuthService.verifyMindAuthSession(session.mindauth_token);
       if (!userInfo) {
         AuthService.destroySession(sessionToken);
+        await AuthService.destroySession(sessionToken);
         if (required) {
           ctx.status = 401;
           ctx.body = { success: false, message: 'Authentication expired' };

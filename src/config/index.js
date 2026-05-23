@@ -8,8 +8,22 @@ module.exports = {
     baseUrl: process.env.BASE_URL || 'http://localhost:3000'
   },
 
-  database: {
-    path: process.env.DB_PATH || path.join(__dirname, '../../data/forum.db')
+  mysql: {
+    host: process.env.MYSQL_HOST || 'localhost',
+    port: parseInt(process.env.MYSQL_PORT, 10) || 3306,
+    user: process.env.MYSQL_USER || 'root',
+    password: process.env.MYSQL_PASSWORD || '',
+    database: process.env.MYSQL_DATABASE || 'mindforum',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
+  },
+
+  redis: {
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    password: process.env.REDIS_PASSWORD || '',
+    db: parseInt(process.env.REDIS_DB, 10) || 0
   },
 
   mindauth: {
@@ -25,6 +39,6 @@ module.exports = {
   },
 
   session: {
-    maxAge: 30 * 24 * 60 * 60 * 1000
+    maxAge: 30 * 24 * 60 * 60 * 1000  // 30 days
   }
 };

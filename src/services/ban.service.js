@@ -3,11 +3,11 @@ const db = require('../database');
 const BAN_CACHE_TTL_MS = 10_000;
 let activeBanCache = { ips: new Set(), ipRanges: [], users: new Set(), refreshedAt: 0 };
 
-function refreshBanCache() {
+async function refreshBanCache() {
   const now = Date.now();
   if (now - activeBanCache.refreshedAt < BAN_CACHE_TTL_MS) return;
 
-  const bans = db.prepare("SELECT ban_type, value FROM bans WHERE is_active = 1").all();
+  const bans = await db.query("SELECT ban_type, value FROM bans WHERE is_active = 1");
   activeBanCache = {
     ips: new Set(),
     ipRanges: [],
@@ -26,16 +26,16 @@ function invalidateBanCache() {
 }
 
 class BanService {
-  static create({ ban_type, value, reason, created_by }) {
-    const result = db.prepare(`
+  static async create({ ban_type, value, reason, created_by }) {
+    const result = await db.execute(`
       INSERT INTO bans (ban_type, value, reason, created_by)
       VALUES (?, ?, ?, ?)
-    `).run(ban_type, value, reason || null, created_by);
+    `, [ban_type, value, reason || null, created_by]);
     invalidateBanCache();
-    return db.prepare('SELECT * FROM bans WHERE id = ?').get(result.lastInsertRowid);
+    return db.queryOne('SELECT * FROM bans WHERE id = ?', [result.insertId]);
   }
 
-  static getList({ page = 1, limit = 20, ban_type, is_active }) {
+  static async getList({ page = 1, limit = 20, ban_type, is_active }) {
     const offset = (page - 1) * limit;
     const wheres = [];
     const params = [];
@@ -45,47 +45,48 @@ class BanService {
 
     const where = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
 
-    const bans = db.prepare(`
+    const bans = await db.query(`
       SELECT b.*, u.username as creator_name
       FROM bans b LEFT JOIN users u ON b.created_by = u.id
       ${where} ORDER BY b.created_at DESC LIMIT ? OFFSET ?
-    `).all(...params, limit, offset);
+    `, [...params, limit, offset]);
 
-    const total = db.prepare(`SELECT COUNT(*) as total FROM bans ${where}`).get(...params).total;
+    const totalResult = await db.queryOne(`SELECT COUNT(*) as total FROM bans ${where}`, params);
 
-    return { data: bans, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
+    return { data: bans, pagination: { page, limit, total: totalResult.total, totalPages: Math.ceil(totalResult.total / limit) } };
   }
 
-  static getById(id) {
-    return db.prepare('SELECT b.*, u.username as creator_name FROM bans b LEFT JOIN users u ON b.created_by = u.id WHERE b.id = ?').get(id);
+  static async getById(id) {
+    return db.queryOne('SELECT b.*, u.username as creator_name FROM bans b LEFT JOIN users u ON b.created_by = u.id WHERE b.id = ?', [id]);
   }
 
-  static update(id, updates) {
+  static async update(id, updates) {
     const fields = [];
     const values = [];
     if (updates.reason !== undefined) { fields.push('reason = ?'); values.push(updates.reason); }
     if (updates.is_active !== undefined) { fields.push('is_active = ?'); values.push(updates.is_active ? 1 : 0); }
     if (fields.length === 0) return this.getById(id);
     values.push(id);
-    db.prepare(`UPDATE bans SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    await db.execute(`UPDATE bans SET ${fields.join(', ')} WHERE id = ?`, values);
     invalidateBanCache();
     return this.getById(id);
   }
 
-  static deactivate(id) {
+  static async deactivate(id) {
     invalidateBanCache();
     return this.update(id, { is_active: false });
   }
 
-  static isActive(type, value) {
-    refreshBanCache();
+  static async isActive(type, value) {
+    await refreshBanCache();
     if (type === 'ip') return activeBanCache.ips.has(value);
     if (type === 'user') return activeBanCache.users.has(value);
-    return db.prepare('SELECT 1 FROM bans WHERE ban_type = ? AND value = ? AND is_active = 1').get(type, value);
+    const result = await db.queryOne('SELECT 1 FROM bans WHERE ban_type = ? AND value = ? AND is_active = 1', [type, value]);
+    return !!result;
   }
 
-  static checkIp(ip) {
-    refreshBanCache();
+  static async checkIp(ip) {
+    await refreshBanCache();
     if (activeBanCache.ips.has(ip)) return true;
     for (const range of activeBanCache.ipRanges) {
       if (this.ipInRange(ip, range)) return true;
@@ -95,7 +96,6 @@ class BanService {
 
   static ipInRange(ip, cidr) {
     if (!cidr.includes('/')) return ip === cidr;
-    // IPv6 not supported — skip gracefully
     if (ip.includes(':') || cidr.includes(':')) return false;
     const [base, bits] = cidr.split('/');
     const mask = ~((1 << (32 - parseInt(bits))) - 1);

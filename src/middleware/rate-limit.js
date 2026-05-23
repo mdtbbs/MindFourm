@@ -1,75 +1,73 @@
 const Response = require('../utils/response');
+const redis = require('../database/redis');
 
-// In-memory store: Map<key, Map<identifier, { count, resetTime }>>
-const stores = new Map();
+/**
+ * Redis-based rate limiting
+ */
+async function rateLimit({ key, max, windowMs, identifier }) {
+  const redisKey = `ratelimit:${key}:${identifier}`;
+  const windowSeconds = Math.floor(windowMs / 1000);
 
-// Cleanup interval: prune expired entries every 5 minutes
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
-const cleanupTimer = setInterval(() => {
-  const now = Date.now();
-  for (const [key, store] of stores.entries()) {
-    for (const [identifier, record] of store.entries()) {
-      if (now > record.resetTime) store.delete(identifier);
-    }
-    if (store.size === 0) stores.delete(key);
-  }
-}, CLEANUP_INTERVAL_MS);
-// Prevent cleanup timer from keeping process alive
-if (cleanupTimer.unref) cleanupTimer.unref();
+  const current = await redis.incr(redisKey);
 
-function rateLimit({ key, max, windowMs, identifier }) {
-  let store = stores.get(key);
-  if (!store) { store = new Map(); stores.set(key, store); }
-
-  const now = Date.now();
-  let record = store.get(identifier);
-
-  if (!record || now > record.resetTime) {
-    store.set(identifier, { count: 1, resetTime: now + windowMs });
-    return true;
+  if (current === 1) {
+    await redis.expire(redisKey, windowSeconds);
   }
 
-  record.count++;
-  return record.count <= max;
+  const ttl = await redis.ttl(redisKey);
+
+  return {
+    allowed: current <= max,
+    current,
+    max,
+    resetIn: ttl,
+    remaining: Math.max(0, max - current)
+  };
 }
 
 function createRateLimitMiddleware({ key, max, windowMs, identifierFn }) {
-  return (ctx, next) => {
+  return async (ctx, next) => {
     const identifier = identifierFn(ctx);
-    if (!rateLimit({ key, max, windowMs, identifier })) {
+    const result = await rateLimit({ key, max, windowMs, identifier });
+
+    ctx.set('X-RateLimit-Limit', result.max.toString());
+    ctx.set('X-RateLimit-Remaining', result.remaining.toString());
+    ctx.set('X-RateLimit-Reset', result.resetIn.toString());
+
+    if (!result.allowed) {
       return Response.error(ctx, 'Rate limit exceeded', 429, 'RATE_LIMITED');
     }
+
     return next();
   };
 }
 
 /**
- * Create rate limit middleware that reads values from settings at request time.
- * @param {string} configKey - e.g. 'post_create', 'reply_create', 'login'
- * @param {string} maxKey - settings key for max count, e.g. 'rate_post_max'
- * @param {string} windowKey - settings key for window in minutes, e.g. 'rate_post_window_min'
- * @param {object} defaults - fallback { max, windowMin } if settings not available
+ * Dynamic rate limit that reads from async settings
  */
 function createDynamicRateLimit(configKey, maxKey, windowKey, defaults) {
-  return (ctx, next) => {
-    // 测试环境检测：如果请求带有X-Test-Request header，跳过rate limit
+  return async (ctx, next) => {
     if (ctx.headers['x-test-request'] === 'true') {
       return next();
     }
 
     const SettingService = require('../services/setting.service');
-    const max = SettingService.getNumber(maxKey) ?? defaults.max;
-    const windowMin = SettingService.getNumber(windowKey) ?? defaults.windowMin;
+    const max = await SettingService.getNumber(maxKey) ?? defaults.max;
+    const windowMin = await SettingService.getNumber(windowKey) ?? defaults.windowMin;
     const identifier = ctx.state.user ? `user:${ctx.state.user.id}` : `ip:${ctx.ip}`;
-    if (!rateLimit({ key: configKey, max, windowMs: windowMin * 60 * 1000, identifier })) {
+
+    const result = await rateLimit({ key: configKey, max, windowMs: windowMin * 60 * 1000, identifier });
+
+    ctx.set('X-RateLimit-Limit', result.max.toString());
+    ctx.set('X-RateLimit-Remaining', result.remaining.toString());
+    ctx.set('X-RateLimit-Reset', result.resetIn.toString());
+
+    if (!result.allowed) {
       return Response.error(ctx, 'Rate limit exceeded', 429, 'RATE_LIMITED');
     }
+
     return next();
   };
 }
 
-function resetStore(key) {
-  if (key) stores.delete(key); else stores.clear();
-}
-
-module.exports = { createRateLimitMiddleware, createDynamicRateLimit, rateLimit, resetStore };
+module.exports = { createRateLimitMiddleware, createDynamicRateLimit, rateLimit };

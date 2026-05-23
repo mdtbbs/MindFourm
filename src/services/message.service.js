@@ -1,23 +1,24 @@
 const db = require('../database');
+const redis = require('../database/redis');
 const { parseMarkdown } = require('../utils/markdown');
 const { encodeCursor, decodeCursor } = require('../utils/cursor');
 const NotificationService = require('./notification.service');
 const { NOTIFICATION_TYPES } = require('../utils/constants');
 
 class MessageService {
-  static create({ sender_id, recipient_id, content }) {
+  static async create({ sender_id, recipient_id, content }) {
     if (sender_id === recipient_id) return null;
 
     const contentHtml = parseMarkdown(content);
-    const result = db.prepare(`
+    const result = await db.execute(`
       INSERT INTO messages (sender_id, recipient_id, content, content_html)
       VALUES (?, ?, ?, ?)
-    `).run(sender_id, recipient_id, content, contentHtml);
+    `, [sender_id, recipient_id, content, contentHtml]);
 
-    const message = this.getById(result.lastInsertRowid);
+    const message = await this.getById(result.insertId);
 
     // Notify recipient
-    NotificationService.create({
+    await NotificationService.create({
       user_id: recipient_id,
       type: NOTIFICATION_TYPES.message,
       actor_id: sender_id,
@@ -26,21 +27,24 @@ class MessageService {
       content: content.slice(0, 200),
     });
 
+    // Invalidate unread count cache for recipient
+    await redis.del(`unread_msg:${recipient_id}`);
+
     return message;
   }
 
-  static getById(id) {
-    return db.prepare(`
+  static async getById(id) {
+    return db.queryOne(`
       SELECT m.*, s.username as sender_name, s.avatar_url as sender_avatar,
              r.username as recipient_name
       FROM messages m
       JOIN users s ON m.sender_id = s.id
       JOIN users r ON m.recipient_id = r.id
       WHERE m.id = ?
-    `).get(id);
+    `, [id]);
   }
 
-  static getConversations(userId, { limit = 20, cursor }) {
+  static async getConversations(userId, { limit = 20, cursor }) {
     const whereClauses = [];
     const params = [userId];
 
@@ -52,7 +56,7 @@ class MessageService {
 
     const whereClause = whereClauses.length > 0 ? `AND ${whereClauses.join(' AND ')}` : '';
 
-    const conversations = db.prepare(`
+    const conversations = await db.query(`
       WITH latest AS (
         SELECT
           CASE WHEN sender_id = ? THEN recipient_id ELSE sender_id END as other_user_id,
@@ -76,7 +80,7 @@ class MessageService {
       JOIN users u ON u.id = l.other_user_id
       ORDER BY l.last_at DESC
       LIMIT ?
-    `).all(userId, userId, userId, userId, limit + 1);
+    `, [userId, userId, userId, userId, limit + 1]);
 
     const hasMore = conversations.length > limit;
     if (hasMore) conversations.pop();
@@ -88,7 +92,7 @@ class MessageService {
     return { data: conversations, next_cursor: nextCursor, has_more: hasMore };
   }
 
-  static getConversation(userId, otherUserId, { limit = 50, cursor }) {
+  static async getConversation(userId, otherUserId, { limit = 50, cursor }) {
     const whereClauses = [
       '((sender_id = ? AND recipient_id = ? AND deleted_by_sender = 0) OR (sender_id = ? AND recipient_id = ? AND deleted_by_recipient = 0))',
     ];
@@ -101,23 +105,26 @@ class MessageService {
     }
 
     // Mark messages as read
-    db.prepare(`
+    await db.execute(`
       UPDATE messages SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE sender_id = ? AND recipient_id = ? AND is_read = 0
-    `).run(otherUserId, userId);
+    `, [otherUserId, userId]);
+
+    // Invalidate unread count cache
+    await redis.del(`unread_msg:${userId}`);
 
     const whereClause = whereClauses.join(' AND ');
 
-    const messages = db.prepare(`
+    const messages = await db.query(`
       SELECT m.*, s.username as sender_name, s.avatar_url as sender_avatar
       FROM messages m
       JOIN users s ON m.sender_id = s.id
       WHERE ${whereClause}
       ORDER BY m.created_at DESC
       LIMIT ?
-    `).all(...params, limit + 1);
+    `, [...params, limit + 1]);
 
-    messages.reverse(); // Oldest first
+    messages.reverse();
 
     const hasMore = messages.length > limit;
     if (hasMore) messages.shift();
@@ -129,28 +136,40 @@ class MessageService {
     return { data: messages, next_cursor: nextCursor, has_more: hasMore };
   }
 
-  static markAsRead(messageId, userId) {
-    db.prepare(`
+  static async markAsRead(messageId, userId) {
+    await db.execute(`
       UPDATE messages SET is_read = 1, read_at = CURRENT_TIMESTAMP
       WHERE id = ? AND recipient_id = ?
-    `).run(messageId, userId);
+    `, [messageId, userId]);
+
+    await redis.del(`unread_msg:${userId}`);
   }
 
-  static getUnreadCount(userId) {
-    return db.prepare(`
+  // Cache unread count in Redis for 5 minutes
+  static async getUnreadCount(userId) {
+    const cacheKey = `unread_msg:${userId}`;
+    const cached = await redis.get(cacheKey);
+
+    if (cached !== null) {
+      return parseInt(cached, 10);
+    }
+
+    const result = await db.queryOne(`
       SELECT COUNT(*) as count FROM messages
       WHERE recipient_id = ? AND is_read = 0 AND deleted_by_recipient = 0
-    `).get(userId).count;
+    `, [userId]);
+
+    await redis.set(cacheKey, result.count.toString(), 300);
+    return result.count;
   }
 
-  static deleteForUser(messageId, userId, isSender) {
+  static async deleteForUser(messageId, userId, isSender) {
     const column = isSender ? 'deleted_by_sender' : 'deleted_by_recipient';
-    db.prepare(`UPDATE messages SET ${column} = 1 WHERE id = ?`).run(messageId);
+    await db.execute(`UPDATE messages SET ${column} = 1 WHERE id = ?`, [messageId]);
 
-    // If both deleted, hard delete
-    const msg = db.prepare('SELECT deleted_by_sender, deleted_by_recipient FROM messages WHERE id = ?').get(messageId);
+    const msg = await db.queryOne('SELECT deleted_by_sender, deleted_by_recipient FROM messages WHERE id = ?', [messageId]);
     if (msg?.deleted_by_sender && msg?.deleted_by_recipient) {
-      db.prepare('DELETE FROM messages WHERE id = ?').run(messageId);
+      await db.execute('DELETE FROM messages WHERE id = ?', [messageId]);
     }
   }
 }

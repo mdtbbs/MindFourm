@@ -1,21 +1,21 @@
 const db = require('../database');
 
 class UserService {
-  static getById(id) {
-    return db.prepare(`
+  static async getById(id) {
+    return db.queryOne(`
       SELECT u.id, u.mindauth_id, u.username, u.email, u.role, u.avatar_url, u.bio, u.created_at,
              (SELECT COUNT(*) FROM posts WHERE user_id = u.id AND deleted_at IS NULL) as post_count,
              (SELECT COUNT(*) FROM replies WHERE user_id = u.id AND deleted_at IS NULL) as reply_count
       FROM users u
       WHERE u.id = ?
-    `).get(id);
+    `, [id]);
   }
 
-  static getByMindAuthId(mindauthId) {
-    return db.prepare('SELECT * FROM users WHERE mindauth_id = ?').get(mindauthId);
+  static async getByMindAuthId(mindauthId) {
+    return db.queryOne('SELECT * FROM users WHERE mindauth_id = ?', [mindauthId]);
   }
 
-  static updateProfile(id, { username, bio }) {
+  static async updateProfile(id, { username, bio }) {
     const updates = {};
     if (username !== undefined) updates.username = username;
     if (bio !== undefined) updates.bio = bio;
@@ -23,24 +23,24 @@ class UserService {
     const fields = Object.keys(updates).map(k => `${k} = ?`).join(', ');
     const values = [...Object.values(updates), id];
 
-    db.prepare(`UPDATE users SET ${fields} WHERE id = ?`).run(...values);
+    await db.execute(`UPDATE users SET ${fields} WHERE id = ?`, values);
     return this.getById(id);
   }
 
-  static updateAvatar(id, avatarUrl) {
-    db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?').run(avatarUrl, id);
+  static async updateAvatar(id, avatarUrl) {
+    await db.execute('UPDATE users SET avatar_url = ? WHERE id = ?', [avatarUrl, id]);
     return this.getById(id);
   }
 
-  static removeAvatar(id) {
-    db.prepare('UPDATE users SET avatar_url = NULL WHERE id = ?').run(id);
+  static async removeAvatar(id) {
+    await db.execute('UPDATE users SET avatar_url = NULL WHERE id = ?', [id]);
     return this.getById(id);
   }
 
-  static getRepliesByUserId(userId, { page = 1, limit = 50 }) {
+  static async getRepliesByUserId(userId, { page = 1, limit = 50 }) {
     const offset = (page - 1) * limit;
 
-    const replies = db.prepare(`
+    const replies = await db.query(`
       SELECT r.*, u.mindauth_id as author_mindauth_id, u.role as author_role,
              p.title as post_title
       FROM replies r
@@ -49,12 +49,12 @@ class UserService {
       WHERE r.user_id = ? AND r.deleted_at IS NULL
       ORDER BY r.created_at DESC
       LIMIT ? OFFSET ?
-    `).all(userId, limit, offset);
+    `, [userId, limit, offset]);
 
-    const countResult = db.prepare(`
+    const countResult = await db.queryOne(`
       SELECT COUNT(*) as total FROM replies
       WHERE user_id = ? AND deleted_at IS NULL
-    `).get(userId);
+    `, [userId]);
 
     return {
       data: replies,
@@ -65,12 +65,12 @@ class UserService {
     };
   }
 
-  static updateRole(id, role) {
-    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+  static async updateRole(id, role) {
+    await db.execute('UPDATE users SET role = ? WHERE id = ?', [role, id]);
     return this.getById(id);
   }
 
-  static getAll({ page = 1, limit = 50, search }) {
+  static async getAll({ page = 1, limit = 50, search }) {
     const offset = (page - 1) * limit;
     const wheres = [];
     const params = [];
@@ -82,11 +82,11 @@ class UserService {
 
     const where = wheres.length > 0 ? `WHERE ${wheres.join(' AND ')}` : '';
 
-    const users = db.prepare(`
+    const users = await db.query(`
       SELECT * FROM users ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?
-    `).all(...params, limit, offset);
+    `, [...params, limit, offset]);
 
-    const countResult = db.prepare(`SELECT COUNT(*) as total FROM users ${where}`).get(...params);
+    const countResult = await db.queryOne(`SELECT COUNT(*) as total FROM users ${where}`, params);
 
     return {
       data: users,
@@ -94,14 +94,14 @@ class UserService {
     };
   }
 
-  static searchByUsername(query, limit = 10) {
-    return db.prepare(`
+  static async searchByUsername(query, limit = 10) {
+    return db.query(`
       SELECT id, username, avatar_url
       FROM users
       WHERE username LIKE ?
       ORDER BY created_at DESC
       LIMIT ?
-    `).all(`%${query}%`, limit);
+    `, [`%${query}%`, limit]);
   }
 }
 

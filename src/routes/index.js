@@ -50,7 +50,7 @@ const PUBLIC_SETTING_KEYS = [
 ];
 
 router.get('/api/settings', async (ctx) => {
-  const all = SettingService.getAll();
+  const all = await SettingService.getAll();
   const publicSettings = {};
   for (const key of PUBLIC_SETTING_KEYS) {
     publicSettings[key] = all[key] ?? null;

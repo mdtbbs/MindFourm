@@ -5,46 +5,45 @@ const { encodeCursor, decodeCursor } = require('../utils/cursor');
 const TagService = require('./tag.service');
 
 class PostService {
-  static create({ user_id, title, content, category_id, tags, status = POST_STATUS.draft }) {
+  static async create({ user_id, title, content, category_id, tags, status = POST_STATUS.draft }) {
     const contentHtml = parseMarkdown(content);
 
-    const insertPost = db.prepare(`
-      INSERT INTO posts (user_id, title, content, content_html, category_id, status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+    const result = await db.transaction(async (conn) => {
+      const [r] = await conn.execute(`
+        INSERT INTO posts (user_id, title, content, content_html, category_id, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `, [user_id, title, content, contentHtml, category_id, status]);
 
-    const result = db.transaction(() => {
-      const r = insertPost.run(user_id, title, content, contentHtml, category_id, status);
-      const postId = r.lastInsertRowid;
+      const postId = r.insertId;
 
       if (tags && tags.length > 0) {
-        TagService.attachTags(postId, tags);
+        await TagService.attachTags(postId, tags);
       }
 
       return postId;
-    })();
+    });
 
     return this.getById(result);
   }
 
-  static getById(id) {
-    const post = db.prepare(`
+  static async getById(id) {
+    const post = await db.queryOne(`
       SELECT p.*, c.name as category_name, c.slug as category_slug,
              u.mindauth_id as author_mindauth_id, u.role as author_role
       FROM posts p
       LEFT JOIN categories c ON p.category_id = c.id
       LEFT JOIN users u ON p.user_id = u.id
       WHERE p.id = ? AND p.deleted_at IS NULL
-    `).get(id);
+    `, [id]);
 
     if (post) {
-      post.tags = TagService.getPostTags(post.id);
+      post.tags = await TagService.getPostTags(post.id);
     }
 
     return post;
   }
 
-  static getList({ page = 1, limit = 20, category_id, status = POST_STATUS.published, user_id, search }) {
+  static async getList({ page = 1, limit = 20, category_id, status = POST_STATUS.published, user_id, search }) {
     const offset = (page - 1) * limit;
     const whereClauses = ['p.deleted_at IS NULL'];
     const params = [];
@@ -71,7 +70,7 @@ class PostService {
 
     const whereClause = whereClauses.join(' AND ');
 
-    const posts = db.prepare(`
+    const posts = await db.query(`
       SELECT p.*, c.name as category_name,
              u.mindauth_id as author_mindauth_id, u.role as author_role,
              (SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL) as reply_count
@@ -81,13 +80,13 @@ class PostService {
       WHERE ${whereClause}
       ORDER BY p.is_pinned DESC, p.created_at DESC
       LIMIT ? OFFSET ?
-    `).all(...params, limit, offset);
+    `, [...params, limit, offset]);
 
-    const countResult = db.prepare(`SELECT COUNT(*) as total FROM posts p WHERE ${whereClause}`).get(...params);
+    const countResult = await db.queryOne(`SELECT COUNT(*) as total FROM posts p WHERE ${whereClause}`, params);
 
-    // Batch-fetch tags for all posts in one query
+    // Batch-fetch tags for all posts
     if (posts.length > 0) {
-      const tagMap = TagService.getPostTagsForMultiplePosts(posts.map(p => p.id));
+      const tagMap = await TagService.getPostTagsForMultiplePosts(posts.map(p => p.id));
       for (const post of posts) {
         post.tags = tagMap[post.id] || [];
       }
@@ -104,7 +103,7 @@ class PostService {
     };
   }
 
-  static update(id, updates) {
+  static async update(id, updates) {
     const fields = [];
     const values = [];
 
@@ -134,42 +133,42 @@ class PostService {
     fields.push('updated_at = CURRENT_TIMESTAMP');
     values.push(id);
 
-    db.transaction(() => {
-      db.prepare(`UPDATE posts SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    await db.transaction(async (conn) => {
+      await conn.execute(`UPDATE posts SET ${fields.join(', ')} WHERE id = ?`, values);
 
       if (updates.tags !== undefined) {
-        TagService.detachTags(id);
+        await TagService.detachTags(id);
         if (updates.tags.length > 0) {
-          TagService.attachTags(id, updates.tags);
+          await TagService.attachTags(id, updates.tags);
         }
       }
-    })();
+    });
 
     return this.getById(id);
   }
 
-  static softDelete(id) {
-    db.prepare(`
+  static async softDelete(id) {
+    await db.execute(`
       UPDATE posts SET status = ?, deleted_at = CURRENT_TIMESTAMP
       WHERE id = ?
-    `).run(POST_STATUS.deleted, id);
+    `, [POST_STATUS.deleted, id]);
   }
 
-  static incrementViewCount(id) {
-    db.prepare('UPDATE posts SET view_count = view_count + 1 WHERE id = ?').run(id);
+  static async incrementViewCount(id) {
+    await db.execute('UPDATE posts SET view_count = view_count + 1 WHERE id = ?', [id]);
   }
 
-  static pin(id, isPinned) {
-    db.prepare('UPDATE posts SET is_pinned = ? WHERE id = ?').run(isPinned ? 1 : 0, id);
+  static async pin(id, isPinned) {
+    await db.execute('UPDATE posts SET is_pinned = ? WHERE id = ?', [isPinned ? 1 : 0, id]);
     return this.getById(id);
   }
 
-  static move(id, categoryId) {
-    db.prepare('UPDATE posts SET category_id = ? WHERE id = ?').run(categoryId, id);
+  static async move(id, categoryId) {
+    await db.execute('UPDATE posts SET category_id = ? WHERE id = ?', [categoryId, id]);
     return this.getById(id);
   }
 
-  static getListCursor({ limit = 20, cursor, category_id, search }) {
+  static async getListCursor({ limit = 20, cursor, category_id, search }) {
     const whereClauses = ['p.deleted_at IS NULL', 'p.status = ?', 'p.is_pinned = 0'];
     const params = ['published'];
 
@@ -192,7 +191,7 @@ class PostService {
     const whereClause = whereClauses.join(' AND ');
 
     // Fetch limit + 1 to determine has_more
-    const posts = db.prepare(`
+    const posts = await db.query(`
       SELECT p.*, c.name as category_name, c.slug as category_slug,
              u.mindauth_id as author_mindauth_id, u.role as author_role,
              (SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL) as reply_count
@@ -202,10 +201,10 @@ class PostService {
       WHERE ${whereClause}
       ORDER BY p.created_at DESC, p.id DESC
       LIMIT ?
-    `).all(...params, limit + 1);
+    `, [...params, limit + 1]);
 
-    // Pinned posts always show first, fetch separately
-    const pinned = db.prepare(`
+    // Pinned posts always show first
+    const pinned = await db.query(`
       SELECT p.*, c.name as category_name, c.slug as category_slug,
              u.mindauth_id as author_mindauth_id, u.role as author_role,
              (SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL) as reply_count
@@ -214,12 +213,12 @@ class PostService {
       LEFT JOIN users u ON p.user_id = u.id
       WHERE p.deleted_at IS NULL AND p.status = ? AND p.is_pinned = 1
       ORDER BY p.created_at DESC
-    `).all('published');
+    `, ['published']);
 
     // Batch-fetch tags
     const allPosts = [...pinned, ...posts];
     if (allPosts.length > 0) {
-      const tagMap = TagService.getPostTagsForMultiplePosts(allPosts.map(p => p.id));
+      const tagMap = await TagService.getPostTagsForMultiplePosts(allPosts.map(p => p.id));
       for (const post of allPosts) {
         post.tags = tagMap[post.id] || [];
       }

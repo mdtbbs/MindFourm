@@ -1,32 +1,26 @@
 const db = require('../database');
 
 const DEFAULT_SETTINGS = {
-  // Basic
   site_name: 'MindForum',
   site_tagline: 'Share ideas, exchange experience',
   site_description: 'A community for technical discussion and knowledge sharing.',
   site_logo_url: '',
   site_footer: '© 2026 MindForum',
-  // Announce
   announce_enabled: 'true',
   announce_content: '',
-  // Display
   posts_per_page: '20',
   default_sort: 'newest',
   replies_per_page: '50',
-  // SEO
   seo_title_suffix: ' | MindForum',
   seo_default_description: 'MindForum - A community for technical discussion',
   seo_og_image: '',
   seo_sitemap_enabled: 'true',
   seo_robots_enabled: 'true',
-  // Rules
   title_min_length: '2',
   title_max_length: '200',
   content_min_length: '10',
   max_tags_per_post: '5',
   max_tag_length: '30',
-  // Rate limits
   rate_post_max: '10',
   rate_post_window_min: '60',
   rate_reply_max: '30',
@@ -35,11 +29,9 @@ const DEFAULT_SETTINGS = {
   rate_login_max: '5',
   rate_login_lock_min: '15',
   rate_api_max: '100',
-  // Cleanup
   cleanup_log_retention_days: '90',
   cleanup_soft_delete_retention_days: '30',
   cleanup_session_ttl_hours: '24',
-  // Email
   smtp_host: '',
   smtp_port: '587',
   smtp_user: '',
@@ -60,24 +52,29 @@ const CATEGORY_KEYS = {
 };
 
 class SettingService {
-  static seedDefaults() {
-    const stmt = db.prepare(`
-      INSERT OR IGNORE INTO settings (key, value, category, description) VALUES (?, ?, ?, ?)
-    `);
-    db.transaction(() => {
-      for (const [category, keys] of Object.entries(CATEGORY_KEYS)) {
-        for (const key of keys) {
-          stmt.run(key, DEFAULT_SETTINGS[key], category, null);
+  static async seedDefaults() {
+    for (const [category, keys] of Object.entries(CATEGORY_KEYS)) {
+      for (const key of keys) {
+        try {
+          await db.execute(
+            'INSERT IGNORE INTO settings (`key`, value, category, description) VALUES (?, ?, ?, ?)',
+            [key, DEFAULT_SETTINGS[key], category, null]
+          );
+        } catch (err) {
+          // Ignore duplicate errors
         }
       }
-    })();
+    }
   }
 
-  static getByCategory(category) {
+  static async getByCategory(category) {
     const keys = CATEGORY_KEYS[category];
     if (!keys) return {};
 
-    const rows = db.prepare('SELECT key, value FROM settings WHERE key IN (' + keys.map(() => '?').join(',') + ')').all(...keys);
+    const rows = await db.query(
+      'SELECT `key`, value FROM settings WHERE `key` IN (' + keys.map(() => '?').join(',') + ')',
+      keys
+    );
 
     const result = {};
     for (const row of rows) {
@@ -93,8 +90,8 @@ class SettingService {
     return result;
   }
 
-  static getAll() {
-    const rows = db.prepare('SELECT key, value, category FROM settings ORDER BY category, key').all();
+  static async getAll() {
+    const rows = await db.query('SELECT `key`, value, category FROM settings ORDER BY category, `key`');
     const result = {};
     for (const row of rows) {
       result[row.key] = row.value;
@@ -109,30 +106,25 @@ class SettingService {
     return result;
   }
 
-  static setBatch(category, keyValuePairs) {
-    const stmt = db.prepare(`
-      INSERT INTO settings (key, value, category, updated_at)
-      VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-    `);
-
-    db.transaction(() => {
-      for (const [key, value] of Object.entries(keyValuePairs)) {
-        stmt.run(key, String(value), category);
-      }
-    })();
+  static async setBatch(category, keyValuePairs) {
+    for (const [key, value] of Object.entries(keyValuePairs)) {
+      await db.execute(
+        'INSERT INTO settings (`key`, value, category, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON DUPLICATE KEY UPDATE value = ?, updated_at = CURRENT_TIMESTAMP',
+        [key, String(value), category, String(value)]
+      );
+    }
 
     return this.getByCategory(category);
   }
 
-  static get(key) {
-    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+  static async get(key) {
+    const row = await db.queryOne('SELECT value FROM settings WHERE `key` = ?', [key]);
     if (row) return row.value;
     return DEFAULT_SETTINGS[key] ?? null;
   }
 
-  static getNumber(key) {
-    const val = this.get(key);
+  static async getNumber(key) {
+    const val = await this.get(key);
     if (val === null) return null;
     const num = Number(val);
     return isNaN(num) ? null : num;

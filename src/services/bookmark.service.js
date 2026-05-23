@@ -1,11 +1,11 @@
 const db = require('../database');
 
 class BookmarkService {
-  static add(userId, postId) {
+  static async add(userId, postId) {
     try {
-      db.prepare('INSERT INTO bookmarks (user_id, post_id) VALUES (?, ?)').run(userId, postId);
+      await db.execute('INSERT INTO bookmarks (user_id, post_id) VALUES (?, ?)', [userId, postId]);
     } catch (e) {
-      if (e.message.includes('UNIQUE')) {
+      if (e.message.includes('Duplicate') || e.code === 'ER_DUP_ENTRY') {
         return this.getByUserAndPost(userId, postId);
       }
       throw e;
@@ -13,18 +13,18 @@ class BookmarkService {
     return this.getByUserAndPost(userId, postId);
   }
 
-  static remove(userId, postId) {
-    db.prepare('DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?').run(userId, postId);
+  static async remove(userId, postId) {
+    await db.execute('DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?', [userId, postId]);
   }
 
-  static getByUserAndPost(userId, postId) {
-    return db.prepare('SELECT * FROM bookmarks WHERE user_id = ? AND post_id = ?').get(userId, postId);
+  static async getByUserAndPost(userId, postId) {
+    return db.queryOne('SELECT * FROM bookmarks WHERE user_id = ? AND post_id = ?', [userId, postId]);
   }
 
-  static getByUserId(userId, { page = 1, limit = 20 }) {
+  static async getByUserId(userId, { page = 1, limit = 20 }) {
     const offset = (page - 1) * limit;
 
-    const bookmarks = db.prepare(`
+    const bookmarks = await db.query(`
       SELECT b.id, b.created_at,
              p.id as post_id, p.title, p.status,
              c.name as category_name, c.id as category_id,
@@ -36,13 +36,13 @@ class BookmarkService {
       WHERE b.user_id = ? AND p.deleted_at IS NULL
       ORDER BY b.created_at DESC
       LIMIT ? OFFSET ?
-    `).all(userId, limit, offset);
+    `, [userId, limit, offset]);
 
-    const countResult = db.prepare(`
+    const countResult = await db.queryOne(`
       SELECT COUNT(*) as total FROM bookmarks b
       JOIN posts p ON b.post_id = p.id
       WHERE b.user_id = ? AND p.deleted_at IS NULL
-    `).get(userId);
+    `, [userId]);
 
     return {
       data: bookmarks,

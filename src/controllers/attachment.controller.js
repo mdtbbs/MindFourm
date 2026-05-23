@@ -25,7 +25,6 @@ class AttachmentController {
     const results = [];
 
     for (const file of fileArray) {
-      // Sanitize filename
       const safeName = path.basename(file.originalFilename || 'upload');
       const ext = path.extname(safeName);
       const baseName = path.basename(safeName, ext);
@@ -33,17 +32,14 @@ class AttachmentController {
       const fileName = `${baseName}_${timestamp}${ext}`;
       const destPath = path.join(UPLOAD_DIR, fileName);
 
-      // Ensure directory exists
       if (!fs.existsSync(UPLOAD_DIR)) {
         fs.mkdirSync(UPLOAD_DIR, { recursive: true });
       }
 
-      // Move temp file to destination
       fs.copyFileSync(file.filepath, destPath);
-      // Cleanup temp
       fs.unlinkSync(file.filepath);
 
-      const attachment = AttachmentService.create({
+      const attachment = await AttachmentService.create({
         post_id: ctx.request.body.post_id ? parseInt(ctx.request.body.post_id) : null,
         reply_id: ctx.request.body.reply_id ? parseInt(ctx.request.body.reply_id) : null,
         user_id: user.id,
@@ -56,7 +52,7 @@ class AttachmentController {
       results.push(attachment);
     }
 
-    LogService.log({
+    await LogService.log({
       user_id: user.id,
       action: 'ATTACHMENT_UPLOAD',
       target_type: 'attachment',
@@ -68,14 +64,14 @@ class AttachmentController {
     Response.success(ctx, results.length === 1 ? results[0] : results);
   }
 
-  static download(ctx) {
-    const attachment = AttachmentService.getById(ctx.params.id);
+  static async download(ctx) {
+    const attachment = await AttachmentService.getById(ctx.params.id);
     if (!attachment) {
       ctx.status = 404;
       return Response.error(ctx, '文件不存在');
     }
 
-    AttachmentService.incrementDownloadCount(attachment.id);
+    await AttachmentService.incrementDownloadCount(attachment.id);
 
     const fullPath = path.join(__dirname, '..', attachment.file_path);
     if (!fs.existsSync(fullPath)) {
@@ -88,28 +84,27 @@ class AttachmentController {
     ctx.body = fs.createReadStream(fullPath);
   }
 
-  static deleteFile(ctx) {
+  static async deleteFile(ctx) {
     const user = ctx.state.user;
     if (!user || (user.role !== 'admin' && user.role !== 'moderator')) {
       ctx.status = 403;
       return Response.error(ctx, '无权限');
     }
 
-    const attachment = AttachmentService.getById(parseInt(ctx.params.id));
+    const attachment = await AttachmentService.getById(parseInt(ctx.params.id));
     if (!attachment) {
       ctx.status = 404;
       return Response.error(ctx, '附件不存在');
     }
 
-    // Remove file from disk
     try {
       const fullPath = path.join(__dirname, '..', attachment.file_path);
       if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
     } catch (e) { /* ignore */ }
 
-    db.prepare('DELETE FROM attachments WHERE id = ?').run(parseInt(ctx.params.id));
+    await db.execute('DELETE FROM attachments WHERE id = ?', [parseInt(ctx.params.id)]);
 
-    LogService.log({
+    await LogService.log({
       user_id: user.id,
       action: 'ATTACHMENT_DELETE',
       target_type: 'attachment',
@@ -121,8 +116,8 @@ class AttachmentController {
     Response.success(ctx, { message: '附件已删除' });
   }
 
-  static getByPost(ctx) {
-    const attachments = AttachmentService.getByPostId(parseInt(ctx.params.postId));
+  static async getByPost(ctx) {
+    const attachments = await AttachmentService.getByPostId(parseInt(ctx.params.postId));
     Response.success(ctx, attachments);
   }
 }

@@ -2,11 +2,11 @@ const db = require('../database');
 const { LOG_ACTIONS } = require('../utils/constants');
 
 class LogService {
-  static log({ user_id, action, target_type, target_id, details, ip_address, user_agent }) {
-    db.prepare(`
+  static async log({ user_id, action, target_type, target_id, details, ip_address, user_agent }) {
+    await db.execute(`
       INSERT INTO operation_logs (user_id, action, target_type, target_id, details, ip_address, user_agent)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `, [
       user_id || null,
       action,
       target_type || null,
@@ -14,10 +14,10 @@ class LogService {
       details ? JSON.stringify(details) : null,
       ip_address || null,
       user_agent || null
-    );
+    ]);
   }
 
-  static getLogs({ page = 1, limit = 50, user_id, action, target_type }) {
+  static async getLogs({ page = 1, limit = 50, user_id, action, target_type }) {
     const offset = (page - 1) * limit;
     const whereClauses = [];
     const params = [];
@@ -39,16 +39,16 @@ class LogService {
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const logs = db.prepare(`
+    const logs = await db.query(`
       SELECT l.*, u.mindauth_id
       FROM operation_logs l
       LEFT JOIN users u ON l.user_id = u.id
       ${whereClause}
       ORDER BY l.created_at DESC
       LIMIT ? OFFSET ?
-    `).all(...params, limit, offset);
+    `, [...params, limit, offset]);
 
-    const countResult = db.prepare(`SELECT COUNT(*) as total FROM operation_logs ${whereClause}`).get(...params);
+    const countResult = await db.queryOne(`SELECT COUNT(*) as total FROM operation_logs ${whereClause}`, params);
 
     return {
       data: logs,

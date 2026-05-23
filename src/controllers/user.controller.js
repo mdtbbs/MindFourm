@@ -1,13 +1,12 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const config = require('../config');
 const Response = require('../utils/response');
 const UserService = require('../services/user.service');
 
 class UserController {
-  static getById(ctx) {
-    const user = UserService.getById(parseInt(ctx.params.id));
+  static async getById(ctx) {
+    const user = await UserService.getById(parseInt(ctx.params.id));
     if (!user) {
       Response.notFound(ctx, 'User not found');
       return;
@@ -15,8 +14,8 @@ class UserController {
     Response.success(ctx, user);
   }
 
-  static getMyProfile(ctx) {
-    const user = UserService.getById(ctx.state.user.id);
+  static async getMyProfile(ctx) {
+    const user = await UserService.getById(ctx.state.user.id);
     if (!user) {
       Response.notFound(ctx, 'User not found');
       return;
@@ -24,7 +23,7 @@ class UserController {
     Response.success(ctx, user);
   }
 
-  static updateProfile(ctx) {
+  static async updateProfile(ctx) {
     const { username, bio } = ctx.request.body;
     const updates = {};
     if (username !== undefined) updates.username = username.trim().slice(0, 30);
@@ -35,87 +34,80 @@ class UserController {
       return;
     }
 
-    const user = UserService.updateProfile(ctx.state.user.id, updates);
+    const user = await UserService.updateProfile(ctx.state.user.id, updates);
     Response.success(ctx, user);
   }
 
-  static uploadAvatar(ctx) {
+  static async uploadAvatar(ctx) {
     const file = ctx.request.files?.avatar;
     if (!file) {
       Response.error(ctx, 'No avatar file provided', 400);
       return;
     }
 
-    // koa-body returns a single File object or undefined
     const avatarFile = Array.isArray(file) ? file[0] : file;
 
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(avatarFile.mimetype)) {
       Response.error(ctx, 'Only JPEG, PNG, GIF, and WebP images are allowed', 400);
       return;
     }
 
-    // Create uploads directory
     const uploadsDir = path.join(__dirname, '../../uploads/avatars');
     if (!fs.existsSync(uploadsDir)) {
       fs.mkdirSync(uploadsDir, { recursive: true });
     }
 
-    // Generate unique filename
     const ext = path.extname(avatarFile.originalFilename) || '.jpg';
     const filename = `avatar_${ctx.state.user.id}_${crypto.randomBytes(8).toString('hex')}${ext}`;
     const filepath = path.join(uploadsDir, filename);
 
-    // Move file (koa-body uses formidable, file is already in temp)
     fs.renameSync(avatarFile.filepath, filepath);
 
-    // Update user
     const avatarUrl = `/uploads/avatars/${filename}`;
-    const user = UserService.updateAvatar(ctx.state.user.id, avatarUrl);
+    const user = await UserService.updateAvatar(ctx.state.user.id, avatarUrl);
 
     Response.success(ctx, { avatar_url: user.avatar_url });
   }
 
-  static removeAvatar(ctx) {
-    const user = UserService.getById(ctx.state.user.id);
+  static async removeAvatar(ctx) {
+    const user = await UserService.getById(ctx.state.user.id);
     if (user?.avatar_url) {
-      // Delete file from disk
       const filepath = path.join(__dirname, '../..', user.avatar_url);
       if (fs.existsSync(filepath)) {
         fs.unlinkSync(filepath);
       }
     }
 
-    UserService.removeAvatar(ctx.state.user.id);
+    await UserService.removeAvatar(ctx.state.user.id);
     Response.success(ctx, { message: 'Avatar removed' });
   }
 
-  static getMyReplies(ctx) {
+  static async getMyReplies(ctx) {
     const { page, limit } = ctx.query;
-    const result = UserService.getRepliesByUserId(ctx.state.user.id, {
+    const result = await UserService.getRepliesByUserId(ctx.state.user.id, {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 50
     });
     Response.paginated(ctx, result.data, result.pagination);
   }
 
-  static getRepliesByUserId(ctx) {
+  static async getRepliesByUserId(ctx) {
     const { page, limit } = ctx.query;
-    const result = UserService.getRepliesByUserId(parseInt(ctx.params.id), {
+    const result = await UserService.getRepliesByUserId(parseInt(ctx.params.id), {
       page: parseInt(page) || 1,
       limit: parseInt(limit) || 50
     });
     Response.paginated(ctx, result.data, result.pagination);
   }
 
-  static searchUsers(ctx) {
+  static async searchUsers(ctx) {
     const { q, limit } = ctx.query;
     if (!q || !q.trim()) {
       Response.success(ctx, []);
       return;
     }
-    const users = UserService.searchByUsername(q.trim(), parseInt(limit) || 10);
+    const users = await UserService.searchByUsername(q.trim(), parseInt(limit) || 10);
     Response.success(ctx, users);
   }
 }

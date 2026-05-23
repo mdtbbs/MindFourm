@@ -3,37 +3,37 @@ const fs = require('fs');
 const path = require('path');
 
 class AttachmentService {
-  static create({ post_id, reply_id, user_id, file_name, file_path, file_size, mime_type }) {
-    const result = db.prepare(`
+  static async create({ post_id, reply_id, user_id, file_name, file_path, file_size, mime_type }) {
+    const result = await db.execute(`
       INSERT INTO attachments (post_id, reply_id, user_id, file_name, file_path, file_size, mime_type)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(post_id || null, reply_id || null, user_id, file_name, file_path, file_size, mime_type);
+    `, [post_id || null, reply_id || null, user_id, file_name, file_path, file_size, mime_type]);
 
-    return db.prepare('SELECT * FROM attachments WHERE id = ?').get(result.lastInsertRowid);
+    return db.queryOne('SELECT * FROM attachments WHERE id = ?', [result.insertId]);
   }
 
-  static getByPostId(postId) {
-    return db.prepare(`
+  static async getByPostId(postId) {
+    return db.query(`
       SELECT * FROM attachments WHERE post_id = ? AND reply_id IS NULL ORDER BY created_at ASC
-    `).all(postId);
+    `, [postId]);
   }
 
-  static getByReplyId(replyId) {
-    return db.prepare(`
+  static async getByReplyId(replyId) {
+    return db.query(`
       SELECT * FROM attachments WHERE reply_id = ? ORDER BY created_at ASC
-    `).all(replyId);
+    `, [replyId]);
   }
 
-  static incrementDownloadCount(id) {
-    db.prepare('UPDATE attachments SET download_count = download_count + 1 WHERE id = ?').run(id);
+  static async incrementDownloadCount(id) {
+    await db.execute('UPDATE attachments SET download_count = download_count + 1 WHERE id = ?', [id]);
   }
 
-  static getById(id) {
-    return db.prepare('SELECT * FROM attachments WHERE id = ?').get(id);
+  static async getById(id) {
+    return db.queryOne('SELECT * FROM attachments WHERE id = ?', [id]);
   }
 
-  static delete(id, userId) {
-    const attachment = this.getById(id);
+  static async delete(id, userId) {
+    const attachment = await this.getById(id);
     if (!attachment || attachment.user_id !== userId) return null;
 
     // Remove file from disk
@@ -44,7 +44,7 @@ class AttachmentService {
       // file may already be deleted
     }
 
-    db.prepare('DELETE FROM attachments WHERE id = ?').run(id);
+    await db.execute('DELETE FROM attachments WHERE id = ?', [id]);
     return true;
   }
 }

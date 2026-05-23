@@ -4,7 +4,7 @@ const LogService = require('../services/log.service');
 const { LOG_ACTIONS } = require('../utils/constants');
 
 class MessageController {
-  static send(ctx) {
+  static async send(ctx) {
     const sender = ctx.state.user;
     const { recipient_id, content } = ctx.request.body;
 
@@ -13,7 +13,7 @@ class MessageController {
       return Response.error(ctx, '收件人和内容不能为空');
     }
 
-    const message = MessageService.create({
+    const message = await MessageService.create({
       sender_id: sender.id,
       recipient_id: parseInt(recipient_id),
       content,
@@ -24,7 +24,7 @@ class MessageController {
       return Response.error(ctx, '不能给自己发私信');
     }
 
-    LogService.log({
+    await LogService.log({
       user_id: sender.id,
       action: 'MESSAGE_SEND',
       target_type: 'message',
@@ -36,34 +36,34 @@ class MessageController {
     Response.created(ctx, message);
   }
 
-  static getConversations(ctx) {
+  static async getConversations(ctx) {
     const { limit, cursor } = ctx.query;
-    const result = MessageService.getConversations(ctx.state.user.id, {
+    const result = await MessageService.getConversations(ctx.state.user.id, {
       limit: parseInt(limit) || 20,
       cursor: cursor || null,
     });
     Response.success(ctx, { data: result.data, next_cursor: result.next_cursor, has_more: result.has_more });
   }
 
-  static getConversation(ctx) {
+  static async getConversation(ctx) {
     const { limit, cursor } = ctx.query;
     const otherUserId = parseInt(ctx.params.userId);
-    const result = MessageService.getConversation(ctx.state.user.id, otherUserId, {
+    const result = await MessageService.getConversation(ctx.state.user.id, otherUserId, {
       limit: parseInt(limit) || 50,
       cursor: cursor || null,
     });
     Response.success(ctx, { data: result.data, next_cursor: result.next_cursor, has_more: result.has_more });
   }
 
-  static unreadCount(ctx) {
-    const count = MessageService.getUnreadCount(ctx.state.user.id);
+  static async unreadCount(ctx) {
+    const count = await MessageService.getUnreadCount(ctx.state.user.id);
     Response.success(ctx, { count });
   }
 
-  static deleteMessage(ctx) {
+  static async deleteMessage(ctx) {
     const user = ctx.state.user;
     const messageId = parseInt(ctx.params.id);
-    const message = MessageService.getById(messageId);
+    const message = await MessageService.getById(messageId);
 
     if (!message) {
       ctx.status = 404;
@@ -77,7 +77,7 @@ class MessageController {
       return Response.error(ctx, '无权限');
     }
 
-    MessageService.deleteForUser(messageId, user.id, isSender);
+    await MessageService.deleteForUser(messageId, user.id, isSender);
     Response.success(ctx, { message: '已删除' });
   }
 }
