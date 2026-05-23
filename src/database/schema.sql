@@ -248,26 +248,57 @@ CREATE INDEX IF NOT EXISTS idx_messages_recipient ON messages(recipient_id, is_r
 CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(sender_id, recipient_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_deleted ON messages(deleted_by_sender, deleted_by_recipient);
 
--- Resource center
+-- Resource center (migrated)
 CREATE TABLE IF NOT EXISTS resources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
-    file_name TEXT NOT NULL,
-    file_path TEXT NOT NULL,
-    file_size INTEGER NOT NULL,
-    mime_type TEXT NOT NULL,
-    category TEXT,
+    resource_type TEXT NOT NULL DEFAULT 'file',
+    file_name TEXT,
+    file_path TEXT,
+    file_size INTEGER DEFAULT 0,
+    mime_type TEXT,
+    external_url TEXT,
+    version TEXT,
+    content TEXT,
+    content_html TEXT,
+    category_id INTEGER,
     download_count INTEGER DEFAULT 0,
     is_public INTEGER DEFAULT 1,
     status TEXT NOT NULL DEFAULT 'approved',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES resource_categories(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_resources_user ON resources(user_id);
-CREATE INDEX IF NOT EXISTS idx_resources_category ON resources(category);
 CREATE INDEX IF NOT EXISTS idx_resources_status ON resources(status);
 CREATE INDEX IF NOT EXISTS idx_resources_public ON resources(is_public, status);
 CREATE INDEX IF NOT EXISTS idx_resources_created ON resources(created_at DESC);
+
+-- Resource categories
+CREATE TABLE IF NOT EXISTS resource_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    description TEXT,
+    icon TEXT,
+    sort_order INTEGER DEFAULT 0,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_resource_categories_slug ON resource_categories(slug);
+CREATE INDEX IF NOT EXISTS idx_resource_categories_active ON resource_categories(is_active);
+
+-- Resource versions
+CREATE TABLE IF NOT EXISTS resource_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    resource_id INTEGER NOT NULL,
+    version TEXT NOT NULL,
+    file_path TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
+    UNIQUE(resource_id, version)
+);
+CREATE INDEX IF NOT EXISTS idx_resource_versions_resource ON resource_versions(resource_id);
