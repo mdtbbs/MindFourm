@@ -1,13 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // CDN support: prefix for static assets
+  assetPrefix: process.env.NEXT_PUBLIC_CDN_URL || '',
+
   async rewrites() {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://localhost:4000/api/:path*',
+        destination: process.env.API_URL || 'http://localhost:4000/api/:path*',
       },
     ];
   },
+
   images: {
     remotePatterns: [
       {
@@ -16,7 +20,17 @@ const nextConfig = {
         port: '4001',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'cdn.yoursite.com',
+        pathname: '/**',
+      },
     ],
+  },
+
+  // Generate unique build ID for CDN cache invalidation
+  generateBuildId: async () => {
+    return 'build-' + Date.now();
   },
 };
 

@@ -12,6 +12,10 @@ const app = new Koa();
 
 app.proxy = true;
 
+// CDN configuration
+const CDN_URL = process.env.CDN_URL || '';
+const STATIC_CACHE_TTL = parseInt(process.env.STATIC_CACHE_TTL, 10) || 86400; // 24 hours
+
 app.use(compress({
   gzip: { threshold: 1024 },
   deflate: { threshold: 1024 }
@@ -38,19 +42,48 @@ app.use(bodyParser({
 
 // Serve uploaded avatars at /uploads/avatars/<filename>
 const avatarsDir = path.join(__dirname, '../uploads/avatars');
-app.use(serve(avatarsDir, { prefix: '/uploads/avatars' }));
+app.use(serve(avatarsDir, {
+  prefix: '/uploads/avatars',
+  maxage: STATIC_CACHE_TTL * 1000,
+  setHeaders: (res) => {
+    if (CDN_URL) {
+      res.setHeader('X-CDN-Cache', 'HIT');
+      res.setHeader('CDN-Url', CDN_URL);
+    }
+  }
+}));
 
 // Serve uploaded attachments at /uploads/attachments/<filename>
 const attachmentsDir = path.join(__dirname, '../uploads/attachments');
-app.use(serve(attachmentsDir, { prefix: '/uploads/attachments' }));
+app.use(serve(attachmentsDir, {
+  prefix: '/uploads/attachments',
+  maxage: STATIC_CACHE_TTL * 1000,
+  setHeaders: (res) => {
+    if (CDN_URL) {
+      res.setHeader('X-CDN-Cache', 'HIT');
+      res.setHeader('CDN-Url', CDN_URL);
+    }
+  }
+}));
 
 // Serve uploaded resources at /uploads/resources/<filename>
 const resourcesDir = path.join(__dirname, '../uploads/resources');
-app.use(serve(resourcesDir, { prefix: '/uploads/resources' }));
+app.use(serve(resourcesDir, {
+  prefix: '/uploads/resources',
+  maxage: STATIC_CACHE_TTL * 1000,
+  setHeaders: (res) => {
+    if (CDN_URL) {
+      res.setHeader('X-CDN-Cache', 'HIT');
+      res.setHeader('CDN-Url', CDN_URL);
+    }
+  }
+}));
 
 // Serve static public files (server application page etc.)
 const publicDir = path.join(__dirname, '../public');
-app.use(serve(publicDir));
+app.use(serve(publicDir, {
+  maxage: STATIC_CACHE_TTL * 1000
+}));
 
 app.use(routes.routes());
 app.use(routes.allowedMethods());
