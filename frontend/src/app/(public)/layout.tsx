@@ -1,4 +1,12 @@
-import Header from '@/components/forum/header';
+'use client';
+
+import { useAuth } from '@/lib/auth/context';
+import { useSettings } from '@/lib/settings/context';
+import { UnifiedHeader } from '@mindproject/shared';
+import { messageApi } from '@/lib/api/client';
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import NotificationDropdown from '@/components/forum/notification-dropdown';
 import Footer from '@/components/forum/footer';
 import AnnouncementBanner from '@/components/forum/announcement-banner';
 
@@ -7,9 +15,70 @@ export default function PublicLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { user, isAuthenticated, logout } = useAuth();
+  const settings = useSettings();
+  const router = useRouter();
+  const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    messageApi.unreadCount()
+      .then((res) => setUnreadMsgCount(res.count))
+      .catch(() => {});
+    const interval = setInterval(() => {
+      messageApi.unreadCount()
+        .then((res) => setUnreadMsgCount(res.count))
+        .catch(() => {});
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
+
+  const handleLogin = () => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
+    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;
+  };
+
+  const handleRegister = () => {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
+    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.href = `${mindauthUrl}/register?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;
+  };
+
+  const handleSearch = (query: string) => {
+    if (query.trim()) {
+      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.push('/');
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
-      <Header />
+      <UnifiedHeader
+        showSearch
+        showPostButton
+        showMessages
+        showNotifications
+        siteName={settings.site_name || 'MindBBS'}
+        logoUrl={settings.site_logo_url}
+        user={user}
+        isAuthenticated={isAuthenticated}
+        unreadMessageCount={unreadMsgCount}
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        onLogout={handleLogout}
+        onSearch={handleSearch}
+        notificationDropdownSlot={<NotificationDropdown />}
+      />
       <AnnouncementBanner />
       <main className="flex-1">{children}</main>
       <Footer />
