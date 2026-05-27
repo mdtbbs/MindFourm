@@ -6,6 +6,7 @@ import { adminApi } from '@/lib/api/client';
 import type { AdminStats } from '@/types';
 import { Settings, FileText, AlertTriangle, Ban, FolderTree, ScrollText } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { StatsGrid } from '@mindproject/shared';
 
 const quickLinks = [
   { href: '/admin/settings/basic', label: '站点设置', icon: Settings },
@@ -29,11 +30,11 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  const statCards = [
-    { label: '帖子', value: stats?.total_posts ?? '--', trend: stats ? `今日 +${stats.today_posts}` : '' },
-    { label: '回复', value: stats?.total_replies ?? '--', trend: stats ? `今日 +${stats.today_replies}` : '' },
-    { label: '用户', value: stats?.total_users ?? '--', trend: stats ? `今日 +${stats.today_users}` : '' },
-    { label: '24小时活跃', value: stats?.active_24h ?? '--', trend: '' },
+  const statItems = [
+    { label: '帖子', value: stats?.total_posts ?? '--' },
+    { label: '回复', value: stats?.total_replies ?? '--' },
+    { label: '用户', value: stats?.total_users ?? '--' },
+    { label: '24小时活跃', value: stats?.active_24h ?? '--' },
   ];
 
   const maxActivity = stats ? Math.max(...stats.activity_7d, 1) : 1;
@@ -45,15 +46,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Stat cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-px bg-surface-200 border border-surface-200">
-        {statCards.map((card) => (
-          <div key={card.label} className="bg-white p-6">
-            <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider mb-3">{card.label}</div>
-            <div className="text-3xl font-light text-surface-900">{card.value}</div>
-            {card.trend && <div className="text-xs text-surface-400 mt-2">{card.trend}</div>}
-          </div>
-        ))}
-      </div>
+      <StatsGrid items={statItems} columns={4} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Activity chart */}
