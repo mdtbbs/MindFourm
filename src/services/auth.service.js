@@ -6,18 +6,38 @@ const redis = require('../database/redis');
 class AuthService {
   static async exchangeCode(code) {
     try {
-      const response = await fetch(`${config.mindauth.baseUrl}/api/token`, {
+      // Step 1: Exchange authorization code for tokens
+      const tokenRes = await fetch(`${config.mindauth.baseUrl}/api/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code,
           client_id: config.mindauth.clientId,
-          client_secret: config.mindauth.clientSecret
+          client_secret: config.mindauth.clientSecret,
+          grant_type: 'authorization_code'
         })
       });
 
-      const result = await response.json();
-      return result.success ? result.user : null;
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json();
+        console.error('MindAuth token exchange failed:', tokenRes.status, err);
+        return null;
+      }
+
+      const tokens = await tokenRes.json();
+
+      // Step 2: Get user info from userinfo endpoint
+      const userRes = await fetch(`${config.mindauth.baseUrl}/api/userinfo`, {
+        headers: { 'Authorization': `Bearer ${tokens.access_token}` }
+      });
+
+      if (!userRes.ok) {
+        console.error('MindAuth userinfo failed:', userRes.status);
+        return null;
+      }
+
+      const info = await userRes.json();
+      return { id: info.sub, username: info.name, email: info.email };
     } catch (error) {
       console.error('MindAuth exchange error:', error);
       return null;
