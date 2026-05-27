@@ -8,9 +8,8 @@ export default function RegisterPage() {
   const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
 
   useEffect(() => {
-    const redirectUrl = encodeURIComponent(
-      `${window.location.origin}/api/auth/callback`
-    );
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
     const currentPath = window.location.search;
     window.location.href = `${mindauthUrl}/register?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(currentPath || '/')}`;
