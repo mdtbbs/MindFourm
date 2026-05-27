@@ -2,10 +2,11 @@ import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import Badge from '@/components/ui/badge';
 import { UserProfile, PostListResponse, Reply } from '@/types';
-import { Calendar, MessageSquare, FileText, Bookmark } from 'lucide-react';
+import { Bookmark } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
+import { UserCard } from '@mindproject/shared';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -74,44 +75,30 @@ export default async function UserProfilePage({
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* User Info Card */}
-      <div className="bg-white rounded-lg border border-surface-200 p-6 mb-8">
-        <div className="flex items-start gap-6">
-          {/* Avatar */}
-          <div className="w-20 h-20 rounded-full overflow-hidden bg-primary-100 flex items-center justify-center text-2xl font-bold text-primary-600 shrink-0">
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt={displayName} className="w-full h-full object-cover" />
-            ) : (
-              displayName.charAt(0).toUpperCase()
-            )}
-          </div>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-surface-900 mb-1">
-              {displayName}
-            </h1>
-            <div className="flex items-center gap-3 mb-3">
-              <Badge variant={roleVariant}>{profile.role}</Badge>
-              <ProfileEditLink userId={profile.id} />
-            </div>
-            {profile.bio && (
-              <p className="text-sm text-surface-600 mb-3">{profile.bio}</p>
-            )}
-            <div className="flex flex-wrap gap-4 text-sm text-surface-500">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                加入于 {new Date(profile.created_at).toLocaleDateString('zh-CN')}
-              </span>
-              <span className="flex items-center gap-1">
-                <FileText className="w-4 h-4" />
-                {profile.post_count} 帖子
-              </span>
-              <span className="flex items-center gap-1">
-                <MessageSquare className="w-4 h-4" />
-                {profile.reply_count} 回复
-              </span>
-            </div>
-          </div>
+      {/* User Info Card - 使用shared UserCard */}
+      <div className="flex justify-center mb-8">
+        <UserCard
+          username={displayName}
+          avatarUrl={profile.avatar_url}
+          stats={{
+            posts: profile.post_count,
+            replies: profile.reply_count,
+          }}
+          showStats={true}
+        />
+      </div>
+
+      {/* Bio */}
+      {profile.bio && (
+        <div className="max-w-md mx-auto text-center mb-8">
+          <p className="text-sm text-surface-600">{profile.bio}</p>
         </div>
+      )}
+
+      {/* Role badge and edit link */}
+      <div className="max-w-md mx-auto flex justify-center gap-3 mb-8">
+        <Badge variant={roleVariant}>{profile.role}</Badge>
+        <ProfileEditLink userId={profile.id} />
       </div>
 
       {/* Tabs */}
