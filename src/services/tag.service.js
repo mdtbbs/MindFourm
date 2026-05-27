@@ -44,30 +44,27 @@ class TagService {
 
     const missing = tags.filter(t => !existingMap[t]);
 
-    for (const name of missing) {
-      const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-      try {
-        const result = await db.execute('INSERT IGNORE INTO tags (name, slug) VALUES (?, ?)', [name, slug]);
-        if (result.insertId) {
-          existingMap[name] = result.insertId;
-        } else {
-          // Tag already exists, fetch its ID
-          const tag = await db.queryOne('SELECT id FROM tags WHERE name = ?', [name]);
-          if (tag) existingMap[name] = tag.id;
-        }
-      } catch (err) {
-        // Fetch existing tag if duplicate
-        const tag = await db.queryOne('SELECT id FROM tags WHERE name = ?', [name]);
-        if (tag) existingMap[name] = tag.id;
-      }
+    // 批量插入缺失标签
+    if (missing.length > 0) {
+      const values = missing.map(name => {
+        const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        return `('${name.replace(/'/g, "''")}', '${slug}')`;
+      }).join(',');
+      await db.execute(`INSERT IGNORE INTO tags (name, slug) VALUES ${values}`);
+
+      // 获取新插入标签的 ID
+      const newTags = await db.query(
+        `SELECT name, id FROM tags WHERE name IN (${missing.map(() => '?').join(',')})`,
+        missing
+      );
+      for (const t of newTags) existingMap[t.name] = t.id;
     }
 
-    // Bulk insert post_tags
-    for (const name of tags) {
-      const tagId = existingMap[name];
-      if (tagId !== undefined) {
-        await db.execute('INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES (?, ?)', [postId, tagId]);
-      }
+    // 批量插入 post_tags 关联
+    const tagIds = tags.map(name => existingMap[name]).filter(id => id !== undefined);
+    if (tagIds.length > 0) {
+      const postTagValues = tagIds.map(tagId => `(${postId}, ${tagId})`).join(',');
+      await db.execute(`INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES ${postTagValues}`);
     }
   }
 

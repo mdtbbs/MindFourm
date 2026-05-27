@@ -302,3 +302,13 @@ CREATE TABLE IF NOT EXISTS resource_versions (
     UNIQUE(resource_id, version)
 );
 CREATE INDEX IF NOT EXISTS idx_resource_versions_resource ON resource_versions(resource_id);
+
+-- Performance optimization indexes
+-- Composite index for resource listing query (status + category + created_at)
+CREATE INDEX IF NOT EXISTS idx_resources_list ON resources(status, category_id, created_at DESC);
+
+-- Composite index for notifications unread count query
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read);
+
+-- Posts composite index for user's posts query
+CREATE INDEX IF NOT EXISTS idx_posts_user_status ON posts(user_id, status, created_at DESC);

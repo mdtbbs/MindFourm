@@ -299,3 +299,13 @@ INSERT IGNORE INTO resource_categories (name, slug, description, icon, sort_orde
 ('教程', 'tutorial', '游戏/搭建教程', 'BookOpen', 5),
 ('工具', 'tool', '辅助工具', 'Wrench', 6),
 ('其他', 'other', '其他资源', 'FileText', 7);
+
+-- Performance optimization indexes
+-- Composite index for resource listing query (status + category + created_at)
+ALTER TABLE resources ADD INDEX idx_resources_list (status, category_id, created_at DESC);
+
+-- Composite index for notifications unread count query
+ALTER TABLE notifications ADD INDEX idx_notifications_unread (user_id, is_read);
+
+-- Posts composite index for user's posts query
+ALTER TABLE posts ADD INDEX idx_posts_user_status (user_id, status, created_at DESC);

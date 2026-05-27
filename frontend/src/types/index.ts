@@ -60,6 +60,12 @@ export interface Post {
   author_role: UserRole;
   tags: Tag[];
   replies?: Reply[];
+  repliesPagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 export interface PostListResponse {

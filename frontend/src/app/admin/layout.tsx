@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
-import { AdminSidebar as SharedAdminSidebar, SidebarItem } from '@mindproject/shared';
+import { AdminSidebar as SharedAdminSidebar, SidebarItem } from '@/components/shared/AdminSidebar';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,

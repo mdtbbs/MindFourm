@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth/context';
 import { postApi, categoryApi, tagApi } from '@/lib/api/client';
 import { CreatePostInput, Category, Tag } from '@/types';
@@ -15,6 +15,11 @@ import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import FileUpload from '@/components/forum/file-upload';
 import AttachmentList from '@/components/forum/attachment-list';
 import { Attachment } from '@/types';
+
+// 懒加载 Markdown 渲染器（react-markdown 较大）
+const MarkdownRenderer = dynamic(() => import('@/components/ui/markdown-renderer'), {
+  loading: () => <div className="text-[var(--text-muted)] py-4">渲染中...</div>,
+});
 
 export default function PostForm() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();

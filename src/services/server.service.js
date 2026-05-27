@@ -1,22 +1,62 @@
 const config = require('../config');
+const redis = require('../database/redis');
 
 // EasyManager 配置
 const EASYMANAGER_URL = config.easymanager.baseUrl;
 const EASYMANAGER_API_KEY = config.easymanager.apiKey;
 
+// 超时设置 (5秒)
+const FETCH_TIMEOUT = 5000;
+
+// 缓存 TTL (秒)
+const CACHE_TTL_VERSIONS = 300;  // 5分钟
+const CACHE_TTL_TEMPLATES = 300; // 5分钟
+const CACHE_TTL_PUBLIC_SERVERS = 60; // 1分钟
+
+// 带超时的 fetch helper
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时');
+    }
+    throw error;
+  }
+}
+
 class ServerService {
   /**
-   * 获取公开服务器列表
+   * 获取公开服务器列表 (带缓存)
    */
   static async getPublicServers() {
+    const cacheKey = 'cache:public_servers';
     try {
-      const response = await fetch(`${EASYMANAGER_URL}/api/forum/servers/public`, {
+      // 先检查缓存
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+
+      const response = await fetchWithTimeout(`${EASYMANAGER_URL}/api/forum/servers/public`, {
         headers: {
           'X-Service-Key': EASYMANAGER_API_KEY
         }
       });
       const result = await response.json();
-      return (result.success && result.servers) || [];
+      const servers = (result.success && result.servers) || [];
+
+      // 写入缓存
+      await redis.set(cacheKey, JSON.stringify(servers), CACHE_TTL_PUBLIC_SERVERS);
+      return servers;
     } catch (error) {
       console.error('EasyManager public servers error:', error);
       return [];
@@ -29,7 +69,7 @@ class ServerService {
    */
   static async getUserServers(mindauthId) {
     try {
-      const response = await fetch(`${EASYMANAGER_URL}/api/forum/user/${mindauthId}/servers`, {
+      const response = await fetchWithTimeout(`${EASYMANAGER_URL}/api/forum/user/${mindauthId}/servers`, {
         headers: {
           'X-Service-Key': EASYMANAGER_API_KEY,
           'X-User-ID': String(mindauthId)
@@ -49,7 +89,7 @@ class ServerService {
    */
   static async getServerBasic(serverId) {
     try {
-      const response = await fetch(`${EASYMANAGER_URL}/api/forum/servers/${serverId}/basic`, {
+      const response = await fetchWithTimeout(`${EASYMANAGER_URL}/api/forum/servers/${serverId}/basic`, {
         headers: {
           'X-Service-Key': EASYMANAGER_API_KEY
         }
@@ -69,7 +109,7 @@ class ServerService {
    */
   static async applyServer(mindauthId, data) {
     try {
-      const response = await fetch(`${EASYMANAGER_URL}/api/forum/apply`, {
+      const response = await fetchWithTimeout(`${EASYMANAGER_URL}/api/forum/apply`, {
         method: 'POST',
         headers: {
           'X-Service-Key': EASYMANAGER_API_KEY,
@@ -93,17 +133,28 @@ class ServerService {
   }
 
   /**
-   * 获取可用版本列表
+   * 获取可用版本列表 (带缓存)
    */
   static async getAvailableVersions() {
+    const cacheKey = 'cache:versions';
     try {
-      const response = await fetch(`${EASYMANAGER_URL}/api/versions`, {
+      // 先检查缓存
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+
+      const response = await fetchWithTimeout(`${EASYMANAGER_URL}/api/versions`, {
         headers: {
           'X-Service-Key': EASYMANAGER_API_KEY
         }
       });
       const result = await response.json();
-      return (result.success && result.versions) || [];
+      const versions = (result.success && result.versions) || [];
+
+      // 写入缓存
+      await redis.set(cacheKey, JSON.stringify(versions), CACHE_TTL_VERSIONS);
+      return versions;
     } catch (error) {
       console.error('EasyManager versions error:', error);
       return [];
@@ -111,17 +162,28 @@ class ServerService {
   }
 
   /**
-   * 获取公开模板列表
+   * 获取公开模板列表 (带缓存)
    */
   static async getPublicTemplates() {
+    const cacheKey = 'cache:templates';
     try {
-      const response = await fetch(`${EASYMANAGER_URL}/api/templates`, {
+      // 先检查缓存
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+
+      const response = await fetchWithTimeout(`${EASYMANAGER_URL}/api/templates`, {
         headers: {
           'X-Service-Key': EASYMANAGER_API_KEY
         }
       });
       const result = await response.json();
-      return (result.success && result.templates) || [];
+      const templates = (result.success && result.templates) || [];
+
+      // 写入缓存
+      await redis.set(cacheKey, JSON.stringify(templates), CACHE_TTL_TEMPLATES);
+      return templates;
     } catch (error) {
       console.error('EasyManager templates error:', error);
       return [];

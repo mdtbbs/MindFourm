@@ -100,10 +100,10 @@ export default async function CategoryPage({
           />
         </div>
         <div className="flex-1 space-y-4">
-          <h1 className="text-2xl font-bold text-surface-900">{category.name}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{category.name}</h1>
           {postsResult.data.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-surface-500 mb-4">该分类下暂无帖子</p>
+              <p className="text-gray-500 dark:text-gray-400 mb-4">该分类下暂无帖子</p>
               <Link href="/posts/new" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
                 发布第一篇帖子 &rarr;
               </Link>

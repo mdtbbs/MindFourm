@@ -1,6 +1,14 @@
 const db = require('../database');
 
 class AutoPostService {
+  // Escape HTML to prevent XSS
+  static escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
   static async createServerAnnouncement(data) {
     if (data.type !== 'server_approved') {
       return { success: false, message: '未知的自动发帖类型' };
@@ -30,11 +38,11 @@ class AutoPostService {
     `.trim();
 
     const contentHtml = `
-<p>用户 <strong>${data.owner_name}</strong> 的服务器已通过审批！</p>
+<p>用户 <strong>${AutoPostService.escapeHtml(data.owner_name)}</strong> 的服务器已通过审批！</p>
 <h3>服务器信息</h3>
 <ul>
-  <li>名称：${data.server_name}</li>
-  <li>版本：${data.version || '未知'}</li>
+  <li>名称：${AutoPostService.escapeHtml(data.server_name)}</li>
+  <li>版本：${AutoPostService.escapeHtml(data.version) || '未知'}</li>
   <li>地址：待分配</li>
 </ul>
 <p>欢迎前来游玩！</p>

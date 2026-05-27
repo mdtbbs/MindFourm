@@ -64,7 +64,15 @@ const navSections = [
 function Badge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span className="ml-auto text-xs bg-surface-600 text-surface-100 rounded-full px-1.5 py-0.5 font-semibold">
+    <span style={{
+      marginLeft: 'auto',
+      fontSize: 11,
+      background: 'var(--primary)',
+      color: '#fff',
+      borderRadius: 999,
+      padding: '2px 6px',
+      fontWeight: 500,
+    }}>
       {count}
     </span>
   );
@@ -86,20 +94,38 @@ export default function AdminSidebar() {
   }, []);
 
   return (
-    <aside className="w-64 bg-surface-900 text-surface-300 min-h-screen border-r border-surface-800">
-      <div className="p-6 border-b border-surface-800">
-        <h2 className="text-sm font-bold text-white tracking-wide">MINDFORUM</h2>
-        <p className="text-xs text-surface-500 mt-1 tracking-widest">管理后台</p>
+    <aside
+      className="admin-sidebar"
+      style={{
+        width: 'var(--sidebar-width)',
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        height: '100vh',
+        background: 'var(--bg-card)',
+        borderRight: '1px solid var(--border)',
+        overflowY: 'auto',
+      }}
+    >
+      <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
+        <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>MindForum</h2>
+        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>管理后台</p>
       </div>
-      <nav className="py-3">
+      <nav style={{ padding: 12 }}>
         {navSections.map((section) => {
           const visibleItems = section.items.filter((item) =>
             item.roles.includes(userRole as string)
           );
           if (!visibleItems.length) return null;
           return (
-            <div key={section.title} className="mb-2">
-              <div className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-surface-600">
+            <div key={section.title} style={{ marginBottom: 8 }}>
+              <div style={{
+                padding: '8px 12px',
+                fontSize: 11,
+                fontWeight: 500,
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+              }}>
                 {section.title}
               </div>
               {visibleItems.map((item) => {
@@ -110,13 +136,20 @@ export default function AdminSidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-3 px-5 py-2 text-sm transition-colors ${
-                      isActive
-                        ? 'bg-surface-800 text-white'
-                        : 'text-surface-400 hover:bg-surface-800/50 hover:text-white'
-                    }`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 12px',
+                      fontSize: 13,
+                      borderRadius: 6,
+                      marginBottom: 2,
+                      transition: 'all 0.15s ease',
+                      background: isActive ? 'var(--bg-elevated)' : 'transparent',
+                      color: isActive ? 'var(--text)' : 'var(--text-secondary)',
+                    }}
                   >
-                    <item.icon className="w-4 h-4 shrink-0 opacity-60" />
+                    <item.icon style={{ width: 16, height: 16, opacity: 0.6 }} />
                     {item.label}
                     <Badge count={badgeCount} />
                   </Link>
@@ -125,8 +158,8 @@ export default function AdminSidebar() {
             </div>
           );
         })}
-        <div className="px-5 pt-3">
-          <Link href="/" className="text-sm text-surface-500 hover:text-white transition-colors">
+        <div style={{ padding: '12px 12px', marginTop: 12, borderTop: '1px solid var(--border-light)' }}>
+          <Link href="/" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
             ← 返回论坛
           </Link>
         </div>

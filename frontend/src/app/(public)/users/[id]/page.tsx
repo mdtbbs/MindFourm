@@ -6,7 +6,7 @@ import { Bookmark } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
-import { UserCard } from '@mindproject/shared';
+import { UserCard } from '@/components/shared/UserCard';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -79,7 +79,7 @@ export default async function UserProfilePage({
       <div className="flex justify-center mb-8">
         <UserCard
           username={displayName}
-          avatarUrl={profile.avatar_url}
+          avatarUrl={profile.avatar_url ?? undefined}
           stats={{
             posts: profile.post_count,
             replies: profile.reply_count,

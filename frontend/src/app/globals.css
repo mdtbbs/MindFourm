@@ -1,5 +1,6 @@
-/* MindBBS 样式 - 使用共享设计系统 */
-@import '../../shared-styles/variables.css';
+/* MindProject 样式 - 使用共享设计系统 */
+@import '../../../../shared-styles/variables.css';
+@import '../../../../shared-styles/components.css';
 
 @tailwind base;
 @tailwind components;

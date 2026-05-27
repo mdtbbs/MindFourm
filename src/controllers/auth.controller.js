@@ -60,6 +60,37 @@ class AuthController {
     ctx.redirect(`${frontendUrl}${redirectPath}`);
   }
 
+  static async exchange(ctx) {
+    const { code } = ctx.request.body;
+
+    if (!code) {
+      Response.error(ctx, 'Missing authorization code', 400, 'MISSING_CODE');
+      return;
+    }
+
+    const mindauthUser = await AuthService.exchangeCode(code);
+
+    if (!mindauthUser) {
+      Response.error(ctx, 'Invalid or expired authorization code', 401, 'INVALID_CODE');
+      return;
+    }
+
+    const user = await AuthService.getOrCreateUser(mindauthUser);
+    const sessionToken = await AuthService.createSession(user.id, ctx.ip);
+
+    Response.success(ctx, {
+      user: {
+        id: user.id,
+        mindauthId: mindauthUser.id,
+        username: mindauthUser.username,
+        email: mindauthUser.email,
+        role: user.role,
+        avatar_url: user.avatar_url || null
+      },
+      session_token: sessionToken
+    });
+  }
+
   static async verifySession(ctx) {
     const { session_token } = ctx.request.body;
 

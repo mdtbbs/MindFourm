@@ -1,6 +1,18 @@
 const db = require('../database');
 const redis = require('../database/redis');
 
+// SCAN helper for Redis (避免 KEYS 阻塞)
+async function scanKeys(pattern) {
+  const keys = [];
+  let cursor = '0';
+  do {
+    const result = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = result[0];
+    keys.push(...result[1]);
+  } while (cursor !== '0');
+  return keys;
+}
+
 class StatService {
   static async getDashboardStats() {
     const totals = await db.queryOne(`
@@ -13,8 +25,8 @@ class StatService {
         (SELECT COUNT(*) FROM users WHERE DATE(created_at) = CURDATE()) as today_users
     `);
 
-    // Get active users from Redis (count session keys)
-    const sessionKeys = await redis.keys('session:*');
+    // Get active users from Redis using SCAN (避免 KEYS 阻塞)
+    const sessionKeys = await scanKeys('session:*');
     const active24h = sessionKeys.length;
 
     const activity7d = await db.query(`

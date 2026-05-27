@@ -5,6 +5,7 @@ const compress = require('koa-compress');
 const serve = require('koa-static');
 const path = require('path');
 const { errorHandler } = require('./middleware/error');
+const { setCsrfCookie, validateCsrf } = require('./middleware/csrf');
 const routes = require('./routes');
 const config = require('./config');
 
@@ -39,6 +40,9 @@ app.use(cors({
 app.use(bodyParser({
   json: { limit: '1mb' }
 }));
+
+// CSRF protection for state-changing requests
+app.use(validateCsrf);
 
 // Serve uploaded avatars at /uploads/avatars/<filename>
 const avatarsDir = path.join(__dirname, '../uploads/avatars');
@@ -88,7 +92,8 @@ app.use(serve(publicDir, {
 app.use(routes.routes());
 app.use(routes.allowedMethods());
 
-// Cache-Control for static-like API responses
+// Cache-Control for static-like API responses + CSRF cookie
+app.use(setCsrfCookie);
 app.use(async (ctx, next) => {
   await next();
   if (ctx.status === 200) {

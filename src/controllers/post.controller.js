@@ -28,14 +28,13 @@ class PostController {
 
   static async getById(ctx) {
     const { id } = ctx.params;
-    const post = await PostService.getById(parseInt(id));
+    // 使用合并查询方法，异步增加浏览计数
+    const post = await PostService.getPostDetail(parseInt(id));
 
     if (!post) {
       Response.notFound(ctx, 'Post not found');
       return;
     }
-
-    await PostService.incrementViewCount(parseInt(id));
 
     const { page: repliesPage, limit: repliesLimit } = ctx.query;
     const repliesResult = await ReplyService.getByPostId(parseInt(id), {

@@ -3,6 +3,9 @@ const nextConfig = {
   // CDN support: prefix for static assets
   assetPrefix: process.env.NEXT_PUBLIC_CDN_URL || '',
 
+  // Transpile the shared package
+  transpilePackages: ['@mindproject/shared'],
+
   async rewrites() {
     return [
       {

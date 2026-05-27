@@ -47,7 +47,8 @@ function createRateLimitMiddleware({ key, max, windowMs, identifierFn }) {
  */
 function createDynamicRateLimit(configKey, maxKey, windowKey, defaults) {
   return async (ctx, next) => {
-    if (ctx.headers['x-test-request'] === 'true') {
+    // Test request bypass only available in development environment
+    if (process.env.NODE_ENV !== 'production' && ctx.headers['x-test-request'] === 'true') {
       return next();
     }
 

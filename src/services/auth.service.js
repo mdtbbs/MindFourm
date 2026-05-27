@@ -3,21 +3,79 @@ const config = require('../config');
 const db = require('../database');
 const redis = require('../database/redis');
 
+// 超时设置 (5秒)
+const FETCH_TIMEOUT = 5000;
+
+// 带超时的 fetch helper
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时');
+    }
+    throw error;
+  }
+}
+
+// SCAN helper for Redis (避免 KEYS 阻塞)
+async function scanKeys(pattern) {
+  const keys = [];
+  let cursor = '0';
+  do {
+    const result = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = result[0];
+    keys.push(...result[1]);
+  } while (cursor !== '0');
+  return keys;
+}
+
 class AuthService {
   static async exchangeCode(code) {
     try {
-      const response = await fetch(`${config.mindauth.baseUrl}/api/token`, {
+      // Step 1: Exchange code for tokens (RFC 6749)
+      const tokenResponse = await fetchWithTimeout(`${config.mindauth.baseUrl}/api/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           code,
           client_id: config.mindauth.clientId,
-          client_secret: config.mindauth.clientSecret
+          client_secret: config.mindauth.clientSecret,
+          grant_type: 'authorization_code'
         })
       });
 
-      const result = await response.json();
-      return result.success ? result.user : null;
+      const tokenResult = await tokenResponse.json();
+      if (!tokenResult.access_token) {
+        console.error('MindAuth token exchange failed:', tokenResult);
+        return null;
+      }
+
+      // Step 2: Get user info with access token (OIDC UserInfo endpoint)
+      const userResponse = await fetchWithTimeout(`${config.mindauth.baseUrl}/api/userinfo`, {
+        headers: { 'Authorization': `Bearer ${tokenResult.access_token}` }
+      });
+
+      const userInfo = await userResponse.json();
+      if (!userInfo.sub) {
+        console.error('MindAuth userinfo failed:', userInfo);
+        return null;
+      }
+
+      // Return user in expected format
+      return {
+        id: userInfo.sub,
+        username: userInfo.name || userInfo.email,
+        email: userInfo.email
+      };
     } catch (error) {
       console.error('MindAuth exchange error:', error);
       return null;
@@ -26,7 +84,7 @@ class AuthService {
 
   static async verifyMindAuthSession(sessionToken) {
     try {
-      const response = await fetch(`${config.mindauth.baseUrl}/api/verify`, {
+      const response = await fetchWithTimeout(`${config.mindauth.baseUrl}/api/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_token: sessionToken })
@@ -144,8 +202,8 @@ class AuthService {
   }
 
   static async destroyAllUserSessions(userId) {
-    // Find all session keys for this user
-    const keys = await redis.keys('session:*');
+    // Find all session keys for this user using SCAN (避免 KEYS 阻塞)
+    const keys = await scanKeys('session:*');
     for (const key of keys) {
       const data = await redis.hget(key, 'user_id');
       if (data === userId.toString()) {
