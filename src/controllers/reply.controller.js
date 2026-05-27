@@ -28,20 +28,21 @@ class ReplyController {
     const { postId } = ctx.params;
     const { content, parent_reply_id } = ctx.request.body;
 
-    const post = await PostService.getById(parseInt(postId));
-    if (!post || post.status !== 'published') {
-      Response.notFound(ctx, 'Post not found or not published');
-      return;
-    }
-
-    const reply = await ReplyService.create({
+    // 创建回复（包含帖子验证）
+    const reply = await ReplyService.createWithValidation({
       post_id: parseInt(postId),
       user_id: user.id,
       content,
       parent_reply_id: parseInt(parent_reply_id) || null
     });
 
-    await LogService.log({
+    if (!reply) {
+      Response.notFound(ctx, 'Post not found or not published');
+      return;
+    }
+
+    // 日志记录异步执行（不阻塞响应）
+    LogService.log({
       user_id: user.id,
       action: LOG_ACTIONS.REPLY_CREATE,
       target_type: 'reply',
@@ -49,7 +50,7 @@ class ReplyController {
       details: { post_id: parseInt(postId), parent_reply_id },
       ip_address: ctx.ip,
       user_agent: ctx.headers['user-agent']
-    });
+    }).catch(() => {});
 
     Response.created(ctx, reply);
   }

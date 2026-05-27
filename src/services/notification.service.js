@@ -21,25 +21,28 @@ class NotificationService {
   }
 
   static async notifyPostAuthor(postId, { type, actor_id, reply_id, content }) {
-    const post = await db.queryOne('SELECT user_id FROM posts WHERE id = ?', [postId]);
-    if (!post) return null;
+    // 合并查询：一次 JOIN 获取 post author、actor name、post title
+    const postData = await db.queryOne(`
+      SELECT p.user_id, p.title, u.email, u.username as author_name, a.username as actor_name
+      FROM posts p
+      JOIN users u ON u.id = p.user_id
+      JOIN users a ON a.id = ?
+      WHERE p.id = ?
+    `, [actor_id, postId]);
 
-    const notification = await this.create({ user_id: post.user_id, type, actor_id, post_id: postId, reply_id, content });
+    if (!postData) return null;
 
-    if (notification) {
-      const author = await db.queryOne('SELECT email, username FROM users WHERE id = ?', [post.user_id]);
-      if (author?.email) {
-        const settings = await SettingService.getAll();
-        const siteUrl = settings.site_url || 'http://localhost:3000';
-        const actorName = (await db.queryOne('SELECT username FROM users WHERE id = ?', [actor_id]))?.username || '用户';
-        const postTitle = (await db.queryOne('SELECT title FROM posts WHERE id = ?', [postId]))?.title || '';
-        EmailService.send(author.email, 'reply', {
-          actor_name: actorName,
-          post_title: postTitle,
-          post_url: `${siteUrl}/posts/${postId}`,
-          content: content?.slice(0, 200),
-        }).catch(() => {});
-      }
+    const notification = await this.create({ user_id: postData.user_id, type, actor_id, post_id: postId, reply_id, content });
+
+    if (notification && postData.email) {
+      const settings = await SettingService.getAll();
+      const siteUrl = settings.site_url || 'http://localhost:3000';
+      EmailService.send(postData.email, 'reply', {
+        actor_name: postData.actor_name || '用户',
+        post_title: postData.title || '',
+        post_url: `${siteUrl}/posts/${postId}`,
+        content: content?.slice(0, 200),
+      }).catch(() => {});
     }
 
     return notification;
@@ -49,14 +52,32 @@ class NotificationService {
     const mentions = content.match(/@([一-龥a-zA-Z0-9_]+)/g);
     if (!mentions) return [];
 
+    // 提取所有用户名（去重）
+    const usernameSet = new Set();
+    for (const mention of mentions) {
+      usernameSet.add(mention.slice(1));
+    }
+    const usernames = Array.from(usernameSet);
+
+    // 批量查询所有被提及的用户（避免 N+1）
+    const users = await db.query(
+      `SELECT id, email, username FROM users WHERE username IN (${usernames.map(() => '?').join(',')})`,
+      usernames
+    );
+
+    // 获取 actor 信息（一次查询）
+    const actorData = await db.queryOne('SELECT id, username FROM users WHERE id = ?', [actorId]);
+    const actorName = actorData?.username || '用户';
+
+    // 获取站点设置
+    const settings = await SettingService.getAll();
+    const siteUrl = settings.site_url || 'http://localhost:3000';
+
     const notifications = [];
     const seen = new Set(skipUserIds);
 
-    for (const mention of mentions) {
-      const username = mention.slice(1);
-      const user = await db.queryOne('SELECT id, email FROM users WHERE username = ?', [username]);
-
-      if (user && !seen.has(user.id)) {
+    for (const user of users) {
+      if (!seen.has(user.id) && user.id !== actorId) {
         const notification = await this.create({
           user_id: user.id,
           type: NOTIFICATION_TYPES.mention,
@@ -68,9 +89,7 @@ class NotificationService {
 
         if (notification) {
           notifications.push(notification);
-          const settings = await SettingService.getAll();
-          const siteUrl = settings.site_url || 'http://localhost:3000';
-          const actorName = (await db.queryOne('SELECT username FROM users WHERE id = ?', [actorId]))?.username || '用户';
+          // 发送邮件（异步，不阻塞）
           EmailService.send(user.email, 'mention', {
             actor_name: actorName,
             post_url: `${siteUrl}/posts/${postId}`,
@@ -80,6 +99,7 @@ class NotificationService {
         seen.add(user.id);
       }
     }
+
     return notifications;
   }
 

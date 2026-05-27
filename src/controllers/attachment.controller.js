@@ -2,6 +2,8 @@ const path = require('path');
 const fs = require('fs');
 const db = require('../database');
 const AttachmentService = require('../services/attachment.service');
+const PostService = require('../services/post.service');
+const ReplyService = require('../services/reply.service');
 const LogService = require('../services/log.service');
 const Response = require('../utils/response');
 
@@ -13,6 +15,36 @@ class AttachmentController {
     if (!user) {
       ctx.status = 401;
       return Response.error(ctx, '未登录');
+    }
+
+    // Verify ownership if post_id provided
+    const post_id = ctx.request.body.post_id ? parseInt(ctx.request.body.post_id) : null;
+    const reply_id = ctx.request.body.reply_id ? parseInt(ctx.request.body.reply_id) : null;
+
+    if (post_id) {
+      const post = await PostService.getById(post_id);
+      if (!post) {
+        return Response.error(ctx, '帖子不存在', 404);
+      }
+      // Only post owner or moderators can attach files
+      const isOwner = post.user_id === user.id;
+      const isModerator = user.role === 'admin' || user.role === 'moderator';
+      if (!isOwner && !isModerator) {
+        return Response.error(ctx, '无权向此帖子添加附件', 403);
+      }
+    }
+
+    if (reply_id) {
+      const reply = await ReplyService.getById(reply_id);
+      if (!reply) {
+        return Response.error(ctx, '回复不存在', 404);
+      }
+      // Only reply owner or moderators can attach files
+      const isOwner = reply.user_id === user.id;
+      const isModerator = user.role === 'admin' || user.role === 'moderator';
+      if (!isOwner && !isModerator) {
+        return Response.error(ctx, '无权向此回复添加附件', 403);
+      }
     }
 
     const files = ctx.request.files?.files;
@@ -40,8 +72,8 @@ class AttachmentController {
       fs.unlinkSync(file.filepath);
 
       const attachment = await AttachmentService.create({
-        post_id: ctx.request.body.post_id ? parseInt(ctx.request.body.post_id) : null,
-        reply_id: ctx.request.body.reply_id ? parseInt(ctx.request.body.reply_id) : null,
+        post_id,
+        reply_id,
         user_id: user.id,
         file_name: safeName,
         file_path: `uploads/attachments/${fileName}`,

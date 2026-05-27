@@ -43,6 +43,34 @@ class PostService {
     return post;
   }
 
+  /**
+   * 获取帖子详情（合并查询，优化性能）
+   * 同时获取帖子信息、标签、回复统计
+   * @param {number} id - 帖子ID
+   * @returns {Promise<object|null>}
+   */
+  static async getPostDetail(id) {
+    const post = await db.queryOne(`
+      SELECT p.*, c.name as category_name, c.slug as category_slug,
+             u.mindauth_id as author_mindauth_id, u.role as author_role,
+             (SELECT COUNT(*) FROM replies r WHERE r.post_id = p.id AND r.deleted_at IS NULL) as reply_count
+      FROM posts p
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE p.id = ? AND p.deleted_at IS NULL
+    `, [id]);
+
+    if (!post) return null;
+
+    // 获取标签（单次查询）
+    post.tags = await TagService.getPostTags(post.id);
+
+    // 异步增加浏览计数（不阻塞响应）
+    this.incrementViewCount(id).catch(() => {});
+
+    return post;
+  }
+
   static async getList({ page = 1, limit = 20, category_id, status = POST_STATUS.published, user_id, search }) {
     const offset = (page - 1) * limit;
     const whereClauses = ['p.deleted_at IS NULL'];

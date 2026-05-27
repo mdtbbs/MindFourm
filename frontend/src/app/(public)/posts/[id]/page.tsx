@@ -61,25 +61,37 @@ export default async function PostDetailPage({
 }) {
   const postId = parseInt(params.id);
   const page = parseInt(searchParams.page || '1');
+  const defaultLimit = 50;
 
-  const settings = await fetchSettings();
-  const repliesPerPage = parseInt(settings.replies_per_page || '50');
-  const post = await fetchPost(postId, page, repliesPerPage);
+  // Parallel fetch: settings, post, attachments
+  const [settings, postRes, attachmentsRes] = await Promise.all([
+    fetchSettings(),
+    fetch(`${API_BASE}/api/v1/posts/${postId}?page=${page}&limit=${defaultLimit}`, { next: { tags: [`post-${postId}`] } }),
+    fetch(`${API_BASE}/api/v1/attachments/post/${postId}`, { next: { revalidate: 60 } }),
+  ]);
 
-  // Fetch attachments
+  let post: Post | null = null;
+  if (postRes.ok) {
+    try {
+      const json = await postRes.json();
+      post = json.success ? json.data : null;
+    } catch { /* ignore */ }
+  }
+
   let attachments: Attachment[] = [];
   try {
-    const res = await fetch(`${API_BASE}/api/v1/attachments/post/${postId}`);
-    if (res.ok) {
-      const json = await res.json();
+    if (attachmentsRes.ok) {
+      const json = await attachmentsRes.json();
       attachments = json.success ? json.data : [];
     }
   } catch { /* ignore */ }
 
   if (!post) return <div className="max-w-4xl mx-auto px-4 py-8">帖子不存在</div>;
 
-  const replies = post.replies?.data ?? [];
-  const pagination = post.replies?.pagination ?? { page: 1, totalPages: 1, total: 0 };
+  const repliesPerPage = parseInt(settings.replies_per_page || '50');
+
+  const replies = post.replies ?? [];
+  const pagination = post.repliesPagination ?? { page: 1, totalPages: 1, total: 0 };
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}

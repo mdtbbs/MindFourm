@@ -70,14 +70,15 @@ export default async function HomePage({
   const page = parseInt(searchParams.page || '1');
   const categoryId = searchParams.category_id ? parseInt(searchParams.category_id) : undefined;
 
-  const settings = await fetchSettings();
-  const postsPerPage = parseInt(settings?.posts_per_page || '20');
-
-  const [categories, tags, postsResult] = await Promise.all([
+  // 并行请求所有数据，包括 settings
+  const [categories, tags, postsResult, settings] = await Promise.all([
     fetchCategories(),
     fetchTags(),
-    fetchPosts(page, postsPerPage, categoryId),
+    fetchPosts(page, 20, categoryId),
+    fetchSettings(),
   ]);
+
+  const postsPerPage = parseInt(settings?.posts_per_page || '20');
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

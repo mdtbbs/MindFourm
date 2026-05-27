@@ -1,18 +1,19 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { settingsApi } from '@/lib/api/client';
+import { createContext, useContext, useState } from 'react';
 
 type SettingsContextValue = Record<string, string>;
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
-export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<SettingsContextValue>({});
+interface SettingsProviderProps {
+  initialSettings?: SettingsContextValue;
+  children: React.ReactNode;
+}
 
-  useEffect(() => {
-    settingsApi.get().then(setSettings).catch(() => {});
-  }, []);
+export function SettingsProvider({ initialSettings = {}, children }: SettingsProviderProps) {
+  // 直接使用 SSR 传入的数据，不再客户端请求
+  const [settings] = useState<SettingsContextValue>(initialSettings);
 
   return (
     <SettingsContext.Provider value={settings}>

@@ -88,6 +88,19 @@ async function hdel(key, field) {
   return getClient().hdel(key, field);
 }
 
+// SCAN helper (避免 KEYS 阻塞)
+async function scan(pattern, count = 100) {
+  const client = getClient();
+  const keys = [];
+  let cursor = '0';
+  do {
+    const result = await client.scan(cursor, 'MATCH', pattern, 'COUNT', count);
+    cursor = result[0];
+    keys.push(...result[1]);
+  } while (cursor !== '0');
+  return keys;
+}
+
 async function close() {
   if (client) {
     await client.quit();
@@ -107,6 +120,7 @@ module.exports = {
   expire,
   ttl,
   keys,
+  scan,
   hset,
   hget,
   hgetall,

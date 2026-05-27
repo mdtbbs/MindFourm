@@ -23,7 +23,7 @@ function createRoutes(basePrefix = '/api') {
   router.get('/categories', ResourceController.listCategories);
   router.get('/admin', authMiddleware({ required: true }), requireRole(['admin', 'moderator']), ResourceController.listAll);
   router.get('/:id', ResourceController.getById);
-  router.get('/:id/download', ResourceController.download);
+  router.get('/:id/download', authMiddleware({ required: true }), ResourceController.download);
   router.get('/:id/versions', ResourceController.listVersions);
 
   // Authenticated

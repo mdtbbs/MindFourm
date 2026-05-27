@@ -8,6 +8,7 @@ function createRoutes(basePrefix = '/api') {
 
   router.get('/check', authMiddleware({ required: false }), AuthController.check);
   router.get('/callback', AuthController.callback);
+  router.post('/exchange', AuthController.exchange);
   router.post('/verify-session',
     createDynamicRateLimit('login', 'rate_login_max', 'rate_login_lock_min', { max: 5, windowMin: 15 }),
     AuthController.verifySession

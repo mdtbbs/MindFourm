@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/lib/auth/context';
 import { useSettings } from '@/lib/settings/context';
-import { UnifiedHeader } from '@mindproject/shared';
+import { UnifiedHeader } from '@/components/shared/UnifiedHeader';
 import { messageApi } from '@/lib/api/client';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -35,16 +35,14 @@ export default function PublicLayout({
   }, [isAuthenticated]);
 
   const handleLogin = () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
+    const redirectUrl = encodeURIComponent(`${window.location.origin}/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
     const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
     window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;
   };
 
   const handleRegister = () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
+    const redirectUrl = encodeURIComponent(`${window.location.origin}/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
     const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
     window.location.href = `${mindauthUrl}/register?redirect=${redirectUrl}&client_id=${clientId}&state=${currentPath}`;

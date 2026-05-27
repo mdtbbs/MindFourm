@@ -3,7 +3,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { User } from '@/types';
 import { authApi } from '@/lib/api/client';
-import LoadingSpinner from '@/components/ui/loading-spinner';
 
 interface AuthContextType {
   user: User | null;
@@ -41,19 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    // Check for MindAuth session token first
-    const mindauthToken = localStorage.getItem('mindauth_session_token');
-    if (mindauthToken) {
-      // Try to verify session
-      authApi.verifySession(mindauthToken)
-        .then(() => refreshAuth())
-        .catch(() => {
-          localStorage.removeItem('mindauth_session_token');
-          refreshAuth();
-        });
-    } else {
-      refreshAuth();
-    }
+    refreshAuth();
   }, [refreshAuth]);
 
   const logout = useCallback(async () => {
@@ -63,17 +50,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Ignore errors during logout
     }
     setUser(null);
-    localStorage.removeItem('mindauth_session_token');
   }, []);
 
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-gray-900">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
+  // 非阻塞模式：直接渲染 children，不等待 auth 完成
   return (
     <AuthContext.Provider
       value={{

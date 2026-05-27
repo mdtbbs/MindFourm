@@ -1,6 +1,7 @@
 const Router = require('@koa/router');
 const SettingService = require('../services/setting.service');
 const Response = require('../utils/response');
+const { csrfTokenEndpoint } = require('../middleware/csrf');
 const authRoutes = require('./auth.routes');
 const { createRoutes: createAuthRoutes } = require('./auth.routes');
 const postRoutes = require('./post.routes');
@@ -40,6 +41,9 @@ router.get('/api/health', (ctx) => {
   ctx.status = 200;
   ctx.body = { status: 'ok', timestamp: new Date().toISOString() };
 });
+
+// CSRF token endpoint
+router.get('/api/csrf-token', csrfTokenEndpoint);
 
 // Public settings (no auth) — returns only non-sensitive settings
 const PUBLIC_SETTING_KEYS = [

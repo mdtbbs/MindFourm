@@ -6,6 +6,13 @@ const API_BASE = process.env.API_URL || 'http://localhost:4000';
 const cache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
+// Get CSRF token from cookie (client-side only)
+function getCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null; // Server-side
+  const match = document.cookie.match(/csrf_token=([^;]+)/);
+  return match ? match[1] : null;
+}
+
 function getCacheKey(path: string, options: RequestInit): string | null {
   if (options.method && options.method !== 'GET') return null;
   return `${options.method || 'GET'}:${path}`;
@@ -54,14 +61,36 @@ async function request<T>(
   }
 
   const isFormData = options.body instanceof FormData;
+  // Local API Routes don't need API_BASE prefix
+  const isLocalRoute = path.startsWith('/api/auth/');
+
+  // Add CSRF token for POST/PUT/DELETE requests (except local auth routes)
+  const shouldAddCsrf = !isLocalRoute && ['POST', 'PUT', 'DELETE'].includes(method);
+  const csrfToken = shouldAddCsrf ? getCsrfToken() : null;
+
+  // Build headers
+  const headers: Record<string, string> = {
+    ...options.headers as Record<string, string>,
+    'X-API-Version': '1',
+  };
+
+  // Add Content-Type for JSON requests (not FormData)
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  // Add CSRF token if available
+  if (csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+
+  const url = isLocalRoute ? path : `${API_BASE}${path}`;
 
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetch(url, {
       ...options,
-      headers: isFormData
-        ? { 'X-API-Version': '1', ...options.headers }
-        : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...options.headers },
+      headers,
       credentials: 'include',
     });
   } catch (err) {
@@ -110,17 +139,12 @@ async function request<T>(
   return result;
 }
 
-// Clear cache after mutations
-function clearCache(): void {
-  cache.clear();
-}
-
 // Public settings (no auth)
 export const settingsApi = {
   get: () => request<Record<string, string>>('/api/settings'),
 };
 
-// Auth APIs
+// Auth APIs (via Next.js API Routes)
 export const authApi = {
   check: () => request<{ authenticated: boolean; user?: User }>('/api/auth/check'),
   verifySession: (session_token: string) =>
@@ -150,21 +174,21 @@ export const postApi = {
     })}`),
   getById: (id: number) => request<Post>(`/api/posts/${id}`),
   create: (input: CreatePostInput) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<Post>('/api/posts', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   update: (id: number, input: Partial<CreatePostInput>) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<Post>(`/api/posts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });
   },
   delete: (id: number) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<void>(`/api/posts/${id}`, { method: 'DELETE' });
   },
 };
@@ -177,21 +201,21 @@ export const replyApi = {
       limit: params?.limit,
     })}`),
   create: (postId: number, input: CreateReplyInput) => {
-    clearCache();
+    invalidateCache('/api/posts'); // Invalidate post cache to update reply count
     return request<Reply>(`/api/posts/${postId}/replies`, {
       method: 'POST',
       body: JSON.stringify(input),
     });
   },
   update: (id: number, content: string) => {
-    clearCache();
+    invalidateCache('/api/posts'); // Invalidate post cache
     return request<Reply>(`/api/replies/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ content }),
     });
   },
   delete: (id: number) => {
-    clearCache();
+    invalidateCache('/api/posts'); // Invalidate post cache
     return request<void>(`/api/replies/${id}`, { method: 'DELETE' });
   },
 };
@@ -212,21 +236,22 @@ export const tagApi = {
 // Admin APIs
 export const adminApi = {
   createCategory: (data: { name: string; slug: string; sort_order?: number }) => {
-    clearCache();
+    invalidateCache('/api/categories');
     return request<Category>('/api/admin/categories', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
   updateCategory: (id: number, data: { name: string; slug: string; sort_order?: number }) => {
-    clearCache();
+    invalidateCache('/api/categories');
     return request<Category>(`/api/admin/categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
   deleteCategory: (id: number) => {
-    clearCache();
+    invalidateCache('/api/categories');
+    invalidateCache('/api/posts');
     return request<void>(`/api/admin/categories/${id}`, { method: 'DELETE' });
   },
   updateUserRole: (id: number, role: 'user' | 'moderator' | 'admin') =>
@@ -235,14 +260,14 @@ export const adminApi = {
       body: JSON.stringify({ role }),
     }),
   pinPost: (id: number, isPinned: boolean) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<Post>(`/api/admin/posts/${id}/pin`, {
       method: 'PUT',
       body: JSON.stringify({ is_pinned: isPinned }),
     });
   },
   movePost: (id: number, category_id: number) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<Post>(`/api/admin/posts/${id}/move`, {
       method: 'PUT',
       body: JSON.stringify({ category_id }),
@@ -268,19 +293,21 @@ export const adminApi = {
   getTags: () =>
     request<Tag[]>('/api/admin/tags'),
   createTag: (data: { name: string; slug?: string }) => {
-    clearCache();
+    invalidateCache('/api/tags');
     return request<Tag>('/api/admin/tags', { method: 'POST', body: JSON.stringify(data) });
   },
   updateTag: (id: number, data: { name?: string; slug?: string }) => {
-    clearCache();
+    invalidateCache('/api/tags');
     return request<Tag>(`/api/admin/tags/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
   deleteTag: (id: number) => {
-    clearCache();
+    invalidateCache('/api/tags');
+    invalidateCache('/api/posts');
     return request<void>(`/api/admin/tags/${id}`, { method: 'DELETE' });
   },
   mergeTags: (from_tag_id: number, to_tag_id: number) => {
-    clearCache();
+    invalidateCache('/api/tags');
+    invalidateCache('/api/posts');
     return request<{ message: string }>('/api/admin/tags/merge', {
       method: 'POST', body: JSON.stringify({ from_tag_id, to_tag_id }),
     });
@@ -290,11 +317,12 @@ export const adminApi = {
       `/api/admin/moderation${buildQueryString({ page: params?.page, limit: params?.limit, type: params?.type })}`
     ),
   approvePost: (id: number) => {
-    clearCache();
+    invalidateCache('/api/posts');
+    invalidateCache('/api/admin/moderation');
     return request<{ message: string }>(`/api/admin/moderation/${id}/approve`, { method: 'PUT' });
   },
   rejectPost: (id: number) => {
-    clearCache();
+    invalidateCache('/api/admin/moderation');
     return request<{ message: string }>(`/api/admin/moderation/${id}/reject`, { method: 'PUT' });
   },
   getBans: (params?: { page?: number; limit?: number; ban_type?: string; is_active?: string }) =>
@@ -312,15 +340,15 @@ export const adminApi = {
   cleanupSoftDeleted: () =>
     request<{ message: string }>('/api/admin/cleanup/soft-deleted', { method: 'POST' }),
   bulkDeletePosts: (post_ids: number[]) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<{ message: string }>('/api/admin/posts', { method: 'DELETE', body: JSON.stringify({ post_ids }) });
   },
   bulkPinPosts: (post_ids: number[], is_pinned: boolean) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<{ message: string }>('/api/admin/posts/pin', { method: 'PUT', body: JSON.stringify({ post_ids, is_pinned }) });
   },
   bulkMovePosts: (post_ids: number[], category_id: number) => {
-    clearCache();
+    invalidateCache('/api/posts');
     return request<{ message: string }>('/api/admin/posts/move', { method: 'PUT', body: JSON.stringify({ post_ids, category_id }) });
   },
 };
@@ -431,14 +459,14 @@ export const resourceApi = {
       body: formData,
     }),
   update: (id: number, data: Partial<Resource>) => {
-    clearCache();
+    invalidateCache('/api/v1/resources');
     return request<Resource>(`/api/v1/resources/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
   delete: (id: number) => {
-    clearCache();
+    invalidateCache('/api/v1/resources');
     return request<void>(`/api/v1/resources/${id}`, { method: 'DELETE' });
   },
   getCategories: () =>
@@ -446,7 +474,7 @@ export const resourceApi = {
   getVersions: (id: number) =>
     request<{ versions: ResourceVersion[] }>(`/api/v1/resources/${id}/versions`),
   addVersion: (id: number, formData: FormData) => {
-    clearCache();
+    invalidateCache('/api/v1/resources');
     return request<ResourceVersion>(`/api/v1/resources/${id}/versions`, {
       method: 'POST',
       body: formData,
@@ -458,21 +486,23 @@ export const resourceApi = {
 export const resourceCategoryApi = {
   list: () => request<ResourceCategory[]>('/api/v1/resources/categories'),
   create: (data: Omit<ResourceCategory, 'id' | 'created_at'>) => {
-    clearCache();
+    invalidateCache('/api/v1/resources/categories');
     return request<ResourceCategory>('/api/v1/resources/categories', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
   update: (id: number, data: Partial<ResourceCategory>) => {
-    clearCache();
+    invalidateCache('/api/v1/resources/categories');
+    invalidateCache('/api/v1/resources');
     return request<ResourceCategory>(`/api/v1/resources/categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
   delete: (id: number) => {
-    clearCache();
+    invalidateCache('/api/v1/resources/categories');
+    invalidateCache('/api/v1/resources');
     return request<void>(`/api/v1/resources/categories/${id}`, { method: 'DELETE' });
   },
 };
@@ -484,14 +514,16 @@ export const resourceAdminApi = {
       `/api/v1/resources/admin${buildQueryString({ cursor: params?.cursor, limit: params?.limit, status: params?.status, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
     ),
   updateStatus: (id: number, status: string) => {
-    clearCache();
+    invalidateCache('/api/v1/resources');
+    invalidateCache('/api/v1/resources/admin');
     return request<Resource>(`/api/v1/resources/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
   },
   delete: (id: number) => {
-    clearCache();
+    invalidateCache('/api/v1/resources');
+    invalidateCache('/api/v1/resources/admin');
     return request<void>(`/api/v1/resources/${id}/admin`, { method: 'DELETE' });
   },
 };

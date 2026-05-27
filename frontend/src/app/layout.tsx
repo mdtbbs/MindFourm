@@ -4,7 +4,7 @@ import './globals.css';
 import { ToastProvider } from '@/lib/toast/context';
 import { AuthProvider } from '@/lib/auth/context';
 import { SettingsProvider } from '@/lib/settings/context';
-import { ThemeProvider } from '@mindproject/shared';
+import { ThemeProvider } from '@/lib/theme-context';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -38,11 +38,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return meta;
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // 预取 settings 并传递给 SettingsProvider，避免客户端重复请求
+  const settings = await fetchSettings();
+
   return (
     <html lang="zh-CN" data-theme="light" suppressHydrationWarning>
       <head>
@@ -67,7 +70,7 @@ export default function RootLayout({
       </head>
       <body className={inter.className}>
         <ThemeProvider>
-          <SettingsProvider>
+          <SettingsProvider initialSettings={settings}>
             <AuthProvider>
               <ToastProvider>
                 {children}

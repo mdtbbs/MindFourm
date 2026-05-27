@@ -6,6 +6,7 @@ import { Download, ExternalLink, Calendar, User, FileText } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import VersionSelector from '@/components/ui/version-selector';
+import { useAuth } from '@/lib/auth/context';
 
 function CategoryIcon({ icon }: { icon: string | null }) {
   const IconComponent = icon && ((LucideIcons as unknown) as Record<string, React.ComponentType<{ className?: string }>>)[icon];
@@ -24,6 +25,7 @@ interface ResourceDetailProps {
 }
 
 export default function ResourceDetail({ resource }: ResourceDetailProps) {
+  const { isAuthenticated } = useAuth();
   const versions = resource.versions || [];
   const [selectedVersion, setSelectedVersion] = useState<string | null>(resource.version);
 
@@ -76,8 +78,18 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         </div>
       ) : null}
 
-      {/* Action buttons */}
-      {resource.resource_type === 'file' ? (
+      {/* Action buttons - require login */}
+      {!isAuthenticated ? (
+        <div className="text-center py-4 bg-[var(--bg-elevated)] rounded-[var(--radius)] border border-[var(--border)]">
+          <p className="text-[var(--text-muted)] mb-2">请先登录后再下载资源</p>
+          <a
+            href="/login"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
+          >
+            前往登录
+          </a>
+        </div>
+      ) : resource.resource_type === 'file' ? (
         <a
           href={`/api/v1/resources/${resource.id}/download`}
           className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-white font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
