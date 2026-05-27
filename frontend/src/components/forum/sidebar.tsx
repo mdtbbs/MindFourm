@@ -12,17 +12,14 @@ interface SidebarProps {
 
 export default function Sidebar({ categories, tags, selectedCategory }: SidebarProps) {
   return (
-    <aside className="space-y-6">
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-4">
-        <h3 className="font-semibold text-surface-900 dark:text-gray-100 mb-3">分类</h3>
-        <nav className="space-y-1">
+    <aside style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Categories Section */}
+      <div className="sidebar-section">
+        <h3 className="sidebar-title">分类</h3>
+        <nav className="sidebar-nav">
           <Link
             href="/"
-            className={`block px-3 py-2 rounded text-sm transition-colors ${
-              !selectedCategory
-                ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
-                : 'text-surface-600 dark:text-gray-300 hover:bg-surface-100 dark:hover:bg-gray-800'
-            }`}
+            className={`sidebar-link ${!selectedCategory ? 'active' : ''}`}
           >
             全部帖子
           </Link>
@@ -33,11 +30,7 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
               <Link
                 key={category.id}
                 href={`/categories/${category.id}`}
-                className={`block px-3 py-2 rounded text-sm transition-colors ${
-                  selectedCategory === category.id
-                    ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 font-medium'
-                    : 'text-surface-600 dark:text-gray-300 hover:bg-surface-100 dark:hover:bg-gray-800'
-                }`}
+                className={`sidebar-link ${selectedCategory === category.id ? 'active' : ''}`}
               >
                 {category.name}
               </Link>
@@ -45,15 +38,16 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
         </nav>
       </div>
 
+      {/* Tags Section */}
       {tags.length > 0 && (
-        <div className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-4">
-          <h3 className="font-semibold text-surface-900 dark:text-gray-100 mb-3">热门标签</h3>
-          <div className="flex flex-wrap gap-2">
+        <div className="sidebar-section">
+          <h3 className="sidebar-title">热门标签</h3>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {tags.slice(0, 20).map((tag) => (
               <Link
                 key={tag.id}
                 href={`/tags/${tag.slug}`}
-                className="px-3 py-1 bg-surface-100 dark:bg-gray-800 text-surface-600 dark:text-gray-300 text-sm rounded-full hover:bg-primary-100 dark:hover:bg-primary-900/30 hover:text-primary-700 dark:hover:text-primary-400 transition-colors"
+                className="sidebar-tag"
               >
                 {tag.name}
               </Link>
@@ -63,23 +57,17 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
       )}
 
       {/* Resource Center */}
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-4">
-        <Link
-          href="/resources"
-          className="flex items-center gap-2 text-sm font-medium text-surface-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-        >
-          <FolderOpen className="w-4 h-4" />
+      <div className="sidebar-section">
+        <Link href="/resources" className="sidebar-quick-link">
+          <FolderOpen style={{ width: 16, height: 16 }} />
           资源中心
         </Link>
       </div>
 
       {/* Game Servers */}
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-4">
-        <Link
-          href="/servers"
-          className="flex items-center gap-2 text-sm font-medium text-surface-700 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-        >
-          <Server className="w-4 h-4" />
+      <div className="sidebar-section">
+        <Link href="/servers" className="sidebar-quick-link">
+          <Server style={{ width: 16, height: 16 }} />
           游戏服务器
         </Link>
       </div>
