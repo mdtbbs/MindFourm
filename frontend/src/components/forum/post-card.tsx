@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { Post } from '@/types';
 import Badge from '@/components/ui/badge';
+import { LikeButton } from '@/components/forum/like-button';
 import { Pin, MessageSquare, Eye } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface PostCardProps {
   post: Post;
@@ -26,12 +29,38 @@ function formatTime(dateStr: string): string {
 
 export default function PostCard({ post }: PostCardProps) {
   return (
-    <article className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-4 hover:border-surface-300 dark:hover:border-gray-600 transition-colors">
+    <motion.article
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      whileHover={{
+        scale: 1.01,
+        boxShadow: '0 4px 12px rgba(255,107,53,0.1)',
+      }}
+      className={cn(
+        'bg-white dark:bg-gray-900 rounded-lg border p-4',
+        post.is_pinned
+          ? 'border-red-200 dark:border-red-800/50'
+          : 'border-surface-200 dark:border-gray-700'
+      )}
+    >
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             {post.is_pinned && (
-              <Pin className="w-4 h-4 text-red-500 flex-shrink-0" />
+              <motion.div
+                animate={{
+                  scale: [1, 1.1, 1],
+                  rotate: [0, 5, 0],
+                }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  ease: 'easeInOut',
+                }}
+              >
+                <Pin className="w-4 h-4 text-red-500 flex-shrink-0" />
+              </motion.div>
             )}
             <Link
               href={`/posts/${post.id}`}
@@ -54,9 +83,14 @@ export default function PostCard({ post }: PostCardProps) {
             {post.tags && post.tags.length > 0 && (
               <div className="flex gap-1">
                 {post.tags.slice(0, 3).map((tag) => (
-                  <Badge key={tag.id} variant="primary">
-                    {tag.name}
-                  </Badge>
+                  <motion.div
+                    key={tag.id}
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    <Badge variant="primary">
+                      {tag.name}
+                    </Badge>
+                  </motion.div>
                 ))}
               </div>
             )}
@@ -71,10 +105,12 @@ export default function PostCard({ post }: PostCardProps) {
               {post.view_count} 浏览
             </span>
 
+            <LikeButton type="post" id={post.id} initialCount={post.like_count || 0} />
+
             <span>{formatTime(post.created_at)}</span>
           </div>
         </div>
       </div>
-    </article>
+    </motion.article>
   );
 }

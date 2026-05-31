@@ -1,12 +1,16 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/lib/toast/context';
 import { AuthProvider } from '@/lib/auth/context';
 import { SettingsProvider } from '@/lib/settings/context';
 import { ThemeProvider } from '@mindproject/shared';
+import { LikeProvider } from '@/lib/like/context';
+import { cn } from "@/lib/utils";
 
-const inter = Inter({ subsets: ['latin'] });
+const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -44,7 +48,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh-CN" data-theme="light" suppressHydrationWarning>
+    <html lang="zh-CN" data-theme="light" suppressHydrationWarning className={cn(inter.variable, jetbrainsMono.variable)}>
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -69,9 +73,11 @@ export default function RootLayout({
         <ThemeProvider>
           <SettingsProvider>
             <AuthProvider>
-              <ToastProvider>
-                {children}
-              </ToastProvider>
+              <LikeProvider>
+                <ToastProvider>
+                  {children}
+                </ToastProvider>
+              </LikeProvider>
             </AuthProvider>
           </SettingsProvider>
         </ThemeProvider>

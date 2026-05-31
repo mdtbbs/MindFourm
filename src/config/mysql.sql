@@ -299,3 +299,32 @@ INSERT IGNORE INTO resource_categories (name, slug, description, icon, sort_orde
 ('教程', 'tutorial', '游戏/搭建教程', 'BookOpen', 5),
 ('工具', 'tool', '辅助工具', 'Wrench', 6),
 ('其他', 'other', '其他资源', 'FileText', 7);
+
+-- Phase 3: likes (post and reply likes)
+CREATE TABLE IF NOT EXISTS post_likes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    post_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_post_like (user_id, post_id),
+    INDEX idx_post_likes_user (user_id, created_at DESC),
+    INDEX idx_post_likes_post (post_id)
+);
+
+CREATE TABLE IF NOT EXISTS reply_likes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    reply_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_id) REFERENCES replies(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_reply_like (user_id, reply_id),
+    INDEX idx_reply_likes_user (user_id, created_at DESC),
+    INDEX idx_reply_likes_reply (reply_id)
+);
+
+-- Add like_count columns to posts and replies (run as ALTER if columns don't exist)
+-- ALTER TABLE posts ADD COLUMN like_count INT DEFAULT 0 AFTER view_count;
+-- ALTER TABLE replies ADD COLUMN like_count INT DEFAULT 0 AFTER status;

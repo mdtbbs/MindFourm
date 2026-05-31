@@ -78,6 +78,8 @@ const NOTIFICATION_TYPES = {
   reply: 'reply',
   mention: 'mention',
   message: 'message',
+  post_like: 'post_like',
+  reply_like: 'reply_like',
 };
 
 module.exports = {

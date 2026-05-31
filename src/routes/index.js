@@ -22,6 +22,7 @@ const { createRoutes: createResourceRoutes } = require('./resource.routes');
 const serverRoutes = require('./server.routes');
 const autoPostRoutes = require('./auto-post.routes');
 const { createRoutes: createPostServerRoutes } = require('./post-server.routes');
+const { createRoutes: createLikeRoutes } = require('./like.routes');
 
 const router = new Router();
 
@@ -85,5 +86,6 @@ router.use(createResourceRoutes('/api/v1').routes());
 router.use(createAdminRoutes('/api/v1').routes());
 router.use(serverRoutes.routes());
 router.use(createPostServerRoutes('/api/v1').routes());
+router.use(createLikeRoutes('/api/v1').routes());
 
 module.exports = router;

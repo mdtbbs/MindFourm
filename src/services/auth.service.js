@@ -37,7 +37,9 @@ class AuthService {
       }
 
       const info = await userRes.json();
-      return { id: info.sub, username: info.name, email: info.email };
+      // updated_at 是 created_at 的 epoch timestamp (秒)
+      const createdAt = info.updated_at ? new Date(info.updated_at * 1000).toISOString() : null;
+      return { id: info.sub, username: info.name, email: info.email, created_at: createdAt };
     } catch (error) {
       console.error('MindAuth exchange error:', error);
       return null;
@@ -64,13 +66,14 @@ class AuthService {
     let user = await db.queryOne('SELECT * FROM users WHERE mindauth_id = ?', [mindauthUser.id]);
 
     if (!user) {
+      // 创建新用户时同步 MindAuth 的 created_at
       const result = await db.execute(
-        'INSERT INTO users (mindauth_id, username, email, role) VALUES (?, ?, ?, ?)',
-        [mindauthUser.id, mindauthUser.username, mindauthUser.email, 'user']
+        'INSERT INTO users (mindauth_id, username, email, role, created_at) VALUES (?, ?, ?, ?, ?)',
+        [mindauthUser.id, mindauthUser.username, mindauthUser.email, 'user', mindauthUser.created_at || new Date().toISOString()]
       );
       user = await db.queryOne('SELECT * FROM users WHERE id = ?', [result.insertId]);
     } else {
-      // Update username/email only if changed
+      // Update username/email only if changed (不更新 created_at，保留首次登录时间)
       if (user.username !== mindauthUser.username || user.email !== mindauthUser.email) {
         await db.execute(
           'UPDATE users SET username = ?, email = ? WHERE mindauth_id = ?',

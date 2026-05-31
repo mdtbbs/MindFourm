@@ -3,6 +3,7 @@
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
+import { LikeButton } from '@/components/forum/like-button';
 import { Quote, Reply as ReplyIcon } from 'lucide-react';
 
 interface ReplyItemProps {
@@ -20,14 +21,14 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
   }
 
   return (
-    <div className="bg-white rounded-lg border border-surface-200 overflow-hidden" id={`reply-${reply.id}`}>
+    <div className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 overflow-hidden" id={`reply-${reply.id}`}>
       {/* Reply Header */}
-      <div className="px-4 py-3 bg-surface-50 border-b border-surface-200 flex items-center justify-between">
+      <div className="px-4 py-3 bg-[var(--bg-elevated)] dark:bg-gray-800 border-b border-[var(--border)] dark:border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-3 text-sm">
-          <span className="font-medium text-surface-700">#{index + 1}</span>
-          <span className="text-surface-500">作者 ID: {reply.author_mindauth_id}</span>
-          <span className="text-surface-300">|</span>
-          <span className="text-surface-500">{formatTime(reply.created_at)}</span>
+          <span className="font-medium text-[var(--text)]">#{index + 1}</span>
+          <span className="text-[var(--text-secondary)]">作者 ID: {reply.author_mindauth_id}</span>
+          <span className="text-[var(--text-muted)]">|</span>
+          <span className="text-[var(--text-secondary)]">{formatTime(reply.created_at)}</span>
         </div>
       </div>
 
@@ -37,12 +38,13 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
       </div>
 
       {/* Reply Actions */}
-      <div className="px-4 py-3 bg-surface-50 border-t border-surface-200 flex items-center gap-2">
+      <div className="px-4 py-3 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] dark:border-gray-700 flex items-center gap-2">
+        <LikeButton type="reply" id={reply.id} initialCount={reply.like_count || 0} />
         <Button
           variant="ghost"
           size="sm"
           onClick={handleQuote}
-          className="text-surface-600"
+          className="text-[var(--text-secondary)]"
           disabled={!handleQuote}
         >
           <Quote className="w-4 h-4 mr-1" />
@@ -52,7 +54,7 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
           variant="ghost"
           size="sm"
           onClick={handleReply}
-          className="text-surface-600"
+          className="text-[var(--text-secondary)]"
           disabled={!handleReply}
         >
           <ReplyIcon className="w-4 h-4 mr-1" />

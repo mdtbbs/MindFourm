@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { notificationApi } from '@/lib/api/client';
 import { Notification } from '@/types';
-import { Bell, CheckCheck, MessageSquare, AtSign, ExternalLink } from 'lucide-react';
+import { Bell, CheckCheck, MessageSquare, AtSign, Heart, ExternalLink } from 'lucide-react';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 export default function NotificationDropdown() {
   const router = useRouter();
@@ -62,10 +63,17 @@ export default function NotificationDropdown() {
   };
 
   const typeIcon = (type: string) =>
-    type === 'reply' ? <MessageSquare className="w-4 h-4" /> : <AtSign className="w-4 h-4" />;
+    type === 'reply' ? <MessageSquare className="w-4 h-4" />
+      : type === 'mention' ? <AtSign className="w-4 h-4" />
+      : type === 'post_like' || type === 'reply_like' ? <Heart className="w-4 h-4 text-red-500" />
+      : <Bell className="w-4 h-4" />;
 
-  const typeText = (type: string) =>
-    type === 'reply' ? '回复了你的帖子' : '提到了你';
+  const typeText = (type: string, content?: string | null) =>
+    type === 'reply' ? '回复了你的帖子'
+      : type === 'mention' ? '提到了你'
+      : type === 'post_like' ? '点赞了你的帖子'
+      : type === 'reply_like' ? '点赞了你的回复'
+      : '通知';
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -74,9 +82,15 @@ export default function NotificationDropdown() {
         className="relative p-2 text-surface-600 dark:text-gray-300 hover:text-primary-600 transition-colors"
         title="通知"
       >
-        <Bell className="w-5 h-5" />
+        {/* 铃铛图标 - 有未读时摇摆 */}
+        <Bell
+          className={`w-5 h-5 transition-transform ${
+            unreadCount > 0 ? 'animate-wiggle' : ''
+          }`}
+        />
+        {/* 未读徽章 - 脉冲效果 */}
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
+          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-badge-pulse shadow-sm">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -99,7 +113,9 @@ export default function NotificationDropdown() {
 
           <div className="max-h-64 overflow-y-auto">
             {loading ? (
-              <div className="py-8 text-center text-surface-400 dark:text-gray-500">加载中...</div>
+              <div className="py-8 flex justify-center">
+                <LoadingSpinner variant="orbital" size="md" />
+              </div>
             ) : notifications.length === 0 ? (
               <div className="py-8 text-center text-surface-400 dark:text-gray-500">暂无通知</div>
             ) : (
@@ -115,7 +131,7 @@ export default function NotificationDropdown() {
                     <div className="text-surface-500 dark:text-gray-400">{typeIcon(n.type)}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-surface-700 dark:text-gray-300 line-clamp-2">
-                        {n.actor_name} {typeText(n.type)}
+                        {n.actor_name} {typeText(n.type, n.content)}
                       </p>
                       {n.post_title && (
                         <p className="text-xs text-surface-500 dark:text-gray-400 truncate mt-1">

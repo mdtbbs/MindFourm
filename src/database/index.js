@@ -32,6 +32,28 @@ async function initialize() {
     console.log('MySQL schema initialized');
   }
 
+  // Run migrations for new columns
+  try {
+    // Add like_count to posts if not exists
+    const [postColumns] = await pool.execute("SHOW COLUMNS FROM posts LIKE 'like_count'");
+    if (postColumns.length === 0) {
+      await pool.execute("ALTER TABLE posts ADD COLUMN like_count INT DEFAULT 0 AFTER view_count");
+      console.log('Added like_count column to posts');
+    }
+
+    // Add like_count to replies if not exists
+    const [replyColumns] = await pool.execute("SHOW COLUMNS FROM replies LIKE 'like_count'");
+    if (replyColumns.length === 0) {
+      await pool.execute("ALTER TABLE replies ADD COLUMN like_count INT DEFAULT 0 AFTER status");
+      console.log('Added like_count column to replies');
+    }
+  } catch (err) {
+    // Tables might not exist yet, ignore
+    if (!err.message.includes('doesn\'t exist')) {
+      console.warn('Migration error:', err.message);
+    }
+  }
+
   // Initialize Redis
   redis.initialize();
 

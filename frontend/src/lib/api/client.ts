@@ -1,6 +1,46 @@
-import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate } from '@/types';
+import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost } from '@/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+/**
+ * Create a request function that forwards cookies from the server-side request.
+ * Usage in server components:
+ *   const cookies = request.headers.get('cookie') || '';
+ *   const api = createClientWithCookie(cookies);
+ *   const profile = await api.userApi.getMyProfile();
+ */
+export function createClientWithCookie(cookie: string) {
+  const headers: Record<string, string> = {};
+  if (cookie) headers['Cookie'] = cookie;
+
+  return {
+    request: async <T>(path: string, options: RequestInit = {}): Promise<T> => {
+      const method = options.method || 'GET';
+      const isFormData = options.body instanceof FormData;
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: isFormData
+          ? { 'X-API-Version': '1', ...headers, ...options.headers }
+          : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...headers, ...options.headers },
+      });
+      if (!res.ok) {
+        let message = `Request failed: ${res.status}`;
+        try {
+          const data = await res.json();
+          if (data?.message) message = data.message;
+        } catch {}
+        throw new Error(message);
+      }
+      const data: unknown = await res.json();
+      if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
+        const d = data as { data: unknown; pagination?: unknown };
+        if (d.pagination !== undefined) return d as T;
+        return d.data as T;
+      }
+      return data as T;
+    },
+  };
+}
 
 // Simple in-memory cache for GET requests (client-side only)
 const cache = new Map<string, { data: unknown; timestamp: number }>();
@@ -381,6 +421,33 @@ export const notificationApi = {
     request<void>(`/api/v1/notifications/${id}/read`, { method: 'PUT' }),
   markAllAsRead: () =>
     request<void>('/api/v1/notifications/read-all', { method: 'PUT' }),
+};
+
+// Like APIs
+export const likeApi = {
+  // Post likes
+  likePost: (postId: number) =>
+    request<{ id: number; post_id: number; user_id: number; created_at: string }>(`/api/v1/likes/posts/${postId}`, { method: 'POST' }),
+  unlikePost: (postId: number) =>
+    request<void>(`/api/v1/likes/posts/${postId}`, { method: 'DELETE' }),
+  checkPostLike: (postId: number) =>
+    request<{ liked: boolean; count: number }>(`/api/v1/likes/posts/${postId}`),
+  getLikedPosts: (params?: { page?: number; limit?: number }) =>
+    request<{ data: LikedPost[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(
+      `/api/v1/likes/posts${buildQueryString({ page: params?.page, limit: params?.limit })}`
+    ),
+
+  // Reply likes
+  likeReply: (replyId: number) =>
+    request<{ id: number; reply_id: number; user_id: number; created_at: string }>(`/api/v1/likes/replies/${replyId}`, { method: 'POST' }),
+  unlikeReply: (replyId: number) =>
+    request<void>(`/api/v1/likes/replies/${replyId}`, { method: 'DELETE' }),
+  checkReplyLike: (replyId: number) =>
+    request<{ liked: boolean; count: number }>(`/api/v1/likes/replies/${replyId}`),
+
+  // User statistics
+  getUserLikeCount: (userId: number) =>
+    request<{ count: number }>(`/api/v1/likes/users/${userId}/count`),
 };
 
 // Attachment APIs

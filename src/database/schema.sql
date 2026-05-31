@@ -302,3 +302,28 @@ CREATE TABLE IF NOT EXISTS resource_versions (
     UNIQUE(resource_id, version)
 );
 CREATE INDEX IF NOT EXISTS idx_resource_versions_resource ON resource_versions(resource_id);
+
+-- Phase 3: likes (post and reply likes)
+CREATE TABLE IF NOT EXISTS post_likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    post_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    UNIQUE(user_id, post_id)
+);
+CREATE INDEX IF NOT EXISTS idx_post_likes_user ON post_likes(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_post_likes_post ON post_likes(post_id);
+
+CREATE TABLE IF NOT EXISTS reply_likes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    reply_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_id) REFERENCES replies(id) ON DELETE CASCADE,
+    UNIQUE(user_id, reply_id)
+);
+CREATE INDEX IF NOT EXISTS idx_reply_likes_user ON reply_likes(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reply_likes_reply ON reply_likes(reply_id);

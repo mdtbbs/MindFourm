@@ -52,6 +52,7 @@ export interface Post {
   is_pinned: boolean;
   view_count: number;
   reply_count: number;
+  like_count: number;
   created_at: string;
   updated_at: string;
   category_name: string | null;
@@ -90,6 +91,7 @@ export interface Reply {
   content_html: string;
   post_title?: string | null;
   status: 'active' | 'pending' | 'deleted';
+  like_count: number;
   created_at: string;
   updated_at: string;
   author_mindauth_id: number;
@@ -228,7 +230,7 @@ export interface BookmarkListResponse {
 export interface Notification {
   id: number;
   user_id: number;
-  type: 'reply' | 'mention' | 'message';
+  type: 'reply' | 'mention' | 'message' | 'post_like' | 'reply_like';
   actor_id: number;
   actor_name: string;
   actor_avatar: string | null;
@@ -361,4 +363,19 @@ export interface ServerTemplate {
   name: string;
   version: string;
   is_public: boolean;
+}
+
+// Phase 3: Likes
+export interface LikedPost {
+  id: number;
+  created_at: string;
+  post_id: number;
+  title: string;
+  status: string;
+  like_count: number;
+  category_name: string | null;
+  category_id: number | null;
+  author_mindauth_id: number;
+  author_role: UserRole;
+  author_name: string | null;
 }
