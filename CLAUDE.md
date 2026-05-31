@@ -1,202 +1,302 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in the MindFourm service.
 
 ## Project Overview
 
-MindForum is a forum system integrated with MindAuth for OAuth SSO. It provides posts, replies, categories, tags, user profiles, bookmarks, notifications, private messages, attachments, and a resource center. Admin panel for content moderation.
+MindFourm is a forum system for the Mindustry community, integrated with:
+- **MindAuth**: OAuth SSO login
+- **EasyManager**: Server listings and applications
+
+Features include:
+- Posts and replies with Markdown support
+- Categories and tags
+- Bookmarks and notifications
+- Private messages
+- Resource center (downloads)
+- Admin panel with moderation tools
 
 ## Commands
 
-### Backend (Koa)
 ```bash
-npm install          # Install dependencies
-npm start            # Production mode (port 4000)
-npm run dev          # Development with --watch
-```
+# Backend (Port 4000)
+cd MindFourm && npm run dev
 
-### Frontend (Next.js + TypeScript)
-```bash
-cd frontend
-npm install          # Install dependencies
-npm run dev          # Development (port 3000)
-npm run build        # Production build
-npm start            # Production server
-```
+# Frontend (Port 3000)
+cd MindFourm/frontend && npm run dev
 
-### E2E Tests (Playwright)
-```bash
-npx playwright test                  # Run all tests
-npx playwright test --ui             # Interactive UI mode
-npx playwright test auth.spec.ts     # Run specific test file
+# E2E Tests
+cd MindFourm && npx playwright test
 ```
 
 ## Architecture
 
-### Backend (Koa.js) - Three-Layer Pattern
-
 ```
-src/
-├── index.js          # Entry: init DB → start server → handle SIGINT/SIGTERM
-├── app.js            # Koa setup: compress, CORS, error, bodyParser, static, routes
-├── config/           # Environment config (mindauth, easymanager, session)
-├── database/
-│   ├── index.js      # better-sqlite3 init, WAL mode, schema migrations
-│   ├── schema.sql    # All tables and indexes
-│   └── migrations/   # Schema evolution scripts
-├── routes/
-│   ├── index.js      # Route registry: legacy + v1 versioned routes
-│   └── *.routes.js   # Router modules with factory pattern for versioning
-├── controllers/      # Request handling → call Service → Response wrapper
-├── services/         # Business logic, DB operations, core functionality
-├── middleware/       # auth, permission, rate-limit, validate, upload, ban-check
-├── utils/            # constants (PERMISSIONS), response, markdown, cursor
-└── validators/       # Joi validation schemas
-```
-
-### Frontend (Next.js 14 App Router)
-
-```
-frontend/src/
-├── app/
-│   ├── (public)/     # Public pages: home, posts/[id], categories, tags, users, search
-│   ├── (auth)/       # Auth-required: posts/new, users/me/edit, notifications
-│   ├── admin/        # Admin panel: dashboard, users, posts, moderation, settings
-│   └── layout.tsx    # Global layout with AuthProvider
-├── lib/
-│   ├── api/client.ts # Unified API client with 30s cache, clearCache on mutation
-│   └── auth/context.tsx # React Context: user, isAuthenticated, logout, refreshAuth
-├── components/       # forum/, admin/, ui/ (reusable components)
-├── hooks/            # use-draft.ts (local storage draft persistence)
-└── types/            # TypeScript interfaces
+┌──────────────────────────────────────────────────────────────────────────┐
+│                      Next.js Frontend (Port 3000)                          │
+│  App Router: (public), (auth), admin route groups                          │
+│  Components: forum/, admin/, ui/                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                      Koa Backend (Port 4000)                               │
+│  src/app.js - Main entry                                                   │
+│  src/routes/ - 16 route modules                                             │
+│  src/controllers/ - Request handling                                        │
+│  src/services/ - Business logic                                             │
+└──────────────────────────────────────────────────────────────────────────┘
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+         ┌─────────┐    ┌─────────┐    ┌────────────┐
+         │  MySQL  │    │  Redis  │    │  MindAuth  │
+         │ Posts   │    │ Session │    │  OAuth     │
+         │ Users   │    │ Cache   │    │            │
+         └─────────┘    └─────────┘    └────────────┘
+                              │
+                              ▼
+                    ┌─────────────────┐
+                    │  EasyManager    │
+                    │  Server API     │
+                    └─────────────────┘
 ```
 
-## Key Patterns
+## Backend Structure (`src/`)
 
-### Authentication Flow
-1. User clicks login → redirect to MindAuth `/authorize`
-2. MindAuth redirects back with `code` → `/api/auth/callback`
-3. Backend exchanges code with MindAuth `/api/token`
-4. Create/update local user record (`users.mindauth_id`)
-5. Create session (`sessions` table), set cookie `forum_session`
-6. Middleware validates session + verifies MindAuth token (if present)
+### Routes (`src/routes/`)
+| Module | Prefix | Description |
+|--------|--------|-------------|
+| `auth.routes.js` | `/api/auth` | OAuth callback, session |
+| `post.routes.js` | `/api/posts`, `/api/v1/posts` | Posts CRUD |
+| `reply.routes.js` | `/api/v1/replies` | Replies CRUD |
+| `category.routes.js` | `/api/categories` | Category listing |
+| `tag.routes.js` | `/api/tags` | Tag listing |
+| `user.routes.js` | `/api/v1/users` | User profiles |
+| `bookmark.routes.js` | `/api/v1/bookmarks` | Bookmarks |
+| `notification.routes.js` | `/api/v1/notifications` | Notifications |
+| `message.routes.js` | `/api/v1/messages` | Private messages |
+| `attachment.routes.js` | `/api/v1/attachments` | File uploads |
+| `resource.routes.js` | `/api/v1/resources` | Resource center |
+| `server.routes.js` | `/api/servers` | EasyManager proxy |
+| `post-server.routes.js` | `/api/v1/post-servers` | Post-server relations |
+| `auto-post.routes.js` | `/api/auto-post` | EasyManager callback |
+| `admin.routes.js` | `/api/admin`, `/api/v1/admin` | Admin panel |
 
-Session validation (auth.js middleware):
-- Token from `Authorization: Bearer` header or `forum_session` cookie
-- Query session with user JOIN → if `mindauth_token` present, verify with MindAuth `/api/verify`
-- OAuth sessions (no mindauth_token) trust local user data from JOIN
+### Controllers (`src/controllers/`)
+Handle request parsing, validation, and response formatting.
 
-### Route Versioning
-- Legacy routes: `/api/posts`, `/api/admin/*`
-- v1 routes: `/api/v1/posts`, `/api/v1/users/*` (new features)
-- Response header: `X-API-Version: 1` or `X-API-Version: legacy`
-- Factory pattern: `createRoutes(prefix)` function in each routes file
+### Services (`src/services/`)
+| Service | Purpose |
+|---------|---------|
+| `auth.service.js` | MindAuth OAuth integration |
+| `post.service.js` | Post CRUD, search, pagination |
+| `reply.service.js` | Reply management |
+| `user.service.js` | User profiles, search |
+| `bookmark.service.js` | Bookmark management |
+| `notification.service.js` | Notification creation/delivery |
+| `message.service.js` | Private messages |
+| `server.service.js` | EasyManager API proxy |
+| `resource.service.js` | Resource uploads/downloads |
+| `ban.service.js` | User/content banning |
+| `setting.service.js` | System settings |
+| `stat.service.js` | Statistics |
 
-### Permission System
-```javascript
-// src/utils/constants.js - PERMISSIONS map
-POST_DELETE_ANY: ['moderator', 'admin']
-POST_PIN: ['moderator', 'admin']
-CATEGORY_MANAGE: ['admin']
+### Middleware (`src/middleware/`)
+| Middleware | Purpose |
+|------------|---------|
+| `auth.js` | Session validation |
+| `ban-check.js` | Banned user check |
+| `permission.js` | Role-based access |
+| `rate-limit.js` | Request throttling |
+| `service-auth.js` | Service-to-service auth (X-Service-Key) |
+| `upload.js` | File upload handling |
+| `validate.js` | Request validation (Joi) |
 
-// middleware/permission.js
-requirePermission('POST_DELETE_ANY')     // role-based check
-requireOwnershipOrPermission('POST_EDIT_ANY', getPostUserId)  // owner OR role
-requireAdmin / requireModerator          // direct role check
+## API Endpoints
+
+### Posts (`/api/posts`, `/api/v1/posts`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Post list (pagination) |
+| GET | `/cursor` | Post list (cursor pagination) |
+| GET | `/:id` | Post detail |
+| POST | `/` | Create post |
+| PUT | `/:id` | Update post |
+| DELETE | `/:id` | Delete post |
+
+### Replies (`/api/v1/replies`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/:postId/replies` | Reply list |
+| POST | `/:postId/replies` | Create reply |
+| PUT | `/:id` | Update reply |
+| DELETE | `/:id` | Delete reply |
+
+### Users (`/api/v1/users`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/me` | Current user |
+| PUT | `/me/profile` | Update profile |
+| POST | `/me/avatar` | Upload avatar |
+| GET | `/search` | Search users (@mentions) |
+| GET | `/:id` | User public info |
+
+### Notifications (`/api/v1/notifications`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Notification list |
+| GET | `/unread-count` | Unread count |
+| PUT | `/:id/read` | Mark read |
+| PUT | `/read-all` | Mark all read |
+
+### Resources (`/api/v1/resources`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Resource list |
+| GET | `/:id` | Resource detail |
+| GET | `/:id/download` | Download file |
+| POST | `/` | Upload resource |
+| PUT | `/:id/status` | Update status (admin) |
+
+### Servers (`/api/servers`) - EasyManager Proxy
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/public` | Public server list |
+| GET | `/my` | User's servers |
+| POST | `/apply` | Apply for server |
+
+### Admin (`/api/admin`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/stats` | Statistics |
+| GET/PUT | `/settings/:category` | Settings management |
+| GET | `/users` | User list |
+| PUT | `/users/:id/role` | Update role |
+| GET/DELETE | `/posts` | Post management |
+| PUT | `/posts/pin` | Pin posts |
+| POST/DELETE | `/categories` | Category CRUD |
+| GET/POST/DELETE | `/tags` | Tag management |
+| GET/PUT | `/bans` | Ban management |
+| GET | `/logs` | Operation logs |
+
+## Database Tables
+
+| Table | Purpose | Key Fields |
+|-------|---------|------------|
+| `users` | User accounts | mindauth_id, username, email, role, avatar_url |
+| `posts` | Forum posts | user_id, category_id, server_id, title, content, status, is_pinned |
+| `replies` | Post replies | post_id, user_id, parent_reply_id, content |
+| `categories` | Post categories | name, slug, sort_order |
+| `tags` | Post tags | name, slug |
+| `post_tags` | Post-tag relation | post_id, tag_id |
+| `bookmarks` | User bookmarks | user_id, post_id |
+| `notifications` | User notifications | user_id, type, actor_id, is_read |
+| `messages` | Private messages | sender_id, recipient_id, is_read |
+| `attachments` | File attachments | post_id, user_id, file_path |
+| `resources` | Resource center | user_id, title, resource_type, status |
+| `settings` | System settings (KV) | key, value, category |
+| `bans` | Ban records | ban_type, value, reason |
+| `operation_logs` | Admin logs | user_id, action, target_type |
+
+## Frontend Structure (`frontend/`)
+
+### App Router Pages (`frontend/src/app/`)
+| Route Group | Pages |
+|-------------|-------|
+| `(public)` | `/`, `/posts/:id`, `/categories/:slug`, `/tags/:slug`, `/search`, `/users/:id`, `/resources`, `/servers` |
+| `(auth)` | `/login`, `/register`, `/callback`, `/posts/new`, `/messages`, `/notifications`, `/users/me`, `/apply/server` |
+| `admin` | `/admin`, `/admin/settings/*`, `/admin/posts`, `/admin/categories`, `/admin/users`, `/admin/logs`, `/admin/resources/*` |
+
+### Components (`frontend/src/components/`)
+| Directory | Components |
+|-----------|------------|
+| `forum/` | PostCard, PostList, ReplyList, CategoryNav, TagList |
+| `admin/` | AdminHeader, AdminStats, UserTable, PostTable |
+| `ui/` | shadcn/ui components (button, card, dialog, tabs, etc.) |
+
+### Lib (`frontend/src/lib/`)
+| File | Purpose |
+|------|---------|
+| `api/client.ts` | API request wrapper |
+| `auth/context.tsx` | Auth context provider |
+| `settings/context.tsx` | Settings context |
+| `toast/context.tsx` | Toast notifications |
+| `utils.ts` | Utility functions |
+
+## MindAuth Integration
+
+### OAuth Flow
+```
+1. User clicks login → Redirect to MindAuth /login
+2. MindAuth redirects to /api/auth/callback?code=XYZ
+3. Backend exchanges code for access_token
+4. Backend gets userinfo from MindAuth
+5. Create/update local user by mindauth_id
+6. Create forum session, set cookie
 ```
 
-### Response Wrapper
-All controllers use `Response.success(ctx, data)` or `Response.error(ctx, message, status, code)` for consistent JSON format: `{ success: true/false, data/message, code? }`
+### Environment Variables
+| Variable | Description |
+|----------|-------------|
+| `MINDAUTH_URL` | MindAuth service URL |
+| `MINDAUTH_CLIENT_ID` | OAuth client ID |
+| `MINDAUTH_CLIENT_SECRET` | OAuth client secret |
+| `MINDAUTH_CALLBACK_URL` | Callback URL |
 
-### Cursor Pagination (PostService.getListCursor)
-- Encodes cursor as `base64(created_at|id)` for stable pagination
-- Separates pinned posts (always first) from regular posts
-- Fetches `limit + 1` to determine `has_more`
-- Avoids offset-based pagination performance issues on large datasets
+## EasyManager Integration
 
-### Batch Tag Loading
-`TagService.getPostTagsForMultiplePosts(postIds)` fetches all tags in single query, avoiding N+1 problem when listing posts with tags.
+### Server Listing
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/forum/servers/public` | Public servers |
+| `GET /api/forum/user/:mindauthId/servers` | User's servers |
+| `POST /api/forum/apply` | Server application |
+| `GET /api/forum/servers/:id/basic` | Server info |
 
-### Server-Associated Posts
-Posts can be linked to EasyManager servers via `server_id` column with `post_type` ('normal' | 'server_announcement'). Used for server-specific discussions and announcements.
+### Callback Reception
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/auto-post/server-approved` | Auto-create post when server approved |
 
-## Database
+### Environment Variables
+| Variable | Description |
+|----------|-------------|
+| `EASYMANAGER_URL` | EasyManager API URL |
+| `EASYMANAGER_API_KEY` | Service authentication key |
 
-### Core Tables
-- `users` - mindauth_id (unique), username, email, role, avatar_url, bio
-- `sessions` - user_id, session_token, mindauth_token, expires_at
-- `posts` - user_id, category_id, server_id, post_type, title, content/content_html, status, is_pinned, deleted_at
-- `replies` - post_id, user_id, parent_reply_id (nested), content, status, deleted_at
-- `categories` - name, slug, sort_order, is_active
-- `tags` / `post_tags` - Tag system with slug-based lookup
-- `bookmarks` - user_id, post_id unique pair
-- `notifications` - type (reply/mention/message), actor_id, is_read
-- `messages` - sender_id, recipient_id, deleted_by_sender, deleted_by_recipient (bidirectional soft delete)
-- `attachments` - post_id/reply_id, file metadata
-- `resources` - Resource center with approval workflow
-- `operation_logs` - Admin audit trail (action, target_type, target_id, ip_address)
-- `settings` - KV store with categories (site, seo, announce, email, general)
-- `bans` - ban_type (ip/user), value, is_active
+## Environment Setup (`MindFourm/.env`)
 
-### Key Indexes (schema.sql)
-- `idx_posts_list` - Composite: (deleted_at, status, is_pinned DESC, created_at DESC) for main listing
-- `idx_replies_list` - Composite: (post_id, deleted_at, created_at ASC)
-- `idx_sessions_validate` - Composite: (session_token, expires_at) for auth middleware
-- `idx_posts_server_id` / `idx_posts_post_type` - Server-associated posts
-- `idx_notifications_user` - Composite: (user_id, is_read, created_at DESC)
+```bash
+PORT=4000
+FRONTEND_URL=http://localhost:3000
+API_URL=http://localhost:4000
 
-### Database Config (database/index.js)
-- WAL mode for concurrent read/write
-- Foreign keys enabled
-- 5-second busy_timeout
-- Schema migrations via ALTER TABLE with duplicate check
+# Database
+MYSQL_HOST=localhost
+MYSQL_DATABASE=mindforum
+REDIS_HOST=localhost
 
-## Environment Variables
+# MindAuth OAuth
+MINDAUTH_URL=http://localhost:4001
+MINDAUTH_CLIENT_ID=forum
+MINDAUTH_CLIENT_SECRET=<secret>
 
-Backend `.env`:
-- `PORT=4000`
-- `DB_PATH=./data/forum.db`
-- `FRONTEND_URL=http://localhost:3000`
-- `MINDAUTH_URL=http://localhost:4001`
-- `MINDAUTH_CLIENT_ID`, `MINDAUTH_CLIENT_SECRET`
-- `MINDAUTH_CALLBACK_URL=http://localhost:4000/api/auth/callback`
+# EasyManager
+EASYMANAGER_URL=http://localhost:5001
+EASYMANAGER_API_KEY=<key>
+```
 
-Frontend `.env.local`:
-- `NEXT_PUBLIC_API_URL=http://localhost:4000`
-- `NEXT_PUBLIC_MINDAUTH_URL=http://localhost:4001`
+## Technology Stack
 
-## Integration Points
+| Layer | Technology |
+|-------|------------|
+| Backend | Koa 2.x, MySQL 2, ioredis |
+| Frontend | Next.js 14 (App Router), React 18, TypeScript |
+| Styling | Tailwind CSS, shadcn/ui |
+| Animation | Framer Motion |
+| Validation | Joi |
+| Markdown | Marked + React Markdown |
 
-### MindAuth OAuth
-- Redirect: `${MINDAUTH_URL}/authorize?client_id=...&redirect_uri=...&state=...`
-- Callback: `/api/auth/callback?code=...&state=...`
-- Token exchange: POST `${MINDAUTH_URL}/api/token` with `{ code, client_id, client_secret }`
-- Session verify: POST `${MINDAUTH_URL}/api/verify` with `{ session_token }`
-
-### EasyManager (Server Management)
-Service layer calls (`src/services/server.service.js`) proxy to EasyManager with `X-Service-Key` header:
-- `/api/forum/servers/public` - Public server list (no auth, service key)
-- `/api/forum/user/:id/servers` - User's owned servers (service key + user ID)
-- `/api/forum/servers/:id/basic` - Basic server info for forum display
-- `/api/forum/apply` - Apply for new server
-- `/api/versions` - Available Mindustry versions
-- `/api/templates` - Server templates
-
-Service layer (`src/services/server.service.js`) fetches from EasyManager API using configured API key.
-
-## Frontend API Client (lib/api/client.ts)
-
-Exports typed API functions:
-- `authApi` - check, verifySession, logout
-- `postApi` - getList, getListCursor, getById, create, update, delete
-- `replyApi` - getByPost, create, update, delete
-- `categoryApi` / `tagApi` - Read-only category/tag access
-- `userApi` - getById, getMyProfile, updateProfile, uploadAvatar
-- `bookmarkApi` - list, check, add, remove
-- `notificationApi` - list, listCursor, unreadCount, markAsRead, markAllAsRead
-- `messageApi` - send, getConversations, getConversation, unreadCount, delete
-- `resourceApi` - list, getById, download, upload, delete, getCategories
-- `serverApi` - EasyManager integration APIs
-- `adminApi` - Full admin panel operations
-
-Cache: 30-second TTL for GET requests, `clearCache()` called on all mutations.
+---
+*Last updated: 2026-05-31*
