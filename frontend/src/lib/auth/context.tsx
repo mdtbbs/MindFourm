@@ -9,7 +9,7 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  logout: () => Promise<void>;
+  logout: () => void;
   refreshAuth: () => Promise<void>;
 }
 
@@ -17,7 +17,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isAuthenticated: false,
   isLoading: true,
-  logout: async () => {},
+  logout: () => {},
   refreshAuth: async () => {},
 });
 
@@ -56,20 +56,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [refreshAuth]);
 
-  const logout = useCallback(async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      // Ignore errors during logout
-    }
+  // 登出：先清除论坛 session，然后跳转到 MindAuth 登出页面
+  const logout = useCallback(() => {
+    // 先调用论坛登出 API（清除论坛 session + 撤销 OAuth tokens）
+    authApi.logout().catch(() => {
+      // 忽略错误，继续登出流程
+    });
+
+    // 清除本地状态
     setUser(null);
     localStorage.removeItem('mindauth_session_token');
+
+    // 跳转到 MindAuth 登出页面，登出后返回当前页面
+    const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
+    const currentUrl = window.location.href;
+    const redirectUri = encodeURIComponent(currentUrl);
+    window.location.href = `${mindauthUrl}/#/logout?redirect_uri=${redirectUri}`;
   }, []);
 
   if (isLoading) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-white dark:bg-gray-900">
-        <LoadingSpinner size="lg" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg)]">
+        <LoadingSpinner variant="orbital" size="lg" />
       </div>
     );
   }

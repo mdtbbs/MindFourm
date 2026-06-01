@@ -6,21 +6,20 @@ import { LogOut } from 'lucide-react';
 export default function AdminHeader() {
   const { user, logout } = useAuth();
 
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = '/';
+  const handleLogout = () => {
+    logout();
   };
 
   return (
-    <header className="bg-white border-b border-surface-200 px-6 py-4 flex items-center justify-between">
-      <h1 className="text-xl font-bold text-surface-900">MindForum 管理后台</h1>
+    <header className="bg-[var(--bg-card)] dark:bg-gray-900 border-b border-[var(--border)] dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+      <h1 className="text-xl font-bold text-[var(--text)]">MindForum 管理后台</h1>
       <div className="flex items-center gap-4">
-        <span className="text-sm text-surface-600">
+        <span className="text-sm text-[var(--text-secondary)]">
           {user?.username} ({user?.role})
         </span>
         <button
           onClick={handleLogout}
-          className="p-2 text-surface-600 hover:text-red-600 transition-colors"
+          className="p-2 text-[var(--text-secondary)] hover:text-red-600 transition-colors"
           aria-label="退出登录"
         >
           <LogOut className="w-5 h-5" />

@@ -39,7 +39,16 @@ class AuthService {
       const info = await userRes.json();
       // updated_at 是 created_at 的 epoch timestamp (秒)
       const createdAt = info.updated_at ? new Date(info.updated_at * 1000).toISOString() : null;
-      return { id: info.sub, username: info.name, email: info.email, created_at: createdAt };
+
+      // 返回用户信息 + OAuth tokens (用于登出时撤销)
+      return {
+        id: info.sub,
+        username: info.name,
+        email: info.email,
+        created_at: createdAt,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token
+      };
     } catch (error) {
       console.error('MindAuth exchange error:', error);
       return null;
@@ -87,12 +96,18 @@ class AuthService {
     return user;
   }
 
-  static async createSession(userId, ipAddress = null) {
+  static async createSession(userId, ipAddress = null, tokens = {}) {
     const sessionToken = crypto.randomBytes(32).toString('hex');
     const ttlSeconds = Math.floor(config.session.maxAge / 1000);
 
-    // Store session in Redis hash
+    // Store session in Redis hash - 包含 OAuth tokens
     await redis.hset(`session:${sessionToken}`, 'user_id', userId.toString());
+    if (tokens.access_token) {
+      await redis.hset(`session:${sessionToken}`, 'access_token', tokens.access_token);
+    }
+    if (tokens.refresh_token) {
+      await redis.hset(`session:${sessionToken}`, 'refresh_token', tokens.refresh_token);
+    }
     await redis.expire(`session:${sessionToken}`, ttlSeconds);
 
     // Log to MySQL session_audit
@@ -149,8 +164,57 @@ class AuthService {
     };
   }
 
+  /**
+   * 撤销 MindAuth OAuth tokens
+   * @param {string} accessToken - OAuth access token
+   * @param {string} refreshToken - OAuth refresh token
+   */
+  static async revokeTokens(accessToken, refreshToken) {
+    const revocationPromises = [];
+
+    // Revoke access token
+    if (accessToken) {
+      revocationPromises.push(
+        fetch(`${config.mindauth.baseUrl}/api/revoke`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: accessToken,
+            token_type_hint: 'access_token',
+            client_id: config.mindauth.clientId,
+            client_secret: config.mindauth.clientSecret
+          })
+        }).catch(err => console.warn('Access token revocation failed:', err.message))
+      );
+    }
+
+    // Revoke refresh token
+    if (refreshToken) {
+      revocationPromises.push(
+        fetch(`${config.mindauth.baseUrl}/api/revoke`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            token: refreshToken,
+            token_type_hint: 'refresh_token',
+            client_id: config.mindauth.clientId,
+            client_secret: config.mindauth.clientSecret
+          })
+        }).catch(err => console.warn('Refresh token revocation failed:', err.message))
+      );
+    }
+
+    await Promise.allSettled(revocationPromises);
+  }
+
   static async destroySession(sessionToken) {
     const sessionData = await redis.hgetall(`session:${sessionToken}`);
+
+    // Revoke OAuth tokens before deleting session
+    if (sessionData && (sessionData.access_token || sessionData.refresh_token)) {
+      await AuthService.revokeTokens(sessionData.access_token, sessionData.refresh_token);
+    }
+
     await redis.del(`session:${sessionToken}`);
 
     // Log to audit

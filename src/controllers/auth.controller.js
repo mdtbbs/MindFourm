@@ -38,18 +38,24 @@ class AuthController {
     }
 
     const user = await AuthService.getOrCreateUser(mindauthUser);
-    const sessionToken = await AuthService.createSession(user.id, ctx.ip);
+    // 传递 OAuth tokens 给 createSession，用于登出时撤销
+    const sessionToken = await AuthService.createSession(
+      user.id,
+      ctx.ip,
+      { access_token: mindauthUser.access_token, refresh_token: mindauthUser.refresh_token }
+    );
 
     const cookieOpts = {
       maxAge: config.session.maxAge,
       httpOnly: true,
       secure: config.app.env === 'production',
-      sameSite: 'lax'
+      sameSite: 'lax',
+      domain: process.env.COOKIE_DOMAIN || undefined,
     };
 
     ctx.cookies.set('forum_session', sessionToken, cookieOpts);
 
-    const frontendUrl = config.app.baseUrl;
+    const frontendUrl = config.app.frontendUrl;
     let redirectPath = '/';
     if (state) {
       const decoded = decodeURIComponent(state);
@@ -82,7 +88,8 @@ class AuthController {
       maxAge: config.session.maxAge,
       httpOnly: true,
       secure: config.app.env === 'production',
-      sameSite: 'lax'
+      sameSite: 'lax',
+      domain: process.env.COOKIE_DOMAIN || undefined,
     };
 
     ctx.cookies.set('forum_session', forumSessionToken, cookieOpts);
@@ -103,7 +110,10 @@ class AuthController {
 
     if (sessionToken) {
       await AuthService.destroySession(sessionToken);
-      ctx.cookies.set('forum_session', '', { maxAge: 0 });
+      ctx.cookies.set('forum_session', '', {
+        maxAge: 0,
+        domain: process.env.COOKIE_DOMAIN || undefined,
+      });
     }
 
     Response.success(ctx, { message: 'Logged out' });
