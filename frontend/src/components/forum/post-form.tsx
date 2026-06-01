@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { useAuth } from '@/lib/auth/context';
 import { postApi, categoryApi, tagApi } from '@/lib/api/client';
@@ -19,6 +19,7 @@ import { Attachment } from '@/types';
 export default function PostForm() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   // Form fields
   const [title, setTitle] = useState('');
@@ -165,7 +166,7 @@ export default function PostForm() {
         />
         <div className="text-center">
           <a
-            href="/login"
+            href={`/login?redirect=${encodeURIComponent(pathname || '/posts/new')}`}
             className="text-primary-600 hover:text-primary-700 font-medium"
           >
             前往登录 &rarr;

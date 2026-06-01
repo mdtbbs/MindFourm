@@ -23,6 +23,9 @@ export default function ServerSidebar() {
   const searchParams = useSearchParams();
   const currentSection = searchParams?.get('section') || (isAuthenticated ? 'my' : 'public');
 
+  // 当前页面路径，用于登录后跳转回来
+  const currentPath = `/servers?section=${currentSection}`;
+
   return (
     <aside className="w-64 shrink-0">
       <div className="bg-[var(--bg-card)] rounded-[var(--radius-card)] border border-[var(--border)] p-4 sticky top-20">
@@ -36,7 +39,7 @@ export default function ServerSidebar() {
               return (
                 <Link
                   key={item.key}
-                  href="/login"
+                  href={`/login?redirect=${encodeURIComponent(`/servers?section=${item.key}`)}`}
                   className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius)] text-sm text-[var(--text-muted)] hover:bg-[var(--bg-elevated)] transition-colors"
                 >
                   {item.icon}
