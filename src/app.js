@@ -23,15 +23,19 @@ app.use(compress({
 
 app.use(errorHandler);
 
+const allowedOrigins = [config.app.frontendUrl, config.app.apiUrl];
+
 app.use(cors({
   origin: (ctx) => {
     const requestOrigin = ctx.get('Origin');
+    // Skip CORS for non-CORS requests (no Origin header)
+    if (!requestOrigin) return false;
     // In development, allow any origin that sends credentials
-    // In production, only allow the configured baseUrl
+    // In production, only allow configured origins
     if (config.app.env === 'development') {
-      return requestOrigin || config.app.baseUrl;
+      return requestOrigin;
     }
-    return config.app.baseUrl;
+    return allowedOrigins.includes(requestOrigin) ? requestOrigin : false;
   },
   credentials: true
 }));

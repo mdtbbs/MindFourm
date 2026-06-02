@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi } from '@/lib/api/client';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 export default function CallbackPage() {
   const router = useRouter();
@@ -50,7 +51,9 @@ export default function CallbackPage() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-4" />
+        <div className="mx-auto mb-4">
+          <LoadingSpinner variant="orbital" size="lg" />
+        </div>
         <p className="text-surface-500">登录成功，正在验证...</p>
       </div>
     </div>

@@ -83,7 +83,7 @@ export default async function HomePage({
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex gap-8">
         {/* Left Sidebar */}
-        <div className="hidden lg:block w-64 flex-shrink-0">
+        <div className="hidden lg:block w-52 flex-shrink-0">
           <Sidebar
             categories={categories}
             tags={tags}
@@ -97,7 +97,7 @@ export default async function HomePage({
           <ServerSection />
 
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">
+            <h1 className="text-2xl font-bold text-[var(--text)]">
               {categoryId
                 ? categories.find((c) => c.id === categoryId)?.name || '分类'
                 : '最新帖子'}
@@ -106,10 +106,10 @@ export default async function HomePage({
 
           {postsResult.data.length === 0 ? (
             <div className="text-center py-12">
-              <p className="text-surface-500 dark:text-gray-400 mb-4">暂无帖子</p>
+              <p className="text-[var(--text-secondary)] mb-4">暂无帖子</p>
               <Link
                 href="/posts/new"
-                className="inline-flex items-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
+                className="inline-flex items-center px-4 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-dark)] transition-colors"
               >
                 发布第一篇帖子
               </Link>

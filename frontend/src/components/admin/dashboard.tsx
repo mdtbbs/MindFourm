@@ -40,7 +40,7 @@ export default function Dashboard() {
   const maxActivity = stats ? Math.max(...stats.activity_7d, 1) : 1;
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><LoadingSpinner size="lg" /></div>;
+    return <div className="flex items-center justify-center h-64"><LoadingSpinner variant="orbital" size="lg" /></div>;
   }
 
   return (
@@ -50,32 +50,32 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Activity chart */}
-        <div className="lg:col-span-2 bg-white border border-surface-200">
-          <div className="px-5 py-4 border-b border-surface-200">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">7 日活动</h3>
+        <div className="lg:col-span-2 bg-[var(--bg-card)] dark:bg-gray-900 border border-[var(--border)] dark:border-gray-700 rounded-lg">
+          <div className="px-5 py-4 border-b border-[var(--border)] dark:border-gray-700">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">7 日活动</h3>
           </div>
           <div className="flex items-end justify-center gap-2 h-36 px-5 py-6">
             {stats?.activity_7d.map((val, i) => (
               <div key={i} className="flex flex-col items-center gap-1">
-                <div className="w-5 bg-surface-300 rounded-sm" style={{ height: `${Math.max((val / maxActivity) * 120, 4)}px` }} />
-                <span className="text-xs text-surface-400 font-mono">{chartDays[i]}</span>
+                <div className="w-5 bg-[var(--primary)] opacity-60 rounded-sm" style={{ height: `${Math.max((val / maxActivity) * 120, 4)}px` }} />
+                <span className="text-xs text-[var(--text-muted)] font-mono">{chartDays[i]}</span>
               </div>
             ))}
-            {!stats && <span className="text-surface-400">暂无数据</span>}
+            {!stats && <span className="text-[var(--text-muted)]">暂无数据</span>}
           </div>
         </div>
 
         {/* Quick access */}
-        <div className="bg-white border border-surface-200">
-          <div className="px-5 py-4 border-b border-surface-200">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-600">快捷入口</h3>
+        <div className="bg-[var(--bg-card)] dark:bg-gray-900 border border-[var(--border)] dark:border-gray-700 rounded-lg">
+          <div className="px-5 py-4 border-b border-[var(--border)] dark:border-gray-700">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">快捷入口</h3>
           </div>
           <div>
             {quickLinks.map((link) => (
-              <Link key={link.href} href={link.href} className="flex items-center gap-3 px-5 py-3 text-sm text-surface-600 border-b border-surface-100 hover:bg-surface-50 hover:text-surface-900 transition-colors last:border-b-0">
+              <Link key={link.href} href={link.href} className="flex items-center gap-3 px-5 py-3 text-sm text-[var(--text-secondary)] border-b border-[var(--border-light)] dark:border-gray-800 hover:bg-[var(--bg-hover)] dark:hover:bg-gray-800 hover:text-[var(--text)] transition-colors last:border-b-0">
                 <link.icon className="w-4 h-4 shrink-0 opacity-50" />
                 {link.label}
-                <span className="ml-auto text-surface-300">→</span>
+                <span className="ml-auto text-[var(--text-muted)]">→</span>
               </Link>
             ))}
           </div>

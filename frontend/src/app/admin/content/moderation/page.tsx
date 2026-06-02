@@ -69,7 +69,7 @@ export default function ModerationPage() {
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <Button variant="ghost" size="sm" onClick={() => handleApprove(item.id)}>通过</Button>
-                  <Button variant="danger" size="sm" onClick={() => handleReject(item.id)}>拒绝</Button>
+                  <Button variant="destructive" size="sm" onClick={() => handleReject(item.id)}>拒绝</Button>
                 </div>
               </div>
             ))}

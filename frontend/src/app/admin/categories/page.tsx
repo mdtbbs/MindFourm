@@ -101,7 +101,7 @@ export default function CategoriesPage() {
                           编辑
                         </Button>
                         <Button
-                          variant="danger"
+                          variant="destructive"
                           size="sm"
                           onClick={() => handleDelete(cat.id, cat.name)}
                         >

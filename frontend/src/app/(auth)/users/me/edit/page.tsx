@@ -7,6 +7,7 @@ import { UserProfile } from '@/types';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import AvatarUploader from '@/components/forum/avatar-uploader';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 import { ArrowLeft } from 'lucide-react';
 
 export default function ProfileEditPage() {
@@ -59,21 +60,21 @@ export default function ProfileEditPage() {
   };
 
   if (!profile) {
-    return <div className="max-w-2xl mx-auto px-4 py-8 text-center text-surface-500">加载中...</div>;
+    return <div className="max-w-2xl mx-auto px-4 py-8 flex justify-center"><LoadingSpinner variant="orbital" size="lg" /></div>;
   }
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => router.back()} className="p-1 text-surface-500 hover:text-surface-700" aria-label="返回上一页">
+        <button onClick={() => router.back()} className="p-1 text-[var(--text-secondary)] hover:text-[var(--text)]" aria-label="返回上一页">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-xl font-bold text-surface-900">编辑资料</h1>
+        <h1 className="text-xl font-bold text-[var(--text)]">编辑资料</h1>
       </div>
 
-      <div className="bg-white rounded-lg border border-surface-200 p-6 space-y-6">
-        <div className="flex flex-col items-center pb-6 border-b border-surface-100">
-          <h2 className="text-sm font-semibold text-surface-700 mb-4 self-start">头像</h2>
+      <div className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 p-6 space-y-6">
+        <div className="flex flex-col items-center pb-6 border-b border-[var(--border-light)] dark:border-gray-800">
+          <h2 className="text-sm font-semibold text-[var(--text)] mb-4 self-start">头像</h2>
           <AvatarUploader
             currentAvatar={profile.avatar_url}
             onUpload={handleAvatarUpload}
@@ -82,35 +83,35 @@ export default function ProfileEditPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-surface-700 mb-2">昵称</label>
+          <label className="block text-sm font-semibold text-[var(--text)] mb-2">昵称</label>
           <input
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             maxLength={30}
-            className="w-full px-3 py-2 border border-surface-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full px-3 py-2 border border-[var(--border)] dark:border-gray-600 rounded-lg text-sm bg-[var(--bg)] dark:bg-gray-800 text-[var(--text)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)]"
             placeholder="输入昵称"
           />
-          <p className="text-xs text-surface-400 mt-1">{username.length}/30</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{username.length}/30</p>
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-surface-700 mb-2">个人简介</label>
+          <label className="block text-sm font-semibold text-[var(--text)] mb-2">个人简介</label>
           <textarea
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             maxLength={500}
             rows={4}
-            className="w-full px-3 py-2 border border-surface-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-none"
+            className="w-full px-3 py-2 border border-[var(--border)] dark:border-gray-600 rounded-lg text-sm bg-[var(--bg)] dark:bg-gray-800 text-[var(--text)] focus:ring-2 focus:ring-[var(--primary)] focus:border-[var(--primary)] resize-none"
             placeholder="介绍一下自己..."
           />
-          <p className="text-xs text-surface-400 mt-1">{bio.length}/500</p>
+          <p className="text-xs text-[var(--text-muted)] mt-1">{bio.length}/500</p>
         </div>
 
         {message && <Alert type="success" message={message} />}
         {error && <Alert type="error" message={error} />}
 
-        <div className="flex gap-3 justify-end pt-4 border-t border-surface-100">
+        <div className="flex gap-3 justify-end pt-4 border-t border-[var(--border-light)] dark:border-gray-800">
           <Button variant="ghost" onClick={() => router.back()}>取消</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? '保存中...' : '保存'}

@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { User } from 'lucide-react';
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 interface MentionInputProps {
   textareaRef: React.RefObject<HTMLTextAreaElement>;

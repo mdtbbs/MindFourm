@@ -202,7 +202,7 @@ export default function AdminPostsPage() {
             已选择 {selectedIds.length} 项
           </span>
           <Button
-            variant="danger"
+            variant="destructive"
             size="sm"
             disabled={bulkActionLoading}
             onClick={handleBulkDelete}
@@ -315,7 +315,7 @@ export default function AdminPostsPage() {
                       />
 
                       <Button
-                        variant="danger"
+                        variant="destructive"
                         size="sm"
                         disabled={actionInProgress[post.id]}
                         onClick={() => handleDelete(post)}

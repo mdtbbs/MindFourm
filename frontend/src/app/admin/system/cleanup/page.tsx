@@ -92,9 +92,9 @@ export default function CleanupPage() {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">手动清理</h2>
         </div>
         <div className="p-6 flex gap-3 flex-wrap">
-          <Button variant="danger" onClick={() => runCleanup('cleanupSessions')}>清除过期会话</Button>
-          <Button variant="danger" onClick={() => runCleanup('cleanupLogs')}>清除旧日志</Button>
-          <Button variant="danger" onClick={() => runCleanup('cleanupSoftDeleted')}>清除软删除数据</Button>
+          <Button variant="destructive" onClick={() => runCleanup('cleanupSessions')}>清除过期会话</Button>
+          <Button variant="destructive" onClick={() => runCleanup('cleanupLogs')}>清除旧日志</Button>
+          <Button variant="destructive" onClick={() => runCleanup('cleanupSoftDeleted')}>清除软删除数据</Button>
         </div>
       </div>
     </div>

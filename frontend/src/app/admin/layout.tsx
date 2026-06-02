@@ -72,12 +72,12 @@ export default function AdminLayout({
   const visibleItems = navItems.filter(item => item.roles.includes(userRole));
 
   // Convert to SidebarItem format
-  const sidebarItems: SidebarItem[] = visibleItems.map(item => ({
+  const sidebarItems = visibleItems.map(item => ({
     key: item.key,
     label: item.label,
     icon: item.icon,
     href: item.href,
-  }));
+  })) as SidebarItem[];
 
   const activeKey = getActiveKey(pathname);
 

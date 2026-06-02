@@ -31,6 +31,7 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
                 key={category.id}
                 href={`/categories/${category.id}`}
                 className={`sidebar-link ${selectedCategory === category.id ? 'active' : ''}`}
+                title={category.name}
               >
                 {category.name}
               </Link>
@@ -48,8 +49,9 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
                 key={tag.id}
                 href={`/tags/${tag.slug}`}
                 className="sidebar-tag"
+                title={tag.name}
               >
-                {tag.name}
+                <span>{tag.name}</span>
               </Link>
             ))}
           </div>

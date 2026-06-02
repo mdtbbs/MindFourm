@@ -102,7 +102,7 @@ export default function BansPage() {
                   <td className="px-4 py-3 text-surface-500">{ban.creator_name || '—'}</td>
                   <td className="px-4 py-3 text-surface-500 font-mono text-xs">{new Date(ban.created_at).toLocaleDateString('zh-CN')}</td>
                   <td className="px-4 py-3"><span className={`text-xs px-2 py-0.5 rounded font-semibold ${ban.is_active ? 'bg-surface-100 text-surface-600' : 'bg-surface-50 text-surface-400'}`}>{ban.is_active ? '生效中' : '已解除'}</span></td>
-                  <td className="px-4 py-3"><Button variant="danger" size="sm" onClick={() => handleDeactivate(ban.id)}>解除</Button></td>
+                  <td className="px-4 py-3"><Button variant="destructive" size="sm" onClick={() => handleDeactivate(ban.id)}>解除</Button></td>
                 </tr>
               ))}
             </tbody>

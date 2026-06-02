@@ -76,25 +76,25 @@ export default async function PostDetailPage({
     }
   } catch { /* ignore */ }
 
-  if (!post) return <div className="max-w-4xl mx-auto px-4 py-8">帖子不存在</div>;
+  if (!post) return <div className="max-w-4xl mx-auto px-4 py-8 text-[var(--text)]">帖子不存在</div>;
 
   const replies = post.replies?.data ?? [];
   const pagination = post.replies?.pagination ?? { page: 1, totalPages: 1, total: 0 };
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
-      <nav className="mb-6 text-sm text-surface-500">
-        <Link href="/" className="hover:text-primary-600">首页</Link>
+      <nav className="mb-6 text-sm text-[var(--text-secondary)]">
+        <Link href="/" className="hover:text-[var(--primary)]">首页</Link>
         <span className="mx-2">/</span>
         {post.category_name ? (
           <>
-            <Link href={`/categories/${post.category_id}`} className="hover:text-primary-600">
+            <Link href={`/categories/${post.category_id}`} className="hover:text-[var(--primary)]">
               {post.category_name}
             </Link>
             <span className="mx-2">/</span>
           </>
         ) : null}
-        <span className="text-surface-900">{post.title}</span>
+        <span className="text-[var(--text)]">{post.title}</span>
       </nav>
 
       {/* Post Content */}
@@ -103,12 +103,12 @@ export default async function PostDetailPage({
 
       {/* Replies */}
       <div className="mt-8 space-y-4">
-        <h2 className="text-lg font-semibold text-surface-900">
+        <h2 className="text-lg font-semibold text-[var(--text)]">
           回复 ({pagination.total})
         </h2>
 
         {replies.length === 0 ? (
-          <div className="text-center py-8 text-surface-500">暂无回复，快来抢沙发吧</div>
+          <div className="text-center py-8 text-[var(--text-secondary)]">暂无回复，快来抢沙发吧</div>
         ) : (
           <div className="space-y-4">
             {replies.map((reply: any, index: number) => (

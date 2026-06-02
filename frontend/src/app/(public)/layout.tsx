@@ -56,9 +56,8 @@ export default function PublicLayout({
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    router.push('/');
+  const handleLogout = () => {
+    logout();
   };
 
   return (

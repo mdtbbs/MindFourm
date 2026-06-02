@@ -5,7 +5,8 @@ module.exports = {
   app: {
     port: parseInt(process.env.PORT, 10) || 4000,
     env: process.env.NODE_ENV || 'development',
-    baseUrl: process.env.BASE_URL || 'http://localhost:3000'
+    frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+    apiUrl: process.env.API_URL || 'http://localhost:4000'
   },
 
   mysql: {

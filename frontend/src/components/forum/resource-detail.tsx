@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Resource } from '@/types';
 import { Download, ExternalLink, Calendar, User, FileText } from 'lucide-react';
+import { resourceApi } from '@/lib/api/client';
 import * as LucideIcons from 'lucide-react';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import VersionSelector from '@/components/ui/version-selector';
@@ -79,7 +80,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       {/* Action buttons */}
       {resource.resource_type === 'file' ? (
         <a
-          href={`/api/v1/resources/${resource.id}/download`}
+          href={resourceApi.download(resource.id)}
           className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-white font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
         >
           <Download className="w-5 h-5" />

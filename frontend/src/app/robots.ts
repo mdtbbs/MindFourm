@@ -13,7 +13,7 @@ export default async function robots() {
   }
 
   const enabled = settings.seo_robots_enabled !== 'false';
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:4000';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
   if (enabled) {
     return {
