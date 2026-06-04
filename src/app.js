@@ -12,6 +12,17 @@ const app = new Koa();
 
 app.proxy = true;
 
+// Security headers - prevent information leakage and common attacks
+app.use(async (ctx, next) => {
+  ctx.set('X-Content-Type-Options', 'nosniff');
+  ctx.set('X-Frame-Options', 'DENY');
+  ctx.set('X-XSS-Protection', '1; mode=block');
+  ctx.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // Remove X-Powered-By if present (Koa doesn't set it by default, but proxies might)
+  ctx.remove('X-Powered-By');
+  await next();
+});
+
 // CDN configuration
 const CDN_URL = process.env.CDN_URL || '';
 const STATIC_CACHE_TTL = parseInt(process.env.STATIC_CACHE_TTL, 10) || 86400; // 24 hours

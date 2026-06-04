@@ -16,7 +16,17 @@ export default async function sitemap() {
     return [];
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+  // Security: Require proper URL in production, don't expose localhost
+  if (!baseUrl) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('Security: NEXT_PUBLIC_SITE_URL is required in production for sitemap');
+      return []; // Return empty sitemap rather than expose localhost
+    }
+    // Development: skip sitemap generation
+    return [];
+  }
 
   // Static pages
   const staticUrls = [
