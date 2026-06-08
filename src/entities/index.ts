@@ -53,6 +53,10 @@ import { PluginPermission } from './plugin-permission.entity';
 // Email
 import { EmailLog } from './email-log.entity';
 
+// Search
+import { SearchHistory } from './search-history.entity';
+import { PopularSearch } from './popular-search.entity';
+
 export const entities = [
   User,
   Post,
@@ -99,6 +103,9 @@ export const entities = [
   PluginPermission,
   // Email
   EmailLog,
+  // Search
+  SearchHistory,
+  PopularSearch,
 ];
 
 export {
@@ -123,4 +130,7 @@ export {
   Plugin, PluginHook, PluginConfig, PluginPermission,
   // Email
   EmailLog,
+  // Search
+  SearchHistory,
+  PopularSearch,
 };
