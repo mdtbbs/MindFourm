@@ -5,28 +5,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 MindFourm is a forum system for the Mindustry community, integrated with:
-- **MindAuth**: OAuth SSO login
-- **EasyManager**: Server listings and applications
+- **MindAuth** (Port 4001): OAuth SSO login
+- **EasyManager** (Port 5001): Server listings and applications
 
 Features include:
-- Posts and replies with Markdown support
-- Categories and tags
-- Bookmarks and notifications
-- Private messages
-- Resource center (downloads)
-- Admin panel with moderation tools
+- Posts and replies with Markdown support, categories, tags
+- Bookmarks, likes, notifications (SSE + email + in-app, 5 types: reply/mention/like/system/report)
+- Private messages with cursor pagination
+- Resource center with uploads, external links, versioning
+- Admin panel with dashboard, moderation, bulk ops, tag merge, cleanup
+- Search (MySQL LIKE, upgrade path to Full-Text → Elasticsearch)
+- Email notifications (SMTP, Handlebars templates, Bull queue, user preferences)
+
+**NOT implemented**: polls, badges/reputation, points system, user follow, group chat, RSS, plugin management UI.
 
 ## Commands
 
 ```bash
-# Backend (Port 4000)
+# Backend (Port 4000) — NestJS
 cd MindFourm && npm run dev
 
-# Frontend (Port 3000)
+# Frontend (Port 3000) — Next.js
 cd MindFourm/frontend && npm run dev
 
 # E2E Tests
 cd MindFourm && npx playwright test
+
+# Build
+cd MindFourm && npm run build
+
+# Docker Dev
+docker compose -f docker-compose.dev.yml up -d
 ```
 
 ## Architecture
@@ -35,20 +44,22 @@ cd MindFourm && npx playwright test
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                      Next.js Frontend (Port 3000)                          │
 │  App Router: (public), (auth), admin route groups                          │
-│  Components: forum/, admin/, ui/                                            │
+│  State: Zustand (user-store, notification-store, online-store)            │
+│  Data: TanStack React Query + SSE (real-time notifications)               │
 └──────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                      Koa Backend (Port 4000)                               │
-│  src/app.js - Main entry                                                   │
-│  src/routes/ - 16 route modules                                             │
-│  src/controllers/ - Request handling                                        │
-│  src/services/ - Business logic                                             │
+│                   NestJS Backend (Port 4000)                               │
+│  src/main.ts - Bootstrap with global prefix /api                           │
+│  src/app.module.ts - Root module importing 21 feature modules              │
+│  src/modules/ - 21 feature modules (controller + service + DTO)            │
+│  src/common/ - Guards, filters, interceptors, decorators, utils            │
+│  src/entities/ - 19 TypeORM entity definitions                             │
+│  src/database/ - TypeORM MySQL + Redis modules                             │
 └──────────────────────────────────────────────────────────────────────────┘
-                              │
-              ┌───────────────┼───────────────┐
-              ▼               ▼               ▼
+              │                    │                    │
+              ▼                    ▼                    ▼
          ┌─────────┐    ┌─────────┐    ┌────────────┐
          │  MySQL  │    │  Redis  │    │  MindAuth  │
          │ Posts   │    │ Session │    │  OAuth     │
@@ -64,217 +75,438 @@ cd MindFourm && npx playwright test
 
 ## Backend Structure (`src/`)
 
-### Routes (`src/routes/`)
-| Module | Prefix | Description |
-|--------|--------|-------------|
-| `auth.routes.js` | `/api/auth` | OAuth callback, session |
-| `post.routes.js` | `/api/posts`, `/api/v1/posts` | Posts CRUD |
-| `reply.routes.js` | `/api/v1/replies` | Replies CRUD |
-| `category.routes.js` | `/api/categories` | Category listing |
-| `tag.routes.js` | `/api/tags` | Tag listing |
-| `user.routes.js` | `/api/v1/users` | User profiles |
-| `bookmark.routes.js` | `/api/v1/bookmarks` | Bookmarks |
-| `notification.routes.js` | `/api/v1/notifications` | Notifications |
-| `message.routes.js` | `/api/v1/messages` | Private messages |
-| `attachment.routes.js` | `/api/v1/attachments` | File uploads |
-| `resource.routes.js` | `/api/v1/resources` | Resource center |
-| `server.routes.js` | `/api/servers` | EasyManager proxy |
-| `post-server.routes.js` | `/api/v1/post-servers` | Post-server relations |
-| `auto-post.routes.js` | `/api/auto-post` | EasyManager callback |
-| `admin.routes.js` | `/api/admin`, `/api/v1/admin` | Admin panel |
+### Module Structure (`src/modules/`)
 
-### Controllers (`src/controllers/`)
-Handle request parsing, validation, and response formatting.
+21 feature modules. Each follows: `*.module.ts` | `*.controller.ts` | `*.service.ts` | `dto/`
 
-### Services (`src/services/`)
-| Service | Purpose |
-|---------|---------|
-| `auth.service.js` | MindAuth OAuth integration |
-| `post.service.js` | Post CRUD, search, pagination |
-| `reply.service.js` | Reply management |
-| `user.service.js` | User profiles, search |
-| `bookmark.service.js` | Bookmark management |
-| `notification.service.js` | Notification creation/delivery |
-| `message.service.js` | Private messages |
-| `server.service.js` | EasyManager API proxy |
-| `resource.service.js` | Resource uploads/downloads |
-| `ban.service.js` | User/content banning |
-| `setting.service.js` | System settings |
-| `stat.service.js` | Statistics |
+| Module | Description |
+|--------|-------------|
+| `auth` | MindAuth OAuth callback, Redis session create/verify/destroy, sliding renewal |
+| `posts` | Post CRUD, Markdown parsing, tags, cursor pagination, search |
+| `replies` | Reply management (2-level nesting), @mention parsing, soft delete |
+| `users` | User profiles, avatar updates, role management |
+| `categories` | Hierarchical category management (parent/child) |
+| `tags` | Tag CRUD with auto-slug generation, merge support |
+| `notifications` | In-app notifications (5 types), SSE events, Redis cache, email dispatch |
+| `bookmarks` | Bookmark CRUD |
+| `likes` | Post/reply likes with count updates |
+| `messages` | Private messaging with cursor pagination |
+| `attachments` | File upload with multer |
+| `resources` | Resource management (upload/external), versioning, categories |
+| `servers` | Game server entity CRUD |
+| `post-servers` | Link/unlink posts to game servers |
+| `auto-post` | EasyManager callback handler for auto-post announcements |
+| `admin` | Admin panel: dashboard stats, bulk ops, moderation, tag merge, cleanup |
+| `bans` | Ban management (user/IP/CIDR), in-memory cache (10s TTL) |
+| `stats` | Dashboard statistics, 7-day activity charts |
+| `settings` | Key-value settings with in-memory cache |
+| `logs` | Operation logging service (MySQL `operation_logs` table) |
 
-### Middleware (`src/middleware/`)
-| Middleware | Purpose |
-|------------|---------|
-| `auth.js` | Session validation |
-| `ban-check.js` | Banned user check |
-| `permission.js` | Role-based access |
-| `rate-limit.js` | Request throttling |
-| `service-auth.js` | Service-to-service auth (X-Service-Key) |
-| `upload.js` | File upload handling |
-| `validate.js` | Request validation (Joi) |
+### Common Layer (`src/common/`)
 
-## API Endpoints
+**Guard Execution Order**: `JwtAuthGuard` → `RolesGuard` → `BanGuard` → `RateLimitGuard`
 
-### Posts (`/api/posts`, `/api/v1/posts`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Post list (pagination) |
-| GET | `/cursor` | Post list (cursor pagination) |
-| GET | `/:id` | Post detail |
-| POST | `/` | Create post |
-| PUT | `/:id` | Update post |
-| DELETE | `/:id` | Delete post |
+| Guard | Purpose |
+|-------|---------|
+| `jwt-auth.guard.ts` | Redis session token validation from `forum_session` cookie/header |
+| `roles.guard.ts` | Role hierarchy check (numeric level comparison) |
+| `permissions.guard.ts` | Fine-grained permission-based access |
+| `service-auth.guard.ts` | `X-Service-Key` header validation for service-to-service calls |
+| `rate-limit.guard.ts` | Atomic Lua script rate limiting (INCR + EXPIRE in single Redis call) |
+| `ban.guard.ts` | IP/user ban checking with CIDR range support (IPv4 only) |
 
-### Replies (`/api/v1/replies`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/:postId/replies` | Reply list |
-| POST | `/:postId/replies` | Create reply |
-| PUT | `/:id` | Update reply |
-| DELETE | `/:id` | Delete reply |
+**Decorators**: `@Public()` (bypass auth), `@Roles('admin', 'moderator')` (role requirement)
 
-### Users (`/api/v1/users`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/me` | Current user |
-| PUT | `/me/profile` | Update profile |
-| POST | `/me/avatar` | Upload avatar |
-| GET | `/search` | Search users (@mentions) |
-| GET | `/:id` | User public info |
+**Filters**: `all-exceptions.filter.ts` — Global error handler, hides internal details
 
-### Notifications (`/api/v1/notifications`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Notification list |
-| GET | `/unread-count` | Unread count |
-| PUT | `/:id/read` | Mark read |
-| PUT | `/read-all` | Mark all read |
+**Interceptors**: `response.interceptor.ts` — Wraps all responses in `{ success: true, data: ... }`
 
-### Resources (`/api/v1/resources`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/` | Resource list |
-| GET | `/:id` | Resource detail |
-| GET | `/:id/download` | Download file |
-| POST | `/` | Upload resource |
-| PUT | `/:id/status` | Update status (admin) |
-
-### Servers (`/api/servers`) - EasyManager Proxy
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/public` | Public server list |
-| GET | `/my` | User's servers |
-| POST | `/apply` | Apply for server |
-
-### Admin (`/api/admin`)
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/stats` | Statistics |
-| GET/PUT | `/settings/:category` | Settings management |
-| GET | `/users` | User list |
-| PUT | `/users/:id/role` | Update role |
-| GET/DELETE | `/posts` | Post management |
-| PUT | `/posts/pin` | Pin posts |
-| POST/DELETE | `/categories` | Category CRUD |
-| GET/POST/DELETE | `/tags` | Tag management |
-| GET/PUT | `/bans` | Ban management |
-| GET | `/logs` | Operation logs |
-
-## Database Tables
-
-| Table | Purpose | Key Fields |
-|-------|---------|------------|
-| `users` | User accounts | mindauth_id, username, email, role, avatar_url |
-| `posts` | Forum posts | user_id, category_id, server_id, title, content, status, is_pinned |
-| `replies` | Post replies | post_id, user_id, parent_reply_id, content |
-| `categories` | Post categories | name, slug, sort_order |
-| `tags` | Post tags | name, slug |
-| `post_tags` | Post-tag relation | post_id, tag_id |
-| `bookmarks` | User bookmarks | user_id, post_id |
-| `notifications` | User notifications | user_id, type, actor_id, is_read |
-| `messages` | Private messages | sender_id, recipient_id, is_read |
-| `attachments` | File attachments | post_id, user_id, file_path |
-| `resources` | Resource center | user_id, title, resource_type, status |
-| `settings` | System settings (KV) | key, value, category |
-| `bans` | Ban records | ban_type, value, reason |
-| `operation_logs` | Admin logs | user_id, action, target_type |
-
-## Frontend Structure (`frontend/`)
-
-### App Router Pages (`frontend/src/app/`)
-| Route Group | Pages |
-|-------------|-------|
-| `(public)` | `/`, `/posts/:id`, `/categories/:slug`, `/tags/:slug`, `/search`, `/users/:id`, `/resources`, `/servers` |
-| `(auth)` | `/login`, `/register`, `/callback`, `/posts/new`, `/messages`, `/notifications`, `/users/me`, `/apply/server` |
-| `admin` | `/admin`, `/admin/settings/*`, `/admin/posts`, `/admin/categories`, `/admin/users`, `/admin/logs`, `/admin/resources/*` |
-
-### Components (`frontend/src/components/`)
-| Directory | Components |
-|-----------|------------|
-| `forum/` | PostCard, PostList, ReplyList, CategoryNav, TagList |
-| `admin/` | AdminHeader, AdminStats, UserTable, PostTable |
-| `ui/` | shadcn/ui components (button, card, dialog, tabs, etc.) |
-
-### Lib (`frontend/src/lib/`)
+**Utils** (`src/common/utils/`):
 | File | Purpose |
 |------|---------|
-| `api/client.ts` | API request wrapper |
-| `auth/context.tsx` | Auth context provider |
-| `settings/context.tsx` | Settings context |
-| `toast/context.tsx` | Toast notifications |
-| `utils.ts` | Utility functions |
+| `constants.ts` | `ROLES`, `POST_STATUS`, `REPLY_STATUS`, `LOG_ACTIONS`, `PERMISSIONS` |
+| `cursor.util.ts` | `encodeCursor()` / `decodeCursor()` for cursor pagination |
+| `markdown.util.ts` | Markdown parsing with `marked` + `sanitize-html` |
+| `response.util.ts` | `ResponseUtil` helper class |
+| `search.util.ts` | `escapeLike()` for MySQL LIKE query safety |
 
-## MindAuth Integration
+### Database Layer (`src/database/`)
 
-### OAuth Flow
+- `database.module.ts` — TypeORM MySQL connection (connection pool: 20 max, 10s timeout)
+- `redis.module.ts` — Redis module
+- `redis.service.ts` — Full Redis wrapper (`get`/`set`/`del`/`hset`/`hgetall`/`incr`/`expire`/`keys`/`eval`)
+
+### Entities (`src/entities/`)
+
+19 TypeORM entities with `utf8mb4` charset, `ON DELETE CASCADE` foreign keys:
+
+`user` | `post` (soft delete) | `reply` (soft delete) | `category` | `tag` | `post-tag` | `bookmark` | `notification` | `message` | `attachment` | `resource` (soft delete) | `resource-category` | `resource-version` | `post-like` | `reply-like` | `ban` | `setting` | `operation-log` | `session-audit`
+
+Soft-delete uses `@DeleteDateColumn` for posts, replies, and resources.
+
+## Frontend Architecture (`frontend/`)
+
+### Routing (Next.js 14 App Router)
+
+| Route Group | Purpose | Pages |
+|-------------|---------|-------|
+| `(public)/` | Public pages | Home (Hero + Marquee hot posts), post list, post detail, categories, tags, user profiles, search |
+| `(auth)/` | Authenticated pages | Notifications (SSE + Toast), messages, bookmarks, settings |
+| `admin/` | Admin panel | Dashboard (animated StatCards), users, posts, reports, settings, announcements, sensitive words, levels, groups, shop, plugins |
+
+### State Management (Zustand)
+
+| Store | Responsibility |
+|-------|---------------|
+| `user-store` | Current user info, login state, points/badges/reputation updates |
+| `notification-store` | Notification list, unread count, SSE real-time updates |
+| `online-store` | Online users collection and count |
+
+### Data Fetching & Real-time
+
+- **TanStack React Query** for API data fetching with cache/invalidation
+- **SSE (Server-Sent Events)** at `/api/notifications/events` for real-time notification delivery
+- Custom hook `useSse(eventType, callback)` manages EventSource lifecycle with auto-reconnect
+
+### UI Components
+
+- **shadcn/ui**: Base interactive components (Button, Dialog, Input, Tabs, etc.)
+- **Magic UI**: Visual animations (Hero, Marquee, AnimatedList, FadeText, Shimmer, GlowEffect, Toast, Avatar, AnimatedBeam, AnimatedShinyText, DotLoading)
+- **shared package**: Cross-project reusable components (UnifiedHeader, AdminSidebar, LoginLayout, UserCard, ServerCard, StatsGrid, ActivityChart, Tabs, DataTable, Medal, Title)
+- **shared-styles**: CSS design system with CSS variables (brand `#3b82f6`, 50+ component classes)
+- Dark mode via `data-theme="dark"` CSS variable override, follows system preference
+- `prefers-reduced-motion` support for accessibility
+- Markdown rendering: `react-markdown` + `remark-gfm` (GitHub Flavored Markdown)
+
+### Markdown Editor
+
+Simple textarea + preview mode (no rich text editor). Backend parses with `marked` + `sanitize-html`; frontend renders with `react-markdown` + `remark-gfm`.
+
+## Key Patterns
+
+### Response Format
+All API responses wrapped by ResponseInterceptor:
+```json
+{ "success": true, "data": ... }
+{ "success": false, "message": "..." }
+```
+
+### Authentication
+- OAuth `access_token` is **ONE-TIME use only** (to exchange code for user info)
+- Primary auth: **Redis session token** in HttpOnly cookie `forum_session`
+- Session TTL: 7 days (Redis), Cookie maxAge: 30 days
+- **Sliding window renewal**: session TTL reset on each successful request
+- `@Public()` decorator bypasses JwtAuthGuard
+
+### Rate Limiting
+- Atomic Lua script: `INCR` + conditional `EXPIRE` in single Redis call (no race conditions)
+- Per-handler limits: posts 10/min, replies 30/min, login 5/5min, session verify 20/min, default 60/min
+
+### Pagination
+- **Offset-based**: `?page=1&limit=20` (limit capped at 50) — for admin panels needing total count
+- **Cursor-based**: `?cursor=xxx&limit=20` — for public infinite scroll (efficient, no OFFSET penalty)
+
+### Validation
+- `class-validator` DTOs with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`
+- LIKE special characters (`%`, `_`, `\`) escaped via `escapeLike()` utility
+
+### Cache Strategy (Manual, NOT CacheInterceptor)
+| Data | TTL | Key Pattern | Invalidation |
+|------|-----|------------|-------------|
+| User session | 7 days | `session:{token}` | Sliding renewal |
+| User profile | 5 min | `user:{id}` | Delete on update |
+| Post detail | 5 min | `post:{id}` | Delete on update |
+| Post list (home) | 1 min | `posts:home:{page}` | Delete on new post |
+| Categories | 30 min | `categories:list` | Delete on change |
+| Hot posts/tags | 5 min | `posts:hot` / `tags:hot` | Periodic refresh |
+| System settings | 5 min | `setting:{key}` | Delete on update |
+| View count | 1 min/IP | `view:post:{id}:ip:{ip}` | Anti-spam |
+| Unread notifications | 5 min | `user:unread:{id}` | Update on new/read |
+| Ban check | 10 sec | **In-memory Map** (not Redis) | Fast lookup |
+
+### Soft Delete
+Posts, replies, resources use `@DeleteDateColumn` — never physical deletion. Use `repository.softDelete(id)`.
+
+## Security Design
+
+### Role Hierarchy
+```
+guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < super_admin(6)
+```
+
+### XSS Protection
+- Backend: `sanitize-html` strips `<script>`, `<iframe>`, `<object>`, `<embed>`, `<form>`, `on*` handlers, `javascript:` URLs
+- Frontend: React (no `dangerouslySetInnerHTML`), DOMPurify for HTML rendering
+- Allowed tags: h1-h6, p, br, strong, em, u, s, code, pre, blockquote, ul, ol, li, a, img, table, thead, tbody, tr, th, td, hr, details, summary
+- Allowed schemes: `http`, `https`, `mailto`
+
+### CORS
+- Only `FRONTEND_URL` origin allowed
+- `credentials: true` for cookie-based auth
+
+### CSRF
+- Current: Relies on CORS origin validation + HttpOnly cookie + SameSite=Lax
+- No Double Submit Cookie (not needed for same-origin frontend/backend)
+
+### Ban System
+- Three types: `user` (by ID), `ip` (single IP), `ip_range` (CIDR notation)
+- CIDR matching: IPv4 only currently (planned: IPv6 with `ipaddr.js`)
+- In-memory Map cache with 10-second TTL for fast ban checks
+
+### CSP (Recommended, NOT yet implemented)
+```
+default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';
+```
+
+### Error Handling
+- Unhandled exceptions return generic `{ success: false, message: '服务器内部错误' }`
+- Stack traces never exposed to client; detailed errors logged server-side
+
+## MindAuth OAuth Integration
+
 ```
 1. User clicks login → Redirect to MindAuth /login
-2. MindAuth redirects to /api/auth/callback?code=XYZ
-3. Backend exchanges code for access_token
-4. Backend gets userinfo from MindAuth
+2. MindAuth authenticates → Redirects to /api/auth/callback?code=XYZ
+3. Backend exchanges code for access_token (one-time use)
+4. Backend fetches userinfo from MindAuth via access_token
 5. Create/update local user by mindauth_id
-6. Create forum session, set cookie
+6. Create Redis session, set HttpOnly forum_session cookie
 ```
 
-### Environment Variables
-| Variable | Description |
-|----------|-------------|
-| `MINDAUTH_URL` | MindAuth service URL |
-| `MINDAUTH_CLIENT_ID` | OAuth client ID |
-| `MINDAUTH_CLIENT_SECRET` | OAuth client secret |
-| `MINDAUTH_CALLBACK_URL` | Callback URL |
+Session audit: login/logout events recorded in `operation_logs` table. Abnormal login detection (异地 IP, unusual time).
 
 ## EasyManager Integration
 
-### Server Listing
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/forum/servers/public` | Public servers |
-| `GET /api/forum/user/:mindauthId/servers` | User's servers |
-| `POST /api/forum/apply` | Server application |
-| `GET /api/forum/servers/:id/basic` | Server info |
+| `GET /api/servers/public` | Public server list |
+| `GET /api/servers/my` | User's servers |
+| `POST /api/servers/apply` | Apply for new server |
+| `POST /api/auto-post/server-approved` | EasyManager callback (X-Service-Key auth) — auto-creates announcement post |
 
-### Callback Reception
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /api/auto-post/server-approved` | Auto-create post when server approved |
+## Feature Specifications
 
-### Environment Variables
-| Variable | Description |
-|----------|-------------|
-| `EASYMANAGER_URL` | EasyManager API URL |
-| `EASYMANAGER_API_KEY` | Service authentication key |
+### Posts
+- Markdown content, category assignment, multiple tags, optional attachments
+- Status: draft, published, hidden, deleted (soft)
+- Pinned and featured flags
+- View count with anti-spam (1 min per IP per post)
+- Cursor pagination for public lists, offset for admin
+
+### Replies
+- 2-level nesting (reply → reply to reply)
+- @mention parsing with notification dispatch
+- Soft delete with moderation support
+
+### Notifications
+- 5 types: reply, mention, like, system, report
+- Delivery: in-app (DB) + SSE (real-time) + email (queued, user preference)
+- Redis cache for unread count (5 min TTL)
+
+### Admin Panel
+- Dashboard: stats cards (animated), 7-day activity chart
+- User management: role updates, ban/unban, quota management
+- Content moderation: post/reply review, bulk delete/hide
+- Tag merge, cleanup operations
+- System settings, announcements, sensitive words
+
+### Search
+- Current: MySQL LIKE with keyword highlighting (`<mark>` tag)
+- Search history per user, hot searches via Redis sorted set
+- Search result cache (1 min for exact matches)
+- Upgrade path: LIKE → Full-Text Index (>100k posts) → Elasticsearch (>1M posts)
+
+### Email System
+- SMTP configured via system settings (admin panel)
+- 4 templates: reply notification, @mention, private message, system notification
+- Queue: Bull (Redis-based), 3 retries with exponential backoff
+- User preferences: `reply_email`, `mention_email`, `message_email`, `digest_email` (all default ON except digest)
+- Unsubscribe link in every email → preferences page
+- Email logs for monitoring (sent/failed/bounced)
+
+## Plugin System (PLANNED - NOT IMPLEMENTED)
+
+### Plugin Structure
+```
+plugins/<name>/
+├── plugin.json         # Metadata, version, dependencies
+├── index.js            # Entry point
+└── config.schema.json  # Configuration schema
+```
+
+### Hook Types
+| Type | Timing | Purpose |
+|------|--------|---------|
+| `before` | Pre-execution | Modify input params |
+| `after` | Post-execution | Non-blocking side effects |
+| `filter` | Transform | Transform output data |
+
+### Available Hooks
+`post.create` / `post.created` / `reply.create` / `reply.created` / `user.login` / `content.render`
+
+### Plugin API
+Access via `context.services.*` (postService, userService, etc.)
+
+## Plugin Architecture (PLANNED - NOT IMPLEMENTED)
+
+- **EventBus**-based hook system
+- **Plugin Manager**: Installer, Loader, Registry, Config Manager
+- **Frontend injection points**: header, footer, sidebar, post-toolbar, user-profile, admin-sidebar
+- **Dynamic route** registration for plugins
+- **Dependency management** with semver
+
+## Frontend Template System (PLANNED - NOT IMPLEMENTED)
+
+- **Template Registry** with priority: Plugin > Custom Theme > System Default
+- **18 predefined injection points** for component injection
+- Theme switching via admin panel
+- Template inheritance (extends base template)
+
+## Deployment
+
+### Docker Development
+```
+mysql:8 (3306) + redis:7-alpine (6379) + backend (hot reload) + frontend (hot reload)
+```
+
+### Docker Production
+```
+Nginx (:443 HTTPS, :80 → redirect)
+  ├── Frontend (3000)
+  └── Backend (3001)
+        ├── MySQL (internal)
+        ├── Redis (internal)
+        └── MindAuth (external)
+```
+
+### Dockerfile Pattern (multi-stage)
+- Builder: `node:20-alpine` → `npm ci` → `npm run build`
+- Runner: copy `dist/` + `node_modules` → `node dist/main.js` (backend) / `npm start` (frontend)
+- Healthcheck: `curl -f http://localhost:3001/health` (interval=30s, timeout=10s, retries=3)
+
+### Nginx
+- HTTP → HTTPS redirect
+- Static asset caching (images, CSS, JS)
+- WebSocket/SSE support (`proxy_set_header Connection ''`)
+- gzip compression, security headers (HSTS, X-Frame-Options)
+
+## Performance Optimization
+
+### Database Indexes
+```sql
+-- Posts
+idx_posts_user_id, idx_posts_category_id,
+idx_posts_status_created (status, created_at DESC),
+idx_posts_is_pinned, idx_posts_is_featured, idx_posts_visibility
+
+-- Replies
+idx_replies_post_id, idx_replies_user_id,
+idx_replies_parent (post_id, parent_reply_id),
+idx_replies_created (post_id, created_at DESC)
+
+-- Notifications
+idx_notifications_user_read (user_id, is_read),
+idx_notifications_user_created (user_id, created_at DESC)
+
+-- Others
+idx_reports_status, idx_reports_reporter, idx_reports_target,
+idx_users_status, idx_users_mindauth, idx_users_online,
+idx_likes_user_post, idx_bookmarks_user,
+idx_messages_sender, idx_messages_recipient, idx_messages_unread
+```
+
+### Query Best Practices
+- Avoid `SELECT *` — specify needed columns
+- Avoid `LIKE '%keyword%'` for large datasets — use Full-Text Index
+- Avoid N+1 queries — use JOINs or batch queries
+- Avoid large `LIMIT offset, count` — use cursor pagination
+
+### Connection Pool
+```
+connectionLimit: 20, waitForConnections: true,
+queueLimit: 0, connectTimeout: 10000
+```
+
+### Performance Targets
+| Metric | Target |
+|--------|--------|
+| LCP (First Contentful Paint) | < 2.5s |
+| TTI (Time to Interactive) | < 3.5s |
+| API P50 | < 200ms |
+| API P95 | < 1s |
+| DB Query | < 50ms |
+| Redis Hit Rate | > 80% |
+| Concurrent Users | > 1000 |
+
+## Logging & Monitoring
+
+### Winston Logger
+- Levels: `error`, `warn`, `info`, `debug`, `verbose`
+- Transports: Console (colorized) + DailyRotateFile (20MB max, 90-day retention, gzip compressed)
+- Log files: `logs/error-%DATE%.log`, `logs/combined-%DATE%.log`
+
+### Operation Logs
+- Stored in MySQL `operation_logs` table (NOT files)
+- Fields: user_id, action, target_type, target_id, details, ip_address, created_at
+- Cleanup: delete records older than 90 days via `POST /admin/cleanup/logs`
+
+### Health Check (`GET /health`)
+- Application status (NestJS running)
+- Database connection (TypeORM ping)
+- Redis connection (ioredis ping)
+- Disk space (log directory availability)
+
+### Log Retention (Unified 90 Days)
+| Type | Storage |
+|------|---------|
+| Error logs | Files (`logs/error-*.log`) |
+| Combined logs | Files (`logs/combined-*.log`) |
+| Request logs | Files (`logs/request-*.log`) |
+| Operation audit | MySQL `operation_logs` table |
+
+## Testing Strategy
+
+| Level | Tool | Coverage Target |
+|-------|------|----------------|
+| Unit | Jest + mocked TypeORM Repository | > 80% |
+| Integration | Jest + supertest + test database | Core API > 90% |
+| E2E | **Playwright** (NOT Jest) | Core flows > 95% |
+| API Contract | OpenAPI schema validation | All endpoints 100% |
+
+### Test Structure
+```
+tests/
+├── unit/services/          # Service layer with mocked repos
+├── integration/api/        # Controller + Service with real DB
+└── e2e/                    # Full browser automation (Playwright)
+```
+
+### CI/CD
+GitHub Actions with MySQL 8 + Redis 7 services. Run unit → integration → API contract → coverage.
+
+### Commands
+```bash
+npm run test:unit      # Unit tests
+npm run test:integration  # Integration tests
+npm run test:e2e       # Playwright E2E
+npm run test:api       # API contract tests
+npm run test           # All tests
+npm run test:cov       # Coverage report
+```
 
 ## Environment Setup (`MindFourm/.env`)
 
 ```bash
+# Server
 PORT=4000
 FRONTEND_URL=http://localhost:3000
-API_URL=http://localhost:4000
 
 # Database
 MYSQL_HOST=localhost
 MYSQL_DATABASE=mindforum
+
+# Redis
 REDIS_HOST=localhost
 
 # MindAuth OAuth
@@ -291,12 +523,18 @@ EASYMANAGER_API_KEY=<key>
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Koa 2.x, MySQL 2, ioredis |
+| Backend | NestJS v10, TypeScript, TypeORM 0.3, MySQL2, ioredis |
 | Frontend | Next.js 14 (App Router), React 18, TypeScript |
-| Styling | Tailwind CSS, shadcn/ui |
-| Animation | Framer Motion |
-| Validation | Joi |
-| Markdown | Marked + React Markdown |
+| State | Zustand (stores), TanStack React Query (data) |
+| Real-time | SSE (Server-Sent Events) |
+| Styling | Tailwind CSS, shadcn/ui, Magic UI, shared-styles CSS |
+| Animation | Framer Motion, Motion |
+| Validation | class-validator + class-transformer |
+| Markdown | marked + sanitize-html (backend), react-markdown + remark-gfm (frontend) |
+| Email | Handlebars templates + Nodemailer + Bull (Redis queue) |
+| Logging | Winston + DailyRotateFile (90-day retention) |
+| Testing | Jest (unit/integration), Playwright (E2E) |
+| Deployment | Docker + Docker Compose, Nginx (reverse proxy + SSL) |
 
 ---
-*Last updated: 2026-05-31*
+*Last updated: 2026-06-08*
