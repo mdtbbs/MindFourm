@@ -7,7 +7,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
 import { UserCard } from '@mindproject/shared';
-import { Medal, Title } from '@mindforum/shared-react';
+import { Medal, Title } from '@mindproject/shared';
 import FollowButton from '@/components/forum/follow-button';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
