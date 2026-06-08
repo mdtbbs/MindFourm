@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Category, Tag } from '@/types';
-import { FolderOpen, Server } from 'lucide-react';
+import { FolderOpen, Server, Users, Trophy } from 'lucide-react';
 
 interface SidebarProps {
   categories: Category[];
@@ -71,6 +71,22 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
         <Link href="/servers" className="sidebar-quick-link">
           <Server style={{ width: 16, height: 16 }} />
           游戏服务器
+        </Link>
+      </div>
+
+      {/* User Groups */}
+      <div className="sidebar-section">
+        <Link href="/groups" className="sidebar-quick-link">
+          <Users style={{ width: 16, height: 16 }} />
+          用户组
+        </Link>
+      </div>
+
+      {/* Leaderboard */}
+      <div className="sidebar-section">
+        <Link href="/leaderboard" className="sidebar-quick-link">
+          <Trophy style={{ width: 16, height: 16 }} />
+          积分排行榜
         </Link>
       </div>
     </aside>

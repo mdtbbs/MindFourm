@@ -388,6 +388,65 @@ export const adminApi = {
   getPluginHooks: (slug: string) => request<any>(`/api/plugins/${slug}/hooks`),
 };
 
+// Levels API
+export const levelsApi = {
+  getAll: () => request<any[]>('/levels'),
+  getUserLevel: (userId: number) => request<any>(`/levels/user/${userId}`),
+  adminGetAll: () => request<any[]>('/levels/admin'),
+  adminCreate: (data: { name: string; slug: string; min_points: number; max_points?: number; color?: string; description?: string; sort_order?: number }) => {
+    clearCache();
+    return request<any>('/levels/admin', { method: 'POST', body: JSON.stringify(data) });
+  },
+  adminUpdate: (id: number, data: Partial<{ name: string; slug: string; min_points: number; max_points: number | null; color: string; description: string; sort_order: number }>) => {
+    clearCache();
+    return request<any>(`/levels/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  adminDelete: (id: number) => {
+    clearCache();
+    return request<any>(`/levels/admin/${id}`, { method: 'DELETE' });
+  },
+};
+
+// Badges API
+export const badgesApi = {
+  getAll: () => request<any[]>('/badges'),
+  getUserBadges: (userId: number) => request<any[]>(`/badges/user/${userId}`),
+  adminGetAll: () => request<any[]>('/badges/admin'),
+  adminCreate: (data: { name: string; slug: string; icon?: string; description?: string; level?: string; criteria?: string; is_active?: number }) => {
+    clearCache();
+    return request<any>('/badges/admin', { method: 'POST', body: JSON.stringify(data) });
+  },
+  adminUpdate: (id: number, data: any) => {
+    clearCache();
+    return request<any>(`/badges/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  adminDelete: (id: number) => {
+    clearCache();
+    return request<any>(`/badges/admin/${id}`, { method: 'DELETE' });
+  },
+  adminAward: (user_id: number, badge_id: number) => {
+    clearCache();
+    return request<any>('/badges/admin/award', { method: 'POST', body: JSON.stringify({ user_id, badge_id }) });
+  },
+};
+
+// Groups API (for admin)
+export const groupsAdminApi = {
+  getAll: () => request<any[]>('/groups/admin'),
+  create: (data: { name: string; slug?: string; description?: string; icon?: string; color?: string; sort_order?: number }) => {
+    clearCache();
+    return request<any>('/groups/admin', { method: 'POST', body: JSON.stringify(data) });
+  },
+  update: (id: number, data: any) => {
+    clearCache();
+    return request<any>(`/groups/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  delete: (id: number) => {
+    clearCache();
+    return request<any>(`/groups/admin/${id}`, { method: 'DELETE' });
+  },
+};
+
 // User APIs
 export const userApi = {
   getById: (id: number) => request<UserProfile>(`/api/users/${id}`),
