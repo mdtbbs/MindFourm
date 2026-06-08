@@ -8,6 +8,7 @@ import Link from 'next/link';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
 import { UserCard } from '@mindproject/shared';
 import { Medal, Title } from '@mindforum/shared-react';
+import FollowButton from '@/components/forum/follow-button';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -187,8 +188,9 @@ export default async function UserProfilePage({
         </div>
       )}
 
-      {/* Role badge and edit link */}
+      {/* Role badge, Follow button and edit link */}
       <div className="max-w-md mx-auto flex justify-center gap-3 mb-8">
+        <FollowButton targetUserId={userId} />
         <Badge variant={roleVariant}>{profile.role}</Badge>
         <ProfileEditLink userId={profile.id} />
       </div>
