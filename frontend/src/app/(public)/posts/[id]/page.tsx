@@ -24,7 +24,7 @@ async function fetchSettings(): Promise<Record<string, string>> {
 }
 
 async function fetchPost(id: number, page: number, limit: number) {
-  const res = await fetch(`${API_BASE}/api/v1/posts/${id}?page=${page}&limit=${limit}`, { next: { tags: [`post-${id}`] } });
+  const res = await fetch(`${API_BASE}/api/posts/${id}?page=${page}&limit=${limit}`, { next: { tags: [`post-${id}`] } });
   if (!res.ok) return null;
   const json = await res.json();
   return json.success ? json.data : null;
@@ -69,7 +69,7 @@ export default async function PostDetailPage({
   // Fetch attachments
   let attachments: Attachment[] = [];
   try {
-    const res = await fetch(`${API_BASE}/api/v1/attachments/post/${postId}`);
+    const res = await fetch(`${API_BASE}/api/attachments/post/${postId}`);
     if (res.ok) {
       const json = await res.json();
       attachments = json.success ? json.data : [];

@@ -7,7 +7,7 @@ const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchPosts(page: number, slug: string): Promise<PostListResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/tags/${slug}/posts?page=${page}&limit=20`, { next: { tags: ['posts'] } });
+    const res = await fetch(`${API_BASE}/api/tags/${slug}/posts?page=${page}&limit=20`, { next: { tags: ['posts'] } });
     if (!res.ok) notFound();
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };

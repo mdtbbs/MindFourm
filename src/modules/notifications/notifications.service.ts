@@ -64,7 +64,13 @@ export class NotificationsService {
     await this.emailQueueService.addEmailJob({
       to: user.email,
       subject: templateVars.subject || `[${siteName}] 新通知`,
-      html: this.renderEmailTemplate(template, { ...templateVars, site_name: siteName, preferences_url: `${this.frontendUrl}/settings`, year: new Date().getFullYear() }),
+      html: this.renderEmailTemplate(template, {
+        ...templateVars,
+        username: user.username || '用户',
+        site_name: siteName,
+        preferences_url: `${this.frontendUrl}/settings`,
+        year: new Date().getFullYear(),
+      }),
     });
 
     // Log the email

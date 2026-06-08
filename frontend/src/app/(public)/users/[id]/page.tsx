@@ -14,7 +14,7 @@ const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchUserProfile(userId: number): Promise<UserProfile | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/users/${userId}`, { next: { tags: [`user-${userId}`] } });
+    const res = await fetch(`${API_BASE}/api/users/${userId}`, { next: { tags: [`user-${userId}`] } });
     if (!res.ok) return null;
     const json = await res.json();
     return json.success ? json.data : null;
@@ -25,7 +25,7 @@ async function fetchUserProfile(userId: number): Promise<UserProfile | null> {
 
 async function fetchUserPosts(userId: number, page: number): Promise<PostListResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/posts?page=${page}&limit=20&user_id=${userId}`, { next: { tags: ['posts'] } });
+    const res = await fetch(`${API_BASE}/api/posts?page=${page}&limit=20&user_id=${userId}`, { next: { tags: ['posts'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -40,7 +40,7 @@ async function fetchUserPosts(userId: number, page: number): Promise<PostListRes
 
 async function fetchUserReplies(userId: number, page: number): Promise<{ data: Reply[]; pagination: PostListResponse['pagination'] }> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/users/${userId}/replies?page=${page}&limit=20`, { next: { tags: ['replies'] } });
+    const res = await fetch(`${API_BASE}/api/users/${userId}/replies?page=${page}&limit=20`, { next: { tags: ['replies'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -55,7 +55,7 @@ async function fetchUserReplies(userId: number, page: number): Promise<{ data: R
 
 async function fetchUserBookmarks(page: number): Promise<BookmarkListResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/bookmarks?page=${page}&limit=20`, { next: { tags: ['bookmarks'] } });
+    const res = await fetch(`${API_BASE}/api/bookmarks?page=${page}&limit=20`, { next: { tags: ['bookmarks'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -70,7 +70,7 @@ async function fetchUserBookmarks(page: number): Promise<BookmarkListResponse> {
 
 async function fetchUserLikes(page: number): Promise<{ data: LikedPost[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/likes/posts?page=${page}&limit=20`, { next: { tags: ['likes'] } });
+    const res = await fetch(`${API_BASE}/api/likes/posts?page=${page}&limit=20`, { next: { tags: ['likes'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };

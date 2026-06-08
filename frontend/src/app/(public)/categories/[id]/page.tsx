@@ -12,7 +12,7 @@ const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchPosts(page: number, categoryId: number): Promise<PostListResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/posts?page=${page}&limit=20&category_id=${categoryId}`, { next: { tags: ['posts'] } });
+    const res = await fetch(`${API_BASE}/api/posts?page=${page}&limit=20&category_id=${categoryId}`, { next: { tags: ['posts'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -27,7 +27,7 @@ async function fetchPosts(page: number, categoryId: number): Promise<PostListRes
 
 async function fetchCategories(): Promise<Category[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
+    const res = await fetch(`${API_BASE}/api/categories`, { next: { tags: ['categories'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
@@ -38,7 +38,7 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchTags(): Promise<Tag[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/tags`, { next: { tags: ['tags'] } });
+    const res = await fetch(`${API_BASE}/api/tags`, { next: { tags: ['tags'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
@@ -49,7 +49,7 @@ async function fetchTags(): Promise<Tag[]> {
 
 async function fetchCategory(id: number): Promise<Category | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/categories/${id}`, { next: { tags: ['categories'] } });
+    const res = await fetch(`${API_BASE}/api/categories/${id}`, { next: { tags: ['categories'] } });
     if (!res.ok) return null;
     const json = await res.json();
     return json.success ? json.data : null;

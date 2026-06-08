@@ -22,7 +22,7 @@ function formatTime(dateStr: string): string {
 
 async function fetchConversations(): Promise<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/messages`, {
+    const res = await fetch(`${API_BASE}/api/messages`, {
       cache: 'no-store',
       headers: { 'Cookie': process.env.COOKIE || '' },
     });

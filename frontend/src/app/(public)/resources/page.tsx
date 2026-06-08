@@ -16,8 +16,8 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
   if (params.sort) qs.set('sort', params.sort);
 
   const [resourcesRes, categoriesRes] = await Promise.all([
-    fetch(`${API_BASE}/api/v1/resources?${qs.toString()}`, { next: { revalidate: 60 } }),
-    fetch(`${API_BASE}/api/v1/resources/categories`, { next: { revalidate: 300 } }),
+    fetch(`${API_BASE}/api/resources?${qs.toString()}`, { next: { revalidate: 60 } }),
+    fetch(`${API_BASE}/api/resources/categories`, { next: { revalidate: 300 } }),
   ]);
 
   let resources: Resource[] = [];

@@ -27,7 +27,7 @@ export function ServerSelector({ value, onChange, postType, onPostTypeChange }: 
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
-    fetch(`${API_BASE}/api/v1/post-servers/my-servers`, { credentials: 'include' })
+    fetch(`${API_BASE}/api/post-servers/my-servers`, { credentials: 'include' })
       .then(res => res.json())
       .then(data => {
         if (data.success && data.servers) {

@@ -10,7 +10,7 @@ const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchResource(id: number): Promise<Resource | null> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/resources/${id}`, { next: { revalidate: 60 } });
+    const res = await fetch(`${API_BASE}/api/resources/${id}`, { next: { revalidate: 60 } });
     if (!res.ok) return null;
     const json = await res.json();
     return json.success ? json.data : null;

@@ -12,7 +12,7 @@ const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchCategories(): Promise<Category[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
+    const res = await fetch(`${API_BASE}/api/categories`, { next: { tags: ['categories'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
@@ -23,7 +23,7 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchTags(): Promise<Tag[]> {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/tags`, { next: { tags: ['tags'] } });
+    const res = await fetch(`${API_BASE}/api/tags`, { next: { tags: ['tags'] } });
     if (!res.ok) return [];
     const json = await res.json();
     return json.success ? json.data : [];
@@ -49,7 +49,7 @@ async function fetchPosts(page: number, limit: number, categoryId?: number): Pro
     qs.set('page', String(page));
     qs.set('limit', String(limit));
     if (categoryId) qs.set('category_id', String(categoryId));
-    const res = await fetch(`${API_BASE}/api/v1/posts?${qs}`, { next: { tags: ['posts'] } });
+    const res = await fetch(`${API_BASE}/api/posts?${qs}`, { next: { tags: ['posts'] } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };

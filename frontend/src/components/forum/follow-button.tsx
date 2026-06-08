@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { api } from '@/lib/api/client';
 import { UserPlus, UserCheck } from 'lucide-react';
@@ -9,8 +9,21 @@ export default function FollowButton({ targetUserId }: { targetUserId: number })
   const { user, isAuthenticated } = useAuth();
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user || user.id === targetUserId) {
+      setChecking(false);
+      return;
+    }
+    api.get(`/follows/check/${targetUserId}?followerId=${user.id}`)
+      .then((res) => setIsFollowing(res.isFollowing || false))
+      .catch(() => {})
+      .finally(() => setChecking(false));
+  }, [isAuthenticated, user, targetUserId]);
 
   if (!isAuthenticated || user?.id === targetUserId) return null;
+  if (checking) return <div className="w-20 h-8 bg-surface-100 rounded animate-pulse" />;
 
   const handleToggle = async () => {
     setLoading(true);

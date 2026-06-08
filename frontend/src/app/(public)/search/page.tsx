@@ -13,7 +13,7 @@ async function fetchPosts(query: string, page: number, limit: number): Promise<P
     qs.set('page', String(page));
     qs.set('limit', String(limit));
     qs.set('search', query);
-    const res = await fetch(`${API_BASE}/api/v1/posts?${qs}`, { next: { revalidate: 0 } });
+    const res = await fetch(`${API_BASE}/api/posts?${qs}`, { next: { revalidate: 0 } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
