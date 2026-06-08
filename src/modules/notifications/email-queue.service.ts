@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Queue, Worker, Job } from 'bullmq';
 import { EmailService, MailOptions } from './email.service';
+import { RedisService } from '../../database/redis.service';
 
 export interface EmailJob {
   to: string | string[];
@@ -9,97 +11,75 @@ export interface EmailJob {
 }
 
 /**
- * Email queue service for asynchronous email sending
- * Currently uses a simple in-memory queue
- * Can be upgraded to use Bull/BullMQ with Redis for production
+ * Email queue service for asynchronous email sending using BullMQ
+ * Provides persistent queue with retry logic and concurrency control
  */
 @Injectable()
-export class EmailQueueService {
+export class EmailQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailQueueService.name);
-  private readonly queue: EmailJob[] = [];
-  private processing = false;
+  private queue: Queue;
+  private worker: Worker;
 
-  constructor(private emailService: EmailService) {}
+  constructor(
+    private emailService: EmailService,
+    private redisService: RedisService,
+  ) {}
+
+  async onModuleInit(): Promise<void> {
+    const redisConfig = this.redisService.getConnectionConfig();
+
+    this.queue = new Queue('email-queue', {
+      connection: redisConfig,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 1000 },
+        removeOnComplete: 100,
+        removeOnFail: 50,
+      },
+    });
+
+    this.worker = new Worker(
+      'email-queue',
+      async (job: Job<{ to: string | string[]; subject: string; html: string; text?: string }>) => {
+        const { to, subject, html, text } = job.data;
+        await this.emailService.sendMail({ to, subject, html, text });
+      },
+      {
+        connection: redisConfig,
+        concurrency: 5,
+      },
+    );
+
+    this.worker.on('completed', (job) => {
+      this.logger.debug(`Email sent: ${job.data.subject} -> ${job.data.to}`);
+    });
+
+    this.worker.on('failed', (job, err) => {
+      this.logger.error(
+        `Email failed: ${job?.data?.subject} -> ${job?.data?.to}: ${err.message}`,
+      );
+    });
+
+    this.logger.log('Email queue initialized with BullMQ');
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    await this.queue.close();
+    await this.worker.close();
+  }
 
   /**
    * Add an email job to the queue
-   * @param job - Email job to add
    */
   async addEmailJob(job: EmailJob): Promise<void> {
-    this.queue.push(job);
-    this.logger.debug(`Email job added to queue. Queue size: ${this.queue.length}`);
-
-    // Process queue if not already processing
-    if (!this.processing) {
-      this.processQueue();
-    }
+    await this.queue.add('send-email', job);
   }
 
   /**
-   * Process the email queue
-   * Sends emails one by one with retry logic
+   * Get current queue size (waiting + active jobs)
    */
-  private async processQueue(): Promise<void> {
-    if (this.processing) return;
-
-    this.processing = true;
-
-    while (this.queue.length > 0) {
-      const job = this.queue.shift();
-      if (!job) break;
-
-      try {
-        await this.sendWithRetry(job, 3);
-        this.logger.debug(`Email sent successfully to ${job.to}`);
-      } catch (error) {
-        this.logger.error(`Failed to send email after retries: ${(error as Error).message}`);
-        // Email log status is already set to 'sent' when queued
-        // In production with BullMQ, we'd update the status here on failure
-      }
-    }
-
-    this.processing = false;
-  }
-
-  /**
-   * Send email with retry logic
-   * @param job - Email job
-   * @param maxAttempts - Maximum retry attempts
-   */
-  private async sendWithRetry(job: EmailJob, maxAttempts: number): Promise<void> {
-    let lastError: Error | null = null;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        await this.emailService.sendMail(job);
-        return;
-      } catch (error) {
-        lastError = error as Error;
-        this.logger.warn(`Email send attempt ${attempt}/${maxAttempts} failed: ${(error as Error).message}`);
-
-        if (attempt < maxAttempts) {
-          // Exponential backoff: 1s, 2s, 4s...
-          const delay = Math.pow(2, attempt - 1) * 1000;
-          await this.sleep(delay);
-        }
-      }
-    }
-
-    throw lastError;
-  }
-
-  /**
-   * Sleep utility
-   * @param ms - Milliseconds to sleep
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Get current queue size
-   */
-  getQueueSize(): number {
-    return this.queue.length;
+  async getQueueSize(): Promise<number> {
+    const jobs = await this.queue.getJobCounts('waiting', 'active');
+    return jobs.waiting + jobs.active;
   }
 }

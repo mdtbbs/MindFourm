@@ -30,6 +30,19 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.client;
   }
 
+  /**
+   * Get Redis connection configuration for external libraries (e.g., BullMQ)
+   * that may have incompatible ioredis versions
+   */
+  getConnectionConfig() {
+    return {
+      host: this.config.get<string>('redis.host'),
+      port: this.config.get<number>('redis.port'),
+      password: this.config.get<string>('redis.password') || undefined,
+      db: this.config.get<number>('redis.db'),
+    };
+  }
+
   // String operations
   async get(key: string): Promise<string | null> {
     return this.client.get(key);
