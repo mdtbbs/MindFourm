@@ -1,6 +1,7 @@
-import { postApi } from '@/lib/api/client';
+import { postApi, searchApi } from '@/lib/api/client';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
+import SearchEnhancements from '@/components/forum/search-enhancements';
 import { Post, PostListResponse } from '@/types';
 
 export const revalidate = 0;
@@ -71,6 +72,8 @@ export default async function SearchPage({
           queryParams={query ? { q: query } : {}}
         />
       )}
+
+      <SearchEnhancements />
     </div>
   );
 }

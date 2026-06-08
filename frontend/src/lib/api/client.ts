@@ -663,3 +663,20 @@ export const serverApi = {
   getTemplates: () =>
     request<{ templates: ServerTemplate[] }>('/api/servers/templates'),
 };
+
+// Search API
+export const searchApi = {
+  search: (params: { q: string; type?: string; page?: number; limit?: number; category?: string; sort?: string }) => {
+    const qs = new URLSearchParams();
+    qs.set('q', params.q);
+    if (params.type) qs.set('type', params.type);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.category) qs.set('category', params.category);
+    if (params.sort) qs.set('sort', params.sort);
+    return request<any>(`/api/search?${qs.toString()}`);
+  },
+  getHistory: () => request<any[]>('/api/search/history'),
+  clearHistory: () => request<any>('/api/search/history', { method: 'DELETE' }),
+  getPopular: () => request<string[]>('/api/search/popular'),
+};
