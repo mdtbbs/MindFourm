@@ -5,6 +5,7 @@ import { Reply } from '../../entities/reply.entity';
 import { Post } from '../../entities/post.entity';
 import { User } from '../../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EventBusService } from '../plugins/event-bus.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { parseMarkdown } from '../../common/utils/markdown.util';
 import { PointsService } from '../points/points.service';
@@ -19,11 +20,16 @@ export class RepliesService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private notificationsService: NotificationsService,
+    private eventBus: EventBusService,
     private pointsService: PointsService,
   ) {}
 
   async createReplyForPost(postId: number, dto: CreateReplyDto, userId: number): Promise<Reply> {
     const { content, parent_reply_id } = dto;
+
+    // Execute "before" hook
+    let modifiedDto = await this.eventBus.execute('reply.create', { ...dto, postId, userId });
+    dto = modifiedDto;
 
     // Validate post exists and is published
     const post = await this.postRepository.findOne({
@@ -100,6 +106,11 @@ export class RepliesService {
 
     // Award points for creating reply
     await this.awardPointsForReply(savedReply.id, userId);
+
+    // Execute "after" hook
+    this.eventBus.execute('reply.created', { reply: savedReply, userId }).catch((err) =>
+      console.error('reply.created hook error:', err),
+    );
 
     return savedReply;
   }
