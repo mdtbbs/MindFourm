@@ -12,6 +12,7 @@ import { DatabaseModule } from '../../database/database.module';
 import { PointsModule } from '../points/points.module';
 import { GroupsModule } from '../groups/groups.module';
 import { PluginsModule } from '../plugins/plugins.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PluginsModule } from '../plugins/plugins.module';
     PointsModule,
     GroupsModule,
     PluginsModule,
+    NotificationsModule,
     TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply]),
   ],
   providers: [PostsService],

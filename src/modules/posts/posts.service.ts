@@ -23,6 +23,7 @@ import { RedisService } from '../../database/redis.service';
 import { PointsService } from '../points/points.service';
 import { GroupsService } from '../groups/groups.service';
 import { EventBusService } from '../plugins/event-bus.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
@@ -50,6 +51,7 @@ export class PostsService {
     private pointsService: PointsService,
     private groupsService: GroupsService,
     private eventBus: EventBusService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -115,6 +117,19 @@ export class PostsService {
       this.eventBus.execute('post.created', { post: savedPost, userId }).catch((err) =>
         console.error('post.created hook error:', err),
       );
+
+      // Handle @mentions in post content (only for published posts)
+      if (savedPost.status === 'published' && dto.content) {
+        this.notificationsService.notifyMentionedUsers(
+          dto.content,
+          savedPost.id,
+          userId,
+          undefined, // replyId - not applicable for posts
+          [userId],  // skipUserIds - don't notify the author
+        ).catch((err) =>
+          console.error('Post mention notification error:', err),
+        );
+      }
 
       return result;
     });
