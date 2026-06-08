@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUserStore } from '@/lib/stores/user-store';
+import { useAuth } from '@/lib/auth/context';
 import { api } from '@/lib/api/client';
-import { UnifiedHeader } from '@mindforum/shared-react';
+import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 
 interface EmailPreferences {
@@ -23,7 +23,7 @@ const EMAIL_OPTIONS: { key: keyof EmailPreferences; label: string; description: 
 ];
 
 export default function SettingsPage() {
-  const { user, isAuthenticated } = useUserStore();
+  const { user, isAuthenticated } = useAuth();
   const [preferences, setPreferences] = useState<EmailPreferences>({
     reply_email: true,
     mention_email: true,
