@@ -201,6 +201,14 @@ export interface UserProfile {
   created_at: string;
   post_count: number;
   reply_count: number;
+  // Points & Level
+  total_points?: number;
+  level?: { id: number; name: string; slug: string; color: string | null; icon: string | null; progress?: number };
+  // Follow stats
+  follower_count?: number;
+  following_count?: number;
+  // Badges
+  badges?: Array<{ id: number; name: string; slug: string; icon: string | null; level: string | null }>;
 }
 
 // Phase 2: Bookmarks

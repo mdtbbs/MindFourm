@@ -2,11 +2,12 @@ import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import Badge from '@/components/ui/badge';
 import { UserProfile, PostListResponse, Reply, BookmarkListResponse, LikedPost } from '@/types';
-import { Bookmark, Calendar, Heart } from 'lucide-react';
+import { Bookmark, Calendar, Heart, Star, Users } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
 import { UserCard } from '@mindproject/shared';
+import { Medal, Title } from '@mindforum/shared-react';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
@@ -125,6 +126,59 @@ export default async function UserProfilePage({
           showStats={true}
         />
       </div>
+
+      {/* Level, Points, Follow Stats */}
+      <div className="flex justify-center gap-6 mb-6">
+        {profile.level && (
+          <div className="flex items-center gap-2 card px-4 py-2">
+            {profile.level.icon ? (
+              <img src={profile.level.icon} alt={profile.level.name} className="w-6 h-6" />
+            ) : (
+              <Star className="w-5 h-5" style={{ color: profile.level.color || 'var(--primary)' }} />
+            )}
+            <span className="text-sm font-medium">{profile.level.name}</span>
+            {profile.level.progress !== undefined && (
+              <div className="w-16 h-2 bg-surface-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full" style={{ width: `${profile.level.progress}%`, backgroundColor: profile.level.color || 'var(--primary)' }} />
+              </div>
+            )}
+          </div>
+        )}
+        {profile.total_points !== undefined && (
+          <div className="flex items-center gap-2 card px-4 py-2">
+            <Star className="w-5 h-5 text-yellow-500" />
+            <span className="text-sm font-medium">{profile.total_points} 积分</span>
+          </div>
+        )}
+        {(profile.follower_count !== undefined || profile.following_count !== undefined) && (
+          <div className="flex items-center gap-4 card px-4 py-2">
+            <span className="text-sm text-muted flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              <strong>{profile.following_count || 0}</strong> 关注
+            </span>
+            <span className="text-sm text-muted flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              <strong>{profile.follower_count || 0}</strong> 粉丝
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Badges */}
+      {profile.badges && profile.badges.length > 0 && (
+        <div className="flex justify-center gap-2 mb-6 flex-wrap">
+          {profile.badges.map((badge) => (
+            <div key={badge.id} className="flex items-center gap-1.5 card px-3 py-1.5">
+              {badge.icon ? (
+                <img src={badge.icon} alt={badge.name} className="w-4 h-4" />
+              ) : (
+                <Medal level={badge.level as any} />
+              )}
+              <span className="text-xs font-medium">{badge.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Bio */}
       {profile.bio && (
