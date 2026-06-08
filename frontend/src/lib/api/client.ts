@@ -182,7 +182,7 @@ export const postApi = {
       search: params?.search,
     })}`),
   getListCursor: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string }) =>
-    request<{ data: Post[]; next_cursor: string | null; has_more: boolean }>(`/api/v1/posts/cursor${buildQueryString({
+    request<{ data: Post[]; next_cursor: string | null; has_more: boolean }>(`/api/posts/cursor${buildQueryString({
       cursor: params?.cursor,
       limit: params?.limit,
       category_id: params?.category_id,
@@ -363,26 +363,49 @@ export const adminApi = {
     clearCache();
     return request<{ message: string }>('/api/admin/posts/move', { method: 'PUT', body: JSON.stringify({ post_ids, category_id }) });
   },
+  // Plugin management
+  getPlugins: () => request<any[]>('/api/plugins'),
+  getPlugin: (slug: string) => request<any>(`/api/plugins/${slug}`),
+  installPlugin: (metadata: { name: string; slug: string; version: string; description?: string; author?: string }) => {
+    clearCache();
+    return request<any>('/api/plugins/install', { method: 'POST', body: JSON.stringify(metadata) });
+  },
+  uninstallPlugin: (slug: string) => {
+    clearCache();
+    return request<any>(`/api/plugins/${slug}`, { method: 'DELETE' });
+  },
+  enablePlugin: (slug: string) => {
+    clearCache();
+    return request<any>(`/api/plugins/${slug}/enable`, { method: 'POST' });
+  },
+  disablePlugin: (slug: string) => {
+    clearCache();
+    return request<any>(`/api/plugins/${slug}/disable`, { method: 'POST' });
+  },
+  getPluginConfig: (slug: string) => request<any>(`/api/plugins/${slug}/config`),
+  updatePluginConfig: (slug: string, config: Record<string, any>) =>
+    request<any>(`/api/plugins/${slug}/config`, { method: 'PUT', body: JSON.stringify({ config }) }),
+  getPluginHooks: (slug: string) => request<any>(`/api/plugins/${slug}/hooks`),
 };
 
 // User APIs
 export const userApi = {
-  getById: (id: number) => request<UserProfile>(`/api/v1/users/${id}`),
-  getMyProfile: () => request<UserProfile>('/api/v1/users/me'),
+  getById: (id: number) => request<UserProfile>(`/api/users/${id}`),
+  getMyProfile: () => request<UserProfile>('/api/users/me'),
   updateProfile: (data: { username?: string; bio?: string }) =>
-    request<UserProfile>('/api/v1/users/me/profile', {
+    request<UserProfile>('/api/users/me/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
   uploadAvatar: (formData: FormData) =>
-    request<{ avatar_url: string }>('/api/v1/users/me/avatar', {
+    request<{ avatar_url: string }>('/api/users/me/avatar', {
       method: 'POST',
       body: formData,
     }),
   removeAvatar: () =>
-    request<void>('/api/v1/users/me/avatar', { method: 'DELETE' }),
+    request<void>('/api/users/me/avatar', { method: 'DELETE' }),
   getMyReplies: (params?: { page?: number; limit?: number }) =>
-    request<ReplyListResponse>(`/api/v1/users/me/replies${buildQueryString({
+    request<ReplyListResponse>(`/api/users/me/replies${buildQueryString({
       page: params?.page,
       limit: params?.limit,
     })}`),
@@ -391,130 +414,130 @@ export const userApi = {
 // Bookmark APIs
 export const bookmarkApi = {
   list: (params?: { page?: number; limit?: number }) =>
-    request<BookmarkListResponse>(`/api/v1/bookmarks${buildQueryString({
+    request<BookmarkListResponse>(`/api/bookmarks${buildQueryString({
       page: params?.page,
       limit: params?.limit,
     })}`),
   check: (postId: number) =>
-    request<{ bookmarked: boolean }>(`/api/v1/bookmarks/check/${postId}`),
+    request<{ bookmarked: boolean }>(`/api/bookmarks/check/${postId}`),
   add: (postId: number) =>
-    request<Bookmark>(`/api/v1/bookmarks/${postId}`, { method: 'POST' }),
+    request<Bookmark>(`/api/bookmarks/${postId}`, { method: 'POST' }),
   remove: (postId: number) =>
-    request<void>(`/api/v1/bookmarks/${postId}`, { method: 'DELETE' }),
+    request<void>(`/api/bookmarks/${postId}`, { method: 'DELETE' }),
 };
 
 // Notification APIs
 export const notificationApi = {
   list: (params?: { page?: number; limit?: number }) =>
-    request<NotificationListResponse>(`/api/v1/notifications${buildQueryString({
+    request<NotificationListResponse>(`/api/notifications${buildQueryString({
       page: params?.page,
       limit: params?.limit,
     })}`),
   listCursor: (params?: { cursor?: string; limit?: number }) =>
-    request<{ data: Notification[]; next_cursor: string | null; has_more: boolean }>(`/api/v1/notifications/cursor${buildQueryString({
+    request<{ data: Notification[]; next_cursor: string | null; has_more: boolean }>(`/api/notifications/cursor${buildQueryString({
       cursor: params?.cursor,
       limit: params?.limit,
     })}`),
   unreadCount: () =>
-    request<{ count: number }>('/api/v1/notifications/unread-count'),
+    request<{ count: number }>('/api/notifications/unread-count'),
   markAsRead: (id: number) =>
-    request<void>(`/api/v1/notifications/${id}/read`, { method: 'PUT' }),
+    request<void>(`/api/notifications/${id}/read`, { method: 'PUT' }),
   markAllAsRead: () =>
-    request<void>('/api/v1/notifications/read-all', { method: 'PUT' }),
+    request<void>('/api/notifications/read-all', { method: 'PUT' }),
 };
 
 // Like APIs
 export const likeApi = {
   // Post likes
   likePost: (postId: number) =>
-    request<{ id: number; post_id: number; user_id: number; created_at: string }>(`/api/v1/likes/posts/${postId}`, { method: 'POST' }),
+    request<{ message: string }>(`/api/likes/posts/${postId}`, { method: 'POST' }),
   unlikePost: (postId: number) =>
-    request<void>(`/api/v1/likes/posts/${postId}`, { method: 'DELETE' }),
+    request<{ message: string }>(`/api/likes/posts/${postId}`, { method: 'DELETE' }),
   checkPostLike: (postId: number) =>
-    request<{ liked: boolean; count: number }>(`/api/v1/likes/posts/${postId}`),
+    request<{ liked: boolean; count: number }>(`/api/likes/posts/${postId}`),
   getLikedPosts: (params?: { page?: number; limit?: number }) =>
     request<{ data: LikedPost[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(
-      `/api/v1/likes/posts${buildQueryString({ page: params?.page, limit: params?.limit })}`
+      `/api/likes/posts${buildQueryString({ page: params?.page, limit: params?.limit })}`
     ),
 
   // Reply likes
   likeReply: (replyId: number) =>
-    request<{ id: number; reply_id: number; user_id: number; created_at: string }>(`/api/v1/likes/replies/${replyId}`, { method: 'POST' }),
+    request<{ message: string }>(`/api/likes/replies/${replyId}`, { method: 'POST' }),
   unlikeReply: (replyId: number) =>
-    request<void>(`/api/v1/likes/replies/${replyId}`, { method: 'DELETE' }),
+    request<{ message: string }>(`/api/likes/replies/${replyId}`, { method: 'DELETE' }),
   checkReplyLike: (replyId: number) =>
-    request<{ liked: boolean; count: number }>(`/api/v1/likes/replies/${replyId}`),
+    request<{ liked: boolean; count: number }>(`/api/likes/replies/${replyId}`),
 
   // User statistics
   getUserLikeCount: (userId: number) =>
-    request<{ count: number }>(`/api/v1/likes/users/${userId}/count`),
+    request<{ count: number }>(`/api/likes/users/${userId}/count`),
 };
 
 // Attachment APIs
 export const attachmentApi = {
   upload: (formData: FormData) =>
-    request<Attachment | Attachment[]>('/api/v1/attachments/upload', {
+    request<Attachment | Attachment[]>('/api/attachments/upload', {
       method: 'POST',
       body: formData,
     }),
   getByPost: (postId: number) =>
-    request<Attachment[]>(`/api/v1/attachments/post/${postId}`),
-  download: (id: number) => `${API_BASE}/api/v1/attachments/${id}/download`,
+    request<Attachment[]>(`/api/attachments/post/${postId}`),
+  download: (id: number) => `${API_BASE}/api/attachments/${id}/download`,
 };
 
 // Message APIs
 export const messageApi = {
   send: (recipient_id: number, content: string) =>
-    request<Message>('/api/v1/messages', {
+    request<Message>('/api/messages', {
       method: 'POST',
       body: JSON.stringify({ recipient_id, content }),
     }),
   getConversations: (params?: { cursor?: string; limit?: number }) =>
     request<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/v1/messages${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
+      `/api/messages${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
     ),
   getConversation: (userId: number, params?: { cursor?: string; limit?: number }) =>
     request<{ data: Message[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/v1/messages/${userId}${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
+      `/api/messages/${userId}${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
     ),
   unreadCount: () =>
-    request<{ count: number }>('/api/v1/messages/unread-count'),
+    request<{ count: number }>('/api/messages/unread-count'),
   delete: (id: number) =>
-    request<void>(`/api/v1/messages/${id}`, { method: 'DELETE' }),
+    request<void>(`/api/messages/${id}`, { method: 'DELETE' }),
 };
 
 // Resource APIs
 export const resourceApi = {
   list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/v1/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
+      `/api/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
     ),
   getById: (id: number) =>
-    request<Resource>(`/api/v1/resources/${id}`),
-  download: (id: number) => `${API_BASE}/api/v1/resources/${id}/download`,
+    request<Resource>(`/api/resources/${id}`),
+  download: (id: number) => `${API_BASE}/api/resources/${id}/download`,
   upload: (formData: FormData) =>
-    request<Resource>('/api/v1/resources', {
+    request<Resource>('/api/resources', {
       method: 'POST',
       body: formData,
     }),
   update: (id: number, data: Partial<Resource>) => {
     clearCache();
-    return request<Resource>(`/api/v1/resources/${id}`, {
+    return request<Resource>(`/api/resources/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
   delete: (id: number) => {
     clearCache();
-    return request<void>(`/api/v1/resources/${id}`, { method: 'DELETE' });
+    return request<void>(`/api/resources/${id}`, { method: 'DELETE' });
   },
   getCategories: () =>
-    request<ResourceCategory[]>('/api/v1/resources/categories'),
+    request<ResourceCategory[]>('/api/resources/categories'),
   getVersions: (id: number) =>
-    request<{ versions: ResourceVersion[] }>(`/api/v1/resources/${id}/versions`),
+    request<{ versions: ResourceVersion[] }>(`/api/resources/${id}/versions`),
   addVersion: (id: number, formData: FormData) => {
     clearCache();
-    return request<ResourceVersion>(`/api/v1/resources/${id}/versions`, {
+    return request<ResourceVersion>(`/api/resources/${id}/versions`, {
       method: 'POST',
       body: formData,
     });
@@ -523,24 +546,24 @@ export const resourceApi = {
 
 // Resource Category Admin APIs
 export const resourceCategoryApi = {
-  list: () => request<ResourceCategory[]>('/api/v1/resources/categories'),
+  list: () => request<ResourceCategory[]>('/api/resources/categories'),
   create: (data: Omit<ResourceCategory, 'id' | 'created_at'>) => {
     clearCache();
-    return request<ResourceCategory>('/api/v1/resources/categories', {
+    return request<ResourceCategory>('/api/resources/categories', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
   update: (id: number, data: Partial<ResourceCategory>) => {
     clearCache();
-    return request<ResourceCategory>(`/api/v1/resources/categories/${id}`, {
+    return request<ResourceCategory>(`/api/resources/categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
   delete: (id: number) => {
     clearCache();
-    return request<void>(`/api/v1/resources/categories/${id}`, { method: 'DELETE' });
+    return request<void>(`/api/resources/categories/${id}`, { method: 'DELETE' });
   },
 };
 
@@ -548,18 +571,18 @@ export const resourceCategoryApi = {
 export const resourceAdminApi = {
   list: (params?: { cursor?: string; limit?: number; status?: string; category_id?: number; search?: string; sort?: string }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/v1/resources/admin${buildQueryString({ cursor: params?.cursor, limit: params?.limit, status: params?.status, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
+      `/api/resources/admin${buildQueryString({ cursor: params?.cursor, limit: params?.limit, status: params?.status, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
     ),
   updateStatus: (id: number, status: string) => {
     clearCache();
-    return request<Resource>(`/api/v1/resources/${id}/status`, {
+    return request<Resource>(`/api/resources/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status }),
     });
   },
   delete: (id: number) => {
     clearCache();
-    return request<void>(`/api/v1/resources/${id}/admin`, { method: 'DELETE' });
+    return request<void>(`/api/resources/${id}/admin`, { method: 'DELETE' });
   },
 };
 
