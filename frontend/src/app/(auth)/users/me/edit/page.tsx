@@ -8,7 +8,8 @@ import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import AvatarUploader from '@/components/forum/avatar-uploader';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Bell } from 'lucide-react';
+import Link from 'next/link';
 
 export default function ProfileEditPage() {
   const router = useRouter();
@@ -112,6 +113,10 @@ export default function ProfileEditPage() {
         {error && <Alert type="error" message={error} />}
 
         <div className="flex gap-3 justify-end pt-4 border-t border-[var(--border-light)] dark:border-gray-800">
+          <Link href="/settings" className="flex items-center gap-1 text-sm text-[var(--text-secondary)] hover:text-[var(--primary)] transition-colors mr-auto">
+            <Bell className="w-4 h-4" />
+            通知设置
+          </Link>
           <Button variant="ghost" onClick={() => router.back()}>取消</Button>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? '保存中...' : '保存'}

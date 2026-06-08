@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth/context';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen, Puzzle, Award, Star
+  Package, AlertCircle, FolderOpen, Puzzle, Award, Star, ShoppingBag
 } from 'lucide-react';
 
 const navSections = [
@@ -62,9 +62,11 @@ const navSections = [
   {
     title: '扩展',
     items: [
+      { href: '/admin/points', label: '积分规则', icon: Star, roles: ['admin'] },
       { href: '/admin/plugins', label: '插件管理', icon: Puzzle, roles: ['admin'] },
       { href: '/admin/levels', label: '等级管理', icon: Star, roles: ['admin'] },
       { href: '/admin/badges', label: '徽章管理', icon: Award, roles: ['admin'] },
+      { href: '/admin/shop', label: '商城管理', icon: ShoppingBag, roles: ['admin'] },
     ],
   },
 ];
