@@ -35,7 +35,7 @@ export default function AdminPointsPage() {
 
   const fetchRules = useCallback(async () => {
     try {
-      const data = await api.get('/points/admin/rules');
+      const data = await api.get<PointRule[]>('/points/admin/rules');
       setRules(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载积分规则失败');
@@ -110,7 +110,7 @@ export default function AdminPointsPage() {
           </h1>
           <p className="text-sm text-surface-500 mt-1">管理积分获取和扣除规则</p>
         </div>
-        <Button onClick={() => { resetForm(); setShowForm(true); }} variant="primary">
+        <Button onClick={() => { resetForm(); setShowForm(true); }} variant="default">
           <Plus className="w-4 h-4 mr-1" />
           添加规则
         </Button>
@@ -147,7 +147,7 @@ export default function AdminPointsPage() {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button onClick={handleSubmit} variant="primary">{editing ? '保存修改' : '创建规则'}</Button>
+            <Button onClick={handleSubmit} variant="default">{editing ? '保存修改' : '创建规则'}</Button>
             <Button onClick={() => { setShowForm(false); resetForm(); }} variant="secondary">取消</Button>
           </div>
         </div>
@@ -176,7 +176,7 @@ export default function AdminPointsPage() {
               <Button size="sm" variant="secondary" onClick={() => handleEdit(rule)}>
                 <Edit className="w-3 h-3 mr-1" /> 编辑
               </Button>
-              <Button size="sm" variant="danger" onClick={() => handleDelete(rule.id)}>
+              <Button size="sm" variant="destructive" onClick={() => handleDelete(rule.id)}>
                 <Trash2 className="w-3 h-3 mr-1" /> 删除
               </Button>
             </div>

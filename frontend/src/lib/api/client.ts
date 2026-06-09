@@ -390,60 +390,60 @@ export const adminApi = {
 
 // Levels API
 export const levelsApi = {
-  getAll: () => request<any[]>('/levels'),
-  getUserLevel: (userId: number) => request<any>(`/levels/user/${userId}`),
-  adminGetAll: () => request<any[]>('/levels/admin'),
+  getAll: () => request<any[]>('/api/levels'),
+  getUserLevel: (userId: number) => request<any>(`/api/levels/user/${userId}`),
+  adminGetAll: () => request<any[]>('/api/levels/admin'),
   adminCreate: (data: { name: string; slug: string; min_points: number; max_points?: number; color?: string; description?: string; sort_order?: number }) => {
     clearCache();
-    return request<any>('/levels/admin', { method: 'POST', body: JSON.stringify(data) });
+    return request<any>('/api/levels/admin', { method: 'POST', body: JSON.stringify(data) });
   },
-  adminUpdate: (id: number, data: Partial<{ name: string; slug: string; min_points: number; max_points: number | null; color: string; description: string; sort_order: number }>) => {
+  adminUpdate: (id: number, data: Partial<{ name: string; slug: string; min_points: number; max_points: number | undefined; color: string; description: string; sort_order: number }>) => {
     clearCache();
-    return request<any>(`/levels/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    return request<any>(`/api/levels/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
   adminDelete: (id: number) => {
     clearCache();
-    return request<any>(`/levels/admin/${id}`, { method: 'DELETE' });
+    return request<{ message: string }>(`/api/levels/admin/${id}`, { method: 'DELETE' });
   },
 };
 
 // Badges API
 export const badgesApi = {
-  getAll: () => request<any[]>('/badges'),
-  getUserBadges: (userId: number) => request<any[]>(`/badges/user/${userId}`),
-  adminGetAll: () => request<any[]>('/badges/admin'),
+  getAll: () => request<any[]>('/api/badges'),
+  getUserBadges: (userId: number) => request<any[]>(`/api/badges/user/${userId}`),
+  adminGetAll: () => request<any[]>('/api/badges/admin'),
   adminCreate: (data: { name: string; slug: string; icon?: string; description?: string; level?: string; criteria?: string; is_active?: number }) => {
     clearCache();
-    return request<any>('/badges/admin', { method: 'POST', body: JSON.stringify(data) });
+    return request<any>('/api/badges/admin', { method: 'POST', body: JSON.stringify(data) });
   },
   adminUpdate: (id: number, data: any) => {
     clearCache();
-    return request<any>(`/badges/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    return request<any>(`/api/badges/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
   adminDelete: (id: number) => {
     clearCache();
-    return request<any>(`/badges/admin/${id}`, { method: 'DELETE' });
+    return request<{ message: string }>(`/api/badges/admin/${id}`, { method: 'DELETE' });
   },
   adminAward: (user_id: number, badge_id: number) => {
     clearCache();
-    return request<any>('/badges/admin/award', { method: 'POST', body: JSON.stringify({ user_id, badge_id }) });
+    return request<any>('/api/badges/admin/award', { method: 'POST', body: JSON.stringify({ user_id, badge_id }) });
   },
 };
 
 // Groups API (for admin)
 export const groupsAdminApi = {
-  getAll: () => request<any[]>('/groups/admin'),
+  getAll: () => request<any[]>('/api/groups/admin'),
   create: (data: { name: string; slug?: string; description?: string; icon?: string; color?: string; sort_order?: number }) => {
     clearCache();
-    return request<any>('/groups/admin', { method: 'POST', body: JSON.stringify(data) });
+    return request<any>('/api/groups/admin', { method: 'POST', body: JSON.stringify(data) });
   },
   update: (id: number, data: any) => {
     clearCache();
-    return request<any>(`/groups/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    return request<any>(`/api/groups/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
   delete: (id: number) => {
     clearCache();
-    return request<any>(`/groups/admin/${id}`, { method: 'DELETE' });
+    return request<{ message: string }>(`/api/groups/admin/${id}`, { method: 'DELETE' });
   },
 };
 
@@ -477,8 +477,10 @@ export const bookmarkApi = {
       page: params?.page,
       limit: params?.limit,
     })}`),
-  check: (postId: number) =>
-    request<{ bookmarked: boolean }>(`/api/bookmarks/check/${postId}`),
+  check: async (postId: number) => {
+    const res = await request<{ isBookmarked: boolean }>(`/api/bookmarks/check/${postId}`);
+    return { bookmarked: res.isBookmarked };
+  },
   add: (postId: number) =>
     request<Bookmark>(`/api/bookmarks/${postId}`, { method: 'POST' }),
   remove: (postId: number) =>
@@ -679,4 +681,27 @@ export const searchApi = {
   getHistory: () => request<any[]>('/api/search/history'),
   clearHistory: () => request<any>('/api/search/history', { method: 'DELETE' }),
   getPopular: () => request<string[]>('/api/search/popular'),
+};
+
+// Generic API object for simple requests (backward compatibility)
+export const api = {
+  get: <T = unknown>(path: string) => request<T>(path),
+  post: <T = unknown>(path: string, body?: unknown) => {
+    clearCache();
+    return request<T>(path, {
+      method: 'POST',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  },
+  put: <T = unknown>(path: string, body?: unknown) => {
+    clearCache();
+    return request<T>(path, {
+      method: 'PUT',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  },
+  delete: <T = unknown>(path: string) => {
+    clearCache();
+    return request<T>(path, { method: 'DELETE' });
+  },
 };

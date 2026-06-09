@@ -89,7 +89,7 @@ export default function PluginsPage() {
           <h1 className="text-xl font-bold">插件管理</h1>
           <p className="text-sm text-surface-500 mt-1">管理论坛系统的扩展插件</p>
         </div>
-        <Button onClick={() => setShowInstall(!showInstall)} variant="primary">
+        <Button onClick={() => setShowInstall(!showInstall)} variant="default">
           <Plus className="w-4 h-4 mr-1" />
           安装插件
         </Button>
@@ -150,7 +150,7 @@ export default function PluginsPage() {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button onClick={handleInstall} disabled={installing} variant="primary">
+            <Button onClick={handleInstall} disabled={installing} variant="default">
               {installing ? '安装中...' : '确认安装'}
             </Button>
             <Button onClick={() => setShowInstall(false)} variant="secondary">
@@ -201,11 +201,11 @@ export default function PluginsPage() {
                       <PowerOff className="w-3 h-3 mr-1" /> 禁用
                     </Button>
                   ) : (
-                    <Button size="sm" variant="primary" onClick={() => handleAction('enable', plugin.slug)}>
+                    <Button size="sm" variant="default" onClick={() => handleAction('enable', plugin.slug)}>
                       <Power className="w-3 h-3 mr-1" /> 启用
                     </Button>
                   )}
-                  <Button size="sm" variant="danger" onClick={() => handleAction('uninstall', plugin.slug)}>
+                  <Button size="sm" variant="destructive" onClick={() => handleAction('uninstall', plugin.slug)}>
                     <Trash2 className="w-3 h-3 mr-1" /> 卸载
                   </Button>
                 </div>

@@ -20,9 +20,13 @@
 
 ## Redis 缓存层级
 
-### 缓存策略
+### 缓存策略（手动管理，非拦截器）
+
+缓存通过 `RedisService` 手动管理，而非 NestJS CacheInterceptor：
+
 | 数据类型 | 缓存时间 | 缓存 Key | 更新策略 |
 |----------|----------|----------|----------|
+| 用户会话 | 7 天 | `session:{token}` | 活动时滑动续期 |
 | 用户资料 | 5 分钟 | `user:{id}` | 用户更新时删除 |
 | 用户权限 | 5 分钟 | `user:permissions:{id}` | 角色变更时删除 |
 | 帖子详情 | 5 分钟 | `post:{id}` | 帖子更新时删除 |
@@ -31,52 +35,110 @@
 | 热门标签 | 5 分钟 | `tags:hot` | 定时更新 |
 | 热门帖子 | 5 分钟 | `posts:hot` | 定时更新 |
 | 系统设置 | 5 分钟 | `setting:{key}` | 设置更新时删除 |
-| 在线用户 | 实时更新 | `online_users` | 用户活跃时更新 |
-| 未读通知数 | 1 分钟 | `user:unread:{id}` | 新通知/已读时更新 |
+| 帖子浏览量 | 1 分钟/IP 限制 | `view:post:{postId}:ip:{ip}` | 防刷量机制 |
+| 未读通知数 | 5 分钟 | `user:unread:{id}` | 新通知/已读时更新 |
+| 封禁检查 | 10 秒 | 内存 Map | 快速检查，非 Redis |
 
-### 缓存拦截器
+### 会话缓存策略
+
 ```typescript
-// common/interceptors/cache.interceptor.ts
-@Injectable()
-export class CacheInterceptor implements NestInterceptor {
-  constructor(private redis: RedisService) {}
+// 7 天 TTL，滑动续期
+const SESSION_TTL = 7 * 24 * 60 * 60; // 7 天
 
-  async intercept(context: ExecutionContext, next: CallHandler): Promise<any> {
-    const req = context.switchToHttp().getRequest();
-    const key = this.generateCacheKey(req);
-
-    // 尝试从缓存读取
-    const cached = await this.redis.get(key);
-    if (cached) {
-      return JSON.parse(cached);
-    }
-
-    // 执行请求
-    const result = await next.handle();
-
-    // 写入缓存
-    const ttl = this.getTTL(context.getHandler());
-    if (ttl > 0) {
-      await this.redis.set(key, JSON.stringify(result), 'EX', ttl);
-    }
-
-    return result;
+// 用户活跃时续期会话
+async function renewSession(token: string) {
+  const session = await redis.get(`session:${token}`);
+  if (session) {
+    await redis.expire(`session:${token}`, SESSION_TTL);
   }
+}
+```
 
-  private generateCacheKey(req: Request): string {
-    return `cache:${req.method}:${req.originalUrl}`;
+### 浏览量防刷机制
+
+```typescript
+// 使用 Redis 限制同一 IP 对同一帖子的浏览量计数频率
+// 一个 IP 对一个帖子，每分钟只能增加一次浏览量
+
+async function incrementViewCount(postId: number, ip: string) {
+  const key = `view:post:${postId}:ip:${ip}`;
+  const exists = await redis.exists(key);
+  
+  if (!exists) {
+    // 增加浏览量
+    await db.query('UPDATE posts SET view_count = view_count + 1 WHERE id = ?', [postId]);
+    // 设置 1 分钟 TTL
+    await redis.set(key, '1', 'EX', 60);
   }
+}
+```
 
-  private getTTL(handler: Function): number {
-    // 通过装饰器或配置获取 TTL
-    return reflector.get<number>('cache_ttl', handler) || 300;
+### 封禁检查缓存
+
+```typescript
+// 使用内存 Map（非 Redis）进行快速封禁检查
+// 10 秒 TTL，避免频繁数据库查询
+
+const banCache = new Map<string, { banned: boolean; expireAt: number }>();
+
+async function checkBan(userId: number): Promise<boolean> {
+  const key = `user:${userId}`;
+  const cached = banCache.get(key);
+  
+  if (cached && cached.expireAt > Date.now()) {
+    return cached.banned;
+  }
+  
+  // 查询数据库
+  const banned = await db.query('SELECT * FROM bans WHERE user_id = ? AND active = 1', [userId]);
+  
+  banCache.set(key, {
+    banned: banned.length > 0,
+    expireAt: Date.now() + 10000, // 10 秒
+  });
+  
+  return banned.length > 0;
+}
+```
+
+### 未读通知数缓存
+
+```typescript
+// 5 分钟 TTL，新通知时主动更新
+const UNREAD_TTL = 5 * 60; // 5 分钟
+
+async function getUnreadCount(userId: number): Promise<number> {
+  const key = `user:unread:${userId}`;
+  const cached = await redis.get(key);
+  
+  if (cached) {
+    return parseInt(cached);
+  }
+  
+  // 查询数据库
+  const count = await db.query('SELECT COUNT(*) FROM notifications WHERE user_id = ? AND is_read = 0', [userId]);
+  
+  await redis.set(key, count.toString(), 'EX', UNREAD_TTL);
+  
+  return count;
+}
+
+// 新通知时更新缓存
+async function createNotification(userId: number, notification: Notification) {
+  await db.insertNotification(notification);
+  
+  // 主动更新未读数缓存
+  const key = `user:unread:${userId}`;
+  const current = await redis.get(key);
+  if (current) {
+    await redis.set(key, (parseInt(current) + 1).toString(), 'EX', UNREAD_TTL);
   }
 }
 ```
 
 ### 缓存失效处理
 ```typescript
-// 在 Service 中删除相关缓存
+// 在 Service 中手动删除相关缓存
 async updatePost(id: number, dto: UpdatePostDto, userId: number): Promise<Post> {
   // 更新帖子
   const post = await this.postRepo.update(id, dto);
@@ -86,11 +148,7 @@ async updatePost(id: number, dto: UpdatePostDto, userId: number): Promise<Post> 
     `post:${id}`,
     `posts:home:1`,          // 首页缓存
     `posts:hot`,              // 热门帖子
-    `search:posts:${dto.title || ''}`, // 相关搜索缓存
   ]);
-
-  // 触发 SSE 更新
-  this.sseService.notify(userId, 'post_updated', { postId: id });
 
   return post;
 }
@@ -170,6 +228,9 @@ LIMIT 20;
 | 大分页 `LIMIT 10000, 20` | 扫描大量数据 | 使用 Cursor-based 分页 |
 
 ### Cursor-based 分页
+
+游标分页比 OFFSET 分页更高效，特别是大数据量时：
+
 ```typescript
 // 使用游标分页（比 OFFSET 更高效）
 async getPostsWithCursor(options: CursorPagination): Promise<CursorResult> {
@@ -184,14 +245,44 @@ async getPostsWithCursor(options: CursorPagination): Promise<CursorResult> {
   }
 
   const posts = await qb.getMany();
-  const hasNextPage = posts.length > options.limit;
   
-  if (hasNextPage) posts.pop(); // 移除多取的那条
+  // 正确的处理方式：先判断，再弹出
+  const hasNextPage = posts.length > options.limit;
+  if (hasNextPage) {
+    posts.pop(); // 移除多取的那条
+  }
 
   return {
     data: posts,
     hasNextPage,
     nextCursor: hasNextPage ? posts[posts.length - 1].created_at : null,
+  };
+}
+```
+
+> **注意**：代码正确地在 `pop()` 之前先判断 `hasNextPage`。错误的写法是先 `pop()` 再判断，这会导致边界情况出错。
+
+### Offset 分页
+
+对于小数据量或需要显示总页数的情况，使用传统的 offset 分页：
+
+```typescript
+async getPostsWithOffset(options: OffsetPagination): Promise<OffsetResult> {
+  const qb = this.postRepo
+    .createQueryBuilder('p')
+    .where('p.status = :status', { status: 'published' })
+    .orderBy('p.created_at', 'DESC')
+    .skip((options.page - 1) * options.limit)
+    .take(options.limit);
+
+  const [data, total] = await qb.getManyAndCount();
+
+  return {
+    data,
+    total,
+    page: options.page,
+    limit: options.limit,
+    totalPages: Math.ceil(total / options.limit),
   };
 }
 ```
@@ -315,6 +406,46 @@ function PrefetchLink({ href, children }) {
 
 ---
 
+## 频率限制
+
+### Lua 脚本原子操作
+
+使用 Lua 脚本实现原子性的 INCR + EXPIRE 操作，避免竞态条件：
+
+```typescript
+// Lua 脚本：原子性计数 + 设置过期时间
+const RATE_LIMIT_SCRIPT = `
+  local current = redis.call('INCR', KEYS[1])
+  if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+  end
+  return current
+`;
+
+async function checkRateLimit(key: string, limit: number, ttl: number): Promise<boolean> {
+  const current = await redis.eval(RATE_LIMIT_SCRIPT, [key], [ttl.toString()]);
+  return current <= limit;
+}
+
+// 使用示例
+async function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
+  const ip = req.ip;
+  const key = `rate_limit:${ip}:${req.path}`;
+  
+  const allowed = await checkRateLimit(key, 100, 60); // 每 IP 每路径每分钟 100 次
+  
+  if (!allowed) {
+    return res.status(429).json({ error: 'Too many requests' });
+  }
+  
+  next();
+}
+```
+
+> **注意**：Lua 脚本在 Redis 服务器端执行，保证 INCR 和 EXPIRE 的原子性。如果分开调用，可能导致计数后未设置过期时间（进程崩溃时）。
+
+---
+
 ## 数据库连接池优化
 
 ```typescript
@@ -349,3 +480,23 @@ function PrefetchLink({ href, children }) {
 | 数据库查询时间 | < 50ms |
 | Redis 命中率 | > 80% |
 | 并发用户支持 | > 1000 |
+
+---
+
+## 索引优化补充
+
+### 移除未实现表的索引
+
+以下索引对应未实现的功能，已移除：
+- `idx_follows_follower` - 关注系统未实现
+- `idx_follows_following` - 关注系统未实现
+- `idx_message_reads_user` - 群聊未实现
+
+### 私信索引调整
+
+```sql
+-- 一对一私信索引（非群聊）
+CREATE INDEX idx_messages_sender ON messages(sender_id);
+CREATE INDEX idx_messages_recipient ON messages(recipient_id);
+CREATE INDEX idx_messages_unread ON messages(recipient_id, is_read);
+```

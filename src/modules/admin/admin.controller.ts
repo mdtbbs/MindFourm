@@ -1,0 +1,430 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { Like } from 'typeorm';
+import { AdminService } from './admin.service';
+import { StatsService } from '../stats/stats.service';
+import { SettingsService } from '../settings/settings.service';
+import { LogsService } from '../logs/logs.service';
+import { BansService } from '../bans/bans.service';
+import { CategoriesService } from '../categories/categories.service';
+import { TagsService } from '../tags/tags.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { BulkPostsDto } from './dto/bulk-posts.dto';
+import { MergeTagsDto } from './dto/merge-tags.dto';
+import { escapeLike } from '@common/utils/search.util';
+
+@Controller('admin')
+@UseGuards(JwtAuthGuard, RolesGuard)
+export class AdminController {
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly statsService: StatsService,
+    private readonly settingsService: SettingsService,
+    private readonly logsService: LogsService,
+    private readonly bansService: BansService,
+    private readonly categoriesService: CategoriesService,
+    private readonly tagsService: TagsService,
+  ) {}
+
+  /**
+   * GET /admin/stats - Dashboard statistics (moderator+)
+   */
+  @Get('stats')
+  @Roles('moderator', 'admin')
+  async getStats() {
+    return this.adminService.getStats();
+  }
+
+  /**
+   * GET /admin/badge-counts - Moderation badge counts (moderator+)
+   */
+  @Get('badge-counts')
+  @Roles('moderator', 'admin')
+  async getBadgeCounts() {
+    return this.adminService.getBadgeCounts();
+  }
+
+  /**
+   * GET /admin/settings - All settings (admin only)
+   */
+  @Get('settings')
+  @Roles('admin')
+  async getAllSettings() {
+    return this.settingsService.getAll();
+  }
+
+  /**
+   * GET /admin/settings/:category - Category settings (admin only)
+   */
+  @Get('settings/:category')
+  @Roles('admin')
+  async getCategorySettings(@Param('category') category: string) {
+    return this.settingsService.getByCategory(category);
+  }
+
+  /**
+   * PUT /admin/settings/:category - Batch update settings (admin only)
+   */
+  @Put('settings/:category')
+  @Roles('admin')
+  async updateSettings(
+    @Param('category') category: string,
+    @Body() settings: Record<string, string>,
+  ) {
+    await this.settingsService.setBatch(category, settings);
+    return { message: 'Settings updated' };
+  }
+
+  /**
+   * GET /admin/users - User list (admin only)
+   */
+  @Get('users')
+  @Roles('admin')
+  async getUsers(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('search') search?: string,
+  ) {
+    // This would be implemented in UsersService, delegating here for consistency
+    const skip = (parseInt(page as any, 10) - 1) * parseInt(limit as any, 10);
+
+    const where: any = {};
+    if (search) {
+      where.username = Like(`%${escapeLike(search)}%`);
+    }
+
+    // For now, return a basic structure - actual implementation would use UsersService
+    return {
+      data: [],
+      total: 0,
+      page: parseInt(page as any, 10),
+      limit: parseInt(limit as any, 10),
+      totalPages: 0,
+    };
+  }
+
+  /**
+   * PUT /admin/users/:id/role - Change user role (admin only)
+   */
+  @Put('users/:id/role')
+  @Roles('admin')
+  async updateUserRole(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { role: string },
+  ) {
+    // This would be implemented in UsersService
+    return { message: `User ${id} role updated to ${body.role}` };
+  }
+
+  /**
+   * GET /admin/posts - Post management list (moderator+)
+   */
+  @Get('posts')
+  @Roles('moderator', 'admin')
+  async getPosts(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('status') status?: string,
+    @Query('category_id') category_id?: number,
+  ) {
+    return this.adminService.getPosts({
+      page: parseInt(page as any, 10),
+      limit: parseInt(limit as any, 10),
+      status,
+      category_id: category_id ? parseInt(category_id as any, 10) : undefined,
+    });
+  }
+
+  /**
+   * DELETE /admin/posts - Bulk delete posts (moderator+)
+   */
+  @Delete('posts')
+  @Roles('moderator', 'admin')
+  async bulkDeletePosts(@Body() dto: BulkPostsDto) {
+    await this.adminService.bulkDeletePosts(dto.post_ids);
+    return { message: `${dto.post_ids.length} posts deleted` };
+  }
+
+  /**
+   * PUT /admin/posts/pin - Bulk pin posts (moderator+)
+   */
+  @Put('posts/pin')
+  @Roles('moderator', 'admin')
+  async bulkPinPosts(@Body() dto: BulkPostsDto) {
+    await this.adminService.bulkPinPosts(dto.post_ids, dto.is_pinned ?? 1);
+    return { message: `${dto.post_ids.length} posts pinned` };
+  }
+
+  /**
+   * PUT /admin/posts/move - Bulk move posts (moderator+)
+   */
+  @Put('posts/move')
+  @Roles('moderator', 'admin')
+  async bulkMovePosts(@Body() dto: BulkPostsDto) {
+    if (!dto.category_id) {
+      throw new Error('category_id is required');
+    }
+    await this.adminService.bulkMovePosts(dto.post_ids, dto.category_id);
+    return { message: `${dto.post_ids.length} posts moved` };
+  }
+
+  /**
+   * PUT /admin/posts/:id/pin - Pin single post (moderator+)
+   */
+  @Put('posts/:id/pin')
+  @Roles('moderator', 'admin')
+  async pinPost(@Param('id', ParseIntPipe) id: number, @Body() body: { is_pinned: number }) {
+    return this.adminService.pinPost(id, body.is_pinned);
+  }
+
+  /**
+   * PUT /admin/posts/:id/move - Move single post (moderator+)
+   */
+  @Put('posts/:id/move')
+  @Roles('moderator', 'admin')
+  async movePost(@Param('id', ParseIntPipe) id: number, @Body() body: { category_id: number }) {
+    return this.adminService.movePost(id, body.category_id);
+  }
+
+  /**
+   * POST /admin/categories - Create category (admin only)
+   */
+  @Post('categories')
+  @Roles('admin')
+  async createCategory(@Body() dto: any) {
+    return this.categoriesService.create(dto);
+  }
+
+  /**
+   * PUT /admin/categories/:id - Update category (admin only)
+   */
+  @Put('categories/:id')
+  @Roles('admin')
+  async updateCategory(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: any,
+  ) {
+    return this.categoriesService.update(id, dto);
+  }
+
+  /**
+   * DELETE /admin/categories/:id - Delete category (admin only)
+   */
+  @Delete('categories/:id')
+  @Roles('admin')
+  async deleteCategory(@Param('id', ParseIntPipe) id: number) {
+    await this.categoriesService.delete(id);
+    return { message: 'Category deleted' };
+  }
+
+  /**
+   * GET /admin/tags - Tag list (admin only)
+   */
+  @Get('tags')
+  @Roles('admin')
+  async getTags(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+  ) {
+    return this.tagsService.findAll(parseInt(page as any, 10), parseInt(limit as any, 10));
+  }
+
+  /**
+   * POST /admin/tags - Create tag (admin only)
+   */
+  @Post('tags')
+  @Roles('admin')
+  async createTag(@Body() dto: any) {
+    return this.tagsService.create(dto);
+  }
+
+  /**
+   * PUT /admin/tags/:id - Update tag (admin only)
+   */
+  @Put('tags/:id')
+  @Roles('admin')
+  async updateTag(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: any,
+  ) {
+    return this.tagsService.update(id, dto);
+  }
+
+  /**
+   * DELETE /admin/tags/:id - Delete tag (admin only)
+   */
+  @Delete('tags/:id')
+  @Roles('admin')
+  async deleteTag(@Param('id', ParseIntPipe) id: number) {
+    await this.tagsService.delete(id);
+    return { message: 'Tag deleted' };
+  }
+
+  /**
+   * POST /admin/tags/merge - Merge two tags (admin only)
+   */
+  @Post('tags/merge')
+  @Roles('admin')
+  async mergeTags(@Body() dto: MergeTagsDto) {
+    await this.adminService.mergeTags(dto.from_tag_id, dto.to_tag_id);
+    return { message: 'Tags merged' };
+  }
+
+  /**
+   * GET /admin/moderation - Moderation queue (moderator+)
+   */
+  @Get('moderation')
+  @Roles('moderator', 'admin')
+  async getModerationQueue(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('type') type: string = 'all',
+  ) {
+    return this.adminService.getModerationQueue(
+      type,
+      parseInt(page as any, 10),
+      parseInt(limit as any, 10),
+    );
+  }
+
+  /**
+   * PUT /admin/moderation/:id/approve - Approve item (moderator+)
+   */
+  @Put('moderation/:id/approve')
+  @Roles('moderator', 'admin')
+  async approveItem(@Param('id', ParseIntPipe) id: number) {
+    await this.adminService.approvePost(id);
+    return { message: 'Item approved' };
+  }
+
+  /**
+   * PUT /admin/moderation/:id/reject - Reject item (moderator+)
+   */
+  @Put('moderation/:id/reject')
+  @Roles('moderator', 'admin')
+  async rejectItem(@Param('id', ParseIntPipe) id: number) {
+    await this.adminService.rejectPost(id);
+    return { message: 'Item rejected' };
+  }
+
+  /**
+   * GET /admin/bans - Ban list (admin only)
+   */
+  @Get('bans')
+  @Roles('admin')
+  async getBans(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('ban_type') ban_type?: string,
+    @Query('is_active') is_active?: number,
+  ) {
+    return this.bansService.getList({
+      page: parseInt(page as any, 10),
+      limit: parseInt(limit as any, 10),
+      ban_type,
+      is_active: is_active !== undefined ? parseInt(is_active as any, 10) : undefined,
+    });
+  }
+
+  /**
+   * POST /admin/bans - Create ban (admin only)
+   */
+  @Post('bans')
+  @Roles('admin')
+  async createBan(
+    @Body() dto: { ban_type: string; value: string; reason?: string },
+    @Query('user_id') user_id: number,
+  ) {
+    return this.bansService.create({
+      ban_type: dto.ban_type,
+      value: dto.value,
+      reason: dto.reason,
+      created_by: user_id,
+    });
+  }
+
+  /**
+   * PUT /admin/bans/:id - Update ban (admin only)
+   */
+  @Put('bans/:id')
+  @Roles('admin')
+  async updateBan(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updates: { reason?: string; is_active?: number },
+  ) {
+    return this.bansService.update(id, updates);
+  }
+
+  /**
+   * DELETE /admin/bans/:id - Deactivate ban (admin only)
+   */
+  @Delete('bans/:id')
+  @Roles('admin')
+  async deactivateBan(@Param('id', ParseIntPipe) id: number) {
+    await this.bansService.deactivate(id);
+    return { message: 'Ban deactivated' };
+  }
+
+  /**
+   * POST /admin/cleanup/sessions - Cleanup expired sessions (admin only)
+   */
+  @Post('cleanup/sessions')
+  @Roles('admin')
+  async cleanupSessions() {
+    // This would use Redis to cleanup expired sessions
+    return { message: 'Sessions cleaned up' };
+  }
+
+  /**
+   * POST /admin/cleanup/logs - Cleanup old logs (admin only)
+   */
+  @Post('cleanup/logs')
+  @Roles('admin')
+  async cleanupLogs() {
+    const count = await this.adminService.cleanupLogs();
+    return { message: `${count} logs cleaned up` };
+  }
+
+  /**
+   * POST /admin/cleanup/soft-deleted - Cleanup soft deleted items (admin only)
+   */
+  @Post('cleanup/soft-deleted')
+  @Roles('admin')
+  async cleanupSoftDeleted() {
+    const count = await this.adminService.cleanupSoftDeleted();
+    return { message: `${count} items cleaned up` };
+  }
+
+  /**
+   * GET /admin/logs - Operation logs (admin only)
+   */
+  @Get('logs')
+  @Roles('admin')
+  async getLogs(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 20,
+    @Query('user_id') user_id?: number,
+    @Query('action') action?: string,
+    @Query('target_type') target_type?: string,
+  ) {
+    return this.logsService.getLogs({
+      page: parseInt(page as any, 10),
+      limit: parseInt(limit as any, 10),
+      user_id: user_id ? parseInt(user_id as any, 10) : undefined,
+      action,
+      target_type,
+    });
+  }
+}

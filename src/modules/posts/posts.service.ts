@@ -81,7 +81,7 @@ export class PostsService {
         user_id: userId,
         category_id: dto.category_id,
         server_id: dto.server_id,
-        required_group_id: dto.required_group_id || null,
+        required_group_id: dto.required_group_id,
         post_type: dto.post_type || 'normal',
         title: dto.title,
         content: dto.content,

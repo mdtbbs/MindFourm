@@ -75,10 +75,10 @@ export class SearchService {
     });
   }
 
-  async recordSearch(userId: number | null, query: string, resultsCount: number): Promise<void> {
+  async recordSearch(userId: number | undefined, query: string, resultsCount: number): Promise<void> {
     // Record search history
     this.searchHistoryRepo.save({
-      user_id: userId,
+      user_id: userId as number,
       query: query.toLowerCase().trim(),
       search_type: 'global',
       results_count: resultsCount,

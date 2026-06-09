@@ -30,39 +30,58 @@
 ### 工具
 - **Jest**：测试框架
 - **ts-jest**：TypeScript 支持
-- **@nestjs/testing**：NestJS 测试模块
+- **@nestjs/testing**：NestJS 测试模块（用于集成测试）
+- **TypeORM Repository Mock**：单元测试中使用模拟仓库
 
 ### 示例：帖子服务单元测试
+
+单元测试使用模拟的 TypeORM Repository，避免真实的数据库依赖：
+
 ```typescript
 // modules/posts/posts.service.spec.ts
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { PostService } from './posts.service';
 import { Post } from './entities/post.entity';
+import { Repository } from 'typeorm';
 
 describe('PostService', () => {
   let service: PostService;
-  let repo: Repository<Post>;
-
-  const mockRepo = {
-    create: jest.fn(),
-    save: jest.fn(),
-    find: jest.fn(),
-    findOne: jest.fn(),
-    count: jest.fn(),
-    createQueryBuilder: jest.fn(),
-  };
+  let mockRepo: jest.Mocked<Repository<Post>>;
 
   beforeEach(async () => {
+    // 创建模拟仓库
+    mockRepo = {
+      create: jest.fn(),
+      save: jest.fn(),
+      find: jest.fn(),
+      findOne: jest.fn(),
+      findOneBy: jest.fn(),
+      count: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        getMany: jest.fn(),
+        getManyAndCount: jest.fn(),
+        andWhere: jest.fn().mockReturnThis(),
+      }),
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PostService,
-        { provide: getRepositoryToken(Post), useValue: mockRepo },
+        {
+          provide: getRepositoryToken(Post),
+          useValue: mockRepo,
+        },
       ],
     }).compile();
 
     service = module.get<PostService>(PostService);
-    repo = module.get<Repository<Post>>(getRepositoryToken(Post));
   });
 
   it('should create a post successfully', async () => {
@@ -73,10 +92,10 @@ describe('PostService', () => {
       tags: ['test'],
     };
     const userId = 1;
-    const mockPost: Partial<Post> = { id: 1, ...dto, user_id: userId };
+    const mockPost = { id: 1, ...dto, user_id: userId, created_at: new Date() };
 
-    mockRepo.create.mockReturnValue(mockPost);
-    mockRepo.save.mockResolvedValue(mockPost);
+    mockRepo.create.mockReturnValue(mockPost as any);
+    mockRepo.save.mockResolvedValue(mockPost as any);
 
     const result = await service.create(dto, userId);
 
@@ -87,16 +106,28 @@ describe('PostService', () => {
   });
 
   it('should return null when post not found', async () => {
-    mockRepo.findOne.mockResolvedValue(null);
+    mockRepo.findOneBy.mockResolvedValue(null);
 
     const result = await service.findOne(999);
 
     expect(result).toBeNull();
+    expect(mockRepo.findOneBy).toHaveBeenCalledWith({ id: 999 });
   });
 
-  it('should not allow deleted user to create post', async () => {
-    // 模拟用户已删除的情况
-    // ...
+  it('should use cursor pagination correctly', async () => {
+    const mockPosts = [
+      { id: 1, title: 'Post 1', created_at: new Date('2024-01-01') },
+      { id: 2, title: 'Post 2', created_at: new Date('2024-01-02') },
+      { id: 3, title: 'Post 3', created_at: new Date('2024-01-03') },
+    ];
+
+    mockRepo.createQueryBuilder().getMany.mockResolvedValue(mockPosts);
+
+    const result = await service.getPostsWithCursor({ limit: 2, cursor: null });
+
+    expect(result.data).toHaveLength(2);
+    expect(result.hasNextPage).toBe(true);
+    expect(result.nextCursor).toBe(mockPosts[1].created_at);
   });
 });
 ```
@@ -224,8 +255,30 @@ describe('PostsController (integration)', () => {
 - 跨模块功能
 
 ### 工具
-- **Playwright**：浏览器自动化
+- **Playwright**：浏览器自动化（E2E 测试）
 - **测试数据库**：每个测试使用独立的测试数据
+
+> **注意**：E2E 测试使用 Playwright，而非 Jest。Jest 用于单元测试和集成测试。
+
+### 测试文件位置
+```
+MindFourm/tests/
+├── e2e/
+│   ├── auth.spec.ts        # 登录/登出流程
+│   ├── post-flow.spec.ts   # 发帖/回复/删除流程
+│   ├── admin.spec.ts       # 管理后台操作
+│   └── notification.spec.ts # 通知流程
+├── integration/
+│   └── api/
+│       ├── posts.spec.ts   # 帖子 API 集成测试
+│       ├── users.spec.ts   # 用户 API 集成测试
+│       └── auth.spec.ts    # 认证 API 集成测试
+└── unit/
+    └── services/
+        ├── post.service.spec.ts
+        ├── user.service.spec.ts
+        └── notification.service.spec.ts
+```
 
 ### 示例：用户发帖 E2E 测试
 ```typescript
@@ -246,9 +299,8 @@ test.describe('User Post Flow', () => {
     await page.click('text=发布帖子');
     await page.fill('[name="title"]', 'E2E Test Post');
     
-    // Editor.js 富文本输入
-    await page.click('.codex-editor__content');
-    await page.keyboard.type('This is the test post content.');
+    // Markdown 编辑器（textarea + 预览模式）
+    await page.fill('[name="content"]', 'This is the test post content in **Markdown**.');
     
     // 选择分类
     await page.selectOption('[name="category"]', '1');
@@ -264,7 +316,9 @@ test.describe('User Post Flow', () => {
     
     // 3. 验证帖子创建成功
     await expect(page.locator('h1')).toContainText('E2E Test Post');
-    await expect(page.locator('.post-content')).toContainText('This is the test post content.');
+    await expect(page.locator('.post-content')).toContainText('This is the test post content');
+    // 验证 Markdown 渲染（bold 标签）
+    await expect(page.locator('.post-content strong')).toBeVisible();
   });
 
   test('should allow user to reply to a post', async ({ page }) => {
@@ -337,9 +391,11 @@ describe('API Contract Tests', () => {
 | 层级 | 目标覆盖率 |
 |------|------------|
 | 单元测试 | > 80% |
-| 集成测试 | 核心 API 100% |
-| E2E 测试 | 核心用户流程 100% |
+| 集成测试 | 核心 API > 90% |
+| E2E 测试 | 核心用户流程 > 95% |
 | API 契约测试 | 所有公开端点 100% |
+
+> **注意**：覆盖率目标已调整为现实水平。100% 覆盖率是不现实且不必要的，重点覆盖核心业务逻辑和关键用户流程。
 
 ---
 

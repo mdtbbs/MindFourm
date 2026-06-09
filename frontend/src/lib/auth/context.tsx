@@ -1,79 +1,36 @@
+/**
+ * Auth Context - Backward compatibility wrapper for Zustand user store
+ *
+ * This file provides backward compatibility for existing components
+ * that use AuthProvider/useAuth pattern, while internally using Zustand.
+ *
+ * New components should import directly from '@/store/user-store'
+ */
+
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User } from '@/types';
-import { authApi } from '@/lib/api/client';
+import React, { useEffect } from 'react';
+import { useUserStore, useAuth } from '@/store/user-store';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 
-interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  logout: () => void;
-  refreshAuth: () => Promise<void>;
-}
+// Re-export useAuth for backward compatibility
+export { useAuth };
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  logout: () => {},
-  refreshAuth: async () => {},
-});
-
+/**
+ * AuthProvider - Initializes Zustand user store on mount
+ *
+ * This Provider triggers the initial auth check when the app loads.
+ * Existing components using useAuth() will work without changes.
+ */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isLoading, refreshAuth } = useUserStore();
 
-  const refreshAuth = useCallback(async () => {
-    try {
-      const response = await authApi.check();
-      if (response.authenticated) {
-        setUser(response.user || null);
-      } else {
-        setUser(null);
-      }
-    } catch {
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
+  // Trigger initial auth check on mount
   useEffect(() => {
-    // Check for MindAuth session token first
-    const mindauthToken = localStorage.getItem('mindauth_session_token');
-    if (mindauthToken) {
-      // Try to verify session
-      authApi.verifySession(mindauthToken)
-        .then(() => refreshAuth())
-        .catch(() => {
-          localStorage.removeItem('mindauth_session_token');
-          refreshAuth();
-        });
-    } else {
-      refreshAuth();
-    }
+    refreshAuth();
   }, [refreshAuth]);
 
-  // 登出：先清除论坛 session，然后跳转到 MindAuth 登出页面
-  const logout = useCallback(() => {
-    // 先调用论坛登出 API（清除论坛 session + 撤销 OAuth tokens）
-    authApi.logout().catch(() => {
-      // 忽略错误，继续登出流程
-    });
-
-    // 清除本地状态
-    setUser(null);
-    localStorage.removeItem('mindauth_session_token');
-
-    // 跳转到 MindAuth 登出页面，登出后返回当前页面
-    const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
-    const currentUrl = window.location.href;
-    const redirectUri = encodeURIComponent(currentUrl);
-    window.location.href = `${mindauthUrl}/#/logout?redirect_uri=${redirectUri}`;
-  }, []);
-
+  // Show loading spinner while checking auth status
   if (isLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg)]">
@@ -82,21 +39,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        logout,
-        refreshAuth,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
+  return <>{children}</>;
 }

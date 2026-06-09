@@ -1,27 +1,33 @@
+/**
+ * Settings Context - Backward compatibility wrapper for Zustand settings store
+ *
+ * This file provides backward compatibility for existing components
+ * that use SettingsProvider/useSettings pattern, while internally using Zustand.
+ *
+ * New components should import directly from '@/store/settings-store'
+ */
+
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { settingsApi } from '@/lib/api/client';
+import React, { useEffect } from 'react';
+import { useSettingsStore, useSettings } from '@/store/settings-store';
 
-type SettingsContextValue = Record<string, string>;
+// Re-export useSettings for backward compatibility
+export { useSettings };
 
-const SettingsContext = createContext<SettingsContextValue | null>(null);
-
+/**
+ * SettingsProvider - Initializes Zustand settings store on mount
+ *
+ * Triggers the initial settings fetch when the app loads.
+ * Existing components using useSettings() will work without changes.
+ */
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<SettingsContextValue>({});
+  const { fetchSettings } = useSettingsStore();
 
+  // Fetch settings on mount
   useEffect(() => {
-    settingsApi.get().then(setSettings).catch(() => {});
-  }, []);
+    fetchSettings();
+  }, [fetchSettings]);
 
-  return (
-    <SettingsContext.Provider value={settings}>
-      {children}
-    </SettingsContext.Provider>
-  );
-}
-
-export function useSettings() {
-  const ctx = useContext(SettingsContext);
-  return ctx ?? {};
+  return <>{children}</>;
 }

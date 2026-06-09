@@ -18,9 +18,15 @@ async function fetchPosts(query: string, page: number, limit: number): Promise<P
     if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
+    const responseData = json.data || {};
     return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit, total: 0, totalPages: 1 },
+      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
+      pagination: {
+        page: responseData.page || 1,
+        limit: responseData.limit || limit,
+        total: responseData.total || 0,
+        totalPages: responseData.totalPages || 1,
+      },
     };
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };

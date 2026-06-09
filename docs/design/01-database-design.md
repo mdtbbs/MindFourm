@@ -12,6 +12,8 @@
 | ORM | TypeORM |
 | 字符集 | utf8mb4 / utf8mb4_unicode_ci |
 
+> **注意**：本系统使用 TypeORM 实体类定义数据库结构，而非原生 SQL。本文档展示的是等效的 MySQL 表结构供参考。所有外键约束使用 `ON DELETE CASCADE`。
+
 ---
 
 ## 核心表设计
@@ -27,9 +29,7 @@
 | email | VARCHAR(255) UNIQUE | 邮箱 |
 | avatar_url | VARCHAR(500) | 头像 URL |
 | bio | TEXT | 个人简介 |
-| points | INT DEFAULT 0 | 积分 |
-| reputation | INT DEFAULT 0 | 声望 |
-| level | INT DEFAULT 1 | 等级 |
+| role | ENUM | user/moderator/admin |
 | profile_background | VARCHAR(500) | 主页背景 |
 | custom_title | VARCHAR(100) | 自定义称号 |
 | signature | TEXT | 签名档 |
@@ -38,6 +38,8 @@
 | last_active_at | TIMESTAMP | 最后活跃时间 |
 | is_online | BOOLEAN DEFAULT FALSE | 在线状态 |
 | status | ENUM | active/banned/deleted |
+
+> **注意**：积分(points)、声望(reputation)、等级(level)字段已移除，徽章/等级系统未实现。
 
 #### roles - 角色表
 | 字段 | 类型 | 说明 |
@@ -62,9 +64,9 @@
 #### posts - 帖子表
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | INT PK | 自增主键 |
-| user_id | INT FK | 作者 |
-| category_id | INT FK | 分类 |
+| id | BIGINT PK | 自增主键（高流量表使用 BIGINT） |
+| user_id | INT FK | 作者（ON DELETE CASCADE） |
+| category_id | INT FK | 分类（ON DELETE CASCADE） |
 | title | VARCHAR(255) | 标题 |
 | content | TEXT | 正文（Markdown） |
 | cover_image | VARCHAR(500) | 封面图 |
@@ -72,7 +74,6 @@
 | view_count | INT | 浏览量 |
 | like_count | INT | 点赞数 |
 | reply_count | INT | 回复数 |
-| poll_id | INT FK | 关联投票 |
 | is_pinned | BOOLEAN | 置顶 |
 | is_featured | BOOLEAN | 精华 |
 | visibility | ENUM | public/members_only/group_only |
@@ -80,26 +81,29 @@
 | toc | JSON | 手动目录结构 |
 | created_at | TIMESTAMP | |
 | updated_at | TIMESTAMP | |
+| deleted_at | TIMESTAMP | 软删除时间（@DeleteDateColumn） |
 
-#### post_edits - 帖子编辑历史
+> **注意**：`poll_id` 字段已移除，投票系统未实现。帖子使用 `@DeleteDateColumn` 实现软删除。
+
 #### replies - 回复表（支持 2 层嵌套 + 引用 + @提及）
-#### reply_edits - 回复编辑历史
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT PK | 自增主键（高流量表使用 BIGINT） |
+| post_id | INT FK | 关联帖子（ON DELETE CASCADE） |
+| user_id | INT FK | 作者（ON DELETE CASCADE） |
+| parent_reply_id | BIGINT FK | 父回复（ON DELETE CASCADE，支持嵌套） |
+| content | TEXT | 回复内容（Markdown） |
+| created_at | TIMESTAMP | |
+| updated_at | TIMESTAMP | |
+| deleted_at | TIMESTAMP | 软删除时间（@DeleteDateColumn） |
+
+> **注意**：回复同样使用软删除。`post_edits` 和 `reply_edits` 编辑历史表已移除，编辑历史未实现。
 
 ---
 
-### 投票系统
+### ~~投票系统~~（未实现）
 
-#### polls - 投票表
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | INT PK | |
-| post_id | INT FK | |
-| question | VARCHAR(255) | 投票问题 |
-| allow_multiple | BOOLEAN | 是否多选 |
-| end_at | TIMESTAMP | 截止时间 |
-
-#### poll_options - 投票选项
-#### poll_votes - 用户投票记录
+> **注意**：投票系统（polls、poll_options、poll_votes）已规划但未实现。如需实现，请参考原设计文档。
 
 ---
 
@@ -109,9 +113,9 @@
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | INT PK | |
-| post_id | INT FK | 关联帖子 |
-| reply_id | INT FK | 关联回复 |
-| user_id | INT FK | 上传者 |
+| target_type | ENUM | 关联类型：'post' 或 'reply'（TODO：待重构） |
+| target_id | INT | 关联 ID（帖子或回复的 ID） |
+| user_id | INT FK | 上传者（ON DELETE CASCADE） |
 | file_name | VARCHAR(255) | 文件名 |
 | file_path | VARCHAR(500) | 存储路径 |
 | file_size | INT | 文件大小 |
@@ -119,15 +123,20 @@
 | download_count | INT | 下载次数 |
 | created_at | TIMESTAMP | |
 
+> **TODO**：当前实现使用 `target_type ENUM('post', 'reply')` + `target_id` 模式，而非单独的 `post_id` 和 `reply_id` 外键。这种模式更灵活，避免了多个可空外键的问题。
+
 ---
 
-### 用户激励
+### ~~用户激励~~（未实现）
 
-#### badges - 徽章定义表
-#### user_badges - 用户徽章关联
-#### reputation_logs - 声望记录表
-#### points_logs - 积分记录表
-#### points_rules - 积分规则表
+> **注意**：以下表已规划但未实现：
+> - `badges` - 徽章定义表
+> - `user_badges` - 用户徽章关联
+> - `reputation_logs` - 声望记录表
+> - `points_logs` - 积分记录表
+> - `points_rules` - 积分规则表
+> 
+> 共享组件包中有 `Medal` 和 `Title` 组件用于显示用户头衔，但积分/徽章系统未实现。
 
 ---
 
@@ -136,17 +145,19 @@
 #### notifications - 通知表
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | INT PK | |
-| user_id | INT FK | 接收者 |
-| type | ENUM | reply/mention/like/system/badge/report |
+| id | BIGINT PK | 自增主键（高流量表使用 BIGINT） |
+| user_id | INT FK | 接收者（ON DELETE CASCADE） |
+| type | ENUM | reply/mention/like/system/report |
 | title | VARCHAR(255) | |
 | content | TEXT | |
-| actor_id | INT FK | 触发者 |
-| target_type | ENUM | post/reply/user/badge |
+| actor_id | INT FK | 触发者（ON DELETE CASCADE） |
+| target_type | ENUM | post/reply/user |
 | target_id | INT | |
 | is_read | BOOLEAN | |
 | email_sent | BOOLEAN | 是否已发送邮件通知 |
 | created_at | TIMESTAMP | |
+
+> **注意**：`badge` 类型已移除，徽章系统未实现。
 
 ---
 
@@ -192,26 +203,34 @@
 
 ---
 
-### 用户扩展
+### ~~用户扩展~~（未实现）
 
-#### user_follows - 用户关注表
-#### user_feeds - 用户动态表
-#### user_titles - 用户头衔表（Discuz 风格）
-#### user_title_assignments - 头衔分配表
-#### user_social_links - 社交链接表
-#### user_signatures - 签名档表
-#### user_levels - 用户等级表
-#### user_groups - 用户组表
-#### user_group_members - 用户组成员表
+> **注意**：以下表已规划但未实现：
+> - `user_follows` - 用户关注表
+> - `user_feeds` - 用户动态表
+> - `user_titles` - 用户头衔表
+> - `user_title_assignments` - 头衔分配表
+> - `user_social_links` - 社交链接表
+> - `user_signatures` - 签名档表
+> - `user_levels` - 用户等级表
+> - `user_groups` - 用户组表
+> - `user_group_members` - 用户组成员表
 
 ---
 
 ### 私信系统
 
-#### message_groups - 私信群聊表
-#### message_group_members - 群聊成员表
-#### group_messages - 群聊消息表
-#### message_reads - 消息已读记录
+#### messages - 私信表
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT PK | 自增主键（高流量表使用 BIGINT） |
+| sender_id | INT FK | 发送者（ON DELETE CASCADE） |
+| recipient_id | INT FK | 接收者（ON DELETE CASCADE） |
+| content | TEXT | 消息内容 |
+| is_read | BOOLEAN | 是否已读 |
+| created_at | TIMESTAMP | |
+
+> **注意**：群聊功能未实现，仅支持一对一私信。
 
 ---
 
@@ -236,8 +255,34 @@
 
 ### 统计与日志
 
-#### statistics - 统计表
 #### operation_logs - 操作日志表
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT PK | 自增主键（高流量表使用 BIGINT） |
+| user_id | INT FK | 操作者（ON DELETE CASCADE） |
+| action | VARCHAR(50) | 操作类型 |
+| target_type | VARCHAR(50) | 目标类型 |
+| target_id | INT | 目标 ID |
+| details | JSON | 操作详情 |
+| ip_address | VARCHAR(45) | IP 地址 |
+| user_agent | VARCHAR(500) | 用户代理 |
+| created_at | TIMESTAMP | |
+
+> **注意**：操作日志存储在 MySQL 数据库中，保留 90 天。通过 `POST /admin/cleanup/logs` 接口清理旧日志。
+
+#### session_audit - 会话审计表
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | BIGINT PK | 自增主键 |
+| session_token | VARCHAR(255) | 会话令牌 |
+| user_id | INT FK | 用户 ID（ON DELETE CASCADE） |
+| action | ENUM | login/logout/token_refresh |
+| ip_address | VARCHAR(45) | IP 地址 |
+| created_at | TIMESTAMP | |
+
+> **注意**：用于追踪用户登录/登出行为，增强安全审计。
+
+#### statistics - 统计表
 #### search_history - 搜索历史表
 #### popular_searches - 热门搜索表
 #### online_sessions - 在线会话表
@@ -262,13 +307,70 @@
 ## 索引设计
 
 ```sql
+-- 帖子表索引
 CREATE INDEX idx_posts_user_id ON posts(user_id);
 CREATE INDEX idx_posts_category_id ON posts(category_id);
 CREATE INDEX idx_posts_status_created ON posts(status, created_at DESC);
+CREATE INDEX idx_posts_is_pinned ON posts(is_pinned, created_at DESC);
+
+-- 回复表索引
 CREATE INDEX idx_replies_post_id ON replies(post_id);
 CREATE INDEX idx_replies_user_id ON replies(user_id);
+CREATE INDEX idx_replies_parent ON replies(post_id, parent_reply_id);
+CREATE INDEX idx_replies_created ON replies(post_id, created_at DESC);
+
+-- 通知表索引
 CREATE INDEX idx_notifications_user_read ON notifications(user_id, is_read);
-CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_notifications_user_created ON notifications(user_id, created_at DESC);
+
+-- 消息表索引
+CREATE INDEX idx_messages_sender ON messages(sender_id);
+CREATE INDEX idx_messages_recipient ON messages(recipient_id);
+CREATE INDEX idx_messages_unread ON messages(recipient_id, is_read);
+
+-- 操作日志索引
+CREATE INDEX idx_operation_logs_user ON operation_logs(user_id);
+CREATE INDEX idx_operation_logs_action ON operation_logs(action);
+CREATE INDEX idx_operation_logs_created ON operation_logs(created_at DESC);
+
+-- 用户表索引
+CREATE INDEX idx_users_status ON users(status);
+CREATE INDEX idx_users_mindauth ON users(mindauth_id);
 CREATE INDEX idx_users_online ON users(is_online, last_active_at);
+
+-- 其他索引
+CREATE INDEX idx_reports_status ON reports(status);
 CREATE INDEX idx_sensitive_word ON sensitive_words(word);
 ```
+
+## 外键约束说明
+
+所有外键约束使用 `ON DELETE CASCADE`，当父记录被删除时自动删除关联记录：
+
+```sql
+-- 示例
+ALTER TABLE posts ADD CONSTRAINT fk_posts_user 
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+
+ALTER TABLE replies ADD CONSTRAINT fk_replies_post 
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE;
+
+ALTER TABLE notifications ADD CONSTRAINT fk_notifications_user 
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+```
+
+## 软删除实现
+
+使用 TypeORM 的 `@DeleteDateColumn` 实现软删除：
+
+```typescript
+@Entity()
+export class Post {
+  // ... 其他字段
+  
+  @DeleteDateColumn()
+  deletedAt: Date | null;
+}
+```
+
+软删除的实体在查询时会自动被过滤，使用 `repository.find()` 不会返回已删除记录。如需包含已删除记录，使用 `withDeleted()` 方法。

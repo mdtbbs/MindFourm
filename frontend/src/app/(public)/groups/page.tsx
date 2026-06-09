@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
-import UnifiedHeader from '@/components/layout/unified-header';
+import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { Users, Hash, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
@@ -27,7 +27,7 @@ export default function GroupsPage() {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const data = await api.get('/groups');
+      const data = await api.get<Group[]>('/groups');
       setGroups(data || []);
     } catch (err) {
       console.error('Failed to load groups:', err);

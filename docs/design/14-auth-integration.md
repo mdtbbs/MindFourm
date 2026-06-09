@@ -2,6 +2,7 @@
 
 > 本文档记录了论坛系统与 MindAuth OAuth 的集成设计方案。
 > 创建时间: 2026-06-07
+> 更新时间: 2026-06-08
 
 ## 认证流程
 
@@ -43,14 +44,40 @@
      │               │ 11. 创建/更新本地用户          │               │
      │               │──────────────────────────────▶│               │
      │               │               │               │               │
-     │               │ 12. 创建会话                   │               │
+     │               │ 12. 创建 Redis 会话（7天TTL）  │               │
      │               │──────────────────────────────────────────────▶│
      │               │               │               │               │
-     │               │ 13. 设置 HttpOnly Cookie      │               │
+     │               │ 13. 设置 HttpOnly Cookie（30天）              │
      │               │               │               │               │
      │ 14. 重定向到首页              │               │               │
      │◀──────────────│               │               │               │
+     │               │               │               │               │
+     │               │ 后续请求：验证会话 + 滑动续期   │               │
+     │               │──────────────────────────────────────────────▶│
 ```
+
+---
+
+## 核心概念
+
+### OAuth Token 的作用范围
+
+**重要**：OAuth `access_token` 仅在登录时一次性使用，用于从 MindAuth 获取用户信息。它**不用于后续的 API 认证**。
+
+| 阶段 | Token | 说明 |
+|------|-------|------|
+| 登录时 | OAuth `access_token` | 一次性使用，获取用户信息后丢弃 |
+| 后续认证 | Redis 会话 Token | 存储在 HttpOnly Cookie 中，是主要认证机制 |
+
+### 会话管理
+
+| 机制 | TTL | 说明 |
+|------|-----|------|
+| Redis 会话 | 7 天（604800 秒） | 实际会话有效期，滑动窗口续期 |
+| Cookie `maxAge` | 30 天 | Cookie 本身的最大存活时间 |
+| 会话审计 | 永久 | 记录到 `session_audit` 表 |
+
+**滑动窗口续期**：每次成功验证会话时，Redis 会话的 TTL 会重置为 7 天。这意味着活跃用户的会话实际上不会过期，只要他们在 7 天内至少访问一次。
 
 ---
 
@@ -73,28 +100,22 @@ MINDAUTH_CALLBACK_URL=http://localhost:3000/api/auth/callback
 
 ---
 
-## JWT 管理
+## Cookie 配置
 
-### Token 类型
-| Token | 有效期 | 存储位置 | 用途 |
-|-------|--------|----------|------|
-| 访问 Token（access_token） | 1 小时 | HttpOnly Cookie | API 请求认证 |
-| 刷新 Token（refresh_token） | 7 天 | Redis | 刷新访问 Token |
-
-### Cookie 配置
 ```typescript
-// config/oauth.config.ts
-export const authConfig = {
-  cookieName: 'forum_session',
-  cookieOptions: {
-    httpOnly: true,       // 前端 JS 无法访问
+// config/app.config.ts
+export default () => ({
+  session: {
+    name: 'forum_session',
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 天（Cookie 存活时间）
+    httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',      // CSRF 防护
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 天
-    path: '/',
+    sameSite: 'lax',
   },
-};
+});
 ```
+
+**注意**：Cookie 的 `maxAge`（30 天）和 Redis 会话 TTL（7 天）不同是正常的设计。Cookie 存储的是会话 Token，而 Redis 决定会话是否有效。滑动窗口续期确保活跃用户的会话保持有效。
 
 ---
 
@@ -104,120 +125,112 @@ export const authConfig = {
 // modules/auth/auth.service.ts
 @Injectable()
 export class AuthService {
+  // Redis 会话 TTL：7 天，每次验证时滑动续期
+  private readonly sessionTtl = 7 * 24 * 60 * 60; // 604800 秒
+
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
-    @InjectRepository(RefreshToken) private refreshRepo: Repository<RefreshToken>,
-    private httpService: HttpService,
-    private redis: RedisService,
+    @InjectRepository(SessionAudit) private sessionAuditRepo: Repository<SessionAudit>,
+    private redisService: RedisService,
+    private configService: ConfigService,
   ) {}
 
   /**
    * OAuth 回调处理
+   * 注意：OAuth access_token 仅在此处一次性使用，用于获取用户信息
    */
-  async handleOAuthCallback(code: string, ip: string, userAgent: string): Promise<AuthResult> {
-    // 1. 用 code 换取 access_token
-    const tokenResponse = await this.httpService.post(
-      `${process.env.MINDAUTH_URL}/oauth/token`,
-      {
-        grant_type: 'authorization_code',
-        code,
-        client_id: process.env.MINDAUTH_CLIENT_ID,
-        client_secret: process.env.MINDAUTH_CLIENT_SECRET,
-        redirect_uri: process.env.MINDAUTH_CALLBACK_URL,
-      }
-    ).toPromise();
+  async handleOAuthCallback(code: string, ip: string): Promise<AuthResult> {
+    // 1. 用 code 换取 access_token（一次性使用）
+    const accessToken = await this.exchangeCode(code);
 
-    const { access_token, refresh_token } = tokenResponse.data;
-
-    // 2. 获取用户信息
-    const userInfo = await this.httpService.get(
-      `${process.env.MINDAUTH_URL}/api/user`,
-      { headers: { Authorization: `Bearer ${access_token}` } }
-    ).toPromise();
-
-    const mindauthUser = userInfo.data;
+    // 2. 获取用户信息（access_token 使用后丢弃）
+    const mindauthUser = await this.getUserInfo(accessToken);
 
     // 3. 创建或更新本地用户
-    let user = await this.userRepo.findOne({ where: { mindauth_id: mindauthUser.id } });
+    const user = await this.getOrCreateUser(mindauthUser);
 
-    if (!user) {
-      // 新用户
-      user = this.userRepo.create({
-        mindauth_id: mindauthUser.id,
-        username: mindauthUser.username,
-        email: mindauthUser.email,
-        avatar_url: mindauthUser.avatar_url,
-        status: 'active',
-      });
-      await this.userRepo.save(user);
-
-      // 分配默认角色
-      await this.assignDefaultRole(user.id);
-    } else {
-      // 更新用户信息
-      user.username = mindauthUser.username;
-      user.email = mindauthUser.email;
-      if (mindauthUser.avatar_url) user.avatar_url = mindauthUser.avatar_url;
-      await this.userRepo.save(user);
-    }
-
-    // 4. 创建本地会话
+    // 4. 创建本地 Redis 会话（主要认证机制）
     const sessionToken = this.generateSessionToken();
-    
-    // 存储到 Redis
-    await this.redis.set(
-      `session:${sessionToken}`,
-      JSON.stringify({ userId: user.id, ip, userAgent }),
-      'EX', 7 * 24 * 60 * 60 // 7 天
-    );
-
-    // 记录登录日志
-    await this.logLogin(user.id, ip, userAgent);
+    await this.createSession(user.id, sessionToken, ip);
 
     return { user, sessionToken };
   }
 
   /**
-   * 验证会话
+   * 验证会话 - 滑动窗口续期
    */
   async verifySession(sessionToken: string): Promise<User | null> {
-    const sessionData = await this.redis.get(`session:${sessionToken}`);
-    if (!sessionData) return null;
+    const sessionKey = `session:${sessionToken}`;
+    const sessionData = await this.redisService.hgetall(sessionKey);
 
-    const { userId } = JSON.parse(sessionData);
+    if (!sessionData || !sessionData.userId) {
+      return null;
+    }
+
+    // 滑动窗口：每次成功验证时刷新 TTL
+    await this.redisService.expire(sessionKey, this.sessionTtl);
+
+    const userId = parseInt(sessionData.userId, 10);
     const user = await this.userRepo.findOne({ where: { id: userId } });
 
-    if (!user || user.status !== 'active') return null;
+    return user || null;
+  }
 
-    // 更新最后活跃时间
-    user.last_active_at = new Date();
-    user.is_online = true;
-    await this.userRepo.save(user);
+  /**
+   * 创建会话并记录审计日志
+   */
+  async createSession(userId: number, sessionToken: string, ip: string): Promise<void> {
+    const sessionKey = `session:${sessionToken}`;
 
-    // 更新 Redis 会话
-    await this.redis.expire(`session:${sessionToken}`, 7 * 24 * 60 * 60);
+    // 存储会话到 Redis（哈希结构）
+    await this.redisService.hset(sessionKey, 'userId', userId.toString());
+    await this.redisService.hset(sessionKey, 'createdAt', new Date().toISOString());
+    await this.redisService.expire(sessionKey, this.sessionTtl);
 
-    return user;
+    // 记录审计日志
+    const audit = this.sessionAuditRepo.create({
+      user_id: userId,
+      session_token: sessionToken,
+      action: 'login',
+      ip_address: ip,
+    });
+    await this.sessionAuditRepo.save(audit);
   }
 
   /**
    * 登出
    */
-  async logout(sessionToken: string): Promise<void> {
-    const sessionData = await this.redis.get(`session:${sessionToken}`);
-    if (sessionData) {
-      const { userId } = JSON.parse(sessionData);
-      
-      // 标记离线
-      const user = await this.userRepo.findOne({ where: { id: userId } });
-      if (user) {
-        user.is_online = false;
-        await this.userRepo.save(user);
-      }
-    }
+  async logout(sessionToken: string, userId?: number): Promise<void> {
+    const sessionKey = `session:${sessionToken}`;
+    await this.redisService.del(sessionKey);
 
-    // 删除会话
-    await this.redis.del(`session:${sessionToken}`);
+    // 记录审计日志
+    if (userId) {
+      const audit = this.sessionAuditRepo.create({
+        user_id: userId,
+        session_token: sessionToken,
+        action: 'logout',
+      });
+      await this.sessionAuditRepo.save(audit);
+    }
+  }
+
+  /**
+   * 撤销 MindAuth 令牌（可选）
+   * @deprecated OAuth 令牌仅在登录时一次性使用，此方法仅用于清理目的。
+   * 本地 Redis 会话是主要认证机制。
+   */
+  async revokeTokens(accessToken: string, refreshToken?: string): Promise<void> {
+    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
+    try {
+      await axios.post(`${mindauthUrl}/api/revoke`, {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+    } catch (error) {
+      // 静默失败 - 本地会话已销毁
+      console.warn('Failed to revoke tokens at MindAuth:', error.message);
+    }
   }
 
   private generateSessionToken(): string {
@@ -269,14 +282,37 @@ if (isPublic) return true; // 跳过认证
 
 ## 会话管理策略
 
-### 会话过期
+### 会话过期机制
+
 | 场景 | 行为 |
 |------|------|
-| Token 过期（1 小时） | 需要刷新 Token |
-| 刷新 Token 过期（7 天） | 需要重新登录 |
-| 用户登出 | 立即删除会话 |
-| 修改密码 | 撤销所有会话（通过 MindAuth） |
+| Redis 会话过期（7天无活动） | 需要重新登录 |
+| 用户登出 | 立即删除会话，记录审计日志 |
+| Cookie 过期（30天） | Cookie 被浏览器删除，但会话可能仍在 Redis 中 |
 | 封禁用户 | 立即删除所有会话 |
+
+### 滑动窗口续期
+
+会话采用**滑动窗口续期**机制：
+- Redis 会话 TTL 为 7 天
+- 每次成功验证会话时，TTL 重置为 7 天
+- 活跃用户的会话实际上永不过期（只要 7 天内至少访问一次）
+
+### 会话审计
+
+所有登录/登出操作记录到 `session_audit` 表：
+
+```sql
+CREATE TABLE session_audit (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  user_id INT NOT NULL,
+  session_token VARCHAR(96) NOT NULL,
+  action ENUM('login', 'logout') NOT NULL,
+  ip_address VARCHAR(45),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_user_created (user_id, created_at DESC)
+);
+```
 
 ### 异常登录检测
 | 检测项 | 规则 |
@@ -285,20 +321,6 @@ if (isPublic) return true; // 跳过认证
 | 异常时间 | 非活跃时段登录 |
 | 频繁失败 | 15 分钟内登录失败 > 5 次 |
 | 异常设备 | User-Agent 突然变化 |
-
-### 登录日志
-```sql
-CREATE TABLE login_logs (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  user_id INT NOT NULL,
-  ip_address VARCHAR(45),
-  user_agent TEXT,
-  status ENUM('success', 'failed') NOT NULL,
-  failure_reason VARCHAR(100),  -- 失败原因
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_user_created (user_id, created_at DESC)
-);
-```
 
 ---
 
@@ -343,33 +365,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 ---
 
-## MindAuth Token 刷新
-
-### 自动刷新
-当 access_token 过期时，使用 refresh_token 自动刷新：
-
-```typescript
-async refreshToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string }> {
-  const response = await this.httpService.post(
-    `${process.env.MINDAUTH_URL}/oauth/token`,
-    {
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: process.env.MINDAUTH_CLIENT_ID,
-      client_secret: process.env.MINDAUTH_CLIENT_SECRET,
-    }
-  ).toPromise();
-
-  return response.data;
-}
-```
-
----
-
 ## 安全注意事项
 
-1. **HttpOnly Cookie**：前端 JS 无法读取，防止 XSS 窃取 Token
+1. **HttpOnly Cookie**：前端 JS 无法读取，防止 XSS 窃取会话 Token
 2. **SameSite Cookie**：防止 CSRF 攻击
 3. **HTTPS**：生产环境必须使用 HTTPS
-4. **Token 轮换**：每次刷新时生成新的 refresh_token
-5. **MindAuth 依赖**：论坛不存储密码，所有密码相关操作通过 MindAuth
+4. **OAuth Token 一次性使用**：`access_token` 仅用于获取用户信息，不存储
+5. **Redis 会话为主**：本地 Redis 会话是主要认证机制，不依赖 MindAuth Token
+6. **滑动窗口续期**：活跃用户会话保持有效
+7. **会话审计**：所有登录/登出操作记录到数据库
+8. **MindAuth 依赖**：论坛不存储密码，所有密码相关操作通过 MindAuth

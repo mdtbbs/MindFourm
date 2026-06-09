@@ -1,7 +1,17 @@
 /* MindBBS 样式 - 使用共享设计系统 */
 @import '../../../../shared-styles/variables.css';
 @import '../../../../shared-styles/components.css';
-@import "tw-animate-css";
+
+/* tw-animate-css base styles (inline to avoid import issues) */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 
 /* CSS 变量必须在使用前定义 */
 :root {
@@ -77,8 +87,6 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: #ff6b35;
 }
-
-@import "shadcn/tailwind.css";
 
 @tailwind base;
 @tailwind components;

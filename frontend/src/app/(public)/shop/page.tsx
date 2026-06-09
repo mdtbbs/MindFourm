@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
-import UnifiedHeader from '@/components/layout/unified-header';
+import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { ShoppingBag, Star, Lock, Package } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
@@ -31,7 +31,7 @@ export default function ShopPage() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await api.get('/shop/items?page=1&limit=50');
+      const res = await api.get<{ data: ShopItem[] }>('/shop/items?page=1&limit=50');
       setItems((res.data || []).filter((i: ShopItem) => i.is_active));
     } catch (err) {
       console.error('Failed to load shop:', err);
@@ -43,7 +43,7 @@ export default function ShopPage() {
   const fetchMyPoints = useCallback(async () => {
     if (!isAuthenticated || !user) return;
     try {
-      const data = await api.get('/points/me');
+      const data = await api.get<{ available_points?: number; total_points?: number }>('/points/me');
       setMyPoints(data.available_points || data.total_points || 0);
     } catch {}
   }, [isAuthenticated, user]);
@@ -51,7 +51,7 @@ export default function ShopPage() {
   const fetchMyPurchases = useCallback(async () => {
     if (!isAuthenticated || !user) return;
     try {
-      const res = await api.get(`/shop/me/purchases?userId=${user.id}&page=1&limit=20`);
+      const res = await api.get<{ data: any[] }>(`/shop/me/purchases?userId=${user.id}&page=1&limit=20`);
       setPurchases(res.data || []);
     } catch {}
   }, [isAuthenticated, user]);

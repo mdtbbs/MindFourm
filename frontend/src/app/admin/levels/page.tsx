@@ -49,8 +49,12 @@ export default function AdminLevelsPage() {
     setError(null);
     try {
       const body = {
-        ...formData,
-        max_points: formData.max_points ? parseInt(formData.max_points) : null,
+        name: formData.name,
+        slug: formData.slug,
+        min_points: formData.min_points,
+        max_points: formData.max_points ? parseInt(formData.max_points) : undefined,
+        color: formData.color || undefined,
+        description: formData.description || undefined,
         sort_order: formData.sort_order || 0,
       };
       if (editing) {
@@ -104,7 +108,7 @@ export default function AdminLevelsPage() {
           <h1 className="text-xl font-bold">等级管理</h1>
           <p className="text-sm text-surface-500 mt-1">管理用户等级体系，根据积分自动分配</p>
         </div>
-        <Button onClick={() => { resetForm(); setShowForm(true); }} variant="primary">
+        <Button onClick={() => { resetForm(); setShowForm(true); }} variant="default">
           <Plus className="w-4 h-4 mr-1" />
           添加等级
         </Button>
@@ -151,7 +155,7 @@ export default function AdminLevelsPage() {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button onClick={handleSubmit} variant="primary">{editing ? '保存修改' : '创建等级'}</Button>
+            <Button onClick={handleSubmit} variant="default">{editing ? '保存修改' : '创建等级'}</Button>
             <Button onClick={() => { setShowForm(false); resetForm(); }} variant="secondary">取消</Button>
           </div>
         </div>
@@ -178,7 +182,7 @@ export default function AdminLevelsPage() {
               <Button size="sm" variant="secondary" onClick={() => handleEdit(level)}>
                 <Edit className="w-3 h-3 mr-1" /> 编辑
               </Button>
-              <Button size="sm" variant="danger" onClick={() => handleDelete(level.id)}>
+              <Button size="sm" variant="destructive" onClick={() => handleDelete(level.id)}>
                 <Trash2 className="w-3 h-3 mr-1" /> 删除
               </Button>
             </div>

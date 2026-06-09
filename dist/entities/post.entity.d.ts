@@ -1,0 +1,36 @@
+import { User } from './user.entity';
+import { Category } from './category.entity';
+import { Reply } from './reply.entity';
+import { Bookmark } from './bookmark.entity';
+import { Attachment } from './attachment.entity';
+import { Notification } from './notification.entity';
+import { PostLike } from './post-like.entity';
+import { PostTag } from './post-tag.entity';
+import { Group } from './group.entity';
+export declare class Post {
+    id: number;
+    user_id: number;
+    category_id: number;
+    server_id: number;
+    required_group_id: number;
+    post_type: string;
+    title: string;
+    content: string;
+    content_html: string;
+    status: string;
+    is_pinned: number;
+    view_count: number;
+    like_count: number;
+    created_at: Date;
+    updated_at: Date;
+    deleted_at: Date;
+    user: User;
+    category: Category;
+    requiredGroup: Group;
+    replies: Reply[];
+    bookmarks: Bookmark[];
+    attachments: Attachment[];
+    notifications: Notification[];
+    likes: PostLike[];
+    postTags: PostTag[];
+}

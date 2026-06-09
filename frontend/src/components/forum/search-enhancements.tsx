@@ -13,11 +13,11 @@ export default function SearchEnhancements() {
   const fetchData = useCallback(async () => {
     try {
       const [popularRes, historyRes] = await Promise.all([
-        searchApi.getPopular().catch(() => ({ data: [] })),
-        searchApi.getHistory().catch(() => ({ data: [] })),
+        searchApi.getPopular().catch(() => []),
+        searchApi.getHistory().catch(() => []),
       ]);
-      setPopular(popularRes.data || []);
-      setHistory(historyRes.data || []);
+      setPopular(Array.isArray(popularRes) ? popularRes : []);
+      setHistory(Array.isArray(historyRes) ? historyRes : []);
     } catch {} finally {
       setLoading(false);
     }

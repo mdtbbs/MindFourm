@@ -6,7 +6,7 @@ import {
   useMotionTemplate,
   useMotionValue,
   useSpring,
-} from "motion/react"
+} from "framer-motion"
 import { useTheme } from "next-themes"
 
 import { cn } from "@/lib/utils"

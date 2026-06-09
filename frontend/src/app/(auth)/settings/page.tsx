@@ -42,7 +42,7 @@ export default function SettingsPage() {
 
   const loadPreferences = async () => {
     try {
-      const res = await api.get('/notifications/email-preference');
+      const res = await api.get<{ data: { data: EmailPreferences } }>('/notifications/email-preference');
       setPreferences(res.data.data);
     } catch {
       // Use defaults

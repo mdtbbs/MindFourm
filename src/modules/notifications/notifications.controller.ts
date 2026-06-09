@@ -1,12 +1,74 @@
-import { Controller, Get, Put, Query, Param, UseGuards, Req, Body, Patch } from '@nestjs/common';
+import { Controller, Get, Put, Query, Param, UseGuards, Req, Body, Patch, Sse } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
 import { UpdateEmailPreferenceDto } from './dto/update-email-preference.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Observable, Subject } from 'rxjs';
+import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 
 @Controller('notifications')
-export class NotificationsController {
+export class NotificationsController implements OnModuleInit, OnModuleDestroy {
+  private notificationSubjects: Map<number, Subject<MessageEvent>> = new Map();
+  private redisSubscriber: any;
+
   constructor(private readonly notificationsService: NotificationsService) {}
+
+  onModuleInit() {
+    // Initialize Redis subscriber for notification events
+    // This will be set up in the service
+  }
+
+  onModuleDestroy() {
+    // Cleanup all SSE connections
+    for (const subject of this.notificationSubjects.values()) {
+      subject.complete();
+    }
+    this.notificationSubjects.clear();
+  }
+
+  /**
+   * SSE endpoint for real-time notifications
+   *
+   * Clients connect to this endpoint and receive real-time notification events.
+   * The endpoint uses JWT authentication via cookie/session.
+   */
+  @Sse('events')
+  @UseGuards(JwtAuthGuard)
+  sseEvents(@Req() req: any): Observable<MessageEvent> {
+    const userId = req.user.id;
+
+    // Create or get existing subject for this user
+    if (!this.notificationSubjects.has(userId)) {
+      this.notificationSubjects.set(userId, new Subject<MessageEvent>());
+    }
+
+    const subject = this.notificationSubjects.get(userId);
+
+    if (!subject) {
+      throw new Error('Failed to create SSE subject');
+    }
+
+    // Send initial connection message
+    subject.next({
+      data: JSON.stringify({ type: 'connected', userId }),
+    } as MessageEvent);
+
+    // Return the observable stream
+    return subject.asObservable();
+  }
+
+  /**
+   * Push notification to SSE stream for a specific user
+   * Called by NotificationsService when a new notification is created
+   */
+  pushNotification(userId: number, notification: any) {
+    const subject = this.notificationSubjects.get(userId);
+    if (subject) {
+      subject.next({
+        data: JSON.stringify({ type: 'notification', data: notification }),
+      } as MessageEvent);
+    }
+  }
 
   @UseGuards(JwtAuthGuard)
   @Get()

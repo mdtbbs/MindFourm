@@ -13,8 +13,14 @@
 │  │ Winston  │  │ 日志     │  │ 健康     │  │ 性能         │   │
 │  │ Logger   │  │ 轮转     │  │ 检查     │  │ 监控         │   │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────────┘   │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │              operation_logs 表（MySQL 存储）               │  │
+│  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+> **注意**：操作日志存储在 MySQL `operation_logs` 表中，而非文件。使用 `LogsService` 提供日志记录和查询功能。
 
 ---
 
@@ -55,7 +61,7 @@ export const WinstonConfig = {
       level: 'error',
       datePattern: 'YYYY-MM-DD',
       maxSize: '20m',       // 单个文件最大 20MB
-      maxFiles: '30d',      // 保留 30 天
+      maxFiles: '90d',      // 保留 90 天（统一保留期限）
       zippedArchive: true,  // 自动压缩
     }),
 
@@ -64,7 +70,7 @@ export const WinstonConfig = {
       filename: 'logs/combined-%DATE%.log',
       datePattern: 'YYYY-MM-DD',
       maxSize: '20m',
-      maxFiles: '30d',
+      maxFiles: '90d',      // 保留 90 天（统一保留期限）
       zippedArchive: true,
     }),
   ],
@@ -72,33 +78,80 @@ export const WinstonConfig = {
 ```
 
 ### 使用方式
+
+#### LogsService - 操作日志服务
+
+操作日志存储在 MySQL `operation_logs` 表中，通过 `LogsService` 管理：
+
 ```typescript
-// NestJS Logger
+// services/logs.service.ts
 @Injectable()
-export class AppLogger extends Logger {
-  error(message: string, trace?: string, context?: string) {
-    super.error(message, trace, context);
-    // 同时写入 Winston
-    this.winstonLogger.error(message, { context, trace });
+export class LogsService {
+  constructor(
+    @InjectRepository(OperationLog)
+    private logRepo: Repository<OperationLog>,
+  ) {}
+
+  // 记录操作日志
+  async log(userId: number, action: string, targetType: string, targetId: number, details: any, ip: string): Promise<void> {
+    await this.logRepo.save({
+      user_id: userId,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      details,
+      ip_address: ip,
+      created_at: new Date(),
+    });
   }
 
-  info(message: string, context?: string) {
-    super.log(message, context);
-    this.winstonLogger.info(message, { context });
+  // 分页查询日志
+  async getLogs(options: { page: number; limit: number; action?: string; userId?: number }): Promise<PaginatedResult<OperationLog>> {
+    const qb = this.logRepo.createQueryBuilder('log')
+      .orderBy('log.created_at', 'DESC')
+      .skip((options.page - 1) * options.limit)
+      .take(options.limit);
+
+    if (options.action) {
+      qb.andWhere('log.action = :action', { action: options.action });
+    }
+    if (options.userId) {
+      qb.andWhere('log.user_id = :userId', { userId: options.userId });
+    }
+
+    const [data, total] = await qb.getManyAndCount();
+
+    return {
+      data,
+      total,
+      page: options.page,
+      limit: options.limit,
+    };
   }
-}
 
-// 在 Service 中注入
-@Injectable()
-export class PostService {
-  constructor(private logger: AppLogger) {}
+  // 清理旧日志（保留 90 天）
+  async cleanupOldLogs(): Promise<number> {
+    const cutoffDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    const result = await this.logRepo
+      .createQueryBuilder()
+      .delete()
+      .where('created_at < :cutoff', { cutoff: cutoffDate })
+      .execute();
 
-  async create(dto: CreatePostDto, userId: number) {
-    this.logger.info(`Post created by user ${userId}`, 'PostService');
-    // ...
+    return result.affected;
   }
 }
 ```
+
+#### 清理接口
+
+管理员可通过 API 清理旧日志：
+
+```
+POST /admin/cleanup/logs
+```
+
+该接口调用 `LogsService.cleanupOldLogs()` 删除超过 90 天的操作日志。
 
 ---
 
@@ -287,10 +340,13 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 - Docker logs：`docker logs forum-backend --follow`
 - 可选集成：ELK Stack（Elasticsearch + Logstash + Kibana）或 Grafana Loki
 
-### 日志保留策略
+### 日志保留策略（统一 90 天）
+
 | 日志类型 | 保留时间 | 存储位置 |
 |----------|----------|----------|
-| 错误日志 | 90 天 | 本地文件 + 可选远程 |
-| 综合日志 | 30 天 | 本地文件 |
-| 请求日志 | 7 天 | 本地文件 |
-| 操作审计日志 | 永久 | 数据库 |
+| 错误日志 | 90 天 | 本地文件 (`logs/error-*.log`) |
+| 综合日志 | 90 天 | 本地文件 (`logs/combined-*.log`) |
+| 请求日志 | 90 天 | 本地文件 (`logs/request-*.log`) |
+| 操作审计日志 | 90 天 | MySQL `operation_logs` 表 |
+
+> **注意**：所有日志类型统一保留 90 天，通过 Winston `maxFiles: '90d'` 和 MySQL 定期清理实现。

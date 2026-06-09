@@ -12,7 +12,7 @@ export class SearchHistory {
   id: number;
 
   @Column({ nullable: true })
-  user_id: number | null;
+  user_id: number;
 
   @Column({ length: 255 })
   query: string;

@@ -16,7 +16,7 @@ export default function FollowButton({ targetUserId }: { targetUserId: number })
       setChecking(false);
       return;
     }
-    api.get(`/follows/check/${targetUserId}?followerId=${user.id}`)
+    api.get<{ isFollowing: boolean }>(`/follows/check/${targetUserId}?followerId=${user.id}`)
       .then((res) => setIsFollowing(res.isFollowing || false))
       .catch(() => {})
       .finally(() => setChecking(false));

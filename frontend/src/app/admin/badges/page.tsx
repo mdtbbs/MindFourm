@@ -50,7 +50,15 @@ export default function AdminBadgesPage() {
     setError(null);
     if (!formData.name || !formData.slug) { setError('请填写名称和标识'); return; }
     try {
-      const body = { ...formData, criteria: formData.criteria || null, is_active: formData.is_active };
+      const body = {
+        name: formData.name,
+        slug: formData.slug,
+        icon: formData.icon || undefined,
+        description: formData.description || undefined,
+        level: formData.level || undefined,
+        criteria: formData.criteria || undefined,
+        is_active: formData.is_active
+      };
       if (editing) {
         await badgesApi.adminUpdate(editing.id, body);
         setMessage('徽章已更新');
@@ -123,7 +131,7 @@ export default function AdminBadgesPage() {
           <Button onClick={() => setShowAward(true)} variant="secondary">
             <Gift className="w-4 h-4 mr-1" /> 授予徽章
           </Button>
-          <Button onClick={() => { resetForm(); setShowForm(true); }} variant="primary">
+          <Button onClick={() => { resetForm(); setShowForm(true); }} variant="default">
             <Plus className="w-4 h-4 mr-1" /> 添加徽章
           </Button>
         </div>
@@ -150,7 +158,7 @@ export default function AdminBadgesPage() {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button onClick={handleAward} variant="primary">授予</Button>
+            <Button onClick={handleAward} variant="default">授予</Button>
             <Button onClick={() => setShowAward(false)} variant="secondary">取消</Button>
           </div>
         </div>
@@ -198,7 +206,7 @@ export default function AdminBadgesPage() {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button onClick={handleSubmit} variant="primary">{editing ? '保存修改' : '创建徽章'}</Button>
+            <Button onClick={handleSubmit} variant="default">{editing ? '保存修改' : '创建徽章'}</Button>
             <Button onClick={() => { setShowForm(false); resetForm(); }} variant="secondary">取消</Button>
           </div>
         </div>
@@ -223,7 +231,7 @@ export default function AdminBadgesPage() {
               <Button size="sm" variant="secondary" onClick={() => handleEdit(badge)}>
                 <Edit className="w-3 h-3 mr-1" /> 编辑
               </Button>
-              <Button size="sm" variant="danger" onClick={() => handleDelete(badge.id)}>
+              <Button size="sm" variant="destructive" onClick={() => handleDelete(badge.id)}>
                 <Trash2 className="w-3 h-3 mr-1" /> 删除
               </Button>
             </div>

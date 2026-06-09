@@ -17,7 +17,7 @@ export class SearchController {
     });
 
     // Record search
-    await this.searchService.recordSearch(null, dto.q, postsResult.pagination.total);
+    await this.searchService.recordSearch(undefined, dto.q, postsResult.pagination.total);
 
     return {
       success: true,

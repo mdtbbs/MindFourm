@@ -3,14 +3,19 @@
 > 本文档记录了论坛系统的 UI/UX 设计规范。
 > 创建时间: 2026-06-07
 
-## 设计系统
+## 技术栈
 
-| 项目 | 规范 |
+| 项目 | 选择 |
 |------|------|
+| 前端框架 | Next.js 14 (App Router) |
+| 渲染模式 | SSR (服务端渲染) |
 | 基础组件 | shadcn/ui |
 | 动画组件 | Magic UI + Framer Motion |
 | 样式框架 | Tailwind CSS |
+| Markdown 渲染 | react-markdown + remark-gfm |
 | 主题 | 浅色/深色跟随系统切换 |
+
+> **注意**：前端使用 Next.js 14 App Router 架构，所有页面默认使用 SSR 渲染，确保 SEO 友好和首屏加载性能。
 
 ---
 
@@ -249,6 +254,120 @@
 | 颜色依赖 | 重要信息不仅依赖颜色 |
 | 动画 | 支持 `prefers-reduced-motion` |
 
+### 动画可访问性
+
+系统支持 `prefers-reduced-motion` 媒体查询，尊重用户的系统设置：
+
+```css
+/* 用户偏好减少动画时，禁用或简化动画 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+```
+
+在 Framer Motion 中：
+
+```tsx
+const prefersReducedMotion = useReducedMotion();
+
+<motion.div
+  animate={{ opacity: 1 }}
+  transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
+>
+  {/* 内容 */}
+</motion.div>
+```
+
+---
+
+## 共享设计系统
+
+### shared-styles CSS 设计系统
+
+项目使用 `shared-styles` 包提供统一的 CSS 设计系统，包含 50+ 组件类。
+
+**变量定义** (`variables.css`)：
+
+| 类别 | 变量 |
+|------|------|
+| 品牌色 | `--primary: #ff6b35`, `--accent: #ffc107` |
+| 浅色主题 | `--bg: #fafafa`, `--bg-card: #ffffff`, `--text: #333333` |
+| 深色主题 | `[data-theme="dark"]` 覆盖 |
+| 状态色 | `--success`, `--warning`, `--error`, `--info` |
+| 布局 | `--header-height: 56px`, `--sidebar-width: 200px` |
+| 徽章 | `--badge-lv1` 到 `--badge-lv4` 渐变 |
+| 称号 | `--title-active`, `--title-core`, `--title-mod` |
+
+**组件类** (`components.css`)：
+
+| 类别 | 类名示例 |
+|------|----------|
+| 按钮 | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-danger` |
+| 卡片 | `.card`, `.card-lg`, `.server-card`, `.user-card` |
+| 表单 | `.input`, `.input-error`, `.badge` |
+| 导航 | `.header`, `.admin-sidebar`, `.tabs` |
+| 反馈 | `.toast`, `.toast-success`, `.toast-error` |
+| 数据 | `.data-table`, `.stats-grid`, `.activity-chart` |
+
+**工具类** (`utilities.css`)：
+
+| 类别 | 类名示例 |
+|------|----------|
+| 布局 | `.flex`, `.flex-col`, `.items-center`, `.justify-between` |
+| 间距 | `.gap-1/2/3/4`, `.p-2/3/4`, `.m-0`, `.mt-2/4` |
+| 文字 | `.text-primary/secondary/muted`, `.font-medium/semibold/bold` |
+| 响应式 | `.hidden-mobile`, `.hidden-desktop` |
+
+### shared TypeScript 包
+
+共享组件库提供跨项目复用的 React 组件。
+
+**组件列表**（11 个）：
+
+| 组件 | 说明 |
+|------|------|
+| `UnifiedHeader` | 导航头部，包含搜索、通知、主题切换 |
+| `AdminSidebar` | 管理面板侧边栏，支持折叠模式 |
+| `LoginLayout` | 分屏登录布局，带品牌动画 |
+| `UserCard` | 用户卡片，显示徽章和称号 |
+| `ServerCard` | 服务器卡片，显示状态/玩家/延迟 |
+| `StatsGrid` | 统计网格（2-5 列，普通/紧凑模式） |
+| `ActivityChart` | 24 小时活动柱状图 |
+| `Tabs` | 标签导航（下划线/药丸样式） |
+| `DataTable` | 通用数据表格，支持自定义列 |
+| `Medal` | 用户勋章徽章（Lv1-4，带脉冲动画） |
+| `Title` | 用户称号徽章（active/core/mod/admin/contributor） |
+
+**Hooks**：
+
+| Hook | 说明 |
+|------|------|
+| `useTheme` | 主题上下文，支持浅色/深色切换和过渡动画 |
+
+**类型定义** (`src/types/`)：
+
+| 文件 | 类型 |
+|------|------|
+| `user.ts` | User, UserRole, UserQuota, UserProfile, UserMedal, UserTitle |
+| `server.ts` | Server, ServerStatusType, ServerStats, ServerTemplate |
+| `post.ts` | Post, Reply, Category, Tag, Bookmark |
+| `notification.ts` | Notification, NotificationType |
+| `api.ts` | ApiResponse, PaginatedResponse, ApiError |
+
+**工具函数**：
+
+| 函数 | 说明 |
+|------|------|
+| `cn` | Tailwind 类名合并工具（clsx + tailwind-merge） |
+
+构建命令：`npm run build` → 输出到 `dist/`
+
 ---
 
 ## 页面布局规范
@@ -266,17 +385,26 @@
 
 ### 帖子详情页
 - 帖子标题 + 作者信息
-- 帖子正文（Markdown 渲染）
+- 帖子正文（react-markdown 渲染 GitHub 风格 Markdown）
 - 手动目录（侧边栏）
-- 投票区（如有）
 - 回复列表（分页，每页 20 条）
-- 回复输入框
+- 回复输入框（textarea + 预览）
+
+> **Markdown 编辑器**：使用 `react-markdown` + `remark-gfm` 渲染，支持：
+> - 代码语法高亮
+> - 表格
+> - 任务列表
+> - 删除线
+> - 自动链接
+> 
+> 编辑模式为 textarea + 实时预览，而非富文本编辑器（如 Editor.js）。
 
 ### 用户资料页
 - 主页背景 + 头像 + 昵称 + 称号
-- 徽章展示
-- 统计数据（发帖/回复/获赞/积分排名）
-- 动态列表
+- 统计数据（发帖/回复/获赞）
+- 用户帖子列表
+
+> **注意**：徽章展示、积分排名、动态列表功能未实现。
 
 ### 管理后台
 - 侧边栏导航

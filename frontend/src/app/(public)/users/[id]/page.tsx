@@ -29,9 +29,15 @@ async function fetchUserPosts(userId: number, page: number): Promise<PostListRes
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const responseData = json.data || {};
     return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
+      pagination: {
+        page: responseData.page || 1,
+        limit: responseData.limit || 20,
+        total: responseData.total || 0,
+        totalPages: responseData.totalPages || 1,
+      },
     };
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -44,9 +50,15 @@ async function fetchUserReplies(userId: number, page: number): Promise<{ data: R
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const responseData = json.data || {};
     return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
+      pagination: {
+        page: responseData.page || 1,
+        limit: responseData.limit || 20,
+        total: responseData.total || 0,
+        totalPages: responseData.totalPages || 1,
+      },
     };
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -59,9 +71,15 @@ async function fetchUserBookmarks(page: number): Promise<BookmarkListResponse> {
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const responseData = json.data || {};
     return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
+      pagination: {
+        page: responseData.page || 1,
+        limit: responseData.limit || 20,
+        total: responseData.total || 0,
+        totalPages: responseData.totalPages || 1,
+      },
     };
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -74,9 +92,15 @@ async function fetchUserLikes(page: number): Promise<{ data: LikedPost[]; pagina
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
+    const responseData = json.data || {};
     return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
+      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
+      pagination: {
+        page: responseData.page || 1,
+        limit: responseData.limit || 20,
+        total: responseData.total || 0,
+        totalPages: responseData.totalPages || 1,
+      },
     };
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };

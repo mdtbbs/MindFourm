@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
-import UnifiedHeader from '@/components/layout/unified-header';
+import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { Trophy, Medal, Star } from 'lucide-react';
 
@@ -23,7 +23,7 @@ export default function LeaderboardPage() {
 
   const fetchLeaderboard = useCallback(async (p: number) => {
     try {
-      const res = await api.get(`/points/leaderboard?page=${p}&limit=20`);
+      const res = await api.get<{ data: LeaderboardUser[] }>(`/points/leaderboard?page=${p}&limit=20`);
       const data = res.data || [];
       if (p === 1) {
         setUsers(data);

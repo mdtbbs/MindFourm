@@ -28,7 +28,7 @@ export default function AdminShopPage() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const data = await api.get('/shop/admin/items');
+      const data = await api.get<ShopItem[]>('/shop/admin/items');
       setItems(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载商品失败');
@@ -100,7 +100,7 @@ export default function AdminShopPage() {
           <h1 className="text-xl font-bold">商城管理</h1>
           <p className="text-sm text-surface-500 mt-1">管理积分商城商品，设置兑换价格和库存</p>
         </div>
-        <Button onClick={() => { resetForm(); setShowForm(true); }} variant="primary">
+        <Button onClick={() => { resetForm(); setShowForm(true); }} variant="default">
           <Plus className="w-4 h-4 mr-1" />
           添加商品
         </Button>
@@ -146,7 +146,7 @@ export default function AdminShopPage() {
             </div>
           </div>
           <div className="mt-4 flex gap-2">
-            <Button onClick={handleSubmit} variant="primary">{editing ? '保存修改' : '创建商品'}</Button>
+            <Button onClick={handleSubmit} variant="default">{editing ? '保存修改' : '创建商品'}</Button>
             <Button onClick={() => { setShowForm(false); resetForm(); }} variant="secondary">取消</Button>
           </div>
         </div>
@@ -178,7 +178,7 @@ export default function AdminShopPage() {
               <Button size="sm" variant="secondary" onClick={() => handleEdit(item)}>
                 <Edit className="w-3 h-3 mr-1" /> 编辑
               </Button>
-              <Button size="sm" variant="danger" onClick={() => handleDelete(item.id)}>
+              <Button size="sm" variant="destructive" onClick={() => handleDelete(item.id)}>
                 <Trash2 className="w-3 h-3 mr-1" /> 删除
               </Button>
             </div>

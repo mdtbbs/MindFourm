@@ -1,0 +1,117 @@
+import {
+  Controller, Get, Post, Put, Delete, Param, Query, UseGuards, Req, ParseIntPipe, Body,
+} from '@nestjs/common';
+import { MessagesService } from './messages.service';
+import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { CreateGroupChatDto } from './dto/create-group-chat.dto';
+import type { Request } from 'express';
+
+@Controller('messages')
+@UseGuards(JwtAuthGuard)
+export class MessagesController {
+  constructor(private readonly messagesService: MessagesService) {}
+
+  @Post()
+  async send(@Body() dto: { recipient_id: number; content: string }, @Req() req: Request) {
+    return this.messagesService.create(dto, (req as any).user?.id);
+  }
+
+  @Get()
+  async getConversations(@Req() req: Request, @Query('limit') limit = '20', @Query('cursor') cursor?: string) {
+    return this.messagesService.getConversations((req as any).user?.id, Number(limit), cursor);
+  }
+
+  @Get('unread-count')
+  async unreadCount(@Req() req: Request) {
+    return { count: await this.messagesService.getUnreadCount((req as any).user?.id) };
+  }
+
+  @Get(':userId')
+  async getConversation(@Req() req: Request, @Param('userId', ParseIntPipe) userId: number, @Query('limit') limit = '50', @Query('cursor') cursor?: string) {
+    return this.messagesService.getConversation((req as any).user?.id, userId, Number(limit), cursor);
+  }
+
+  @Delete(':id')
+  async deleteMessage(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    return this.messagesService.deleteForUser(id, (req as any).user?.id, false);
+  }
+}
+
+// Group Chat Controller
+@Controller('group-chats')
+@UseGuards(JwtAuthGuard)
+export class GroupChatsController {
+  constructor(private readonly messagesService: MessagesService) {}
+
+  @Post()
+  async createGroupChat(@Body() dto: CreateGroupChatDto, @Req() req: Request) {
+    const groupChat = await this.messagesService.createGroupChat(dto, (req as any).user?.id);
+    return { success: true, data: groupChat };
+  }
+
+  @Get()
+  async getMyGroupChats(@Req() req: Request) {
+    const groupChats = await this.messagesService.getMyGroupChats((req as any).user?.id);
+    return { success: true, data: groupChats };
+  }
+
+  @Get(':id')
+  async getGroupChat(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    const groupChat = await this.messagesService.getGroupChat(id, (req as any).user?.id);
+    return { success: true, data: groupChat };
+  }
+
+  @Get(':id/messages')
+  async getGroupMessages(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
+    @Query('limit') limit = '50',
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.messagesService.getGroupMessages(id, (req as any).user?.id, Number(limit), cursor);
+  }
+
+  @Post(':id/messages')
+  async sendGroupMessage(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { content: string },
+    @Req() req: Request,
+  ) {
+    const message = await this.messagesService.sendGroupMessage(id, (req as any).user?.id, dto.content);
+    return { success: true, data: message };
+  }
+
+  @Post(':id/members')
+  async addGroupMember(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { user_id: number; role?: string },
+  ) {
+    const member = await this.messagesService.addGroupMember(id, dto.user_id, dto.role || 'member');
+    return { success: true, data: member };
+  }
+
+  @Delete(':id/members/:userId')
+  async removeGroupMember(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('userId', ParseIntPipe) userId: number,
+  ) {
+    await this.messagesService.removeGroupMember(id, userId);
+    return { success: true, data: { message: '成员已移除' } };
+  }
+
+  @Post(':id/leave')
+  async leaveGroupChat(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
+    await this.messagesService.leaveGroupChat(id, (req as any).user?.id);
+    return { success: true, data: { message: '已离开群聊' } };
+  }
+
+  @Put(':id')
+  async updateGroupChat(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { name?: string; description?: string },
+    @Req() req: Request,
+  ) {
+    const groupChat = await this.messagesService.updateGroupChat(id, (req as any).user?.id, dto);
+    return { success: true, data: groupChat };
+  }
+}
