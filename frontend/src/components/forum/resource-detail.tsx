@@ -68,9 +68,9 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       )}
 
       {/* Markdown content */}
-      {resource.content_html ? (
+      {resource.content ? (
         <div className="mb-6 p-4 bg-[var(--bg-elevated)] rounded-[var(--radius-card)]">
-          <MarkdownRenderer content={resource.content_html} />
+          <MarkdownRenderer content={resource.content} />
         </div>
       ) : resource.description ? (
         <div className="mb-6 p-4 bg-[var(--bg-elevated)] rounded-[var(--radius-card)] text-[var(--text-secondary)]">

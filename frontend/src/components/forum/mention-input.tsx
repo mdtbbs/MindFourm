@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { User } from 'lucide-react';
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 interface MentionInputProps {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
@@ -30,7 +29,7 @@ export default function MentionInput({ textareaRef, onInsert }: MentionInputProp
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/users/search?q=${encodeURIComponent(q)}&limit=10`, {
+      const res = await fetch(`/api/v1/users/search?q=${encodeURIComponent(q)}&limit=10`, {
         headers: { 'X-API-Version': '1' },
         credentials: 'include',
       });

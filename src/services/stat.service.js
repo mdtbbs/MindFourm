@@ -3,14 +3,7 @@ const redis = require('../database/redis');
 
 // SCAN helper for Redis (避免 KEYS 阻塞)
 async function scanKeys(pattern) {
-  const keys = [];
-  let cursor = '0';
-  do {
-    const result = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-    cursor = result[0];
-    keys.push(...result[1]);
-  } while (cursor !== '0');
-  return keys;
+  return redis.scan(pattern, 100);
 }
 
 class StatService {

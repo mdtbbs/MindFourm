@@ -8,22 +8,18 @@ class PostService {
   static async create({ user_id, title, content, category_id, tags, status = POST_STATUS.draft }) {
     const contentHtml = parseMarkdown(content);
 
-    const result = await db.transaction(async (conn) => {
-      const [r] = await conn.execute(`
-        INSERT INTO posts (user_id, title, content, content_html, category_id, status)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [user_id, title, content, contentHtml, category_id, status]);
+    const result = await db.execute(`
+      INSERT INTO posts (user_id, title, content, content_html, category_id, status)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [user_id, title, content, contentHtml, category_id, status]);
 
-      const postId = r.insertId;
+    const postId = result.insertId;
 
-      if (tags && tags.length > 0) {
-        await TagService.attachTags(postId, tags);
-      }
+    if (tags && tags.length > 0) {
+      await TagService.attachTags(postId, tags);
+    }
 
-      return postId;
-    });
-
-    return this.getById(result);
+    return this.getById(postId);
   }
 
   static async getById(id) {

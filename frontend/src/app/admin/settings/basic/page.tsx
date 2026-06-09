@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api/client';
+import { useSettingsRefresh } from '@/lib/settings/context';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 
@@ -11,6 +12,7 @@ export default function BasicSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const refreshSettings = useSettingsRefresh();
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -30,6 +32,7 @@ export default function BasicSettingsPage() {
     setError(null);
     try {
       await adminApi.updateSettings('basic', values);
+      await refreshSettings();
       setMessage('Settings saved successfully');
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {

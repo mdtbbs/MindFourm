@@ -26,16 +26,13 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
 // SCAN helper for Redis (避免 KEYS 阻塞)
 async function scanKeys(pattern) {
-  const keys = [];
-  let cursor = '0';
-  do {
-    const result = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
-    cursor = result[0];
-    keys.push(...result[1]);
-  } while (cursor !== '0');
-  return keys;
+  return redis.scan(pattern, 100);
 }
 
 class AuthService {
@@ -134,7 +131,7 @@ class AuthService {
     try {
       await db.execute(
         'INSERT INTO session_audit (user_id, session_token, action, ip_address) VALUES (?, ?, ?, ?)',
-        [userId, sessionToken, 'create', ipAddress]
+        [userId, hashToken(sessionToken), 'create', ipAddress]
       );
     } catch (err) {
       console.warn('Session audit log failed:', err.message);
@@ -193,7 +190,7 @@ class AuthService {
       try {
         await db.execute(
           'INSERT INTO session_audit (user_id, session_token, action) VALUES (?, ?, ?)',
-          [parseInt(sessionData.user_id, 10), sessionToken, 'destroy']
+          [parseInt(sessionData.user_id, 10), hashToken(sessionToken), 'destroy']
         );
       } catch (err) {
         console.warn('Session audit log failed:', err.message);

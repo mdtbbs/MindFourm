@@ -5,6 +5,18 @@ const fs = require('fs');
 const path = require('path');
 
 const UPLOAD_DIR = path.join(__dirname, '../uploads/resources');
+const MAX_RESOURCE_LIMIT = 100;
+const DEFAULT_RESOURCE_LIMIT = 20;
+
+function normalizeLimit(limit) {
+  const parsed = Number.parseInt(limit, 10);
+  if (!Number.isInteger(parsed) || parsed < 1) return DEFAULT_RESOURCE_LIMIT;
+  return Math.min(parsed, MAX_RESOURCE_LIMIT);
+}
+
+function canManageResource(user) {
+  return user && ['admin', 'moderator'].includes(user.role);
+}
 
 class ResourceService {
   static async create({ user_id, title, description, resource_type, file_name, file_path, file_size, mime_type, external_url, version, content, content_html, category_id, is_public }) {
@@ -20,9 +32,29 @@ class ResourceService {
     return this.getById(result.insertId);
   }
 
-  static async getList({ limit = 20, cursor, category_id, search, status, sort }) {
-    const whereClauses = ['status = ?'];
-    const params = [status || 'approved'];
+  static canView(resource, user = null) {
+    if (!resource) return false;
+    if (resource.status === 'approved' && Number(resource.is_public) === 1) return true;
+    if (!user) return false;
+    if (resource.user_id === user.id) return true;
+    return canManageResource(user);
+  }
+
+  static async getList({ limit = DEFAULT_RESOURCE_LIMIT, cursor, category_id, search, status, sort, publicOnly = false }) {
+    const normalizedLimit = normalizeLimit(limit);
+    const whereClauses = [];
+    const params = [];
+
+    if (status) {
+      whereClauses.push('r.status = ?');
+      params.push(status);
+    }
+
+    if (publicOnly) {
+      whereClauses.push('r.status = ?');
+      whereClauses.push('r.is_public = 1');
+      params.push('approved');
+    }
 
     if (category_id) {
       whereClauses.push('r.category_id = ?');
@@ -41,7 +73,7 @@ class ResourceService {
     }
 
     const orderBy = sort === 'downloads' ? 'r.download_count DESC' : 'r.created_at DESC';
-    const whereClause = whereClauses.join(' AND ');
+    const whereClause = whereClauses.length > 0 ? whereClauses.join(' AND ') : '1 = 1';
 
     const resources = await db.query(`
       SELECT r.*, u.username, u.avatar_url,
@@ -52,9 +84,9 @@ class ResourceService {
       WHERE ${whereClause}
       ORDER BY ${orderBy}
       LIMIT ?
-    `, [...params, limit + 1]);
+    `, [...params, normalizedLimit + 1]);
 
-    const hasMore = resources.length > limit;
+    const hasMore = resources.length > normalizedLimit;
     if (hasMore) resources.pop();
 
     const nextCursor = resources.length > 0
@@ -75,9 +107,9 @@ class ResourceService {
     `, [id]);
   }
 
-  static async getByResourceIdWithVersions(id) {
+  static async getByResourceIdWithVersions(id, user = null) {
     const resource = await this.getById(id);
-    if (!resource) return null;
+    if (!this.canView(resource, user)) return null;
     const versions = await db.query(`
       SELECT * FROM resource_versions WHERE resource_id = ? ORDER BY created_at DESC
     `, [id]);

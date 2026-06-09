@@ -84,13 +84,6 @@ export default function PostForm() {
     }
   }, [draft]);
 
-  // Redirect after successful creation
-  useEffect(() => {
-    if (createdPostId !== null) {
-      router.push(`/posts/${createdPostId}`);
-    }
-  }, [createdPostId, router]);
-
   const parseTags = (): string[] => {
     return tagsInput
       .split(/[,，]+/)
@@ -189,12 +182,16 @@ export default function PostForm() {
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-surface-900 mb-6">发布新帖子</h1>
 
-      {success && (
-        <Alert
-          type="success"
-          message="帖子发布成功，正在跳转..."
-          className="mb-4"
-        />
+      {success && createdPostId && (
+        <div className="mb-4 space-y-3">
+          <Alert
+            type="success"
+            message="帖子发布成功。你可以继续上传附件，或进入帖子详情页。"
+          />
+          <Button type="button" onClick={() => router.push(`/posts/${createdPostId}`)}>
+            查看帖子
+          </Button>
+        </div>
       )}
       {error && (
         <Alert

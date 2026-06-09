@@ -35,22 +35,30 @@ class TagService {
   static async batchAttach(postId, tags) {
     if (!tags || !tags.length) return;
 
+    const normalizedTags = [...new Set(tags
+      .map(tag => String(tag).trim())
+      .filter(tag => tag.length > 0)
+      .slice(0, 10)
+      .map(tag => tag.slice(0, 50)))];
+    if (!normalizedTags.length) return;
+
     const existing = await db.query(
-      `SELECT name, id FROM tags WHERE name IN (${tags.map(() => '?').join(',')})`,
-      tags
+      `SELECT name, id FROM tags WHERE name IN (${normalizedTags.map(() => '?').join(',')})`,
+      normalizedTags
     );
     const existingMap = {};
     for (const t of existing) existingMap[t.name] = t.id;
 
-    const missing = tags.filter(t => !existingMap[t]);
+    const missing = normalizedTags.filter(t => !existingMap[t]);
 
     // 批量插入缺失标签
     if (missing.length > 0) {
-      const values = missing.map(name => {
-        const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        return `('${name.replace(/'/g, "''")}', '${slug}')`;
-      }).join(',');
-      await db.execute(`INSERT IGNORE INTO tags (name, slug) VALUES ${values}`);
+      const placeholders = missing.map(() => '(?, ?)').join(',');
+      const values = missing.flatMap(name => {
+        const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || `tag-${Date.now()}`;
+        return [name, slug];
+      });
+      await db.execute(`INSERT IGNORE INTO tags (name, slug) VALUES ${placeholders}`, values);
 
       // 获取新插入标签的 ID
       const newTags = await db.query(
@@ -61,10 +69,11 @@ class TagService {
     }
 
     // 批量插入 post_tags 关联
-    const tagIds = tags.map(name => existingMap[name]).filter(id => id !== undefined);
+    const tagIds = normalizedTags.map(name => existingMap[name]).filter(id => id !== undefined);
     if (tagIds.length > 0) {
-      const postTagValues = tagIds.map(tagId => `(${postId}, ${tagId})`).join(',');
-      await db.execute(`INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES ${postTagValues}`);
+      const placeholders = tagIds.map(() => '(?, ?)').join(',');
+      const values = tagIds.flatMap(tagId => [postId, tagId]);
+      await db.execute(`INSERT IGNORE INTO post_tags (post_id, tag_id) VALUES ${placeholders}`, values);
     }
   }
 

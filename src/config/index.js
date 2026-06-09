@@ -1,11 +1,20 @@
 require('dotenv').config();
 const path = require('path');
 
+const env = process.env.NODE_ENV || 'development';
+const defaultEasyManagerKey = 'forum-service-key-dev';
+const easyManagerApiKey = process.env.EASYMANAGER_API_KEY || defaultEasyManagerKey;
+
+if (env === 'production' && easyManagerApiKey === defaultEasyManagerKey) {
+  throw new Error('EASYMANAGER_API_KEY must be configured in production');
+}
+
 module.exports = {
   app: {
     port: parseInt(process.env.PORT, 10) || 4000,
-    env: process.env.NODE_ENV || 'development',
-    baseUrl: process.env.BASE_URL || 'http://localhost:3000'
+    env,
+    baseUrl: process.env.BASE_URL || 'http://localhost:3000',
+    trustProxy: process.env.TRUST_PROXY === 'true'
   },
 
   mysql: {
@@ -35,7 +44,8 @@ module.exports = {
 
   easymanager: {
     baseUrl: process.env.EASYMANAGER_URL || 'http://localhost:5001',
-    apiKey: process.env.EASYMANAGER_API_KEY || 'forum-service-key-dev'
+    apiKey: easyManagerApiKey,
+    isDefaultKey: easyManagerApiKey === defaultEasyManagerKey
   },
 
   session: {

@@ -21,6 +21,10 @@ class AttachmentController {
     const post_id = ctx.request.body.post_id ? parseInt(ctx.request.body.post_id) : null;
     const reply_id = ctx.request.body.reply_id ? parseInt(ctx.request.body.reply_id) : null;
 
+    if ((post_id && reply_id) || (!post_id && !reply_id)) {
+      return Response.error(ctx, '附件必须且只能关联一个帖子或回复', 400);
+    }
+
     if (post_id) {
       const post = await PostService.getById(post_id);
       if (!post) {

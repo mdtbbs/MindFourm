@@ -1,5 +1,5 @@
-import { messageApi } from '@/lib/api/client';
 import { Conversation } from '@/types';
+import { cookies } from 'next/headers';
 import Link from 'next/link';
 
 export const revalidate = 0;
@@ -22,9 +22,10 @@ function formatTime(dateStr: string): string {
 
 async function fetchConversations(): Promise<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }> {
   try {
+    const sessionCookie = cookies().get('forum_session');
     const res = await fetch(`${API_BASE}/api/v1/messages`, {
       cache: 'no-store',
-      headers: { 'Cookie': process.env.COOKIE || '' },
+      headers: sessionCookie ? { Cookie: `forum_session=${sessionCookie.value}` } : {},
     });
     if (!res.ok) return { data: [], next_cursor: null, has_more: false };
     const json = await res.json();

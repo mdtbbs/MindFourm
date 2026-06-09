@@ -1,6 +1,8 @@
 node_modules/
 data/
 .env
+test-results/
 *.log
 .DS_Store
 Thumbs.db
+uploads/resources/e2e-static-leak-*.txt

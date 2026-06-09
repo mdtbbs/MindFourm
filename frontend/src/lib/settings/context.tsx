@@ -4,7 +4,12 @@ import { createContext, useContext, useState } from 'react';
 
 type SettingsContextValue = Record<string, string>;
 
-const SettingsContext = createContext<SettingsContextValue | null>(null);
+interface SettingsContextState {
+  settings: SettingsContextValue;
+  refreshSettings: () => Promise<void>;
+}
+
+const SettingsContext = createContext<SettingsContextState | null>(null);
 
 interface SettingsProviderProps {
   initialSettings?: SettingsContextValue;
@@ -12,11 +17,17 @@ interface SettingsProviderProps {
 }
 
 export function SettingsProvider({ initialSettings = {}, children }: SettingsProviderProps) {
-  // 直接使用 SSR 传入的数据，不再客户端请求
-  const [settings] = useState<SettingsContextValue>(initialSettings);
+  const [settings, setSettings] = useState<SettingsContextValue>(initialSettings);
+
+  const refreshSettings = async () => {
+    const res = await fetch('/api/settings', { credentials: 'include' });
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json.success) setSettings(json.data);
+  };
 
   return (
-    <SettingsContext.Provider value={settings}>
+    <SettingsContext.Provider value={{ settings, refreshSettings }}>
       {children}
     </SettingsContext.Provider>
   );
@@ -24,5 +35,10 @@ export function SettingsProvider({ initialSettings = {}, children }: SettingsPro
 
 export function useSettings() {
   const ctx = useContext(SettingsContext);
-  return ctx ?? {};
+  return ctx?.settings ?? {};
+}
+
+export function useSettingsRefresh() {
+  const ctx = useContext(SettingsContext);
+  return ctx?.refreshSettings ?? (async () => {});
 }

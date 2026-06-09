@@ -21,14 +21,15 @@ export default function CallbackPage() {
     fetch('/api/auth/exchange', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ code, state }),
     })
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
-          const decodedState = decodeURIComponent(state);
-          if (decodedState.startsWith('/') && !decodedState.startsWith('//') && !decodedState.includes('://')) {
-            router.replace(decodedState);
+          const returnTo = data.returnTo || '/';
+          if (returnTo.startsWith('/') && !returnTo.startsWith('//') && !returnTo.includes('://')) {
+            router.refresh();
+            router.replace(returnTo);
           } else {
             router.replace('/');
           }

@@ -17,7 +17,6 @@ interface Server {
   description?: string;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 function ServerSkeleton() {
   return (
@@ -94,7 +93,7 @@ export function ServerSection() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/servers/public`)
+    fetch('/api/servers/public')
       .then(res => res.json())
       .then(data => {
         if (data.success && data.servers) {

@@ -85,7 +85,7 @@ export default function AdminSidebar() {
   const [badges, setBadges] = useState({ moderation_pending: 0, announce_active: 0 });
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'}/api/admin/badge-counts`, {
+    fetch('/api/admin/badge-counts', {
       credentials: 'include',
     })
       .then(r => r.json())

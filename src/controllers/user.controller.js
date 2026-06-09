@@ -11,7 +11,7 @@ class UserController {
       Response.notFound(ctx, 'User not found');
       return;
     }
-    Response.success(ctx, user);
+    Response.success(ctx, UserService.toPublicProfile(user));
   }
 
   static async getMyProfile(ctx) {

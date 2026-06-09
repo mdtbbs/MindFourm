@@ -101,40 +101,40 @@ class ResourceController {
   static async list(ctx) {
     const { limit, cursor, category_id, search, sort } = ctx.query;
     const result = await ResourceService.getList({
-      limit: parseInt(limit) || 20,
+      limit: parseInt(limit, 10) || 20,
       cursor: cursor || null,
       category_id: category_id || null,
       search: search || null,
-      status: 'approved',
       sort: sort || null,
+      publicOnly: true,
     });
     Response.success(ctx, { data: result.data, next_cursor: result.next_cursor, has_more: result.has_more });
   }
 
   static async getById(ctx) {
-    const data = await ResourceService.getByResourceIdWithVersions(parseInt(ctx.params.id));
+    const data = await ResourceService.getByResourceIdWithVersions(parseInt(ctx.params.id, 10), ctx.state.user);
     if (!data) {
-      ctx.status = 404;
-      return Response.error(ctx, '资源不存在');
+      return Response.error(ctx, '资源不存在', 404);
     }
     Response.success(ctx, data);
   }
 
   static async download(ctx) {
-    const resource = await ResourceService.getById(parseInt(ctx.params.id));
-    if (!resource || resource.resource_type !== 'file') {
+    const resource = await ResourceService.getById(parseInt(ctx.params.id, 10));
+    if (!ResourceService.canView(resource, ctx.state.user) || resource.resource_type !== 'file') {
       return Response.error(ctx, '资源不存在或不可下载', 404);
     }
 
     await ResourceService.incrementDownload(resource.id);
 
-    const fullPath = path.join(__dirname, '..', resource.file_path);
-    if (!fs.existsSync(fullPath)) {
+    const uploadRoot = path.resolve(__dirname, '..', 'uploads', 'resources');
+    const fullPath = path.resolve(__dirname, '..', resource.file_path || '');
+    if (!fullPath.startsWith(`${uploadRoot}${path.sep}`) || !fs.existsSync(fullPath)) {
       return Response.error(ctx, '文件已丢失', 404);
     }
 
     ctx.set('Content-Disposition', `attachment; filename="${encodeURIComponent(resource.file_name)}"`);
-    ctx.set('Content-Type', resource.mime_type);
+    ctx.set('Content-Type', resource.mime_type || 'application/octet-stream');
     ctx.body = fs.createReadStream(fullPath);
   }
 
@@ -183,7 +183,11 @@ class ResourceController {
   }
 
   static async listVersions(ctx) {
-    const versions = await ResourceVersionService.list(parseInt(ctx.params.id));
+    const resource = await ResourceService.getById(parseInt(ctx.params.id, 10));
+    if (!ResourceService.canView(resource, ctx.state.user)) {
+      return Response.error(ctx, '资源不存在', 404);
+    }
+    const versions = await ResourceVersionService.list(resource.id);
     Response.success(ctx, { versions });
   }
 

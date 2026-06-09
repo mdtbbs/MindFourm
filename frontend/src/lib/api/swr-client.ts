@@ -1,7 +1,7 @@
 import useSWR, { SWRConfiguration, mutate, Key } from 'swr';
 import type { User, Post, PostListResponse, Reply, ReplyListResponse, Category, Tag, Notification, NotificationListResponse, UserProfile, Bookmark, BookmarkListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate } from '@/types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const API_BASE = '';
 
 // Default fetcher for SWR
 const fetcher = async <T>(url: string): Promise<T> => {

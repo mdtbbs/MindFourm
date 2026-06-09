@@ -1,6 +1,6 @@
 import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate } from '@/types';
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
+const API_BASE = '';
 
 // Simple in-memory cache for GET requests (client-side only)
 const cache = new Map<string, { data: unknown; timestamp: number }>();
@@ -10,7 +10,26 @@ const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 function getCsrfToken(): string | null {
   if (typeof document === 'undefined') return null; // Server-side
   const match = document.cookie.match(/csrf_token=([^;]+)/);
-  return match ? match[1] : null;
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+async function ensureCsrfToken(): Promise<string | null> {
+  if (typeof document === 'undefined') return null;
+  const existingToken = getCsrfToken();
+  if (existingToken) return existingToken;
+
+  const res = await fetch('/api/csrf-token', {
+    credentials: 'include',
+    headers: { 'X-API-Version': '1' },
+  });
+  if (!res.ok) return getCsrfToken();
+
+  try {
+    const data = await res.json();
+    return data?.csrf_token || data?.data?.csrf_token || getCsrfToken();
+  } catch {
+    return getCsrfToken();
+  }
 }
 
 function getCacheKey(path: string, options: RequestInit): string | null {
@@ -66,7 +85,7 @@ async function request<T>(
 
   // Add CSRF token for POST/PUT/DELETE requests (except local auth routes)
   const shouldAddCsrf = !isLocalRoute && ['POST', 'PUT', 'DELETE'].includes(method);
-  const csrfToken = shouldAddCsrf ? getCsrfToken() : null;
+  const csrfToken = shouldAddCsrf ? await ensureCsrfToken() : null;
 
   // Build headers
   const headers: Record<string, string> = {
@@ -420,7 +439,7 @@ export const attachmentApi = {
     }),
   getByPost: (postId: number) =>
     request<Attachment[]>(`/api/v1/attachments/post/${postId}`),
-  download: (id: number) => `${API_BASE}/api/v1/attachments/${id}/download`,
+  download: (id: number) => `/api/v1/attachments/${id}/download`,
 };
 
 // Message APIs
@@ -452,7 +471,7 @@ export const resourceApi = {
     ),
   getById: (id: number) =>
     request<Resource>(`/api/v1/resources/${id}`),
-  download: (id: number) => `${API_BASE}/api/v1/resources/${id}/download`,
+  download: (id: number) => `/api/v1/resources/${id}/download`,
   upload: (formData: FormData) =>
     request<Resource>('/api/v1/resources', {
       method: 'POST',

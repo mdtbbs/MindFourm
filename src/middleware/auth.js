@@ -1,6 +1,7 @@
 const config = require('../config');
 const db = require('../database');
 const AuthService = require('../services/auth.service');
+const BanService = require('../services/ban.service');
 
 function authMiddleware(options = {}) {
   const { required = true, roles = [] } = options;
@@ -37,7 +38,6 @@ function authMiddleware(options = {}) {
     if (session.mindauth_token) {
       userInfo = await AuthService.verifyMindAuthSession(session.mindauth_token);
       if (!userInfo) {
-        AuthService.destroySession(sessionToken);
         await AuthService.destroySession(sessionToken);
         if (required) {
           ctx.status = 401;
@@ -65,6 +65,12 @@ function authMiddleware(options = {}) {
       role: session.role,
       createdAt: userInfo.created_at
     };
+
+    if (await BanService.isActive('user', String(ctx.state.user.id))) {
+      ctx.status = 403;
+      ctx.body = { success: false, message: 'Account banned', code: 'BANNED' };
+      return;
+    }
 
     if (roles.length > 0 && !roles.includes(ctx.state.user.role)) {
       ctx.status = 403;

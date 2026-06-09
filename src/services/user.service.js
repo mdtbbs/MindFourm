@@ -11,6 +11,12 @@ class UserService {
     `, [id]);
   }
 
+  static toPublicProfile(user) {
+    if (!user) return null;
+    const { email, ...publicUser } = user;
+    return publicUser;
+  }
+
   static async getByMindAuthId(mindauthId) {
     return db.queryOne('SELECT * FROM users WHERE mindauth_id = ?', [mindauthId]);
   }
