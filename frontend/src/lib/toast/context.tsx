@@ -41,6 +41,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             id={toast.id}
             message={toast.message}
             type={toast.type}
+            duration={toast.duration}
+            dismissible={toast.dismissible}
             onDismiss={dismissToast}
           />
         ))}

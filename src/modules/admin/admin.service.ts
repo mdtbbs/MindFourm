@@ -8,6 +8,7 @@ import { LogsService } from '../logs/logs.service';
 import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
+import { PointsService } from '../points/points.service';
 
 @Injectable()
 export class AdminService {
@@ -37,6 +38,7 @@ export class AdminService {
     private bansService: BansService,
     private categoriesService: CategoriesService,
     private tagsService: TagsService,
+    private pointsService: PointsService,
   ) {}
 
   /**
@@ -52,6 +54,7 @@ export class AdminService {
   async getBadgeCounts(): Promise<{
     pending_posts: number;
     pending_replies: number;
+    pending_avatars: number;
     show_announce: boolean;
   }> {
     const pending_posts = await this.postRepository.count({
@@ -61,6 +64,9 @@ export class AdminService {
     const pending_replies = await this.replyRepository.count({
       where: { status: 'pending' },
     });
+    const pending_avatars = await this.userRepository.count({
+      where: { avatar_status: 'pending' },
+    });
 
     const announce_setting = await this.settingsService.get('show_announcement');
     const show_announce = announce_setting === 'true';
@@ -68,6 +74,7 @@ export class AdminService {
     return {
       pending_posts,
       pending_replies,
+      pending_avatars,
       show_announce,
     };
   }
@@ -223,7 +230,7 @@ export class AdminService {
   }> {
     const skip = (page - 1) * limit;
 
-    if (type === 'posts' || type === 'all') {
+    if (type === 'posts' || type === 'post' || type === 'all') {
       const [data, total] = await this.postRepository.findAndCount({
         where: { status: 'pending' },
         relations: ['user', 'category'],
@@ -235,13 +242,20 @@ export class AdminService {
       const totalPages = Math.ceil(total / limit);
 
       return {
-        data: data.map((item) => ({ ...item, type: 'post' })),
+        data: data.map((item) => ({
+          id: item.id,
+          item_type: 'post',
+          title: item.title,
+          content: item.content,
+          author_username: item.user?.username || '',
+          created_at: item.created_at,
+        })),
         total,
         page,
         limit,
         totalPages,
       };
-    } else if (type === 'replies') {
+    } else if (type === 'replies' || type === 'reply') {
       const [data, total] = await this.replyRepository.findAndCount({
         where: { status: 'pending' },
         relations: ['user', 'post'],
@@ -253,7 +267,38 @@ export class AdminService {
       const totalPages = Math.ceil(total / limit);
 
       return {
-        data: data.map((item) => ({ ...item, type: 'reply' })),
+        data: data.map((item) => ({
+          id: item.id,
+          item_type: 'reply',
+          content: item.content,
+          author_username: item.user?.username || '',
+          created_at: item.created_at,
+          post_id: item.post_id,
+        })),
+        total,
+        page,
+        limit,
+        totalPages,
+      };
+    } else if (type === 'avatars' || type === 'avatar') {
+      const [data, total] = await this.userRepository.findAndCount({
+        where: { avatar_status: 'pending' },
+        order: { updated_at: 'ASC' },
+        skip,
+        take: limit,
+      });
+
+      const totalPages = Math.ceil(total / limit);
+
+      return {
+        data: data.map((item) => ({
+          id: item.id,
+          item_type: 'avatar',
+          content: item.pending_avatar_url || '',
+          author_username: item.username || '',
+          created_at: item.updated_at,
+          avatar_url: item.pending_avatar_url,
+        })),
         total,
         page,
         limit,
@@ -274,7 +319,14 @@ export class AdminService {
    * Approve a post (set status to published)
    */
   async approvePost(id: number): Promise<void> {
+    const post = await this.postRepository.findOne({ where: { id } });
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
     await this.postRepository.update(id, { status: 'published' });
+    if (post.status !== 'published') {
+      await this.pointsService.awardPoints(post.user_id, 'create_post', 'post', post.id);
+    }
   }
 
   /**
@@ -282,6 +334,54 @@ export class AdminService {
    */
   async rejectPost(id: number): Promise<void> {
     await this.postRepository.update(id, { status: 'deleted' });
+  }
+
+  async approveReply(id: number): Promise<void> {
+    const reply = await this.replyRepository.findOne({ where: { id } });
+    if (!reply) {
+      throw new NotFoundException('Reply not found');
+    }
+    await this.replyRepository.update(id, { status: 'published' });
+    if (reply.status !== 'published') {
+      await this.pointsService.awardPoints(reply.user_id, 'create_reply', 'reply', reply.id);
+    }
+  }
+
+  async rejectReply(id: number): Promise<void> {
+    await this.replyRepository.update(id, { status: 'deleted', deleted_at: new Date() });
+  }
+
+  async approveAvatar(userId: number): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.pending_avatar_url) {
+      throw new BadRequestException('No pending avatar');
+    }
+    user.avatar_url = user.pending_avatar_url;
+    user.pending_avatar_url = null;
+    user.avatar_status = 'approved';
+    await this.userRepository.save(user);
+  }
+
+  async rejectAvatar(userId: number): Promise<void> {
+    await this.userRepository.update(userId, {
+      pending_avatar_url: null,
+      avatar_status: 'rejected',
+    });
+  }
+
+  async approveModerationItem(type: string, id: number): Promise<void> {
+    if (type === 'reply' || type === 'replies') return this.approveReply(id);
+    if (type === 'avatar' || type === 'avatars') return this.approveAvatar(id);
+    return this.approvePost(id);
+  }
+
+  async rejectModerationItem(type: string, id: number): Promise<void> {
+    if (type === 'reply' || type === 'replies') return this.rejectReply(id);
+    if (type === 'avatar' || type === 'avatars') return this.rejectAvatar(id);
+    return this.rejectPost(id);
   }
 
   /**
@@ -313,7 +413,7 @@ export class AdminService {
    */
   async cleanupLogs(): Promise<number> {
     const retentionDays = await this.settingsService.getNumber('cleanup_log_retention_days');
-    const days = retentionDays || 90;
+    const days = retentionDays || 365;
 
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);

@@ -1,8 +1,10 @@
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { LogsService } from '../logs/logs.service';
 export declare class UsersController {
     private readonly usersService;
-    constructor(usersService: UsersService);
+    private readonly logsService;
+    constructor(usersService: UsersService, logsService: LogsService);
     getCurrentUser(req: any): Promise<import("../../entities").User & {
         post_count?: number;
         reply_count?: number;
@@ -23,4 +25,6 @@ export declare class UsersController {
         replies: import("../../entities").Reply[];
         total: number;
     }>;
+    private logOperation;
+    private getClientIp;
 }

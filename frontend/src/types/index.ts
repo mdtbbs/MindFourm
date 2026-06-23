@@ -9,6 +9,8 @@ export interface User {
   role: UserRole;
   avatar_url?: string | null;
   bio?: string | null;
+  phone_verified?: boolean;
+  phone_verified_at?: string | null;
   createdAt: string;
 }
 
@@ -181,12 +183,13 @@ export interface CreateBanInput {
 
 export interface ModerationItem {
   id: number;
-  item_type: 'post' | 'reply';
+  item_type: 'post' | 'reply' | 'avatar';
   title?: string;
   content: string;
   author_username: string;
   created_at: string;
   post_id?: number;
+  avatar_url?: string;
 }
 
 // Phase 2: User Profile

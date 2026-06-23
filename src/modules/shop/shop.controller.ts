@@ -1,11 +1,12 @@
 import {
-  Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards,
+  Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards, Req,
 } from '@nestjs/common';
 import { ShopService } from './shop.service';
 import { CreateShopItemDto, UpdateShopItemDto, QueryShopDto } from './dto/shop.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
+import type { Request } from 'express';
 
 @Controller('shop')
 export class ShopController {
@@ -27,14 +28,16 @@ export class ShopController {
 
   @Post('purchase/:itemId')
   @UseGuards(JwtAuthGuard)
-  async purchase(@Param('itemId') itemId: number, @Query('userId') userId: number) {
+  async purchase(@Param('itemId') itemId: number, @Req() req: Request) {
+    const userId = (req as any).user?.id;
     const purchase = await this.shopService.purchase(userId, itemId);
     return { success: true, data: purchase };
   }
 
   @Get('me/purchases')
   @UseGuards(JwtAuthGuard)
-  async getMyPurchases(@Query('userId') userId: number, @Query() query: QueryShopDto) {
+  async getMyPurchases(@Req() req: Request, @Query() query: QueryShopDto) {
+    const userId = (req as any).user?.id;
     const result = await this.shopService.getUserPurchases(userId, query.page || 1, query.limit || 20);
     return { success: true, data: result };
   }

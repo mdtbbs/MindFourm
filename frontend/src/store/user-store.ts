@@ -35,12 +35,6 @@ export const useUserStore = create<UserState>()(
       },
 
       logout: () => {
-        // Call logout API (clears forum session + OAuth tokens)
-        authApi.logout().catch(() => {
-          // Ignore errors, continue logout flow
-        });
-
-        // Clear local state
         set({
           user: null,
           isAuthenticated: false,
@@ -51,11 +45,18 @@ export const useUserStore = create<UserState>()(
         if (typeof window !== 'undefined') {
           localStorage.removeItem('mindauth_session_token');
 
-          // Redirect to MindAuth logout page
           const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
           const currentUrl = window.location.href;
           const redirectUri = encodeURIComponent(currentUrl);
-          window.location.href = `${mindauthUrl}/#/logout?redirect_uri=${redirectUri}`;
+          let redirected = false;
+          const redirectToMindAuthLogout = () => {
+            if (redirected) return;
+            redirected = true;
+            window.location.href = `${mindauthUrl}/#/logout?redirect_uri=${redirectUri}`;
+          };
+
+          authApi.logout().finally(redirectToMindAuthLogout);
+          window.setTimeout(redirectToMindAuthLogout, 1500);
         }
       },
 

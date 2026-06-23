@@ -22,6 +22,8 @@ export declare class GroupsController {
                 username: string;
                 email: string;
                 avatar_url: string;
+                pending_avatar_url: string | null;
+                avatar_status: string;
                 bio: string;
                 total_points: number;
                 available_points: number;
@@ -30,6 +32,8 @@ export declare class GroupsController {
                 message_email: boolean;
                 system_email: boolean;
                 digest_email: boolean;
+                phone_verified: boolean;
+                phone_verified_at: Date | null;
                 created_at: Date;
                 updated_at: Date;
                 posts: import("../../entities").Post[];

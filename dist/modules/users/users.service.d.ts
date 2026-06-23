@@ -3,11 +3,13 @@ import { User } from '../../entities/user.entity';
 import { Post } from '../../entities/post.entity';
 import { Reply } from '../../entities/reply.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { SettingsService } from '../settings/settings.service';
 export declare class UsersService {
     private userRepository;
     private postRepository;
     private replyRepository;
-    constructor(userRepository: Repository<User>, postRepository: Repository<Post>, replyRepository: Repository<Reply>);
+    private settingsService;
+    constructor(userRepository: Repository<User>, postRepository: Repository<Post>, replyRepository: Repository<Reply>, settingsService: SettingsService);
     getById(id: number): Promise<User & {
         post_count?: number;
         reply_count?: number;

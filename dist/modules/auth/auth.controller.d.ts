@@ -7,6 +7,11 @@ export declare class AuthController {
     check(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     callback(code: string, state: string, req: Request, res: Response): Promise<void>;
     verifySession(body: VerifySessionDto, req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    syncPhoneStatus(phoneSyncToken: string, req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    syncUserFromMindAuth(body: any): Promise<{
+        synced: boolean;
+        user_id: number | null;
+    }>;
     testLogin(userType: string | undefined, req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     logout(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
 }

@@ -8,6 +8,8 @@ import { User } from '@entities/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PluginsModule } from '../plugins/plugins.module';
 import { PointsModule } from '../points/points.module';
+import { SettingsModule } from '../settings/settings.module';
+import { LogsModule } from '../logs/logs.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { PointsModule } from '../points/points.module';
     NotificationsModule,
     PluginsModule,
     PointsModule,
+    SettingsModule,
+    LogsModule,
   ],
   providers: [RepliesService],
   controllers: [RepliesController, RepliesControllerMain],

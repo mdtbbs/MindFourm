@@ -27,6 +27,7 @@ export declare class AdminController {
     getBadgeCounts(): Promise<{
         pending_posts: number;
         pending_replies: number;
+        pending_avatars: number;
         show_announce: boolean;
     }>;
     getAllSettings(): Promise<Record<string, string>>;
@@ -95,10 +96,10 @@ export declare class AdminController {
         limit: number;
         totalPages: number;
     }>;
-    approveItem(id: number): Promise<{
+    approveItem(id: number, type: string | undefined, req: any): Promise<{
         message: string;
     }>;
-    rejectItem(id: number): Promise<{
+    rejectItem(id: number, type: string | undefined, req: any): Promise<{
         message: string;
     }>;
     getBans(page?: number, limit?: number, ban_type?: string, is_active?: number): Promise<{
@@ -123,7 +124,7 @@ export declare class AdminController {
     cleanupSessions(): Promise<{
         message: string;
     }>;
-    cleanupLogs(): Promise<{
+    cleanupLogs(req: any): Promise<{
         message: string;
     }>;
     cleanupSoftDeleted(): Promise<{
@@ -136,4 +137,6 @@ export declare class AdminController {
         limit: number;
         totalPages: number;
     }>;
+    private logOperation;
+    private getClientIp;
 }

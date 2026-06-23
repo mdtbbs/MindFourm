@@ -1,4 +1,6 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { AuthService } from '../../modules/auth/auth.service';
@@ -31,7 +33,22 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     request.user = user;
+    this.assertPhoneVerifiedForWrites(request);
     return true;
+  }
+
+  private assertPhoneVerifiedForWrites(request: any): void {
+    const method = String(request.method || '').toUpperCase();
+    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      return;
+    }
+
+    if (!request.user?.phone_verified) {
+      throw new ForbiddenException({
+        code: 'PHONE_NOT_VERIFIED',
+        message: '请先验证手机号后再继续操作',
+      });
+    }
   }
 
   private extractTokenFromHeader(request: any): string | undefined {

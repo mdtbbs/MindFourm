@@ -1,8 +1,9 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { BansService } from './bans.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import type { Request } from 'express';
 
 @Controller('bans')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -33,12 +34,12 @@ export class BansController {
    */
   @Post()
   @Roles('admin')
-  async create(@Body() dto: { ban_type: string; value: string; reason?: string }, @Query('user_id') user_id: number) {
+  async create(@Body() dto: { ban_type: string; value: string; reason?: string }, @Req() req: Request) {
     return this.bansService.create({
       ban_type: dto.ban_type,
       value: dto.value,
       reason: dto.reason,
-      created_by: user_id,
+      created_by: (req as any).user?.id,
     });
   }
 

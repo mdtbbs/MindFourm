@@ -130,12 +130,14 @@ let AdminController = class AdminController {
     async getModerationQueue(page = 1, limit = 20, type = 'all') {
         return this.adminService.getModerationQueue(type, parseInt(page, 10), parseInt(limit, 10));
     }
-    async approveItem(id) {
-        await this.adminService.approvePost(id);
+    async approveItem(id, type = 'post', req) {
+        await this.adminService.approveModerationItem(type, id);
+        await this.logOperation(req, 'moderation.approve', type, id);
         return { message: 'Item approved' };
     }
-    async rejectItem(id) {
-        await this.adminService.rejectPost(id);
+    async rejectItem(id, type = 'post', req) {
+        await this.adminService.rejectModerationItem(type, id);
+        await this.logOperation(req, 'moderation.reject', type, id);
         return { message: 'Item rejected' };
     }
     async getBans(page = 1, limit = 20, ban_type, is_active) {
@@ -164,8 +166,9 @@ let AdminController = class AdminController {
     async cleanupSessions() {
         return { message: 'Sessions cleaned up' };
     }
-    async cleanupLogs() {
+    async cleanupLogs(req) {
         const count = await this.adminService.cleanupLogs();
+        await this.logOperation(req, 'cleanup.logs', 'operation_log', undefined, { count });
         return { message: `${count} logs cleaned up` };
     }
     async cleanupSoftDeleted() {
@@ -180,6 +183,20 @@ let AdminController = class AdminController {
             action,
             target_type,
         });
+    }
+    async logOperation(req, action, targetType, targetId, details) {
+        await this.logsService.log({
+            user_id: req.user?.id,
+            action,
+            target_type: targetType,
+            target_id: targetId,
+            details: details ? JSON.stringify(details) : undefined,
+            ip_address: this.getClientIp(req),
+            user_agent: req.headers?.['user-agent'],
+        }).catch((err) => console.warn('operation log failed:', err.message));
+    }
+    getClientIp(req) {
+        return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
     }
 };
 exports.AdminController = AdminController;
@@ -374,16 +391,20 @@ __decorate([
     (0, common_1.Put)('moderation/:id/approve'),
     (0, roles_decorator_1.Roles)('moderator', 'admin'),
     __param(0, (0, common_1.Param)('id', common_1.ParseIntPipe)),
+    __param(1, (0, common_1.Body)('type')),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
+    __metadata("design:paramtypes", [Number, String, Object]),
     __metadata("design:returntype", Promise)
 ], AdminController.prototype, "approveItem", null);
 __decorate([
     (0, common_1.Put)('moderation/:id/reject'),
     (0, roles_decorator_1.Roles)('moderator', 'admin'),
     __param(0, (0, common_1.Param)('id', common_1.ParseIntPipe)),
+    __param(1, (0, common_1.Body)('type')),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
+    __metadata("design:paramtypes", [Number, String, Object]),
     __metadata("design:returntype", Promise)
 ], AdminController.prototype, "rejectItem", null);
 __decorate([
@@ -433,8 +454,9 @@ __decorate([
 __decorate([
     (0, common_1.Post)('cleanup/logs'),
     (0, roles_decorator_1.Roles)('admin'),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AdminController.prototype, "cleanupLogs", null);
 __decorate([

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ServeStaticModule } from '@nestjs/serve-static';
@@ -35,6 +36,8 @@ import { ShopModule } from './modules/shop/shop.module';
 import { RssModule } from './modules/rss/rss.module';
 import { PluginsModule } from './modules/plugins/plugins.module';
 import { SearchModule } from './modules/search/search.module';
+import { ServiceApiModule } from './modules/service-api/service-api.module';
+import { PhoneWriteGuard } from './common/guards/phone-write.guard';
 
 @Module({
   imports: [
@@ -88,7 +91,14 @@ import { SearchModule } from './modules/search/search.module';
     RssModule,
     PluginsModule,
     SearchModule,
+    ServiceApiModule,
   ],
   controllers: [HealthController],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: PhoneWriteGuard,
+    },
+  ],
 })
 export class AppModule {}

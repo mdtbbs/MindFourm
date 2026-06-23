@@ -6,6 +6,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { EventBusService } from '../plugins/event-bus.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { PointsService } from '../points/points.service';
+import { SettingsService } from '../settings/settings.service';
 export declare class RepliesService {
     private replyRepository;
     private postRepository;
@@ -13,7 +14,8 @@ export declare class RepliesService {
     private notificationsService;
     private eventBus;
     private pointsService;
-    constructor(replyRepository: Repository<Reply>, postRepository: Repository<Post>, userRepository: Repository<User>, notificationsService: NotificationsService, eventBus: EventBusService, pointsService: PointsService);
+    private settingsService;
+    constructor(replyRepository: Repository<Reply>, postRepository: Repository<Post>, userRepository: Repository<User>, notificationsService: NotificationsService, eventBus: EventBusService, pointsService: PointsService, settingsService: SettingsService);
     createReplyForPost(postId: number, dto: CreateReplyDto, userId: number): Promise<Reply>;
     awardPointsForReply(replyId: number, userId: number): Promise<void>;
     getByPostId(postId: number, page?: number, limit?: number): Promise<{

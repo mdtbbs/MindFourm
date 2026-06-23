@@ -17,9 +17,12 @@ const common_1 = require("@nestjs/common");
 const platform_express_1 = require("@nestjs/platform-express");
 const users_service_1 = require("./users.service");
 const update_profile_dto_1 = require("./dto/update-profile.dto");
+const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
+const logs_service_1 = require("../logs/logs.service");
 let UsersController = class UsersController {
-    constructor(usersService) {
+    constructor(usersService, logsService) {
         this.usersService = usersService;
+        this.logsService = logsService;
     }
     async getCurrentUser(req) {
         const userId = req.user?.id;
@@ -33,7 +36,12 @@ let UsersController = class UsersController {
         if (!userId) {
             throw new Error('Not authenticated');
         }
-        return this.usersService.updateProfile(userId, dto);
+        const user = await this.usersService.updateProfile(userId, dto);
+        await this.logOperation(req, 'user.profile.update', 'user', userId, {
+            username_changed: dto.username !== undefined,
+            bio_changed: dto.bio !== undefined,
+        });
+        return user;
     }
     async uploadAvatar(req, file) {
         const userId = req.user?.id;
@@ -44,14 +52,21 @@ let UsersController = class UsersController {
             throw new Error('No file uploaded');
         }
         const avatarUrl = `/uploads/avatars/${file.filename}`;
-        return this.usersService.updateAvatar(userId, avatarUrl);
+        const user = await this.usersService.updateAvatar(userId, avatarUrl);
+        await this.logOperation(req, 'user.avatar.upload', 'user', userId, {
+            avatar_status: user.avatar_status,
+            pending: user.avatar_status === 'pending',
+        });
+        return user;
     }
     async removeAvatar(req) {
         const userId = req.user?.id;
         if (!userId) {
             throw new Error('Not authenticated');
         }
-        return this.usersService.removeAvatar(userId);
+        const user = await this.usersService.removeAvatar(userId);
+        await this.logOperation(req, 'user.avatar.remove', 'user', userId);
+        return user;
     }
     async getCurrentUserReplies(req, page, limit) {
         const userId = req.user?.id;
@@ -72,10 +87,25 @@ let UsersController = class UsersController {
     async getUserReplies(id, page, limit) {
         return this.usersService.getRepliesByUserId(parseInt(id, 10), page || 1, limit || 20);
     }
+    async logOperation(req, action, targetType, targetId, details) {
+        await this.logsService.log({
+            user_id: req.user?.id,
+            action,
+            target_type: targetType,
+            target_id: targetId,
+            details: details ? JSON.stringify(details) : undefined,
+            ip_address: this.getClientIp(req),
+            user_agent: req.headers?.['user-agent'],
+        }).catch((err) => console.warn('operation log failed:', err.message));
+    }
+    getClientIp(req) {
+        return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    }
 };
 exports.UsersController = UsersController;
 __decorate([
     (0, common_1.Get)('me'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -83,6 +113,7 @@ __decorate([
 ], UsersController.prototype, "getCurrentUser", null);
 __decorate([
     (0, common_1.Put)('me/profile'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -91,6 +122,7 @@ __decorate([
 ], UsersController.prototype, "updateProfile", null);
 __decorate([
     (0, common_1.Post)('me/avatar'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('avatar')),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.UploadedFile)()),
@@ -100,6 +132,7 @@ __decorate([
 ], UsersController.prototype, "uploadAvatar", null);
 __decorate([
     (0, common_1.Delete)('me/avatar'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -107,6 +140,7 @@ __decorate([
 ], UsersController.prototype, "removeAvatar", null);
 __decorate([
     (0, common_1.Get)('me/replies'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)('page')),
     __param(2, (0, common_1.Query)('limit')),
@@ -140,6 +174,7 @@ __decorate([
 ], UsersController.prototype, "getUserReplies", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
-    __metadata("design:paramtypes", [users_service_1.UsersService])
+    __metadata("design:paramtypes", [users_service_1.UsersService,
+        logs_service_1.LogsService])
 ], UsersController);
 //# sourceMappingURL=users.controller.js.map

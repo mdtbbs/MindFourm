@@ -17,6 +17,8 @@ const user_entity_1 = require("../../entities/user.entity");
 const notifications_module_1 = require("../notifications/notifications.module");
 const plugins_module_1 = require("../plugins/plugins.module");
 const points_module_1 = require("../points/points.module");
+const settings_module_1 = require("../settings/settings.module");
+const logs_module_1 = require("../logs/logs.module");
 let RepliesModule = class RepliesModule {
 };
 exports.RepliesModule = RepliesModule;
@@ -27,6 +29,8 @@ exports.RepliesModule = RepliesModule = __decorate([
             notifications_module_1.NotificationsModule,
             plugins_module_1.PluginsModule,
             points_module_1.PointsModule,
+            settings_module_1.SettingsModule,
+            logs_module_1.LogsModule,
         ],
         providers: [replies_service_1.RepliesService],
         controllers: [replies_controller_1.RepliesController, replies_controller_1.RepliesControllerMain],

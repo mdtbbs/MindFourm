@@ -10,6 +10,7 @@ import { PointsService } from '../points/points.service';
 import { GroupsService } from '../groups/groups.service';
 import { EventBusService } from '../plugins/event-bus.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
@@ -26,7 +27,8 @@ export declare class PostsService {
     private groupsService;
     private eventBus;
     private notificationsService;
-    constructor(postRepository: Repository<Post>, userRepository: Repository<User>, categoryRepository: Repository<Category>, tagRepository: Repository<Tag>, postTagRepository: Repository<PostTag>, replyRepository: Repository<Reply>, dataSource: DataSource, redisService: RedisService, pointsService: PointsService, groupsService: GroupsService, eventBus: EventBusService, notificationsService: NotificationsService);
+    private settingsService;
+    constructor(postRepository: Repository<Post>, userRepository: Repository<User>, categoryRepository: Repository<Category>, tagRepository: Repository<Tag>, postTagRepository: Repository<PostTag>, replyRepository: Repository<Reply>, dataSource: DataSource, redisService: RedisService, pointsService: PointsService, groupsService: GroupsService, eventBus: EventBusService, notificationsService: NotificationsService, settingsService: SettingsService);
     create(dto: CreatePostDto, userId: number): Promise<Post | null>;
     findById(id: number, userId?: number): Promise<Post>;
     findAll(query: QueryPostsDto): Promise<{

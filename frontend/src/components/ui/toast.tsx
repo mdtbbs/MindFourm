@@ -10,6 +10,7 @@ interface ToastProps {
   type: ToastType;
   onDismiss: (id: string) => void;
   duration?: number;
+  dismissible?: boolean;
 }
 
 const typeStyles: Record<ToastType, string> = {
@@ -46,7 +47,7 @@ const typeIcons: Record<ToastType, React.ReactNode> = {
   ),
 };
 
-export default function Toast({ id, message, type, onDismiss, duration = 4000 }: ToastProps) {
+export default function Toast({ id, message, type, onDismiss, duration = 4000, dismissible = true }: ToastProps) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -61,7 +62,10 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000 }:
     // Trigger slide-in on mount
     requestAnimationFrame(() => setVisible(true));
 
-    timerRef.current = setTimeout(dismiss, duration);
+    if (duration > 0) {
+      timerRef.current = setTimeout(dismiss, duration);
+    }
+
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
@@ -80,16 +84,18 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000 }:
     >
       {typeIcons[type]}
       <p className="flex-1 text-sm font-medium leading-5">{message}</p>
-      <button
-        type="button"
-        onClick={dismiss}
-        className="ml-1 shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2"
-        aria-label="Dismiss notification"
-      >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      {dismissible && (
+        <button
+          type="button"
+          onClick={dismiss}
+          className="ml-1 shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2"
+          aria-label="Dismiss notification"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

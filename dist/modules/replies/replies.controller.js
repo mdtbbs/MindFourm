@@ -18,16 +18,37 @@ const replies_service_1 = require("./replies.service");
 const create_reply_dto_1 = require("./dto/create-reply.dto");
 const update_reply_dto_1 = require("./dto/update-reply.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
+const logs_service_1 = require("../logs/logs.service");
 let RepliesController = class RepliesController {
-    constructor(repliesService) {
+    constructor(repliesService, logsService) {
         this.repliesService = repliesService;
+        this.logsService = logsService;
     }
     async getRepliesByPost(postId, page, limit) {
         return this.repliesService.getByPostId(Number(postId), page ? Number(page) : 1, limit ? Number(limit) : 20);
     }
     async createReply(postId, dto, req) {
         const userId = req.user.id;
-        return this.repliesService.createReplyForPost(Number(postId), dto, userId);
+        const reply = await this.repliesService.createReplyForPost(Number(postId), dto, userId);
+        await this.logOperation(req, 'reply.create', 'reply', reply.id, {
+            post_id: Number(postId),
+            status: reply.status,
+        });
+        return reply;
+    }
+    async logOperation(req, action, targetType, targetId, details) {
+        await this.logsService.log({
+            user_id: req.user?.id,
+            action,
+            target_type: targetType,
+            target_id: targetId,
+            details: details ? JSON.stringify(details) : undefined,
+            ip_address: this.getClientIp(req),
+            user_agent: req.headers?.['user-agent'],
+        }).catch((err) => console.warn('operation log failed:', err.message));
+    }
+    getClientIp(req) {
+        return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
     }
 };
 exports.RepliesController = RepliesController;
@@ -52,23 +73,42 @@ __decorate([
 ], RepliesController.prototype, "createReply", null);
 exports.RepliesController = RepliesController = __decorate([
     (0, common_1.Controller)('posts/:postId/replies'),
-    __metadata("design:paramtypes", [replies_service_1.RepliesService])
+    __metadata("design:paramtypes", [replies_service_1.RepliesService,
+        logs_service_1.LogsService])
 ], RepliesController);
 let RepliesControllerMain = class RepliesControllerMain {
-    constructor(repliesService) {
+    constructor(repliesService, logsService) {
         this.repliesService = repliesService;
+        this.logsService = logsService;
     }
     async getReplyById(id) {
         return this.repliesService.findById(Number(id));
     }
     async updateReply(id, dto, req) {
         const userId = req.user.id;
-        return this.repliesService.update(Number(id), dto.content, userId);
+        const reply = await this.repliesService.update(Number(id), dto.content, userId);
+        await this.logOperation(req, 'reply.update', 'reply', Number(id), { post_id: reply.post_id });
+        return reply;
     }
     async deleteReply(id, req) {
         const userId = req.user.id;
         await this.repliesService.softDelete(Number(id), userId);
+        await this.logOperation(req, 'reply.delete', 'reply', Number(id));
         return { message: 'Reply deleted successfully' };
+    }
+    async logOperation(req, action, targetType, targetId, details) {
+        await this.logsService.log({
+            user_id: req.user?.id,
+            action,
+            target_type: targetType,
+            target_id: targetId,
+            details: details ? JSON.stringify(details) : undefined,
+            ip_address: this.getClientIp(req),
+            user_agent: req.headers?.['user-agent'],
+        }).catch((err) => console.warn('operation log failed:', err.message));
+    }
+    getClientIp(req) {
+        return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
     }
 };
 exports.RepliesControllerMain = RepliesControllerMain;
@@ -100,6 +140,7 @@ __decorate([
 ], RepliesControllerMain.prototype, "deleteReply", null);
 exports.RepliesControllerMain = RepliesControllerMain = __decorate([
     (0, common_1.Controller)('replies'),
-    __metadata("design:paramtypes", [replies_service_1.RepliesService])
+    __metadata("design:paramtypes", [replies_service_1.RepliesService,
+        logs_service_1.LogsService])
 ], RepliesControllerMain);
 //# sourceMappingURL=replies.controller.js.map

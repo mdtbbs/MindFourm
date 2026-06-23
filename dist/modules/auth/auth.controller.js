@@ -16,6 +16,8 @@ exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
 const verify_session_dto_1 = require("./dto/verify-session.dto");
+const mindauth_service_guard_1 = require("../../common/guards/mindauth-service.guard");
+const skip_phone_verification_decorator_1 = require("../../common/decorators/skip-phone-verification.decorator");
 let AuthController = class AuthController {
     constructor(authService) {
         this.authService = authService;
@@ -39,6 +41,8 @@ let AuthController = class AuthController {
                 avatar_url: user.avatar_url,
                 role: user.role,
                 bio: user.bio,
+                phone_verified: user.phone_verified,
+                phone_verified_at: user.phone_verified_at,
                 created_at: user.created_at,
             },
         });
@@ -86,11 +90,47 @@ let AuthController = class AuthController {
                 email: user.email,
                 avatar_url: user.avatar_url,
                 role: user.role,
+                phone_verified: user.phone_verified,
+                phone_verified_at: user.phone_verified_at,
             },
         });
     }
+    async syncPhoneStatus(phoneSyncToken, req, res) {
+        const sessionToken = req.cookies?.forum_session;
+        if (!sessionToken) {
+            throw new common_1.UnauthorizedException('Session token is required');
+        }
+        const currentUser = await this.authService.verifySession(sessionToken);
+        if (!currentUser) {
+            throw new common_1.UnauthorizedException('Session expired');
+        }
+        const user = await this.authService.syncPhoneStatus(currentUser.id, phoneSyncToken);
+        return res.json({
+            success: true,
+            user: {
+                id: user.id,
+                mindauth_id: user.mindauth_id,
+                username: user.username,
+                email: user.email,
+                avatar_url: user.avatar_url,
+                role: user.role,
+                bio: user.bio,
+                phone_verified: user.phone_verified,
+                phone_verified_at: user.phone_verified_at,
+                created_at: user.created_at,
+            },
+        });
+    }
+    async syncUserFromMindAuth(body) {
+        const user = await this.authService.syncMindAuthUserData(body.user ?? body);
+        return {
+            synced: !!user,
+            user_id: user?.id ?? null,
+        };
+    }
     async testLogin(userType = 'user', req, res) {
-        if (process.env.NODE_ENV === 'production') {
+        const appEnv = this.authService['configService'].get('app.env');
+        if (appEnv === 'production' || process.env.NODE_ENV === 'production') {
             throw new common_1.UnauthorizedException('Test login not available in production');
         }
         const testUsers = {
@@ -159,6 +199,7 @@ __decorate([
 __decorate([
     (0, common_1.Post)('verify'),
     (0, common_1.Post)('verify-session'),
+    (0, skip_phone_verification_decorator_1.SkipPhoneVerification)(),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __param(2, (0, common_1.Res)()),
@@ -167,7 +208,27 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "verifySession", null);
 __decorate([
+    (0, common_1.Post)('sync-phone-status'),
+    (0, skip_phone_verification_decorator_1.SkipPhoneVerification)(),
+    __param(0, (0, common_1.Body)('phone_sync_token')),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "syncPhoneStatus", null);
+__decorate([
+    (0, common_1.Post)('internal/users/sync'),
+    (0, skip_phone_verification_decorator_1.SkipPhoneVerification)(),
+    (0, common_1.UseGuards)(mindauth_service_guard_1.MindAuthServiceGuard),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "syncUserFromMindAuth", null);
+__decorate([
     (0, common_1.Post)('test-login'),
+    (0, skip_phone_verification_decorator_1.SkipPhoneVerification)(),
     __param(0, (0, common_1.Body)('userType')),
     __param(1, (0, common_1.Req)()),
     __param(2, (0, common_1.Res)()),
@@ -177,6 +238,7 @@ __decorate([
 ], AuthController.prototype, "testLogin", null);
 __decorate([
     (0, common_1.Post)('logout'),
+    (0, skip_phone_verification_decorator_1.SkipPhoneVerification)(),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),

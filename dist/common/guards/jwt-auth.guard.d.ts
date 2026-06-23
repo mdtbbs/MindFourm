@@ -6,5 +6,6 @@ export declare class JwtAuthGuard implements CanActivate {
     private reflector;
     constructor(authService: AuthService, reflector: Reflector);
     canActivate(context: ExecutionContext): Promise<boolean>;
+    private assertPhoneVerifiedForWrites;
     private extractTokenFromHeader;
 }

@@ -23,14 +23,16 @@ const notifications_service_1 = require("../notifications/notifications.service"
 const event_bus_service_1 = require("../plugins/event-bus.service");
 const markdown_util_1 = require("../../common/utils/markdown.util");
 const points_service_1 = require("../points/points.service");
+const settings_service_1 = require("../settings/settings.service");
 let RepliesService = class RepliesService {
-    constructor(replyRepository, postRepository, userRepository, notificationsService, eventBus, pointsService) {
+    constructor(replyRepository, postRepository, userRepository, notificationsService, eventBus, pointsService, settingsService) {
         this.replyRepository = replyRepository;
         this.postRepository = postRepository;
         this.userRepository = userRepository;
         this.notificationsService = notificationsService;
         this.eventBus = eventBus;
         this.pointsService = pointsService;
+        this.settingsService = settingsService;
     }
     async createReplyForPost(postId, dto, userId) {
         const { content, parent_reply_id } = dto;
@@ -63,17 +65,18 @@ let RepliesService = class RepliesService {
         if (!user) {
             throw new common_1.NotFoundException('User not found');
         }
+        const requiresApproval = await this.settingsService.getBoolean('require_reply_approval', true);
         const newReply = this.replyRepository.create({
             post_id: postId,
             user_id: userId,
             parent_reply_id: parent_reply_id,
             content,
             content_html: contentHtml,
-            status: 'published',
+            status: requiresApproval ? 'pending' : 'published',
             like_count: 0,
         });
         const savedReply = await this.replyRepository.save(newReply);
-        if (post.user_id !== userId) {
+        if (savedReply.status === 'published' && post.user_id !== userId) {
             await this.notificationsService.create({
                 user_id: post.user_id,
                 type: 'reply',
@@ -83,8 +86,10 @@ let RepliesService = class RepliesService {
                 content: content,
             });
         }
-        await this.notificationsService.notifyMentionedUsers(content, postId, userId, savedReply.id);
-        await this.awardPointsForReply(savedReply.id, userId);
+        if (savedReply.status === 'published') {
+            await this.notificationsService.notifyMentionedUsers(content, postId, userId, savedReply.id);
+            await this.awardPointsForReply(savedReply.id, userId);
+        }
         this.eventBus.execute('reply.created', { reply: savedReply, userId }).catch((err) => console.error('reply.created hook error:', err));
         return savedReply;
     }
@@ -170,6 +175,7 @@ exports.RepliesService = RepliesService = __decorate([
         typeorm_2.Repository,
         notifications_service_1.NotificationsService,
         event_bus_service_1.EventBusService,
-        points_service_1.PointsService])
+        points_service_1.PointsService,
+        settings_service_1.SettingsService])
 ], RepliesService);
 //# sourceMappingURL=replies.service.js.map

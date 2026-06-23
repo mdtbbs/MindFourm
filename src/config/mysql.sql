@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(50) NOT NULL DEFAULT 'user',
     avatar_url VARCHAR(500),
     bio TEXT,
+    phone_verified TINYINT(1) NOT NULL DEFAULT 0,
+    phone_verified_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_users_mindauth_id (mindauth_id),
     INDEX idx_users_role (role),

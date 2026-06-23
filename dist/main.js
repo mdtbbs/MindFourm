@@ -10,6 +10,7 @@ const points_service_1 = require("./modules/points/points.service");
 const plugin_manager_service_1 = require("./modules/plugins/plugin-manager.service");
 const levels_service_1 = require("./modules/levels/levels.service");
 const badges_service_1 = require("./modules/badges/badges.service");
+const typeorm_1 = require("typeorm");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
         logger: ['error', 'warn', 'log'],
@@ -27,7 +28,7 @@ async function bootstrap() {
         origin: process.env.FRONTEND_URL || 'http://localhost:3000',
         credentials: true,
     });
-    await (0, database_module_1.initializeDatabase)();
+    await (0, database_module_1.initializeDatabase)(app.get(typeorm_1.DataSource));
     const pointsService = app.get(points_service_1.PointsService);
     await pointsService.initializeDefaultRules();
     const levelsService = app.get(levels_service_1.LevelsService);

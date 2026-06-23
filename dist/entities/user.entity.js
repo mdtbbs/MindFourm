@@ -54,6 +54,14 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "avatar_url", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ length: 500, nullable: true }),
+    __metadata("design:type", Object)
+], User.prototype, "pending_avatar_url", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 30, default: 'approved' }),
+    __metadata("design:type", String)
+], User.prototype, "avatar_status", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),
     __metadata("design:type", String)
 ], User.prototype, "bio", void 0);
@@ -85,6 +93,14 @@ __decorate([
     (0, typeorm_1.Column)({ type: 'boolean', default: false }),
     __metadata("design:type", Boolean)
 ], User.prototype, "digest_email", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'boolean', default: false }),
+    __metadata("design:type", Boolean)
+], User.prototype, "phone_verified", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'datetime', nullable: true }),
+    __metadata("design:type", Object)
+], User.prototype, "phone_verified_at", void 0);
 __decorate([
     (0, typeorm_1.CreateDateColumn)(),
     __metadata("design:type", Date)

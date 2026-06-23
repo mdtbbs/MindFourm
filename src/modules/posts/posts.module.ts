@@ -13,6 +13,8 @@ import { PointsModule } from '../points/points.module';
 import { GroupsModule } from '../groups/groups.module';
 import { PluginsModule } from '../plugins/plugins.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SettingsModule } from '../settings/settings.module';
+import { LogsModule } from '../logs/logs.module';
 
 @Module({
   imports: [
@@ -21,6 +23,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
     GroupsModule,
     PluginsModule,
     NotificationsModule,
+    SettingsModule,
+    LogsModule,
     TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply]),
   ],
   providers: [PostsService],

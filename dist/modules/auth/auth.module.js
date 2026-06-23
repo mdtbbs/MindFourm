@@ -14,6 +14,7 @@ const session_audit_entity_1 = require("../../entities/session-audit.entity");
 const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
 const points_module_1 = require("../points/points.module");
+const mindauth_service_guard_1 = require("../../common/guards/mindauth-service.guard");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -24,7 +25,7 @@ exports.AuthModule = AuthModule = __decorate([
             typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, session_audit_entity_1.SessionAudit]),
             points_module_1.PointsModule,
         ],
-        providers: [auth_service_1.AuthService],
+        providers: [auth_service_1.AuthService, mindauth_service_guard_1.MindAuthServiceGuard],
         controllers: [auth_controller_1.AuthController],
         exports: [auth_service_1.AuthService, typeorm_1.TypeOrmModule],
     })

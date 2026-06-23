@@ -9,6 +9,7 @@ import { EventBusService } from '../plugins/event-bus.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { parseMarkdown } from '../../common/utils/markdown.util';
 import { PointsService } from '../points/points.service';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class RepliesService {
@@ -22,6 +23,7 @@ export class RepliesService {
     private notificationsService: NotificationsService,
     private eventBus: EventBusService,
     private pointsService: PointsService,
+    private settingsService: SettingsService,
   ) {}
 
   async createReplyForPost(postId: number, dto: CreateReplyDto, userId: number): Promise<Reply> {
@@ -71,6 +73,8 @@ export class RepliesService {
       throw new NotFoundException('User not found');
     }
 
+    const requiresApproval = await this.settingsService.getBoolean('require_reply_approval', true);
+
     // Create reply
     const newReply = this.replyRepository.create({
       post_id: postId,
@@ -78,14 +82,14 @@ export class RepliesService {
       parent_reply_id: parent_reply_id,
       content,
       content_html: contentHtml,
-      status: 'published',
+      status: requiresApproval ? 'pending' : 'published',
       like_count: 0,
     });
 
     const savedReply = await this.replyRepository.save(newReply);
 
     // Create notification for post author (if not the same user)
-    if (post.user_id !== userId) {
+    if (savedReply.status === 'published' && post.user_id !== userId) {
       await this.notificationsService.create({
         user_id: post.user_id,
         type: 'reply',
@@ -96,16 +100,17 @@ export class RepliesService {
       });
     }
 
-    // Handle @mentions in content
-    await this.notificationsService.notifyMentionedUsers(
-      content,
-      postId,
-      userId,
-      savedReply.id,
-    );
+    if (savedReply.status === 'published') {
+      await this.notificationsService.notifyMentionedUsers(
+        content,
+        postId,
+        userId,
+        savedReply.id,
+      );
 
-    // Award points for creating reply
-    await this.awardPointsForReply(savedReply.id, userId);
+      // Award points for creating reply
+      await this.awardPointsForReply(savedReply.id, userId);
+    }
 
     // Execute "after" hook
     this.eventBus.execute('reply.created', { reply: savedReply, userId }).catch((err) =>

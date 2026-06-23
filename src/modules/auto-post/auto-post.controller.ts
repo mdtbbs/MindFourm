@@ -2,12 +2,14 @@ import { Controller, Post, Body, UseGuards, ConflictException } from '@nestjs/co
 import { AutoPostService } from './auto-post.service';
 import { ServiceAuthGuard } from '@common/guards/service-auth.guard';
 import { ServerApprovedCallbackDto } from './dto/server-approved-callback.dto';
+import { SkipPhoneVerification } from '@common/decorators/skip-phone-verification.decorator';
 
 @Controller('auto-post')
 export class AutoPostController {
   constructor(private autoPostService: AutoPostService) {}
 
   @Post('server-approved')
+  @SkipPhoneVerification()
   @UseGuards(ServiceAuthGuard)
   async handleServerApproved(@Body() dto: ServerApprovedCallbackDto) {
     const result = await this.autoPostService.createServerAnnouncement({

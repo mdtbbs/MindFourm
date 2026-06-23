@@ -23,9 +23,13 @@ export declare const appConfig: () => {
         clientId: string;
         clientSecret: string;
         callbackUrl: string;
+        serviceKey: string;
     };
     easymanager: {
         baseUrl: string;
+        apiKey: string;
+    };
+    automation: {
         apiKey: string;
     };
     session: {

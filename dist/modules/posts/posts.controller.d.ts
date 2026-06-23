@@ -2,9 +2,11 @@ import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
+import { LogsService } from '../logs/logs.service';
 export declare class PostsController {
     private readonly postsService;
-    constructor(postsService: PostsService);
+    private readonly logsService;
+    constructor(postsService: PostsService, logsService: LogsService);
     findAll(query: QueryPostsDto): Promise<{
         data: import("../../entities").Post[];
         total: number;
@@ -59,8 +61,8 @@ export declare class PostsController {
         success: boolean;
         message: string;
     }>;
-    pin(id: number, isPinned: number): Promise<import("../../entities").Post>;
-    move(id: number, categoryId: number): Promise<import("../../entities").Post>;
+    pin(id: number, isPinned: number, req: any): Promise<import("../../entities").Post>;
+    move(id: number, categoryId: number, req: any): Promise<import("../../entities").Post>;
     findByUser(userId: number, page?: number, limit?: number): Promise<{
         data: import("../../entities").Post[];
         total: number;
@@ -68,4 +70,6 @@ export declare class PostsController {
         limit: number;
         totalPages: number;
     }>;
+    private logOperation;
+    private getClientIp;
 }

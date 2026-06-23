@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const auto_post_service_1 = require("./auto-post.service");
 const service_auth_guard_1 = require("../../common/guards/service-auth.guard");
 const server_approved_callback_dto_1 = require("./dto/server-approved-callback.dto");
+const skip_phone_verification_decorator_1 = require("../../common/decorators/skip-phone-verification.decorator");
 let AutoPostController = class AutoPostController {
     constructor(autoPostService) {
         this.autoPostService = autoPostService;
@@ -47,6 +48,7 @@ let AutoPostController = class AutoPostController {
 exports.AutoPostController = AutoPostController;
 __decorate([
     (0, common_1.Post)('server-approved'),
+    (0, skip_phone_verification_decorator_1.SkipPhoneVerification)(),
     (0, common_1.UseGuards)(service_auth_guard_1.ServiceAuthGuard),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),

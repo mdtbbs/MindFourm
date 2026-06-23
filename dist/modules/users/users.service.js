@@ -20,11 +20,13 @@ const user_entity_1 = require("../../entities/user.entity");
 const post_entity_1 = require("../../entities/post.entity");
 const reply_entity_1 = require("../../entities/reply.entity");
 const search_util_1 = require("../../common/utils/search.util");
+const settings_service_1 = require("../settings/settings.service");
 let UsersService = class UsersService {
-    constructor(userRepository, postRepository, replyRepository) {
+    constructor(userRepository, postRepository, replyRepository, settingsService) {
         this.userRepository = userRepository;
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
+        this.settingsService = settingsService;
     }
     async getById(id) {
         const user = await this.userRepository.findOne({ where: { id } });
@@ -68,7 +70,15 @@ let UsersService = class UsersService {
         if (!user) {
             throw new common_1.NotFoundException(`User with id ${id} not found`);
         }
-        user.avatar_url = avatarUrl;
+        if (await this.settingsService.getBoolean('require_avatar_approval', true)) {
+            user.pending_avatar_url = avatarUrl;
+            user.avatar_status = 'pending';
+        }
+        else {
+            user.avatar_url = avatarUrl;
+            user.pending_avatar_url = null;
+            user.avatar_status = 'approved';
+        }
         return this.userRepository.save(user);
     }
     async removeAvatar(id) {
@@ -77,6 +87,8 @@ let UsersService = class UsersService {
             throw new common_1.NotFoundException(`User with id ${id} not found`);
         }
         user.avatar_url = '';
+        user.pending_avatar_url = null;
+        user.avatar_status = 'approved';
         return this.userRepository.save(user);
     }
     async getRepliesByUserId(userId, page = 1, limit = 20) {
@@ -129,6 +141,7 @@ exports.UsersService = UsersService = __decorate([
     __param(2, (0, typeorm_1.InjectRepository)(reply_entity_1.Reply)),
     __metadata("design:paramtypes", [typeorm_2.Repository,
         typeorm_2.Repository,
-        typeorm_2.Repository])
+        typeorm_2.Repository,
+        settings_service_1.SettingsService])
 ], UsersService);
 //# sourceMappingURL=users.service.js.map

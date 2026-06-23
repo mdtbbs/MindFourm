@@ -15,9 +15,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const message = typeof exceptionResponse === 'string'
         ? exceptionResponse
         : (exceptionResponse as any).message || exception.message;
+      const code = typeof exceptionResponse === 'object' && exceptionResponse !== null
+        ? (exceptionResponse as any).code
+        : undefined;
 
       response.status(status).json({
         success: false,
+        ...(code ? { code } : {}),
         message,
       });
       return;

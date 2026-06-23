@@ -8,6 +8,7 @@ import {
   Query,
   Body,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { PointsService } from './points.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
@@ -16,6 +17,7 @@ import { Roles } from '@common/decorators/roles.decorator';
 import { QueryPointHistoryDto } from './dto/point-history.dto';
 import { QueryLeaderboardDto } from './dto/leaderboard.dto';
 import { AwardPointsDto, CreatePointRuleDto, UpdatePointRuleDto } from './dto/admin-points.dto';
+import type { Request } from 'express';
 
 @Controller('points')
 export class PointsController {
@@ -23,7 +25,8 @@ export class PointsController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  async getMyPoints(@Query('userId') userId: number) {
+  async getMyPoints(@Req() req: Request) {
+    const userId = (req as any).user?.id;
     const points = await this.pointsService.getUserPoints(userId);
     return { success: true, data: points };
   }
@@ -31,9 +34,10 @@ export class PointsController {
   @Get('me/history')
   @UseGuards(JwtAuthGuard)
   async getMyHistory(
-    @Query('userId') userId: number,
+    @Req() req: Request,
     @Query() query: QueryPointHistoryDto,
   ) {
+    const userId = (req as any).user?.id;
     const result = await this.pointsService.getHistory(
       userId,
       query.limit || 20,

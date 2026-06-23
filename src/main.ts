@@ -8,6 +8,7 @@ import { PointsService } from './modules/points/points.service';
 import { PluginManagerService } from './modules/plugins/plugin-manager.service';
 import { LevelsService } from './modules/levels/levels.service';
 import { BadgesService } from './modules/badges/badges.service';
+import { DataSource } from 'typeorm';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -40,7 +41,7 @@ async function bootstrap() {
   });
 
   // Initialize database schema if needed
-  await initializeDatabase();
+  await initializeDatabase(app.get(DataSource));
 
   // Initialize default point rules
   const pointsService = app.get(PointsService);

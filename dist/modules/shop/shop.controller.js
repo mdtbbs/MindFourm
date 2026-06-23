@@ -31,11 +31,13 @@ let ShopController = class ShopController {
         const item = await this.shopService.getItemById(id);
         return { success: true, data: item };
     }
-    async purchase(itemId, userId) {
+    async purchase(itemId, req) {
+        const userId = req.user?.id;
         const purchase = await this.shopService.purchase(userId, itemId);
         return { success: true, data: purchase };
     }
-    async getMyPurchases(userId, query) {
+    async getMyPurchases(req, query) {
+        const userId = req.user?.id;
         const result = await this.shopService.getUserPurchases(userId, query.page || 1, query.limit || 20);
         return { success: true, data: result };
     }
@@ -75,18 +77,18 @@ __decorate([
     (0, common_1.Post)('purchase/:itemId'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __param(0, (0, common_1.Param)('itemId')),
-    __param(1, (0, common_1.Query)('userId')),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, Number]),
+    __metadata("design:paramtypes", [Number, Object]),
     __metadata("design:returntype", Promise)
 ], ShopController.prototype, "purchase", null);
 __decorate([
     (0, common_1.Get)('me/purchases'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
-    __param(0, (0, common_1.Query)('userId')),
+    __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, shop_dto_1.QueryShopDto]),
+    __metadata("design:paramtypes", [Object, shop_dto_1.QueryShopDto]),
     __metadata("design:returntype", Promise)
 ], ShopController.prototype, "getMyPurchases", null);
 __decorate([

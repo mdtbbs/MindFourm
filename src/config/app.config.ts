@@ -23,10 +23,14 @@ export const appConfig = () => ({
     clientId: process.env.MINDAUTH_CLIENT_ID || 'forum',
     clientSecret: process.env.MINDAUTH_CLIENT_SECRET || '',
     callbackUrl: process.env.MINDAUTH_CALLBACK_URL || 'http://localhost:3000/api/auth/callback',
+    serviceKey: process.env.MINDAUTH_SERVICE_KEY || '',
   },
   easymanager: {
     baseUrl: process.env.EASYMANAGER_URL || 'http://localhost:5001',
     apiKey: process.env.EASYMANAGER_API_KEY || '',
+  },
+  automation: {
+    apiKey: process.env.FORUM_API_KEY || '',
   },
   session: {
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days

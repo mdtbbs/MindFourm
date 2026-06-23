@@ -1,4 +1,5 @@
 import { BansService } from './bans.service';
+import type { Request } from 'express';
 export declare class BansController {
     private readonly bansService;
     constructor(bansService: BansService);
@@ -13,7 +14,7 @@ export declare class BansController {
         ban_type: string;
         value: string;
         reason?: string;
-    }, user_id: number): Promise<import("../../entities").Ban>;
+    }, req: Request): Promise<import("../../entities").Ban>;
     update(id: number, updates: {
         reason?: string;
         is_active?: number;

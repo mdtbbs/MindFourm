@@ -6,6 +6,7 @@ import { Post } from '../../entities/post.entity';
 import { Reply } from '../../entities/reply.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { escapeLike } from '@common/utils/search.util';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class UsersService {
@@ -16,6 +17,7 @@ export class UsersService {
     private postRepository: Repository<Post>,
     @InjectRepository(Reply)
     private replyRepository: Repository<Reply>,
+    private settingsService: SettingsService,
   ) {}
 
   async getById(id: number): Promise<User & { post_count?: number; reply_count?: number }> {
@@ -75,7 +77,15 @@ export class UsersService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
-    user.avatar_url = avatarUrl;
+    if (await this.settingsService.getBoolean('require_avatar_approval', true)) {
+      user.pending_avatar_url = avatarUrl;
+      user.avatar_status = 'pending';
+    } else {
+      user.avatar_url = avatarUrl;
+      user.pending_avatar_url = null;
+      user.avatar_status = 'approved';
+    }
+
     return this.userRepository.save(user);
   }
 
@@ -87,6 +97,8 @@ export class UsersService {
     }
 
     user.avatar_url = '' as any;
+    user.pending_avatar_url = null;
+    user.avatar_status = 'approved';
     return this.userRepository.save(user);
   }
 

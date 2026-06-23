@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
+const core_1 = require("@nestjs/core");
 const config_1 = require("@nestjs/config");
 const serve_static_1 = require("@nestjs/serve-static");
 const path_1 = require("path");
@@ -43,6 +44,8 @@ const shop_module_1 = require("./modules/shop/shop.module");
 const rss_module_1 = require("./modules/rss/rss.module");
 const plugins_module_1 = require("./modules/plugins/plugins.module");
 const search_module_1 = require("./modules/search/search.module");
+const service_api_module_1 = require("./modules/service-api/service-api.module");
+const phone_write_guard_1 = require("./common/guards/phone-write.guard");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -99,8 +102,15 @@ exports.AppModule = AppModule = __decorate([
             rss_module_1.RssModule,
             plugins_module_1.PluginsModule,
             search_module_1.SearchModule,
+            service_api_module_1.ServiceApiModule,
         ],
         controllers: [health_controller_1.HealthController],
+        providers: [
+            {
+                provide: core_1.APP_GUARD,
+                useClass: phone_write_guard_1.PhoneWriteGuard,
+            },
+        ],
     })
 ], AppModule);
 //# sourceMappingURL=app.module.js.map

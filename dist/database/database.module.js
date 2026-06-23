@@ -41,7 +41,41 @@ exports.DatabaseModule = DatabaseModule = __decorate([
         exports: [typeorm_1.TypeOrmModule, redis_module_1.RedisModule],
     })
 ], DatabaseModule);
-async function initializeDatabase() {
+async function initializeDatabase(dataSource) {
+    if (dataSource) {
+        try {
+            await dataSource.query('ALTER TABLE users ADD COLUMN phone_verified TINYINT(1) NOT NULL DEFAULT 0');
+        }
+        catch (err) {
+            if (err?.code !== 'ER_DUP_FIELDNAME') {
+                console.warn('Could not add users.phone_verified:', err?.message || err);
+            }
+        }
+        try {
+            await dataSource.query('ALTER TABLE users ADD COLUMN phone_verified_at DATETIME NULL');
+        }
+        catch (err) {
+            if (err?.code !== 'ER_DUP_FIELDNAME') {
+                console.warn('Could not add users.phone_verified_at:', err?.message || err);
+            }
+        }
+        try {
+            await dataSource.query('ALTER TABLE users ADD COLUMN pending_avatar_url VARCHAR(500) NULL');
+        }
+        catch (err) {
+            if (err?.code !== 'ER_DUP_FIELDNAME') {
+                console.warn('Could not add users.pending_avatar_url:', err?.message || err);
+            }
+        }
+        try {
+            await dataSource.query("ALTER TABLE users ADD COLUMN avatar_status VARCHAR(30) NOT NULL DEFAULT 'approved'");
+        }
+        catch (err) {
+            if (err?.code !== 'ER_DUP_FIELDNAME') {
+                console.warn('Could not add users.avatar_status:', err?.message || err);
+            }
+        }
+    }
     console.log('Database initialized with existing schema');
 }
 //# sourceMappingURL=database.module.js.map

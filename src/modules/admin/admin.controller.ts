@@ -8,6 +8,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { Like } from 'typeorm';
@@ -304,8 +305,13 @@ export class AdminController {
    */
   @Put('moderation/:id/approve')
   @Roles('moderator', 'admin')
-  async approveItem(@Param('id', ParseIntPipe) id: number) {
-    await this.adminService.approvePost(id);
+  async approveItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('type') type: string = 'post',
+    @Req() req: any,
+  ) {
+    await this.adminService.approveModerationItem(type, id);
+    await this.logOperation(req, 'moderation.approve', type, id);
     return { message: 'Item approved' };
   }
 
@@ -314,8 +320,13 @@ export class AdminController {
    */
   @Put('moderation/:id/reject')
   @Roles('moderator', 'admin')
-  async rejectItem(@Param('id', ParseIntPipe) id: number) {
-    await this.adminService.rejectPost(id);
+  async rejectItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('type') type: string = 'post',
+    @Req() req: any,
+  ) {
+    await this.adminService.rejectModerationItem(type, id);
+    await this.logOperation(req, 'moderation.reject', type, id);
     return { message: 'Item rejected' };
   }
 
@@ -392,8 +403,9 @@ export class AdminController {
    */
   @Post('cleanup/logs')
   @Roles('admin')
-  async cleanupLogs() {
+  async cleanupLogs(@Req() req: any) {
     const count = await this.adminService.cleanupLogs();
+    await this.logOperation(req, 'cleanup.logs', 'operation_log', undefined, { count });
     return { message: `${count} logs cleaned up` };
   }
 
@@ -426,5 +438,27 @@ export class AdminController {
       action,
       target_type,
     });
+  }
+
+  private async logOperation(
+    req: any,
+    action: string,
+    targetType?: string,
+    targetId?: number,
+    details?: Record<string, unknown>,
+  ) {
+    await this.logsService.log({
+      user_id: req.user?.id,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      details: details ? JSON.stringify(details) : undefined,
+      ip_address: this.getClientIp(req),
+      user_agent: req.headers?.['user-agent'],
+    }).catch((err) => console.warn('operation log failed:', err.message));
+  }
+
+  private getClientIp(req: any): string {
+    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   }
 }

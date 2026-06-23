@@ -42,10 +42,48 @@ cp .env.example .env
 关键配置：
 - `MINDAUTH_URL` - MindAuth 服务地址
 - `MINDAUTH_CLIENT_ID` / `MINDAUTH_CLIENT_SECRET` - OAuth 客户端信息
+- `FORUM_API_KEY` - 服务端 API Key，用于外部软件调用发帖/回复接口
 
 ### 数据库
 
 SQLite 数据库位于 `data/forum.db`，首次启动自动创建。
+
+## 服务 API
+
+外部软件可使用 `FORUM_API_KEY` 调用服务 API，以指定论坛账号执行发帖和回复。请求需携带 `x-api-key: <FORUM_API_KEY>`，也支持 `Authorization: Bearer <FORUM_API_KEY>`。
+
+目标账号必须已经完成手机号验证，否则接口返回 `PHONE_NOT_VERIFIED`，不会绕过论坛写操作限制。
+
+### 发帖
+
+```http
+POST /api/service-api/posts
+Content-Type: application/json
+x-api-key: <FORUM_API_KEY>
+
+{
+  "user_id": 3,
+  "title": "标题",
+  "content": "正文",
+  "category_id": 1,
+  "tags": ["公告"]
+}
+```
+
+账号标识只允许三选一：`user_id`、`mindauth_id`、`username`。
+
+### 回复
+
+```http
+POST /api/service-api/posts/123/replies
+Content-Type: application/json
+x-api-key: <FORUM_API_KEY>
+
+{
+  "user_id": 3,
+  "content": "回复内容"
+}
+```
 
 ## 技术栈
 

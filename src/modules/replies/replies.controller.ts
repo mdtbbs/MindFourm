@@ -3,10 +3,14 @@ import { RepliesService } from './replies.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { UpdateReplyDto } from './dto/update-reply.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { LogsService } from '../logs/logs.service';
 
 @Controller('posts/:postId/replies')
 export class RepliesController {
-  constructor(private readonly repliesService: RepliesService) {}
+  constructor(
+    private readonly repliesService: RepliesService,
+    private readonly logsService: LogsService,
+  ) {}
 
   @Get()
   async getRepliesByPost(
@@ -29,13 +33,37 @@ export class RepliesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    return this.repliesService.createReplyForPost(Number(postId), dto, userId);
+    const reply = await this.repliesService.createReplyForPost(Number(postId), dto, userId);
+    await this.logOperation(req, 'reply.create', 'reply', reply.id, {
+      post_id: Number(postId),
+      status: reply.status,
+    });
+    return reply;
+  }
+
+  private async logOperation(req: any, action: string, targetType?: string, targetId?: number, details?: Record<string, unknown>) {
+    await this.logsService.log({
+      user_id: req.user?.id,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      details: details ? JSON.stringify(details) : undefined,
+      ip_address: this.getClientIp(req),
+      user_agent: req.headers?.['user-agent'],
+    }).catch((err) => console.warn('operation log failed:', err.message));
+  }
+
+  private getClientIp(req: any): string {
+    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   }
 }
 
 @Controller('replies')
 export class RepliesControllerMain {
-  constructor(private readonly repliesService: RepliesService) {}
+  constructor(
+    private readonly repliesService: RepliesService,
+    private readonly logsService: LogsService,
+  ) {}
 
   @Get(':id')
   async getReplyById(@Param('id') id: number) {
@@ -50,7 +78,9 @@ export class RepliesControllerMain {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    return this.repliesService.update(Number(id), dto.content, userId);
+    const reply = await this.repliesService.update(Number(id), dto.content, userId);
+    await this.logOperation(req, 'reply.update', 'reply', Number(id), { post_id: reply.post_id });
+    return reply;
   }
 
   @UseGuards(JwtAuthGuard)
@@ -58,6 +88,23 @@ export class RepliesControllerMain {
   async deleteReply(@Param('id') id: number, @Req() req: any) {
     const userId = req.user.id;
     await this.repliesService.softDelete(Number(id), userId);
+    await this.logOperation(req, 'reply.delete', 'reply', Number(id));
     return { message: 'Reply deleted successfully' };
+  }
+
+  private async logOperation(req: any, action: string, targetType?: string, targetId?: number, details?: Record<string, unknown>) {
+    await this.logsService.log({
+      user_id: req.user?.id,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      details: details ? JSON.stringify(details) : undefined,
+      ip_address: this.getClientIp(req),
+      user_agent: req.headers?.['user-agent'],
+    }).catch((err) => console.warn('operation log failed:', err.message));
+  }
+
+  private getClientIp(req: any): string {
+    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   }
 }

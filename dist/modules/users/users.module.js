@@ -14,12 +14,14 @@ const users_controller_1 = require("./users.controller");
 const user_entity_1 = require("../../entities/user.entity");
 const post_entity_1 = require("../../entities/post.entity");
 const reply_entity_1 = require("../../entities/reply.entity");
+const settings_module_1 = require("../settings/settings.module");
+const logs_module_1 = require("../logs/logs.module");
 let UsersModule = class UsersModule {
 };
 exports.UsersModule = UsersModule;
 exports.UsersModule = UsersModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, post_entity_1.Post, reply_entity_1.Reply])],
+        imports: [typeorm_1.TypeOrmModule.forFeature([user_entity_1.User, post_entity_1.Post, reply_entity_1.Reply]), settings_module_1.SettingsModule, logs_module_1.LogsModule],
         providers: [users_service_1.UsersService],
         exports: [users_service_1.UsersService],
         controllers: [users_controller_1.UsersController],

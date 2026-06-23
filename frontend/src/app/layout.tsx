@@ -6,6 +6,7 @@ import { AuthProvider } from '@/lib/auth/context';
 import { SettingsProvider } from '@/lib/settings/context';
 import { ThemeProvider } from '@mindproject/shared';
 import { LikeProvider } from '@/lib/like/context';
+import { PhoneVerificationProvider } from '@/components/phone-verification-provider';
 import { cn } from "@/lib/utils";
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
@@ -75,7 +76,9 @@ export default function RootLayout({
             <AuthProvider>
               <LikeProvider>
                 <ToastProvider>
-                  {children}
+                  <PhoneVerificationProvider>
+                    {children}
+                  </PhoneVerificationProvider>
                 </ToastProvider>
               </LikeProvider>
             </AuthProvider>

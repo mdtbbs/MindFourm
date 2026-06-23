@@ -22,6 +22,8 @@ const points_module_1 = require("../points/points.module");
 const groups_module_1 = require("../groups/groups.module");
 const plugins_module_1 = require("../plugins/plugins.module");
 const notifications_module_1 = require("../notifications/notifications.module");
+const settings_module_1 = require("../settings/settings.module");
+const logs_module_1 = require("../logs/logs.module");
 let PostsModule = class PostsModule {
 };
 exports.PostsModule = PostsModule;
@@ -33,6 +35,8 @@ exports.PostsModule = PostsModule = __decorate([
             groups_module_1.GroupsModule,
             plugins_module_1.PluginsModule,
             notifications_module_1.NotificationsModule,
+            settings_module_1.SettingsModule,
+            logs_module_1.LogsModule,
             typeorm_1.TypeOrmModule.forFeature([post_entity_1.Post, user_entity_1.User, category_entity_1.Category, tag_entity_1.Tag, post_tag_entity_1.PostTag, reply_entity_1.Reply]),
         ],
         providers: [posts_service_1.PostsService],

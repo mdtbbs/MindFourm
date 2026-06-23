@@ -23,6 +23,7 @@ let SettingsService = class SettingsService {
         this.settingsCache = new Map();
     }
     async onModuleInit() {
+        await this.seedDefaults();
         await this.loadSettings();
     }
     async seedDefaults() {
@@ -35,9 +36,12 @@ let SettingsService = class SettingsService {
             { key: 'posts_per_page', value: '20', category: 'posts', description: 'Posts per page' },
             { key: 'max_post_length', value: '10000', category: 'posts', description: 'Maximum post length' },
             { key: 'allow_attachments', value: 'true', category: 'posts', description: 'Allow file attachments' },
-            { key: 'require_approval', value: 'false', category: 'moderation', description: 'Require post approval' },
-            { key: 'auto_approve_trusted', value: 'true', category: 'moderation', description: 'Auto-approve trusted users' },
-            { key: 'cleanup_log_retention_days', value: '90', category: 'cleanup', description: 'Days to retain operation logs' },
+            { key: 'require_approval', value: 'true', category: 'moderation', description: 'Require post approval' },
+            { key: 'require_post_approval', value: 'true', category: 'moderation', description: 'Require post approval before publishing' },
+            { key: 'require_reply_approval', value: 'true', category: 'moderation', description: 'Require reply approval before publishing' },
+            { key: 'require_avatar_approval', value: 'true', category: 'moderation', description: 'Require avatar approval before applying' },
+            { key: 'auto_approve_trusted', value: 'false', category: 'moderation', description: 'Auto-approve trusted users' },
+            { key: 'cleanup_log_retention_days', value: '365', category: 'cleanup', description: 'Days to retain operation logs' },
             { key: 'cleanup_session_retention_days', value: '30', category: 'cleanup', description: 'Days to retain expired sessions' },
             { key: 'cleanup_soft_delete_retention_days', value: '30', category: 'cleanup', description: 'Days to retain soft-deleted items' },
             { key: 'smtp_host', value: '', category: 'email', description: 'SMTP server host' },
@@ -75,6 +79,13 @@ let SettingsService = class SettingsService {
     async getNumber(key) {
         const value = await this.get(key);
         return value ? parseFloat(value) : null;
+    }
+    async getBoolean(key, defaultValue = false) {
+        const value = await this.get(key);
+        if (value === null) {
+            return defaultValue;
+        }
+        return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
     }
     async setBatch(category, keyValuePairs) {
         for (const [key, value] of Object.entries(keyValuePairs)) {

@@ -30,12 +30,12 @@ let BansController = class BansController {
             is_active: is_active !== undefined ? parseInt(is_active, 10) : undefined,
         });
     }
-    async create(dto, user_id) {
+    async create(dto, req) {
         return this.bansService.create({
             ban_type: dto.ban_type,
             value: dto.value,
             reason: dto.reason,
-            created_by: user_id,
+            created_by: req.user?.id,
         });
     }
     async update(id, updates) {
@@ -62,9 +62,9 @@ __decorate([
     (0, common_1.Post)(),
     (0, roles_decorator_1.Roles)('admin'),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Query)('user_id')),
+    __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Number]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], BansController.prototype, "create", null);
 __decorate([

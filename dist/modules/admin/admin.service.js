@@ -23,8 +23,9 @@ const logs_service_1 = require("../logs/logs.service");
 const bans_service_1 = require("../bans/bans.service");
 const categories_service_1 = require("../categories/categories.service");
 const tags_service_1 = require("../tags/tags.service");
+const points_service_1 = require("../points/points.service");
 let AdminService = class AdminService {
-    constructor(postRepository, replyRepository, userRepository, categoryRepository, tagRepository, postTagRepository, banRepository, settingRepository, operationLogRepository, dataSource, statsService, settingsService, logsService, bansService, categoriesService, tagsService) {
+    constructor(postRepository, replyRepository, userRepository, categoryRepository, tagRepository, postTagRepository, banRepository, settingRepository, operationLogRepository, dataSource, statsService, settingsService, logsService, bansService, categoriesService, tagsService, pointsService) {
         this.postRepository = postRepository;
         this.replyRepository = replyRepository;
         this.userRepository = userRepository;
@@ -41,6 +42,7 @@ let AdminService = class AdminService {
         this.bansService = bansService;
         this.categoriesService = categoriesService;
         this.tagsService = tagsService;
+        this.pointsService = pointsService;
     }
     async getStats() {
         return this.statsService.getDashboardStats();
@@ -52,11 +54,15 @@ let AdminService = class AdminService {
         const pending_replies = await this.replyRepository.count({
             where: { status: 'pending' },
         });
+        const pending_avatars = await this.userRepository.count({
+            where: { avatar_status: 'pending' },
+        });
         const announce_setting = await this.settingsService.get('show_announcement');
         const show_announce = announce_setting === 'true';
         return {
             pending_posts,
             pending_replies,
+            pending_avatars,
             show_announce,
         };
     }
@@ -154,7 +160,7 @@ let AdminService = class AdminService {
     }
     async getModerationQueue(type, page, limit) {
         const skip = (page - 1) * limit;
-        if (type === 'posts' || type === 'all') {
+        if (type === 'posts' || type === 'post' || type === 'all') {
             const [data, total] = await this.postRepository.findAndCount({
                 where: { status: 'pending' },
                 relations: ['user', 'category'],
@@ -164,14 +170,21 @@ let AdminService = class AdminService {
             });
             const totalPages = Math.ceil(total / limit);
             return {
-                data: data.map((item) => ({ ...item, type: 'post' })),
+                data: data.map((item) => ({
+                    id: item.id,
+                    item_type: 'post',
+                    title: item.title,
+                    content: item.content,
+                    author_username: item.user?.username || '',
+                    created_at: item.created_at,
+                })),
                 total,
                 page,
                 limit,
                 totalPages,
             };
         }
-        else if (type === 'replies') {
+        else if (type === 'replies' || type === 'reply') {
             const [data, total] = await this.replyRepository.findAndCount({
                 where: { status: 'pending' },
                 relations: ['user', 'post'],
@@ -181,7 +194,37 @@ let AdminService = class AdminService {
             });
             const totalPages = Math.ceil(total / limit);
             return {
-                data: data.map((item) => ({ ...item, type: 'reply' })),
+                data: data.map((item) => ({
+                    id: item.id,
+                    item_type: 'reply',
+                    content: item.content,
+                    author_username: item.user?.username || '',
+                    created_at: item.created_at,
+                    post_id: item.post_id,
+                })),
+                total,
+                page,
+                limit,
+                totalPages,
+            };
+        }
+        else if (type === 'avatars' || type === 'avatar') {
+            const [data, total] = await this.userRepository.findAndCount({
+                where: { avatar_status: 'pending' },
+                order: { updated_at: 'ASC' },
+                skip,
+                take: limit,
+            });
+            const totalPages = Math.ceil(total / limit);
+            return {
+                data: data.map((item) => ({
+                    id: item.id,
+                    item_type: 'avatar',
+                    content: item.pending_avatar_url || '',
+                    author_username: item.username || '',
+                    created_at: item.updated_at,
+                    avatar_url: item.pending_avatar_url,
+                })),
                 total,
                 page,
                 limit,
@@ -197,10 +240,63 @@ let AdminService = class AdminService {
         };
     }
     async approvePost(id) {
+        const post = await this.postRepository.findOne({ where: { id } });
+        if (!post) {
+            throw new common_1.NotFoundException('Post not found');
+        }
         await this.postRepository.update(id, { status: 'published' });
+        if (post.status !== 'published') {
+            await this.pointsService.awardPoints(post.user_id, 'create_post', 'post', post.id);
+        }
     }
     async rejectPost(id) {
         await this.postRepository.update(id, { status: 'deleted' });
+    }
+    async approveReply(id) {
+        const reply = await this.replyRepository.findOne({ where: { id } });
+        if (!reply) {
+            throw new common_1.NotFoundException('Reply not found');
+        }
+        await this.replyRepository.update(id, { status: 'published' });
+        if (reply.status !== 'published') {
+            await this.pointsService.awardPoints(reply.user_id, 'create_reply', 'reply', reply.id);
+        }
+    }
+    async rejectReply(id) {
+        await this.replyRepository.update(id, { status: 'deleted', deleted_at: new Date() });
+    }
+    async approveAvatar(userId) {
+        const user = await this.userRepository.findOne({ where: { id: userId } });
+        if (!user) {
+            throw new common_1.NotFoundException('User not found');
+        }
+        if (!user.pending_avatar_url) {
+            throw new common_1.BadRequestException('No pending avatar');
+        }
+        user.avatar_url = user.pending_avatar_url;
+        user.pending_avatar_url = null;
+        user.avatar_status = 'approved';
+        await this.userRepository.save(user);
+    }
+    async rejectAvatar(userId) {
+        await this.userRepository.update(userId, {
+            pending_avatar_url: null,
+            avatar_status: 'rejected',
+        });
+    }
+    async approveModerationItem(type, id) {
+        if (type === 'reply' || type === 'replies')
+            return this.approveReply(id);
+        if (type === 'avatar' || type === 'avatars')
+            return this.approveAvatar(id);
+        return this.approvePost(id);
+    }
+    async rejectModerationItem(type, id) {
+        if (type === 'reply' || type === 'replies')
+            return this.rejectReply(id);
+        if (type === 'avatar' || type === 'avatars')
+            return this.rejectAvatar(id);
+        return this.rejectPost(id);
     }
     async mergeTags(fromId, toId) {
         return this.dataSource.transaction(async (manager) => {
@@ -215,7 +311,7 @@ let AdminService = class AdminService {
     }
     async cleanupLogs() {
         const retentionDays = await this.settingsService.getNumber('cleanup_log_retention_days');
-        const days = retentionDays || 90;
+        const days = retentionDays || 365;
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
         const result = await this.operationLogRepository.delete({
@@ -269,6 +365,7 @@ exports.AdminService = AdminService = __decorate([
         logs_service_1.LogsService,
         bans_service_1.BansService,
         categories_service_1.CategoriesService,
-        tags_service_1.TagsService])
+        tags_service_1.TagsService,
+        points_service_1.PointsService])
 ], AdminService);
 //# sourceMappingURL=admin.service.js.map

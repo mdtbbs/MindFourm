@@ -11,6 +11,7 @@ export declare class SettingsService implements OnModuleInit {
     getByCategory(category: string): Promise<Record<string, string>>;
     get(key: string): Promise<string | null>;
     getNumber(key: string): Promise<number | null>;
+    getBoolean(key: string, defaultValue?: boolean): Promise<boolean>;
     setBatch(category: string, keyValuePairs: Record<string, string>): Promise<void>;
     private loadSettings;
 }

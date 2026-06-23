@@ -18,8 +18,12 @@ let AllExceptionsFilter = class AllExceptionsFilter {
             const message = typeof exceptionResponse === 'string'
                 ? exceptionResponse
                 : exceptionResponse.message || exception.message;
+            const code = typeof exceptionResponse === 'object' && exceptionResponse !== null
+                ? exceptionResponse.code
+                : undefined;
             response.status(status).json({
                 success: false,
+                ...(code ? { code } : {}),
                 message,
             });
             return;

@@ -2,17 +2,18 @@ import { PointsService } from './points.service';
 import { QueryPointHistoryDto } from './dto/point-history.dto';
 import { QueryLeaderboardDto } from './dto/leaderboard.dto';
 import { AwardPointsDto, CreatePointRuleDto, UpdatePointRuleDto } from './dto/admin-points.dto';
+import type { Request } from 'express';
 export declare class PointsController {
     private readonly pointsService;
     constructor(pointsService: PointsService);
-    getMyPoints(userId: number): Promise<{
+    getMyPoints(req: Request): Promise<{
         success: boolean;
         data: {
             total_points: number;
             available_points: number;
         };
     }>;
-    getMyHistory(userId: number, query: QueryPointHistoryDto): Promise<{
+    getMyHistory(req: Request, query: QueryPointHistoryDto): Promise<{
         success: boolean;
         data: {
             logs: import("../../entities").PointLog[];

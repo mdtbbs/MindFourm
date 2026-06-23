@@ -6,6 +6,7 @@ import { LogsService } from '../logs/logs.service';
 import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
+import { PointsService } from '../points/points.service';
 export declare class AdminService {
     private postRepository;
     private replyRepository;
@@ -23,7 +24,8 @@ export declare class AdminService {
     private bansService;
     private categoriesService;
     private tagsService;
-    constructor(postRepository: Repository<Post>, replyRepository: Repository<Reply>, userRepository: Repository<User>, categoryRepository: Repository<Category>, tagRepository: Repository<Tag>, postTagRepository: Repository<PostTag>, banRepository: Repository<Ban>, settingRepository: Repository<Setting>, operationLogRepository: Repository<OperationLog>, dataSource: DataSource, statsService: StatsService, settingsService: SettingsService, logsService: LogsService, bansService: BansService, categoriesService: CategoriesService, tagsService: TagsService);
+    private pointsService;
+    constructor(postRepository: Repository<Post>, replyRepository: Repository<Reply>, userRepository: Repository<User>, categoryRepository: Repository<Category>, tagRepository: Repository<Tag>, postTagRepository: Repository<PostTag>, banRepository: Repository<Ban>, settingRepository: Repository<Setting>, operationLogRepository: Repository<OperationLog>, dataSource: DataSource, statsService: StatsService, settingsService: SettingsService, logsService: LogsService, bansService: BansService, categoriesService: CategoriesService, tagsService: TagsService, pointsService: PointsService);
     getStats(): Promise<{
         total_posts: number;
         total_replies: number;
@@ -35,6 +37,7 @@ export declare class AdminService {
     getBadgeCounts(): Promise<{
         pending_posts: number;
         pending_replies: number;
+        pending_avatars: number;
         show_announce: boolean;
     }>;
     getPosts(query: {
@@ -63,6 +66,12 @@ export declare class AdminService {
     }>;
     approvePost(id: number): Promise<void>;
     rejectPost(id: number): Promise<void>;
+    approveReply(id: number): Promise<void>;
+    rejectReply(id: number): Promise<void>;
+    approveAvatar(userId: number): Promise<void>;
+    rejectAvatar(userId: number): Promise<void>;
+    approveModerationItem(type: string, id: number): Promise<void>;
+    rejectModerationItem(type: string, id: number): Promise<void>;
     mergeTags(fromId: number, toId: number): Promise<void>;
     cleanupLogs(): Promise<number>;
     cleanupSoftDeleted(): Promise<number>;

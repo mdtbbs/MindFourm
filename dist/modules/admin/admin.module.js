@@ -17,6 +17,7 @@ const logs_module_1 = require("../logs/logs.module");
 const bans_module_1 = require("../bans/bans.module");
 const categories_module_1 = require("../categories/categories.module");
 const tags_module_1 = require("../tags/tags.module");
+const points_module_1 = require("../points/points.module");
 const index_1 = require("../../entities/index");
 let AdminModule = class AdminModule {
 };
@@ -31,6 +32,7 @@ exports.AdminModule = AdminModule = __decorate([
             bans_module_1.BansModule,
             categories_module_1.CategoriesModule,
             tags_module_1.TagsModule,
+            points_module_1.PointsModule,
         ],
         controllers: [admin_controller_1.AdminController],
         providers: [admin_service_1.AdminService],

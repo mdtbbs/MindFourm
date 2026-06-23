@@ -8,6 +8,7 @@ import { LogsModule } from '../logs/logs.module';
 import { BansModule } from '../bans/bans.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { TagsModule } from '../tags/tags.module';
+import { PointsModule } from '../points/points.module';
 import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply } from '@entities/index';
 
 @Module({
@@ -19,6 +20,7 @@ import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply }
     BansModule,
     CategoriesModule,
     TagsModule,
+    PointsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

@@ -25,11 +25,13 @@ let PointsController = class PointsController {
     constructor(pointsService) {
         this.pointsService = pointsService;
     }
-    async getMyPoints(userId) {
+    async getMyPoints(req) {
+        const userId = req.user?.id;
         const points = await this.pointsService.getUserPoints(userId);
         return { success: true, data: points };
     }
-    async getMyHistory(userId, query) {
+    async getMyHistory(req, query) {
+        const userId = req.user?.id;
         const result = await this.pointsService.getHistory(userId, query.limit || 20, query.cursor);
         return { success: true, data: result };
     }
@@ -66,18 +68,18 @@ exports.PointsController = PointsController;
 __decorate([
     (0, common_1.Get)('me'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
-    __param(0, (0, common_1.Query)('userId')),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PointsController.prototype, "getMyPoints", null);
 __decorate([
     (0, common_1.Get)('me/history'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
-    __param(0, (0, common_1.Query)('userId')),
+    __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Query)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, point_history_dto_1.QueryPointHistoryDto]),
+    __metadata("design:paramtypes", [Object, point_history_dto_1.QueryPointHistoryDto]),
     __metadata("design:returntype", Promise)
 ], PointsController.prototype, "getMyHistory", null);
 __decorate([

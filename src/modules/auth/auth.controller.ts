@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { VerifySessionDto } from './dto/verify-session.dto';
+import { MindAuthServiceGuard } from '../../common/guards/mindauth-service.guard';
+import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -34,6 +36,8 @@ export class AuthController {
         avatar_url: user.avatar_url,
         role: user.role,
         bio: user.bio,
+        phone_verified: user.phone_verified,
+        phone_verified_at: user.phone_verified_at,
         created_at: user.created_at,
       },
     });
@@ -92,6 +96,7 @@ export class AuthController {
    */
   @Post('verify')
   @Post('verify-session')
+  @SkipPhoneVerification()
   async verifySession(
     @Body() body: VerifySessionDto,
     @Req() req: Request,
@@ -116,8 +121,57 @@ export class AuthController {
         email: user.email,
         avatar_url: user.avatar_url,
         role: user.role,
+        phone_verified: user.phone_verified,
+        phone_verified_at: user.phone_verified_at,
       },
     });
+  }
+
+  @Post('sync-phone-status')
+  @SkipPhoneVerification()
+  async syncPhoneStatus(
+    @Body('phone_sync_token') phoneSyncToken: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const sessionToken = req.cookies?.forum_session;
+
+    if (!sessionToken) {
+      throw new UnauthorizedException('Session token is required');
+    }
+
+    const currentUser = await this.authService.verifySession(sessionToken);
+    if (!currentUser) {
+      throw new UnauthorizedException('Session expired');
+    }
+
+    const user = await this.authService.syncPhoneStatus(currentUser.id, phoneSyncToken);
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        mindauth_id: user.mindauth_id,
+        username: user.username,
+        email: user.email,
+        avatar_url: user.avatar_url,
+        role: user.role,
+        bio: user.bio,
+        phone_verified: user.phone_verified,
+        phone_verified_at: user.phone_verified_at,
+        created_at: user.created_at,
+      },
+    });
+  }
+
+  @Post('internal/users/sync')
+  @SkipPhoneVerification()
+  @UseGuards(MindAuthServiceGuard)
+  async syncUserFromMindAuth(@Body() body: any) {
+    const user = await this.authService.syncMindAuthUserData(body.user ?? body);
+    return {
+      synced: !!user,
+      user_id: user?.id ?? null,
+    };
   }
 
   /**
@@ -125,13 +179,14 @@ export class AuthController {
    * Only available in development/test environment
    */
   @Post('test-login')
+  @SkipPhoneVerification()
   async testLogin(
     @Body('userType') userType: string = 'user',
     @Req() req: Request,
     @Res() res: Response,
   ) {
-    // Only allow in development
-    if (process.env.NODE_ENV === 'production') {
+    const appEnv = this.authService['configService'].get<string>('app.env');
+    if (appEnv === 'production' || process.env.NODE_ENV === 'production') {
       throw new UnauthorizedException('Test login not available in production');
     }
 
@@ -170,6 +225,7 @@ export class AuthController {
    * Logout endpoint - destroys session and clears cookie
    */
   @Post('logout')
+  @SkipPhoneVerification()
   async logout(@Req() req: Request, @Res() res: Response) {
     const sessionToken = req.cookies?.forum_session;
 

@@ -36,7 +36,20 @@ let JwtAuthGuard = class JwtAuthGuard {
             throw new common_1.UnauthorizedException('会话已过期');
         }
         request.user = user;
+        this.assertPhoneVerifiedForWrites(request);
         return true;
+    }
+    assertPhoneVerifiedForWrites(request) {
+        const method = String(request.method || '').toUpperCase();
+        if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+            return;
+        }
+        if (!request.user?.phone_verified) {
+            throw new common_1.ForbiddenException({
+                code: 'PHONE_NOT_VERIFIED',
+                message: '请先验证手机号后再继续操作',
+            });
+        }
     }
     extractTokenFromHeader(request) {
         const [type, token] = request.headers.authorization?.split(' ') ?? [];

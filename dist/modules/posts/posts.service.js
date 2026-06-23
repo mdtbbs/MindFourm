@@ -27,11 +27,12 @@ const points_service_1 = require("../points/points.service");
 const groups_service_1 = require("../groups/groups.service");
 const event_bus_service_1 = require("../plugins/event-bus.service");
 const notifications_service_1 = require("../notifications/notifications.service");
+const settings_service_1 = require("../settings/settings.service");
 const markdown_util_1 = require("../../common/utils/markdown.util");
 const cursor_util_1 = require("../../common/utils/cursor.util");
 const search_util_1 = require("../../common/utils/search.util");
 let PostsService = class PostsService {
-    constructor(postRepository, userRepository, categoryRepository, tagRepository, postTagRepository, replyRepository, dataSource, redisService, pointsService, groupsService, eventBus, notificationsService) {
+    constructor(postRepository, userRepository, categoryRepository, tagRepository, postTagRepository, replyRepository, dataSource, redisService, pointsService, groupsService, eventBus, notificationsService, settingsService) {
         this.postRepository = postRepository;
         this.userRepository = userRepository;
         this.categoryRepository = categoryRepository;
@@ -44,6 +45,7 @@ let PostsService = class PostsService {
         this.groupsService = groupsService;
         this.eventBus = eventBus;
         this.notificationsService = notificationsService;
+        this.settingsService = settingsService;
     }
     async create(dto, userId) {
         let modifiedDto = await this.eventBus.execute('post.create', { ...dto, userId });
@@ -58,6 +60,9 @@ let PostsService = class PostsService {
                     throw new common_1.BadRequestException('分类不存在');
                 }
             }
+            const requestedStatus = dto.status || 'published';
+            const requiresApproval = requestedStatus === 'published'
+                && await this.settingsService.getBoolean('require_post_approval', true);
             const newPost = manager.create(post_entity_1.Post, {
                 user_id: userId,
                 category_id: dto.category_id,
@@ -67,7 +72,7 @@ let PostsService = class PostsService {
                 title: dto.title,
                 content: dto.content,
                 content_html: contentHtml,
-                status: dto.status || 'draft',
+                status: requiresApproval ? 'pending' : requestedStatus,
                 is_pinned: 0,
                 view_count: 0,
                 like_count: 0,
@@ -529,6 +534,7 @@ exports.PostsService = PostsService = __decorate([
         points_service_1.PointsService,
         groups_service_1.GroupsService,
         event_bus_service_1.EventBusService,
-        notifications_service_1.NotificationsService])
+        notifications_service_1.NotificationsService,
+        settings_service_1.SettingsService])
 ], PostsService);
 //# sourceMappingURL=posts.service.js.map

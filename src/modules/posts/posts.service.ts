@@ -24,6 +24,7 @@ import { PointsService } from '../points/points.service';
 import { GroupsService } from '../groups/groups.service';
 import { EventBusService } from '../plugins/event-bus.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
@@ -52,6 +53,7 @@ export class PostsService {
     private groupsService: GroupsService,
     private eventBus: EventBusService,
     private notificationsService: NotificationsService,
+    private settingsService: SettingsService,
   ) {}
 
   /**
@@ -76,6 +78,10 @@ export class PostsService {
         }
       }
 
+      const requestedStatus = dto.status || 'published';
+      const requiresApproval = requestedStatus === 'published'
+        && await this.settingsService.getBoolean('require_post_approval', true);
+
       // Create the post
       const newPost = manager.create(Post, {
         user_id: userId,
@@ -86,7 +92,7 @@ export class PostsService {
         title: dto.title,
         content: dto.content,
         content_html: contentHtml,
-        status: dto.status || 'draft',
+        status: requiresApproval ? 'pending' : requestedStatus,
         is_pinned: 0,
         view_count: 0,
         like_count: 0,

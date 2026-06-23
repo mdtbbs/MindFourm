@@ -14,6 +14,7 @@ export interface ToastItem {
   message: string;
   type: ToastType;
   duration?: number; // Auto-dismiss duration in ms (default: 5000)
+  dismissible?: boolean;
   createdAt: number;
 }
 
@@ -23,6 +24,7 @@ interface ToastState {
 
   // Actions
   showToast: (message: string, type?: ToastType, duration?: number) => void;
+  showPersistentToast: (id: string, message: string, type?: ToastType) => void;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
   showInfo: (message: string) => void;
@@ -48,6 +50,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
       message,
       type,
       duration,
+      dismissible: true,
       createdAt: Date.now(),
     };
 
@@ -55,7 +58,13 @@ export const useToastStore = create<ToastState>((set, get) => ({
       // Remove oldest toast if exceeding max
       let newToasts = [...state.toasts, toast];
       if (newToasts.length > state.maxToasts) {
-        newToasts = newToasts.slice(-state.maxToasts);
+        const persistentToasts = newToasts.filter((t) => t.dismissible === false);
+        const dismissibleToasts = newToasts.filter((t) => t.dismissible !== false);
+        const dismissibleLimit = Math.max(state.maxToasts - persistentToasts.length, 0);
+        newToasts = [
+          ...persistentToasts,
+          ...(dismissibleLimit > 0 ? dismissibleToasts.slice(-dismissibleLimit) : []),
+        ];
       }
       return { toasts: newToasts };
     });
@@ -66,6 +75,30 @@ export const useToastStore = create<ToastState>((set, get) => ({
         get().dismissToast(id);
       }, duration);
     }
+  },
+
+  showPersistentToast: (id, message, type = 'warning') => {
+    set((state) => {
+      const existing = state.toasts.find((toast) => toast.id === id);
+      const persistentToast: ToastItem = {
+        id,
+        message,
+        type,
+        duration: 0,
+        dismissible: false,
+        createdAt: existing?.createdAt ?? Date.now(),
+      };
+
+      if (existing) {
+        return {
+          toasts: state.toasts.map((toast) => (toast.id === id ? persistentToast : toast)),
+        };
+      }
+
+      return {
+        toasts: [persistentToast, ...state.toasts].slice(0, state.maxToasts),
+      };
+    });
   },
 
   showSuccess: (message) => {

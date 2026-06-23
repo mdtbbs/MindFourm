@@ -21,9 +21,11 @@ const query_posts_dto_1 = require("./dto/query-posts.dto");
 const jwt_auth_guard_1 = require("../../common/guards/jwt-auth.guard");
 const roles_guard_1 = require("../../common/guards/roles.guard");
 const roles_decorator_1 = require("../../common/decorators/roles.decorator");
+const logs_service_1 = require("../logs/logs.service");
 let PostsController = class PostsController {
-    constructor(postsService) {
+    constructor(postsService, logsService) {
         this.postsService = postsService;
+        this.logsService = logsService;
     }
     async findAll(query) {
         return this.postsService.findAll(query);
@@ -59,27 +61,56 @@ let PostsController = class PostsController {
     }
     async create(dto, req) {
         const userId = req.user.id;
-        return this.postsService.create(dto, userId);
+        const post = await this.postsService.create(dto, userId);
+        await this.logOperation(req, 'post.create', 'post', post?.id, {
+            status: post?.status,
+            title: post?.title,
+        });
+        return post;
     }
     async update(id, dto, req) {
         const userId = req.user.id;
         const userRole = req.user.role;
-        return this.postsService.update(id, dto, userId, userRole);
+        const post = await this.postsService.update(id, dto, userId, userRole);
+        await this.logOperation(req, 'post.update', 'post', id, {
+            status: post?.status,
+            title: post?.title,
+        });
+        return post;
     }
     async delete(id, req) {
         const userId = req.user.id;
         const userRole = req.user.role;
         await this.postsService.softDelete(id, userId, userRole);
+        await this.logOperation(req, 'post.delete', 'post', id);
         return { success: true, message: '帖子删除成功' };
     }
-    async pin(id, isPinned) {
-        return this.postsService.pin(id, isPinned ? 1 : 0);
+    async pin(id, isPinned, req) {
+        const post = await this.postsService.pin(id, isPinned ? 1 : 0);
+        await this.logOperation(req, 'post.pin', 'post', id, { is_pinned: isPinned ? 1 : 0 });
+        return post;
     }
-    async move(id, categoryId) {
-        return this.postsService.move(id, categoryId);
+    async move(id, categoryId, req) {
+        const post = await this.postsService.move(id, categoryId);
+        await this.logOperation(req, 'post.move', 'post', id, { category_id: categoryId });
+        return post;
     }
     async findByUser(userId, page, limit) {
         return this.postsService.findByUser(userId, page || 1, limit || 20);
+    }
+    async logOperation(req, action, targetType, targetId, details) {
+        await this.logsService.log({
+            user_id: req.user?.id,
+            action,
+            target_type: targetType,
+            target_id: targetId,
+            details: details ? JSON.stringify(details) : undefined,
+            ip_address: this.getClientIp(req),
+            user_agent: req.headers?.['user-agent'],
+        }).catch((err) => console.warn('operation log failed:', err.message));
+    }
+    getClientIp(req) {
+        return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
     }
 };
 exports.PostsController = PostsController;
@@ -162,8 +193,9 @@ __decorate([
     (0, roles_decorator_1.Roles)('admin', 'moderator'),
     __param(0, (0, common_1.Param)('id', common_1.ParseIntPipe)),
     __param(1, (0, common_1.Body)('is_pinned')),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, Number]),
+    __metadata("design:paramtypes", [Number, Number, Object]),
     __metadata("design:returntype", Promise)
 ], PostsController.prototype, "pin", null);
 __decorate([
@@ -172,8 +204,9 @@ __decorate([
     (0, roles_decorator_1.Roles)('admin', 'moderator'),
     __param(0, (0, common_1.Param)('id', common_1.ParseIntPipe)),
     __param(1, (0, common_1.Body)('category_id', common_1.ParseIntPipe)),
+    __param(2, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number, Number]),
+    __metadata("design:paramtypes", [Number, Number, Object]),
     __metadata("design:returntype", Promise)
 ], PostsController.prototype, "move", null);
 __decorate([
@@ -187,6 +220,7 @@ __decorate([
 ], PostsController.prototype, "findByUser", null);
 exports.PostsController = PostsController = __decorate([
     (0, common_1.Controller)('posts'),
-    __metadata("design:paramtypes", [posts_service_1.PostsService])
+    __metadata("design:paramtypes", [posts_service_1.PostsService,
+        logs_service_1.LogsService])
 ], PostsController);
 //# sourceMappingURL=posts.controller.js.map

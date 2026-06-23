@@ -38,6 +38,12 @@ export class User {
   @Column({ length: 500, nullable: true })
   avatar_url: string;
 
+  @Column({ length: 500, nullable: true })
+  pending_avatar_url: string | null;
+
+  @Column({ length: 30, default: 'approved' })
+  avatar_status: string;
+
   @Column({ type: 'text', nullable: true })
   bio: string;
 
@@ -62,6 +68,12 @@ export class User {
 
   @Column({ type: 'boolean', default: false })
   digest_email: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  phone_verified: boolean;
+
+  @Column({ type: 'datetime', nullable: true })
+  phone_verified_at: Date | null;
 
   @CreateDateColumn()
   created_at: Date;

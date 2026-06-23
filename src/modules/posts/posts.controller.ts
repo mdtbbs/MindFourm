@@ -19,10 +19,14 @@ import { QueryPostsDto } from './dto/query-posts.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
+import { LogsService } from '../logs/logs.service';
 
 @Controller('posts')
 export class PostsController {
-  constructor(private readonly postsService: PostsService) {}
+  constructor(
+    private readonly postsService: PostsService,
+    private readonly logsService: LogsService,
+  ) {}
 
   /**
    * GET /api/posts - List posts (page-based pagination)
@@ -105,7 +109,12 @@ export class PostsController {
   @UseGuards(JwtAuthGuard)
   async create(@Body() dto: CreatePostDto, @Req() req: any) {
     const userId = req.user.id;
-    return this.postsService.create(dto, userId);
+    const post = await this.postsService.create(dto, userId);
+    await this.logOperation(req, 'post.create', 'post', post?.id, {
+      status: post?.status,
+      title: post?.title,
+    });
+    return post;
   }
 
   /**
@@ -120,7 +129,12 @@ export class PostsController {
   ) {
     const userId = req.user.id;
     const userRole = req.user.role;
-    return this.postsService.update(id, dto, userId, userRole);
+    const post = await this.postsService.update(id, dto, userId, userRole);
+    await this.logOperation(req, 'post.update', 'post', id, {
+      status: post?.status,
+      title: post?.title,
+    });
+    return post;
   }
 
   /**
@@ -132,6 +146,7 @@ export class PostsController {
     const userId = req.user.id;
     const userRole = req.user.role;
     await this.postsService.softDelete(id, userId, userRole);
+    await this.logOperation(req, 'post.delete', 'post', id);
     return { success: true, message: '帖子删除成功' };
   }
 
@@ -144,8 +159,11 @@ export class PostsController {
   async pin(
     @Param('id', ParseIntPipe) id: number,
     @Body('is_pinned') isPinned: number,
+    @Req() req: any,
   ) {
-    return this.postsService.pin(id, isPinned ? 1 : 0);
+    const post = await this.postsService.pin(id, isPinned ? 1 : 0);
+    await this.logOperation(req, 'post.pin', 'post', id, { is_pinned: isPinned ? 1 : 0 });
+    return post;
   }
 
   /**
@@ -157,8 +175,11 @@ export class PostsController {
   async move(
     @Param('id', ParseIntPipe) id: number,
     @Body('category_id', ParseIntPipe) categoryId: number,
+    @Req() req: any,
   ) {
-    return this.postsService.move(id, categoryId);
+    const post = await this.postsService.move(id, categoryId);
+    await this.logOperation(req, 'post.move', 'post', id, { category_id: categoryId });
+    return post;
   }
 
   /**
@@ -171,5 +192,27 @@ export class PostsController {
     @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
   ) {
     return this.postsService.findByUser(userId, page || 1, limit || 20);
+  }
+
+  private async logOperation(
+    req: any,
+    action: string,
+    targetType?: string,
+    targetId?: number,
+    details?: Record<string, unknown>,
+  ) {
+    await this.logsService.log({
+      user_id: req.user?.id,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      details: details ? JSON.stringify(details) : undefined,
+      ip_address: this.getClientIp(req),
+      user_agent: req.headers?.['user-agent'],
+    }).catch((err) => console.warn('operation log failed:', err.message));
+  }
+
+  private getClientIp(req: any): string {
+    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
   }
 }

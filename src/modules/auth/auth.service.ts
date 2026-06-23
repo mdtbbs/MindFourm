@@ -51,26 +51,56 @@ export class AuthService {
   /**
    * Get user info from MindAuth using access token
    */
-  async getUserInfo(accessToken: string): Promise<{ id: number; username: string; email: string; avatar_url: string }> {
+  async getUserInfo(accessToken: string): Promise<{
+    id: number;
+    username: string;
+    email: string;
+    avatar_url: string;
+    phone_verified?: boolean;
+    phone_verified_at?: string | Date | null;
+  }> {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
 
     try {
-      const response = await axios.get(`${mindauthUrl}/api/user`, {
+      const response = await axios.get(`${mindauthUrl}/api/userinfo`, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
       });
 
-      return response.data;
+      return {
+        id: Number(response.data.id ?? response.data.sub),
+        username: response.data.username ?? response.data.name,
+        email: response.data.email,
+        avatar_url: response.data.avatar_url,
+        phone_verified: response.data.phone_verified === true,
+        phone_verified_at: response.data.phone_verified_at ?? null,
+      };
     } catch (error) {
-      throw new UnauthorizedException('Failed to get user info from MindAuth');
+      try {
+        const response = await axios.get(`${mindauthUrl}/api/user`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+        return response.data;
+      } catch {
+        throw new UnauthorizedException('Failed to get user info from MindAuth');
+      }
     }
   }
 
   /**
    * Find existing user or create new one based on MindAuth user data
    */
-  async getOrCreateUser(mindauthUser: { id: number; username: string; email: string; avatar_url: string }): Promise<User> {
+  async getOrCreateUser(mindauthUser: {
+    id: number;
+    username: string;
+    email: string;
+    avatar_url: string;
+    phone_verified?: boolean;
+    phone_verified_at?: string | Date | null;
+  }): Promise<User> {
     let user = await this.usersRepository.findOne({
       where: { mindauth_id: mindauthUser.id },
     });
@@ -82,6 +112,8 @@ export class AuthService {
         email: mindauthUser.email,
         avatar_url: mindauthUser.avatar_url,
         role: 'user',
+        phone_verified: !!mindauthUser.phone_verified,
+        phone_verified_at: mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : null,
       });
       await this.usersRepository.save(user);
     } else {
@@ -91,10 +123,111 @@ export class AuthService {
       if (mindauthUser.avatar_url) {
         user.avatar_url = mindauthUser.avatar_url;
       }
+      user.phone_verified = !!mindauthUser.phone_verified;
+      user.phone_verified_at = mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : user.phone_verified_at;
       await this.usersRepository.save(user);
     }
 
     return user;
+  }
+
+  async syncMindAuthUserData(mindauthUser: {
+    id?: number;
+    mindauth_id?: number;
+    username?: string;
+    email?: string;
+    avatar_url?: string | null;
+    phone_verified?: boolean;
+    phone_verified_at?: string | Date | null;
+  }): Promise<User | null> {
+    const mindauthId = Number(mindauthUser.id ?? mindauthUser.mindauth_id);
+    if (!mindauthId) {
+      return null;
+    }
+
+    const user = await this.usersRepository.findOne({ where: { mindauth_id: mindauthId } });
+    if (!user) {
+      return null;
+    }
+
+    if (mindauthUser.username) user.username = mindauthUser.username;
+    if (mindauthUser.email) user.email = mindauthUser.email;
+    if (mindauthUser.avatar_url) user.avatar_url = mindauthUser.avatar_url;
+    if (typeof mindauthUser.phone_verified === 'boolean') {
+      user.phone_verified = mindauthUser.phone_verified;
+    }
+    if (mindauthUser.phone_verified_at) {
+      user.phone_verified_at = new Date(mindauthUser.phone_verified_at);
+    } else if (mindauthUser.phone_verified === false) {
+      user.phone_verified_at = null;
+    }
+
+    return this.usersRepository.save(user);
+  }
+
+  private async fetchMindAuthUserById(mindauthId: number): Promise<{
+    id: number;
+    username: string;
+    email: string;
+    avatar_url?: string | null;
+    phone_verified?: boolean;
+    phone_verified_at?: string | Date | null;
+  } | null> {
+    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL') || this.configService.get<string>('mindauth.baseUrl');
+    const serviceKey = this.configService.get<string>('MINDAUTH_SERVICE_KEY') || this.configService.get<string>('mindauth.serviceKey');
+
+    if (!mindauthUrl || !serviceKey) {
+      return null;
+    }
+
+    try {
+      const response = await axios.get(`${mindauthUrl}/api/internal/users/${mindauthId}`, {
+        headers: { 'X-Service-Key': serviceKey },
+        timeout: 3000,
+      });
+      return response.data.user ?? response.data;
+    } catch (error) {
+      console.warn('Failed to refresh user from MindAuth:', (error as Error).message);
+      return null;
+    }
+  }
+
+  async refreshUserFromMindAuth(user: User, force = false): Promise<User> {
+    const cooldownKey = `mindauth:user-refresh:${user.id}`;
+    if (!force && (await this.redisService.get(cooldownKey))) {
+      return user;
+    }
+
+    await this.redisService.set(cooldownKey, '1', 60);
+
+    const mindauthUser = await this.fetchMindAuthUserById(user.mindauth_id);
+    if (!mindauthUser) {
+      return user;
+    }
+
+    const updated = await this.syncMindAuthUserData(mindauthUser);
+    return updated ?? user;
+  }
+
+  async syncPhoneStatus(userId: number, phoneSyncToken: string): Promise<User> {
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
+    const response = await axios.post(`${mindauthUrl}/api/sms/sync-status`, {
+      phone_sync_token: phoneSyncToken,
+    });
+
+    const remoteUserId = Number(response.data.user_id);
+    if (remoteUserId !== user.mindauth_id) {
+      throw new UnauthorizedException('Phone status does not match current user');
+    }
+
+    user.phone_verified = response.data.phone_verified === true;
+    user.phone_verified_at = response.data.phone_verified_at ? new Date(response.data.phone_verified_at) : new Date();
+    return this.usersRepository.save(user);
   }
 
   /**
@@ -125,11 +258,24 @@ export class AuthService {
    * Create session for E2E testing - skips points award and audit log to avoid blocking
    */
   async createTestSession(userId: number, sessionToken: string, ip: string): Promise<void> {
+    if (this.isProduction()) {
+      throw new UnauthorizedException('Test login not available in production');
+    }
+
     const sessionKey = `session:${sessionToken}`;
+
+    await this.usersRepository.update(userId, {
+      phone_verified: true,
+      phone_verified_at: new Date(),
+    });
 
     // Store session in Redis as hash (minimal operations for speed)
     await this.redisService.hset(sessionKey, 'userId', userId.toString());
     await this.redisService.expire(sessionKey, this.sessionTtl);
+  }
+
+  private isProduction(): boolean {
+    return this.configService.get<string>('app.env') === 'production' || process.env.NODE_ENV === 'production';
   }
 
   /**
@@ -165,7 +311,7 @@ export class AuthService {
       where: { id: userId },
     });
 
-    return user || null;
+    return user ? this.refreshUserFromMindAuth(user) : null;
   }
 
   /**

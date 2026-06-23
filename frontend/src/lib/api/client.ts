@@ -1,6 +1,25 @@
 import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost } from '@/types';
+import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
+import { useToastStore } from '@/store/toast-store';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+const MINDAUTH_BASE = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
+
+class ApiRequestError extends Error {
+  status: number;
+  code?: string;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+  }
+}
+
+type RequestOptions = RequestInit & {
+  skipPhoneVerificationRetry?: boolean;
+};
 
 /**
  * Create a request function that forwards cookies from the server-side request.
@@ -82,7 +101,7 @@ function buildQueryString(params: Record<string, string | number | undefined>): 
 
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<T> {
   const method = options.method || 'GET';
   const cacheKey = getCacheKey(path, options);
@@ -110,13 +129,25 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `Request failed: ${res.status}`;
+    let code: string | undefined;
     try {
       const data = await res.json();
       if (data?.message) message = data.message;
+      if (data?.code) code = data.code;
     } catch {
       // Response body is not JSON, use default message
     }
-    throw new Error(message);
+
+    const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(method).toUpperCase());
+    if (code === 'PHONE_NOT_VERIFIED' && isWrite && !options.skipPhoneVerificationRetry) {
+      useToastStore.getState().showWarning('请先验证手机号，验证成功后会自动继续本次操作');
+      const verified = await requestPhoneVerification();
+      if (verified) {
+        return request<T>(path, { ...options, skipPhoneVerificationRetry: true });
+      }
+    }
+
+    throw new ApiRequestError(message, res.status, code);
   }
 
   let data: unknown;
@@ -163,12 +194,67 @@ export const settingsApi = {
 // Auth APIs
 export const authApi = {
   check: () => request<{ authenticated: boolean; user?: User }>('/api/auth/check'),
+  syncPhoneStatus: (phone_sync_token: string) =>
+    request<{ success: boolean; user: User }>('/api/auth/sync-phone-status', {
+      method: 'POST',
+      body: JSON.stringify({ phone_sync_token }),
+    }),
   verifySession: (session_token: string) =>
     request<void>('/api/auth/verify-session', {
       method: 'POST',
       body: JSON.stringify({ session_token }),
     }),
-  logout: () => request<void>('/api/auth/logout', { method: 'POST' }),
+  logout: async () => {
+    const results = await Promise.allSettled([
+      request<void>('/api/auth/logout', { method: 'POST' }),
+      mindAuthRequest<{ success: boolean }>('/api/logout', {}),
+    ]);
+
+    const failed = results.find((result) => result.status === 'rejected');
+    if (failed && results.every((result) => result.status === 'rejected')) {
+      throw (failed as PromiseRejectedResult).reason;
+    }
+  },
+};
+
+async function getMindAuthCsrfToken(): Promise<string> {
+  const res = await fetch(`${MINDAUTH_BASE}/api/csrf-token`, {
+    credentials: 'include',
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.csrf_token) {
+    throw new Error(data?.message || '获取验证令牌失败');
+  }
+  return data.csrf_token;
+}
+
+async function mindAuthRequest<T>(path: string, body: unknown): Promise<T> {
+  const csrfToken = await getMindAuthCsrfToken();
+  const res = await fetch(`${MINDAUTH_BASE}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': csrfToken,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiRequestError(data?.message || `Request failed: ${res.status}`, res.status, data?.code);
+  }
+  return data as T;
+}
+
+export const smsApi = {
+  send: (phone: string) =>
+    mindAuthRequest<{ success: boolean; message: string; code?: string; phone_verified?: boolean; phone_sync_token?: string }>('/api/sms/send', { phone }),
+  verify: (phone: string, code: string) =>
+    mindAuthRequest<{ success: boolean; message: string; phone_verified: boolean; phone_sync_token: string }>(
+      '/api/sms/verify',
+      { phone, code },
+    ),
 };
 
 // Post APIs

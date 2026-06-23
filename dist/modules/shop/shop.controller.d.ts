@@ -1,5 +1,6 @@
 import { ShopService } from './shop.service';
 import { CreateShopItemDto, UpdateShopItemDto, QueryShopDto } from './dto/shop.dto';
+import type { Request } from 'express';
 export declare class ShopController {
     private readonly shopService;
     constructor(shopService: ShopService);
@@ -17,11 +18,11 @@ export declare class ShopController {
         success: boolean;
         data: import("../../entities").ShopItem;
     }>;
-    purchase(itemId: number, userId: number): Promise<{
+    purchase(itemId: number, req: Request): Promise<{
         success: boolean;
         data: import("../../entities").Purchase;
     }>;
-    getMyPurchases(userId: number, query: QueryShopDto): Promise<{
+    getMyPurchases(req: Request, query: QueryShopDto): Promise<{
         success: boolean;
         data: {
             purchases: import("../../entities").Purchase[];
