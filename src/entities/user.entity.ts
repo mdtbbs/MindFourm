@@ -38,7 +38,7 @@ export class User {
   @Column({ length: 500, nullable: true })
   avatar_url: string;
 
-  @Column({ length: 500, nullable: true })
+  @Column({ type: 'varchar', length: 500, nullable: true })
   pending_avatar_url: string | null;
 
   @Column({ length: 30, default: 'approved' })
