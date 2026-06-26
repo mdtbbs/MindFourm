@@ -24,7 +24,7 @@ import { Public } from '@common/decorators/public.decorator';
 import type { Request, Response } from 'express';
 
 const ALLOWED_MIME_TYPES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'application/pdf', 'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-excel',
@@ -35,12 +35,35 @@ const ALLOWED_MIME_TYPES = [
   'application/gzip', 'application/x-tar',
 ];
 
+const ALLOWED_EXTENSIONS_BY_MIME = new Map<string, Set<string>>([
+  ['image/jpeg', new Set(['.jpg', '.jpeg'])],
+  ['image/png', new Set(['.png'])],
+  ['image/gif', new Set(['.gif'])],
+  ['image/webp', new Set(['.webp'])],
+  ['application/pdf', new Set(['.pdf'])],
+  ['application/msword', new Set(['.doc'])],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', new Set(['.docx'])],
+  ['application/vnd.ms-excel', new Set(['.xls'])],
+  ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', new Set(['.xlsx'])],
+  ['text/plain', new Set(['.txt'])],
+  ['text/csv', new Set(['.csv'])],
+  ['application/zip', new Set(['.zip'])],
+  ['application/x-zip-compressed', new Set(['.zip'])],
+  ['application/x-rar-compressed', new Set(['.rar'])],
+  ['application/x-7z-compressed', new Set(['.7z'])],
+  ['application/gzip', new Set(['.gz'])],
+  ['application/x-tar', new Set(['.tar'])],
+]);
+
 function fileFilter(_req: any, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) {
-  if (ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-    callback(null, true);
-  } else {
+  const ext = extname(file.originalname).toLowerCase();
+  const allowedExtensions = ALLOWED_EXTENSIONS_BY_MIME.get(file.mimetype);
+  if (!ALLOWED_MIME_TYPES.includes(file.mimetype) || !allowedExtensions?.has(ext)) {
     callback(new Error('File type not allowed'), false);
+    return;
   }
+
+  callback(null, true);
 }
 
 @Controller('attachments')
@@ -55,7 +78,7 @@ export class AttachmentsController {
         destination: './uploads/attachments',
         filename: (_req, file, callback) => {
           const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-          callback(null, `${uniqueSuffix}${extname(file.originalname)}`);
+          callback(null, `${uniqueSuffix}${extname(file.originalname).toLowerCase()}`);
         },
       }),
       limits: { fileSize: 10 * 1024 * 1024 },

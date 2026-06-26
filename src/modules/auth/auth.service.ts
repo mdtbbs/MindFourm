@@ -8,7 +8,7 @@ import { User } from '@entities/user.entity';
 import { SessionAudit } from '@entities/session-audit.entity';
 import { RedisService } from '@database/redis.service';
 import { PointsService } from '../points/points.service';
-import { AuthResult } from './interfaces/auth-result.interface';
+import { joinMindAuthApiUrl } from './mindauth-url.util';
 
 @Injectable()
 export class AuthService {
@@ -34,7 +34,7 @@ export class AuthService {
     const callbackUrl = this.configService.get<string>('MINDAUTH_CALLBACK_URL');
 
     try {
-      const response = await axios.post(`${mindauthUrl}/oauth/token`, {
+      const response = await axios.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
         grant_type: 'authorization_code',
         code,
         client_id: clientId,
@@ -62,7 +62,7 @@ export class AuthService {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
 
     try {
-      const response = await axios.get(`${mindauthUrl}/api/userinfo`, {
+      const response = await axios.get(joinMindAuthApiUrl(mindauthUrl, '/userinfo'), {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -78,7 +78,7 @@ export class AuthService {
       };
     } catch (error) {
       try {
-        const response = await axios.get(`${mindauthUrl}/api/user`, {
+        const response = await axios.get(joinMindAuthApiUrl(mindauthUrl, '/user'), {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -181,7 +181,7 @@ export class AuthService {
     }
 
     try {
-      const response = await axios.get(`${mindauthUrl}/api/internal/users/${mindauthId}`, {
+      const response = await axios.get(joinMindAuthApiUrl(mindauthUrl, `/internal/users/${mindauthId}`), {
         headers: { 'X-Service-Key': serviceKey },
         timeout: 3000,
       });
@@ -216,7 +216,7 @@ export class AuthService {
     }
 
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
-    const response = await axios.post(`${mindauthUrl}/api/sms/sync-status`, {
+    const response = await axios.post(joinMindAuthApiUrl(mindauthUrl, '/sms/sync-status'), {
       phone_sync_token: phoneSyncToken,
     });
 
@@ -342,7 +342,7 @@ export class AuthService {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
 
     try {
-      await axios.post(`${mindauthUrl}/api/revoke`, {
+      await axios.post(joinMindAuthApiUrl(mindauthUrl, '/revoke'), {
         access_token: accessToken,
         refresh_token: refreshToken,
       });

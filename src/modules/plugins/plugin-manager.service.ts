@@ -63,7 +63,7 @@ export class PluginManagerService {
    * Load a single plugin
    */
   private async loadPlugin(plugin: Plugin): Promise<void> {
-    const pluginDir = path.join(this.pluginsDir, plugin.slug);
+    const pluginDir = this.getPluginDir(plugin.slug);
 
     // Check if plugin directory exists
     if (!fs.existsSync(pluginDir)) {
@@ -131,7 +131,7 @@ export class PluginManagerService {
     }
 
     // Create plugin directory
-    const pluginDir = path.join(this.pluginsDir, metadata.slug);
+    const pluginDir = this.getPluginDir(metadata.slug);
     if (!fs.existsSync(this.pluginsDir)) {
       fs.mkdirSync(this.pluginsDir, { recursive: true });
     }
@@ -190,7 +190,7 @@ export class PluginManagerService {
     await this.pluginRepo.delete(plugin.id);
 
     // Delete plugin directory
-    const pluginDir = path.join(this.pluginsDir, slug);
+    const pluginDir = this.getPluginDir(slug);
     if (fs.existsSync(pluginDir)) {
       fs.rmSync(pluginDir, { recursive: true, force: true });
     }
@@ -282,5 +282,19 @@ export class PluginManagerService {
    */
   async executeHook<T>(hookName: string, context: T): Promise<T> {
     return this.eventBus.execute(hookName, context);
+  }
+
+  private getPluginDir(slug: string): string {
+    if (!/^[a-z0-9][a-z0-9._-]{0,63}$/i.test(slug)) {
+      throw new BadRequestException('Invalid plugin slug');
+    }
+
+    const root = path.resolve(this.pluginsDir);
+    const pluginDir = path.resolve(root, slug);
+    if (pluginDir !== root && pluginDir.startsWith(`${root}${path.sep}`)) {
+      return pluginDir;
+    }
+
+    throw new BadRequestException('Invalid plugin path');
   }
 }

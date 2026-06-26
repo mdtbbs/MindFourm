@@ -36,11 +36,12 @@ export function createClientWithCookie(cookie: string) {
     request: async <T>(path: string, options: RequestInit = {}): Promise<T> => {
       const method = options.method || 'GET';
       const isFormData = options.body instanceof FormData;
+      const requestHeaders = isFormData
+        ? { 'X-API-Version': '1', ...headers, ...(options.headers as Record<string, string> | undefined) }
+        : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...headers, ...(options.headers as Record<string, string> | undefined) };
       const res = await fetch(`${API_BASE}${path}`, {
         ...options,
-        headers: isFormData
-          ? { 'X-API-Version': '1', ...headers, ...options.headers }
-          : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...headers, ...options.headers },
+        headers: withCsrfHeader(requestHeaders, String(method), cookie),
       });
       if (!res.ok) {
         let message = `Request failed: ${res.status}`;
@@ -99,6 +100,51 @@ function buildQueryString(params: Record<string, string | number | undefined>): 
   return str ? `?${str}` : '';
 }
 
+function readCookieValue(name: string, cookieSource?: string): string | undefined {
+  const source = cookieSource ?? (typeof document !== 'undefined' ? document.cookie : '');
+  if (!source) return undefined;
+
+  const prefix = `${name}=`;
+  const pair = source
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(prefix));
+
+  if (!pair) return undefined;
+  return decodeURIComponent(pair.slice(prefix.length));
+}
+
+function withCsrfHeader(
+  headers: Record<string, string>,
+  method: string,
+  cookieSource?: string,
+): Record<string, string> {
+  if (!isWriteMethod(method)) {
+    return headers;
+  }
+
+  const csrfToken = readCookieValue('csrf_token', cookieSource);
+  if (!csrfToken) return headers;
+  return { ...headers, 'X-CSRF-Token': csrfToken };
+}
+
+function isWriteMethod(method: string): boolean {
+  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase());
+}
+
+async function ensureClientCsrfToken(method: string): Promise<void> {
+  if (!isWriteMethod(method) || typeof document === 'undefined' || readCookieValue('csrf_token')) {
+    return;
+  }
+
+  await fetch(`${API_BASE}/api/auth/check`, {
+    method: 'GET',
+    credentials: 'include',
+  }).catch(() => {
+    // The write request will surface the actual failure if the token is still missing.
+  });
+}
+
 async function request<T>(
   path: string,
   options: RequestOptions = {}
@@ -116,11 +162,13 @@ async function request<T>(
 
   let res: Response;
   try {
+    await ensureClientCsrfToken(String(method));
+    const requestHeaders = isFormData
+      ? { 'X-API-Version': '1', ...(options.headers as Record<string, string> | undefined) }
+      : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...(options.headers as Record<string, string> | undefined) };
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      headers: isFormData
-        ? { 'X-API-Version': '1', ...options.headers }
-        : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...options.headers },
+      headers: withCsrfHeader(requestHeaders, String(method)),
       credentials: 'include',
     });
   } catch (err) {

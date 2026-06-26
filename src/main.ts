@@ -9,6 +9,26 @@ import { PluginManagerService } from './modules/plugins/plugin-manager.service';
 import { LevelsService } from './modules/levels/levels.service';
 import { BadgesService } from './modules/badges/badges.service';
 import { DataSource } from 'typeorm';
+import { csrfMiddleware } from './common/middleware/csrf.middleware';
+
+function parseCookieHeader(header: string | undefined): Record<string, string> {
+  if (!header) return {};
+  return header.split(';').reduce<Record<string, string>>((cookies, part) => {
+    const separatorIndex = part.indexOf('=');
+    if (separatorIndex === -1) return cookies;
+
+    const key = part.slice(0, separatorIndex).trim();
+    const value = part.slice(separatorIndex + 1).trim();
+    if (!key) return cookies;
+
+    try {
+      cookies[key] = decodeURIComponent(value);
+    } catch {
+      cookies[key] = value;
+    }
+    return cookies;
+  }, {});
+}
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -17,6 +37,12 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api');
+
+  app.use((req: any, _res: any, next: () => void) => {
+    req.cookies = req.cookies || parseCookieHeader(req.headers?.cookie);
+    next();
+  });
+  app.use(csrfMiddleware);
 
   // Global pipes
   app.useGlobalPipes(

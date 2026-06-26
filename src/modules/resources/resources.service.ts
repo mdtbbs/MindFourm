@@ -140,7 +140,6 @@ export class ResourcesService {
         description: true,
         resource_type: true,
         file_name: true,
-        file_path: true,
         file_size: true,
         mime_type: true,
         external_url: true,
