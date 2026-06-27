@@ -1,5 +1,3 @@
-import { motion } from 'framer-motion';
-
 interface BadgeProps {
   children: React.ReactNode;
   variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger';
@@ -16,11 +14,10 @@ const variantClasses: Record<NonNullable<BadgeProps['variant']>, string> = {
 
 export default function Badge({ children, variant = 'default', className = '' }: BadgeProps) {
   return (
-    <motion.span
-      whileHover={{ scale: 1.05 }}
+    <span
       className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full ${variantClasses[variant]} ${className}`}
     >
       {children}
-    </motion.span>
+    </span>
   );
 }
