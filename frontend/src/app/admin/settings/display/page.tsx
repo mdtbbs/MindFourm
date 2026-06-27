@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+
+const latestPostToggles = [
+  ['latest_posts_show_index', '显示序号'],
+  ['latest_posts_show_excerpt', '显示摘要'],
+  ['latest_posts_show_tags', '显示标签'],
+  ['latest_posts_show_stats', '显示回复/浏览/点赞'],
+] as const;
 
 export default function DisplaySettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
@@ -13,21 +20,33 @@ export default function DisplaySettingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchSettings = useCallback(async () => {
-    try { setValues(await adminApi.getSettings('display')); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
-    finally { setLoading(false); }
+    try {
+      setValues(await adminApi.getSettings('display'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
   const handleSave = async () => {
-    setSaving(true); setError(null);
-    try { await adminApi.updateSettings('display', values); setMessage('Saved'); setTimeout(() => setMessage(null), 3000); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
-    finally { setSaving(false); }
+    setSaving(true);
+    setError(null);
+    try {
+      await adminApi.updateSettings('display', values);
+      setMessage('Saved');
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const update = (k: string, v: string) => setValues((p) => ({ ...p, [k]: v }));
+  const update = (key: string, value: string) => setValues((prev) => ({ ...prev, [key]: value }));
+  const toggle = (key: string, checked: boolean) => update(key, checked ? 'true' : 'false');
 
   if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
 
@@ -37,30 +56,76 @@ export default function DisplaySettingsPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">显示设置</h2>
         <p className="text-xs text-surface-400 mt-1">控制首页和列表显示行为</p>
       </div>
+
       <div className="p-6 space-y-6">
         {message && <Alert type="success" message={message} />}
         {error && <Alert type="error" message={error} />}
 
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">每页帖子数</label>
-          <input type="number" className="w-32 px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.posts_per_page ?? '20'} onChange={(e) => update('posts_per_page', e.target.value)} />
+        <div className="grid gap-5 md:grid-cols-3">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">每页帖子数</label>
+            <input type="number" className="w-32 px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.posts_per_page ?? '20'} onChange={(e) => update('posts_per_page', e.target.value)} />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">默认排序</label>
+            <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={values.default_sort ?? 'newest'} onChange={(e) => update('default_sort', e.target.value)}>
+              <option value="newest">最新发布</option>
+              <option value="popular">最热</option>
+              <option value="replies">最多回复</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">每页回复数</label>
+            <input type="number" className="w-32 px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.replies_per_page ?? '50'} onChange={(e) => update('replies_per_page', e.target.value)} />
+            <p className="text-xs text-surface-400 mt-1">帖子详情中每页显示的回复数</p>
+          </div>
+        </div>
+
+        <div className="border-t border-surface-200 pt-6">
+          <h3 className="text-sm font-semibold text-surface-800">最新帖子</h3>
+          <p className="mt-1 text-xs text-surface-400">控制首页最新帖子区域的文案、密度和信息显示。</p>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">标题</label>
+            <input className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.latest_posts_title ?? '最新帖子'} onChange={(e) => update('latest_posts_title', e.target.value)} />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">强调色</label>
+            <div className="flex items-center gap-2">
+              <input type="color" className="h-9 w-12 border border-surface-200 bg-white p-1" value={values.latest_posts_accent_color ?? '#2f80ed'} onChange={(e) => update('latest_posts_accent_color', e.target.value)} />
+              <input className="w-32 px-3 py-2 border border-surface-200 rounded text-sm font-mono focus:outline-none focus:border-surface-400" value={values.latest_posts_accent_color ?? '#2f80ed'} onChange={(e) => update('latest_posts_accent_color', e.target.value)} />
+            </div>
+          </div>
         </div>
 
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">默认排序</label>
-          <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={values.default_sort ?? 'newest'} onChange={(e) => update('default_sort', e.target.value)}>
-            <option value="newest">最新发布</option>
-            <option value="popular">最热</option>
-            <option value="replies">最多回复</option>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">说明文字</label>
+          <textarea className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400 min-h-[72px]" value={values.latest_posts_description ?? '浅蓝、直角、低噪音的论坛界面，重点放在帖子层级和浏览效率。'} onChange={(e) => update('latest_posts_description', e.target.value)} />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">浏览密度</label>
+          <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={values.latest_posts_density ?? 'compact'} onChange={(e) => update('latest_posts_density', e.target.value)}>
+            <option value="compact">紧凑</option>
+            <option value="comfortable">舒展</option>
           </select>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">每页回复数</label>
-          <input type="number" className="w-32 px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.replies_per_page ?? '50'} onChange={(e) => update('replies_per_page', e.target.value)} />
-          <p className="text-xs text-surface-400 mt-1">帖子详情中每页显示的回数</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {latestPostToggles.map(([key, label]) => (
+            <label key={key} className="flex items-center gap-2 border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-700">
+              <input type="checkbox" checked={(values[key] ?? 'true') === 'true'} onChange={(e) => toggle(key, e.target.checked)} className="h-4 w-4 accent-surface-900" />
+              {label}
+            </label>
+          ))}
         </div>
       </div>
+
       <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
         <Button variant="ghost" onClick={fetchSettings}>Reset</Button>
         <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>

@@ -5,6 +5,25 @@ import { VerifySessionDto } from './dto/verify-session.dto';
 import { MindAuthServiceGuard } from '../../common/guards/mindauth-service.guard';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
 
+function getSafeRedirectPath(state?: string): string {
+  if (!state) {
+    return '/';
+  }
+
+  let path = state;
+  try {
+    path = decodeURIComponent(state);
+  } catch {
+    path = state;
+  }
+
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) {
+    return '/';
+  }
+
+  return path;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}
@@ -84,8 +103,10 @@ export class AuthController {
         path: '/',
       });
 
+      const redirectPath = getSafeRedirectPath(state);
+
       // Redirect to frontend
-      return res.redirect(frontendUrl);
+      return res.redirect(`${frontendUrl}${redirectPath}`);
     } catch (error) {
       throw new UnauthorizedException((error as Error).message);
     }
@@ -190,21 +211,13 @@ export class AuthController {
       throw new UnauthorizedException('Test login not available in production');
     }
 
-    // Map user types to test user IDs
-    const testUsers: Record<string, number> = {
-      admin: 1,
-      moderator: 2,
-      user: 3,
-    };
-
-    const userId = testUsers[userType] || 3;
-
     // Create session for test user (using simplified test method)
     const sessionToken = this.authService.generateSessionToken();
     const ip = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
 
     try {
-      await this.authService.createTestSession(userId, sessionToken, ip);
+      const user = await this.authService.getOrCreateTestUser(userType);
+      await this.authService.createTestSession(user.id, sessionToken, ip);
 
       // Set HttpOnly cookie
       res.cookie('forum_session', sessionToken, {
@@ -215,7 +228,7 @@ export class AuthController {
         path: '/',
       });
 
-      return res.json({ success: true, userId, sessionToken });
+      return res.json({ success: true, userId: user.id, sessionToken });
     } catch (error) {
       return res.status(500).json({ error: (error as Error).message });
     }

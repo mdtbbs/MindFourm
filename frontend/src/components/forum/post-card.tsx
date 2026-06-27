@@ -32,65 +32,48 @@ export default function PostCard({ post }: PostCardProps) {
     <motion.article
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-      whileHover={{
-        scale: 1.01,
-        boxShadow: '0 4px 12px rgba(255,107,53,0.1)',
-      }}
+      transition={{ duration: 0.25 }}
+      whileHover={{ y: -1 }}
       className={cn(
-        'bg-white dark:bg-gray-900 rounded-lg border p-4',
-        post.is_pinned
-          ? 'border-red-200 dark:border-red-800/50'
-          : 'border-surface-200 dark:border-gray-700'
+        'panel-surface p-4 transition-colors duration-200',
+        post.is_pinned ? 'border-[rgba(47,128,237,0.35)]' : 'border-[var(--border)]'
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 border-l-2 pl-4 border-[rgba(47,128,237,0.18)]">
           <div className="flex items-center gap-2 mb-1">
             {post.is_pinned && (
               <motion.div
-                animate={{
-                  scale: [1, 1.1, 1],
-                  rotate: [0, 5, 0],
-                }}
-                transition={{
-                  duration: 1.5,
-                  repeat: Infinity,
-                  ease: 'easeInOut',
-                }}
+                animate={{ scale: [1, 1.08, 1] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <Pin className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <Pin className="w-4 h-4 text-[var(--primary)] flex-shrink-0" />
               </motion.div>
             )}
             <Link
               href={`/posts/${post.id}`}
-              className="text-lg font-semibold text-surface-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 truncate"
+              className="text-[15px] font-semibold text-[var(--foreground)] hover:text-[var(--primary)] truncate"
             >
               {post.title}
             </Link>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-surface-500">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted-foreground)]">
             {post.category_name && (
               <Link
                 href={`/categories/${post.category_id}`}
-                className="hover:text-primary-600 transition-colors"
+                className="rounded-none border border-[var(--border)] px-2 py-0.5 bg-[var(--muted)] hover:border-[var(--primary)] hover:text-[var(--primary)] transition-colors"
               >
                 {post.category_name}
               </Link>
             )}
 
             {post.tags && post.tags.length > 0 && (
-              <div className="flex gap-1">
+              <div className="flex flex-wrap gap-1">
                 {post.tags.slice(0, 3).map((tag) => (
-                  <motion.div
-                    key={tag.id}
-                    whileHover={{ scale: 1.05 }}
-                  >
-                    <Badge variant="primary">
-                      {tag.name}
-                    </Badge>
-                  </motion.div>
+                  <Badge key={tag.id} variant="primary">
+                    {tag.name}
+                  </Badge>
                 ))}
               </div>
             )}

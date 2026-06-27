@@ -211,6 +211,8 @@ export default function PostForm() {
         {/* Title */}
         <Input
           label="标题"
+          name="title"
+          data-testid="post-title-input"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="请输入帖子标题"
@@ -279,6 +281,8 @@ export default function PostForm() {
             <MarkdownRenderer content={content} className="min-h-[200px] p-4 bg-surface-50 dark:bg-gray-800 rounded-lg border border-surface-200 dark:border-gray-700" fallback="*暂无内容*" />
           ) : (
             <textarea
+              name="content"
+              data-testid="post-content-input"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="使用 Markdown 格式编写帖子内容..."
@@ -342,6 +346,7 @@ export default function PostForm() {
           </Button>
           <Button
             type="submit"
+            data-testid="publish-button"
             disabled={isSubmitting}
           >
             {isSubmitting ? '发布中...' : '发布帖子'}

@@ -274,6 +274,43 @@ export class AuthService {
     await this.redisService.expire(sessionKey, this.sessionTtl);
   }
 
+  async getOrCreateTestUser(userType: string): Promise<User> {
+    if (this.isProduction()) {
+      throw new UnauthorizedException('Test login not available in production');
+    }
+
+    const users: Record<string, { mindauthId: number; username: string; role: string }> = {
+      admin: { mindauthId: 900001, username: 'e2e_admin', role: 'admin' },
+      moderator: { mindauthId: 900002, username: 'e2e_moderator', role: 'moderator' },
+      user: { mindauthId: 900003, username: 'e2e_user', role: 'user' },
+    };
+    const config = users[userType] || users.user;
+
+    let user = await this.usersRepository.findOne({
+      where: { mindauth_id: config.mindauthId },
+    });
+
+    if (!user) {
+      user = this.usersRepository.create({
+        mindauth_id: config.mindauthId,
+        username: config.username,
+        email: `${config.username}@example.test`,
+        role: config.role,
+        avatar_url: '',
+        phone_verified: true,
+        phone_verified_at: new Date(),
+      });
+    } else {
+      user.username = config.username;
+      user.email = `${config.username}@example.test`;
+      user.role = config.role;
+      user.phone_verified = true;
+      user.phone_verified_at = new Date();
+    }
+
+    return this.usersRepository.save(user);
+  }
+
   private isProduction(): boolean {
     return this.configService.get<string>('app.env') === 'production' || process.env.NODE_ENV === 'production';
   }

@@ -11,7 +11,7 @@ export default function LoginPage() {
   useEffect(() => {
     const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
     const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
-    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || 'forum';
 
     // 从 URL 参数获取 redirect，如果没有则使用当前路径
     const redirectParam = searchParams?.get('redirect');

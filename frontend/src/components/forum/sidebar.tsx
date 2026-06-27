@@ -10,18 +10,34 @@ interface SidebarProps {
   selectedCategory?: number;
 }
 
+const quickLinks = [
+  { href: '/resources', label: '资源中心', icon: FolderOpen },
+  { href: '/servers', label: '游戏服务器', icon: Server },
+  { href: '/groups', label: '用户组', icon: Users },
+  { href: '/leaderboard', label: '积分排行', icon: Trophy },
+  { href: '/shop', label: '积分商店', icon: ShoppingBag },
+];
+
 export default function Sidebar({ categories, tags, selectedCategory }: SidebarProps) {
   return (
-    <aside style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Categories Section */}
-      <div className="sidebar-section">
-        <h3 className="sidebar-title">分类</h3>
-        <nav className="sidebar-nav">
+    <aside className="space-y-4">
+      <section className="panel-surface p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+            分类
+          </h3>
+          <span className="text-[11px] text-[var(--muted-foreground)]">{categories.length}</span>
+        </div>
+        <nav className="space-y-1">
           <Link
             href="/"
-            className={`sidebar-link ${!selectedCategory ? 'active' : ''}`}
+            className={`flex items-center justify-between border px-3 py-2 text-sm transition-colors ${
+              !selectedCategory
+                ? 'border-[var(--primary)] bg-[rgba(47,128,237,0.06)] text-[var(--primary)]'
+                : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
+            }`}
           >
-            全部帖子
+            <span>全部帖子</span>
           </Link>
           {categories
             .filter((c) => c.is_active)
@@ -30,73 +46,61 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
               <Link
                 key={category.id}
                 href={`/categories/${category.id}`}
-                className={`sidebar-link ${selectedCategory === category.id ? 'active' : ''}`}
+                className={`flex items-center justify-between border px-3 py-2 text-sm transition-colors ${
+                  selectedCategory === category.id
+                    ? 'border-[var(--primary)] bg-[rgba(47,128,237,0.06)] text-[var(--primary)]'
+                    : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
+                }`}
                 title={category.name}
               >
-                {category.name}
+                <span className="truncate">{category.name}</span>
               </Link>
             ))}
         </nav>
-      </div>
+      </section>
 
-      {/* Tags Section */}
       {tags.length > 0 && (
-        <div className="sidebar-section">
-          <h3 className="sidebar-title">热门标签</h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+        <section className="panel-surface p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+              热门标签
+            </h3>
+            <span className="text-[11px] text-[var(--muted-foreground)]">{Math.min(tags.length, 20)}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
             {tags.slice(0, 20).map((tag) => (
               <Link
                 key={tag.id}
                 href={`/tags/${tag.slug}`}
-                className="sidebar-tag"
+                className="border border-[var(--border)] bg-[var(--muted)] px-2.5 py-1 text-xs text-[var(--foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
                 title={tag.name}
               >
-                <span>{tag.name}</span>
+                {tag.name}
               </Link>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Resource Center */}
-      <div className="sidebar-section">
-        <Link href="/resources" className="sidebar-quick-link">
-          <FolderOpen style={{ width: 16, height: 16 }} />
-          资源中心
-        </Link>
-      </div>
-
-      {/* Game Servers */}
-      <div className="sidebar-section">
-        <Link href="/servers" className="sidebar-quick-link">
-          <Server style={{ width: 16, height: 16 }} />
-          游戏服务器
-        </Link>
-      </div>
-
-      {/* User Groups */}
-      <div className="sidebar-section">
-        <Link href="/groups" className="sidebar-quick-link">
-          <Users style={{ width: 16, height: 16 }} />
-          用户组
-        </Link>
-      </div>
-
-      {/* Leaderboard */}
-      <div className="sidebar-section">
-        <Link href="/leaderboard" className="sidebar-quick-link">
-          <Trophy style={{ width: 16, height: 16 }} />
-          积分排行榜
-        </Link>
-      </div>
-
-      {/* Shop */}
-      <div className="sidebar-section">
-        <Link href="/shop" className="sidebar-quick-link">
-          <ShoppingBag style={{ width: 16, height: 16 }} />
-          积分商城
-        </Link>
-      </div>
+      <section className="panel-surface p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+            快捷入口
+          </h3>
+        </div>
+        <div className="space-y-2">
+          {quickLinks.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="flex items-center gap-2 border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </section>
     </aside>
   );
 }

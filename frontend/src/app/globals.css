@@ -373,3 +373,83 @@ body {
     box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
   }
 }
+
+/* Clean forum theme override */
+:root {
+  --background: #f5f9ff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2f80ed;
+  --primary-foreground: #ffffff;
+  --secondary: #eaf2ff;
+  --secondary-foreground: #0f172a;
+  --muted: #eef4fb;
+  --muted-foreground: #667085;
+  --accent: #dcecff;
+  --accent-foreground: #0f172a;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #d8e2f0;
+  --input: #d8e2f0;
+  --ring: rgba(47, 128, 237, 0.35);
+  --radius: 0.125rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0f172a;
+  --sidebar-primary: #2f80ed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef4fb;
+  --sidebar-accent-foreground: #0f172a;
+  --sidebar-border: #d8e2f0;
+  --sidebar-ring: rgba(47, 128, 237, 0.35);
+}
+
+[data-theme="dark"],
+.dark {
+  --background: #0b1220;
+  --foreground: #e5eefc;
+  --card: #101a2d;
+  --card-foreground: #e5eefc;
+  --popover: #101a2d;
+  --popover-foreground: #e5eefc;
+  --primary: #74a9ff;
+  --primary-foreground: #0b1220;
+  --secondary: #13233c;
+  --secondary-foreground: #e5eefc;
+  --muted: #13233c;
+  --muted-foreground: #9fb0ca;
+  --accent: #173153;
+  --accent-foreground: #e5eefc;
+  --destructive: #f87171;
+  --destructive-foreground: #0b1220;
+  --border: rgba(148, 163, 184, 0.18);
+  --input: rgba(148, 163, 184, 0.22);
+  --ring: rgba(116, 169, 255, 0.35);
+  --sidebar: #101a2d;
+  --sidebar-foreground: #e5eefc;
+  --sidebar-primary: #74a9ff;
+  --sidebar-primary-foreground: #0b1220;
+  --sidebar-accent: #13233c;
+  --sidebar-accent-foreground: #e5eefc;
+  --sidebar-border: rgba(148, 163, 184, 0.18);
+  --sidebar-ring: rgba(116, 169, 255, 0.35);
+}
+
+html {
+  background-color: var(--background) !important;
+}
+
+body {
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.panel-surface {
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}

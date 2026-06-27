@@ -30,6 +30,14 @@ export class SettingsService implements OnModuleInit {
       { key: 'posts_per_page', value: '20', category: 'posts', description: 'Posts per page' },
       { key: 'max_post_length', value: '10000', category: 'posts', description: 'Maximum post length' },
       { key: 'allow_attachments', value: 'true', category: 'posts', description: 'Allow file attachments' },
+      { key: 'latest_posts_title', value: '最新帖子', category: 'display', description: 'Latest posts section title' },
+      { key: 'latest_posts_description', value: '浅蓝、直角、低噪音的论坛界面，重点放在帖子层级和浏览效率。', category: 'display', description: 'Latest posts section description' },
+      { key: 'latest_posts_density', value: 'compact', category: 'display', description: 'Latest posts display density: compact or comfortable' },
+      { key: 'latest_posts_accent_color', value: '#2f80ed', category: 'display', description: 'Latest posts accent color' },
+      { key: 'latest_posts_show_excerpt', value: 'true', category: 'display', description: 'Show post excerpt in latest posts list' },
+      { key: 'latest_posts_show_tags', value: 'true', category: 'display', description: 'Show tags in latest posts list' },
+      { key: 'latest_posts_show_stats', value: 'true', category: 'display', description: 'Show stats in latest posts list' },
+      { key: 'latest_posts_show_index', value: 'true', category: 'display', description: 'Show row index in latest posts list' },
       { key: 'require_approval', value: 'true', category: 'moderation', description: 'Require post approval' },
       { key: 'require_post_approval', value: 'true', category: 'moderation', description: 'Require post approval before publishing' },
       { key: 'require_reply_approval', value: 'true', category: 'moderation', description: 'Require reply approval before publishing' },
@@ -49,7 +57,7 @@ export class SettingsService implements OnModuleInit {
 
     for (const setting of defaults) {
       await this.settingRepository.query(
-        'INSERT IGNORE INTO settings (key, value, category, description) VALUES (?, ?, ?, ?)',
+        'INSERT IGNORE INTO settings (`key`, `value`, category, description) VALUES (?, ?, ?, ?)',
         [setting.key, setting.value, setting.category, setting.description],
       );
     }

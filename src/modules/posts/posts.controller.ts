@@ -80,14 +80,16 @@ export class PostsController {
   @Get(':id')
   async findOne(
     @Param('id', ParseIntPipe) id: number,
-    @Query('reply_page', new ParseIntPipe({ optional: true })) replyPage?: number,
-    @Query('reply_limit', new ParseIntPipe({ optional: true })) replyLimit?: number,
+    @Query('reply_page') replyPage?: string,
+    @Query('reply_limit') replyLimit?: string,
   ) {
+    const parsedReplyPage = replyPage ? parseInt(replyPage, 10) : 1;
+    const parsedReplyLimit = replyLimit ? parseInt(replyLimit, 10) : 20;
     const post = await this.postsService.findById(id);
     const replies = await this.postsService.getReplies(
       id,
-      replyLimit || 20,
-      replyPage || 1,
+      Number.isFinite(parsedReplyLimit) ? parsedReplyLimit : 20,
+      Number.isFinite(parsedReplyPage) ? parsedReplyPage : 1,
     );
 
     return {

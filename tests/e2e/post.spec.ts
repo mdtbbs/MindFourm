@@ -10,6 +10,85 @@
 
 import { test, expect } from '../fixtures/page-objects/base.po';
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
+import type { APIRequestContext } from '@playwright/test';
+
+let fixturePostId: number | null = null;
+let fixturePostTitle: string | null = null;
+let fixtureSetup: Promise<void> | null = null;
+
+async function ensureFixturePost(request: APIRequestContext): Promise<void> {
+  if (fixturePostId !== null) {
+    return;
+  }
+
+  if (!fixtureSetup) {
+    fixtureSetup = (async () => {
+      const loginResponse = await request.post('http://localhost:4000/api/auth/test-login', {
+        data: { userType: 'user' },
+      });
+
+      if (!loginResponse.ok()) {
+        throw new Error(`Failed to create test session: ${loginResponse.status()}`);
+      }
+
+      const setCookies = loginResponse
+        .headersArray()
+        .filter((header) => header.name.toLowerCase() === 'set-cookie')
+        .map((header) => header.value);
+
+      const cookieMap = new Map<string, string>();
+      for (const rawCookie of setCookies) {
+        const [cookiePair] = rawCookie.split(';');
+        const separatorIndex = cookiePair.indexOf('=');
+        if (separatorIndex === -1) continue;
+        const name = cookiePair.slice(0, separatorIndex).trim();
+        const value = cookiePair.slice(separatorIndex + 1).trim();
+        cookieMap.set(name, value);
+      }
+
+      const csrfToken = cookieMap.get('csrf_token');
+      const sessionToken = cookieMap.get('forum_session');
+      if (!csrfToken || !sessionToken) {
+        throw new Error('Missing CSRF or session cookie from test login');
+      }
+
+      const createResponse = await request.post('http://localhost:4000/api/posts', {
+        data: {
+          title: `E2E Fixture Post ${Date.now()}`,
+          content: '# Fixture post\n\nThis post exists for E2E coverage.',
+          status: 'published',
+        },
+        headers: {
+          Cookie: `csrf_token=${csrfToken}; forum_session=${sessionToken}`,
+          'X-CSRF-Token': csrfToken,
+        },
+      });
+
+      if (!createResponse.ok()) {
+        throw new Error(`Failed to create fixture post: ${createResponse.status()}`);
+      }
+
+      const created = await createResponse.json() as { data?: { id?: number }; id?: number };
+      const postId = created.data?.id ?? created.id;
+      if (!postId) {
+        throw new Error('Fixture post response did not include an id');
+      }
+
+      fixturePostId = postId;
+      fixturePostTitle = `E2E Fixture Post`;
+    })();
+  }
+
+  await fixtureSetup;
+}
+
+test.beforeAll(async ({ request }) => {
+  await ensureFixturePost(request);
+});
+
+authTest.beforeAll(async ({ request }) => {
+  await ensureFixturePost(request);
+});
 
 test.describe('Public Post Viewing', () => {
   test('should display post list on homepage', async ({ homePage }) => {
@@ -42,22 +121,20 @@ test.describe('Public Post Viewing', () => {
   });
 
   test('should display post content with markdown rendering', async ({ page }) => {
-    // Navigate to an existing post (use post ID 1 for testing)
-    await page.goto('/posts/1', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    expect(fixturePostId).not.toBeNull();
+    await page.goto(`/posts/${fixturePostId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Check for post title
-    const title = page.locator('h1');
-    await expect(title).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Fixture post', { exact: true })).toBeVisible({ timeout: 30000 });
 
     // Check for post content
     const content = page.locator('[data-testid="post-content"]');
-    if (await content.isVisible().catch(() => false)) {
-      await expect(content).toBeVisible();
-    }
+    await expect(content).toBeVisible({ timeout: 10000 });
   });
 
   test('should display replies on post detail', async ({ page }) => {
-    await page.goto('/posts/1', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    expect(fixturePostId).not.toBeNull();
+    await page.goto(`/posts/${fixturePostId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Wait for replies to load
     await page.waitForTimeout(1000);
@@ -167,10 +244,14 @@ authTest.describe('Post Creation (Authenticated)', () => {
 
   authTest('should auto-save draft', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/posts/new', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    const titleInput = authenticatedPage.getByPlaceholder('请输入帖子标题');
+    const contentInput = authenticatedPage.getByPlaceholder('使用 Markdown 格式编写帖子内容...');
+    await expect(titleInput).toBeVisible({ timeout: 30000 });
+    await expect(contentInput).toBeVisible({ timeout: 30000 });
 
     // Fill partial content
-    await authenticatedPage.fill('[name="title"]', 'Draft Test Post');
-    await authenticatedPage.fill('[name="content"]', 'Draft content for auto-save test');
+    await titleInput.fill('Draft Test Post');
+    await contentInput.fill('Draft content for auto-save test');
 
     // Wait for auto-save (typically 3-5 seconds)
     await authenticatedPage.waitForTimeout(5000);
@@ -179,7 +260,6 @@ authTest.describe('Post Creation (Authenticated)', () => {
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Draft should be restored
-    const titleInput = authenticatedPage.locator('[name="title"]');
     if (await titleInput.isVisible().catch(() => false)) {
       const titleValue = await titleInput.inputValue();
       authExpect(titleValue).toContain('Draft Test Post');
@@ -205,7 +285,8 @@ authTest.describe('Post Creation (Authenticated)', () => {
 
 authTest.describe('Post Interactions (Authenticated)', () => {
   authTest('should like a post', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/posts/1', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    expect(fixturePostId).not.toBeNull();
+    await authenticatedPage.goto(`/posts/${fixturePostId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Find like button
     const likeButton = authenticatedPage.locator('[data-testid="like-button"]');
@@ -219,7 +300,8 @@ authTest.describe('Post Interactions (Authenticated)', () => {
   });
 
   authTest('should bookmark a post', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/posts/1', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    expect(fixturePostId).not.toBeNull();
+    await authenticatedPage.goto(`/posts/${fixturePostId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Find bookmark button
     const bookmarkButton = authenticatedPage.locator('[data-testid="bookmark-button"]');
@@ -230,7 +312,8 @@ authTest.describe('Post Interactions (Authenticated)', () => {
   });
 
   authTest('should create a reply', async ({ authenticatedPage }) => {
-    await authenticatedPage.goto('/posts/1', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    expect(fixturePostId).not.toBeNull();
+    await authenticatedPage.goto(`/posts/${fixturePostId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Find reply input
     const replyInput = authenticatedPage.locator('[data-testid="reply-input"]');

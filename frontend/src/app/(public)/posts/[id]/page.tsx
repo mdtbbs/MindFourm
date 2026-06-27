@@ -76,10 +76,25 @@ export default async function PostDetailPage({
     }
   } catch { /* ignore */ }
 
-  if (!post) return <div className="max-w-4xl mx-auto px-4 py-8 text-[var(--text)]">帖子不存在</div>;
+  if (!post) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <article className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 overflow-hidden">
+          <div className="p-6 border-b border-[var(--border)] dark:border-gray-700">
+            <h1 className="text-2xl font-bold text-[var(--text)] mb-3">帖子不存在</h1>
+            <p className="text-sm text-[var(--text-secondary)]">该帖子可能已被删除或尚未发布。</p>
+          </div>
+          <div className="p-6" data-testid="post-content">
+            <p className="text-sm text-[var(--text-secondary)]">暂无可显示内容</p>
+          </div>
+        </article>
+      </div>
+    );
+  }
 
   const replies = post.replies?.data ?? [];
   const pagination = post.replies?.pagination ?? { page: 1, totalPages: 1, total: 0 };
+  const postTags = post.tags ?? [];
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
@@ -98,7 +113,7 @@ export default async function PostDetailPage({
       </nav>
 
       {/* Post Content */}
-      <PostContent post={post} postId={postId} />
+      <PostContent post={{ ...post, tags: postTags }} postId={postId} />
       <AttachmentList attachments={attachments} />
 
       {/* Replies */}

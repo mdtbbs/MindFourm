@@ -44,7 +44,7 @@ export default function PostContent({
           <span className="text-[var(--text-muted)]">|</span>
           <span>{post.view_count} 浏览</span>
 
-          {post.tags.length > 0 && (
+          {post.tags?.length > 0 && (
             <>
               <span className="text-[var(--text-muted)]">|</span>
               <div className="flex gap-1">
@@ -60,7 +60,7 @@ export default function PostContent({
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div className="p-6" data-testid="post-content">
         <MarkdownRenderer content={post.content} />
       </div>
 

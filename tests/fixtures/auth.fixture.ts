@@ -45,6 +45,18 @@ async function createTestSession(
   if (!sessionCookie) {
     throw new Error('No forum_session cookie received from test-login endpoint');
   }
+
+  await context.addCookies([
+    {
+      name: 'forum_session',
+      value: sessionCookie.value,
+      domain: 'localhost',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: false,
+    },
+  ]);
 }
 
 export const test = base.extend<AuthFixtures>({
