@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Like, MoreThan, LessThan } from 'typeorm';
+import { Repository, DataSource, Like, LessThan } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
@@ -13,6 +13,13 @@ import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+
+export interface ResourceFileMeta {
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+}
 
 @Injectable()
 export class ResourcesService {
@@ -28,64 +35,119 @@ export class ResourcesService {
     private dataSource: DataSource,
   ) {}
 
-  /**
-   * Create a new resource
-   */
-  async create(dto: CreateResourceDto, userId: number): Promise<Resource | null> {
+  private normalizeResourceType(resourceType: string): string {
+    return resourceType === 'file' ? 'upload' : resourceType;
+  }
+
+  private toOptionalNumber(value: unknown): number | undefined {
+    if (value === undefined || value === null || value === '') return undefined;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      throw new BadRequestException('Invalid numeric value');
+    }
+    return parsed;
+  }
+
+  private toTinyInt(value: unknown, defaultValue: number): number {
+    if (value === undefined || value === null || value === '') return defaultValue;
+    if (typeof value === 'boolean') return value ? 1 : 0;
+    if (value === 'true') return 1;
+    if (value === 'false') return 0;
+    return Number(value) ? 1 : 0;
+  }
+
+  private normalizeVersion(version: ResourceVersion) {
+    return {
+      ...version,
+      file_size: version.file_size || 0,
+    };
+  }
+
+  private normalizeResource(resource: Resource, versions?: ResourceVersion[]) {
+    return {
+      ...resource,
+      is_public: resource.is_public === 1,
+      file_size: resource.file_size || 0,
+      username: resource.user?.username || '',
+      avatar_url: resource.user?.avatar_url || null,
+      category_name: resource.category?.name || null,
+      category_icon: resource.category?.icon || null,
+      versions: versions?.map((version) => this.normalizeVersion(version)),
+    };
+  }
+
+  private async deleteStoredFile(filePath?: string | null): Promise<void> {
+    if (!filePath) return;
+
+    try {
+      await fs.unlink(path.resolve(filePath));
+    } catch {
+      console.warn(`File not found: ${filePath}`);
+    }
+  }
+
+  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta): Promise<any> {
     return this.dataSource.transaction(async (manager) => {
-      // Validate category if provided
-      if (dto.category_id) {
+      const categoryId = this.toOptionalNumber((dto as any).category_id);
+      const resourceType = this.normalizeResourceType(dto.resource_type);
+
+      if (categoryId) {
         const category = await manager.findOne(ResourceCategory, {
-          where: { id: dto.category_id },
+          where: { id: categoryId },
         });
         if (!category) {
-          throw new BadRequestException('分类不存在');
+          throw new BadRequestException('Category does not exist');
         }
       }
 
-      // Validate resource_type
-      if (!['upload', 'external'].includes(dto.resource_type)) {
-        throw new BadRequestException('无效的资源类型');
+      if (!['upload', 'external'].includes(resourceType)) {
+        throw new BadRequestException('Invalid resource type');
       }
 
-      // Parse markdown to HTML if content provided
+      if (resourceType === 'upload' && !file) {
+        throw new BadRequestException('A file is required for uploaded resources');
+      }
+
+      if (resourceType === 'external' && !dto.external_url) {
+        throw new BadRequestException('An external URL is required');
+      }
+
       const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
 
-      // Create the resource
       const newResource = manager.create(Resource, {
         user_id: userId,
         title: dto.title,
         description: dto.description,
-        resource_type: dto.resource_type,
-        external_url: dto.external_url,
+        resource_type: resourceType,
+        file_name: file?.file_name,
+        file_path: file?.file_path,
+        file_size: file?.file_size,
+        mime_type: file?.mime_type,
+        external_url: resourceType === 'external' ? dto.external_url : undefined,
         version: dto.version,
         content: dto.content,
         content_html: contentHtml,
-        category_id: dto.category_id,
-        is_public: dto.is_public !== undefined ? dto.is_public : 0,
+        category_id: categoryId,
+        is_public: this.toTinyInt((dto as any).is_public, 1),
         status: 'pending',
         download_count: 0,
       });
       const savedResource = await manager.save(newResource);
 
-      // Return with relations
       const result = await manager.findOne(Resource, {
         where: { id: savedResource.id },
         relations: ['user', 'category'],
       });
 
-      return result;
+      if (!result) {
+        throw new NotFoundException('Resource does not exist');
+      }
+
+      return this.normalizeResource(result);
     });
   }
 
-  /**
-   * Get resource list with cursor pagination
-   */
-  async getList(query: QueryResourcesDto): Promise<{
-    data: Resource[];
-    nextCursor: string | null;
-    hasMore: boolean;
-  }> {
+  async getList(query: QueryResourcesDto): Promise<any> {
     const {
       limit = 20,
       category_id,
@@ -109,7 +171,6 @@ export class ResourcesService {
       where.title = Like(`%${escapeLike(search)}%`);
     }
 
-    // Decode cursor for pagination
     let cursorCondition: any = {};
     if (cursor) {
       try {
@@ -122,8 +183,8 @@ export class ResourcesService {
           { [sort]: LessThan(cursorValue) },
           { [sort]: cursorValue, id: LessThan(idValue) },
         ];
-      } catch (e) {
-        // Invalid cursor, ignore
+      } catch {
+        // Ignore invalid cursors.
       }
     }
 
@@ -132,33 +193,14 @@ export class ResourcesService {
         ? [{ ...where, ...cursorCondition[0] }, { ...where, ...cursorCondition[1] }]
         : where,
       relations: ['user', 'category'],
-      select: {
-        id: true,
-        user_id: true,
-        category_id: true,
-        title: true,
-        description: true,
-        resource_type: true,
-        file_name: true,
-        file_size: true,
-        mime_type: true,
-        external_url: true,
-        version: true,
-        content: true,
-        status: true,
-        is_public: true,
-        download_count: true,
-        created_at: true,
-        updated_at: true,
-      },
       order: {
         [sort]: 'DESC',
         id: 'DESC',
       },
-      take: limit + 1,
+      take: Number(limit) + 1,
     });
 
-    const hasMore = resources.length > limit;
+    const hasMore = resources.length > Number(limit);
     if (hasMore) {
       resources.pop();
     }
@@ -174,64 +216,54 @@ export class ResourcesService {
     }
 
     return {
-      data: resources,
+      data: resources.map((resource) => this.normalizeResource(resource)),
       nextCursor,
       hasMore,
+      next_cursor: nextCursor,
+      has_more: hasMore,
     };
   }
 
-  /**
-   * Get resource by ID with user and category info
-   */
-  async getById(id: number): Promise<Resource> {
+  async getById(id: number): Promise<any> {
     const resource = await this.resourceRepository.findOne({
       where: { id },
       relations: ['user', 'category'],
     });
 
     if (!resource) {
-      throw new NotFoundException('资源不存在');
+      throw new NotFoundException('Resource does not exist');
     }
 
-    return resource;
+    return this.normalizeResource(resource);
   }
 
-  /**
-   * Get resource by ID with versions
-   */
-  async getByIdWithVersions(id: number): Promise<Resource & { versions: ResourceVersion[] }> {
-    const resource = await this.getById(id);
+  async getByIdWithVersions(id: number): Promise<any> {
+    const resource = await this.resourceRepository.findOne({
+      where: { id },
+      relations: ['user', 'category'],
+    });
+
+    if (!resource) {
+      throw new NotFoundException('Resource does not exist');
+    }
 
     const versions = await this.versionRepository.find({
       where: { resource_id: id },
       order: { created_at: 'DESC' },
     });
 
-    return {
-      ...resource,
-      versions,
-    };
+    return this.normalizeResource(resource, versions);
   }
 
-  /**
-   * Increment download count
-   */
   async incrementDownload(id: number): Promise<void> {
     await this.resourceRepository.increment({ id }, 'download_count', 1);
   }
 
-  /**
-   * Get resources by user ID with cursor pagination
-   */
   async getByUserId(
     userId: number,
     limit: number = 20,
     cursor?: string,
-  ): Promise<{
-    data: Resource[];
-    nextCursor: string | null;
-    hasMore: boolean;
-  }> {
+  ): Promise<any> {
     const where: any = { user_id: userId };
 
     let cursorCondition: any = {};
@@ -245,8 +277,8 @@ export class ResourcesService {
           { created_at: LessThan(cursorValue) },
           { created_at: cursorValue, id: LessThan(idValue) },
         ];
-      } catch (e) {
-        // Invalid cursor, ignore
+      } catch {
+        // Ignore invalid cursors.
       }
     }
 
@@ -259,10 +291,10 @@ export class ResourcesService {
         created_at: 'DESC',
         id: 'DESC',
       },
-      take: limit + 1,
+      take: Number(limit) + 1,
     });
 
-    const hasMore = resources.length > limit;
+    const hasMore = resources.length > Number(limit);
     if (hasMore) {
       resources.pop();
     }
@@ -275,16 +307,15 @@ export class ResourcesService {
     }
 
     return {
-      data: resources,
+      data: resources.map((resource) => this.normalizeResource(resource)),
       nextCursor,
       hasMore,
+      next_cursor: nextCursor,
+      has_more: hasMore,
     };
   }
 
-  /**
-   * Update resource (owner only)
-   */
-  async update(id: number, userId: number, dto: UpdateResourceDto): Promise<Resource | null> {
+  async update(id: number, userId: number, dto: UpdateResourceDto): Promise<any> {
     return this.dataSource.transaction(async (manager) => {
       const resource = await manager.findOne(Resource, {
         where: { id },
@@ -292,33 +323,33 @@ export class ResourcesService {
       });
 
       if (!resource) {
-        throw new NotFoundException('资源不存在');
+        throw new NotFoundException('Resource does not exist');
       }
 
       if (resource.user_id !== userId) {
-        throw new ForbiddenException('无权限编辑此资源');
+        throw new ForbiddenException('No permission to edit this resource');
       }
 
-      // Validate category if changing
-      if (dto.category_id && dto.category_id !== resource.category_id) {
+      const categoryId = this.toOptionalNumber((dto as any).category_id);
+      if (categoryId && categoryId !== resource.category_id) {
         const category = await manager.findOne(ResourceCategory, {
-          where: { id: dto.category_id },
+          where: { id: categoryId },
         });
         if (!category) {
-          throw new BadRequestException('分类不存在');
+          throw new BadRequestException('Category does not exist');
         }
       }
 
-      // Build update data
       const updateData: Partial<Resource> = {};
 
       if (dto.title) updateData.title = dto.title;
       if (dto.description !== undefined) updateData.description = dto.description;
       if (dto.resource_type) {
-        if (!['upload', 'external'].includes(dto.resource_type)) {
-          throw new BadRequestException('无效的资源类型');
+        const resourceType = this.normalizeResourceType(dto.resource_type);
+        if (!['upload', 'external'].includes(resourceType)) {
+          throw new BadRequestException('Invalid resource type');
         }
-        updateData.resource_type = dto.resource_type;
+        updateData.resource_type = resourceType;
       }
       if (dto.external_url !== undefined) updateData.external_url = dto.external_url;
       if (dto.version !== undefined) updateData.version = dto.version;
@@ -326,8 +357,10 @@ export class ResourcesService {
         updateData.content = dto.content;
         updateData.content_html = parseMarkdown(dto.content);
       }
-      if (dto.category_id !== undefined) updateData.category_id = dto.category_id;
-      if (dto.is_public !== undefined) updateData.is_public = dto.is_public;
+      if ((dto as any).category_id !== undefined) updateData.category_id = categoryId;
+      if ((dto as any).is_public !== undefined) {
+        updateData.is_public = this.toTinyInt((dto as any).is_public, resource.is_public);
+      }
 
       await manager.update(Resource, id, updateData);
 
@@ -336,13 +369,14 @@ export class ResourcesService {
         relations: ['user', 'category'],
       });
 
-      return result;
+      if (!result) {
+        throw new NotFoundException('Resource does not exist');
+      }
+
+      return this.normalizeResource(result);
     });
   }
 
-  /**
-   * Delete resource (owner only, delete file from disk)
-   */
   async delete(id: number, userId: number): Promise<void> {
     const resource = await this.resourceRepository.findOne({
       where: { id },
@@ -350,68 +384,48 @@ export class ResourcesService {
     });
 
     if (!resource) {
-      throw new NotFoundException('资源不存在');
+      throw new NotFoundException('Resource does not exist');
     }
 
     if (resource.user_id !== userId) {
-      throw new ForbiddenException('无权限删除此资源');
+      throw new ForbiddenException('No permission to delete this resource');
     }
 
-    // Delete file from disk if it's an upload type
-    if (resource.resource_type === 'upload' && resource.file_path) {
-      try {
-        const filePath = path.resolve(resource.file_path);
-        await fs.unlink(filePath);
-      } catch (err) {
-        // File might not exist, continue
-        console.warn(`File not found: ${resource.file_path}`);
-      }
+    await this.deleteStoredFile(resource.file_path);
+
+    const versions = await this.versionRepository.find({ where: { resource_id: id } });
+    for (const version of versions) {
+      await this.deleteStoredFile(version.file_path);
     }
 
-    // Delete versions
     await this.versionRepository.delete({ resource_id: id });
-
-    // Delete resource
     await this.resourceRepository.delete(id);
   }
 
-  /**
-   * Admin delete resource (delete file from disk)
-   */
   async adminDelete(id: number): Promise<void> {
     const resource = await this.resourceRepository.findOne({
       where: { id },
     });
 
     if (!resource) {
-      throw new NotFoundException('资源不存在');
+      throw new NotFoundException('Resource does not exist');
     }
 
-    // Delete file from disk if it's an upload type
-    if (resource.resource_type === 'upload' && resource.file_path) {
-      try {
-        const filePath = path.resolve(resource.file_path);
-        await fs.unlink(filePath);
-      } catch (err) {
-        // File might not exist, continue
-        console.warn(`File not found: ${resource.file_path}`);
-      }
+    await this.deleteStoredFile(resource.file_path);
+
+    const versions = await this.versionRepository.find({ where: { resource_id: id } });
+    for (const version of versions) {
+      await this.deleteStoredFile(version.file_path);
     }
 
-    // Delete versions
     await this.versionRepository.delete({ resource_id: id });
-
-    // Delete resource
     await this.resourceRepository.delete(id);
   }
 
-  /**
-   * Update resource status (admin/mod)
-   */
-  async updateStatus(id: number, status: string): Promise<Resource> {
+  async updateStatus(id: number, status: string): Promise<any> {
     const validStatuses = ['pending', 'approved', 'rejected'];
     if (!validStatuses.includes(status)) {
-      throw new BadRequestException('无效的状态');
+      throw new BadRequestException('Invalid status');
     }
 
     await this.resourceRepository.update(id, { status });
@@ -422,15 +436,12 @@ export class ResourcesService {
     });
 
     if (!resource) {
-      throw new NotFoundException('资源不存在');
+      throw new NotFoundException('Resource does not exist');
     }
 
-    return resource;
+    return this.normalizeResource(resource);
   }
 
-  /**
-   * Count resources by status
-   */
   async countByStatus(status: string): Promise<number> {
     return this.resourceRepository.count({
       where: { status },

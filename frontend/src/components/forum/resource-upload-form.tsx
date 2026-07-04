@@ -37,11 +37,11 @@ export default function ResourceUploadForm() {
     try {
       const formData = new FormData();
       formData.append('title', title.trim());
-      formData.append('resource_type', 'file');
-      if (version) formData.append('version', version);
+      formData.append('resource_type', 'upload');
+      if (version.trim()) formData.append('version', version.trim());
       if (categoryId) formData.append('category_id', String(categoryId));
-      formData.append('is_public', String(isPublic));
-      if (content) formData.append('content', content);
+      formData.append('is_public', isPublic ? '1' : '0');
+      if (content.trim()) formData.append('content', content);
       formData.append('file', file);
 
       const resource = await resourceApi.upload(formData);
@@ -74,7 +74,7 @@ export default function ResourceUploadForm() {
         label="版本号"
         value={version}
         onChange={(e) => setVersion(e.target.value)}
-        placeholder="例如: 1.0、v2.0（可选）"
+        placeholder="例如：1.0、v2.0"
         maxLength={50}
       />
 
@@ -86,8 +86,8 @@ export default function ResourceUploadForm() {
           className="w-full px-4 py-2 bg-[var(--bg-elevated)] text-[var(--text)] border border-[var(--border)] rounded-[var(--radius)]"
         >
           <option value="">不选择</option>
-          {categories.filter(c => c.is_active).map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+          {categories.filter((category) => category.is_active).map((category) => (
+            <option key={category.id} value={category.id}>{category.name}</option>
           ))}
         </select>
       </div>
@@ -120,6 +120,7 @@ export default function ResourceUploadForm() {
           <Upload className="w-6 h-6 text-[var(--text-muted)]" />
           <input
             type="file"
+            accept=".zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
             className="flex-1 text-sm"
           />

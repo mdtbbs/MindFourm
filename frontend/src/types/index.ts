@@ -305,7 +305,7 @@ export interface Resource {
   user_id: number;
   title: string;
   description: string | null;
-  resource_type: 'file' | 'external';
+  resource_type: 'upload' | 'external';
   file_name: string | null;
   file_path: string | null;
   file_size: number;
@@ -343,6 +343,9 @@ export interface ResourceVersion {
   resource_id: number;
   version: string;
   file_path: string | null;
+  file_name: string | null;
+  file_size: number;
+  mime_type: string | null;
   created_at: string;
 }
 

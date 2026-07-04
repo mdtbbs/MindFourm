@@ -14,6 +14,15 @@ export class ResourceVersion {
   @Column({ length: 500, nullable: true })
   file_path: string;
 
+  @Column({ length: 255, nullable: true })
+  file_name: string;
+
+  @Column({ nullable: true })
+  file_size: number;
+
+  @Column({ length: 100, nullable: true })
+  mime_type: string;
+
   @CreateDateColumn()
   created_at: Date;
 }

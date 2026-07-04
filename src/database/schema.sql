@@ -254,7 +254,7 @@ CREATE TABLE IF NOT EXISTS resources (
     user_id INTEGER NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
-    resource_type TEXT NOT NULL DEFAULT 'file',
+    resource_type TEXT NOT NULL DEFAULT 'upload',
     file_name TEXT,
     file_path TEXT,
     file_size INTEGER DEFAULT 0,
@@ -297,6 +297,9 @@ CREATE TABLE IF NOT EXISTS resource_versions (
     resource_id INTEGER NOT NULL,
     version TEXT NOT NULL,
     file_path TEXT,
+    file_name TEXT,
+    file_size INTEGER,
+    mime_type TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
     UNIQUE(resource_id, version)

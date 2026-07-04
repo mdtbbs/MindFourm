@@ -8,6 +8,8 @@ import { PointsService } from './modules/points/points.service';
 import { PluginManagerService } from './modules/plugins/plugin-manager.service';
 import { LevelsService } from './modules/levels/levels.service';
 import { BadgesService } from './modules/badges/badges.service';
+import { SettingsService } from './modules/settings/settings.service';
+import { ResourceCategoryService } from './modules/resources/resource-categories.service';
 import { DataSource } from 'typeorm';
 import { csrfMiddleware } from './common/middleware/csrf.middleware';
 
@@ -68,6 +70,15 @@ async function bootstrap() {
 
   // Initialize database schema if needed
   await initializeDatabase(app.get(DataSource));
+
+  // Initialize default settings after schema creation. This is explicit because
+  // module hooks run before the empty-database bootstrap can create tables.
+  const settingsService = app.get(SettingsService);
+  await settingsService.seedDefaults();
+
+  // Initialize default resource categories for the resource center.
+  const resourceCategoryService = app.get(ResourceCategoryService);
+  await resourceCategoryService.initializeDefaultCategories();
 
   // Initialize default point rules
   const pointsService = app.get(PointsService);

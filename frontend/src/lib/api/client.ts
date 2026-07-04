@@ -709,7 +709,8 @@ export const resourceApi = {
     ),
   getById: (id: number) =>
     request<Resource>(`/api/resources/${id}`),
-  download: (id: number) => `${API_BASE}/api/resources/${id}/download`,
+  download: (id: number, versionId?: number | null) =>
+    `${API_BASE}/api/resources/${id}/download${versionId ? `?version_id=${versionId}` : ''}`,
   upload: (formData: FormData) =>
     request<Resource>('/api/resources', {
       method: 'POST',
@@ -729,7 +730,7 @@ export const resourceApi = {
   getCategories: () =>
     request<ResourceCategory[]>('/api/resources/categories'),
   getVersions: (id: number) =>
-    request<{ versions: ResourceVersion[] }>(`/api/resources/${id}/versions`),
+    request<ResourceVersion[]>(`/api/resources/${id}/versions`),
   addVersion: (id: number, formData: FormData) => {
     clearCache();
     return request<ResourceVersion>(`/api/resources/${id}/versions`, {
@@ -737,11 +738,15 @@ export const resourceApi = {
       body: formData,
     });
   },
+  deleteVersion: (id: number, versionId: number) => {
+    clearCache();
+    return request<void>(`/api/resources/${id}/versions/${versionId}`, { method: 'DELETE' });
+  },
 };
 
 // Resource Category Admin APIs
 export const resourceCategoryApi = {
-  list: () => request<ResourceCategory[]>('/api/resources/categories'),
+  list: () => request<ResourceCategory[]>('/api/resources/categories/admin'),
   create: (data: Omit<ResourceCategory, 'id' | 'created_at'>) => {
     clearCache();
     return request<ResourceCategory>('/api/resources/categories', {

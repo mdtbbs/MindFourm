@@ -10,15 +10,21 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   ParseIntPipe,
-  HttpStatus,
   StreamableFile,
+  BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { mkdirSync, createReadStream } from 'fs';
 import { Response } from 'express';
-import { ResourcesService } from './resources.service';
+import { ResourcesService, ResourceFileMeta } from './resources.service';
 import { ResourceCategoryService } from './resource-categories.service';
 import { ResourceVersionService } from './resource-versions.service';
-import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { QueryResourcesDto } from './dto/query-resources.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
@@ -26,6 +32,84 @@ import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+
+const RESOURCE_UPLOAD_DIR = './uploads/resources';
+const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
+const ALLOWED_RESOURCE_EXTENSIONS = new Set([
+  '.zip',
+  '.rar',
+  '.7z',
+  '.tar',
+  '.gz',
+  '.jar',
+  '.msav',
+  '.msch',
+  '.json',
+  '.hjson',
+  '.txt',
+  '.md',
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+]);
+
+function resourceFileFilter(
+  _req: any,
+  file: Express.Multer.File,
+  callback: (error: Error | null, acceptFile: boolean) => void,
+) {
+  const ext = extname(file.originalname).toLowerCase();
+  if (!ALLOWED_RESOURCE_EXTENSIONS.has(ext)) {
+    callback(new BadRequestException('Resource file type is not allowed'), false);
+    return;
+  }
+
+  callback(null, true);
+}
+
+const resourceUploadInterceptor = FileInterceptor('file', {
+  storage: diskStorage({
+    destination: (_req, _file, callback) => {
+      mkdirSync(RESOURCE_UPLOAD_DIR, { recursive: true });
+      callback(null, RESOURCE_UPLOAD_DIR);
+    },
+    filename: (_req, file, callback) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      callback(null, `${uniqueSuffix}${extname(file.originalname).toLowerCase()}`);
+    },
+  }),
+  limits: { fileSize: MAX_RESOURCE_SIZE },
+  fileFilter: resourceFileFilter,
+});
+
+function toFileMeta(file?: Express.Multer.File): ResourceFileMeta | undefined {
+  if (!file) return undefined;
+  return {
+    file_name: file.originalname,
+    file_path: file.path,
+    file_size: file.size,
+    mime_type: file.mimetype,
+  };
+}
+
+function normalizeCategoryBody(body: any) {
+  return {
+    name: body.name,
+    slug: body.slug,
+    description: body.description || null,
+    icon: body.icon || null,
+    sort_order: body.sort_order === undefined ? 0 : Number(body.sort_order),
+    is_active: body.is_active === false || body.is_active === 'false' ? 0 : 1,
+  };
+}
+
+async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
+  if (!file?.path) return;
+  await fs.unlink(file.path).catch(() => undefined);
+}
 
 @Controller('resources')
 export class ResourcesController {
@@ -35,25 +119,48 @@ export class ResourcesController {
     private readonly versionService: ResourceVersionService,
   ) {}
 
-  /**
-   * GET /api/resources - List approved resources (cursor pagination)
-   */
   @Get()
   async getList(@Query() query: QueryResourcesDto) {
     return this.resourcesService.getList(query);
   }
 
-  /**
-   * GET /api/resources/categories - List categories
-   */
   @Get('categories')
   async listCategories() {
     return this.categoryService.list();
   }
 
-  /**
-   * GET /api/resources/admin - List all statuses (auth, admin/mod)
-   */
+  @Get('categories/admin')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async listAdminCategories() {
+    return this.categoryService.list(true);
+  }
+
+  @Post('categories')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async createCategory(@Body() body: any) {
+    return this.categoryService.create(normalizeCategoryBody(body));
+  }
+
+  @Put('categories/:categoryId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async updateCategory(
+    @Param('categoryId', ParseIntPipe) categoryId: number,
+    @Body() body: any,
+  ) {
+    return this.categoryService.update(categoryId, normalizeCategoryBody(body));
+  }
+
+  @Delete('categories/:categoryId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async deleteCategory(@Param('categoryId', ParseIntPipe) categoryId: number) {
+    await this.categoryService.delete(categoryId);
+    return { message: 'Category deleted successfully' };
+  }
+
   @Get('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')
@@ -61,76 +168,75 @@ export class ResourcesController {
     return this.resourcesService.getList(query);
   }
 
-  /**
-   * GET /api/resources/:id - Detail with versions
-   */
   @Get(':id')
   async getById(@Param('id', ParseIntPipe) id: number) {
     return this.resourcesService.getByIdWithVersions(id);
   }
 
-  /**
-   * GET /api/resources/:id/download - Download file
-   */
   @Get(':id/download')
   async download(
     @Param('id', ParseIntPipe) id: number,
+    @Query('version_id') versionId: string | undefined,
     @Res({ passthrough: true }) res: Response,
   ) {
     const resource = await this.resourcesService.getById(id);
 
-    // Increment download count
-    await this.resourcesService.incrementDownload(id);
-
-    if (resource.resource_type === 'external' && resource.external_url) {
-      // Redirect to external URL
+    if (!versionId && resource.resource_type === 'external' && resource.external_url) {
+      await this.resourcesService.incrementDownload(id);
       return res.redirect(resource.external_url);
     }
 
-    if (!resource.file_path) {
-      throw new Error('文件路径不存在');
+    if (versionId && !Number.isFinite(Number(versionId))) {
+      throw new BadRequestException('Invalid version id');
     }
 
-    const filePath = path.resolve(resource.file_path);
+    const target = versionId
+      ? await this.versionService.getDownloadTarget(id, Number(versionId))
+      : resource;
 
-    // Check file exists
+    if (!target.file_path) {
+      throw new NotFoundException('File path does not exist');
+    }
+
+    const filePath = path.resolve(target.file_path);
     try {
       await fs.access(filePath);
     } catch {
-      throw new Error('文件不存在');
+      throw new NotFoundException('File does not exist');
     }
 
-    // Set headers
+    await this.resourcesService.incrementDownload(id);
+
     res.set({
-      'Content-Type': resource.mime_type || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(resource.file_name || 'file')}"`,
+      'Content-Type': target.mime_type || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(target.file_name || 'file')}"`,
     });
 
-    const file = await fs.readFile(filePath);
-    return new StreamableFile(file);
+    return new StreamableFile(createReadStream(filePath));
   }
 
-  /**
-   * GET /api/resources/:id/versions - List versions
-   */
   @Get(':id/versions')
   async getVersions(@Param('id', ParseIntPipe) id: number) {
     return this.versionService.list(id);
   }
 
-  /**
-   * POST /api/resources - Upload/create (auth)
-   */
   @Post()
   @UseGuards(JwtAuthGuard)
-  async create(@Body() dto: CreateResourceDto, @Req() req: any) {
+  @UseInterceptors(resourceUploadInterceptor)
+  async create(
+    @Body() body: any,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req() req: any,
+  ) {
     const userId = req.user.id;
-    return this.resourcesService.create(dto, userId);
+    try {
+      return await this.resourcesService.create(body, userId, toFileMeta(file));
+    } catch (error) {
+      await cleanupUploadedFile(file);
+      throw error;
+    }
   }
 
-  /**
-   * PUT /api/resources/:id - Update (auth, owner)
-   */
   @Put(':id')
   @UseGuards(JwtAuthGuard)
   async update(
@@ -142,45 +248,48 @@ export class ResourcesController {
     return this.resourcesService.update(id, userId, dto);
   }
 
-  /**
-   * DELETE /api/resources/:id - Delete (auth, owner)
-   */
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   async delete(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const userId = req.user.id;
     await this.resourcesService.delete(id, userId);
-    return { success: true, message: '资源删除成功' };
+    return { message: 'Resource deleted successfully' };
   }
 
-  /**
-   * POST /api/resources/:id/versions - Add version (auth, owner)
-   */
   @Post(':id/versions')
   @UseGuards(JwtAuthGuard)
+  @UseInterceptors(resourceUploadInterceptor)
   async addVersion(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: { version: string; file_path: string },
+    @Body() body: { version?: string },
+    @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: any,
   ) {
     const userId = req.user.id;
-
-    // Verify ownership
-    const resource = await this.resourcesService.getById(id);
-    if (resource.user_id !== userId) {
-      throw new Error('无权限添加版本');
+    try {
+      return await this.versionService.create(
+        { resource_id: id, version: body.version || '' },
+        toFileMeta(file),
+        userId,
+      );
+    } catch (error) {
+      await cleanupUploadedFile(file);
+      throw error;
     }
-
-    return this.versionService.create({
-      resource_id: id,
-      version: dto.version,
-      file_path: dto.file_path,
-    });
   }
 
-  /**
-   * PUT /api/resources/:id/status - Update status (auth, admin/mod)
-   */
+  @Delete(':id/versions/:versionId')
+  @UseGuards(JwtAuthGuard)
+  async deleteVersion(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('versionId', ParseIntPipe) versionId: number,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    await this.versionService.delete(versionId, id, userId);
+    return { message: 'Version deleted successfully' };
+  }
+
   @Put(':id/status')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')
@@ -191,14 +300,11 @@ export class ResourcesController {
     return this.resourcesService.updateStatus(id, status);
   }
 
-  /**
-   * DELETE /api/resources/:id/admin - Admin delete (auth, admin/mod)
-   */
   @Delete(':id/admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')
   async adminDelete(@Param('id', ParseIntPipe) id: number) {
     await this.resourcesService.adminDelete(id);
-    return { success: true, message: '资源删除成功' };
+    return { message: 'Resource deleted successfully' };
   }
 }

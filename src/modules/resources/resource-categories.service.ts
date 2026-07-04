@@ -26,6 +26,27 @@ export class ResourceCategoryService {
     });
   }
 
+  async initializeDefaultCategories(): Promise<void> {
+    const defaults: Array<Partial<ResourceCategory>> = [
+      { name: '插件', slug: 'plugin', description: 'Mindustry 插件/模组', icon: 'Puzzle', sort_order: 1, is_active: 1 },
+      { name: '地图', slug: 'map', description: '游戏地图文件', icon: 'Map', sort_order: 2, is_active: 1 },
+      { name: '服务端', slug: 'server', description: '服务端配置/工具', icon: 'Server', sort_order: 3, is_active: 1 },
+      { name: '材质包', slug: 'texture', description: '游戏材质/皮肤', icon: 'Palette', sort_order: 4, is_active: 1 },
+      { name: '教程', slug: 'tutorial', description: '游戏/搭建教程', icon: 'BookOpen', sort_order: 5, is_active: 1 },
+      { name: '工具', slug: 'tool', description: '辅助工具', icon: 'Wrench', sort_order: 6, is_active: 1 },
+      { name: '其他', slug: 'other', description: '其他资源', icon: 'FileText', sort_order: 7, is_active: 1 },
+    ];
+
+    for (const category of defaults) {
+      const existing = await this.categoryRepository.findOne({
+        where: { slug: category.slug },
+      });
+      if (!existing) {
+        await this.categoryRepository.save(this.categoryRepository.create(category));
+      }
+    }
+  }
+
   /**
    * Get category by ID
    */
