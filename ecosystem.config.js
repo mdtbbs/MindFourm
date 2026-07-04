@@ -2,7 +2,8 @@ module.exports = {
   apps: [
     {
       name: 'mindforum-api',
-      script: 'src/index.js',
+      script: 'dist/main.js',
+      cwd: './',
       instances: 2,
       exec_mode: 'cluster',
       watch: false,

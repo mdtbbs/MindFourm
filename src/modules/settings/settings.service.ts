@@ -1,10 +1,11 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '@entities/index';
 
 @Injectable()
 export class SettingsService implements OnModuleInit {
+  private readonly logger = new Logger(SettingsService.name);
   private settingsCache: Map<string, Setting> = new Map();
 
   constructor(
@@ -13,8 +14,12 @@ export class SettingsService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seedDefaults();
-    await this.loadSettings();
+    try {
+      await this.seedDefaults();
+      await this.loadSettings();
+    } catch (error) {
+      this.logger.warn(`Settings initialization deferred: ${(error as Error).message}`);
+    }
   }
 
   /**
