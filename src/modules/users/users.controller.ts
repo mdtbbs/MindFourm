@@ -11,12 +11,62 @@ import {
   UseInterceptors,
   UploadedFile,
   UseGuards,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import { mkdirSync } from 'fs';
+import * as fs from 'fs/promises';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
+
+const AVATAR_UPLOAD_DIR = './uploads/avatars';
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
+const ALLOWED_AVATAR_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+const ALLOWED_AVATAR_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
+function avatarFileFilter(
+  _req: any,
+  file: Express.Multer.File,
+  callback: (error: Error | null, acceptFile: boolean) => void,
+) {
+  const ext = extname(file.originalname).toLowerCase();
+  if (!ALLOWED_AVATAR_MIME_TYPES.has(file.mimetype) || !ALLOWED_AVATAR_EXTENSIONS.has(ext)) {
+    callback(new BadRequestException('Avatar file type is not allowed'), false);
+    return;
+  }
+
+  callback(null, true);
+}
+
+const avatarUploadInterceptor = FileInterceptor('avatar', {
+  storage: diskStorage({
+    destination: (_req, _file, callback) => {
+      mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
+      callback(null, AVATAR_UPLOAD_DIR);
+    },
+    filename: (_req, file, callback) => {
+      const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+      callback(null, `${uniqueSuffix}${extname(file.originalname).toLowerCase()}`);
+    },
+  }),
+  limits: { fileSize: MAX_AVATAR_SIZE },
+  fileFilter: avatarFileFilter,
+});
+
+async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
+  if (!file?.path) return;
+  await fs.unlink(file.path).catch(() => undefined);
+}
 
 @Controller('users')
 export class UsersController {
@@ -31,7 +81,7 @@ export class UsersController {
     const userId = req.user?.id;
 
     if (!userId) {
-      throw new Error('Not authenticated');
+      throw new UnauthorizedException('Not authenticated');
     }
 
     return this.usersService.getById(userId);
@@ -43,7 +93,7 @@ export class UsersController {
     const userId = req.user?.id;
 
     if (!userId) {
-      throw new Error('Not authenticated');
+      throw new UnauthorizedException('Not authenticated');
     }
 
     const user = await this.usersService.updateProfile(userId, dto);
@@ -56,28 +106,32 @@ export class UsersController {
 
   @Post('me/avatar')
   @UseGuards(JwtAuthGuard)
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(avatarUploadInterceptor)
   async uploadAvatar(@Req() req: any, @UploadedFile() file: Express.Multer.File) {
     const userId = req.user?.id;
 
     if (!userId) {
-      throw new Error('Not authenticated');
+      await cleanupUploadedFile(file);
+      throw new UnauthorizedException('Not authenticated');
     }
 
     if (!file) {
-      throw new Error('No file uploaded');
+      throw new BadRequestException('No file uploaded');
     }
 
-    // In a real implementation, you'd upload to storage and get a URL
-    // For now, we'll use a local path
     const avatarUrl = `/uploads/avatars/${file.filename}`;
 
-    const user = await this.usersService.updateAvatar(userId, avatarUrl);
-    await this.logOperation(req, 'user.avatar.upload', 'user', userId, {
-      avatar_status: user.avatar_status,
-      pending: user.avatar_status === 'pending',
-    });
-    return user;
+    try {
+      const user = await this.usersService.updateAvatar(userId, avatarUrl);
+      await this.logOperation(req, 'user.avatar.upload', 'user', userId, {
+        avatar_status: user.avatar_status,
+        pending: user.avatar_status === 'pending',
+      });
+      return user;
+    } catch (error) {
+      await cleanupUploadedFile(file);
+      throw error;
+    }
   }
 
   @Delete('me/avatar')
@@ -86,7 +140,7 @@ export class UsersController {
     const userId = req.user?.id;
 
     if (!userId) {
-      throw new Error('Not authenticated');
+      throw new UnauthorizedException('Not authenticated');
     }
 
     const user = await this.usersService.removeAvatar(userId);
@@ -100,7 +154,7 @@ export class UsersController {
     const userId = req.user?.id;
 
     if (!userId) {
-      throw new Error('Not authenticated');
+      throw new UnauthorizedException('Not authenticated');
     }
 
     return this.usersService.getRepliesByUserId(userId, page || 1, limit || 20);

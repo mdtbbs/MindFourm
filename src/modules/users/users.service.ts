@@ -7,6 +7,8 @@ import { Reply } from '../../entities/reply.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { escapeLike } from '@common/utils/search.util';
 import { SettingsService } from '../settings/settings.service';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 @Injectable()
 export class UsersService {
@@ -19,6 +21,13 @@ export class UsersService {
     private replyRepository: Repository<Reply>,
     private settingsService: SettingsService,
   ) {}
+
+  private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
+    if (!avatarUrl?.startsWith('/uploads/avatars/')) return;
+
+    const filePath = path.resolve(`.${avatarUrl}`);
+    await fs.unlink(filePath).catch(() => undefined);
+  }
 
   async getById(id: number): Promise<User & { post_count?: number; reply_count?: number }> {
     const user = await this.userRepository.findOne({ where: { id } });
@@ -78,9 +87,12 @@ export class UsersService {
     }
 
     if (await this.settingsService.getBoolean('require_avatar_approval', true)) {
+      await this.deleteLocalAvatar(user.pending_avatar_url);
       user.pending_avatar_url = avatarUrl;
       user.avatar_status = 'pending';
     } else {
+      await this.deleteLocalAvatar(user.avatar_url);
+      await this.deleteLocalAvatar(user.pending_avatar_url);
       user.avatar_url = avatarUrl;
       user.pending_avatar_url = null;
       user.avatar_status = 'approved';
@@ -96,7 +108,10 @@ export class UsersService {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
-    user.avatar_url = '' as any;
+    await this.deleteLocalAvatar(user.avatar_url);
+    await this.deleteLocalAvatar(user.pending_avatar_url);
+
+    user.avatar_url = null as any;
     user.pending_avatar_url = null;
     user.avatar_status = 'approved';
     return this.userRepository.save(user);

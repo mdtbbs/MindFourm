@@ -48,16 +48,25 @@ export default function ProfileEditPage() {
   };
 
   const handleAvatarUpload = async (file: File) => {
+    setError(null);
+    setMessage(null);
     const formData = new FormData();
     formData.append('avatar', file);
     const result = await userApi.uploadAvatar(formData);
-    if (!result?.avatar_url) throw new Error('上传失败：服务器未返回头像URL');
-    setProfile((prev) => prev ? { ...prev, avatar_url: result.avatar_url } : null);
+    setProfile(result);
+    if (result.avatar_status === 'pending') {
+      setMessage('头像已上传，等待管理员审核');
+    } else if (result.avatar_status === 'approved') {
+      setMessage('头像已更新');
+    }
   };
 
   const handleAvatarRemove = async () => {
-    await userApi.removeAvatar();
-    setProfile((prev) => prev ? { ...prev, avatar_url: null } : null);
+    setError(null);
+    setMessage(null);
+    const result = await userApi.removeAvatar();
+    setProfile(result);
+    setMessage('头像已删除');
   };
 
   if (!profile) {

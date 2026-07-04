@@ -200,6 +200,8 @@ export interface UserProfile {
   email: string | null;
   role: UserRole;
   avatar_url: string | null;
+  pending_avatar_url?: string | null;
+  avatar_status?: 'approved' | 'pending' | 'rejected';
   bio: string | null;
   created_at: string;
   post_count: number;

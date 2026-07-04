@@ -591,12 +591,12 @@ export const userApi = {
       body: JSON.stringify(data),
     }),
   uploadAvatar: (formData: FormData) =>
-    request<{ avatar_url: string }>('/api/users/me/avatar', {
+    request<UserProfile>('/api/users/me/avatar', {
       method: 'POST',
       body: formData,
     }),
   removeAvatar: () =>
-    request<void>('/api/users/me/avatar', { method: 'DELETE' }),
+    request<UserProfile>('/api/users/me/avatar', { method: 'DELETE' }),
   getMyReplies: (params?: { page?: number; limit?: number }) =>
     request<ReplyListResponse>(`/api/users/me/replies${buildQueryString({
       page: params?.page,

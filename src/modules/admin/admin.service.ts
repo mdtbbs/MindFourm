@@ -9,6 +9,8 @@ import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
 import { PointsService } from '../points/points.service';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 @Injectable()
 export class AdminService {
@@ -40,6 +42,11 @@ export class AdminService {
     private tagsService: TagsService,
     private pointsService: PointsService,
   ) {}
+
+  private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
+    if (!avatarUrl?.startsWith('/uploads/avatars/')) return;
+    await fs.unlink(path.resolve(`.${avatarUrl}`)).catch(() => undefined);
+  }
 
   /**
    * Get dashboard statistics (delegate to StatsService)
@@ -359,6 +366,7 @@ export class AdminService {
     if (!user.pending_avatar_url) {
       throw new BadRequestException('No pending avatar');
     }
+    await this.deleteLocalAvatar(user.avatar_url);
     user.avatar_url = user.pending_avatar_url;
     user.pending_avatar_url = null;
     user.avatar_status = 'approved';
@@ -366,6 +374,11 @@ export class AdminService {
   }
 
   async rejectAvatar(userId: number): Promise<void> {
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    await this.deleteLocalAvatar(user.pending_avatar_url);
     await this.userRepository.update(userId, {
       pending_avatar_url: null,
       avatar_status: 'rejected',
