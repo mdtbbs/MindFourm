@@ -82,7 +82,7 @@ async function fetchPosts(page: number, limit: number, categoryId?: number): Pro
     qs.set('limit', String(limit));
     if (categoryId) qs.set('category_id', String(categoryId));
 
-    const res = await fetch(`${API_BASE}/api/posts?${qs}`, { next: { tags: ['posts'] } });
+    const res = await fetch(`${API_BASE}/api/posts?${qs}`, { cache: 'no-store' });
     if (!res.ok) return { ...emptyPosts, pagination: { ...emptyPosts.pagination, limit } };
 
     const json = await res.json();

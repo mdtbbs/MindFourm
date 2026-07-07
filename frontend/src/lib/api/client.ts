@@ -77,6 +77,7 @@ const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
 function getCacheKey(path: string, options: RequestInit): string | null {
   if (options.method && options.method !== 'GET') return null;
+  if (path.startsWith('/api/admin')) return null;
   return `${options.method || 'GET'}:${path}`;
 }
 
@@ -405,6 +406,15 @@ export const tagApi = {
 
 // Admin APIs
 export const adminApi = {
+  getPosts: (params?: { page?: number; limit?: number; status?: string; category_id?: number }) =>
+    request<{ data: Post[]; pagination: PostListResponse['pagination'] }>(
+      `/api/admin/posts${buildQueryString({
+        page: params?.page,
+        limit: params?.limit,
+        status: params?.status,
+        category_id: params?.category_id,
+      })}`
+    ),
   createCategory: (data: { name: string; slug: string; sort_order?: number }) => {
     clearCache();
     return request<Category>('/api/admin/categories', {
@@ -483,13 +493,19 @@ export const adminApi = {
     request<{ data: ModerationItem[]; pagination: PostListResponse['pagination'] }>(
       `/api/admin/moderation${buildQueryString({ page: params?.page, limit: params?.limit, type: params?.type })}`
     ),
-  approvePost: (id: number) => {
+  approvePost: (id: number, type: string = 'post') => {
     clearCache();
-    return request<{ message: string }>(`/api/admin/moderation/${id}/approve`, { method: 'PUT' });
+    return request<{ message: string }>(`/api/admin/moderation/${id}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ type }),
+    });
   },
-  rejectPost: (id: number) => {
+  rejectPost: (id: number, type: string = 'post') => {
     clearCache();
-    return request<{ message: string }>(`/api/admin/moderation/${id}/reject`, { method: 'PUT' });
+    return request<{ message: string }>(`/api/admin/moderation/${id}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ type }),
+    });
   },
   getBans: (params?: { page?: number; limit?: number; ban_type?: string; is_active?: string }) =>
     request<AdminBanListResponse>(`/api/admin/bans${buildQueryString({ page: params?.page, limit: params?.limit, ban_type: params?.ban_type, is_active: params?.is_active })}`),

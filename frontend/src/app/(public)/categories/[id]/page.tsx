@@ -12,7 +12,7 @@ const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchPosts(page: number, categoryId: number): Promise<PostListResponse> {
   try {
-    const res = await fetch(`${API_BASE}/api/posts?page=${page}&limit=20&category_id=${categoryId}`, { next: { tags: ['posts'] } });
+    const res = await fetch(`${API_BASE}/api/posts?page=${page}&limit=20&category_id=${categoryId}`, { cache: 'no-store' });
     if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
