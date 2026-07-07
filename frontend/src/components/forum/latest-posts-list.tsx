@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Eye, MessageSquare, Pin, ThumbsUp } from 'lucide-react';
 import { Post } from '@/types';
 import { cn } from '@/lib/utils';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 
 interface LatestPostsSettings {
   title: string;
@@ -61,13 +62,21 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
       <div className="border-b border-[var(--border)] bg-[#f7fbff] px-4 py-3 sm:px-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-[var(--foreground)]">
-              {settings.title}
-            </h2>
+            <div
+              role="heading"
+              aria-level={2}
+              className="text-base font-semibold text-[var(--foreground)]"
+            >
+              <MarkdownRenderer
+                content={settings.title}
+                className="[&_p]:m-0 [&_p]:text-inherit [&_p]:font-inherit [&_h1]:m-0 [&_h1]:text-inherit [&_h1]:font-inherit [&_h2]:m-0 [&_h2]:text-inherit [&_h2]:font-inherit [&_h3]:m-0 [&_h3]:text-inherit [&_h3]:font-inherit"
+              />
+            </div>
             {settings.description && (
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">
-                {settings.description}
-              </p>
+              <MarkdownRenderer
+                content={settings.description}
+                className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)] [&_p]:my-0 [&_p+p]:mt-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0"
+              />
             )}
           </div>
           <Link
@@ -92,7 +101,10 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                 comfortable
                   ? 'py-4 sm:grid-cols-[3rem_minmax(0,1fr)_9rem]'
                   : 'py-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_8rem]',
-                !settings.showIndex && (comfortable ? 'sm:grid-cols-[minmax(0,1fr)_9rem]' : 'sm:grid-cols-[minmax(0,1fr)_8rem]')
+                !settings.showIndex
+                  && (comfortable
+                    ? 'sm:grid-cols-[minmax(0,1fr)_9rem]'
+                    : 'sm:grid-cols-[minmax(0,1fr)_8rem]'),
               )}
             >
               {settings.showIndex && (
@@ -100,7 +112,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                   <div
                     className={cn(
                       'border-l-2 pl-2 font-mono text-xs text-[var(--muted-foreground)]',
-                      post.is_pinned && 'font-semibold text-[var(--latest-accent)]'
+                      post.is_pinned && 'font-semibold text-[var(--latest-accent)]',
                     )}
                     style={{ borderColor: post.is_pinned ? 'var(--latest-accent)' : 'var(--border)' }}
                   >
@@ -130,7 +142,12 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                 </div>
 
                 {settings.showExcerpt && excerpt && (
-                  <p className={cn('mt-1 text-sm leading-6 text-[var(--muted-foreground)]', comfortable ? 'line-clamp-2' : 'line-clamp-1')}>
+                  <p
+                    className={cn(
+                      'mt-1 text-sm leading-6 text-[var(--muted-foreground)]',
+                      comfortable ? 'line-clamp-2' : 'line-clamp-1',
+                    )}
+                  >
                     {excerpt}
                   </p>
                 )}

@@ -59,26 +59,34 @@ export class AdminService {
    * Get moderation badge counts
    */
   async getBadgeCounts(): Promise<{
+    moderation_pending: number;
+    announce_active: number;
     pending_posts: number;
     pending_replies: number;
     pending_avatars: number;
     show_announce: boolean;
   }> {
-    const pending_posts = await this.postRepository.count({
-      where: { status: 'pending' },
-    });
+    const [pending_posts, pending_replies, pending_avatars, announceEnabled, legacyAnnounceSetting] =
+      await Promise.all([
+        this.postRepository.count({
+          where: { status: 'pending' },
+        }),
+        this.replyRepository.count({
+          where: { status: 'pending' },
+        }),
+        this.userRepository.count({
+          where: { avatar_status: 'pending' },
+        }),
+        this.settingsService.get('announce_enabled'),
+        this.settingsService.get('show_announcement'),
+      ]);
 
-    const pending_replies = await this.replyRepository.count({
-      where: { status: 'pending' },
-    });
-    const pending_avatars = await this.userRepository.count({
-      where: { avatar_status: 'pending' },
-    });
-
-    const announce_setting = await this.settingsService.get('show_announcement');
-    const show_announce = announce_setting === 'true';
+    const show_announce = announceEnabled === 'true'
+      || (announceEnabled === null && legacyAnnounceSetting === 'true');
 
     return {
+      moderation_pending: pending_posts + pending_replies + pending_avatars,
+      announce_active: show_announce ? 1 : 0,
       pending_posts,
       pending_replies,
       pending_avatars,

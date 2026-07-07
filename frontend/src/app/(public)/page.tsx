@@ -1,13 +1,35 @@
-import Sidebar from '@/components/forum/sidebar';
-import Pagination from '@/components/ui/pagination';
-import ServerSection from '@/components/forum/server-section';
-import { Category, Tag, PostListResponse } from '@/types';
 import Link from 'next/link';
+import Sidebar from '@/components/forum/sidebar';
+import ServerSection from '@/components/forum/server-section';
 import LatestPostsList, { LatestPostsSettings } from '@/components/forum/latest-posts-list';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import Pagination from '@/components/ui/pagination';
+import { Category, PostListResponse, Tag } from '@/types';
 
 export const revalidate = 30;
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
+
+interface ForumOverviewStats {
+  total_posts: number;
+  total_replies: number;
+  total_users: number;
+  total_resources: number;
+  latest_user: string | null;
+}
+
+const emptyPosts: PostListResponse = {
+  data: [],
+  pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
+};
+
+const emptyOverview: ForumOverviewStats = {
+  total_posts: 0,
+  total_replies: 0,
+  total_users: 0,
+  total_resources: 0,
+  latest_user: null,
+};
 
 async function fetchCategories(): Promise<Category[]> {
   try {
@@ -42,16 +64,30 @@ async function fetchSettings(): Promise<Record<string, string>> {
   }
 }
 
+async function fetchForumOverview(): Promise<ForumOverviewStats> {
+  try {
+    const res = await fetch(`${API_BASE}/api/stats/overview`, { next: { revalidate: 30 } });
+    if (!res.ok) return emptyOverview;
+    const json = await res.json();
+    return json.success ? { ...emptyOverview, ...json.data } : emptyOverview;
+  } catch {
+    return emptyOverview;
+  }
+}
+
 async function fetchPosts(page: number, limit: number, categoryId?: number): Promise<PostListResponse> {
   try {
     const qs = new URLSearchParams();
     qs.set('page', String(page));
     qs.set('limit', String(limit));
     if (categoryId) qs.set('category_id', String(categoryId));
+
     const res = await fetch(`${API_BASE}/api/posts?${qs}`, { next: { tags: ['posts'] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
+    if (!res.ok) return { ...emptyPosts, pagination: { ...emptyPosts.pagination, limit } };
+
     const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
+    if (!json.success) return { ...emptyPosts, pagination: { ...emptyPosts.pagination, limit } };
+
     const responseData = json.data || {};
     return {
       data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
@@ -63,7 +99,7 @@ async function fetchPosts(page: number, limit: number, categoryId?: number): Pro
       },
     };
   } catch {
-    return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
+    return { ...emptyPosts, pagination: { ...emptyPosts.pagination, limit } };
   }
 }
 
@@ -90,27 +126,40 @@ function parseLatestPostsSettings(settings: Record<string, string>): LatestPosts
   };
 }
 
+function formatStatValue(value: number): string {
+  return value.toLocaleString('zh-CN');
+}
+
 export default async function HomePage({
   searchParams,
 }: {
   searchParams: { page?: string; category_id?: string };
 }) {
-  const page = parseInt(searchParams.page || '1');
-  const categoryId = searchParams.category_id ? parseInt(searchParams.category_id) : undefined;
+  const page = parseInt(searchParams.page || '1', 10);
+  const categoryId = searchParams.category_id ? parseInt(searchParams.category_id, 10) : undefined;
 
   const settings = await fetchSettings();
-  const postsPerPage = parseInt(settings?.posts_per_page || '20');
+  const postsPerPage = parseInt(settings.posts_per_page || '20', 10);
   const latestPostsSettings = parseLatestPostsSettings(settings);
 
-  const [categories, tags, postsResult] = await Promise.all([
+  const [categories, tags, postsResult, forumOverview] = await Promise.all([
     fetchCategories(),
     fetchTags(),
     fetchPosts(page, postsPerPage, categoryId),
+    fetchForumOverview(),
   ]);
 
   const activeCategoryName = categoryId
-    ? categories.find((c) => c.id === categoryId)?.name || '分类'
-    : '最新帖子';
+    ? categories.find((category) => category.id === categoryId)?.name || '分类'
+    : latestPostsSettings.title;
+  const heroDescription = latestPostsSettings.description;
+  const statCards = [
+    { label: '已注册用户', value: formatStatValue(forumOverview.total_users) },
+    { label: '消息', value: formatStatValue(forumOverview.total_replies) },
+    { label: '主题', value: formatStatValue(forumOverview.total_posts) },
+    { label: '资源', value: formatStatValue(forumOverview.total_resources) },
+    { label: '最新用户', value: forumOverview.latest_user || '暂无' },
+  ];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -120,26 +169,34 @@ export default async function HomePage({
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
               MindForum
             </p>
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
-              {activeCategoryName}
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">
-              浅蓝、直角、低噪音的论坛界面，重点放在帖子层级和浏览效率。
-            </p>
+            <div className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+              <MarkdownRenderer
+                content={activeCategoryName}
+                className="[&_p]:m-0 [&_p]:text-inherit [&_p]:font-inherit [&_h1]:m-0 [&_h1]:text-inherit [&_h1]:font-inherit [&_h2]:m-0 [&_h2]:text-inherit [&_h2]:font-inherit [&_h3]:m-0 [&_h3]:text-inherit [&_h3]:font-inherit"
+              />
+            </div>
+            <MarkdownRenderer
+              content={heroDescription}
+              className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)] [&_p]:my-0 [&_p+p]:mt-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0"
+            />
           </div>
-          <div className="grid gap-3 p-6 sm:grid-cols-3 lg:grid-cols-1">
-            <div className="border border-[var(--border)] bg-[var(--muted)] p-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">帖子</div>
-              <div className="mt-2 text-lg font-semibold text-[var(--foreground)]">{postsResult.pagination.total}</div>
-            </div>
-            <div className="border border-[var(--border)] bg-[var(--muted)] p-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">分类</div>
-              <div className="mt-2 text-lg font-semibold text-[var(--foreground)]">{categories.length}</div>
-            </div>
-            <div className="border border-[var(--border)] bg-[var(--muted)] p-3">
-              <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">标签</div>
-              <div className="mt-2 text-lg font-semibold text-[var(--foreground)]">{tags.length}</div>
-            </div>
+
+          <div className="grid gap-3 p-6 sm:grid-cols-2">
+            {statCards.map((item) => (
+              <div
+                key={item.label}
+                className={`border border-[var(--border)] bg-[var(--muted)] p-3 ${
+                  item.label === '最新用户' ? 'sm:col-span-2' : ''
+                }`}
+              >
+                <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+                  {item.label}
+                </div>
+                <div className="mt-2 truncate text-lg font-semibold text-[var(--foreground)]">
+                  {item.value}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

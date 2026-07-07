@@ -1,8 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Post, Reply, User } from '@entities/index';
+import { Post, Reply, SessionAudit, User } from '@entities/index';
 import { RedisService } from '../../database/redis.service';
+
+export interface DashboardStats {
+  total_posts: number;
+  total_replies: number;
+  total_users: number;
+  active_24h: number;
+  today_posts: number;
+  today_replies: number;
+  today_users: number;
+  activity_7d: number[];
+}
+
+export interface ForumOverviewStats {
+  total_posts: number;
+  total_replies: number;
+  total_users: number;
+  total_resources: number;
+  latest_user: string | null;
+}
 
 @Injectable()
 export class StatsService {
@@ -13,48 +32,87 @@ export class StatsService {
     private replyRepository: Repository<Reply>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(SessionAudit)
+    private sessionAuditRepository: Repository<SessionAudit>,
     private redisService: RedisService,
   ) {}
+
+  private parseCount(value: unknown): number {
+    return Number.parseInt(String(value ?? 0), 10) || 0;
+  }
 
   /**
    * Get dashboard statistics in a single query
    */
-  async getDashboardStats(): Promise<{
-    total_posts: number;
-    total_replies: number;
-    total_users: number;
-    posts_today: number;
-    replies_today: number;
-    active_24h: number;
-  }> {
+  async getDashboardStats(): Promise<DashboardStats> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const yesterday = new Date();
-    yesterday.setHours(0, 0, 0, 0);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    // Single query with subqueries for counts
-    const [stats] = await this.postRepository.query(`
-      SELECT
-        (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
-        (SELECT COUNT(*) FROM replies WHERE status = 'active') as total_replies,
-        (SELECT COUNT(*) FROM users) as total_users,
-        (SELECT COUNT(*) FROM posts WHERE status = 'published' AND created_at >= ?) as posts_today,
-        (SELECT COUNT(*) FROM replies WHERE status = 'active' AND created_at >= ?) as replies_today
-    `, [today, today]);
-
-    // Count active sessions from Redis
-    const sessionKeys = await this.redisService.keys('session:*');
-    const active_24h = sessionKeys.length;
+    const [statsRows, sessionKeys, activity7d] = await Promise.all([
+      this.postRepository.query(`
+        SELECT
+          (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
+          (SELECT COUNT(*) FROM replies WHERE status = 'active') as total_replies,
+          (SELECT COUNT(*) FROM users) as total_users,
+          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND created_at >= ?) as today_posts,
+          (SELECT COUNT(*) FROM replies WHERE status = 'active' AND created_at >= ?) as today_replies,
+          (SELECT COUNT(*) FROM users WHERE created_at >= ?) as today_users
+      `, [today, today, today]),
+      this.redisService.keys('session:*'),
+      this.get7DayActivity(),
+    ]);
+    const [stats] = statsRows;
 
     return {
-      total_posts: parseInt(stats.total_posts, 10),
-      total_replies: parseInt(stats.total_replies, 10),
-      total_users: parseInt(stats.total_users, 10),
-      posts_today: parseInt(stats.posts_today, 10),
-      replies_today: parseInt(stats.replies_today, 10),
-      active_24h,
+      total_posts: this.parseCount(stats?.total_posts),
+      total_replies: this.parseCount(stats?.total_replies),
+      total_users: this.parseCount(stats?.total_users),
+      active_24h: sessionKeys.length,
+      today_posts: this.parseCount(stats?.today_posts),
+      today_replies: this.parseCount(stats?.today_replies),
+      today_users: this.parseCount(stats?.today_users),
+      activity_7d: activity7d.map((row) => row.count),
+    };
+  }
+
+  async getForumOverview(): Promise<ForumOverviewStats> {
+    const [statsRows, latestLoginRows] = await Promise.all([
+      this.postRepository.query(`
+        SELECT
+          (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
+          (SELECT COUNT(*) FROM replies WHERE status = 'active') as total_replies,
+          (SELECT COUNT(*) FROM users) as total_users,
+          (SELECT COUNT(*) FROM resources WHERE status = 'approved') as total_resources
+      `),
+      this.sessionAuditRepository.query(`
+        SELECT u.username
+        FROM session_audit sa
+        INNER JOIN users u ON u.id = sa.user_id
+        WHERE sa.action = 'login'
+        ORDER BY sa.created_at DESC, sa.id DESC
+        LIMIT 1
+      `),
+    ]);
+
+    const latestUserRows = latestLoginRows.length > 0
+      ? latestLoginRows
+      : await this.userRepository.query(`
+        SELECT username
+        FROM users
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      `);
+
+    const [stats] = statsRows;
+
+    return {
+      total_posts: this.parseCount(stats?.total_posts),
+      total_replies: this.parseCount(stats?.total_replies),
+      total_users: this.parseCount(stats?.total_users),
+      total_resources: this.parseCount(stats?.total_resources),
+      latest_user: typeof latestUserRows[0]?.username === 'string'
+        ? latestUserRows[0].username
+        : null,
     };
   }
 
