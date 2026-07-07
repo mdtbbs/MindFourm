@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 
@@ -6,6 +6,7 @@ import axios from 'axios';
 export class ServersService {
   private readonly easyManagerUrl: string;
   private readonly serviceKey: string;
+  private readonly logger = new Logger(ServersService.name);
 
   constructor(private configService: ConfigService) {
     this.easyManagerUrl = this.configService.get<string>('easymanager.baseUrl', '');
@@ -28,10 +29,21 @@ export class ServersService {
       );
       return response.data;
     } catch (error) {
-      if (error.response) {
-        throw new BadRequestException(error.response.data?.message || 'Failed to fetch public servers');
-      }
-      throw new BadRequestException('Failed to connect to EasyManager service');
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message || error.message
+        : error instanceof Error
+          ? error.message
+          : 'Unknown error';
+
+      this.logger.warn(
+        `EasyManager public server list unavailable (${status ?? 'network'}): ${message}`
+      );
+
+      return {
+        success: true,
+        servers: [],
+      };
     }
   }
 

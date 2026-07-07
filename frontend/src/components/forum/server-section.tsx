@@ -3,21 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Users, MapPin, Waves } from 'lucide-react';
-
-interface Server {
-  id: number;
-  name: string;
-  port: number;
-  status: 'running' | 'stopped' | 'pending';
-  version: string;
-  players: number;
-  playerList: { name: string }[];
-  mapName: string;
-  wave: number;
-  description?: string;
-}
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+import { serverApi } from '@/lib/api/client';
+import type { Server } from '@/types';
 
 function ServerCard({ server }: { server: Server }) {
   return (
@@ -81,15 +68,22 @@ export function ServerSection() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/servers/public`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.servers) {
-          setServers(data.servers);
-        }
+    let cancelled = false;
+
+    serverApi.getPublicServers()
+      .then((data) => {
+        if (cancelled) return;
+        setServers(Array.isArray(data.servers) ? data.servers : []);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (loading) {
