@@ -537,4 +537,4 @@ EASYMANAGER_API_KEY=<key>
 | Deployment | Docker + Docker Compose, Nginx (reverse proxy + SSL) |
 
 ---
-*Last updated: 2026-06-08*
+*Last updated: 2026-07-05*

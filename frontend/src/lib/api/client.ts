@@ -55,7 +55,16 @@ export function createClientWithCookie(cookie: string) {
       if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
         const d = data as { data: unknown; pagination?: unknown };
         if (d.pagination !== undefined) return d as T;
-        return d.data as T;
+        // Normalize flat pagination format: { data: [...], total, page, limit, totalPages }
+        const inner = d.data;
+        if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) {
+          const innerObj = inner as Record<string, unknown>;
+          if (Array.isArray(innerObj.data) && typeof innerObj.total === 'number') {
+            const { data: items, total, page, limit, totalPages, ...rest } = innerObj;
+            return { data: items, pagination: { total, page, limit, totalPages }, ...rest } as T;
+          }
+        }
+        return inner as T;
       }
       return data as T;
     },
@@ -218,6 +227,17 @@ async function request<T>(
       const result = inner as T;
       if (cacheKey) setCache(cacheKey, result);
       return result;
+    }
+    // Normalize flat pagination format: { data: [...], total, page, limit, totalPages }
+    // → { data: [...], pagination: { total, page, limit, totalPages } }
+    if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) {
+      const innerObj = inner as Record<string, unknown>;
+      if (Array.isArray(innerObj.data) && typeof innerObj.total === 'number') {
+        const { data: items, total, page, limit, totalPages, ...rest } = innerObj;
+        const normalized = { data: items, pagination: { total, page, limit, totalPages }, ...rest } as T;
+        if (cacheKey) setCache(cacheKey, normalized);
+        return normalized;
+      }
     }
     const result = d.data as T;
     if (cacheKey) setCache(cacheKey, result);
@@ -439,8 +459,8 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  getTags: () =>
-    request<Tag[]>('/api/admin/tags'),
+  getTags: (params?: { page?: number; limit?: number }) =>
+    request<{ data: Tag[]; pagination: PostListResponse['pagination'] }>('/api/admin/tags' + buildQueryString(params || {})),
   createTag: (data: { name: string; slug?: string }) => {
     clearCache();
     return request<Tag>('/api/admin/tags', { method: 'POST', body: JSON.stringify(data) });

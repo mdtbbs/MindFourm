@@ -14,7 +14,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: process.env.API_URL || 'http://localhost:4000/api/:path*',
+        destination: process.env.API_URL || 'http://localhost:4500/api/:path*',
       },
     ];
   },
@@ -25,13 +25,13 @@ const nextConfig = {
       {
         protocol: 'http',
         hostname: 'localhost',
-        port: '4000',
+        port: '4500',
         pathname: '/**',
       },
       {
         protocol: 'http',
         hostname: 'localhost',
-        port: '4001',
+        port: '4501',
         pathname: '/**',
       },
       // Production - CDN (optional)

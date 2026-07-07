@@ -37,7 +37,8 @@ export default function Dashboard() {
     { label: '24小时活跃', value: stats?.active_24h ?? '--' },
   ];
 
-  const maxActivity = stats ? Math.max(...stats.activity_7d, 1) : 1;
+  const activity7d = stats?.activity_7d ?? [];
+  const maxActivity = Math.max(...activity7d, 1);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><LoadingSpinner variant="orbital" size="lg" /></div>;
@@ -55,13 +56,13 @@ export default function Dashboard() {
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">7 日活动</h3>
           </div>
           <div className="flex items-end justify-center gap-2 h-36 px-5 py-6">
-            {stats?.activity_7d.map((val, i) => (
+            {activity7d.map((val, i) => (
               <div key={i} className="flex flex-col items-center gap-1">
                 <div className="w-5 bg-[var(--primary)] opacity-60 rounded-sm" style={{ height: `${Math.max((val / maxActivity) * 120, 4)}px` }} />
                 <span className="text-xs text-[var(--text-muted)] font-mono">{chartDays[i]}</span>
               </div>
             ))}
-            {!stats && <span className="text-[var(--text-muted)]">暂无数据</span>}
+            {activity7d.length === 0 && <span className="text-[var(--text-muted)]">暂无数据</span>}
           </div>
         </div>
 

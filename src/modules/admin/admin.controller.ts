@@ -26,6 +26,19 @@ import { BulkPostsDto } from './dto/bulk-posts.dto';
 import { MergeTagsDto } from './dto/merge-tags.dto';
 import { escapeLike } from '@common/utils/search.util';
 
+/** Safely parse a query param to int, falling back to a default when the
+ *  global ValidationPipe turns a missing param into `undefined`/NaN. */
+function toInt(value: unknown, fallback: number): number {
+  const n = parseInt(value as any, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/** Like toInt but returns undefined instead of a fallback. */
+function toIntOpt(value: unknown): number | undefined {
+  const n = parseInt(value as any, 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 @Controller('admin')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AdminController {
@@ -99,7 +112,9 @@ export class AdminController {
     @Query('search') search?: string,
   ) {
     // This would be implemented in UsersService, delegating here for consistency
-    const skip = (parseInt(page as any, 10) - 1) * parseInt(limit as any, 10);
+    const safePage = toInt(page, 1);
+    const safeLimit = toInt(limit, 20);
+    const skip = (safePage - 1) * safeLimit;
 
     const where: any = {};
     if (search) {
@@ -110,8 +125,8 @@ export class AdminController {
     return {
       data: [],
       total: 0,
-      page: parseInt(page as any, 10),
-      limit: parseInt(limit as any, 10),
+      page: safePage,
+      limit: safeLimit,
       totalPages: 0,
     };
   }
@@ -141,10 +156,10 @@ export class AdminController {
     @Query('category_id') category_id?: number,
   ) {
     return this.adminService.getPosts({
-      page: parseInt(page as any, 10),
-      limit: parseInt(limit as any, 10),
+      page: toInt(page, 1),
+      limit: toInt(limit, 20),
       status,
-      category_id: category_id ? parseInt(category_id as any, 10) : undefined,
+      category_id: toIntOpt(category_id),
     });
   }
 
@@ -239,7 +254,7 @@ export class AdminController {
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 20,
   ) {
-    return this.tagsService.findAll(parseInt(page as any, 10), parseInt(limit as any, 10));
+    return this.tagsService.findAll(toInt(page, 1), toInt(limit, 20));
   }
 
   /**
@@ -295,8 +310,8 @@ export class AdminController {
   ) {
     return this.adminService.getModerationQueue(
       type,
-      parseInt(page as any, 10),
-      parseInt(limit as any, 10),
+      toInt(page, 1),
+      toInt(limit, 20),
     );
   }
 
@@ -342,10 +357,10 @@ export class AdminController {
     @Query('is_active') is_active?: number,
   ) {
     return this.bansService.getList({
-      page: parseInt(page as any, 10),
-      limit: parseInt(limit as any, 10),
+      page: toInt(page, 1),
+      limit: toInt(limit, 20),
       ban_type,
-      is_active: is_active !== undefined ? parseInt(is_active as any, 10) : undefined,
+      is_active: toIntOpt(is_active),
     });
   }
 
@@ -432,9 +447,9 @@ export class AdminController {
     @Query('target_type') target_type?: string,
   ) {
     return this.logsService.getLogs({
-      page: parseInt(page as any, 10),
-      limit: parseInt(limit as any, 10),
-      user_id: user_id ? parseInt(user_id as any, 10) : undefined,
+      page: toInt(page, 1),
+      limit: toInt(limit, 20),
+      user_id: toIntOpt(user_id),
       action,
       target_type,
     });
