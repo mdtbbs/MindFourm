@@ -115,4 +115,38 @@ describe('SettingsService', () => {
       site_footer: 'Footer text',
     });
   });
+
+  it('groups webhook channel settings under the notifications category', async () => {
+    const { service } = createService([
+      {
+        key: 'admin_notifications_enabled',
+        value: 'true',
+        category: 'notifications',
+        description: 'Enable admin notifications',
+        updated_at: new Date(),
+      },
+      {
+        key: 'admin_notifications_webhook_enabled',
+        value: 'true',
+        category: 'notifications',
+        description: 'Enable admin notification webhooks',
+        updated_at: new Date(),
+      },
+      {
+        key: 'admin_notifications_webhook_url',
+        value: 'https://example.com/hooks/admin',
+        category: 'notifications',
+        description: 'Admin notification webhook URL',
+        updated_at: new Date(),
+      },
+    ]);
+
+    await (service as any).loadSettings();
+
+    await expect(service.getByCategory('notifications')).resolves.toEqual({
+      admin_notifications_enabled: 'true',
+      admin_notifications_webhook_enabled: 'true',
+      admin_notifications_webhook_url: 'https://example.com/hooks/admin',
+    });
+  });
 });

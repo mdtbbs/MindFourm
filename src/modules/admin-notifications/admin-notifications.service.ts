@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { RedisService } from '../../database/redis.service';
 import { AdminNotification, User } from '@entities/index';
 import { SettingsService } from '../settings/settings.service';
+import { AdminNotificationWebhookService } from './admin-notification-webhook.service';
 
 export const ADMIN_NOTIFICATIONS_REDIS_CHANNEL = 'admin-notifications:events';
 
@@ -49,6 +50,7 @@ export class AdminNotificationsService {
     private readonly userRepository: Repository<User>,
     private readonly settingsService: SettingsService,
     private readonly redisService: RedisService,
+    private readonly webhookService: AdminNotificationWebhookService,
   ) {}
 
   async publish(input: PublishAdminNotificationInput): Promise<AdminNotificationView[]> {
@@ -87,6 +89,10 @@ export class AdminNotificationsService {
     if (await this.settingsService.getBoolean('admin_notifications_realtime_enabled', true)) {
       await Promise.all(normalized.map((notification) => this.publishRealtime(notification)));
     }
+
+    await this.webhookService.publish(input, normalized).catch((error) => {
+      this.logger.warn(`Admin notification webhook publish failed: ${(error as Error).message}`);
+    });
 
     return normalized;
   }

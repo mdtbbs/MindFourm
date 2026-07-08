@@ -5,6 +5,7 @@ function createService(overrides: {
   userRepository?: Record<string, jest.Mock>;
   settingsService?: Record<string, jest.Mock>;
   redisService?: Record<string, jest.Mock>;
+  webhookService?: Record<string, jest.Mock>;
 } = {}) {
   const adminNotificationRepository = {
     create: jest.fn().mockImplementation((value) => value),
@@ -45,12 +46,17 @@ function createService(overrides: {
     getClient: jest.fn().mockReturnValue({ publish }),
     ...overrides.redisService,
   };
+  const webhookService = {
+    publish: jest.fn().mockResolvedValue(undefined),
+    ...overrides.webhookService,
+  };
 
   const service = new AdminNotificationsService(
     adminNotificationRepository as any,
     userRepository as any,
     settingsService as any,
     redisService as any,
+    webhookService as any,
   );
 
   return {
@@ -60,12 +66,13 @@ function createService(overrides: {
     settingsService,
     redisService,
     publish,
+    webhookService,
   };
 }
 
 describe('AdminNotificationsService', () => {
   it('publishes notifications to configured admin recipients and realtime stream', async () => {
-    const { service, adminNotificationRepository, publish } = createService();
+    const { service, adminNotificationRepository, publish, webhookService } = createService();
 
     const result = await service.publishModerationPending({
       item_type: 'post',
@@ -86,6 +93,18 @@ describe('AdminNotificationsService', () => {
       is_read: false,
     });
     expect(publish).toHaveBeenCalledTimes(2);
+    expect(webhookService.publish).toHaveBeenCalledTimes(1);
+    expect(webhookService.publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_key: 'moderation.post.pending',
+      }),
+      expect.arrayContaining([
+        expect.objectContaining({
+          user_id: 4,
+          event_key: 'moderation.post.pending',
+        }),
+      ]),
+    );
   });
 
   it('skips publishing when the category preference is disabled', async () => {

@@ -46,6 +46,10 @@ export class SettingsService implements OnModuleInit {
       'admin_notifications_recipient_roles',
       'admin_notifications_moderation_pending_enabled',
       'admin_notifications_moderation_result_enabled',
+      'admin_notifications_webhook_enabled',
+      'admin_notifications_webhook_url',
+      'admin_notifications_webhook_secret',
+      'admin_notifications_webhook_timeout_ms',
     ]),
   };
 
@@ -106,6 +110,10 @@ export class SettingsService implements OnModuleInit {
       { key: 'admin_notifications_recipient_roles', value: 'moderator,admin', category: 'notifications', description: 'Roles that receive admin notifications' },
       { key: 'admin_notifications_moderation_pending_enabled', value: 'true', category: 'notifications', description: 'Notify admins about new pending moderation items' },
       { key: 'admin_notifications_moderation_result_enabled', value: 'true', category: 'notifications', description: 'Notify admins about moderation approve/reject actions' },
+      { key: 'admin_notifications_webhook_enabled', value: 'false', category: 'notifications', description: 'Enable third-party webhook delivery for admin notifications' },
+      { key: 'admin_notifications_webhook_url', value: '', category: 'notifications', description: 'Third-party admin notification webhook URL' },
+      { key: 'admin_notifications_webhook_secret', value: '', category: 'notifications', description: 'Optional webhook signature secret for admin notifications' },
+      { key: 'admin_notifications_webhook_timeout_ms', value: '5000', category: 'notifications', description: 'Webhook request timeout in milliseconds' },
       { key: 'cleanup_log_retention_days', value: '365', category: 'cleanup', description: 'Days to retain operation logs' },
       { key: 'cleanup_session_retention_days', value: '30', category: 'cleanup', description: 'Days to retain expired sessions' },
       { key: 'cleanup_soft_delete_retention_days', value: '30', category: 'cleanup', description: 'Days to retain soft-deleted items' },
