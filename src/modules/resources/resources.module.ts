@@ -8,9 +8,11 @@ import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { User } from '@entities/user.entity';
+import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 
 @Module({
   imports: [
+    AdminNotificationsModule,
     TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, User]),
   ],
   providers: [ResourcesService, ResourceCategoryService, ResourceVersionService],

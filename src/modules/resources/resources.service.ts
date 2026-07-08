@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Like, LessThan } from 'typeorm';
+import { Repository, DataSource, Like, LessThan, In } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
@@ -11,6 +11,7 @@ import { QueryResourcesDto } from './dto/query-resources.dto';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -20,6 +21,13 @@ export interface ResourceFileMeta {
   file_size: number;
   mime_type: string;
 }
+
+type ResourceListScope = 'public' | 'admin';
+
+const PUBLIC_RESOURCE_STATUSES = ['approved', 'published'] as const;
+const RESOURCE_STATUS_PENDING = 'pending';
+const RESOURCE_STATUS_APPROVED = 'approved';
+const RESOURCE_STATUS_REJECTED = 'rejected';
 
 @Injectable()
 export class ResourcesService {
@@ -33,6 +41,7 @@ export class ResourcesService {
     @InjectRepository(ResourceVersion)
     private versionRepository: Repository<ResourceVersion>,
     private dataSource: DataSource,
+    private adminNotificationsService: AdminNotificationsService,
   ) {}
 
   private normalizeResourceType(resourceType: string): string {
@@ -143,19 +152,36 @@ export class ResourcesService {
         throw new NotFoundException('Resource does not exist');
       }
 
+      if (result.status === RESOURCE_STATUS_PENDING) {
+        this.adminNotificationsService.publishModerationPending({
+          item_type: 'resource',
+          item_id: result.id,
+          title: result.title,
+          content: dto.description || dto.content || dto.external_url || file?.file_name || null,
+          author_username: result.user?.username || `#${userId}`,
+          action_url: '/admin/resources/moderation',
+        }).catch((err) =>
+          console.error('Admin resource moderation notification error:', err),
+        );
+      }
+
       return this.normalizeResource(result);
     });
   }
 
-  async getList(query: QueryResourcesDto): Promise<any> {
+  async getList(
+    query: QueryResourcesDto,
+    options: { scope?: ResourceListScope } = {},
+  ): Promise<any> {
     const {
       limit = 20,
       category_id,
       search,
-      status = 'approved',
+      status,
       sort = 'created_at',
       cursor,
     } = query;
+    const scope = options.scope ?? 'public';
 
     const where: any = {};
 
@@ -163,7 +189,10 @@ export class ResourcesService {
       where.category_id = category_id;
     }
 
-    if (status) {
+    if (scope === 'public') {
+      where.status = In(PUBLIC_RESOURCE_STATUSES);
+      where.is_public = 1;
+    } else if (status) {
       where.status = status;
     }
 
@@ -422,21 +451,58 @@ export class ResourcesService {
     await this.resourceRepository.delete(id);
   }
 
-  async updateStatus(id: number, status: string): Promise<any> {
-    const validStatuses = ['pending', 'approved', 'rejected'];
+  async updateStatus(
+    id: number,
+    status: string,
+    options: { actorUsername?: string | null } = {},
+  ): Promise<any> {
+    const validStatuses: string[] = [
+      RESOURCE_STATUS_PENDING,
+      RESOURCE_STATUS_APPROVED,
+      RESOURCE_STATUS_REJECTED,
+    ];
     if (!validStatuses.includes(status)) {
       throw new BadRequestException('Invalid status');
     }
 
-    await this.resourceRepository.update(id, { status });
-
-    const resource = await this.resourceRepository.findOne({
+    const existingResource = await this.resourceRepository.findOne({
       where: { id },
       relations: ['user', 'category'],
     });
 
+    if (!existingResource) {
+      throw new NotFoundException('Resource does not exist');
+    }
+
+    if (existingResource.status !== status) {
+      await this.resourceRepository.update(id, { status });
+    }
+
+    const resource = existingResource.status === status
+      ? existingResource
+      : await this.resourceRepository.findOne({
+        where: { id },
+        relations: ['user', 'category'],
+      });
+
     if (!resource) {
       throw new NotFoundException('Resource does not exist');
+    }
+
+    if (
+      existingResource.status !== status
+      && [RESOURCE_STATUS_APPROVED, RESOURCE_STATUS_REJECTED].includes(status as any)
+    ) {
+      this.adminNotificationsService.publishModerationResult({
+        item_type: 'resource',
+        item_id: resource.id,
+        action: status as 'approved' | 'rejected',
+        actor_username: options.actorUsername || undefined,
+        subject: resource.title,
+        action_url: `/admin/resources?status=${status}`,
+      }).catch((err) =>
+        console.error('Admin resource moderation result notification error:', err),
+      );
     }
 
     return this.normalizeResource(resource);

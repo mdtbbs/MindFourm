@@ -121,7 +121,7 @@ export class ResourcesController {
 
   @Get()
   async getList(@Query() query: QueryResourcesDto) {
-    return this.resourcesService.getList(query);
+    return this.resourcesService.getList(query, { scope: 'public' });
   }
 
   @Get('categories')
@@ -165,7 +165,7 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')
   async getAdminList(@Query() query: QueryResourcesDto) {
-    return this.resourcesService.getList(query);
+    return this.resourcesService.getList(query, { scope: 'admin' });
   }
 
   @Get(':id')
@@ -296,8 +296,11 @@ export class ResourcesController {
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body('status') status: string,
+    @Req() req: any,
   ) {
-    return this.resourcesService.updateStatus(id, status);
+    return this.resourcesService.updateStatus(id, status, {
+      actorUsername: req.user?.username,
+    });
   }
 
   @Delete(':id/admin')
