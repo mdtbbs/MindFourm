@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth/context';
 import { LogOut } from 'lucide-react';
+import AdminNotificationBell from '@/components/admin/admin-notification-bell';
 
 export default function AdminHeader() {
   const { user, logout } = useAuth();
@@ -14,6 +15,7 @@ export default function AdminHeader() {
     <header className="bg-[var(--bg-card)] dark:bg-gray-900 border-b border-[var(--border)] dark:border-gray-700 px-6 py-4 flex items-center justify-between">
       <h1 className="text-xl font-bold text-[var(--text)]">MindForum 管理后台</h1>
       <div className="flex items-center gap-4">
+        <AdminNotificationBell />
         <span className="text-sm text-[var(--text-secondary)]">
           {user?.username} ({user?.role})
         </span>

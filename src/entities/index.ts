@@ -6,6 +6,7 @@ import { Tag } from './tag.entity';
 import { PostTag } from './post-tag.entity';
 import { Bookmark } from './bookmark.entity';
 import { Notification } from './notification.entity';
+import { AdminNotification } from './admin-notification.entity';
 import { Message } from './message.entity';
 import { Attachment } from './attachment.entity';
 import { Resource } from './resource.entity';
@@ -66,6 +67,7 @@ export const entities = [
   PostTag,
   Bookmark,
   Notification,
+  AdminNotification,
   Message,
   Attachment,
   Resource,
@@ -110,6 +112,7 @@ export const entities = [
 
 export {
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
+  AdminNotification,
   Message, Attachment, Resource, ResourceCategory, ResourceVersion,
   PostLike, ReplyLike, Ban, Setting, OperationLog, SessionAudit,
   // Phase 1: Points

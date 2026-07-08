@@ -124,4 +124,18 @@ describe('AdminService', () => {
       avatar_status: 'rejected',
     });
   });
+
+  it('normalizes boolean pin values before updating posts', async () => {
+    const { service, postRepository } = createService({
+      postRepository: {
+        findOne: jest.fn().mockResolvedValue({ id: 240, is_pinned: 1 }),
+      },
+    });
+
+    await service.pinPost(240, true as any);
+    await service.bulkPinPosts([240, 241], false as any);
+
+    expect(postRepository.update).toHaveBeenNthCalledWith(1, 240, { is_pinned: 1 });
+    expect(postRepository.update).toHaveBeenNthCalledWith(2, [240, 241], { is_pinned: 0 });
+  });
 });

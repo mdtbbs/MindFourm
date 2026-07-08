@@ -148,8 +148,34 @@ async function ensureResourceTables(dataSource: DataSource): Promise<void> {
   `);
 }
 
+async function ensureAdminNotificationTables(dataSource: DataSource): Promise<void> {
+  if (!(await tableExists(dataSource, 'users'))) return;
+
+  await dataSource.query(`
+    CREATE TABLE IF NOT EXISTS admin_notifications (
+      id INT PRIMARY KEY AUTO_INCREMENT,
+      user_id INT NOT NULL,
+      event_key VARCHAR(100) NOT NULL,
+      category VARCHAR(50) NOT NULL,
+      level VARCHAR(30) NOT NULL DEFAULT 'info',
+      title VARCHAR(255) NOT NULL,
+      content TEXT NULL,
+      action_url VARCHAR(500) NULL,
+      metadata_json TEXT NULL,
+      is_read TINYINT(1) NOT NULL DEFAULT 0,
+      read_at DATETIME NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      INDEX idx_admin_notifications_user_read (user_id, is_read),
+      INDEX idx_admin_notifications_user_created (user_id, created_at DESC),
+      INDEX idx_admin_notifications_event_key (event_key)
+    )
+  `);
+}
+
 async function ensureExistingSchemaPatches(dataSource: DataSource): Promise<void> {
   await ensureResourceTables(dataSource);
+  await ensureAdminNotificationTables(dataSource);
 
   await addColumnIfMissing(dataSource, 'users', 'total_points', 'INT NOT NULL DEFAULT 0');
   await addColumnIfMissing(dataSource, 'users', 'available_points', 'INT NOT NULL DEFAULT 0');
@@ -187,6 +213,7 @@ async function assertRequiredTables(dataSource: DataSource): Promise<void> {
     'email_logs',
     'search_history',
     'popular_searches',
+    'admin_notifications',
     'resource_categories',
     'resources',
     'resource_versions',

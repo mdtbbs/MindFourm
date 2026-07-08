@@ -14,6 +14,7 @@ import { UsersModule } from './modules/users/users.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { TagsModule } from './modules/tags/tags.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AdminNotificationsModule } from './modules/admin-notifications/admin-notifications.module';
 import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
 import { LikesModule } from './modules/likes/likes.module';
 import { MessagesModule } from './modules/messages/messages.module';
@@ -69,6 +70,7 @@ import { PhoneWriteGuard } from './common/guards/phone-write.guard';
     CategoriesModule,
     TagsModule,
     NotificationsModule,
+    AdminNotificationsModule,
     BookmarksModule,
     LikesModule,
     MessagesModule,

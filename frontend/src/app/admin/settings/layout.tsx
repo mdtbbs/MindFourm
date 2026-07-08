@@ -8,6 +8,7 @@ const tabs = [
   { href: '/admin/settings/announce', label: '公告管理' },
   { href: '/admin/settings/display', label: '显示设置' },
   { href: '/admin/settings/seo', label: 'SEO 设置' },
+  { href: '/admin/settings/notifications', label: '通知设置' },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

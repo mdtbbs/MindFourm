@@ -40,6 +40,13 @@ export class SettingsService implements OnModuleInit {
       'seo_sitemap_enabled',
       'seo_robots_enabled',
     ]),
+    notifications: new Set([
+      'admin_notifications_enabled',
+      'admin_notifications_realtime_enabled',
+      'admin_notifications_recipient_roles',
+      'admin_notifications_moderation_pending_enabled',
+      'admin_notifications_moderation_result_enabled',
+    ]),
   };
 
   constructor(
@@ -94,6 +101,11 @@ export class SettingsService implements OnModuleInit {
       { key: 'require_reply_approval', value: 'true', category: 'moderation', description: 'Require reply approval before publishing' },
       { key: 'require_avatar_approval', value: 'true', category: 'moderation', description: 'Require avatar approval before applying' },
       { key: 'auto_approve_trusted', value: 'false', category: 'moderation', description: 'Auto-approve trusted users' },
+      { key: 'admin_notifications_enabled', value: 'true', category: 'notifications', description: 'Enable admin notification inbox' },
+      { key: 'admin_notifications_realtime_enabled', value: 'true', category: 'notifications', description: 'Enable real-time admin notification delivery' },
+      { key: 'admin_notifications_recipient_roles', value: 'moderator,admin', category: 'notifications', description: 'Roles that receive admin notifications' },
+      { key: 'admin_notifications_moderation_pending_enabled', value: 'true', category: 'notifications', description: 'Notify admins about new pending moderation items' },
+      { key: 'admin_notifications_moderation_result_enabled', value: 'true', category: 'notifications', description: 'Notify admins about moderation approve/reject actions' },
       { key: 'cleanup_log_retention_days', value: '365', category: 'cleanup', description: 'Days to retain operation logs' },
       { key: 'cleanup_session_retention_days', value: '30', category: 'cleanup', description: 'Days to retain expired sessions' },
       { key: 'cleanup_soft_delete_retention_days', value: '30', category: 'cleanup', description: 'Days to retain soft-deleted items' },

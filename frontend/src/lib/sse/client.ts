@@ -12,6 +12,7 @@
 import { EventSourcePolyfill } from 'event-source-polyfill';
 
 type SSEEventType = 'notification' | 'online' | 'message' | 'system';
+type DynamicSSEEventType = SSEEventType | string;
 
 interface SSEOptions {
   url: string;
@@ -22,7 +23,7 @@ interface SSEOptions {
 }
 
 interface SSEMessage {
-  type: SSEEventType;
+  type: DynamicSSEEventType;
   data: unknown;
 }
 
@@ -40,6 +41,7 @@ export class SSEClient {
   private onOpen?: () => void;
   private onError?: (error: Error) => void;
   private listeners: Map<string, Set<(data: unknown) => void>> = new Map();
+  private registeredEventTypes = new Set<string>();
 
   constructor(options: SSEOptions) {
     this.url = options.url;
@@ -85,11 +87,17 @@ export class SSEClient {
         this.onError?.(error);
       };
 
-      // Listen for specific event types
-      this.setupEventListener('notification');
-      this.setupEventListener('online');
-      this.setupEventListener('message');
-      this.setupEventListener('system');
+      this.registeredEventTypes.clear();
+
+      // Listen for known event types and any dynamically subscribed custom events
+      const eventTypes = new Set<string>([
+        'notification',
+        'online',
+        'message',
+        'system',
+        ...this.listeners.keys(),
+      ]);
+      eventTypes.forEach((eventType) => this.setupEventListener(eventType));
 
       // Also listen for generic 'message' events
       this.eventSource.onmessage = (event) => {
@@ -111,14 +119,16 @@ export class SSEClient {
    * Setup listener for a specific event type
    */
   private setupEventListener(eventType: string): void {
-    if (!this.eventSource) return;
+    if (!this.eventSource || this.registeredEventTypes.has(eventType)) return;
+
+    this.registeredEventTypes.add(eventType);
 
     this.eventSource.addEventListener(eventType, (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        this.notifyListeners(eventType as SSEEventType, data);
+        this.notifyListeners(eventType, data);
       } catch {
-        this.notifyListeners(eventType as SSEEventType, event.data);
+        this.notifyListeners(eventType, event.data);
       }
     });
   }
@@ -126,7 +136,7 @@ export class SSEClient {
   /**
    * Notify all listeners for an event type
    */
-  private notifyListeners(type: SSEEventType, data: unknown): void {
+  private notifyListeners(type: DynamicSSEEventType, data: unknown): void {
     const listeners = this.listeners.get(type);
     if (listeners) {
       listeners.forEach((callback) => callback(data));
@@ -163,12 +173,13 @@ export class SSEClient {
   /**
    * Add a listener for a specific event type
    */
-  subscribe(eventType: SSEEventType, callback: (data: unknown) => void): () => void {
+  subscribe(eventType: DynamicSSEEventType, callback: (data: unknown) => void): () => void {
     if (!this.listeners.has(eventType)) {
       this.listeners.set(eventType, new Set());
     }
 
     this.listeners.get(eventType)!.add(callback);
+    this.setupEventListener(eventType);
 
     // Return unsubscribe function
     return () => {
@@ -186,6 +197,7 @@ export class SSEClient {
       this.eventSource = null;
     }
     this.listeners.clear();
+    this.registeredEventTypes.clear();
     console.log('SSE connection closed');
   }
 

@@ -10,6 +10,7 @@ import { PluginsModule } from '../plugins/plugins.module';
 import { PointsModule } from '../points/points.module';
 import { SettingsModule } from '../settings/settings.module';
 import { LogsModule } from '../logs/logs.module';
+import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { LogsModule } from '../logs/logs.module';
     PointsModule,
     SettingsModule,
     LogsModule,
+    AdminNotificationsModule,
   ],
   providers: [RepliesService],
   controllers: [RepliesController, RepliesControllerMain],

@@ -19,6 +19,7 @@ import { LogsService } from '../logs/logs.service';
 import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -50,6 +51,7 @@ export class AdminController {
     private readonly bansService: BansService,
     private readonly categoriesService: CategoriesService,
     private readonly tagsService: TagsService,
+    private readonly adminNotificationsService: AdminNotificationsService,
   ) {}
 
   /**
@@ -326,6 +328,7 @@ export class AdminController {
     @Req() req: any,
   ) {
     await this.adminService.approveModerationItem(type, id);
+    await this.publishModerationResult(type, id, 'approved', req.user?.username);
     await this.logOperation(req, 'moderation.approve', type, id);
     return { message: 'Item approved' };
   }
@@ -341,6 +344,7 @@ export class AdminController {
     @Req() req: any,
   ) {
     await this.adminService.rejectModerationItem(type, id);
+    await this.publishModerationResult(type, id, 'rejected', req.user?.username);
     await this.logOperation(req, 'moderation.reject', type, id);
     return { message: 'Item rejected' };
   }
@@ -475,5 +479,32 @@ export class AdminController {
 
   private getClientIp(req: any): string {
     return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+  }
+
+  private async publishModerationResult(
+    type: string,
+    id: number,
+    action: 'approved' | 'rejected',
+    actorUsername?: string,
+  ) {
+    const normalizedType = type === 'replies'
+      ? 'reply'
+      : type === 'avatars'
+        ? 'avatar'
+        : type === 'posts'
+          ? 'post'
+          : type;
+
+    if (!['post', 'reply', 'avatar'].includes(normalizedType)) {
+      return;
+    }
+
+    await this.adminNotificationsService.publishModerationResult({
+      item_type: normalizedType as 'post' | 'reply' | 'avatar',
+      item_id: id,
+      action,
+      actor_username: actorUsername,
+      action_url: '/admin/content/moderation',
+    }).catch((err) => console.warn('admin notification publish failed:', err.message));
   }
 }

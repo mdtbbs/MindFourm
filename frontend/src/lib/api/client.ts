@@ -1,4 +1,4 @@
-import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost } from '@/types';
+import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost } from '@/types';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
 
@@ -442,7 +442,7 @@ export const adminApi = {
     clearCache();
     return request<Post>(`/api/admin/posts/${id}/pin`, {
       method: 'PUT',
-      body: JSON.stringify({ is_pinned: isPinned }),
+      body: JSON.stringify({ is_pinned: isPinned ? 1 : 0 }),
     });
   },
   movePost: (id: number, category_id: number) => {
@@ -527,7 +527,10 @@ export const adminApi = {
   },
   bulkPinPosts: (post_ids: number[], is_pinned: boolean) => {
     clearCache();
-    return request<{ message: string }>('/api/admin/posts/pin', { method: 'PUT', body: JSON.stringify({ post_ids, is_pinned }) });
+    return request<{ message: string }>('/api/admin/posts/pin', {
+      method: 'PUT',
+      body: JSON.stringify({ post_ids, is_pinned: is_pinned ? 1 : 0 }),
+    });
   },
   bulkMovePosts: (post_ids: number[], category_id: number) => {
     clearCache();
@@ -675,6 +678,20 @@ export const notificationApi = {
     request<void>(`/api/notifications/${id}/read`, { method: 'PUT' }),
   markAllAsRead: () =>
     request<void>('/api/notifications/read-all', { method: 'PUT' }),
+};
+
+export const adminNotificationApi = {
+  list: (params?: { page?: number; limit?: number }) =>
+    request<AdminNotificationListResponse>(`/api/admin/notifications${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+    })}`),
+  unreadCount: () =>
+    request<{ count: number }>('/api/admin/notifications/unread-count'),
+  markAsRead: (id: number) =>
+    request<void>(`/api/admin/notifications/${id}/read`, { method: 'PUT' }),
+  markAllAsRead: () =>
+    request<void>('/api/admin/notifications/read-all', { method: 'PUT' }),
 };
 
 // Like APIs

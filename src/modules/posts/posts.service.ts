@@ -24,6 +24,7 @@ import { PointsService } from '../points/points.service';
 import { GroupsService } from '../groups/groups.service';
 import { EventBusService } from '../plugins/event-bus.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
@@ -53,6 +54,7 @@ export class PostsService {
     private groupsService: GroupsService,
     private eventBus: EventBusService,
     private notificationsService: NotificationsService,
+    private adminNotificationsService: AdminNotificationsService,
     private settingsService: SettingsService,
   ) {}
 
@@ -117,6 +119,22 @@ export class PostsService {
       // Award points for creating post
       if (savedPost.status === 'published') {
         await this.pointsService.awardPoints(userId, 'create_post', 'post', savedPost.id);
+      } else if (savedPost.status === 'pending') {
+        const author = await manager.findOne(User, {
+          where: { id: userId },
+          select: { username: true },
+        });
+
+        this.adminNotificationsService.publishModerationPending({
+          item_type: 'post',
+          item_id: savedPost.id,
+          title: savedPost.title,
+          content: dto.content,
+          author_username: author?.username || `#${userId}`,
+          action_url: '/admin/content/moderation?type=posts',
+        }).catch((err) =>
+          console.error('Admin post moderation notification error:', err),
+        );
       }
 
       // Execute "after" hook for plugins

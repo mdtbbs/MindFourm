@@ -171,7 +171,7 @@ export class AdminService {
    * Bulk pin posts
    */
   async bulkPinPosts(postIds: number[], isPinned: number): Promise<void> {
-    await this.postRepository.update(postIds, { is_pinned: isPinned });
+    await this.postRepository.update(postIds, { is_pinned: this.normalizePinnedValue(isPinned) });
   }
 
   /**
@@ -193,7 +193,7 @@ export class AdminService {
    * Pin a single post
    */
   async pinPost(id: number, isPinned: number): Promise<Post> {
-    await this.postRepository.update(id, { is_pinned: isPinned });
+    await this.postRepository.update(id, { is_pinned: this.normalizePinnedValue(isPinned) });
 
     const post = await this.postRepository.findOne({
       where: { id },
@@ -403,6 +403,10 @@ export class AdminService {
     if (type === 'reply' || type === 'replies') return this.rejectReply(id);
     if (type === 'avatar' || type === 'avatars') return this.rejectAvatar(id);
     return this.rejectPost(id);
+  }
+
+  private normalizePinnedValue(value: number | boolean | null | undefined): 0 | 1 {
+    return value ? 1 : 0;
   }
 
   /**

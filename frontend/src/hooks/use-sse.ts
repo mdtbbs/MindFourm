@@ -19,6 +19,7 @@ const SSE_ENDPOINT = `${API_URL}/api/notifications/events`;
 
 interface UseSseOptions {
   enabled?: boolean;
+  url?: string;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: Error) => void;
@@ -36,7 +37,7 @@ export function useSse<T = unknown>(
   callback: (data: T) => void,
   options: UseSseOptions = {}
 ): void {
-  const { enabled = true, onConnect, onDisconnect, onError } = options;
+  const { enabled = true, url = SSE_ENDPOINT, onConnect, onDisconnect, onError } = options;
   const { isAuthenticated } = useUserStore();
   const clientRef = useRef<SSEClient | null>(null);
 
@@ -57,7 +58,7 @@ export function useSse<T = unknown>(
     // Create and connect SSE client
     if (!clientRef.current) {
       clientRef.current = createSSEClient({
-        url: SSE_ENDPOINT,
+        url,
         onOpen: onConnect,
         onError: (error) => {
           onError?.(error);
@@ -71,7 +72,7 @@ export function useSse<T = unknown>(
 
     // Subscribe to specific event type
     const unsubscribe = clientRef.current.subscribe(
-      eventType as 'notification' | 'online' | 'message' | 'system',
+      eventType,
       (data) => {
         callback(data as T);
       }
@@ -81,7 +82,7 @@ export function useSse<T = unknown>(
     return () => {
       unsubscribe();
     };
-  }, [shouldConnect, eventType, callback, onConnect, onDisconnect, onError]);
+  }, [shouldConnect, eventType, callback, onConnect, onDisconnect, onError, url]);
 }
 
 /**
@@ -127,7 +128,7 @@ export function useSseConnection() {
       }
 
       return clientRef.current.subscribe(
-        eventType as 'notification' | 'online' | 'message' | 'system',
+        eventType,
         (data) => callback(data as T)
       );
     },

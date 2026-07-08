@@ -5,6 +5,7 @@ import { Reply } from '../../entities/reply.entity';
 import { Post } from '../../entities/post.entity';
 import { User } from '../../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { EventBusService } from '../plugins/event-bus.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { parseMarkdown } from '../../common/utils/markdown.util';
@@ -21,6 +22,7 @@ export class RepliesService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private notificationsService: NotificationsService,
+    private adminNotificationsService: AdminNotificationsService,
     private eventBus: EventBusService,
     private pointsService: PointsService,
     private settingsService: SettingsService,
@@ -110,6 +112,17 @@ export class RepliesService {
 
       // Award points for creating reply
       await this.awardPointsForReply(savedReply.id, userId);
+    } else if (savedReply.status === 'pending') {
+      this.adminNotificationsService.publishModerationPending({
+        item_type: 'reply',
+        item_id: savedReply.id,
+        title: `帖子 #${postId} 的新回复`,
+        content,
+        author_username: user.username || `#${userId}`,
+        action_url: '/admin/content/moderation?type=replies',
+      }).catch((err) =>
+        console.error('Admin reply moderation notification error:', err),
+      );
     }
 
     // Execute "after" hook

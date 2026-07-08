@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth/context';
 import { AdminSidebar as SharedAdminSidebar, SidebarItem, SidebarGroup } from '@mindproject/shared';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
-  AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
+  AlertTriangle, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
   Package, AlertCircle, FolderOpen
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
@@ -16,6 +16,7 @@ const navGroups: SidebarGroup[] = [
   {
     label: '总览',
     items: [
+      { key: 'notifications', label: '后台通知', icon: <BellRing size={16} />, href: '/admin/notifications', roles: ['admin', 'moderator'] },
       { key: 'dashboard', label: '仪表盘', icon: <LayoutDashboard size={16} />, href: '/admin', roles: ['admin', 'moderator'] },
     ],
   },

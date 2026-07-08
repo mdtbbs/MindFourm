@@ -265,6 +265,31 @@ export interface NotificationListResponse {
   };
 }
 
+export interface AdminNotification {
+  id: number;
+  user_id: number;
+  event_key: string;
+  category: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  content: string | null;
+  action_url: string | null;
+  metadata: Record<string, unknown> | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface AdminNotificationListResponse {
+  data: AdminNotification[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // Attachments
 export interface Attachment {
   id: number;

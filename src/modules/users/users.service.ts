@@ -7,6 +7,7 @@ import { Reply } from '../../entities/reply.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { escapeLike } from '@common/utils/search.util';
 import { SettingsService } from '../settings/settings.service';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -20,6 +21,7 @@ export class UsersService {
     @InjectRepository(Reply)
     private replyRepository: Repository<Reply>,
     private settingsService: SettingsService,
+    private adminNotificationsService: AdminNotificationsService,
   ) {}
 
   private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
@@ -98,7 +100,22 @@ export class UsersService {
       user.avatar_status = 'approved';
     }
 
-    return this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
+
+    if (savedUser.avatar_status === 'pending') {
+      this.adminNotificationsService.publishModerationPending({
+        item_type: 'avatar',
+        item_id: savedUser.id,
+        title: null,
+        content: savedUser.pending_avatar_url,
+        author_username: savedUser.username || `#${savedUser.id}`,
+        action_url: '/admin/content/moderation?type=avatars',
+      }).catch((err) =>
+        console.error('Admin avatar moderation notification error:', err),
+      );
+    }
+
+    return savedUser;
   }
 
   async removeAvatar(id: number): Promise<User> {

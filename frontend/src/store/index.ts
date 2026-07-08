@@ -7,6 +7,7 @@
 
 export { useUserStore, useAuth } from './user-store';
 export { useNotificationStore, useUnreadCount, useNotifications } from './notification-store';
+export { useAdminNotificationStore, useAdminUnreadCount } from './admin-notification-store';
 export { useOnlineStore, useOnlineCount, useOnlineUsers } from './online-store';
 export { useSettingsStore, useSetting, useSettings } from './settings-store';
 export { useToastStore, useToast } from './toast-store';
