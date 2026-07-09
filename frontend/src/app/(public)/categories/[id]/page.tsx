@@ -3,65 +3,39 @@ import Link from 'next/link';
 import Sidebar from '@/components/forum/sidebar';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import { Category, Tag, PostListResponse } from '@/types';
 import { notFound } from 'next/navigation';
 
 export const revalidate = 300;
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
 async function fetchPosts(page: number, categoryId: number): Promise<PostListResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/api/posts?page=${page}&limit=20&category_id=${categoryId}`, { cache: 'no-store' });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
-      pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || 20,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
-      },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
+  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?page=${page}&limit=20&category_id=${categoryId}`, {
+    init: { cache: 'no-store' },
+    fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
+  });
 }
 
 async function fetchCategories(): Promise<Category[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/categories`, { next: { tags: ['categories'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
+  return fetchApiData<Category[]>('/api/categories', {
+    init: { next: { tags: ['categories'] } },
+    fallback: [],
+  });
 }
 
 async function fetchTags(): Promise<Tag[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/tags`, { next: { tags: ['tags'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
+  return fetchApiData<Tag[]>('/api/tags', {
+    init: { next: { tags: ['tags'] } },
+    fallback: [],
+  });
 }
 
 async function fetchCategory(id: number): Promise<Category | null> {
-  try {
-    const res = await fetch(`${API_BASE}/api/categories/${id}`, { next: { tags: ['categories'] } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.success ? json.data : null;
-  } catch {
-    return null;
-  }
+  return fetchApiData<Category | null>(`/api/categories/${id}`, {
+    init: { next: { tags: ['categories'] } },
+    fallback: null,
+  });
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {

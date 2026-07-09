@@ -5,106 +5,46 @@ import { UserProfile, PostListResponse, Reply, BookmarkListResponse, LikedPost }
 import { Bookmark, Calendar, Heart, Star, Users } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
 import { UserCard } from '@mindproject/shared';
 import { Medal, Title } from '@mindproject/shared';
 import FollowButton from '@/components/forum/follow-button';
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
 async function fetchUserProfile(userId: number): Promise<UserProfile | null> {
-  try {
-    const res = await fetch(`${API_BASE}/api/users/${userId}`, { next: { tags: [`user-${userId}`] } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.success ? json.data : null;
-  } catch {
-    return null;
-  }
+  return fetchApiData<UserProfile | null>(`/api/users/${userId}`, {
+    init: { next: { tags: [`user-${userId}`] } },
+    fallback: null,
+  });
 }
 
 async function fetchUserPosts(userId: number, page: number): Promise<PostListResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/api/posts?page=${page}&limit=20&user_id=${userId}`, { cache: 'no-store' });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
-      pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || 20,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
-      },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
+  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?page=${page}&limit=20&user_id=${userId}`, {
+    init: { cache: 'no-store' },
+    fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
+  });
 }
 
 async function fetchUserReplies(userId: number, page: number): Promise<{ data: Reply[]; pagination: PostListResponse['pagination'] }> {
-  try {
-    const res = await fetch(`${API_BASE}/api/users/${userId}/replies?page=${page}&limit=20`, { next: { tags: ['replies'] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
-      pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || 20,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
-      },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
+  return fetchApiPaginated<Reply>(`/api/users/${userId}/replies?page=${page}&limit=20`, {
+    init: { next: { tags: ['replies'] } },
+    fallback: createEmptyPaginatedResult<Reply>(20),
+  });
 }
 
 async function fetchUserBookmarks(page: number): Promise<BookmarkListResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/api/bookmarks?page=${page}&limit=20`, { next: { tags: ['bookmarks'] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
-      pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || 20,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
-      },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
+  return fetchApiPaginated<BookmarkListResponse['data'][number]>(`/api/bookmarks?page=${page}&limit=20`, {
+    init: { next: { tags: ['bookmarks'] } },
+    fallback: createEmptyPaginatedResult<BookmarkListResponse['data'][number]>(20),
+  });
 }
 
 async function fetchUserLikes(page: number): Promise<{ data: LikedPost[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
-  try {
-    const res = await fetch(`${API_BASE}/api/likes/posts?page=${page}&limit=20`, { next: { tags: ['likes'] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
-      pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || 20,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
-      },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
+  return fetchApiPaginated<LikedPost>(`/api/likes/posts?page=${page}&limit=20`, {
+    init: { next: { tags: ['likes'] } },
+    fallback: createEmptyPaginatedResult<LikedPost>(20),
+  });
 }
 
 export default async function UserProfilePage({
@@ -122,10 +62,18 @@ export default async function UserProfilePage({
   if (!profile) return notFound();
 
   const [postsResult, repliesResult, bookmarksResult, likesResult] = await Promise.all([
-    tab === 'posts' ? fetchUserPosts(userId, page) : Promise.resolve({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } as PostListResponse['pagination'] }),
-    tab === 'replies' ? fetchUserReplies(userId, page) : Promise.resolve({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } as PostListResponse['pagination'] }),
-    tab === 'bookmarks' ? fetchUserBookmarks(page) : Promise.resolve({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } }),
-    tab === 'likes' ? fetchUserLikes(page) : Promise.resolve({ data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } }),
+    tab === 'posts'
+      ? fetchUserPosts(userId, page)
+      : Promise.resolve(createEmptyPaginatedResult<PostListResponse['data'][number]>(20)),
+    tab === 'replies'
+      ? fetchUserReplies(userId, page)
+      : Promise.resolve(createEmptyPaginatedResult<Reply>(20)),
+    tab === 'bookmarks'
+      ? fetchUserBookmarks(page)
+      : Promise.resolve(createEmptyPaginatedResult<BookmarkListResponse['data'][number]>(20)),
+    tab === 'likes'
+      ? fetchUserLikes(page)
+      : Promise.resolve(createEmptyPaginatedResult<LikedPost>(20)),
   ]);
 
   const displayName = profile.username || `User #${profile.id}`;

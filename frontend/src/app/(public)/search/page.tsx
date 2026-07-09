@@ -1,39 +1,25 @@
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import SearchEnhancements from '@/components/forum/search-enhancements';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiPaginated } from '@/lib/api/server-fetch';
 import { SearchResultResponse } from '@/types';
 
 export const revalidate = 0;
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
 async function fetchPosts(query: string, page: number, limit: number): Promise<SearchResultResponse> {
-  try {
-    const qs = new URLSearchParams();
-    qs.set('q', query);
-    qs.set('page', String(page));
-    qs.set('limit', String(limit));
+  const qs = new URLSearchParams();
+  qs.set('q', query);
+  qs.set('page', String(page));
+  qs.set('limit', String(limit));
 
-    const res = await fetch(`${API_BASE}/api/search?${qs.toString()}`, { next: { revalidate: 0 } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
-
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
-
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : [],
-      pagination: {
-        page: responseData.pagination?.page || responseData.page || 1,
-        limit: responseData.pagination?.limit || responseData.limit || limit,
-        total: responseData.pagination?.total || responseData.total || 0,
-        totalPages: responseData.pagination?.totalPages || responseData.totalPages || 1,
-      },
-      popular_searches: Array.isArray(responseData.popular_searches) ? responseData.popular_searches : undefined,
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
+  return fetchApiPaginated<SearchResultResponse['data'][number], { popular_searches?: string[] }>(`/api/search?${qs.toString()}`, {
+    init: { next: { revalidate: 0 } },
+    fallback: {
+      ...createEmptyPaginatedResult<SearchResultResponse['data'][number]>(limit),
+      popular_searches: undefined,
+    },
+  });
 }
 
 export default async function SearchPage({
@@ -45,7 +31,12 @@ export default async function SearchPage({
   const page = parseInt(searchParams.page || '1');
   const postsPerPage = 20;
 
-  const postsResult = query ? await fetchPosts(query, page, postsPerPage) : { data: [], pagination: { page: 1, limit: postsPerPage, total: 0, totalPages: 1 } };
+  const postsResult = query
+    ? await fetchPosts(query, page, postsPerPage)
+    : ({
+        ...createEmptyPaginatedResult<SearchResultResponse['data'][number]>(postsPerPage),
+        popular_searches: undefined,
+      } satisfies SearchResultResponse);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

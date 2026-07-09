@@ -4,11 +4,11 @@ import ServerSection from '@/components/forum/server-section';
 import LatestPostsList, { LatestPostsSettings } from '@/components/forum/latest-posts-list';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import Pagination from '@/components/ui/pagination';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import { Category, PostListResponse, Tag } from '@/types';
 
 export const revalidate = 30;
-
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 interface ForumOverviewStats {
   total_posts: number;
@@ -17,11 +17,6 @@ interface ForumOverviewStats {
   total_resources: number;
   latest_user: string | null;
 }
-
-const emptyPosts: PostListResponse = {
-  data: [],
-  pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
-};
 
 const emptyOverview: ForumOverviewStats = {
   total_posts: 0,
@@ -32,75 +27,43 @@ const emptyOverview: ForumOverviewStats = {
 };
 
 async function fetchCategories(): Promise<Category[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/categories`, { next: { tags: ['categories'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
+  return fetchApiData<Category[]>('/api/categories', {
+    init: { next: { tags: ['categories'] } },
+    fallback: [],
+  });
 }
 
 async function fetchTags(): Promise<Tag[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/tags`, { next: { tags: ['tags'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
+  return fetchApiData<Tag[]>('/api/tags', {
+    init: { next: { tags: ['tags'] } },
+    fallback: [],
+  });
 }
 
 async function fetchSettings(): Promise<Record<string, string>> {
-  try {
-    const res = await fetch(`${API_BASE}/api/settings`, { next: { revalidate: 60 } });
-    if (!res.ok) return {};
-    const json = await res.json();
-    return json.success ? json.data : {};
-  } catch {
-    return {};
-  }
+  return fetchApiData<Record<string, string>>('/api/settings', {
+    init: { next: { revalidate: 60 } },
+    fallback: {},
+  });
 }
 
 async function fetchForumOverview(): Promise<ForumOverviewStats> {
-  try {
-    const res = await fetch(`${API_BASE}/api/stats/overview`, { next: { revalidate: 30 } });
-    if (!res.ok) return emptyOverview;
-    const json = await res.json();
-    return json.success ? { ...emptyOverview, ...json.data } : emptyOverview;
-  } catch {
-    return emptyOverview;
-  }
+  return fetchApiData<ForumOverviewStats>('/api/stats/overview', {
+    init: { next: { revalidate: 30 } },
+    fallback: emptyOverview,
+  }).then((overview) => ({ ...emptyOverview, ...overview }));
 }
 
 async function fetchPosts(page: number, limit: number, categoryId?: number): Promise<PostListResponse> {
-  try {
-    const qs = new URLSearchParams();
-    qs.set('page', String(page));
-    qs.set('limit', String(limit));
-    if (categoryId) qs.set('category_id', String(categoryId));
+  const qs = new URLSearchParams();
+  qs.set('page', String(page));
+  qs.set('limit', String(limit));
+  if (categoryId) qs.set('category_id', String(categoryId));
 
-    const res = await fetch(`${API_BASE}/api/posts?${qs}`, { cache: 'no-store' });
-    if (!res.ok) return { ...emptyPosts, pagination: { ...emptyPosts.pagination, limit } };
-
-    const json = await res.json();
-    if (!json.success) return { ...emptyPosts, pagination: { ...emptyPosts.pagination, limit } };
-
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
-      pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || limit,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
-      },
-    };
-  } catch {
-    return { ...emptyPosts, pagination: { ...emptyPosts.pagination, limit } };
-  }
+  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?${qs.toString()}`, {
+    init: { cache: 'no-store' },
+    fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(limit),
+  });
 }
 
 function parseBooleanSetting(value: string | undefined, defaultValue: boolean): boolean {

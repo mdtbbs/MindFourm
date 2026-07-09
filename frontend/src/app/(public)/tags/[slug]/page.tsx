@@ -1,30 +1,15 @@
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiPaginated } from '@/lib/api/server-fetch';
 import { PostListResponse } from '@/types';
-import { notFound } from 'next/navigation';
-
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchPosts(page: number, slug: string): Promise<PostListResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/api/tags/${slug}/posts?page=${page}&limit=20`, { cache: 'no-store' });
-    if (!res.ok) notFound();
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const responseData = json.data || {};
-    return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
-      pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || 20,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
-      },
-    };
-  } catch (e) {
-    if (e instanceof Error && e.message === 'NEXT_NOT_FOUND') throw e;
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
+  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/tags/${slug}/posts?page=${page}&limit=20`, {
+    init: { cache: 'no-store' },
+    fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
+    notFoundOn404: true,
+  });
 }
 
 export default async function TagPage({

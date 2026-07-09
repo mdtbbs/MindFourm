@@ -1,4 +1,5 @@
 import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse } from '@/types';
+import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/response';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
 
@@ -52,21 +53,11 @@ export function createClientWithCookie(cookie: string) {
         throw new Error(message);
       }
       const data: unknown = await res.json();
-      if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
-        const d = data as { data: unknown; pagination?: unknown };
-        if (d.pagination !== undefined) return d as T;
-        // Normalize flat pagination format: { data: [...], total, page, limit, totalPages }
-        const inner = d.data;
-        if (typeof inner === 'object' && inner !== null && !Array.isArray(inner)) {
-          const innerObj = inner as Record<string, unknown>;
-          if (Array.isArray(innerObj.data) && typeof innerObj.total === 'number') {
-            const { data: items, total, page, limit, totalPages, ...rest } = innerObj;
-            return { data: items, pagination: { total, page, limit, totalPages }, ...rest } as T;
-          }
-        }
-        return inner as T;
+      const paginated = tryNormalizePaginatedApiPayload<unknown, Record<string, unknown>>(data);
+      if (paginated) {
+        return paginated as T;
       }
-      return data as T;
+      return unwrapApiPayload<T>(data) ?? (data as T);
     },
   };
 }
