@@ -225,4 +225,121 @@ describe('PostsService', () => {
       totalPages: 1,
     });
   });
+
+  it('maps search results into public summaries', async () => {
+    const { service, postRepository, postSummaryService } = createService({
+      postRepository: {
+        find: jest.fn().mockResolvedValue([
+          {
+            id: 31,
+            title: 'Searchable post',
+          },
+        ]),
+      },
+      postSummaryService: {
+        toSummaryList: jest.fn().mockResolvedValue([
+          {
+            id: 31,
+            title: 'Searchable post',
+            excerpt: 'search summary',
+          },
+        ]),
+      },
+    });
+
+    const result = await service.search('hello', 15);
+
+    expect(postRepository.find).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: [
+          { title: expect.any(Object), status: 'published' },
+          { content: expect.any(Object), status: 'published' },
+        ],
+        take: 15,
+      }),
+    );
+    expect(postSummaryService.toSummaryList).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 31 }),
+    ]);
+    expect(result).toMatchObject([
+      {
+        id: 31,
+        title: 'Searchable post',
+        excerpt: 'search summary',
+      },
+    ]);
+  });
+
+  it('maps trending and pinned public reads into summaries', async () => {
+    const { service, postRepository, postSummaryService } = createService({
+      postRepository: {
+        find: jest.fn()
+          .mockResolvedValueOnce([
+            {
+              id: 41,
+              title: 'Trending post',
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: 52,
+              title: 'Pinned post',
+            },
+          ]),
+      },
+      postSummaryService: {
+        toSummaryList: jest.fn()
+          .mockResolvedValueOnce([
+            {
+              id: 41,
+              title: 'Trending post',
+              excerpt: 'trending summary',
+            },
+          ])
+          .mockResolvedValueOnce([
+            {
+              id: 52,
+              title: 'Pinned post',
+              excerpt: 'pinned summary',
+            },
+          ]),
+      },
+    });
+
+    const trending = await service.getTrending(5);
+    const pinned = await service.getPinned(9);
+
+    expect(postRepository.find).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: 'published',
+          created_at: expect.any(Object),
+        }),
+        order: { view_count: 'DESC' },
+        take: 5,
+      }),
+    );
+    expect(postRepository.find).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { is_pinned: 1, status: 'published', category_id: 9 },
+        order: { created_at: 'DESC' },
+      }),
+    );
+    expect(postSummaryService.toSummaryList).toHaveBeenNthCalledWith(
+      1,
+      [expect.objectContaining({ id: 41 })],
+    );
+    expect(postSummaryService.toSummaryList).toHaveBeenNthCalledWith(
+      2,
+      [expect.objectContaining({ id: 52 })],
+    );
+    expect(trending).toMatchObject([
+      { id: 41, title: 'Trending post', excerpt: 'trending summary' },
+    ]);
+    expect(pinned).toMatchObject([
+      { id: 52, title: 'Pinned post', excerpt: 'pinned summary' },
+    ]);
+  });
 });

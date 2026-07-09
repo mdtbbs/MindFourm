@@ -779,16 +779,43 @@ export class PostsService {
   /**
    * Search posts by title or content
    */
-  async search(query: string, limit: number = 20): Promise<Post[]> {
-    return this.postRepository.find({
+  async search(query: string, limit: number = 20): Promise<PostSummaryDto[]> {
+    const posts = await this.postRepository.find({
       where: [
         { title: Like(`%${escapeLike(query)}%`), status: 'published' },
         { content: Like(`%${escapeLike(query)}%`), status: 'published' },
       ],
       relations: ['user', 'category'],
+      select: {
+        id: true,
+        user_id: true,
+        category_id: true,
+        server_id: true,
+        post_type: true,
+        title: true,
+        content: true,
+        status: true,
+        is_pinned: true,
+        view_count: true,
+        like_count: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
       take: limit,
       order: { created_at: 'DESC' },
     });
+
+    return this.postSummaryService.toSummaryList(posts);
   }
 
   /**
@@ -855,35 +882,89 @@ export class PostsService {
   /**
    * Get trending posts (most viewed in last 24 hours)
    */
-  async getTrending(limit: number = 10): Promise<Post[]> {
+  async getTrending(limit: number = 10): Promise<PostSummaryDto[]> {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
 
-    return this.postRepository.find({
+    const posts = await this.postRepository.find({
       where: {
         status: 'published',
         created_at: MoreThan(yesterday),
       },
       relations: ['user', 'category'],
+      select: {
+        id: true,
+        user_id: true,
+        category_id: true,
+        server_id: true,
+        post_type: true,
+        title: true,
+        content: true,
+        status: true,
+        is_pinned: true,
+        view_count: true,
+        like_count: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
       order: { view_count: 'DESC' },
       take: limit,
     });
+
+    return this.postSummaryService.toSummaryList(posts);
   }
 
   /**
    * Get pinned posts in a category
    */
-  async getPinned(categoryId?: number): Promise<Post[]> {
+  async getPinned(categoryId?: number): Promise<PostSummaryDto[]> {
     const where: any = { is_pinned: 1, status: 'published' };
 
     if (categoryId) {
       where.category_id = categoryId;
     }
 
-    return this.postRepository.find({
+    const posts = await this.postRepository.find({
       where,
       relations: ['user', 'category'],
+      select: {
+        id: true,
+        user_id: true,
+        category_id: true,
+        server_id: true,
+        post_type: true,
+        title: true,
+        content: true,
+        status: true,
+        is_pinned: true,
+        view_count: true,
+        like_count: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
       order: { created_at: 'DESC' },
     });
+
+    return this.postSummaryService.toSummaryList(posts);
   }
 }
