@@ -1,10 +1,9 @@
-import { messageApi } from '@/lib/api/client';
+import { cookies } from 'next/headers';
+import { fetchApiData } from '@/lib/api/server-fetch';
 import { Conversation } from '@/types';
 import Link from 'next/link';
 
 export const revalidate = 0;
-
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -21,17 +20,18 @@ function formatTime(dateStr: string): string {
 }
 
 async function fetchConversations(): Promise<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }> {
-  try {
-    const res = await fetch(`${API_BASE}/api/messages`, {
+  const cookieHeader = cookies()
+    .getAll()
+    .map(({ name, value }) => `${name}=${value}`)
+    .join('; ');
+
+  return fetchApiData<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }>('/api/messages', {
+    init: {
       cache: 'no-store',
-      headers: { 'Cookie': process.env.COOKIE || '' },
-    });
-    if (!res.ok) return { data: [], next_cursor: null, has_more: false };
-    const json = await res.json();
-    return json.success ? json.data : { data: [], next_cursor: null, has_more: false };
-  } catch {
-    return { data: [], next_cursor: null, has_more: false };
-  }
+      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
+    },
+    fallback: { data: [], next_cursor: null, has_more: false },
+  });
 }
 
 export default async function MessagesPage() {

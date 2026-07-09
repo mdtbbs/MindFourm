@@ -206,6 +206,12 @@ async function request<T>(
     throw new Error('Invalid JSON response');
   }
 
+  const paginated = tryNormalizePaginatedApiPayload<unknown, Record<string, unknown>>(data);
+  if (paginated) {
+    if (cacheKey) setCache(cacheKey, paginated);
+    return paginated as T;
+  }
+
   // Handle wrapped responses
   if (typeof data === 'object' && data !== null && 'success' in data && 'data' in data) {
     const d = data as { data: unknown; pagination?: unknown };
@@ -236,7 +242,7 @@ async function request<T>(
     return result;
   }
 
-  const result = data as T;
+  const result = unwrapApiPayload<T>(data) ?? (data as T);
   if (cacheKey) setCache(cacheKey, result);
   return result;
 }

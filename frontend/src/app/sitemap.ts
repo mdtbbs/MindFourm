@@ -1,16 +1,33 @@
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
+import type { PostSummary } from '@/types';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
+
+async function fetchSitemapPosts(limit: number = 1000): Promise<PostSummary[]> {
+  const pageSize = 50;
+  const totalPages = Math.ceil(limit / pageSize);
+  const posts: PostSummary[] = [];
+
+  for (let page = 1; page <= totalPages; page += 1) {
+    const result = await fetchApiPaginated<PostSummary>(`/api/posts?page=${page}&limit=${pageSize}`, {
+      init: { next: { revalidate: 60 } },
+      fallback: createEmptyPaginatedResult<PostSummary>(pageSize),
+    });
+
+    posts.push(...result.data);
+
+    if (result.pagination.page >= result.pagination.totalPages || result.data.length < pageSize) {
+      break;
+    }
+  }
+
+  return posts.slice(0, limit);
+}
 
 export default async function sitemap() {
-  let settings: Record<string, string> = {};
-  try {
-    const res = await fetch(`${API_BASE}/api/settings`, { next: { revalidate: 60 } });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success) settings = json.data;
-    }
-  } catch {
-    // If settings API fails, generate sitemap anyway
-  }
+  const settings = await fetchApiData<Record<string, string>>('/api/settings', {
+    init: { next: { revalidate: 60 } },
+    fallback: {},
+  });
 
   if (settings.seo_sitemap_enabled === 'false') {
     return [];
@@ -34,21 +51,10 @@ export default async function sitemap() {
   ];
 
   // Fetch posts for sitemap
-  let postUrls: { url: string; lastModified: string }[] = [];
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/posts?page=1&limit=1000`, { next: { revalidate: 60 } });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success && json.data) {
-        postUrls = json.data.map((post: any) => ({
-          url: `${baseUrl}/posts/${post.id}`,
-          lastModified: post.updated_at || post.created_at,
-        }));
-      }
-    }
-  } catch {
-    // Skip post URLs if fetch fails
-  }
+  const postUrls = (await fetchSitemapPosts()).map((post) => ({
+    url: `${baseUrl}/posts/${post.id}`,
+    lastModified: post.updated_at || post.created_at,
+  }));
 
   return [...staticUrls, ...postUrls];
 }

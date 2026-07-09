@@ -8,6 +8,7 @@ import {
 } from '@/lib/api/response';
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1']);
 
 type FetchOptions = Parameters<typeof fetch>[1];
 
@@ -16,6 +17,22 @@ type FetchApiOptions<T> = {
   init?: FetchOptions;
   notFoundOn404?: boolean;
 };
+
+function shouldSkipLocalApiFetchDuringBuild(): boolean {
+  if (process.env.NEXT_ALLOW_LOCAL_API_BUILD_FETCH === '1') {
+    return false;
+  }
+
+  if (process.env.npm_lifecycle_event !== 'build') {
+    return false;
+  }
+
+  try {
+    return LOOPBACK_HOSTS.has(new URL(API_BASE).hostname);
+  } catch {
+    return false;
+  }
+}
 
 function isNextNotFoundError(error: unknown): boolean {
   return error instanceof Error && error.message === 'NEXT_NOT_FOUND';
@@ -32,6 +49,10 @@ export async function fetchApiData<T>(
   options: FetchApiOptions<T>,
 ): Promise<T> {
   const { fallback, init, notFoundOn404 } = options;
+
+  if (shouldSkipLocalApiFetchDuringBuild()) {
+    return fallback;
+  }
 
   try {
     const res = await fetch(`${API_BASE}${path}`, init);
@@ -59,6 +80,10 @@ export async function fetchApiPaginated<
   options: FetchApiOptions<ApiPaginatedResult<TItem, TExtra>>,
 ): Promise<ApiPaginatedResult<TItem, TExtra>> {
   const { fallback, init, notFoundOn404 } = options;
+
+  if (shouldSkipLocalApiFetchDuringBuild()) {
+    return fallback;
+  }
 
   try {
     const res = await fetch(`${API_BASE}${path}`, init);

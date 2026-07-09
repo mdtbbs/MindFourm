@@ -3,20 +3,15 @@ import { Resource } from '@/types';
 import { notFound } from 'next/navigation';
 import ResourceDetail from '@/components/forum/resource-detail';
 import { ArrowLeft } from 'lucide-react';
+import { fetchApiData } from '@/lib/api/server-fetch';
 
 export const revalidate = 60;
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
 async function fetchResource(id: number): Promise<Resource | null> {
-  try {
-    const res = await fetch(`${API_BASE}/api/resources/${id}`, { next: { revalidate: 60 } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.success ? json.data : null;
-  } catch {
-    return null;
-  }
+  return fetchApiData<Resource | null>(`/api/resources/${id}`, {
+    init: { next: { revalidate: 60 } },
+    fallback: null,
+  });
 }
 
 export default async function ResourceDetailPage({ params }: { params: { id: string } }) {

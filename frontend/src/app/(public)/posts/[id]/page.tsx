@@ -6,31 +6,23 @@ import ReplyFormWrapper from '@/components/forum/reply-form-wrapper';
 import Pagination from '@/components/ui/pagination';
 import AttachmentList from '@/components/forum/attachment-list';
 import Link from 'next/link';
+import { fetchApiData } from '@/lib/api/server-fetch';
 import { Post, Attachment } from '@/types';
 
 export const revalidate = 60;
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
 async function fetchSettings(): Promise<Record<string, string>> {
-  try {
-    const res = await fetch(`${API_BASE}/api/settings`, { next: { revalidate: 60 } });
-    if (!res.ok) return {};
-    const json = await res.json();
-    return json.success ? json.data : {};
-  } catch {
-    return {};
-  }
+  return fetchApiData<Record<string, string>>('/api/settings', {
+    init: { next: { revalidate: 60 } },
+    fallback: {},
+  });
 }
 
-async function fetchPost(id: number, page: number, limit: number) {
-  const res = await fetch(
-    `${API_BASE}/api/posts/${id}?reply_page=${page}&reply_limit=${limit}`,
-    { cache: 'no-store' },
-  );
-  if (!res.ok) return null;
-  const json = await res.json();
-  return json.success ? json.data : null;
+async function fetchPost(id: number, page: number, limit: number): Promise<Post | null> {
+  return fetchApiData<Post | null>(`/api/posts/${id}?reply_page=${page}&reply_limit=${limit}`, {
+    init: { cache: 'no-store' },
+    fallback: null,
+  });
 }
 
 export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
@@ -70,14 +62,10 @@ export default async function PostDetailPage({
   const post = await fetchPost(postId, page, repliesPerPage);
 
   // Fetch attachments
-  let attachments: Attachment[] = [];
-  try {
-    const res = await fetch(`${API_BASE}/api/attachments/post/${postId}`, { cache: 'no-store' });
-    if (res.ok) {
-      const json = await res.json();
-      attachments = json.success ? json.data : [];
-    }
-  } catch { /* ignore */ }
+  const attachments = await fetchApiData<Attachment[]>(`/api/attachments/post/${postId}`, {
+    init: { cache: 'no-store' },
+    fallback: [],
+  });
 
   if (!post) {
     return (

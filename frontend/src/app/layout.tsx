@@ -7,23 +7,18 @@ import { SettingsProvider } from '@/lib/settings/context';
 import { ThemeProvider } from '@mindproject/shared';
 import { LikeProvider } from '@/lib/like/context';
 import { PhoneVerificationProvider } from '@/components/phone-verification-provider';
+import { fetchApiData } from '@/lib/api/server-fetch';
 import { cn } from "@/lib/utils";
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
 async function fetchSettings(): Promise<Record<string, string>> {
-  try {
-    const res = await fetch(`${API_BASE}/api/settings`, { next: { revalidate: 60 } });
-    if (!res.ok) return {};
-    const json = await res.json();
-    return json.success ? json.data : {};
-  } catch {
-    return {};
-  }
+  return fetchApiData<Record<string, string>>('/api/settings', {
+    init: { next: { revalidate: 60 } },
+    fallback: {},
+  });
 }
 
 export async function generateMetadata(): Promise<Metadata> {

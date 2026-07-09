@@ -3,10 +3,9 @@ import Link from 'next/link';
 import ResourceCard from '@/components/forum/resource-card';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
 import { FileText } from 'lucide-react';
+import { fetchApiData } from '@/lib/api/server-fetch';
 
 export const revalidate = 60;
-
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
 async function fetchData(params: { category_id?: string; search?: string; sort?: string }) {
   const qs = new URLSearchParams();
