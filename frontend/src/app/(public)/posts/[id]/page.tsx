@@ -24,7 +24,10 @@ async function fetchSettings(): Promise<Record<string, string>> {
 }
 
 async function fetchPost(id: number, page: number, limit: number) {
-  const res = await fetch(`${API_BASE}/api/posts/${id}?page=${page}&limit=${limit}`, { cache: 'no-store' });
+  const res = await fetch(
+    `${API_BASE}/api/posts/${id}?reply_page=${page}&reply_limit=${limit}`,
+    { cache: 'no-store' },
+  );
   if (!res.ok) return null;
   const json = await res.json();
   return json.success ? json.data : null;
@@ -92,9 +95,8 @@ export default async function PostDetailPage({
     );
   }
 
-  const replies = post.replies?.data ?? [];
-  const pagination = post.replies?.pagination ?? { page: 1, totalPages: 1, total: 0 };
-  const postTags = post.tags ?? [];
+  const replies = post.replies ?? [];
+  const pagination = post.replyPagination ?? { page: 1, limit: repliesPerPage, totalPages: 1, total: 0 };
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Breadcrumb */}
@@ -113,7 +115,7 @@ export default async function PostDetailPage({
       </nav>
 
       {/* Post Content */}
-      <PostContent post={{ ...post, tags: postTags }} postId={postId} />
+      <PostContent post={post} postId={postId} />
       <AttachmentList attachments={attachments} />
 
       {/* Replies */}

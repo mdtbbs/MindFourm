@@ -25,6 +25,7 @@ export default function PostContent({
   onDelete,
 }: PostContentProps) {
   const canModerate = currentUserRole === 'moderator' || currentUserRole === 'admin';
+  const authorLabel = post.author_mindauth_id ?? `#${post.user_id}`;
 
   function formatTime(dateStr: string): string {
     return new Date(dateStr).toLocaleString('zh-CN');
@@ -38,7 +39,7 @@ export default function PostContent({
 
         <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
           <span className="font-medium text-[var(--text)]">作者</span>
-          <span>ID: {post.author_mindauth_id}</span>
+          <span>ID: {authorLabel}</span>
           <span className="text-[var(--text-muted)]">|</span>
           <span>发布于 {formatTime(post.created_at)}</span>
           <span className="text-[var(--text-muted)]">|</span>

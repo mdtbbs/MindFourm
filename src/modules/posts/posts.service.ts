@@ -9,6 +9,7 @@ import {
   Repository,
   DataSource,
   Brackets,
+  In,
   LessThan,
   MoreThan,
   Like,
@@ -29,6 +30,7 @@ import { SettingsService } from '../settings/settings.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
+import { PostDetailDto, PostDetailReply, PostDetailService } from './post-detail.service';
 import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
@@ -36,6 +38,8 @@ import { escapeLike } from '@common/utils/search.util';
 
 @Injectable()
 export class PostsService {
+  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v2:';
+
   constructor(
     @InjectRepository(Post)
     private postRepository: Repository<Post>,
@@ -58,6 +62,7 @@ export class PostsService {
     private adminNotificationsService: AdminNotificationsService,
     private settingsService: SettingsService,
     private postSummaryService: PostSummaryService,
+    private postDetailService: PostDetailService,
   ) {}
 
   /**
@@ -165,8 +170,8 @@ export class PostsService {
    * Find post by ID with details, increment view count
    * Optional userId for group permission check
    */
-  async findById(id: number, userId?: number): Promise<Post> {
-    const cacheKey = `post:${id}`;
+  async findById(id: number, userId?: number): Promise<PostDetailDto> {
+    const cacheKey = `${PostsService.POST_DETAIL_CACHE_PREFIX}${id}`;
 
     // Try cache first (without incrementing view count)
     const cached = await this.redisService.get(cacheKey);
@@ -186,7 +191,7 @@ export class PostsService {
 
     const post = await this.postRepository.findOne({
       where: { id },
-      relations: ['user', 'category', 'postTags', 'postTags.tag', 'requiredGroup'],
+      relations: ['user', 'category'],
       select: {
         id: true,
         user_id: true,
@@ -203,6 +208,16 @@ export class PostsService {
         required_group_id: true,
         created_at: true,
         updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+        },
       },
     });
 
@@ -221,10 +236,12 @@ export class PostsService {
     // Increment view count
     await this.incrementViewCount(id);
 
-    // Cache for 5 minutes
-    await this.redisService.set(cacheKey, JSON.stringify(post), 300);
+    const detail = await this.postDetailService.toDetail(post);
 
-    return post;
+    // Cache for 5 minutes
+    await this.redisService.set(cacheKey, JSON.stringify(detail), 300);
+
+    return detail;
   }
 
   /**
@@ -671,7 +688,7 @@ export class PostsService {
    * Get first page of replies for a post
    */
   async getReplies(postId: number, limit: number = 20, page: number = 1): Promise<{
-    data: Reply[];
+    data: PostDetailReply[];
     total: number;
     page: number;
     limit: number;
@@ -679,15 +696,34 @@ export class PostsService {
   }> {
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.replyRepository.findAndCount({
-      where: { post_id: postId, status: 'active' },
+    const [replies, total] = await this.replyRepository.findAndCount({
+      where: { post_id: postId, status: In(['active', 'published']) },
       relations: ['user'],
+      select: {
+        id: true,
+        post_id: true,
+        user_id: true,
+        parent_reply_id: true,
+        content: true,
+        content_html: true,
+        status: true,
+        like_count: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+      },
       order: { created_at: 'ASC' },
       skip,
       take: limit,
     });
 
     const totalPages = Math.ceil(total / limit);
+
+    const data = await this.postDetailService.toReplies(replies);
 
     return {
       data,
@@ -736,6 +772,7 @@ export class PostsService {
    */
   private async invalidatePostCache(postId: number): Promise<void> {
     await this.redisService.del(`post:${postId}`);
+    await this.redisService.del(`${PostsService.POST_DETAIL_CACHE_PREFIX}${postId}`);
     await this.redisService.del(`post_view:${postId}`);
   }
 

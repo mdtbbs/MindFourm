@@ -17,6 +17,7 @@ import { AdminNotificationsModule } from '../admin-notifications/admin-notificat
 import { SettingsModule } from '../settings/settings.module';
 import { LogsModule } from '../logs/logs.module';
 import { PostSummaryService } from './post-summary.service';
+import { PostDetailService } from './post-detail.service';
 
 @Module({
   imports: [
@@ -30,8 +31,8 @@ import { PostSummaryService } from './post-summary.service';
     LogsModule,
     TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply]),
   ],
-  providers: [PostsService, PostSummaryService],
+  providers: [PostsService, PostSummaryService, PostDetailService],
   controllers: [PostsController],
-  exports: [PostsService, PostSummaryService],
+  exports: [PostsService, PostSummaryService, PostDetailService],
 })
 export class PostsModule {}

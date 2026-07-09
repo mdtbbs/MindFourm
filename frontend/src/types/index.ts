@@ -69,22 +69,31 @@ export interface Post {
   id: number;
   user_id: number;
   category_id: number | null;
+  server_id?: number | null;
+  required_group_id?: number | null;
+  post_type?: string;
   title: string;
   content: string;
-  content_html: string;
+  content_html: string | null;
   status: 'draft' | 'published' | 'pending' | 'deleted';
   is_pinned: boolean;
   view_count: number;
-  reply_count: number;
+  reply_count?: number;
   like_count: number;
   created_at: string;
   updated_at: string;
   category_name: string | null;
   category_slug: string | null;
-  author_mindauth_id: number;
-  author_role: UserRole;
+  author_mindauth_id: number | null;
+  author_role: UserRole | null;
   tags: Tag[];
   replies?: Reply[];
+  replyPagination?: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 export interface PostListResponse {
@@ -112,14 +121,14 @@ export interface Reply {
   user_id: number;
   parent_reply_id: number | null;
   content: string;
-  content_html: string;
+  content_html: string | null;
   post_title?: string | null;
-  status: 'active' | 'pending' | 'deleted';
+  status: 'active' | 'published' | 'pending' | 'deleted';
   like_count: number;
   created_at: string;
   updated_at: string;
-  author_mindauth_id: number;
-  author_role: UserRole;
+  author_mindauth_id: number | null;
+  author_role: UserRole | null;
 }
 
 export interface ReplyListResponse {

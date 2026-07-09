@@ -82,9 +82,19 @@ export class PostsController {
     @Param('id', ParseIntPipe) id: number,
     @Query('reply_page') replyPage?: string,
     @Query('reply_limit') replyLimit?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    const parsedReplyPage = replyPage ? parseInt(replyPage, 10) : 1;
-    const parsedReplyLimit = replyLimit ? parseInt(replyLimit, 10) : 20;
+    const parsedReplyPage = replyPage
+      ? parseInt(replyPage, 10)
+      : page
+        ? parseInt(page, 10)
+        : 1;
+    const parsedReplyLimit = replyLimit
+      ? parseInt(replyLimit, 10)
+      : limit
+        ? parseInt(limit, 10)
+        : 20;
     const post = await this.postsService.findById(id);
     const replies = await this.postsService.getReplies(
       id,
