@@ -1,4 +1,4 @@
-import type { User, Post, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost } from '@/types';
+import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost } from '@/types';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
 
@@ -337,7 +337,7 @@ export const postApi = {
       search: params?.search,
     })}`),
   getListCursor: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string }) =>
-    request<{ data: Post[]; next_cursor: string | null; has_more: boolean }>(`/api/posts/cursor${buildQueryString({
+    request<{ data: PostSummary[]; nextCursor: string | null; hasMore: boolean }>(`/api/posts/cursor${buildQueryString({
       cursor: params?.cursor,
       limit: params?.limit,
       category_id: params?.category_id,

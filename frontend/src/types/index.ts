@@ -43,6 +43,28 @@ export interface Tag {
 }
 
 // Post types
+export interface PostSummary {
+  id: number;
+  user_id: number;
+  category_id: number | null;
+  server_id?: number | null;
+  post_type?: string;
+  title: string;
+  excerpt: string;
+  status: 'draft' | 'published' | 'pending' | 'deleted';
+  is_pinned: boolean;
+  view_count: number;
+  reply_count: number;
+  like_count: number;
+  created_at: string;
+  updated_at: string;
+  category_name: string | null;
+  category_slug: string | null;
+  author_mindauth_id: number | null;
+  author_role: UserRole | null;
+  tags: Tag[];
+}
+
 export interface Post {
   id: number;
   user_id: number;
@@ -66,7 +88,7 @@ export interface Post {
 }
 
 export interface PostListResponse {
-  data: Post[];
+  data: PostSummary[];
   pagination: {
     page: number;
     limit: number;

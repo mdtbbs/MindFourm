@@ -5,11 +5,13 @@ import { TagsController } from './tags.controller';
 import { Tag } from '../../entities/tag.entity';
 import { Post } from '../../entities/post.entity';
 import { PostTag } from '../../entities/post-tag.entity';
+import { Reply } from '../../entities/reply.entity';
+import { PostSummaryService } from '../posts/post-summary.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tag, Post, PostTag])],
+  imports: [TypeOrmModule.forFeature([Tag, Post, PostTag, Reply])],
   controllers: [TagsController],
-  providers: [TagsService],
+  providers: [TagsService, PostSummaryService],
   exports: [TagsService],
 })
 export class TagsModule {}

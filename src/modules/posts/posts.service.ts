@@ -29,6 +29,7 @@ import { SettingsService } from '../settings/settings.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
+import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
@@ -56,6 +57,7 @@ export class PostsService {
     private notificationsService: NotificationsService,
     private adminNotificationsService: AdminNotificationsService,
     private settingsService: SettingsService,
+    private postSummaryService: PostSummaryService,
   ) {}
 
   /**
@@ -229,7 +231,7 @@ export class PostsService {
    * Find posts with page-based pagination
    */
   async findAll(query: QueryPostsDto): Promise<{
-    data: Post[];
+    data: PostSummaryDto[];
     total: number;
     page: number;
     limit: number;
@@ -274,7 +276,7 @@ export class PostsService {
       where.title = Like(`%${escapeLike(search)}%`);
     }
 
-    const [data, total] = await this.postRepository.findAndCount({
+    const [posts, total] = await this.postRepository.findAndCount({
       where,
       relations: ['user', 'category'],
       select: {
@@ -291,6 +293,16 @@ export class PostsService {
         like_count: true,
         created_at: true,
         updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+        },
       },
       order: {
         [sort]: order === 'ASC' ? 'ASC' : 'DESC',
@@ -299,6 +311,7 @@ export class PostsService {
       take: limit,
     });
 
+    const data = await this.postSummaryService.toSummaryList(posts);
     const totalPages = Math.ceil(total / limit);
 
     return {
@@ -314,7 +327,7 @@ export class PostsService {
    * Find posts with cursor-based pagination
    */
   async findAllCursor(query: QueryPostsDto): Promise<{
-    data: Post[];
+    data: PostSummaryDto[];
     nextCursor: string | null;
     hasMore: boolean;
   }> {
@@ -393,6 +406,16 @@ export class PostsService {
         like_count: true,
         created_at: true,
         updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+        },
       },
       order: {
         [sort]: order === 'ASC' ? 'ASC' : 'DESC',
@@ -417,8 +440,10 @@ export class PostsService {
       nextCursor = encodeCursor(cursorValue, lastPost.id.toString());
     }
 
+    const data = await this.postSummaryService.toSummaryList(posts);
+
     return {
-      data: posts,
+      data,
       nextCursor,
       hasMore,
     };
@@ -737,7 +762,7 @@ export class PostsService {
     page: number = 1,
     limit: number = 20,
   ): Promise<{
-    data: Post[];
+    data: PostSummaryDto[];
     total: number;
     page: number;
     limit: number;
@@ -745,14 +770,40 @@ export class PostsService {
   }> {
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.postRepository.findAndCount({
+    const [posts, total] = await this.postRepository.findAndCount({
       where: { user_id: userId, status: 'published' },
       relations: ['user', 'category'],
+      select: {
+        id: true,
+        user_id: true,
+        category_id: true,
+        server_id: true,
+        post_type: true,
+        title: true,
+        content: true,
+        status: true,
+        is_pinned: true,
+        view_count: true,
+        like_count: true,
+        created_at: true,
+        updated_at: true,
+        user: {
+          id: true,
+          mindauth_id: true,
+          role: true,
+        },
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
       order: { created_at: 'DESC' },
       skip,
       take: limit,
     });
 
+    const data = await this.postSummaryService.toSummaryList(posts);
     const totalPages = Math.ceil(total / limit);
 
     return {

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Tag } from '../../entities/tag.entity';
 import { Post } from '../../entities/post.entity';
 import { PostTag } from '../../entities/post-tag.entity';
+import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
 
 @Injectable()
 export class TagsService {
@@ -14,6 +15,7 @@ export class TagsService {
     private readonly postRepository: Repository<Post>,
     @InjectRepository(PostTag)
     private readonly postTagRepository: Repository<PostTag>,
+    private readonly postSummaryService: PostSummaryService,
   ) {}
 
   async getAll() {
@@ -117,7 +119,13 @@ export class TagsService {
     return result;
   }
 
-  async getPostsByTagSlug(slug: string, page: number, limit: number) {
+  async getPostsByTagSlug(slug: string, page: number, limit: number): Promise<{
+    data: PostSummaryDto[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  }> {
     const tag = await this.getBySlug(slug);
 
     const [posts, total] = await this.postRepository
@@ -125,13 +133,39 @@ export class TagsService {
       .innerJoin('post.postTags', 'post_tag')
       .innerJoin('post_tag.tag', 'tag')
       .where('tag.id = :tagId', { tagId: tag.id })
+      .andWhere('post.status = :status', { status: 'published' })
+      .leftJoinAndSelect('post.user', 'user')
+      .leftJoinAndSelect('post.category', 'category')
+      .select([
+        'post.id',
+        'post.user_id',
+        'post.category_id',
+        'post.server_id',
+        'post.post_type',
+        'post.title',
+        'post.content',
+        'post.status',
+        'post.is_pinned',
+        'post.view_count',
+        'post.like_count',
+        'post.created_at',
+        'post.updated_at',
+        'user.id',
+        'user.mindauth_id',
+        'user.role',
+        'category.id',
+        'category.name',
+        'category.slug',
+      ])
       .skip((page - 1) * limit)
       .take(limit)
       .orderBy('post.created_at', 'DESC')
       .getManyAndCount();
 
+    const data = await this.postSummaryService.toSummaryList(posts);
+
     return {
-      posts,
+      data,
       total,
       page,
       limit,

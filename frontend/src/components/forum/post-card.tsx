@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Post } from '@/types';
+import { PostSummary } from '@/types';
 import Badge from '@/components/ui/badge';
 import { LikeButton } from '@/components/forum/like-button';
 import { Pin, MessageSquare, Eye } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PostCardProps {
-  post: Post;
+  post: PostSummary;
 }
 
 function formatTime(dateStr: string): string {

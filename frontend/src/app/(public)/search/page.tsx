@@ -1,8 +1,7 @@
-import { postApi, searchApi } from '@/lib/api/client';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import SearchEnhancements from '@/components/forum/search-enhancements';
-import { Post, PostListResponse } from '@/types';
+import { PostListResponse, PostSummary } from '@/types';
 
 export const revalidate = 0;
 
@@ -64,7 +63,7 @@ export default async function SearchPage({
         </div>
       ) : (
         <div className="space-y-3">
-          {postsResult.data.map((post: Post) => (
+          {postsResult.data.map((post: PostSummary) => (
             <PostCard key={post.id} post={post} />
           ))}
         </div>

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Eye, MessageSquare, Pin, ThumbsUp } from 'lucide-react';
-import { Post } from '@/types';
+import { PostSummary } from '@/types';
 import { cn } from '@/lib/utils';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 
@@ -16,7 +16,7 @@ interface LatestPostsSettings {
 }
 
 interface LatestPostsListProps {
-  posts: Post[];
+  posts: PostSummary[];
   settings: LatestPostsSettings;
 }
 
@@ -33,22 +33,6 @@ function formatTime(dateStr: string): string {
   if (diffHours < 24) return `${diffHours} 小时前`;
   if (diffDays < 7) return `${diffDays} 天前`;
   return date.toLocaleDateString('zh-CN');
-}
-
-function stripMarkdown(input: string): string {
-  return input
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[#>*_~\-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function getExcerpt(post: Post): string {
-  const text = stripMarkdown(post.content || '');
-  return text.length > 120 ? `${text.slice(0, 120)}...` : text;
 }
 
 export default function LatestPostsList({ posts, settings }: LatestPostsListProps) {
@@ -90,7 +74,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
 
       <div className="divide-y divide-[var(--border)]">
         {posts.map((post, index) => {
-          const excerpt = getExcerpt(post);
+          const excerpt = post.excerpt;
 
           return (
             <article
