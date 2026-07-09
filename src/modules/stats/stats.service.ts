@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Post, Reply, SessionAudit, User } from '@entities/index';
 import { RedisService } from '../../database/redis.service';
+import { PUBLIC_RESOURCE_STATUSES } from '@common/utils/constants';
 
 export interface DashboardStats {
   total_posts: number;
@@ -76,13 +77,14 @@ export class StatsService {
   }
 
   async getForumOverview(): Promise<ForumOverviewStats> {
+    const publicResourceStatusesSql = PUBLIC_RESOURCE_STATUSES.map((status) => `'${status}'`).join(', ');
     const [statsRows, latestLoginRows] = await Promise.all([
       this.postRepository.query(`
         SELECT
           (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'active') as total_replies,
           (SELECT COUNT(*) FROM users) as total_users,
-          (SELECT COUNT(*) FROM resources WHERE status = 'approved') as total_resources
+          (SELECT COUNT(*) FROM resources WHERE status IN (${publicResourceStatusesSql})) as total_resources
       `),
       this.sessionAuditRepository.query(`
         SELECT u.username

@@ -28,6 +28,20 @@ export const REPLY_STATUS = {
 
 export type ReplyStatus = (typeof REPLY_STATUS)[keyof typeof REPLY_STATUS];
 
+export const RESOURCE_STATUS = {
+  pending: 'pending',
+  approved: 'approved',
+  published: 'published',
+  rejected: 'rejected',
+} as const;
+
+export type ResourceStatus = (typeof RESOURCE_STATUS)[keyof typeof RESOURCE_STATUS];
+
+export const PUBLIC_RESOURCE_STATUSES: ResourceStatus[] = [
+  RESOURCE_STATUS.approved,
+  RESOURCE_STATUS.published,
+];
+
 export const LOG_ACTIONS = {
   USER_LOGIN: 'user_login',
   USER_LOGOUT: 'user_logout',

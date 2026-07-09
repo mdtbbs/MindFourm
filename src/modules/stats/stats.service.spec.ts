@@ -82,6 +82,7 @@ describe('StatsService', () => {
     });
 
     expect(postRepository.query).toHaveBeenCalledTimes(1);
+    expect(postRepository.query.mock.calls[0][0]).toContain("status IN ('approved', 'published')");
     expect(sessionAuditRepository.query).toHaveBeenCalledTimes(1);
     expect(userRepository.query).not.toHaveBeenCalled();
   });

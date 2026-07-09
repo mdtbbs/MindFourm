@@ -1,16 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Resource, ResourceVersion } from '@/types';
-import { Download, ExternalLink, Calendar, User, FileText, Loader2, Upload } from 'lucide-react';
+import { Calendar, Download, ExternalLink, FileText, Loader2, Upload, User } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/context';
-import * as LucideIcons from 'lucide-react';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import VersionSelector from '@/components/ui/version-selector';
+import { Resource, ResourceVersion } from '@/types';
 
 function CategoryIcon({ icon }: { icon: string | null }) {
-  const IconComponent = icon && ((LucideIcons as unknown) as Record<string, React.ComponentType<{ className?: string }>>)[icon];
+  const IconComponent =
+    icon && ((LucideIcons as unknown) as Record<string, React.ComponentType<{ className?: string }>>)[icon];
   return IconComponent ? <IconComponent className="w-4 h-4" /> : <FileText className="w-4 h-4" />;
 }
 
@@ -69,25 +70,31 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   };
 
   return (
-    <div className="bg-[var(--bg-card)] rounded-[var(--radius-card)] border border-[var(--border)] p-6">
-      <h1 className="text-2xl font-bold text-[var(--text)] mb-4">{resource.title}</h1>
+    <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-6">
+      <h1 className="mb-3 text-2xl font-bold text-[var(--text)]">{resource.title}</h1>
 
-      <div className="flex flex-wrap gap-4 text-sm text-[var(--text-muted)] mb-4">
+      {resource.description && (
+        <p className="mb-4 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
+          {resource.description}
+        </p>
+      )}
+
+      <div className="mb-4 flex flex-wrap gap-4 text-sm text-[var(--text-muted)]">
         <span className="flex items-center gap-1">
-          <User className="w-4 h-4" />
+          <User className="h-4 w-4" />
           {resource.username}
         </span>
         <span className="flex items-center gap-1">
-          <Calendar className="w-4 h-4" />
+          <Calendar className="h-4 w-4" />
           {new Date(resource.created_at).toLocaleDateString('zh-CN')}
         </span>
         <span className="flex items-center gap-1">
-          <Download className="w-4 h-4" />
+          <Download className="h-4 w-4" />
           {resource.download_count} 次下载
         </span>
         {selectedFileSize > 0 && <span>{formatSize(selectedFileSize)}</span>}
         {resource.category_name && (
-          <span className="flex items-center gap-1 px-2 py-0.5 bg-[var(--bg-elevated)] rounded-full text-xs">
+          <span className="flex items-center gap-1 rounded-full bg-[var(--bg-elevated)] px-2 py-0.5 text-xs">
             <CategoryIcon icon={resource.category_icon} />
             {resource.category_name}
           </span>
@@ -95,7 +102,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       </div>
 
       {(versions.length > 0 || resource.version) && (
-        <div className="mb-4 p-3 bg-[var(--bg-elevated)] rounded-[var(--radius-sm)]">
+        <div className="mb-4 rounded-[var(--radius-sm)] bg-[var(--bg-elevated)] p-3">
           <VersionSelector
             versions={versions}
             baseVersion={resource.version}
@@ -105,22 +112,18 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         </div>
       )}
 
-      {resource.content_html ? (
-        <div className="mb-6 p-4 bg-[var(--bg-elevated)] rounded-[var(--radius-card)]">
+      {resource.content_html && (
+        <div className="mb-6 rounded-[var(--radius-card)] bg-[var(--bg-elevated)] p-4">
           <MarkdownRenderer content={resource.content_html} />
         </div>
-      ) : resource.description ? (
-        <div className="mb-6 p-4 bg-[var(--bg-elevated)] rounded-[var(--radius-card)] text-[var(--text-secondary)]">
-          {resource.description}
-        </div>
-      ) : null}
+      )}
 
       {hasDownloadFile ? (
         <a
           href={resourceApi.download(resource.id, selectedVersion?.id)}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-white font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
+          className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-6 py-3 font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
         >
-          <Download className="w-5 h-5" />
+          <Download className="h-5 w-5" />
           下载 {selectedFileName || '文件'}
         </a>
       ) : (
@@ -128,18 +131,18 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
           href={resource.external_url || '#'}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--primary)] text-white font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
+          className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-6 py-3 font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
         >
-          <ExternalLink className="w-5 h-5" />
+          <ExternalLink className="h-5 w-5" />
           访问外链
         </a>
       )}
 
       {isOwner && (
-        <form onSubmit={handleVersionUpload} className="mt-6 pt-6 border-t border-[var(--border)] space-y-3">
+        <form onSubmit={handleVersionUpload} className="mt-6 space-y-3 border-t border-[var(--border)] pt-6">
           <h2 className="text-sm font-semibold text-[var(--text)]">上传新版本</h2>
           {versionError && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-[var(--radius)] text-red-600 dark:text-red-400 text-sm">
+            <div className="rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
               {versionError}
             </div>
           )}
@@ -149,10 +152,10 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
               onChange={(e) => setNewVersion(e.target.value)}
               placeholder="版本号"
               maxLength={50}
-              className="px-3 py-2 bg-[var(--bg-elevated)] text-[var(--text)] border border-[var(--border)] rounded-[var(--radius)] text-sm"
+              className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]"
             />
-            <label className="flex items-center gap-2 px-3 py-2 bg-[var(--bg-elevated)] border border-[var(--border)] rounded-[var(--radius)] text-sm cursor-pointer">
-              <Upload className="w-4 h-4 text-[var(--text-muted)]" />
+            <label className="flex cursor-pointer items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm">
+              <Upload className="h-4 w-4 text-[var(--text-muted)]" />
               <span className="truncate">{versionFile?.name || '选择版本文件'}</span>
               <input
                 type="file"
@@ -164,9 +167,9 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             <button
               type="submit"
               disabled={isUploadingVersion}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-[var(--radius)] text-sm hover:bg-[var(--primary-dark)] disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm text-white hover:bg-[var(--primary-dark)] disabled:opacity-50"
             >
-              {isUploadingVersion && <Loader2 className="w-4 h-4 animate-spin" />}
+              {isUploadingVersion && <Loader2 className="h-4 w-4 animate-spin" />}
               上传
             </button>
           </div>

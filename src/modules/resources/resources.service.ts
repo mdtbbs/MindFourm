@@ -11,6 +11,7 @@ import { QueryResourcesDto } from './dto/query-resources.dto';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
+import { PUBLIC_RESOURCE_STATUSES, RESOURCE_STATUS } from '@common/utils/constants';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -24,10 +25,9 @@ export interface ResourceFileMeta {
 
 type ResourceListScope = 'public' | 'admin';
 
-const PUBLIC_RESOURCE_STATUSES = ['approved', 'published'] as const;
-const RESOURCE_STATUS_PENDING = 'pending';
-const RESOURCE_STATUS_APPROVED = 'approved';
-const RESOURCE_STATUS_REJECTED = 'rejected';
+const RESOURCE_STATUS_PENDING = RESOURCE_STATUS.pending;
+const RESOURCE_STATUS_APPROVED = RESOURCE_STATUS.approved;
+const RESOURCE_STATUS_REJECTED = RESOURCE_STATUS.rejected;
 
 @Injectable()
 export class ResourcesService {
