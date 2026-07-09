@@ -4,5 +4,10 @@ data/
 *.log
 .DS_Store
 Thumbs.db
+*.tsbuildinfo
 # Build output
 dist/
+uploads/attachments/
+uploads/resources/
+uploads/avatars/
+!uploads/avatars/.gitkeep
