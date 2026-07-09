@@ -223,6 +223,25 @@ export interface ModerationItem {
   avatar_url?: string;
 }
 
+export interface SearchHistoryEntry {
+  id: number;
+  query: string;
+  search_type: string;
+  results_count: number;
+  created_at: string;
+}
+
+export interface SearchResultResponse {
+  data: PostSummary[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  popular_searches?: string[];
+}
+
 // Phase 2: User Profile
 export interface UserProfile {
   id: number;

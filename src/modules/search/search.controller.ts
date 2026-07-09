@@ -20,8 +20,7 @@ export class SearchController {
     await this.searchService.recordSearch(undefined, dto.q, postsResult.pagination.total);
 
     return {
-      success: true,
-      data: postsResult,
+      ...postsResult,
       popular_searches: await this.searchService.getPopularSearches(),
     };
   }
@@ -29,20 +28,18 @@ export class SearchController {
   @UseGuards(JwtAuthGuard)
   @Get('history')
   async getHistory(@Req() req: any) {
-    const history = await this.searchService.getSearchHistory(req.user.id);
-    return { success: true, data: history };
+    return this.searchService.getSearchHistory(req.user.id);
   }
 
   @UseGuards(JwtAuthGuard)
   @Delete('history')
   async clearHistory(@Req() req: any) {
     await this.searchService.clearSearchHistory(req.user.id);
-    return { success: true, message: 'Search history cleared' };
+    return { message: 'Search history cleared' };
   }
 
   @Get('popular')
   async getPopular() {
-    const popular = await this.searchService.getPopularSearches();
-    return { success: true, data: popular };
+    return this.searchService.getPopularSearches();
   }
 }

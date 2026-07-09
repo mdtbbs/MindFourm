@@ -1,31 +1,35 @@
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import SearchEnhancements from '@/components/forum/search-enhancements';
-import { PostListResponse, PostSummary } from '@/types';
+import { SearchResultResponse } from '@/types';
 
 export const revalidate = 0;
 
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 
-async function fetchPosts(query: string, page: number, limit: number): Promise<PostListResponse> {
+async function fetchPosts(query: string, page: number, limit: number): Promise<SearchResultResponse> {
   try {
     const qs = new URLSearchParams();
+    qs.set('q', query);
     qs.set('page', String(page));
     qs.set('limit', String(limit));
-    qs.set('search', query);
-    const res = await fetch(`${API_BASE}/api/posts?${qs}`, { next: { revalidate: 0 } });
+
+    const res = await fetch(`${API_BASE}/api/search?${qs.toString()}`, { next: { revalidate: 0 } });
     if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
+
     const json = await res.json();
     if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
+
     const responseData = json.data || {};
     return {
-      data: Array.isArray(responseData.data) ? responseData.data : Array.isArray(json.data) ? json.data : [],
+      data: Array.isArray(responseData.data) ? responseData.data : [],
       pagination: {
-        page: responseData.page || 1,
-        limit: responseData.limit || limit,
-        total: responseData.total || 0,
-        totalPages: responseData.totalPages || 1,
+        page: responseData.pagination?.page || responseData.page || 1,
+        limit: responseData.pagination?.limit || responseData.limit || limit,
+        total: responseData.pagination?.total || responseData.total || 0,
+        totalPages: responseData.pagination?.totalPages || responseData.totalPages || 1,
       },
+      popular_searches: Array.isArray(responseData.popular_searches) ? responseData.popular_searches : undefined,
     };
   } catch {
     return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
@@ -63,7 +67,7 @@ export default async function SearchPage({
         </div>
       ) : (
         <div className="space-y-3">
-          {postsResult.data.map((post: PostSummary) => (
+          {postsResult.data.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
         </div>

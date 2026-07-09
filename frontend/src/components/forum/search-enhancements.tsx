@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { searchApi } from '@/lib/api/client';
-import Link from 'next/link';
 import { Clock, TrendingUp } from 'lucide-react';
+import { SearchHistoryEntry } from '@/types';
 
 export default function SearchEnhancements() {
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const [popular, setPopular] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 

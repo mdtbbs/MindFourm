@@ -7,6 +7,7 @@ import { SearchHistory } from '@entities/search-history.entity';
 import { PopularSearch } from '@entities/popular-search.entity';
 import { RedisService } from '../../database/redis.service';
 import { escapeLike } from '../../common/utils/search.util';
+import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
 
 @Injectable()
 export class SearchService {
@@ -20,9 +21,21 @@ export class SearchService {
     @InjectRepository(PopularSearch)
     private popularSearchRepo: Repository<PopularSearch>,
     private redisService: RedisService,
+    private postSummaryService: PostSummaryService,
   ) {}
 
-  async searchPosts(query: string, options: { page?: number; limit?: number; category?: string; sort?: string }) {
+  async searchPosts(
+    query: string,
+    options: { page?: number; limit?: number; category?: string; sort?: string },
+  ): Promise<{
+    data: PostSummaryDto[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
     const page = options.page || 1;
     const limit = Math.min(options.limit || 20, 50);
 
@@ -30,6 +43,27 @@ export class SearchService {
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.user', 'user')
       .leftJoinAndSelect('p.category', 'category')
+      .select([
+        'p.id',
+        'p.user_id',
+        'p.category_id',
+        'p.server_id',
+        'p.post_type',
+        'p.title',
+        'p.content',
+        'p.status',
+        'p.is_pinned',
+        'p.view_count',
+        'p.like_count',
+        'p.created_at',
+        'p.updated_at',
+        'user.id',
+        'user.mindauth_id',
+        'user.role',
+        'category.id',
+        'category.name',
+        'category.slug',
+      ])
       .where('p.status = :status', { status: 'published' })
       .andWhere(
         '(p.title LIKE :query OR p.content LIKE :query)',
@@ -52,9 +86,10 @@ export class SearchService {
     qb.skip((page - 1) * limit).take(limit);
 
     const [posts, total] = await qb.getManyAndCount();
+    const data = await this.postSummaryService.toSummaryList(posts);
 
     return {
-      data: posts,
+      data,
       pagination: {
         page,
         limit,

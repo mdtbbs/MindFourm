@@ -1,4 +1,4 @@
-import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost } from '@/types';
+import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse } from '@/types';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
 
@@ -868,10 +868,10 @@ export const searchApi = {
     if (params.limit) qs.set('limit', String(params.limit));
     if (params.category) qs.set('category', params.category);
     if (params.sort) qs.set('sort', params.sort);
-    return request<any>(`/api/search?${qs.toString()}`);
+    return request<SearchResultResponse>(`/api/search?${qs.toString()}`);
   },
-  getHistory: () => request<any[]>('/api/search/history'),
-  clearHistory: () => request<any>('/api/search/history', { method: 'DELETE' }),
+  getHistory: () => request<SearchHistoryEntry[]>('/api/search/history'),
+  clearHistory: () => request<{ message: string }>('/api/search/history', { method: 'DELETE' }),
   getPopular: () => request<string[]>('/api/search/popular'),
 };
 

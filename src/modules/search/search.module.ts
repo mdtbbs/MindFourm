@@ -6,13 +6,16 @@ import { Post } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
 import { SearchHistory } from '@entities/search-history.entity';
 import { PopularSearch } from '@entities/popular-search.entity';
+import { PostTag } from '@entities/post-tag.entity';
+import { Reply } from '@entities/reply.entity';
+import { PostSummaryService } from '../posts/post-summary.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Post, User, SearchHistory, PopularSearch]),
+    TypeOrmModule.forFeature([Post, User, SearchHistory, PopularSearch, PostTag, Reply]),
   ],
   controllers: [SearchController],
-  providers: [SearchService],
+  providers: [SearchService, PostSummaryService],
   exports: [SearchService],
 })
 export class SearchModule {}
