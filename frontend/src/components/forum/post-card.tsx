@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { PostSummary } from '@/types';
 import Badge from '@/components/ui/badge';
 import { LikeButton } from '@/components/forum/like-button';
-import { Pin, MessageSquare, Eye } from 'lucide-react';
+import { Pin, MessageSquare, Eye, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface PostCardProps {
@@ -36,7 +36,9 @@ export default function PostCard({ post }: PostCardProps) {
       whileHover={{ y: -1 }}
       className={cn(
         'panel-surface p-4 transition-colors duration-200',
-        post.is_pinned ? 'border-[rgba(47,128,237,0.35)]' : 'border-[var(--border)]'
+        post.status === 'pending'
+          ? 'border-l-3 border-l-amber-400 bg-amber-50/40'
+          : post.is_pinned ? 'border-[rgba(47,128,237,0.35)]' : 'border-[var(--border)]'
       )}
     >
       <div className="flex items-start gap-3">
@@ -49,6 +51,12 @@ export default function PostCard({ post }: PostCardProps) {
               >
                 <Pin className="w-4 h-4 text-[var(--primary)] flex-shrink-0" />
               </motion.div>
+            )}
+            {post.status === 'pending' && (
+              <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 shrink-0">
+                <Clock className="w-3 h-3" />
+                待审核
+              </span>
             )}
             <Link
               href={`/posts/${post.id}`}

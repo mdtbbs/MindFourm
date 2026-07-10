@@ -11,6 +11,8 @@
 import { test, expect } from '../fixtures/page-objects/base.po';
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
 
+const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
+
 test.describe('Search Functionality', () => {
   test('should display search input in header', async ({ homePage }) => {
     await homePage.navigate();
@@ -81,7 +83,7 @@ test.describe('Search Functionality', () => {
 
 test.describe('Search API', () => {
   test('should call search endpoint', async ({ page }) => {
-    const response = await page.request.get('http://localhost:4000/api/search?q=test');
+    const response = await page.request.get(`${API_URL}/api/search?q=test`);
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
@@ -89,7 +91,7 @@ test.describe('Search API', () => {
   });
 
   test('should return popular searches', async ({ page }) => {
-    const response = await page.request.get('http://localhost:4000/api/search/popular');
+    const response = await page.request.get(`${API_URL}/api/search/popular`);
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();

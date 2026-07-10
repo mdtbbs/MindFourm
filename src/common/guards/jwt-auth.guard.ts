@@ -2,7 +2,7 @@ import {
   Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { IS_PUBLIC_KEY, IS_OPTIONAL_AUTH_KEY } from '../decorators/public.decorator';
 import { AuthService } from '../../modules/auth/auth.service';
 
 @Injectable()
@@ -23,12 +23,19 @@ export class JwtAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const sessionToken = request.cookies?.forum_session || this.extractTokenFromHeader(request);
 
+    const isOptional = this.reflector.getAllAndOverride<boolean>(IS_OPTIONAL_AUTH_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
     if (!sessionToken) {
+      if (isOptional) return true;
       throw new UnauthorizedException('未登录');
     }
 
     const user = await this.authService.verifySession(sessionToken);
     if (!user) {
+      if (isOptional) return true;
       throw new UnauthorizedException('会话已过期');
     }
 

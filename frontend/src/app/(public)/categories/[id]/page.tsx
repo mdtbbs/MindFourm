@@ -14,6 +14,7 @@ async function fetchPosts(page: number, categoryId: number): Promise<PostListRes
   return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?page=${page}&limit=20&category_id=${categoryId}`, {
     init: { cache: 'no-store' },
     fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
+    forwardCookies: true,
   });
 }
 

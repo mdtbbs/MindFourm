@@ -12,6 +12,8 @@
 import { test, expect } from '../fixtures/page-objects/base.po';
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
 
+const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
+
 test.describe('Notification API (Public)', () => {
   test('notification endpoints require authentication', async ({ page }) => {
     // Test that notification endpoints return 401 for unauthenticated users
@@ -21,7 +23,7 @@ test.describe('Notification API (Public)', () => {
     ];
 
     for (const endpoint of endpoints) {
-      const response = await page.request.get(`http://localhost:4000${endpoint}`);
+      const response = await page.request.get(`${API_URL}${endpoint}`);
       // Should be 401 or redirect
       expect(response.status() === 401 || response.ok()).toBeTruthy();
     }

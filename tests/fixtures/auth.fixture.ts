@@ -5,7 +5,10 @@
  * Uses the test-login endpoint to bypass MindAuth OAuth flow in testing.
  */
 
-import { test as base, Page, BrowserContext, Cookie } from '@playwright/test';
+import { test as base, Page, BrowserContext } from '@playwright/test';
+
+const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3000';
 
 // Test user configuration - maps to existing database users
 const TEST_USERS = {
@@ -29,7 +32,7 @@ async function createTestSession(
   userType: TestUserType = 'user'
 ): Promise<void> {
   // Call the test-login endpoint to get a session cookie
-  const response = await context.request.post('http://localhost:4000/api/auth/test-login', {
+  const response = await context.request.post(`${API_URL}/api/auth/test-login`, {
     data: { userType },
   });
 
@@ -39,7 +42,7 @@ async function createTestSession(
   }
 
   // Extract the session cookie from the response
-  const cookies = await context.cookies('http://localhost:4000');
+  const cookies = await context.cookies(API_URL);
   const sessionCookie = cookies.find(c => c.name === 'forum_session');
 
   if (!sessionCookie) {
@@ -50,8 +53,7 @@ async function createTestSession(
     {
       name: 'forum_session',
       value: sessionCookie.value,
-      domain: 'localhost',
-      path: '/',
+      url: BASE_URL,
       httpOnly: true,
       sameSite: 'Lax',
       secure: false,

@@ -8,6 +8,7 @@ import { LogsModule } from '../logs/logs.module';
 import { BansModule } from '../bans/bans.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { TagsModule } from '../tags/tags.module';
+import { UsersModule } from '../users/users.module';
 import { PointsModule } from '../points/points.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply } from '@entities/index';
@@ -21,6 +22,7 @@ import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply }
     BansModule,
     CategoriesModule,
     TagsModule,
+    UsersModule,
     PointsModule,
     AdminNotificationsModule,
   ],

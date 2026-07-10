@@ -12,6 +12,8 @@ import { test, expect } from '../fixtures/page-objects/base.po';
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
 import type { APIRequestContext } from '@playwright/test';
 
+const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
+
 let fixturePostId: number | null = null;
 let fixturePostTitle: string | null = null;
 let fixtureSetup: Promise<void> | null = null;
@@ -23,7 +25,7 @@ async function ensureFixturePost(request: APIRequestContext): Promise<void> {
 
   if (!fixtureSetup) {
     fixtureSetup = (async () => {
-      const loginResponse = await request.post('http://localhost:4000/api/auth/test-login', {
+      const loginResponse = await request.post(`${API_URL}/api/auth/test-login`, {
         data: { userType: 'user' },
       });
 
@@ -52,7 +54,7 @@ async function ensureFixturePost(request: APIRequestContext): Promise<void> {
         throw new Error('Missing CSRF or session cookie from test login');
       }
 
-      const createResponse = await request.post('http://localhost:4000/api/posts', {
+      const createResponse = await request.post(`${API_URL}/api/posts`, {
         data: {
           title: `E2E Fixture Post ${Date.now()}`,
           content: '# Fixture post\n\nThis post exists for E2E coverage.',

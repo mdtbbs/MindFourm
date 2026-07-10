@@ -247,7 +247,7 @@ export class PostsService {
   /**
    * Find posts with page-based pagination
    */
-  async findAll(query: QueryPostsDto): Promise<{
+  async findAll(query: QueryPostsDto, currentUser?: { id: number; role: string }): Promise<{
     data: PostSummaryDto[];
     total: number;
     page: number;
@@ -268,65 +268,45 @@ export class PostsService {
 
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const qb = this.postRepository.createQueryBuilder('post')
+      .leftJoinAndSelect('post.user', 'user')
+      .leftJoinAndSelect('post.category', 'category');
 
     if (category_id) {
-      where.category_id = category_id;
-    }
-
-    if (status) {
-      where.status = status;
-    } else {
-      // Default to published posts
-      where.status = 'published';
+      qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
     }
 
     if (user_id) {
-      where.user_id = user_id;
+      qb.andWhere('post.user_id = :explicitUserId', { explicitUserId: user_id });
     }
 
     if (server_id) {
-      where.server_id = server_id;
+      qb.andWhere('post.server_id = :serverId', { serverId: server_id });
     }
 
     if (search) {
-      where.title = Like(`%${escapeLike(search)}%`);
+      qb.andWhere('post.title LIKE :search', { search: `%${escapeLike(search)}%` });
     }
 
-    const [posts, total] = await this.postRepository.findAndCount({
-      where,
-      relations: ['user', 'category'],
-      select: {
-        id: true,
-        user_id: true,
-        category_id: true,
-        server_id: true,
-        post_type: true,
-        title: true,
-        content: true,
-        status: true,
-        is_pinned: true,
-        view_count: true,
-        like_count: true,
-        created_at: true,
-        updated_at: true,
-        user: {
-          id: true,
-          mindauth_id: true,
-          role: true,
-        },
-        category: {
-          id: true,
-          name: true,
-          slug: true,
-        },
-      },
-      order: {
-        [sort]: order === 'ASC' ? 'ASC' : 'DESC',
-      },
-      skip,
-      take: limit,
-    });
+    // Status filtering: admins see published + pending; regular users see published + own pending
+    if (status) {
+      qb.andWhere('post.status = :status', { status });
+    } else if (currentUser && ['admin', 'moderator'].includes(currentUser.role)) {
+      qb.andWhere('post.status IN (:...visibleStatuses)', { visibleStatuses: ['published', 'pending'] });
+    } else if (currentUser) {
+      qb.andWhere(
+        '(post.status = :publishedStatus OR (post.status = :pendingStatus AND post.user_id = :currentUserId))',
+        { publishedStatus: 'published', pendingStatus: 'pending', currentUserId: currentUser.id },
+      );
+    } else {
+      qb.andWhere('post.status = :status', { status: 'published' });
+    }
+
+    const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
+    qb.orderBy(`post.${sortField}`, order === 'ASC' ? 'ASC' : 'DESC');
+    qb.skip(skip).take(limit);
+
+    const [posts, total] = await qb.getManyAndCount();
 
     const data = await this.postSummaryService.toSummaryList(posts);
     const totalPages = Math.ceil(total / limit);
@@ -343,7 +323,7 @@ export class PostsService {
   /**
    * Find posts with cursor-based pagination
    */
-  async findAllCursor(query: QueryPostsDto): Promise<{
+  async findAllCursor(query: QueryPostsDto, currentUser?: { id: number; role: string }): Promise<{
     data: PostSummaryDto[];
     nextCursor: string | null;
     hasMore: boolean;
@@ -359,87 +339,67 @@ export class PostsService {
       order = 'DESC',
     } = query;
 
-    const where: any = {};
+    const qb = this.postRepository.createQueryBuilder('post')
+      .leftJoinAndSelect('post.user', 'user')
+      .leftJoinAndSelect('post.category', 'category');
 
     if (category_id) {
-      where.category_id = category_id;
-    }
-
-    if (status) {
-      where.status = status;
-    } else {
-      where.status = 'published';
+      qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
     }
 
     if (user_id) {
-      where.user_id = user_id;
+      qb.andWhere('post.user_id = :explicitUserId', { explicitUserId: user_id });
     }
 
     if (server_id) {
-      where.server_id = server_id;
+      qb.andWhere('post.server_id = :serverId', { serverId: server_id });
+    }
+
+    // Status filtering: admins see published + pending; regular users see published + own pending
+    if (status) {
+      qb.andWhere('post.status = :status', { status });
+    } else if (currentUser && ['admin', 'moderator'].includes(currentUser.role)) {
+      qb.andWhere('post.status IN (:...visibleStatuses)', { visibleStatuses: ['published', 'pending'] });
+    } else if (currentUser) {
+      qb.andWhere(
+        '(post.status = :publishedStatus OR (post.status = :pendingStatus AND post.user_id = :currentUserId))',
+        { publishedStatus: 'published', pendingStatus: 'pending', currentUserId: currentUser.id },
+      );
+    } else {
+      qb.andWhere('post.status = :status', { status: 'published' });
     }
 
     // Decode cursor for pagination
-    let cursorCondition: any = {};
     if (cursor) {
       try {
         const decoded = decodeCursor(cursor);
         const cursorValue =
           sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
         const idValue = parseInt(decoded[1]);
+        const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
 
         if (order === 'DESC') {
-          cursorCondition = [
-            { [sort]: LessThan(cursorValue) },
-            { [sort]: cursorValue, id: LessThan(idValue) },
-          ];
+          qb.andWhere(
+            `(post.${sortField} < :cursorValue OR (post.${sortField} = :cursorValue AND post.id < :cursorId))`,
+            { cursorValue, cursorId: idValue },
+          );
         } else {
-          cursorCondition = [
-            { [sort]: MoreThan(cursorValue) },
-            { [sort]: cursorValue, id: MoreThan(idValue) },
-          ];
+          qb.andWhere(
+            `(post.${sortField} > :cursorValue OR (post.${sortField} = :cursorValue AND post.id > :cursorId))`,
+            { cursorValue, cursorId: idValue },
+          );
         }
       } catch (e) {
         // Invalid cursor, ignore
       }
     }
 
-    const posts = await this.postRepository.find({
-      where: cursorCondition.length > 0
-        ? [{ ...where, ...cursorCondition[0] }, { ...where, ...cursorCondition[1] }]
-        : where,
-      relations: ['user', 'category'],
-      select: {
-        id: true,
-        user_id: true,
-        category_id: true,
-        server_id: true,
-        post_type: true,
-        title: true,
-        content: true,
-        status: true,
-        is_pinned: true,
-        view_count: true,
-        like_count: true,
-        created_at: true,
-        updated_at: true,
-        user: {
-          id: true,
-          mindauth_id: true,
-          role: true,
-        },
-        category: {
-          id: true,
-          name: true,
-          slug: true,
-        },
-      },
-      order: {
-        [sort]: order === 'ASC' ? 'ASC' : 'DESC',
-        id: order === 'ASC' ? 'ASC' : 'DESC',
-      },
-      take: limit + 1, // Fetch one extra to check hasMore
-    });
+    const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
+    qb.orderBy(`post.${sortField}`, order === 'ASC' ? 'ASC' : 'DESC')
+      .addOrderBy('post.id', order === 'ASC' ? 'ASC' : 'DESC')
+      .take(limit + 1);
+
+    const posts = await qb.getMany();
 
     const hasMore = posts.length > limit;
     if (hasMore) {

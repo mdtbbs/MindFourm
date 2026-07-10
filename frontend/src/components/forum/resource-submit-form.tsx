@@ -97,6 +97,7 @@ export default function ResourceSubmitForm() {
         <p className="text-sm font-medium text-surface-700 dark:text-gray-300">资源类型 *</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label
+            data-testid="resource-type-upload"
             className={`cursor-pointer rounded-lg border p-4 transition-colors ${
               resourceType === 'upload'
                 ? 'border-[var(--primary)] bg-[var(--primary)]/5'
@@ -123,6 +124,7 @@ export default function ResourceSubmitForm() {
           </label>
 
           <label
+            data-testid="resource-type-external"
             className={`cursor-pointer rounded-lg border p-4 transition-colors ${
               resourceType === 'external'
                 ? 'border-[var(--primary)] bg-[var(--primary)]/5'
@@ -151,6 +153,7 @@ export default function ResourceSubmitForm() {
       </div>
 
       <Input
+        data-testid="resource-title-input"
         label="标题 *"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
@@ -160,6 +163,7 @@ export default function ResourceSubmitForm() {
       />
 
       <Input
+        data-testid="resource-version-input"
         label="版本号"
         value={version}
         onChange={(e) => setVersion(e.target.value)}
@@ -168,6 +172,7 @@ export default function ResourceSubmitForm() {
       />
 
       <Textarea
+        data-testid="resource-description-input"
         label="短介绍"
         value={description}
         onChange={(e) => setDescription(e.target.value)}
@@ -180,6 +185,7 @@ export default function ResourceSubmitForm() {
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">分类</label>
         <select
+          data-testid="resource-category-select"
           value={categoryId ?? ''}
           onChange={(e) => setCategoryId(e.target.value ? parseInt(e.target.value, 10) : null)}
           className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
@@ -201,10 +207,12 @@ export default function ResourceSubmitForm() {
         onChange={setContent}
         placeholder="使用 Markdown 详细介绍资源内容、使用方式和注意事项"
         rows={8}
+        testId="resource-content-input"
       />
 
       {resourceType === 'external' && (
         <Input
+          data-testid="resource-external-url-input"
           label="外链地址 *"
           value={externalUrl}
           onChange={(e) => setExternalUrl(e.target.value)}
@@ -223,6 +231,7 @@ export default function ResourceSubmitForm() {
               {file?.name || '选择要上传的文件'}
             </span>
             <input
+              data-testid="resource-file-input"
               type="file"
               accept=".zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
@@ -256,6 +265,7 @@ export default function ResourceSubmitForm() {
           取消
         </button>
         <button
+          data-testid="resource-submit-button"
           type="submit"
           disabled={isSubmitting}
           className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"

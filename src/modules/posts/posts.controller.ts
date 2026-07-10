@@ -19,6 +19,7 @@ import { QueryPostsDto } from './dto/query-posts.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
+import { OptionalAuth } from '@common/decorators/public.decorator';
 import { LogsService } from '../logs/logs.service';
 
 @Controller('posts')
@@ -30,18 +31,23 @@ export class PostsController {
 
   /**
    * GET /api/posts - List posts (page-based pagination)
+   * Admins/moderators see pending posts; regular users see own pending posts.
    */
   @Get()
-  async findAll(@Query() query: QueryPostsDto) {
-    return this.postsService.findAll(query);
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
+  async findAll(@Query() query: QueryPostsDto, @Req() req: any) {
+    return this.postsService.findAll(query, req.user);
   }
 
   /**
    * GET /api/posts/cursor - List posts (cursor-based pagination)
    */
   @Get('cursor')
-  async findAllCursor(@Query() query: QueryPostsDto) {
-    return this.postsService.findAllCursor(query);
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
+  async findAllCursor(@Query() query: QueryPostsDto, @Req() req: any) {
+    return this.postsService.findAllCursor(query, req.user);
   }
 
   /**

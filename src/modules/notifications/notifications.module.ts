@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
+import { NotificationStreamService } from './notification-stream.service';
 import { EmailService } from './email.service';
 import { EmailQueueService } from './email-queue.service';
 import { TemplateService } from './template.service';
@@ -17,7 +18,13 @@ import { SettingsModule } from '../settings/settings.module';
     TypeOrmModule.forFeature([Notification, User, Post, Reply, EmailLog]),
     SettingsModule,
   ],
-  providers: [NotificationsService, EmailService, EmailQueueService, TemplateService],
+  providers: [
+    NotificationsService,
+    NotificationStreamService,
+    EmailService,
+    EmailQueueService,
+    TemplateService,
+  ],
   exports: [NotificationsService, EmailService, EmailQueueService, TemplateService],
   controllers: [NotificationsController],
 })

@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import {
   type ApiPaginatedResult,
@@ -10,12 +11,14 @@ import {
 const API_BASE = process.env.API_URL || 'http://localhost:4000';
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1']);
 
-type FetchOptions = Parameters<typeof fetch>[1];
+type FetchOptions = RequestInit;
 
 type FetchApiOptions<T> = {
   fallback: T;
   init?: FetchOptions;
   notFoundOn404?: boolean;
+  /** Forward the current request's session cookie to the backend API. */
+  forwardCookies?: boolean;
 };
 
 function shouldSkipLocalApiFetchDuringBuild(): boolean {
@@ -48,14 +51,15 @@ export async function fetchApiData<T>(
   path: string,
   options: FetchApiOptions<T>,
 ): Promise<T> {
-  const { fallback, init, notFoundOn404 } = options;
+  const { fallback, init, notFoundOn404, forwardCookies } = options;
 
   if (shouldSkipLocalApiFetchDuringBuild()) {
     return fallback;
   }
 
   try {
-    const res = await fetch(`${API_BASE}${path}`, init);
+    const headers = buildHeaders(init?.headers, forwardCookies);
+    const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
     if (!res.ok) {
       handleHttpFailure(res.status, notFoundOn404);
       return fallback;
@@ -79,14 +83,15 @@ export async function fetchApiPaginated<
   path: string,
   options: FetchApiOptions<ApiPaginatedResult<TItem, TExtra>>,
 ): Promise<ApiPaginatedResult<TItem, TExtra>> {
-  const { fallback, init, notFoundOn404 } = options;
+  const { fallback, init, notFoundOn404, forwardCookies } = options;
 
   if (shouldSkipLocalApiFetchDuringBuild()) {
     return fallback;
   }
 
   try {
-    const res = await fetch(`${API_BASE}${path}`, init);
+    const headers = buildHeaders(init?.headers, forwardCookies);
+    const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
     if (!res.ok) {
       handleHttpFailure(res.status, notFoundOn404);
       return fallback;
@@ -100,5 +105,36 @@ export async function fetchApiPaginated<
     }
 
     return fallback;
+  }
+}
+
+/**
+ * Build request headers, optionally forwarding the session cookie.
+ */
+function buildHeaders(
+  existingHeaders: HeadersInit | undefined,
+  forwardCookies?: boolean,
+): HeadersInit | undefined {
+  if (!forwardCookies) return existingHeaders;
+
+  try {
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get('forum_session');
+    if (!sessionCookie) return existingHeaders;
+
+    const cookieHeader = `forum_session=${sessionCookie.value}`;
+    // Convert to a plain object and add the cookie
+    const headersObj: Record<string, string> = {};
+    if (existingHeaders instanceof Headers) {
+      existingHeaders.forEach((v, k) => { headersObj[k] = v; });
+    } else if (Array.isArray(existingHeaders)) {
+      for (const [k, v] of existingHeaders) { headersObj[k] = v; }
+    } else if (existingHeaders) {
+      Object.assign(headersObj, existingHeaders);
+    }
+    headersObj['Cookie'] = cookieHeader;
+    return headersObj;
+  } catch {
+    return existingHeaders;
   }
 }

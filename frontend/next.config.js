@@ -34,6 +34,18 @@ const nextConfig = {
         port: '4501',
         pathname: '/**',
       },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '4500',
+        pathname: '/**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '4501',
+        pathname: '/**',
+      },
       // Production - CDN (optional)
       {
         protocol: 'https',

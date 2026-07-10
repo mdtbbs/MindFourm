@@ -102,6 +102,23 @@ export default async function PostDetailPage({
         <span className="text-[var(--text)]">{post.title}</span>
       </nav>
 
+      {/* Pending moderation banner */}
+      {post.status === 'pending' && (
+        <div className="mb-6 flex items-center gap-3 px-4 py-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="shrink-0 w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+            <svg className="w-4 h-4 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">此帖子正在等待审核</p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+              审核通过后将对其他用户可见。如有疑问请联系管理组。
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Post Content */}
       <PostContent post={post} postId={postId} />
       <AttachmentList attachments={attachments} />

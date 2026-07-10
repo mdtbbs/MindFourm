@@ -10,6 +10,7 @@ import { EmailLog } from '../../entities/email-log.entity';
 import { EmailQueueService } from './email-queue.service';
 import { EMAIL_TEMPLATES } from './email.templates';
 import { SettingsService } from '../settings/settings.service';
+import { NotificationStreamService } from './notification-stream.service';
 
 @Injectable()
 export class NotificationsService {
@@ -29,6 +30,7 @@ export class NotificationsService {
     private redisService: RedisService,
     private emailQueueService: EmailQueueService,
     private settingsService: SettingsService,
+    private notificationStream: NotificationStreamService,
   ) {}
 
   /**
@@ -120,6 +122,9 @@ export class NotificationsService {
     // Invalidate unread count cache
     await this.redisService.del(`unread:${data.user_id}`);
 
+    // Push to user's SSE stream for real-time delivery
+    await this.pushToSse(notification.id);
+
     return notification;
   }
 
@@ -175,6 +180,16 @@ export class NotificationsService {
           });
           break;
         }
+        case 'message': {
+          await this.queueEmailIfEnabled(notification.user_id, 'message', {
+            subject: `[${await this.getSiteName()}] ${actorName} 给你发了私信`,
+            username: '',
+            actor_name: actorName,
+            message_excerpt: this.truncateHtml(notification.content || '', 200),
+            message_url: `${this.frontendUrl}/messages`,
+          });
+          break;
+        }
         // 'like' and 'report' types don't send emails by design
       }
     } catch (error) {
@@ -191,6 +206,38 @@ export class NotificationsService {
     const plainText = html.replace(/<[^>]*>/g, '');
     if (plainText.length <= maxLength) return plainText;
     return plainText.substring(0, maxLength) + '...';
+  }
+
+  /**
+   * Load full notification (with actor/post) and push to SSE stream
+   */
+  private async pushToSse(notificationId: number): Promise<void> {
+    try {
+      const full = await this.notificationRepository.findOne({
+        where: { id: notificationId },
+        relations: ['actor', 'post'],
+      });
+      if (!full) return;
+
+      const payload = {
+        id: full.id,
+        user_id: full.user_id,
+        type: full.type,
+        actor_id: full.actor_id,
+        actor_name: full.actor?.username || '用户',
+        post_id: full.post_id,
+        post_title: full.post?.title || null,
+        reply_id: full.reply_id,
+        content: full.content,
+        is_read: full.is_read,
+        created_at: full.created_at,
+      };
+
+      this.notificationStream.push(full.user_id, payload);
+    } catch (err) {
+      // Don't let SSE push failures block notification creation
+      console.error(`Failed to push SSE notification ${notificationId}:`, err);
+    }
   }
 
   async notifyPostAuthor(

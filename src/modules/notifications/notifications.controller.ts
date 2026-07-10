@@ -1,5 +1,6 @@
 import { Controller, Get, Put, Query, Param, UseGuards, Req, Body, Patch, Sse } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { NotificationStreamService } from './notification-stream.service';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
 import { UpdateEmailPreferenceDto } from './dto/update-email-preference.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -9,16 +10,32 @@ import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 @Controller('notifications')
 export class NotificationsController implements OnModuleInit, OnModuleDestroy {
   private notificationSubjects: Map<number, Subject<MessageEvent>> = new Map();
-  private redisSubscriber: any;
+  private streamSubscription: any;
 
-  constructor(private readonly notificationsService: NotificationsService) {}
+  constructor(
+    private readonly notificationsService: NotificationsService,
+    private readonly notificationStream: NotificationStreamService,
+  ) {}
 
   onModuleInit() {
-    // Initialize Redis subscriber for notification events
-    // This will be set up in the service
+    // Subscribe to the notification stream and forward to per-user SSE subjects
+    this.streamSubscription = this.notificationStream.stream$.subscribe(
+      ({ userId, notification }) => {
+        const subject = this.notificationSubjects.get(userId);
+        if (subject) {
+          subject.next({
+            data: JSON.stringify({ type: 'notification', data: notification }),
+          } as MessageEvent);
+        }
+      },
+    );
   }
 
   onModuleDestroy() {
+    // Unsubscribe from stream
+    if (this.streamSubscription) {
+      this.streamSubscription.unsubscribe();
+    }
     // Cleanup all SSE connections
     for (const subject of this.notificationSubjects.values()) {
       subject.complete();
@@ -55,19 +72,6 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
 
     // Return the observable stream
     return subject.asObservable();
-  }
-
-  /**
-   * Push notification to SSE stream for a specific user
-   * Called by NotificationsService when a new notification is created
-   */
-  pushNotification(userId: number, notification: any) {
-    const subject = this.notificationSubjects.get(userId);
-    if (subject) {
-      subject.next({
-        data: JSON.stringify({ type: 'notification', data: notification }),
-      } as MessageEvent);
-    }
   }
 
   @UseGuards(JwtAuthGuard)

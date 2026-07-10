@@ -31,7 +31,7 @@ export class AdminNotification {
   @Column({ type: 'text', nullable: true })
   content: string | null;
 
-  @Column({ length: 500, nullable: true })
+  @Column({ type: 'varchar', length: 500, nullable: true })
   action_url: string | null;
 
   @Column({ type: 'text', nullable: true })

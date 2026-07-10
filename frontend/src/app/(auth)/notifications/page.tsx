@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { notificationApi } from '@/lib/api/client';
 import { Notification } from '@/types';
-import { MessageSquare, AtSign, CheckCheck, Filter } from 'lucide-react';
+import { MessageSquare, AtSign, CheckCheck, Filter, Heart, Mail, Bell } from 'lucide-react';
 import Link from 'next/link';
 
 export default function NotificationsPage() {
@@ -45,11 +45,42 @@ export default function NotificationsPage() {
     } catch {}
   };
 
-  const typeIcon = (type: string) =>
-    type === 'reply' ? <MessageSquare className="w-5 h-5 text-blue-500" /> : <AtSign className="w-5 h-5 text-orange-500" />;
+  const typeIcon = (type: string) => {
+    switch (type) {
+      case 'reply':
+        return <MessageSquare className="w-5 h-5 text-blue-500" />;
+      case 'mention':
+        return <AtSign className="w-5 h-5 text-orange-500" />;
+      case 'post_like':
+      case 'reply_like':
+        return <Heart className="w-5 h-5 text-red-500" />;
+      case 'message':
+        return <Mail className="w-5 h-5 text-green-500" />;
+      case 'system':
+        return <Bell className="w-5 h-5 text-purple-500" />;
+      default:
+        return <Bell className="w-5 h-5 text-surface-400" />;
+    }
+  };
 
-  const typeText = (type: string) =>
-    type === 'reply' ? '回复了你的帖子' : '在帖子中提到了你';
+  const typeText = (type: string) => {
+    switch (type) {
+      case 'reply':
+        return '回复了你的帖子';
+      case 'mention':
+        return '在帖子中提到了你';
+      case 'post_like':
+        return '点赞了你的帖子';
+      case 'reply_like':
+        return '点赞了你的回复';
+      case 'message':
+        return '给你发了私信';
+      case 'system':
+        return '系统通知';
+      default:
+        return '新通知';
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">

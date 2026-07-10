@@ -11,7 +11,6 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { Like } from 'typeorm';
 import { AdminService } from './admin.service';
 import { StatsService } from '../stats/stats.service';
 import { SettingsService } from '../settings/settings.service';
@@ -19,13 +18,13 @@ import { LogsService } from '../logs/logs.service';
 import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
+import { UsersService } from '../users/users.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { BulkPostsDto } from './dto/bulk-posts.dto';
 import { MergeTagsDto } from './dto/merge-tags.dto';
-import { escapeLike } from '@common/utils/search.util';
 
 /** Safely parse a query param to int, falling back to a default when the
  *  global ValidationPipe turns a missing param into `undefined`/NaN. */
@@ -51,6 +50,7 @@ export class AdminController {
     private readonly bansService: BansService,
     private readonly categoriesService: CategoriesService,
     private readonly tagsService: TagsService,
+    private readonly usersService: UsersService,
     private readonly adminNotificationsService: AdminNotificationsService,
   ) {}
 
@@ -113,23 +113,15 @@ export class AdminController {
     @Query('limit') limit: number = 20,
     @Query('search') search?: string,
   ) {
-    // This would be implemented in UsersService, delegating here for consistency
     const safePage = toInt(page, 1);
     const safeLimit = toInt(limit, 20);
-    const skip = (safePage - 1) * safeLimit;
-
-    const where: any = {};
-    if (search) {
-      where.username = Like(`%${escapeLike(search)}%`);
-    }
-
-    // For now, return a basic structure - actual implementation would use UsersService
+    const { users, total } = await this.usersService.getAll(safePage, safeLimit, search);
     return {
-      data: [],
-      total: 0,
+      data: users,
+      total,
       page: safePage,
       limit: safeLimit,
-      totalPages: 0,
+      totalPages: Math.ceil(total / safeLimit),
     };
   }
 
@@ -141,9 +133,11 @@ export class AdminController {
   async updateUserRole(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { role: string },
+    @Req() req: any,
   ) {
-    // This would be implemented in UsersService
-    return { message: `User ${id} role updated to ${body.role}` };
+    const user = await this.usersService.updateRole(id, body.role);
+    await this.logOperation(req, 'user.role.update', 'user', id, { new_role: body.role });
+    return user;
   }
 
   /**

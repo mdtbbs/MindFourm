@@ -63,6 +63,7 @@ async function fetchPosts(page: number, limit: number, categoryId?: number): Pro
   return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?${qs.toString()}`, {
     init: { cache: 'no-store' },
     fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(limit),
+    forwardCookies: true,
   });
 }
 

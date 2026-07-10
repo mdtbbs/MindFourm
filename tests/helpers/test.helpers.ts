@@ -6,6 +6,8 @@
 
 import { Page, APIRequestContext } from '@playwright/test';
 
+const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
+
 /**
  * Wait for API response
  */
@@ -32,7 +34,7 @@ export async function createTestPost(
   request: APIRequestContext,
   data: { title: string; content: string; category_id?: number }
 ): Promise<{ id: number }> {
-  const response = await request.post('http://localhost:4000/api/posts', {
+  const response = await request.post(`${API_URL}/api/posts`, {
     data,
   });
   const result = await response.json();
@@ -46,7 +48,7 @@ export async function deleteTestPost(
   request: APIRequestContext,
   postId: number
 ): Promise<void> {
-  await request.delete(`http://localhost:4000/api/posts/${postId}`);
+  await request.delete(`${API_URL}/api/posts/${postId}`);
 }
 
 /**
@@ -117,7 +119,7 @@ export async function testLogin(
   userType: 'admin' | 'moderator' | 'user'
 ): Promise<{ success: boolean }> {
   try {
-    const response = await request.post('http://localhost:4000/api/auth/test-login', {
+    const response = await request.post(`${API_URL}/api/auth/test-login`, {
       data: { userType },
     });
     return await response.json();

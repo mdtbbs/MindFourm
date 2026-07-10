@@ -1,5 +1,8 @@
 import { test as base, Page } from '@playwright/test';
 
+const AUTH_URL = process.env.PLAYWRIGHT_AUTH_URL || 'http://127.0.0.1:4001';
+const AUTH_ORIGIN = new URL(AUTH_URL).origin;
+
 /**
  * Page Object for Login page
  */
@@ -16,12 +19,15 @@ export class LoginPage {
 
   async waitForMindAuthRedirect() {
     // Wait for redirect to MindAuth (port 4001)
-    await this.page.waitForURL(/localhost:4001|mindauth/, { timeout: 10000 });
+    await this.page.waitForURL(
+      (url) => url.origin === AUTH_ORIGIN || url.hostname.includes('mindauth'),
+      { timeout: 10000 },
+    );
   }
 
   async expectRedirectedToMindAuth() {
-    const url = this.page.url();
-    return url.includes('4001') || url.includes('mindauth');
+    const url = new URL(this.page.url());
+    return url.origin === AUTH_ORIGIN || url.hostname.includes('mindauth');
   }
 }
 

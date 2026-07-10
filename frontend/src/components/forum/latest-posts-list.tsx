@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Eye, MessageSquare, Pin, ThumbsUp } from 'lucide-react';
+import { Eye, MessageSquare, Pin, ThumbsUp, Clock } from 'lucide-react';
 import { PostSummary } from '@/types';
 import { cn } from '@/lib/utils';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
@@ -81,7 +81,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
               key={post.id}
               data-testid="post-card"
               className={cn(
-                'grid gap-3 bg-white px-4 transition-colors hover:bg-[#f7fbff] sm:px-5',
+                'grid gap-3 bg-white px-4 transition-colors sm:px-5',
                 comfortable
                   ? 'py-4 sm:grid-cols-[3rem_minmax(0,1fr)_9rem]'
                   : 'py-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_8rem]',
@@ -89,6 +89,9 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                   && (comfortable
                     ? 'sm:grid-cols-[minmax(0,1fr)_9rem]'
                     : 'sm:grid-cols-[minmax(0,1fr)_8rem]'),
+                post.status === 'pending'
+                  ? 'bg-amber-50/60 hover:bg-amber-50 border-l-3 border-l-amber-400'
+                  : 'hover:bg-[#f7fbff]',
               )}
             >
               {settings.showIndex && (
@@ -108,6 +111,12 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
               <div className="min-w-0">
                 <div className="flex min-w-0 items-center gap-2">
                   {post.is_pinned && <Pin className="h-4 w-4 shrink-0 text-[var(--latest-accent)]" />}
+                  {post.status === 'pending' && (
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                      <Clock className="h-3 w-3" />
+                      待审核
+                    </span>
+                  )}
                   {post.category_name && (
                     <Link
                       href={`/categories/${post.category_id}`}

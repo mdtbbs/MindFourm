@@ -11,9 +11,11 @@
 import { test, expect } from '../fixtures/page-objects/base.po';
 import { test as authTest, expect as authExpect, TEST_USERS } from '../fixtures/auth.fixture';
 
+const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
+
 test.describe('Public Authentication Checks', () => {
   test('should check authentication status', async ({ page }) => {
-    const response = await page.request.get('http://localhost:4000/api/auth/check');
+    const response = await page.request.get(`${API_URL}/api/auth/check`);
     const data = await response.json();
 
     expect(response.ok()).toBeTruthy();
