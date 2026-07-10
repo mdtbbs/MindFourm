@@ -5,9 +5,19 @@ data/
 .DS_Store
 Thumbs.db
 *.tsbuildinfo
+
 # Build output
 dist/
+
+# Uploads (keep directory structure with .gitkeep)
 uploads/attachments/
 uploads/resources/
 uploads/avatars/
 !uploads/avatars/.gitkeep
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Tool artifacts
+.claude/scheduled_tasks.lock

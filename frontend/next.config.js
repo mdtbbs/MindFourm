@@ -6,6 +6,9 @@ const nextConfig = {
   // CDN support: prefix for static assets
   assetPrefix: process.env.NEXT_PUBLIC_CDN_URL || '',
 
+  // Production: standalone output for PM2 (no full node_modules needed)
+  output: 'standalone',
+
   async rewrites() {
     // Only use rewrites in development (production uses direct API domain)
     if (process.env.NODE_ENV === 'production') {
