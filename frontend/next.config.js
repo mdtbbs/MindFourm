@@ -10,57 +10,49 @@ const nextConfig = {
   output: 'standalone',
 
   async rewrites() {
-    // Only use rewrites in development (production uses direct API domain)
-    if (process.env.NODE_ENV === 'production') {
-      return [];
-    }
+    // 生产和开发环境都使用 rewrites
+    // 浏览器请求 /api/* 和 /uploads/* 时，由 Next.js 代理到后端
+    const apiUrl = process.env.API_URL || 'http://127.0.0.1:4000';
     return [
       {
         source: '/api/:path*',
-        destination: process.env.API_URL || 'http://localhost:4500/api/:path*',
+        destination: `${apiUrl}/api/:path*`,
+      },
+      {
+        source: '/uploads/:path*',
+        destination: `${apiUrl}/uploads/:path*`,
       },
     ];
   },
 
   images: {
     remotePatterns: [
-      // Development
+      // Development — 后端和 MindAuth
       {
         protocol: 'http',
         hostname: 'localhost',
-        port: '4500',
-        pathname: '/**',
-      },
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '4501',
-        pathname: '/**',
-      },
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '4500',
-        pathname: '/**',
-      },
-      {
-        protocol: 'http',
-        hostname: 'localhost',
-        port: '4501',
-        pathname: '/**',
-      },
-      // Production - CDN (optional)
-      {
-        protocol: 'https',
-        hostname: 'cdn.yoursite.com',
-        pathname: '/**',
-      },
-      // Production - API domain uploads (avatars, attachments, resources)
-      {
-        protocol: 'https',
-        hostname: 'api.forum.example.com',
+        port: '4000',
         pathname: '/uploads/**',
       },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '4001',
+        pathname: '/uploads/**',
+      },
+      // Production — 部署时替换为真实域名
+      // 如果使用 CDN 托管静态资源
+      // {
+      //   protocol: 'https',
+      //   hostname: 'cdn.example.com',
+      //   pathname: '/**',
+      // },
+      // MindAuth 托管的头像
+      // {
+      //   protocol: 'https',
+      //   hostname: 'auth.example.com',
+      //   pathname: '/uploads/**',
+      // },
     ],
   },
 

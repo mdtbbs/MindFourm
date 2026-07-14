@@ -35,15 +35,15 @@ export default function PublicLayout({
   }, [isAuthenticated]);
 
   const handleLogin = () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const redirectUrl = encodeURIComponent(`${siteUrl}/api/auth/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || 'forum';
     window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=%2F`;
   };
 
   const handleRegister = () => {
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-    const redirectUrl = encodeURIComponent(`${apiBase}/api/auth/callback`);
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const redirectUrl = encodeURIComponent(`${siteUrl}/api/auth/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || 'forum';
     window.location.href = `${mindauthUrl}/register?redirect=${redirectUrl}&client_id=${clientId}&state=%2F`;
   };
