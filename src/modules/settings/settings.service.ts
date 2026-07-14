@@ -126,7 +126,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'cleanup_soft_delete_retention_days', value: '30', category: 'cleanup', description: 'Days to retain soft-deleted items' },
       // Feature toggles (快捷入口开关)
       { key: 'feature_resources_enabled', value: 'true', category: 'features', description: 'Enable resources center' },
-      { key: 'feature_servers_enabled', value: 'true', category: 'features', description: 'Enable game servers' },
+      { key: 'feature_servers_enabled', value: 'false', category: 'features', description: 'Enable game servers' },
       { key: 'feature_groups_enabled', value: 'true', category: 'features', description: 'Enable user groups' },
       { key: 'feature_leaderboard_enabled', value: 'true', category: 'features', description: 'Enable points leaderboard' },
       { key: 'feature_shop_enabled', value: 'true', category: 'features', description: 'Enable points shop' },

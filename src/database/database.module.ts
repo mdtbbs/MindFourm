@@ -108,7 +108,7 @@ async function ensureResourceTables(dataSource: DataSource): Promise<void> {
       resource_type VARCHAR(50) NOT NULL DEFAULT 'upload',
       file_name VARCHAR(255),
       file_path VARCHAR(500),
-      file_size INT DEFAULT 0,
+      file_size INT NULL,
       mime_type VARCHAR(100),
       external_url VARCHAR(500),
       version VARCHAR(50),
@@ -116,8 +116,8 @@ async function ensureResourceTables(dataSource: DataSource): Promise<void> {
       content_html TEXT,
       category_id INT NULL,
       download_count INT DEFAULT 0,
-      is_public TINYINT DEFAULT 1,
-      status VARCHAR(50) NOT NULL DEFAULT 'approved',
+      is_public TINYINT DEFAULT 0,
+      status VARCHAR(50) NOT NULL DEFAULT 'pending',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -206,6 +206,22 @@ async function ensureExistingSchemaPatches(dataSource: DataSource): Promise<void
   await addColumnIfMissing(dataSource, 'resources', 'mfl_download_url', 'VARCHAR(500) NULL');
 
   await addColumnIfMissing(dataSource, 'posts', 'reject_reason', 'VARCHAR(500) NULL');
+
+  // Soft-delete columns
+  await addColumnIfMissing(dataSource, 'posts', 'deleted_at', 'DATETIME NULL');
+  await addColumnIfMissing(dataSource, 'replies', 'deleted_at', 'DATETIME NULL');
+  await addColumnIfMissing(dataSource, 'resources', 'deleted_at', 'DATETIME NULL');
+
+  // Rendered HTML content
+  await addColumnIfMissing(dataSource, 'posts', 'content_html', 'TEXT NULL');
+  await addColumnIfMissing(dataSource, 'replies', 'content_html', 'TEXT NULL');
+
+  // Messages table patches
+  await addColumnIfMissing(dataSource, 'messages', 'content_html', 'TEXT NULL');
+  await addColumnIfMissing(dataSource, 'messages', 'group_chat_id', 'INT NULL');
+  await addColumnIfMissing(dataSource, 'messages', 'deleted_by_sender', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await addColumnIfMissing(dataSource, 'messages', 'deleted_by_recipient', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await addColumnIfMissing(dataSource, 'messages', 'read_at', 'DATETIME NULL');
 }
 
 async function assertRequiredTables(dataSource: DataSource): Promise<void> {

@@ -70,14 +70,17 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_API_URL: ""
         NEXT_PUBLIC_MINDAUTH_URL: ${MINDAUTH_URL}
         NEXT_PUBLIC_MINDAUTH_CLIENT_ID: forum
+        NEXT_PUBLIC_SITE_URL: ${FRONTEND_URL}
     restart: always
     environment:
-      NEXT_PUBLIC_API_URL: /api
+      NEXT_PUBLIC_API_URL: ""
+      API_URL: http://backend:4000
       NEXT_PUBLIC_MINDAUTH_URL: ${MINDAUTH_URL}
       NEXT_PUBLIC_MINDAUTH_CLIENT_ID: forum
+      NEXT_PUBLIC_SITE_URL: ${FRONTEND_URL}
     depends_on:
       - backend
     networks:
