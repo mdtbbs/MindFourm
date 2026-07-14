@@ -6,11 +6,16 @@ import axios from 'axios';
 export class ServersService {
   private readonly easyManagerUrl: string;
   private readonly serviceKey: string;
+  private readonly enabled: boolean;
   private readonly logger = new Logger(ServersService.name);
 
   constructor(private configService: ConfigService) {
+    this.enabled = this.configService.get<boolean>('easymanager.enabled', false);
     this.easyManagerUrl = this.configService.get<string>('easymanager.baseUrl', '');
     this.serviceKey = this.configService.get<string>('easymanager.apiKey', '');
+    if (!this.enabled) {
+      this.logger.log('EasyManager integration is disabled — server APIs will return empty data');
+    }
   }
 
   private getAxiosConfig() {
@@ -22,6 +27,9 @@ export class ServersService {
   }
 
   async getPublicServers() {
+    if (!this.enabled) {
+      return { success: true, servers: [] };
+    }
     try {
       const response = await axios.get(
         `${this.easyManagerUrl}/api/forum/servers/public`,
@@ -48,6 +56,9 @@ export class ServersService {
   }
 
   async getUserServers(mindauthId: number) {
+    if (!this.enabled) {
+      return { success: true, servers: [], message: '服务器功能已关闭' };
+    }
     try {
       const response = await axios.get(
         `${this.easyManagerUrl}/api/forum/user/${mindauthId}/servers`,
@@ -63,6 +74,9 @@ export class ServersService {
   }
 
   async getServerBasic(serverId: number) {
+    if (!this.enabled) {
+      throw new BadRequestException('服务器功能已关闭');
+    }
     try {
       const response = await axios.get(
         `${this.easyManagerUrl}/api/forum/servers/${serverId}/basic`,
@@ -78,6 +92,9 @@ export class ServersService {
   }
 
   async applyServer(mindauthId: number, data: { name: string; description: string; version: string; template_id: number }) {
+    if (!this.enabled) {
+      throw new BadRequestException('服务器功能已关闭');
+    }
     try {
       const response = await axios.post(
         `${this.easyManagerUrl}/api/forum/apply`,
@@ -94,6 +111,9 @@ export class ServersService {
   }
 
   async getAvailableVersions() {
+    if (!this.enabled) {
+      return { success: true, versions: [] };
+    }
     try {
       const response = await axios.get(
         `${this.easyManagerUrl}/api/versions`,
@@ -109,6 +129,9 @@ export class ServersService {
   }
 
   async getPublicTemplates() {
+    if (!this.enabled) {
+      return { success: true, templates: [] };
+    }
     try {
       const response = await axios.get(
         `${this.easyManagerUrl}/api/templates`,

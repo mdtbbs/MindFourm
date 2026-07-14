@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MindFourm is a forum system for the Mindustry community, integrated with:
 - **MindAuth** (Port 4001): OAuth SSO login
-- **EasyManager** (Port 5001): Server listings and applications
+- **MindFileList** (external `download-site` service): resource file hosting and moderated downloads
+- **EasyManager** (Port 5001): ⏸ Paused. Server listings/applications are preserved in code but disabled by default (`EASYMANAGER_ENABLED=false`, `feature_servers_enabled=false`).
 
 Features include:
 - Posts and replies with Markdown support, categories, tags
@@ -68,8 +69,8 @@ docker compose -f docker-compose.dev.yml up -d
                               │
                               ▼
                     ┌─────────────────┐
-                    │  EasyManager    │
-                    │  Server API     │
+                    │  MindFileList   │
+                    │ Resource Files  │
                     └─────────────────┘
 ```
 
@@ -93,9 +94,9 @@ docker compose -f docker-compose.dev.yml up -d
 | `messages` | Private messaging with cursor pagination |
 | `attachments` | File upload with multer |
 | `resources` | Resource management (upload/external), versioning, categories |
-| `servers` | Game server entity CRUD |
-| `post-servers` | Link/unlink posts to game servers |
-| `auto-post` | EasyManager callback handler for auto-post announcements |
+| `servers` | Paused EasyManager proxy module; returns empty/disabled responses unless enabled |
+| `post-servers` | Preserved post-to-server link module for future EasyManager restoration |
+| `auto-post` | Preserved EasyManager callback handler for auto-post announcements |
 | `admin` | Admin panel: dashboard stats, bulk ops, moderation, tag merge, cleanup |
 | `bans` | Ban management (user/IP/CIDR), in-memory cache (10s TTL) |
 | `stats` | Dashboard statistics, 7-day activity charts |
@@ -276,14 +277,58 @@ img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-an
 
 Session audit: login/logout events recorded in `operation_logs` table. Abnormal login detection (异地 IP, unusual time).
 
-## EasyManager Integration
+## EasyManager Integration — ⏸ Paused
 
-| Endpoint | Purpose |
-|----------|---------|
-| `GET /api/servers/public` | Public server list |
-| `GET /api/servers/my` | User's servers |
-| `POST /api/servers/apply` | Apply for new server |
-| `POST /api/auto-post/server-approved` | EasyManager callback (X-Service-Key auth) — auto-creates announcement post |
+EasyManager integration is preserved but disabled by default. Backend config uses `EASYMANAGER_ENABLED=false`; frontend UI is hidden by `feature_servers_enabled=false` unless an admin re-enables it.
+
+When disabled, `ServersService` does **not** connect to EasyManager:
+
+| Endpoint | Disabled behavior |
+|----------|-------------------|
+| `GET /api/servers/public` | Returns an empty server list |
+| `GET /api/servers/versions` | Returns an empty version list |
+| `GET /api/servers/templates` | Returns an empty template list |
+| `GET /api/servers/my` | Requires auth, then returns an empty server list |
+| `POST /api/servers/apply` | Returns a "server feature disabled" error |
+
+Preserved callback endpoints (`/api/auto-post/*`, `/api/post-servers/*`) remain in code for future restoration and are protected by `ServiceAuthGuard`.
+
+To restore: set `EASYMANAGER_ENABLED=true`, set `feature_servers_enabled=true` in admin settings, and restore EasyManager root configs documented in the repository root `CLAUDE.md`.
+
+## MindFileList (MFL) Integration
+
+Users can upload resource files to MindFileList (external file hosting) instead of local storage. MFL manages file storage and download; MindFourm manages resource metadata and moderation.
+
+### Configuration
+
+| Env Variable | Purpose |
+|-------------|---------|
+| `MFL_BASE_URL` | MFL service base URL (e.g., `http://localhost:3000`) |
+| `MFL_API_KEY` | MFL API key with `write` permission |
+
+### Flow
+
+1. User submits resource with `use_mfl=1` → MF uploads file to MFL via `POST /api/v1/files/upload`
+2. MFL returns file ID → MF stores `mfl_file_id`, `mfl_download_url`, `use_mfl=1`
+3. MFL file is created with `approval_status=pending` → download blocked
+4. Admin approves in MF → MF calls MFL `PUT /api/v1/files/:id/approval` with `status=approved`
+5. MFL download becomes available
+
+### Database Fields (resources table)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `use_mfl` | tinyint | 1 = file hosted on MFL |
+| `mfl_file_id` | int | MFL file ID |
+| `mfl_download_url` | varchar(500) | MFL direct download URL |
+
+### Key Service: `MflClientService`
+
+| Method | Purpose |
+|--------|---------|
+| `uploadFile(buffer, filename, category, mime, {resourceId})` | Upload to MFL with pending status |
+| `updateApprovalStatus(mflFileId, status, resourceId, reason?)` | Sync approval status to MFL |
+| `getDownloadUrl(mflFileId)` | Build MFL download URL |
 
 ## Feature Specifications
 
@@ -514,9 +559,14 @@ MINDAUTH_URL=http://localhost:4001
 MINDAUTH_CLIENT_ID=forum
 MINDAUTH_CLIENT_SECRET=<secret>
 
-# EasyManager
+# EasyManager — 暂停中，默认关闭
+EASYMANAGER_ENABLED=false
 EASYMANAGER_URL=http://localhost:5001
 EASYMANAGER_API_KEY=<key>
+
+# MindFileList
+MFL_BASE_URL=http://localhost:3000
+MFL_API_KEY=<write-permission-key>
 ```
 
 ## Technology Stack
@@ -537,4 +587,4 @@ EASYMANAGER_API_KEY=<key>
 | Deployment | Docker + Docker Compose, Nginx (reverse proxy + SSL) |
 
 ---
-*Last updated: 2026-07-05*
+*Last updated: 2026-07-13*

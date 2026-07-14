@@ -26,8 +26,13 @@ export const appConfig = () => ({
     serviceKey: process.env.MINDAUTH_SERVICE_KEY || '',
   },
   easymanager: {
+    enabled: process.env.EASYMANAGER_ENABLED === 'true',
     baseUrl: process.env.EASYMANAGER_URL || 'http://localhost:5001',
     apiKey: process.env.EASYMANAGER_API_KEY || '',
+  },
+  mfl: {
+    baseUrl: process.env.MFL_BASE_URL || '',
+    apiKey: process.env.MFL_API_KEY || '',
   },
   automation: {
     apiKey: process.env.FORUM_API_KEY || '',

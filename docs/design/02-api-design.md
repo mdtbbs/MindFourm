@@ -509,9 +509,9 @@ OAuth 流程:
 
 ---
 
-### 服务器模块 `/api/servers`
+### 服务器模块 `/api/servers` — ⏸ EasyManager 暂停
 
-代理 EasyManager API，用于论坛展示服务器列表和申请。
+保留 EasyManager 代理 API，用于未来恢复论坛服务器列表和申请。当前默认 `EASYMANAGER_ENABLED=false`：服务不会连接 EasyManager，公开查询返回空列表，申请接口返回禁用提示。
 
 | Method | Endpoint | 认证 | 说明 |
 |--------|----------|------|------|
@@ -536,7 +536,9 @@ OAuth 流程:
 
 ---
 
-### 帖子-服务器关联 `/api/post-servers`
+### 帖子-服务器关联 `/api/post-servers` — 保留
+
+该模块为 EasyManager 恢复时保留。当前服务器功能默认关闭时，前端入口隐藏，普通论坛功能不依赖这些接口。
 
 | Method | Endpoint | 认证 | 说明 |
 |--------|----------|------|------|
@@ -548,9 +550,9 @@ OAuth 流程:
 
 ---
 
-### 自动发帖回调 `/api/auto-post`
+### 自动发帖回调 `/api/auto-post` — 保留
 
-EasyManager 服务器审批后回调此模块，自动创建公告帖。
+EasyManager 服务器审批后回调此模块，自动创建公告帖。当前 EasyManager 暂停时该入口不会被活跃服务调用，代码保留用于未来恢复。
 
 | Method | Endpoint | 认证 | 说明 |
 |--------|----------|------|------|
@@ -875,19 +877,26 @@ res.cookie('forum_session', sessionToken, {
 | Client Secret | `MINDAUTH_CLIENT_SECRET` |
 | Callback URL | `MINDAUTH_CALLBACK_URL` |
 
-### EasyManager
+### EasyManager — ⏸ 暂停中
 
-| 配置项 | 环境变量 |
-|--------|----------|
-| API URL | `EASYMANAGER_URL` |
-| Service Key | `EASYMANAGER_API_KEY` |
+| 配置项 | 环境变量 | 默认 |
+|--------|----------|------|
+| Enable Flag | `EASYMANAGER_ENABLED` | `false` |
+| API URL | `EASYMANAGER_URL` | `http://localhost:5001` |
+| Service Key | `EASYMANAGER_API_KEY` | 空 |
 
-**论坛调用 EasyManager**:
+**禁用时行为**:
+- `GET /api/servers/public` → 返回空服务器列表
+- `GET /api/servers/versions` → 返回空版本列表
+- `GET /api/servers/templates` → 返回空模板列表
+- `POST /api/servers/apply` → 返回服务器功能已关闭
+
+**恢复后论坛调用 EasyManager**:
 - `GET /api/servers/public` → EasyManager `/api/forum/servers/public`
 - `GET /api/servers/my` → EasyManager `/api/forum/user/:mindauthId/servers`
 - `POST /api/servers/apply` → EasyManager `/api/forum/apply`
 
-**EasyManager 回调论坛**:
+**EasyManager 回调论坛**（恢复后）:
 - `POST /api/auto-post/server-approved` (X-Service-Key 认证)
 
 ---

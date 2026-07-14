@@ -1,5 +1,18 @@
 import { PostsService } from './posts.service';
 
+function createQueryBuilderMock(result: { many?: any[]; total?: number } = {}) {
+  return {
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getManyAndCount: jest.fn().mockResolvedValue([result.many ?? [], result.total ?? 0]),
+    getMany: jest.fn().mockResolvedValue(result.many ?? []),
+  };
+}
+
 function createService(overrides: {
   postRepository?: Record<string, jest.Mock>;
   replyRepository?: Record<string, jest.Mock>;
@@ -8,7 +21,9 @@ function createService(overrides: {
   postSummaryService?: Record<string, jest.Mock>;
   postDetailService?: Record<string, jest.Mock>;
 } = {}) {
+  const listQueryBuilder = createQueryBuilderMock();
   const postRepository = {
+    createQueryBuilder: jest.fn().mockReturnValue(listQueryBuilder),
     findAndCount: jest.fn().mockResolvedValue([[], 0]),
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn(),
@@ -73,22 +88,24 @@ function createService(overrides: {
     groupsService,
     postSummaryService,
     postDetailService,
+    listQueryBuilder,
   };
 }
 
 describe('PostsService', () => {
   it('returns public list summaries and defaults to published posts', async () => {
+    const queryBuilder = createQueryBuilderMock({
+      many: [
+        {
+          id: 12,
+          title: 'Public post',
+        },
+      ],
+      total: 1,
+    });
     const { service, postRepository, postSummaryService } = createService({
       postRepository: {
-        findAndCount: jest.fn().mockResolvedValue([
-          [
-            {
-              id: 12,
-              title: 'Public post',
-            },
-          ],
-          1,
-        ]),
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       },
       postSummaryService: {
         toSummaryList: jest.fn().mockResolvedValue([
@@ -103,11 +120,10 @@ describe('PostsService', () => {
 
     const result = await service.findAll({ page: 1, limit: 20 });
 
-    expect(postRepository.findAndCount).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { status: 'published' },
-      }),
-    );
+    expect(postRepository.createQueryBuilder).toHaveBeenCalledWith('post');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('post.status = :status', { status: 'published' });
+    expect(queryBuilder.skip).toHaveBeenCalledWith(0);
+    expect(queryBuilder.take).toHaveBeenCalledWith(20);
     expect(postSummaryService.toSummaryList).toHaveBeenCalledWith([
       expect.objectContaining({ id: 12 }),
     ]);

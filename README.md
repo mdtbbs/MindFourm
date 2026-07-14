@@ -1,6 +1,6 @@
 # MindFourm
 
-Mindustry 社区论坛系统，集成 MindAuth OAuth SSO 认证和 EasyManager 服务器管理。
+Mindustry 社区论坛系统，集成 MindAuth OAuth SSO 认证和 MindFileList 资源文件托管。EasyManager 服务器管理代码保留但当前暂停，服务器功能默认关闭。
 
 ## 功能
 
@@ -54,8 +54,9 @@ cp .env.example .env
 关键配置：
 - `MINDAUTH_URL` - MindAuth 服务地址
 - `MINDAUTH_CLIENT_ID` / `MINDAUTH_CLIENT_SECRET` - OAuth 客户端信息
-- `EASYMANAGER_URL` - EasyManager 服务地址
-- `EASYMANAGER_API_KEY` - EasyManager API Key
+- `EASYMANAGER_ENABLED` - EasyManager 集成开关，当前默认 `false`
+- `EASYMANAGER_URL` / `EASYMANAGER_API_KEY` - EasyManager 恢复时使用
+- `MFL_BASE_URL` / `MFL_API_KEY` - MindFileList 文件托管集成
 - `MYSQL_*` - MySQL 数据库配置
 - `REDIS_*` - Redis 配置
 
@@ -67,28 +68,32 @@ MySQL 数据库 `mindfourm`，首次启动自动建表。
 
 ## 服务集成
 
-### MindFourm 调用 EasyManager
+### MindAuth OAuth SSO
 
-使用 `X-Service-Key` 头调用：
+MindFourm 通过 MindAuth 完成登录授权，并在本地创建 Redis session。
 
-| 端点 | 描述 |
+### MindFileList 资源文件托管
+
+资源中心可将上传文件转存到 MindFileList，由 MFL 管理文件存储、审核状态与下载限制。
+
+### EasyManager — ⏸ 暂停中
+
+EasyManager 服务器列表、服务器申请和自动公告回调代码保留，但当前默认关闭：
+
+- 后端：`EASYMANAGER_ENABLED=false` 时不连接 EasyManager，服务器 API 返回空数据或禁用提示
+- 前端：`feature_servers_enabled=false` 时隐藏服务器入口和首页服务器区块
+
+保留的恢复接口：
+
+| 论坛端点 | 当前禁用行为 |
 |------|------|
-| `GET /api/forum/servers/public` | 公开服务器列表 |
-| `GET /api/forum/user/:id/servers` | 用户服务器列表 |
-| `POST /api/forum/apply` | 申请服务器 |
-| `GET /api/forum/servers/:id/basic` | 服务器基本信息 |
+| `GET /api/servers/public` | 返回空服务器列表 |
+| `GET /api/servers/versions` | 返回空版本列表 |
+| `GET /api/servers/templates` | 返回空模板列表 |
+| `GET /api/servers/my` | 需登录后返回空服务器列表 |
+| `POST /api/servers/apply` | 返回服务器功能已关闭 |
 
-### EasyManager 回调 MindFourm
-
-服务器审批通过时：
-```http
-POST /api/auto-post/server-approved
-Content-Type: application/json
-
-{ "serverId": "123", "serverName": "My Server", "ownerId": "mindauth_123" }
-```
-
-自动创建公告帖子。
+恢复 EasyManager 时，需要设置 `EASYMANAGER_ENABLED=true` 并在后台功能管理中开启 `feature_servers_enabled`。
 
 ## 管理面板
 

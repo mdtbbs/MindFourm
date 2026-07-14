@@ -5,6 +5,7 @@ function createService(overrides: {
   manager?: Record<string, jest.Mock>;
   dataSource?: Record<string, jest.Mock>;
   adminNotificationsService?: Record<string, jest.Mock>;
+  mflClientService?: Record<string, jest.Mock>;
 } = {}) {
   const resourceRepository = {
     find: jest.fn().mockResolvedValue([]),
@@ -33,6 +34,13 @@ function createService(overrides: {
     publishModerationResult: jest.fn().mockResolvedValue([]),
     ...overrides.adminNotificationsService,
   };
+  const mflClientService = {
+    uploadFile: jest.fn(),
+    getDownloadUrl: jest.fn(),
+    syncApprovalStatus: jest.fn(),
+    deleteFile: jest.fn(),
+    ...overrides.mflClientService,
+  };
 
   const service = new ResourcesService(
     resourceRepository as any,
@@ -41,6 +49,7 @@ function createService(overrides: {
     {} as any,
     dataSource as any,
     adminNotificationsService as any,
+    mflClientService as any,
   );
 
   return {
@@ -49,6 +58,7 @@ function createService(overrides: {
     manager,
     dataSource,
     adminNotificationsService,
+    mflClientService,
   };
 }
 

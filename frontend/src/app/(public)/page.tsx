@@ -171,7 +171,7 @@ export default async function HomePage({
         </div>
 
         <div className="min-w-0 flex-1 space-y-4">
-          <ServerSection />
+          {parseBooleanSetting(settings.feature_servers_enabled, false) && <ServerSection />}
 
           {postsResult.data.length === 0 ? (
             <div className="panel-surface px-6 py-12 text-center">

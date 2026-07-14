@@ -220,6 +220,7 @@ export const appConfig = () => ({
     callbackUrl: process.env.MINDAUTH_CALLBACK_URL,
   },
   easymanager: {
+    enabled: process.env.EASYMANAGER_ENABLED === 'true',
     baseUrl: process.env.EASYMANAGER_URL || 'http://localhost:5001',
     apiKey: process.env.EASYMANAGER_API_KEY || '',
   },
@@ -484,8 +485,8 @@ modules/{module}/
 | **settings** | 166 | 设置 | KV存储、内存缓存 |
 | **bookmarks** | 151 | 收藏 | 帖子收藏 CRUD |
 | **categories** | 108 | 分类 | 层级分类管理 |
-| **post-servers** | 135 | 帖子-服务器 | 关联管理 |
-| **auto-post** | 137 | 自动发帖 | EasyManager回调、服务器公告 |
+| **post-servers** | 135 | 帖子-服务器 | EasyManager 恢复时使用的关联管理（当前保留） |
+| **auto-post** | 137 | 自动发帖 | EasyManager 回调、服务器公告（当前保留） |
 | **stats** | 99 | 统计 | Dashboard统计、7天活动CTE |
 | **logs** | 109 | 日志 | 操作日志记录 |
 
@@ -790,10 +791,12 @@ await repository.find(); // 不包含 deleted_at != null
 - `verifySession(token)` → Redis 验证 + 滑动窗口刷新
 - `logout(token, userId)` → Redis删除 + SessionAudit 记录
 
-### EasyManager 回调集成
+### EasyManager 回调集成 — ⏸ 保留
+
+EasyManager 当前暂停，以下模块不会被活跃服务调用；代码保留用于未来恢复。
 
 **AutoPostModule**:
-- 接收 `POST /api/auto-post/server-approved`
+- 接收 `POST /api/auto-post/server-approved`（恢复 EasyManager 后）
 - `ServiceAuthGuard` 验证 X-Service-Key
 - `createServerAnnouncement(data)` → 创建帖子 + 通知申请人
 
@@ -948,7 +951,7 @@ MindFourm 后端采用 NestJS v10 架构，具有以下特点：
 7. **Markdown 处理** - marked + sanitize-html 安全渲染
 8. **事务管理** - DataSource.transaction 保证数据一致性
 9. **OAuth 集成** - MindAuth SSO + Redis Session 管理
-10. **服务回调** - EasyManager 自动发帖回调支持
+10. **服务回调** - EasyManager 自动发帖回调代码保留（当前暂停）
 
 ---
 *Last updated: 2026-06-08*

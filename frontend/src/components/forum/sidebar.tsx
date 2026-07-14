@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Category, Tag } from '@/types';
 import { FolderOpen, Server, Users, Trophy, ShoppingBag } from 'lucide-react';
+import { useSetting } from '@/store/settings-store';
 
 interface SidebarProps {
   categories: Category[];
@@ -10,15 +11,33 @@ interface SidebarProps {
   selectedCategory?: number;
 }
 
-const quickLinks = [
-  { href: '/resources', label: '资源中心', icon: FolderOpen },
-  { href: '/servers', label: '游戏服务器', icon: Server },
-  { href: '/groups', label: '用户组', icon: Users },
-  { href: '/leaderboard', label: '积分排行', icon: Trophy },
-  { href: '/shop', label: '积分商店', icon: ShoppingBag },
-];
+const allQuickLinks = [
+  { href: '/resources', label: '资源中心', icon: FolderOpen, settingKey: 'feature_resources_enabled' },
+  { href: '/servers', label: '游戏服务器', icon: Server, settingKey: 'feature_servers_enabled' },
+  { href: '/groups', label: '用户组', icon: Users, settingKey: 'feature_groups_enabled' },
+  { href: '/leaderboard', label: '积分排行', icon: Trophy, settingKey: 'feature_leaderboard_enabled' },
+  { href: '/shop', label: '积分商店', icon: ShoppingBag, settingKey: 'feature_shop_enabled' },
+] as const;
 
 export default function Sidebar({ categories, tags, selectedCategory }: SidebarProps) {
+  const resourcesEnabled = useSetting('feature_resources_enabled', 'true');
+  const serversEnabled = useSetting('feature_servers_enabled', 'false');
+  const groupsEnabled = useSetting('feature_groups_enabled', 'true');
+  const leaderboardEnabled = useSetting('feature_leaderboard_enabled', 'true');
+  const shopEnabled = useSetting('feature_shop_enabled', 'true');
+
+  const enabledMap: Record<string, string> = {
+    feature_resources_enabled: resourcesEnabled,
+    feature_servers_enabled: serversEnabled,
+    feature_groups_enabled: groupsEnabled,
+    feature_leaderboard_enabled: leaderboardEnabled,
+    feature_shop_enabled: shopEnabled,
+  };
+
+  const quickLinks = allQuickLinks.filter(
+    (item) => enabledMap[item.settingKey] !== 'false',
+  );
+
   return (
     <aside className="space-y-4">
       <section className="panel-surface p-4">
@@ -82,25 +101,27 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
         </section>
       )}
 
-      <section className="panel-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-            快捷入口
-          </h3>
-        </div>
-        <div className="space-y-2">
-          {quickLinks.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-2 border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          ))}
-        </div>
-      </section>
+      {quickLinks.length > 0 && (
+        <section className="panel-surface p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+              快捷入口
+            </h3>
+          </div>
+          <div className="space-y-2">
+            {quickLinks.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="flex items-center gap-2 border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+              >
+                <item.icon className="h-4 w-4" />
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </aside>
   );
 }
