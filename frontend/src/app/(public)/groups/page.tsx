@@ -6,6 +6,7 @@ import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { Users, Hash, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
+import FeatureGate from '@/components/forum/feature-gate';
 
 interface Group {
   id: number;
@@ -52,15 +53,18 @@ export default function GroupsPage() {
   };
 
   if (loading) return (
+    <FeatureGate settingKey="feature_groups_enabled" label="用户组">
     <div className="min-h-screen bg-[var(--bg)]">
       <UnifiedHeader />
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     </div>
+    </FeatureGate>
   );
 
   return (
+    <FeatureGate settingKey="feature_groups_enabled" label="用户组">
     <div className="min-h-screen bg-[var(--bg)]">
       <UnifiedHeader />
 
@@ -146,5 +150,6 @@ export default function GroupsPage() {
         )}
       </main>
     </div>
+    </FeatureGate>
   );
 }

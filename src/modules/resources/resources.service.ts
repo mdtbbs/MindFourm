@@ -13,6 +13,7 @@ import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
 import { PUBLIC_RESOURCE_STATUSES, RESOURCE_STATUS } from '@common/utils/constants';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { MflClientService } from './mfl-client.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -21,6 +22,13 @@ export interface ResourceFileMeta {
   file_path: string;
   file_size: number;
   mime_type: string;
+}
+
+export interface MflFileMeta {
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  file_buffer: Buffer;
 }
 
 type ResourceListScope = 'public' | 'admin';
@@ -42,6 +50,7 @@ export class ResourcesService {
     private versionRepository: Repository<ResourceVersion>,
     private dataSource: DataSource,
     private adminNotificationsService: AdminNotificationsService,
+    private mflClientService: MflClientService,
   ) {}
 
   private normalizeResourceType(resourceType: string): string {
@@ -76,6 +85,7 @@ export class ResourcesService {
     return {
       ...resource,
       is_public: resource.is_public === 1,
+      use_mfl: resource.use_mfl === 1,
       file_size: resource.file_size || 0,
       username: resource.user?.username || '',
       avatar_url: resource.user?.avatar_url || null,
@@ -95,10 +105,11 @@ export class ResourcesService {
     }
   }
 
-  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta): Promise<any> {
+  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta, mflMeta?: MflFileMeta): Promise<any> {
     return this.dataSource.transaction(async (manager) => {
       const categoryId = this.toOptionalNumber((dto as any).category_id);
       const resourceType = this.normalizeResourceType(dto.resource_type);
+      const useMfl = !!dto.use_mfl;
 
       if (categoryId) {
         const category = await manager.findOne(ResourceCategory, {
@@ -113,7 +124,7 @@ export class ResourcesService {
         throw new BadRequestException('Invalid resource type');
       }
 
-      if (resourceType === 'upload' && !file) {
+      if (resourceType === 'upload' && !file && !mflMeta) {
         throw new BadRequestException('A file is required for uploaded resources');
       }
 
@@ -121,51 +132,109 @@ export class ResourcesService {
         throw new BadRequestException('An external URL is required');
       }
 
-      const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
+      let savedResourceId: number;
 
-      const newResource = manager.create(Resource, {
-        user_id: userId,
-        title: dto.title,
-        description: dto.description,
-        resource_type: resourceType,
-        file_name: file?.file_name,
-        file_path: file?.file_path,
-        file_size: file?.file_size,
-        mime_type: file?.mime_type,
-        external_url: resourceType === 'external' ? dto.external_url : undefined,
-        version: dto.version,
-        content: dto.content,
-        content_html: contentHtml,
-        category_id: categoryId,
-        is_public: this.toTinyInt((dto as any).is_public, 1),
-        status: 'pending',
-        download_count: 0,
-      });
-      const savedResource = await manager.save(newResource);
+      if (useMfl && mflMeta) {
+        const categorySlug = categoryId
+          ? (await manager.findOne(ResourceCategory, { where: { id: categoryId } }))?.slug || 'uncategorized'
+          : 'uncategorized';
 
-      const result = await manager.findOne(Resource, {
-        where: { id: savedResource.id },
+        // Create resource first to get an ID for MFL
+        const tempResource = manager.create(Resource, {
+          user_id: userId,
+          title: dto.title,
+          resource_type: resourceType,
+          status: 'pending',
+        });
+        const tempSaved = await manager.save(tempResource);
+        savedResourceId = tempSaved.id;
+
+        const mflResult = await this.mflClientService.uploadFile(
+          mflMeta.file_buffer,
+          mflMeta.file_name,
+          categorySlug,
+          mflMeta.mime_type,
+          { resourceId: tempSaved.id },
+        );
+
+        if (!mflResult) {
+          // MFL not configured — clean up the temp record and fail
+          await manager.delete(Resource, tempSaved.id);
+          throw new BadRequestException('MindFileList service is not configured. Please upload locally or contact an admin.');
+        }
+
+        const mflFileId = mflResult.id;
+        const mflDownloadUrl = this.mflClientService.getDownloadUrl(mflResult.id);
+
+        // Update the resource with MFL metadata
+        const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
+
+        await manager.update(Resource, tempSaved.id, {
+          description: dto.description,
+          resource_type: resourceType,
+          file_name: mflMeta.file_name,
+          file_size: mflMeta.file_size,
+          mime_type: mflMeta.mime_type,
+          external_url: undefined,
+          version: dto.version,
+          content: dto.content,
+          content_html: contentHtml,
+          category_id: categoryId,
+          is_public: this.toTinyInt((dto as any).is_public, 1),
+          download_count: 0,
+          use_mfl: 1,
+          mfl_file_id: mflFileId,
+          mfl_download_url: mflDownloadUrl,
+        } as any);
+      } else {
+        // Standard local upload
+        const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
+
+        const newResource = manager.create(Resource, {
+          user_id: userId,
+          title: dto.title,
+          description: dto.description,
+          resource_type: resourceType,
+          file_name: file?.file_name,
+          file_path: file?.file_path,
+          file_size: file?.file_size,
+          mime_type: file?.mime_type,
+          external_url: resourceType === 'external' ? dto.external_url : undefined,
+          version: dto.version,
+          content: dto.content,
+          content_html: contentHtml,
+          category_id: categoryId,
+          is_public: this.toTinyInt((dto as any).is_public, 1),
+          status: 'pending',
+          download_count: 0,
+        });
+        const saved = await manager.save(newResource);
+        savedResourceId = saved.id;
+      }
+
+      const finalResult = await manager.findOne(Resource, {
+        where: { id: savedResourceId },
         relations: ['user', 'category'],
       });
 
-      if (!result) {
+      if (!finalResult) {
         throw new NotFoundException('Resource does not exist');
       }
 
-      if (result.status === RESOURCE_STATUS_PENDING) {
+      if (finalResult.status === RESOURCE_STATUS_PENDING) {
         this.adminNotificationsService.publishModerationPending({
           item_type: 'resource',
-          item_id: result.id,
-          title: result.title,
-          content: dto.description || dto.content || dto.external_url || file?.file_name || null,
-          author_username: result.user?.username || `#${userId}`,
+          item_id: finalResult.id,
+          title: finalResult.title,
+          content: dto.description || dto.content || dto.external_url || mflMeta?.file_name || file?.file_name || null,
+          author_username: finalResult.user?.username || `#${userId}`,
           action_url: '/admin/resources/moderation',
         }).catch((err) =>
           console.error('Admin resource moderation notification error:', err),
         );
       }
 
-      return this.normalizeResource(result);
+      return this.normalizeResource(finalResult);
     });
   }
 
@@ -476,6 +545,21 @@ export class ResourcesService {
 
     if (existingResource.status !== status) {
       await this.resourceRepository.update(id, { status });
+
+      // Sync approval status to MFL if applicable
+      if (existingResource.use_mfl && existingResource.mfl_file_id) {
+        const mflStatus = status === RESOURCE_STATUS_APPROVED ? 'approved'
+          : status === RESOURCE_STATUS_REJECTED ? 'rejected' : null;
+        if (mflStatus) {
+          this.mflClientService.updateApprovalStatus(
+            existingResource.mfl_file_id,
+            mflStatus,
+            id,
+          ).catch((err) =>
+            console.error('MFL approval sync error:', err),
+          );
+        }
+      }
     }
 
     const resource = existingResource.status === status

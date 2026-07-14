@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Post, UserRole } from '@/types';
 import Badge from '@/components/ui/badge';
 import Button from '@/components/ui/button';
 import BookmarkButton from '@/components/forum/bookmark-button';
-import { Pin, Move, Trash2 } from 'lucide-react';
+import { adminApi } from '@/lib/api/client';
+import { Pin, Move, Trash2, Check, X } from 'lucide-react';
 
 interface PostContentProps {
   post: Post;
@@ -27,9 +29,39 @@ export default function PostContent({
   const canModerate = currentUserRole === 'moderator' || currentUserRole === 'admin';
   const authorLabel = post.author_mindauth_id ?? `#${post.user_id}`;
 
+  // Moderation state
+  const [modAction, setModAction] = useState<'approving' | 'rejecting' | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+
   function formatTime(dateStr: string): string {
     return new Date(dateStr).toLocaleString('zh-CN');
   }
+
+  const handleApprove = async () => {
+    if (!postId || modAction) return;
+    setModAction('approving');
+    try {
+      await adminApi.approvePost(postId, 'post');
+      window.location.reload();
+    } catch (err) {
+      console.error('Approve failed:', err);
+      setModAction(null);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!postId || modAction) return;
+    setModAction('rejecting');
+    try {
+      await adminApi.rejectPost(postId, 'post', rejectReason || undefined);
+      window.location.reload();
+    } catch (err) {
+      console.error('Reject failed:', err);
+      setModAction(null);
+      setShowRejectModal(false);
+    }
+  };
 
   return (
     <article className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 overflow-hidden">
@@ -66,7 +98,32 @@ export default function PostContent({
       </div>
 
       {/* Actions */}
-      <div className="px-6 py-4 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] dark:border-gray-700 flex items-center gap-2">
+      <div className="px-6 py-4 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] dark:border-gray-700 flex items-center gap-2 flex-wrap">
+        {/* Moderation actions for pending posts */}
+        {post.status === 'pending' && canModerate && (
+          <div className="flex items-center gap-2 mr-auto">
+            <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider mr-1">
+              待审核
+            </span>
+            <button
+              onClick={handleApprove}
+              disabled={modAction !== null}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              <Check className="w-3.5 h-3.5" />
+              {modAction === 'approving' ? '处理中...' : '通过'}
+            </button>
+            <button
+              onClick={() => setShowRejectModal(true)}
+              disabled={modAction !== null}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+              拒绝
+            </button>
+          </div>
+        )}
+
         {postId && <BookmarkButton postId={postId} />}
         {canModerate && onPin && (
           <Button
@@ -102,6 +159,46 @@ export default function PostContent({
           </Button>
         )}
       </div>
+
+      {/* Reject Reason Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowRejectModal(false)}>
+          <div
+            className="w-full max-w-md bg-[var(--bg-card)] border border-[var(--border)] shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-[var(--border)]">
+              <h3 className="text-base font-semibold text-[var(--text)]">拒绝原因</h3>
+              <p className="text-xs text-[var(--text-muted)] mt-1">请填写拒绝此帖子的原因（可选）</p>
+            </div>
+            <div className="px-6 py-4">
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="例如：内容不符合社区规范..."
+                rows={4}
+                className="w-full px-3 py-2 text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--primary)]"
+                autoFocus
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-[var(--border)] flex justify-end gap-2">
+              <button
+                onClick={() => { setShowRejectModal(false); setRejectReason(''); }}
+                className="px-4 py-2 text-sm text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleReject}
+                disabled={modAction === 'rejecting'}
+                className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {modAction === 'rejecting' ? '处理中...' : '确认拒绝'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

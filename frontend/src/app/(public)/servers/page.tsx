@@ -6,6 +6,7 @@ import ServerSidebar from '@/components/forum/server-sidebar';
 import MyServersList from '@/components/forum/my-servers-list';
 import ServerApplyForm from '@/components/forum/server-apply-form';
 import PublicServerGrid from '@/components/forum/public-server-grid';
+import FeatureGate from '@/components/forum/feature-gate';
 import { Lock } from 'lucide-react';
 
 function AuthRequiredSection() {
@@ -49,6 +50,7 @@ export default function ServersPage() {
   const currentSection = section || (isAuthenticated ? 'my' : 'public');
 
   return (
+    <FeatureGate settingKey="feature_servers_enabled" label="游戏服务器">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex gap-8">
         <ServerSidebar />
@@ -57,5 +59,6 @@ export default function ServersPage() {
         </div>
       </div>
     </div>
+    </FeatureGate>
   );
 }

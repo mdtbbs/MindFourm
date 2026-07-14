@@ -37,6 +37,15 @@ export class Resource {
   @Column({ length: 500, nullable: true })
   external_url: string;
 
+  @Column({ default: 0 })
+  use_mfl: number;
+
+  @Column({ nullable: true })
+  mfl_file_id: number;
+
+  @Column({ length: 500, nullable: true })
+  mfl_download_url: string;
+
   @Column({ length: 50, nullable: true })
   version: string;
 

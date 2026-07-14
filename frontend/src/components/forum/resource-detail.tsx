@@ -118,14 +118,46 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         </div>
       )}
 
+      {resource.status === 'pending' && (
+        <div className="mb-4 flex items-center gap-3 border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+          <svg className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-sm text-amber-800 dark:text-amber-200">
+            此资源正在等待审核，审核通过后可下载。
+          </span>
+        </div>
+      )}
+
+      {resource.status === 'rejected' && (
+        <div className="mb-4 flex items-center gap-3 border border-red-200 bg-red-50 px-4 py-3 dark:border-red-800 dark:bg-red-950/30">
+          <svg className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+          <span className="text-sm text-red-800 dark:text-red-200">
+            此资源未通过审核{resource.reject_reason ? `：${resource.reject_reason}` : ''}
+          </span>
+        </div>
+      )}
+
       {hasDownloadFile ? (
-        <a
-          href={resourceApi.download(resource.id, selectedVersion?.id)}
-          className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-6 py-3 font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
-        >
-          <Download className="h-5 w-5" />
-          下载 {selectedFileName || '文件'}
-        </a>
+        resource.status === 'pending' || resource.status === 'rejected' ? (
+          <button
+            disabled
+            className="inline-flex cursor-not-allowed items-center gap-2 rounded-[var(--radius)] bg-gray-300 px-6 py-3 font-medium text-gray-500 dark:bg-gray-700 dark:text-gray-400"
+          >
+            <Download className="h-5 w-5" />
+            {resource.status === 'pending' ? '等待审核' : '审核未通过'}
+          </button>
+        ) : (
+          <a
+            href={resourceApi.download(resource.id, selectedVersion?.id)}
+            className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-6 py-3 font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
+          >
+            <Download className="h-5 w-5" />
+            下载 {selectedFileName || '文件'}
+          </a>
+        )
       ) : (
         <a
           href={resource.external_url || '#'}

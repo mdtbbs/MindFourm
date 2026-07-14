@@ -200,6 +200,12 @@ async function ensureExistingSchemaPatches(dataSource: DataSource): Promise<void
   await addColumnIfMissing(dataSource, 'resource_versions', 'file_name', 'VARCHAR(255) NULL');
   await addColumnIfMissing(dataSource, 'resource_versions', 'file_size', 'INT NULL');
   await addColumnIfMissing(dataSource, 'resource_versions', 'mime_type', 'VARCHAR(100) NULL');
+
+  await addColumnIfMissing(dataSource, 'resources', 'use_mfl', 'TINYINT(1) NOT NULL DEFAULT 0');
+  await addColumnIfMissing(dataSource, 'resources', 'mfl_file_id', 'INT NULL');
+  await addColumnIfMissing(dataSource, 'resources', 'mfl_download_url', 'VARCHAR(500) NULL');
+
+  await addColumnIfMissing(dataSource, 'posts', 'reject_reason', 'VARCHAR(500) NULL');
 }
 
 async function assertRequiredTables(dataSource: DataSource): Promise<void> {

@@ -19,6 +19,11 @@ export default function ModerationPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Reject modal state
+  const [rejectTarget, setRejectTarget] = useState<ModerationItem | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+
   const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
@@ -41,20 +46,33 @@ export default function ModerationPage() {
       setError(null);
       await adminApi.approvePost(item.id, item.item_type);
       setMessage('审核通过');
+      setTimeout(() => setMessage(null), 3000);
       await fetchItems();
     } catch (err) {
       setError(err instanceof Error ? err.message : '审核通过失败');
     }
   };
 
-  const handleReject = async (item: ModerationItem) => {
+  const handleRejectClick = (item: ModerationItem) => {
+    setRejectTarget(item);
+    setRejectReason('');
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectTarget || rejecting) return;
+    setRejecting(true);
     try {
       setError(null);
-      await adminApi.rejectPost(item.id, item.item_type);
+      await adminApi.rejectPost(rejectTarget.id, rejectTarget.item_type, rejectReason || undefined);
       setMessage('已拒绝');
+      setTimeout(() => setMessage(null), 3000);
+      setRejectTarget(null);
+      setRejectReason('');
       await fetchItems();
     } catch (err) {
       setError(err instanceof Error ? err.message : '拒绝失败');
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -70,7 +88,7 @@ export default function ModerationPage() {
           <p className="mt-1 text-sm text-surface-500">查看并处理待审核的帖子、回复和头像。</p>
         </div>
         <select
-          className="rounded border border-surface-200 px-3 py-2 text-sm"
+          className="border border-surface-200 px-3 py-2 text-sm"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         >
@@ -93,36 +111,80 @@ export default function ModerationPage() {
             {items.map((item) => (
               <div
                 key={`${item.item_type}-${item.id}`}
-                className="flex items-start gap-4 border-b border-surface-100 p-4 last:border-b-0"
+                className="border-b border-surface-100 p-4 last:border-b-0"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-surface-500">
-                      {item.item_type}
-                    </span>
-                    <span className="text-xs text-surface-400">{item.author_username}</span>
-                    <span className="font-mono text-xs text-surface-400">
-                      {new Date(item.created_at).toLocaleString('zh-CN')}
-                    </span>
+                <div className="flex items-start gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-surface-500">
+                        {item.item_type}
+                      </span>
+                      <span className="text-xs text-surface-400">{item.author_username}</span>
+                      <span className="font-mono text-xs text-surface-400">
+                        {new Date(item.created_at).toLocaleString('zh-CN')}
+                      </span>
+                    </div>
+                    {item.title ? (
+                      <a
+                        href={`/posts/${item.item_type === 'post' ? item.id : item.post_id || ''}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate text-sm font-medium text-surface-900 hover:text-[var(--primary)] underline decoration-surface-200 hover:decoration-[var(--primary)]"
+                      >
+                        {item.title}
+                      </a>
+                    ) : null}
+                    <p className="mt-1 text-sm leading-relaxed text-surface-700 line-clamp-3 whitespace-pre-wrap">
+                      {item.content}
+                    </p>
                   </div>
-                  {item.title ? (
-                    <p className="truncate text-sm font-medium text-surface-900">{item.title}</p>
-                  ) : null}
-                  <p className="truncate text-sm text-surface-700">{item.content}</p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => handleApprove(item)}>
-                    通过
-                  </Button>
-                  <Button variant="destructive" size="sm" onClick={() => handleReject(item)}>
-                    拒绝
-                  </Button>
+                  <div className="flex shrink-0 gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => handleApprove(item)}>
+                      通过
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => handleRejectClick(item)}>
+                      拒绝
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Reject Reason Modal */}
+      {rejectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setRejectTarget(null)}>
+          <div
+            className="w-full max-w-md bg-white border border-surface-200 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-surface-200">
+              <h3 className="text-sm font-semibold text-surface-900">拒绝原因</h3>
+              <p className="text-xs text-surface-400 mt-1">
+                拒绝「{rejectTarget.title || `${rejectTarget.item_type} #${rejectTarget.id}`}」，请填写原因（可选）
+              </p>
+            </div>
+            <div className="px-6 py-4">
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="例如：内容不符合社区规范..."
+                rows={4}
+                className="w-full px-3 py-2 text-sm border border-surface-200 focus:outline-none focus:border-surface-400"
+                autoFocus
+              />
+            </div>
+            <div className="px-6 py-4 border-t border-surface-200 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setRejectTarget(null)}>取消</Button>
+              <Button variant="destructive" onClick={handleRejectConfirm} disabled={rejecting}>
+                {rejecting ? '处理中...' : '确认拒绝'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

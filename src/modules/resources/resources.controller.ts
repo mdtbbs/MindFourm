@@ -181,6 +181,12 @@ export class ResourcesController {
   ) {
     const resource = await this.resourcesService.getById(id);
 
+    // MFL redirect: if resource uses MFL, redirect to MFL download URL
+    if (!versionId && resource.use_mfl && resource.mfl_download_url) {
+      await this.resourcesService.incrementDownload(id);
+      return res.redirect(resource.mfl_download_url);
+    }
+
     if (!versionId && resource.resource_type === 'external' && resource.external_url) {
       await this.resourcesService.incrementDownload(id);
       return res.redirect(resource.external_url);
@@ -229,7 +235,21 @@ export class ResourcesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
+    const useMfl = body.use_mfl === '1' || body.use_mfl === 'true' || body.use_mfl === true;
+
     try {
+      if (useMfl && file) {
+        // MFL mode: read file buffer, upload to MFL, don't save locally
+        const fileBuffer = await fs.readFile(file.path);
+        const mflMeta = {
+          file_name: file.originalname,
+          file_size: file.size,
+          mime_type: file.mimetype,
+          file_buffer: fileBuffer,
+        };
+        await cleanupUploadedFile(file);
+        return await this.resourcesService.create(body, userId, undefined, mflMeta);
+      }
       return await this.resourcesService.create(body, userId, toFileMeta(file));
     } catch (error) {
       await cleanupUploadedFile(file);

@@ -5,6 +5,7 @@ import { api } from '@/lib/api/client';
 import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { Trophy, Medal, Star } from 'lucide-react';
+import FeatureGate from '@/components/forum/feature-gate';
 
 interface LeaderboardUser {
   id: number;
@@ -65,6 +66,7 @@ export default function LeaderboardPage() {
   };
 
   return (
+    <FeatureGate settingKey="feature_leaderboard_enabled" label="积分排行">
     <div className="min-h-screen bg-[var(--bg)]">
       <UnifiedHeader />
 
@@ -159,5 +161,6 @@ export default function LeaderboardPage() {
         </div>
       </main>
     </div>
+    </FeatureGate>
   );
 }

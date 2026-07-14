@@ -23,6 +23,7 @@ export default function ResourceSubmitForm() {
   const [content, setContent] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [useMfl, setUseMfl] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +72,9 @@ export default function ResourceSubmitForm() {
         formData.append('external_url', externalUrl.trim());
       } else if (file) {
         formData.append('file', file);
+        if (useMfl) {
+          formData.append('use_mfl', '1');
+        }
       }
 
       const resource = await resourceApi.upload(formData);
@@ -239,6 +243,23 @@ export default function ResourceSubmitForm() {
             />
           </label>
           <p className="mt-1 text-xs text-[var(--text-muted)]">最大 50MB</p>
+
+          {file && (
+            <label className="mt-3 flex cursor-pointer items-start gap-3 border border-[var(--border)] bg-[var(--bg-elevated)] p-3">
+              <input
+                type="checkbox"
+                checked={useMfl}
+                onChange={(e) => setUseMfl(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
+              />
+              <div>
+                <span className="text-sm font-medium text-[var(--text)]">上传到文件站 (MindFileList)</span>
+                <p className="mt-0.5 text-xs text-[var(--text-muted)]">
+                  文件将托管在文件站，获取直链。审核期间文件名称可见但不可下载。
+                </p>
+              </div>
+            </label>
+          )}
         </div>
       )}
 

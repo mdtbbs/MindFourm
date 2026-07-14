@@ -51,6 +51,13 @@ export class SettingsService implements OnModuleInit {
       'admin_notifications_webhook_secret',
       'admin_notifications_webhook_timeout_ms',
     ]),
+    features: new Set([
+      'feature_resources_enabled',
+      'feature_servers_enabled',
+      'feature_groups_enabled',
+      'feature_leaderboard_enabled',
+      'feature_shop_enabled',
+    ]),
   };
 
   constructor(
@@ -117,6 +124,12 @@ export class SettingsService implements OnModuleInit {
       { key: 'cleanup_log_retention_days', value: '365', category: 'cleanup', description: 'Days to retain operation logs' },
       { key: 'cleanup_session_retention_days', value: '30', category: 'cleanup', description: 'Days to retain expired sessions' },
       { key: 'cleanup_soft_delete_retention_days', value: '30', category: 'cleanup', description: 'Days to retain soft-deleted items' },
+      // Feature toggles (快捷入口开关)
+      { key: 'feature_resources_enabled', value: 'true', category: 'features', description: 'Enable resources center' },
+      { key: 'feature_servers_enabled', value: 'true', category: 'features', description: 'Enable game servers' },
+      { key: 'feature_groups_enabled', value: 'true', category: 'features', description: 'Enable user groups' },
+      { key: 'feature_leaderboard_enabled', value: 'true', category: 'features', description: 'Enable points leaderboard' },
+      { key: 'feature_shop_enabled', value: 'true', category: 'features', description: 'Enable points shop' },
       // Email settings
       { key: 'smtp_host', value: '', category: 'email', description: 'SMTP server host' },
       { key: 'smtp_port', value: '587', category: 'email', description: 'SMTP server port' },

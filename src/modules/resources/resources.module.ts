@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ResourcesService } from './resources.service';
 import { ResourceCategoryService } from './resource-categories.service';
 import { ResourceVersionService } from './resource-versions.service';
+import { MflClientService } from './mfl-client.service';
 import { ResourcesController } from './resources.controller';
 import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
@@ -15,8 +16,8 @@ import { AdminNotificationsModule } from '../admin-notifications/admin-notificat
     AdminNotificationsModule,
     TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, User]),
   ],
-  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService],
+  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService],
   controllers: [ResourcesController],
-  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService],
+  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService],
 })
 export class ResourcesModule {}

@@ -335,9 +335,10 @@ export class AdminController {
   async rejectItem(
     @Param('id', ParseIntPipe) id: number,
     @Body('type') type: string = 'post',
+    @Body('reason') reason: string | null,
     @Req() req: any,
   ) {
-    await this.adminService.rejectModerationItem(type, id);
+    await this.adminService.rejectModerationItem(type, id, reason);
     await this.publishModerationResult(type, id, 'rejected', req.user?.username);
     await this.logOperation(req, 'moderation.reject', type, id);
     return { message: 'Item rejected' };

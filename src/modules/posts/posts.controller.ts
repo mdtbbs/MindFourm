@@ -84,12 +84,15 @@ export class PostsController {
    * GET /api/posts/:id - Get post detail with replies
    */
   @Get(':id')
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
   async findOne(
     @Param('id', ParseIntPipe) id: number,
     @Query('reply_page') replyPage?: string,
     @Query('reply_limit') replyLimit?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Req() req?: any,
   ) {
     const parsedReplyPage = replyPage
       ? parseInt(replyPage, 10)
@@ -110,6 +113,7 @@ export class PostsController {
 
     return {
       ...post,
+      current_user_role: req?.user?.role ?? null,
       replies: replies.data,
       replyPagination: {
         total: replies.total,

@@ -76,6 +76,7 @@ export interface Post {
   content: string;
   content_html: string | null;
   status: 'draft' | 'published' | 'pending' | 'deleted';
+  reject_reason?: string | null;
   is_pinned: boolean;
   view_count: number;
   reply_count?: number;
@@ -87,6 +88,7 @@ export interface Post {
   author_mindauth_id: number | null;
   author_role: UserRole | null;
   tags: Tag[];
+  current_user_role?: UserRole | null;
   replies?: Reply[];
   replyPagination?: {
     total: number;
@@ -397,6 +399,9 @@ export interface Resource {
   download_count: number;
   is_public: boolean;
   status: string;
+  reject_reason?: string | null;
+  use_mfl: boolean;
+  mfl_download_url: string | null;
   username: string;
   avatar_url: string | null;
   created_at: string;

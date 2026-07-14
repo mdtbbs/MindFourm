@@ -32,4 +32,8 @@ export class CreateResourceDto {
   @IsOptional()
   @IsNumber()
   is_public?: number;
+
+  @IsOptional()
+  @IsString()
+  use_mfl?: string;
 }

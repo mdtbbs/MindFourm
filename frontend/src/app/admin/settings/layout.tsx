@@ -7,6 +7,7 @@ const tabs = [
   { href: '/admin/settings/basic', label: '基本信息' },
   { href: '/admin/settings/announce', label: '公告管理' },
   { href: '/admin/settings/display', label: '显示设置' },
+  { href: '/admin/settings/features', label: '功能管理' },
   { href: '/admin/settings/seo', label: 'SEO 设置' },
   { href: '/admin/settings/notifications', label: '通知设置' },
 ];

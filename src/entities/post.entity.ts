@@ -44,6 +44,9 @@ export class Post {
   @Column({ length: 50, default: 'draft' })
   status: string;
 
+  @Column({ length: 500, nullable: true })
+  reject_reason: string;
+
   @Column({ default: 0 })
   is_pinned: number;
 

@@ -6,6 +6,7 @@ import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { ShoppingBag, Star, Lock, Package } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
+import FeatureGate from '@/components/forum/feature-gate';
 
 interface ShopItem {
   id: number;
@@ -80,15 +81,18 @@ export default function ShopPage() {
   };
 
   if (loading) return (
+    <FeatureGate settingKey="feature_shop_enabled" label="积分商店">
     <div className="min-h-screen bg-[var(--bg)]">
       <UnifiedHeader />
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     </div>
+    </FeatureGate>
   );
 
   return (
+    <FeatureGate settingKey="feature_shop_enabled" label="积分商店">
     <div className="min-h-screen bg-[var(--bg)]">
       <UnifiedHeader />
 
@@ -237,5 +241,6 @@ export default function ShopPage() {
         )}
       </main>
     </div>
+    </FeatureGate>
   );
 }

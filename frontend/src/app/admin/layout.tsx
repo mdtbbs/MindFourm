@@ -4,10 +4,11 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
 import { AdminSidebar as SharedAdminSidebar, SidebarItem, SidebarGroup } from '@mindproject/shared';
+import { useSetting } from '@/store/settings-store';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen
+  Package, AlertCircle, FolderOpen, ToggleLeft
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
 import AdminHeader from '@/components/admin/admin-header';
@@ -26,6 +27,7 @@ const navGroups: SidebarGroup[] = [
       { key: 'settings-basic', label: '基本信息', icon: <Settings size={16} />, href: '/admin/settings/basic', roles: ['admin'] },
       { key: 'settings-announce', label: '公告管理', icon: <Megaphone size={16} />, href: '/admin/settings/announce', roles: ['admin'] },
       { key: 'settings-display', label: '显示设置', icon: <Palette size={16} />, href: '/admin/settings/display', roles: ['admin'] },
+      { key: 'settings-features', label: '功能管理', icon: <ToggleLeft size={16} />, href: '/admin/settings/features', roles: ['admin'] },
       { key: 'settings-seo', label: 'SEO 设置', icon: <Search size={16} />, href: '/admin/settings/seo', roles: ['admin'] },
     ],
   },
@@ -85,9 +87,24 @@ export default function AdminLayout({
   const pathname = usePathname();
   const { user } = useAuth();
   const userRole = user?.role ?? '';
+  const resourcesEnabled = useSetting('feature_resources_enabled', 'true');
 
-  // Filter items by user role and remove empty groups
+  // Feature-aware group keys to hide when the corresponding feature is disabled
+  const featureGroupMap: Record<string, string> = {
+    '资源': 'feature_resources_enabled',
+  };
+
+  const featureEnabled: Record<string, string> = {
+    'feature_resources_enabled': resourcesEnabled,
+  };
+
+  // Filter items by user role, feature toggles, and remove empty groups
   const visibleGroups = navGroups
+    .filter(group => {
+      const requiredFeature = featureGroupMap[group.label];
+      if (requiredFeature && featureEnabled[requiredFeature] === 'false') return false;
+      return true;
+    })
     .map(group => ({
       ...group,
       items: group.items.filter(item => !item.roles || item.roles.includes(userRole)),

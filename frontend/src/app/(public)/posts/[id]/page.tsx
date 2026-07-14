@@ -22,6 +22,7 @@ async function fetchPost(id: number, page: number, limit: number): Promise<Post 
   return fetchApiData<Post | null>(`/api/posts/${id}?reply_page=${page}&reply_limit=${limit}`, {
     init: { cache: 'no-store' },
     fallback: null,
+    forwardCookies: true,
   });
 }
 
@@ -110,17 +111,19 @@ export default async function PostDetailPage({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">此帖子正在等待审核</p>
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-              审核通过后将对其他用户可见。如有疑问请联系管理组。
+              {post.current_user_role === 'admin' || post.current_user_role === 'moderator'
+                ? '您可以审核此帖子。'
+                : '审核通过后将对其他用户可见。如有疑问请联系管理组。'}
             </p>
           </div>
         </div>
       )}
 
       {/* Post Content */}
-      <PostContent post={post} postId={postId} />
+      <PostContent post={post} postId={postId} currentUserRole={post.current_user_role as any} />
       <AttachmentList attachments={attachments} />
 
       {/* Replies */}

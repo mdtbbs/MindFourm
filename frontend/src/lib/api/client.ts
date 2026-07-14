@@ -497,11 +497,11 @@ export const adminApi = {
       body: JSON.stringify({ type }),
     });
   },
-  rejectPost: (id: number, type: string = 'post') => {
+  rejectPost: (id: number, type: string = 'post', reason?: string) => {
     clearCache();
     return request<{ message: string }>(`/api/admin/moderation/${id}/reject`, {
       method: 'PUT',
-      body: JSON.stringify({ type }),
+      body: JSON.stringify({ type, reason }),
     });
   },
   getBans: (params?: { page?: number; limit?: number; ban_type?: string; is_active?: string }) =>

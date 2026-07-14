@@ -347,8 +347,10 @@ export class AdminService {
   /**
    * Reject a post (set status to deleted)
    */
-  async rejectPost(id: number): Promise<void> {
-    await this.postRepository.update(id, { status: 'deleted' });
+  async rejectPost(id: number, reason?: string | null): Promise<void> {
+    const updateData: any = { status: 'deleted' };
+    if (reason) updateData.reject_reason = reason;
+    await this.postRepository.update(id, updateData);
   }
 
   async approveReply(id: number): Promise<void> {
@@ -399,10 +401,10 @@ export class AdminService {
     return this.approvePost(id);
   }
 
-  async rejectModerationItem(type: string, id: number): Promise<void> {
+  async rejectModerationItem(type: string, id: number, reason?: string | null): Promise<void> {
     if (type === 'reply' || type === 'replies') return this.rejectReply(id);
     if (type === 'avatar' || type === 'avatars') return this.rejectAvatar(id);
-    return this.rejectPost(id);
+    return this.rejectPost(id, reason);
   }
 
   private normalizePinnedValue(value: number | boolean | null | undefined): 0 | 1 {

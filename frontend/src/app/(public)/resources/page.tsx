@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { FileText } from 'lucide-react';
+import { FileText, AlertCircle } from 'lucide-react';
 import ResourceCard from '@/components/forum/resource-card';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
 import { fetchApiData } from '@/lib/api/server-fetch';
@@ -36,6 +36,27 @@ export default async function ResourcesPage({
 }: {
   searchParams: { category_id?: string; search?: string; sort?: string };
 }) {
+  const settings = await fetchApiData<Record<string, string>>('/api/settings', {
+    init: { next: { revalidate: 60 } },
+    fallback: {},
+  });
+
+  const resourcesEnabled = settings.feature_resources_enabled !== 'false';
+
+  if (!resourcesEnabled) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-20 text-center">
+        <div className="panel-surface inline-block px-8 py-10">
+          <AlertCircle className="mx-auto mb-4 h-10 w-10 text-[var(--muted-foreground)]" />
+          <h2 className="mb-2 text-lg font-semibold text-[var(--foreground)]">资源中心已关闭</h2>
+          <p className="text-sm leading-6 text-[var(--muted-foreground)]">
+            管理员已关闭此功能，如需开启请联系管理员。
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const { resources, categories } = await fetchData(searchParams);
 
   return (
