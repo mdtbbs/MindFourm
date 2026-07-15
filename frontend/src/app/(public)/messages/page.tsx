@@ -20,7 +20,7 @@ function formatTime(dateStr: string): string {
 }
 
 async function fetchConversations(): Promise<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }> {
-  const cookieHeader = cookies()
+  const cookieHeader = (await cookies())
     .getAll()
     .map(({ name, value }) => `${name}=${value}`)
     .join('; ');

@@ -58,7 +58,7 @@ export async function fetchApiData<T>(
   }
 
   try {
-    const headers = buildHeaders(init?.headers, forwardCookies);
+    const headers = await buildHeaders(init?.headers, forwardCookies);
     const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
     if (!res.ok) {
       handleHttpFailure(res.status, notFoundOn404);
@@ -90,7 +90,7 @@ export async function fetchApiPaginated<
   }
 
   try {
-    const headers = buildHeaders(init?.headers, forwardCookies);
+    const headers = await buildHeaders(init?.headers, forwardCookies);
     const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
     if (!res.ok) {
       handleHttpFailure(res.status, notFoundOn404);
@@ -111,14 +111,14 @@ export async function fetchApiPaginated<
 /**
  * Build request headers, optionally forwarding the session cookie.
  */
-function buildHeaders(
+async function buildHeaders(
   existingHeaders: HeadersInit | undefined,
   forwardCookies?: boolean,
-): HeadersInit | undefined {
+): Promise<HeadersInit | undefined> {
   if (!forwardCookies) return existingHeaders;
 
   try {
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('forum_session');
     if (!sessionCookie) return existingHeaders;
 
