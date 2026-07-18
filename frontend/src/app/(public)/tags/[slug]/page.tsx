@@ -16,11 +16,12 @@ export default async function TagPage({
   params,
   searchParams,
 }: {
-  params: { slug: string };
-  searchParams: { page?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const slug = params.slug;
-  const page = parseInt(searchParams.page || '1');
+  const { slug } = await params;
+  const { page: pageStr } = await searchParams;
+  const page = parseInt(pageStr || '1');
 
   const postsResult = await fetchPosts(page, slug);
 

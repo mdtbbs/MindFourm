@@ -97,10 +97,11 @@ function formatStatValue(value: number): string {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: { page?: string; category_id?: string };
+  searchParams: Promise<{ page?: string; category_id?: string }>;
 }) {
-  const page = parseInt(searchParams.page || '1', 10);
-  const categoryId = searchParams.category_id ? parseInt(searchParams.category_id, 10) : undefined;
+  const params = await searchParams;
+  const page = parseInt(params.page || '1', 10);
+  const categoryId = params.category_id ? parseInt(params.category_id, 10) : undefined;
 
   const settings = await fetchSettings();
   const postsPerPage = parseInt(settings.posts_per_page || '20', 10);

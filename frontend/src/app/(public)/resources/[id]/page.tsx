@@ -14,8 +14,9 @@ async function fetchResource(id: number): Promise<Resource | null> {
   });
 }
 
-export default async function ResourceDetailPage({ params }: { params: { id: string } }) {
-  const resource = await fetchResource(parseInt(params.id));
+export default async function ResourceDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const resource = await fetchResource(parseInt(id));
   if (!resource) notFound();
 
   return (

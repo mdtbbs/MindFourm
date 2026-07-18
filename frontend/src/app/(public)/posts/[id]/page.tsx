@@ -26,9 +26,10 @@ async function fetchPost(id: number, page: number, limit: number): Promise<Post 
   });
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
   const [post, settings] = await Promise.all([
-    fetchPost(parseInt(params.id), 1, 1),
+    fetchPost(parseInt(id), 1, 1),
     fetchSettings(),
   ]);
   if (!post) return { title: 'Not Found' };
@@ -52,11 +53,13 @@ export default async function PostDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { page?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const postId = parseInt(params.id);
-  const page = parseInt(searchParams.page || '1');
+  const { id } = await params;
+  const { page: pageStr } = await searchParams;
+  const postId = parseInt(id);
+  const page = parseInt(pageStr || '1');
 
   const settings = await fetchSettings();
   const repliesPerPage = parseInt(settings.replies_per_page || '50');

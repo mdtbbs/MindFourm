@@ -34,8 +34,9 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
 export default async function ResourcesPage({
   searchParams,
 }: {
-  searchParams: { category_id?: string; search?: string; sort?: string };
+  searchParams: Promise<{ category_id?: string; search?: string; sort?: string }>;
 }) {
+  const params = await searchParams;
   const settings = await fetchApiData<Record<string, string>>('/api/settings', {
     init: { next: { revalidate: 60 } },
     fallback: {},
@@ -57,7 +58,7 @@ export default async function ResourcesPage({
     );
   }
 
-  const { resources, categories } = await fetchData(searchParams);
+  const { resources, categories } = await fetchData(params);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -76,9 +77,9 @@ export default async function ResourcesPage({
 
       <ResourceFilters
         categories={categories}
-        initialCategory={searchParams.category_id}
-        initialSearch={searchParams.search}
-        initialSort={searchParams.sort}
+        initialCategory={params.category_id}
+        initialSearch={params.search}
+        initialSort={params.sort}
       />
 
       {resources.length === 0 ? (

@@ -10,6 +10,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { useUserStore, useAuth } from '@/store/user-store';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 
@@ -24,6 +25,8 @@ export { useAuth };
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { isLoading, refreshAuth } = useUserStore();
+  const pathname = usePathname();
+  const shouldBypassLoading = pathname === '/login' || pathname === '/register';
 
   // Trigger initial auth check on mount
   useEffect(() => {
@@ -31,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshAuth]);
 
   // Show loading spinner while checking auth status
-  if (isLoading) {
+  if (isLoading && !shouldBypassLoading) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg)]">
         <LoadingSpinner variant="orbital" size="lg" />

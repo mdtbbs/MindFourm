@@ -25,10 +25,11 @@ async function fetchPosts(query: string, page: number, limit: number): Promise<S
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: { q?: string; page?: string };
+  searchParams: Promise<{ q?: string; page?: string }>;
 }) {
-  const query = searchParams.q || '';
-  const page = parseInt(searchParams.page || '1');
+  const params = await searchParams;
+  const query = params.q || '';
+  const page = parseInt(params.page || '1', 10);
   const postsPerPage = 20;
 
   const postsResult = query

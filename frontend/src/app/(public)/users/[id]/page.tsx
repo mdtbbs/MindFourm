@@ -51,12 +51,14 @@ export default async function UserProfilePage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { page?: string; tab?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string; tab?: string }>;
 }) {
-  const userId = parseInt(params.id);
-  const page = parseInt(searchParams.page || '1');
-  const tab = searchParams.tab || 'posts';
+  const { id } = await params;
+  const { page: pageStr, tab } = await searchParams;
+  const userId = parseInt(id);
+  const page = parseInt(pageStr || '1');
+  const tabValue = tab || 'posts';
 
   const profile = await fetchUserProfile(userId);
   if (!profile) return notFound();

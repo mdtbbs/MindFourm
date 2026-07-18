@@ -39,8 +39,9 @@ async function fetchCategory(id: number): Promise<Category | null> {
   });
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const category = await fetchCategory(parseInt(params.id));
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const category = await fetchCategory(parseInt(id));
   if (!category) return { title: 'Not Found' };
   return {
     title: `${category.name} | MindForum`,
@@ -55,11 +56,13 @@ export default async function CategoryPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { page?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const categoryId = parseInt(params.id);
-  const page = parseInt(searchParams.page || '1');
+  const { id } = await params;
+  const { page: pageStr } = await searchParams;
+  const categoryId = parseInt(id);
+  const page = parseInt(pageStr || '1');
 
   const [category, postsResult, categories, tags] = await Promise.all([
     fetchCategory(categoryId),

@@ -35,17 +35,19 @@ export default function PublicLayout({
   }, [isAuthenticated]);
 
   const handleLogin = () => {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const redirectUrl = encodeURIComponent(`${siteUrl}/api/auth/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || 'forum';
-    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=%2F`;
+    const redirectPath = `${window.location.pathname}${window.location.search}`;
+    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(redirectPath || '/')}`;
   };
 
   const handleRegister = () => {
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const redirectUrl = encodeURIComponent(`${siteUrl}/api/auth/callback`);
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || 'forum';
-    window.location.href = `${mindauthUrl}/register?redirect=${redirectUrl}&client_id=${clientId}&state=%2F`;
+    const redirectPath = `${window.location.pathname}${window.location.search}`;
+    window.location.href = `${mindauthUrl}/register?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(redirectPath || '/')}`;
   };
 
   const handleSearch = (query: string) => {
