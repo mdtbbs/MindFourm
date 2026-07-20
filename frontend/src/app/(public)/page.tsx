@@ -16,6 +16,10 @@ interface ForumOverviewStats {
   total_users: number;
   total_resources: number;
   latest_user: string | null;
+  today_posts: number;
+  today_replies: number;
+  today_users: number;
+  active_24h: number;
 }
 
 const emptyOverview: ForumOverviewStats = {
@@ -24,6 +28,10 @@ const emptyOverview: ForumOverviewStats = {
   total_users: 0,
   total_resources: 0,
   latest_user: null,
+  today_posts: 0,
+  today_replies: 0,
+  today_users: 0,
+  active_24h: 0,
 };
 
 async function fetchCategories(): Promise<Category[]> {
@@ -123,6 +131,10 @@ export default async function HomePage({
     { label: '消息', value: formatStatValue(forumOverview.total_replies) },
     { label: '主题', value: formatStatValue(forumOverview.total_posts) },
     { label: '资源', value: formatStatValue(forumOverview.total_resources) },
+    { label: '今日主题', value: formatStatValue(forumOverview.today_posts) },
+    { label: '今日回复', value: formatStatValue(forumOverview.today_replies) },
+    { label: '今日注册', value: formatStatValue(forumOverview.today_users) },
+    { label: '活跃用户', value: formatStatValue(forumOverview.active_24h) },
     { label: '最新用户', value: forumOverview.latest_user || '暂无' },
   ];
 

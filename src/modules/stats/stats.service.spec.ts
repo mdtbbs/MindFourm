@@ -56,6 +56,9 @@ describe('StatsService', () => {
         total_replies: '34',
         total_users: '56',
         total_resources: '7',
+        today_posts: '2',
+        today_replies: '3',
+        today_users: '1',
       }]),
     };
     const userRepository = {
@@ -64,13 +67,16 @@ describe('StatsService', () => {
     const sessionAuditRepository = {
       query: jest.fn().mockResolvedValue([{ username: 'alice' }]),
     };
+    const redisService = {
+      keys: jest.fn().mockResolvedValue(['session:1', 'session:2']),
+    };
 
     const service = new StatsService(
       postRepository as any,
       {} as any,
       userRepository as any,
       sessionAuditRepository as any,
-      { keys: jest.fn() } as any,
+      redisService as any,
     );
 
     await expect(service.getForumOverview()).resolves.toEqual({
@@ -79,6 +85,10 @@ describe('StatsService', () => {
       total_users: 56,
       total_resources: 7,
       latest_user: 'alice',
+      today_posts: 2,
+      today_replies: 3,
+      today_users: 1,
+      active_24h: 2,
     });
 
     expect(postRepository.query).toHaveBeenCalledTimes(1);
@@ -94,6 +104,9 @@ describe('StatsService', () => {
         total_replies: '2',
         total_users: '3',
         total_resources: '4',
+        today_posts: '0',
+        today_replies: '0',
+        today_users: '1',
       }]),
     };
     const userRepository = {
@@ -102,13 +115,16 @@ describe('StatsService', () => {
     const sessionAuditRepository = {
       query: jest.fn().mockResolvedValue([]),
     };
+    const redisService = {
+      keys: jest.fn().mockResolvedValue([]),
+    };
 
     const service = new StatsService(
       postRepository as any,
       {} as any,
       userRepository as any,
       sessionAuditRepository as any,
-      { keys: jest.fn() } as any,
+      redisService as any,
     );
 
     await expect(service.getForumOverview()).resolves.toEqual({
@@ -117,6 +133,10 @@ describe('StatsService', () => {
       total_users: 3,
       total_resources: 4,
       latest_user: 'newcomer',
+      today_posts: 0,
+      today_replies: 0,
+      today_users: 1,
+      active_24h: 0,
     });
 
     expect(sessionAuditRepository.query).toHaveBeenCalledTimes(1);

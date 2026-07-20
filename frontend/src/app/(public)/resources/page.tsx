@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Metadata } from 'next';
 import { FileText, AlertCircle } from 'lucide-react';
 import ResourceCard from '@/components/forum/resource-card';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
@@ -6,6 +7,23 @@ import { fetchApiData } from '@/lib/api/server-fetch';
 import { Resource, ResourceCategory } from '@/types';
 
 export const revalidate = 60;
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await fetchApiData<Record<string, string>>('/api/settings', {
+    init: { next: { revalidate: 60 } },
+    fallback: {},
+  });
+  const titleSuffix = settings.seo_title_suffix || ' | MindForum';
+  return {
+    title: `资源中心${titleSuffix}`,
+    description: '浏览和下载社区贡献的资源、模组和工具',
+    openGraph: {
+      title: `资源中心${titleSuffix}`,
+      description: '浏览和下载社区贡献的资源、模组和工具',
+      type: 'website',
+    },
+  };
+}
 
 async function fetchData(params: { category_id?: string; search?: string; sort?: string }) {
   const qs = new URLSearchParams();

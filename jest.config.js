@@ -2,7 +2,10 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],
-  testMatch: ['<rootDir>/src/**/*.spec.ts'],
+  testMatch: ['**/*.spec.ts'],
+  transformIgnorePatterns: [
+    'node_modules/(?!(uuid)/)',
+  ],
   moduleNameMapper: {
     '^@entities/(.*)$': '<rootDir>/src/entities/$1',
     '^@common/(.*)$': '<rootDir>/src/common/$1',

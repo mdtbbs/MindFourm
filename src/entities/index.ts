@@ -58,6 +58,9 @@ import { EmailLog } from './email-log.entity';
 import { SearchHistory } from './search-history.entity';
 import { PopularSearch } from './popular-search.entity';
 
+// Resource Ratings
+import { ResourceRating } from './resource-rating.entity';
+
 export const entities = [
   User,
   Post,
@@ -108,6 +111,8 @@ export const entities = [
   // Search
   SearchHistory,
   PopularSearch,
+  // Resource Ratings
+  ResourceRating,
 ];
 
 export {
@@ -136,4 +141,6 @@ export {
   // Search
   SearchHistory,
   PopularSearch,
+  // Resource Ratings
+  ResourceRating,
 };

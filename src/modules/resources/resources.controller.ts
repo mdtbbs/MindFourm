@@ -330,4 +330,31 @@ export class ResourcesController {
     await this.resourcesService.adminDelete(id);
     return { message: 'Resource deleted successfully' };
   }
+
+  @Post(':id/rating')
+  @UseGuards(JwtAuthGuard)
+  async upsertRating(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('rating') rating: number,
+    @Req() req: any,
+  ) {
+    const userId = req.user.id;
+    return this.resourcesService.upsertRating(id, userId, rating);
+  }
+
+  @Delete(':id/rating')
+  @UseGuards(JwtAuthGuard)
+  async deleteRating(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const userId = req.user.id;
+    await this.resourcesService.deleteRating(id, userId);
+    return { message: 'Rating deleted successfully' };
+  }
+
+  @Get(':id/rating')
+  @UseGuards(JwtAuthGuard)
+  async getUserRating(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const userId = req.user.id;
+    const rating = await this.resourcesService.getUserRating(id, userId);
+    return { rating };
+  }
 }

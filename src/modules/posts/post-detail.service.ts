@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
+import { getPrefixMetadata, parsePrefixCatalog, DEFAULT_POST_PREFIXES } from './post-prefixes.util';
 
 export interface PostDetailTag {
   id: number;
@@ -34,6 +35,7 @@ export interface PostDetailDto {
   server_id: number | null;
   required_group_id: number | null;
   post_type: string;
+  slug: string | null;
   title: string;
   content: string;
   content_html: string | null;
@@ -47,6 +49,7 @@ export interface PostDetailDto {
   category_slug: string | null;
   author_mindauth_id: number | null;
   author_role: string | null;
+  prefix: { value: string; label: string; color: string } | null;
   tags: PostDetailTag[];
   replies?: PostDetailReply[];
   replyPagination?: {
@@ -64,10 +67,15 @@ export class PostDetailService {
     private readonly postTagRepository: Repository<PostTag>,
   ) {}
 
-  async toDetail(post: Post): Promise<PostDetailDto> {
+  async toDetail(post: Post, prefixCatalog?: string | null): Promise<PostDetailDto> {
     const [tags] = await Promise.all([
       this.loadTags(post.id),
     ]);
+
+    const catalog = parsePrefixCatalog(prefixCatalog ?? undefined);
+    const prefixMeta = post.post_type !== 'normal'
+      ? getPrefixMetadata(post.post_type, catalog)
+      : null;
 
     return {
       id: post.id,
@@ -76,6 +84,7 @@ export class PostDetailService {
       server_id: post.server_id ?? null,
       required_group_id: post.required_group_id ?? null,
       post_type: post.post_type,
+      slug: post.slug ?? null,
       title: post.title,
       content: post.content,
       content_html: post.content_html || null,
@@ -89,6 +98,7 @@ export class PostDetailService {
       category_slug: post.category?.slug || null,
       author_mindauth_id: post.user?.mindauth_id ?? null,
       author_role: post.user?.role ?? null,
+      prefix: prefixMeta ? { value: prefixMeta.value, label: prefixMeta.label, color: prefixMeta.color } : null,
       tags,
     };
   }

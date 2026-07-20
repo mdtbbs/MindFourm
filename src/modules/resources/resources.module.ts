@@ -8,13 +8,14 @@ import { ResourcesController } from './resources.controller';
 import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
+import { ResourceRating } from '@entities/resource-rating.entity';
 import { User } from '@entities/user.entity';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 
 @Module({
   imports: [
     AdminNotificationsModule,
-    TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, User]),
+    TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User]),
   ],
   providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService],
   controllers: [ResourcesController],

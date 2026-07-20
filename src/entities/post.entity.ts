@@ -41,6 +41,9 @@ export class Post {
   @Column({ type: 'text', nullable: true })
   content_html: string;
 
+  @Column({ length: 100, nullable: true })
+  slug: string;
+
   @Column({ length: 50, default: 'draft' })
   status: string;
 

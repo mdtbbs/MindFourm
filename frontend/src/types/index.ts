@@ -49,6 +49,7 @@ export interface PostSummary {
   category_id: number | null;
   server_id?: number | null;
   post_type?: string;
+  slug?: string | null;
   title: string;
   excerpt: string;
   status: 'draft' | 'published' | 'pending' | 'deleted';
@@ -72,6 +73,7 @@ export interface Post {
   server_id?: number | null;
   required_group_id?: number | null;
   post_type?: string;
+  slug?: string | null;
   title: string;
   content: string;
   content_html: string | null;
@@ -397,6 +399,10 @@ export interface Resource {
   category_name: string | null;
   category_icon: string | null;
   download_count: number;
+  slug?: string | null;
+  rating_count?: number;
+  rating_sum?: number;
+  rating_average?: number;
   is_public: boolean;
   status: string;
   reject_reason?: string | null;

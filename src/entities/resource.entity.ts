@@ -61,11 +61,23 @@ export class Resource {
   @Column({ default: 0 })
   is_public: number;
 
+  @Column({ length: 100, nullable: true })
+  slug: string;
+
   @Column({ length: 50, default: 'pending' })
   status: string;
 
   @Column({ default: 0 })
   download_count: number;
+
+  @Column({ default: 0 })
+  rating_count: number;
+
+  @Column({ default: 0 })
+  rating_sum: number;
+
+  @Column({ type: 'decimal', precision: 3, scale: 2, default: 0 })
+  rating_average: number;
 
   @CreateDateColumn()
   created_at: Date;

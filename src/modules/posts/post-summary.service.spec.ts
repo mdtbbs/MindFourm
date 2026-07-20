@@ -60,6 +60,7 @@ describe('PostSummaryService', () => {
         category_id: 3,
         server_id: null,
         post_type: 'normal',
+        slug: 'alpha-post',
         title: 'Alpha',
         content: '# Alpha\nThis is **content** with [link](https://example.com)',
         status: 'published',
@@ -89,6 +90,7 @@ describe('PostSummaryService', () => {
     expect(result[0]).toMatchObject({
       id: 1,
       title: 'Alpha',
+      slug: 'alpha-post',
       excerpt: 'Alpha This is content with link',
       is_pinned: true,
       reply_count: 2,

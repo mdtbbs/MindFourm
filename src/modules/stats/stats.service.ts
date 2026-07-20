@@ -22,6 +22,10 @@ export interface ForumOverviewStats {
   total_users: number;
   total_resources: number;
   latest_user: string | null;
+  today_posts: number;
+  today_replies: number;
+  today_users: number;
+  active_24h: number;
 }
 
 @Injectable()
@@ -78,14 +82,20 @@ export class StatsService {
 
   async getForumOverview(): Promise<ForumOverviewStats> {
     const publicResourceStatusesSql = PUBLIC_RESOURCE_STATUSES.map((status) => `'${status}'`).join(', ');
-    const [statsRows, latestLoginRows] = await Promise.all([
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const [statsRows, latestLoginRows, sessionKeys] = await Promise.all([
       this.postRepository.query(`
         SELECT
           (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'active') as total_replies,
           (SELECT COUNT(*) FROM users) as total_users,
-          (SELECT COUNT(*) FROM resources WHERE status IN (${publicResourceStatusesSql})) as total_resources
-      `),
+          (SELECT COUNT(*) FROM resources WHERE status IN (${publicResourceStatusesSql})) as total_resources,
+          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND created_at >= ?) as today_posts,
+          (SELECT COUNT(*) FROM replies WHERE status = 'active' AND created_at >= ?) as today_replies,
+          (SELECT COUNT(*) FROM users WHERE created_at >= ?) as today_users
+      `, [today, today, today]),
       this.sessionAuditRepository.query(`
         SELECT u.username
         FROM session_audit sa
@@ -94,6 +104,7 @@ export class StatsService {
         ORDER BY sa.created_at DESC, sa.id DESC
         LIMIT 1
       `),
+      this.redisService.keys('session:*'),
     ]);
 
     const latestUserRows = latestLoginRows.length > 0
@@ -115,6 +126,10 @@ export class StatsService {
       latest_user: typeof latestUserRows[0]?.username === 'string'
         ? latestUserRows[0].username
         : null,
+      today_posts: this.parseCount(stats?.today_posts),
+      today_replies: this.parseCount(stats?.today_replies),
+      today_users: this.parseCount(stats?.today_users),
+      active_24h: sessionKeys.length,
     };
   }
 

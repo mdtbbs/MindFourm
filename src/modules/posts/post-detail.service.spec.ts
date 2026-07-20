@@ -37,6 +37,7 @@ describe('PostDetailService', () => {
       server_id: null,
       required_group_id: null,
       post_type: 'normal',
+      slug: 'hello-world',
       title: 'Hello',
       content: '# Hello world',
       content_html: '<h1>Hello world</h1>',
@@ -58,12 +59,14 @@ describe('PostDetailService', () => {
 
     expect(result).toMatchObject({
       id: 42,
+      slug: 'hello-world',
       content: '# Hello world',
       content_html: '<h1>Hello world</h1>',
       category_name: 'General',
       category_slug: 'general',
       author_mindauth_id: 8001,
       author_role: 'moderator',
+      prefix: null,
       tags: [
         {
           id: 9,

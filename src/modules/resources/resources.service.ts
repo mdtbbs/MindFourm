@@ -4,6 +4,7 @@ import { Repository, DataSource, Like, LessThan, In } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
+import { ResourceRating } from '@entities/resource-rating.entity';
 import { User } from '@entities/user.entity';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
@@ -14,6 +15,7 @@ import { escapeLike } from '@common/utils/search.util';
 import { PUBLIC_RESOURCE_STATUSES, RESOURCE_STATUS } from '@common/utils/constants';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { MflClientService } from './mfl-client.service';
+import { isValidRating, updateRatingAggregates, validateResourceSort } from './resource-rating.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -48,6 +50,8 @@ export class ResourcesService {
     private categoryRepository: Repository<ResourceCategory>,
     @InjectRepository(ResourceVersion)
     private versionRepository: Repository<ResourceVersion>,
+    @InjectRepository(ResourceRating)
+    private ratingRepository: Repository<ResourceRating>,
     private dataSource: DataSource,
     private adminNotificationsService: AdminNotificationsService,
     private mflClientService: MflClientService,
@@ -87,6 +91,10 @@ export class ResourcesService {
       is_public: resource.is_public === 1,
       use_mfl: resource.use_mfl === 1,
       file_size: resource.file_size || 0,
+      slug: resource.slug || null,
+      rating_count: resource.rating_count || 0,
+      rating_sum: resource.rating_sum || 0,
+      rating_average: Number(resource.rating_average) || 0,
       username: resource.user?.username || '',
       avatar_url: resource.user?.avatar_url || null,
       category_name: resource.category?.name || null,
@@ -247,10 +255,10 @@ export class ResourcesService {
       category_id,
       search,
       status,
-      sort = 'created_at',
       cursor,
     } = query;
     const scope = options.scope ?? 'public';
+    const sort = validateResourceSort(query.sort);
 
     const where: any = {};
 
@@ -596,5 +604,105 @@ export class ResourcesService {
     return this.resourceRepository.count({
       where: { status },
     });
+  }
+
+  /**
+   * Upsert a user's rating for a resource.
+   * Creates or updates the rating and maintains denormalized aggregates.
+   */
+  async upsertRating(resourceId: number, userId: number, rating: number): Promise<any> {
+    if (!isValidRating(rating)) {
+      throw new BadRequestException('Rating must be an integer between 1 and 5');
+    }
+
+    const resource = await this.resourceRepository.findOne({ where: { id: resourceId } });
+    if (!resource) {
+      throw new NotFoundException('Resource does not exist');
+    }
+
+    // Check if user already rated
+    const existingRating = await this.ratingRepository.findOne({
+      where: { resource_id: resourceId, user_id: userId },
+    });
+
+    const oldRating = existingRating?.rating ?? null;
+
+    // Update or create the rating
+    if (existingRating) {
+      existingRating.rating = rating;
+      await this.ratingRepository.save(existingRating);
+    } else {
+      const newRating = this.ratingRepository.create({
+        resource_id: resourceId,
+        user_id: userId,
+        rating,
+      });
+      await this.ratingRepository.save(newRating);
+    }
+
+    // Update aggregates
+    const aggregates = updateRatingAggregates(
+      resource.rating_count || 0,
+      resource.rating_sum || 0,
+      oldRating,
+      rating,
+    );
+
+    await this.resourceRepository.update(resourceId, aggregates);
+
+    const updatedResource = await this.resourceRepository.findOne({
+      where: { id: resourceId },
+      relations: ['user', 'category'],
+    });
+
+    return this.normalizeResource(updatedResource!);
+  }
+
+  /**
+   * Delete a user's rating for a resource.
+   */
+  async deleteRating(resourceId: number, userId: number): Promise<any> {
+    const resource = await this.resourceRepository.findOne({ where: { id: resourceId } });
+    if (!resource) {
+      throw new NotFoundException('Resource does not exist');
+    }
+
+    const existingRating = await this.ratingRepository.findOne({
+      where: { resource_id: resourceId, user_id: userId },
+    });
+
+    if (!existingRating) {
+      throw new NotFoundException('Rating not found');
+    }
+
+    await this.ratingRepository.delete(existingRating.id);
+
+    // Update aggregates
+    const aggregates = updateRatingAggregates(
+      resource.rating_count || 0,
+      resource.rating_sum || 0,
+      existingRating.rating,
+      null,
+    );
+
+    await this.resourceRepository.update(resourceId, aggregates);
+
+    const updatedResource = await this.resourceRepository.findOne({
+      where: { id: resourceId },
+      relations: ['user', 'category'],
+    });
+
+    return this.normalizeResource(updatedResource!);
+  }
+
+  /**
+   * Get a user's rating for a resource.
+   */
+  async getUserRating(resourceId: number, userId: number): Promise<number | null> {
+    const rating = await this.ratingRepository.findOne({
+      where: { resource_id: resourceId, user_id: userId },
+    });
+
+    return rating?.rating ?? null;
   }
 }
