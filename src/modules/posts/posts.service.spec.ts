@@ -1,3 +1,42 @@
+const decorator = () => () => undefined;
+
+jest.mock('@nestjs/typeorm', () => ({
+  InjectRepository: () => () => undefined,
+}));
+
+jest.mock('typeorm', () => ({
+  Repository: class Repository {},
+  DataSource: class DataSource {},
+  Brackets: class Brackets {},
+  In: (value: unknown) => ({ __op: 'In', value }),
+  LessThan: (value: unknown) => ({ __op: 'LessThan', value }),
+  MoreThan: (value: unknown) => ({ __op: 'MoreThan', value }),
+  Like: (value: unknown) => ({ __op: 'Like', value }),
+  Not: (value: unknown) => ({ __op: 'Not', value }),
+  Entity: decorator,
+  PrimaryGeneratedColumn: decorator,
+  PrimaryColumn: decorator,
+  Column: decorator,
+  ManyToOne: decorator,
+  OneToMany: decorator,
+  ManyToMany: decorator,
+  OneToOne: decorator,
+  JoinColumn: decorator,
+  JoinTable: decorator,
+  CreateDateColumn: decorator,
+  UpdateDateColumn: decorator,
+  DeleteDateColumn: decorator,
+  Index: decorator,
+  Unique: decorator,
+}));
+
+jest.mock('@entities/post.entity', () => ({ Post: class Post {} }));
+jest.mock('@entities/user.entity', () => ({ User: class User {} }));
+jest.mock('@entities/category.entity', () => ({ Category: class Category {} }));
+jest.mock('@entities/tag.entity', () => ({ Tag: class Tag {} }));
+jest.mock('@entities/post-tag.entity', () => ({ PostTag: class PostTag {} }));
+jest.mock('@entities/reply.entity', () => ({ Reply: class Reply {} }));
+
 import { PostsService } from './posts.service';
 
 function createQueryBuilderMock(result: { many?: any[]; total?: number } = {}) {

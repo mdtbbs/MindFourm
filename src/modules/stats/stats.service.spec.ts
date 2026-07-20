@@ -1,3 +1,33 @@
+const decorator = () => () => undefined;
+
+jest.mock('@nestjs/typeorm', () => ({
+  InjectRepository: () => () => undefined,
+}));
+
+jest.mock('typeorm', () => ({
+  Repository: class Repository {},
+  Entity: decorator,
+  PrimaryGeneratedColumn: decorator,
+  PrimaryColumn: decorator,
+  Column: decorator,
+  ManyToOne: decorator,
+  OneToMany: decorator,
+  ManyToMany: decorator,
+  OneToOne: decorator,
+  JoinColumn: decorator,
+  JoinTable: decorator,
+  CreateDateColumn: decorator,
+  UpdateDateColumn: decorator,
+  DeleteDateColumn: decorator,
+  Index: decorator,
+  Unique: decorator,
+}));
+
+jest.mock('@entities/post.entity', () => ({ Post: class Post {} }));
+jest.mock('@entities/reply.entity', () => ({ Reply: class Reply {} }));
+jest.mock('@entities/user.entity', () => ({ User: class User {} }));
+jest.mock('@entities/session-audit.entity', () => ({ SessionAudit: class SessionAudit {} }));
+
 import { StatsService } from './stats.service';
 
 describe('StatsService', () => {
