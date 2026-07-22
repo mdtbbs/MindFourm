@@ -27,7 +27,7 @@ export class AuthService {
   /**
    * Exchange OAuth authorization code for access token
    */
-  async exchangeCode(code: string): Promise<string> {
+  async exchangeCode(code: string): Promise<{ accessToken: string; refreshToken?: string }> {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
     const clientId = this.configService.get<string>('MINDAUTH_CLIENT_ID');
     const clientSecret = this.configService.get<string>('MINDAUTH_CLIENT_SECRET');
@@ -42,7 +42,10 @@ export class AuthService {
         redirect_uri: callbackUrl,
       });
 
-      return response.data.access_token;
+      return {
+        accessToken: response.data.access_token,
+        refreshToken: response.data.refresh_token,
+      };
     } catch (error) {
       throw new UnauthorizedException('Failed to exchange code for token');
     }
@@ -165,34 +168,7 @@ export class AuthService {
     return this.usersRepository.save(user);
   }
 
-  private async fetchMindAuthUserById(mindauthId: number): Promise<{
-    id: number;
-    username: string;
-    email: string;
-    avatar_url?: string | null;
-    phone_verified?: boolean;
-    phone_verified_at?: string | Date | null;
-  } | null> {
-    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL') || this.configService.get<string>('mindauth.baseUrl');
-    const serviceKey = this.configService.get<string>('MINDAUTH_SERVICE_KEY') || this.configService.get<string>('mindauth.serviceKey');
-
-    if (!mindauthUrl || !serviceKey) {
-      return null;
-    }
-
-    try {
-      const response = await axios.get(joinMindAuthApiUrl(mindauthUrl, `/internal/users/${mindauthId}`), {
-        headers: { 'X-Service-Key': serviceKey },
-        timeout: 3000,
-      });
-      return response.data.user ?? response.data;
-    } catch (error) {
-      console.warn('Failed to refresh user from MindAuth:', (error as Error).message);
-      return null;
-    }
-  }
-
-  async refreshUserFromMindAuth(user: User, force = false): Promise<User> {
+  async refreshUserFromMindAuthWithToken(user: User, accessToken: string, refreshToken?: string, force = false): Promise<User> {
     const cooldownKey = `mindauth:user-refresh:${user.id}`;
     if (!force && (await this.redisService.get(cooldownKey))) {
       return user;
@@ -200,45 +176,63 @@ export class AuthService {
 
     await this.redisService.set(cooldownKey, '1', 60);
 
-    const mindauthUser = await this.fetchMindAuthUserById(user.mindauth_id);
-    if (!mindauthUser) {
+    try {
+      const mindauthUser = await this.getUserInfo(accessToken);
+      const updated = await this.syncMindAuthUserData(mindauthUser);
+      return updated ?? user;
+    } catch {
+      // Access token may be expired — try refreshing with refresh token
+      if (refreshToken) {
+        try {
+          const newTokens = await this.refreshAccessToken(refreshToken);
+          const mindauthUser = await this.getUserInfo(newTokens.accessToken);
+          const updated = await this.syncMindAuthUserData(mindauthUser);
+          return updated ?? user;
+        } catch {
+          // Both tokens failed — return cached user
+          return user;
+        }
+      }
       return user;
     }
-
-    const updated = await this.syncMindAuthUserData(mindauthUser);
-    return updated ?? user;
   }
 
-  async syncPhoneStatus(userId: number, phoneSyncToken: string): Promise<User> {
-    const user = await this.usersRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new UnauthorizedException('User not found');
-    }
-
+  /**
+   * Refresh OAuth access token using refresh token
+   */
+  private async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; refreshToken?: string }> {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
-    const response = await axios.post(joinMindAuthApiUrl(mindauthUrl, '/sms/sync-status'), {
-      phone_sync_token: phoneSyncToken,
+    const clientId = this.configService.get<string>('MINDAUTH_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('MINDAUTH_CLIENT_SECRET');
+
+    const response = await axios.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
     });
 
-    const remoteUserId = Number(response.data.user_id);
-    if (remoteUserId !== user.mindauth_id) {
-      throw new UnauthorizedException('Phone status does not match current user');
-    }
-
-    user.phone_verified = response.data.phone_verified === true;
-    user.phone_verified_at = response.data.phone_verified_at ? new Date(response.data.phone_verified_at) : new Date();
-    return this.usersRepository.save(user);
+    return {
+      accessToken: response.data.access_token,
+      refreshToken: response.data.refresh_token,
+    };
   }
 
   /**
    * Create session in Redis and log to session_audit table
    */
-  async createSession(userId: number, sessionToken: string, ip: string): Promise<void> {
+  async createSession(userId: number, sessionToken: string, ip: string, oauthTokens?: { accessToken: string; refreshToken?: string }): Promise<void> {
     const sessionKey = `session:${sessionToken}`;
 
     // Store session in Redis as hash
     await this.redisService.hset(sessionKey, 'userId', userId.toString());
     await this.redisService.hset(sessionKey, 'createdAt', new Date().toISOString());
+    if (oauthTokens?.accessToken) {
+      await this.redisService.hset(sessionKey, 'accessToken', oauthTokens.accessToken);
+    }
+    if (oauthTokens?.refreshToken) {
+      await this.redisService.hset(sessionKey, 'refreshToken', oauthTokens.refreshToken);
+    }
     await this.redisService.expire(sessionKey, this.sessionTtl);
 
     // Log to session_audit table
@@ -348,7 +342,15 @@ export class AuthService {
       where: { id: userId },
     });
 
-    return user ? this.refreshUserFromMindAuth(user) : null;
+    if (!user) return null;
+
+    const accessToken = sessionData.accessToken;
+    const refreshToken = sessionData.refreshToken;
+    if (accessToken) {
+      return this.refreshUserFromMindAuthWithToken(user, accessToken, refreshToken);
+    }
+
+    return user;
   }
 
   /**

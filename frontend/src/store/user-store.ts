@@ -52,7 +52,7 @@ export const useUserStore = create<UserState>()(
           const redirectToMindAuthLogout = () => {
             if (redirected) return;
             redirected = true;
-            window.location.href = `${mindauthUrl}/#/logout?redirect_uri=${redirectUri}`;
+            window.location.href = `${mindauthUrl}/logout?redirect_uri=${redirectUri}`;
           };
 
           authApi.logout().finally(redirectToMindAuthLogout);

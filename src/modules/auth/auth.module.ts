@@ -5,7 +5,6 @@ import { SessionAudit } from '@entities/session-audit.entity';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { PointsModule } from '../points/points.module';
-import { MindAuthServiceGuard } from '../../common/guards/mindauth-service.guard';
 
 @Global()
 @Module({
@@ -13,7 +12,7 @@ import { MindAuthServiceGuard } from '../../common/guards/mindauth-service.guard
     TypeOrmModule.forFeature([User, SessionAudit]),
     PointsModule,
   ],
-  providers: [AuthService, MindAuthServiceGuard],
+  providers: [AuthService],
   controllers: [AuthController],
   exports: [AuthService, TypeOrmModule],
 })

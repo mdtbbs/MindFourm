@@ -1,8 +1,7 @@
-import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { VerifySessionDto } from './dto/verify-session.dto';
-import { MindAuthServiceGuard } from '../../common/guards/mindauth-service.guard';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
 
 function getSafeRedirectPath(state?: string): string {
@@ -78,7 +77,7 @@ export class AuthController {
 
     try {
       // Exchange code for access token
-      const accessToken = await this.authService.exchangeCode(code);
+      const { accessToken, refreshToken } = await this.authService.exchangeCode(code);
 
       // Get user info from MindAuth
       const mindauthUser = await this.authService.getUserInfo(accessToken);
@@ -89,7 +88,7 @@ export class AuthController {
       // Generate session token and create session
       const sessionToken = this.authService.generateSessionToken();
       const ip = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-      await this.authService.createSession(user.id, sessionToken, ip);
+      await this.authService.createSession(user.id, sessionToken, ip, { accessToken, refreshToken });
 
       // Set HttpOnly cookie
       const frontendUrl = this.authService['configService'].get<string>('FRONTEND_URL') || 'http://localhost:3000';
@@ -146,53 +145,6 @@ export class AuthController {
         phone_verified_at: user.phone_verified_at,
       },
     });
-  }
-
-  @Post('sync-phone-status')
-  @SkipPhoneVerification()
-  async syncPhoneStatus(
-    @Body('phone_sync_token') phoneSyncToken: string,
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
-    const sessionToken = req.cookies?.forum_session;
-
-    if (!sessionToken) {
-      throw new UnauthorizedException('Session token is required');
-    }
-
-    const currentUser = await this.authService.verifySession(sessionToken);
-    if (!currentUser) {
-      throw new UnauthorizedException('Session expired');
-    }
-
-    const user = await this.authService.syncPhoneStatus(currentUser.id, phoneSyncToken);
-    return res.json({
-      success: true,
-      user: {
-        id: user.id,
-        mindauth_id: user.mindauth_id,
-        username: user.username,
-        email: user.email,
-        avatar_url: user.avatar_url,
-        role: user.role,
-        bio: user.bio,
-        phone_verified: user.phone_verified,
-        phone_verified_at: user.phone_verified_at,
-        created_at: user.created_at,
-      },
-    });
-  }
-
-  @Post('internal/users/sync')
-  @SkipPhoneVerification()
-  @UseGuards(MindAuthServiceGuard)
-  async syncUserFromMindAuth(@Body() body: any) {
-    const user = await this.authService.syncMindAuthUserData(body.user ?? body);
-    return {
-      synced: !!user,
-      user_id: user?.id ?? null,
-    };
   }
 
   /**

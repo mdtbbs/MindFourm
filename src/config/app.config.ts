@@ -23,7 +23,6 @@ export const appConfig = () => ({
     clientId: process.env.MINDAUTH_CLIENT_ID || 'forum',
     clientSecret: process.env.MINDAUTH_CLIENT_SECRET || '',
     callbackUrl: process.env.MINDAUTH_CALLBACK_URL || 'http://localhost:4000/api/auth/callback',
-    serviceKey: process.env.MINDAUTH_SERVICE_KEY || '',
   },
   easymanager: {
     enabled: process.env.EASYMANAGER_ENABLED === 'true',

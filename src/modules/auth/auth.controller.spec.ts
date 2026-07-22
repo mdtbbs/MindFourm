@@ -3,7 +3,7 @@ import { AuthController } from './auth.controller';
 describe('AuthController', () => {
   const createController = () => {
     const authService = {
-      exchangeCode: jest.fn().mockResolvedValue('access-token'),
+      exchangeCode: jest.fn().mockResolvedValue({ accessToken: 'access-token', refreshToken: 'refresh-token' }),
       getUserInfo: jest.fn().mockResolvedValue({
         id: 123,
         username: 'test-user',
