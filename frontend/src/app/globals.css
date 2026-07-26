@@ -1,109 +1,155 @@
 /* MindBBS 样式 - 使用共享设计系统 */
+
+@import "tailwindcss";
+
+/*
+ * shared-styles/variables.css 是全站唯一的 token 来源，下面 @theme 里的
+ * --color-* 全部指向它。故意不分层引入：未分层的 :root 声明会盖过 Tailwind
+ * theme 层的同名变量，这正是我们想要的覆盖方向。
+ */
 @import '../../../../shared-styles/variables.css';
-@import '../../../../shared-styles/components.css';
 
-/* tw-animate-css base styles (inline to avoid import issues) */
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
+/*
+ * components.css 必须落到 components 层。Tailwind v4 把工具类放进
+ * @layer utilities，而未分层的 CSS 在级联里永远赢过任何 layer，
+ * 直接引入会让 .card 的 padding 盖掉 p-6 这类工具类。
+ */
+@import '../../../../shared-styles/components.css' layer(components);
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+/*
+ * 帖子正文 / 回复 / 资源简介 / 私信气泡都靠 prose 渲染 Markdown，
+ * 没有这个插件它们就是完全无样式的裸 HTML。
+ */
+@plugin "@tailwindcss/typography";
 
-/* CSS 变量必须在使用前定义 */
+/*
+ * 主题同时以 .dark class 和 data-theme 属性写在 <html> 上（见 src/app/layout.tsx
+ * 的首屏内联脚本），dark: 变体两者都要认，否则共享组件与本地组件会脱节。
+ */
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * 唯一的本地 :root。这里只做两件事，不再重复定义任何品牌色：
+ *
+ * 1) 把 shadcn / base-ui 那套语义名（--background、--card、--muted-foreground…）
+ *    别名到 shared-styles 的 token 上。全站有 40+ 处 text-[var(--foreground)]、
+ *    bg-[var(--muted)] 之类的任意值写法依赖这些名字。
+ *    因为 .dark 与 data-theme 都挂在 <html>（= :root 自身），var() 在这里解析
+ *    出来就已经是当前主题的值，深色模式照样生效。
+ *
+ * 2) 补回 Tailwind v4 的 --radius-* 刻度。shared-styles 复用了同一命名空间来
+ *    表达"直角"设计（--radius-sm/--radius-lg 都是 0），而 rounded-sm / rounded-lg
+ *    工具类读的正是这批变量；不覆盖回来，136 处 rounded-* 会全部变成直角。
+ *    组件级圆角请继续用 --radius / --radius-card / --radius-badge。
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  /* 品牌色 - Mindustry 橙色 */
-  --primary: #ff6b35;
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: #ffc107;
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: #ff6b35;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: #ff6b35;
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: #ff6b35;
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--bg-card);
+  --card-foreground: var(--text);
+  --popover: var(--bg-card);
+  --popover-foreground: var(--text);
+  --primary-foreground: #ffffff;
+  --secondary: var(--bg-elevated);
+  --secondary-foreground: var(--text);
+  --muted: var(--bg-elevated);
+  --muted-foreground: var(--text-muted);
+  --accent-foreground: var(--text);
+  --destructive: var(--error);
+  --destructive-foreground: #ffffff;
+  --input: var(--border);
+  --ring: var(--primary);
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
 }
 
-[data-theme="dark"],
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  /* 品牌色 - Mindustry 橙色 */
-  --primary: #ff6b35;
-  --primary-foreground: oklch(0.145 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: #ffc107;
-  --accent-foreground: oklch(0.145 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: #ff6b35;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: #ff6b35;
-  --sidebar-primary-foreground: oklch(0.145 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: #ff6b35;
+/*
+ * 用 inline：工具类里直接写 var(--bg-card) 而不是再套一层 --color-*，
+ * 这样取值在使用处解析，深色模式切换才能生效。
+ */
+@theme inline {
+  /* ===== shadcn / base-ui 语义色 ===== */
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-card: var(--bg-card);
+  --color-card-foreground: var(--text);
+  --color-popover: var(--bg-card);
+  --color-popover-foreground: var(--text);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--bg-elevated);
+  --color-secondary-foreground: var(--text);
+  --color-muted: var(--bg-elevated);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--error);
+  --color-destructive-foreground: #ffffff;
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--primary);
+
+  /* ===== 品牌色阶 ===== */
+  --color-primary: var(--primary);
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-800: var(--primary-800);
+  --color-primary-900: var(--primary-900);
+
+  /*
+   * surface 色阶是本仓库用得最多的一套（700+ 处）。它不是一条灰阶，而是
+   * "从背景到前景"的语义梯度：50-100 是底纹，200-300 是描边，400-900 是文字。
+   */
+  --color-surface: var(--bg-card);
+  --color-surface-50: var(--bg);
+  --color-surface-100: var(--bg-elevated);
+  --color-surface-200: var(--border);
+  --color-surface-300: var(--border);
+  --color-surface-400: var(--text-muted);
+  --color-surface-500: var(--text-secondary);
+  --color-surface-600: var(--text-secondary);
+  --color-surface-700: var(--text);
+  --color-surface-800: var(--text);
+  --color-surface-900: var(--text);
+
+  /* ===== 字体 ===== */
+  --font-sans: var(--font-family);
+
+  /* ===== 阴影 ===== */
+  --shadow-card: var(--shadow-card);
+  --shadow-card-hover: var(--shadow-card-hover);
+  --shadow-modal: var(--shadow-modal);
 }
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@theme {
+  /* MagicUI 的 shimmer-button 依赖这两个动画 */
+  --animate-shimmer-slide: shimmer-slide var(--speed) ease-in-out infinite alternate;
+  --animate-spin-around: spin-around calc(var(--speed) * 2) infinite linear;
+}
 
-@layer utilities {
-  .theme {
-    --font-heading: var(--font-sans);
-    --font-sans: var(--font-sans);
-  }
-
-  * {
+@layer base {
+  /*
+   * v4 把无颜色的 `border` 默认色从 gray-200 改成了 currentColor。
+   * 全站有大量裸 `border` / `border-t` 写法，这里补回设计系统的描边色。
+   */
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
     border-color: var(--border);
   }
 }
 
-/* ===== Base Styles - Must be outside layer for priority ===== */
+/* ===== Base Styles - 必须在 layer 之外，才能压过组件里的背景色 ===== */
+/* 唯一一处 html/body 背景声明；取值来自 shared-styles 的 --bg / --text */
 html {
   background-color: var(--bg) !important;
 }
@@ -112,15 +158,6 @@ body {
   background-color: var(--bg) !important;
   color: var(--text) !important;
   min-height: 100vh;
-}
-
-/* 主题切换时的平滑过渡 */
-.theme-transitioning,
-.theme-transitioning * {
-  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 /* 主题切换时的闪光效果 */
@@ -149,7 +186,6 @@ body {
 }
 
 /* ===== Loading Animation System - Industrial Pulse ===== */
-/* Mindustry-themed geometric animations */
 
 @layer components {
   /* Loader color tokens */
@@ -160,10 +196,10 @@ body {
     background-color: var(--accent);
   }
   .loader-glow {
-    box-shadow: 0 0 20px rgba(255, 107, 53, 0.4);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--primary) 40%, transparent);
   }
   .loader-glow-subtle {
-    box-shadow: 0 0 12px rgba(255, 107, 53, 0.25);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--primary) 25%, transparent);
   }
 
   /* Hexagon Pulse Animation */
@@ -205,32 +241,21 @@ body {
   .orbital-dot-2 { animation-delay: 0.5s; }
   .orbital-dot-3 { animation-delay: 1s; }
 
-  /* Shimmer Sweep for Skeletons */
+  /*
+   * 骨架屏微光。原来写死了橙色 rgba(255,107,53,…)，和 Clean blue 主题不匹配；
+   * 改成从 --primary 派生，浅/深色都能跟着走。
+   */
   .shimmer-sweep {
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 107, 53, 0.08) 25%,
-      rgba(255, 107, 53, 0.15) 50%,
-      rgba(255, 107, 53, 0.08) 75%,
+      color-mix(in srgb, var(--primary) 8%, transparent) 25%,
+      color-mix(in srgb, var(--primary) 15%, transparent) 50%,
+      color-mix(in srgb, var(--primary) 8%, transparent) 75%,
       transparent 100%
     );
     background-size: 200% 100%;
     animation: shimmer-sweep 2s ease-in-out infinite;
-  }
-
-  /* Dark theme shimmer */
-  [data-theme="dark"] .shimmer-sweep,
-  .dark .shimmer-sweep {
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 107, 53, 0.12) 25%,
-      rgba(255, 107, 53, 0.2) 50%,
-      rgba(255, 107, 53, 0.12) 75%,
-      transparent 100%
-    );
-    background-size: 200% 100%;
   }
 
   /* Fade In Animation */
@@ -248,6 +273,16 @@ body {
   }
   .delay-200 {
     animation-delay: 0.2s;
+  }
+
+  /* 通知铃铛：有未读时摇晃 + 角标脉冲 */
+  .animate-wiggle {
+    animation: wiggle 0.5s ease-in-out infinite;
+    animation-delay: 0.3s;
+  }
+
+  .animate-badge-pulse {
+    animation: badge-pulse 1.5s ease-in-out infinite;
   }
 }
 
@@ -314,34 +349,6 @@ body {
   }
 }
 
-/* ===== Reduced Motion Support ===== */
-@media (prefers-reduced-motion: reduce) {
-  .hexagon-pulse,
-  .block-wave,
-  .orbital-spin,
-  .orbital-dot,
-  .shimmer-sweep,
-  .fade-in-up,
-  .animate-wiggle,
-  .animate-badge-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-}
-
-/* ===== Notification Bell Animation ===== */
-@layer components {
-  /* Bell wiggle animation when has unread */
-  .animate-wiggle {
-    animation: wiggle 0.5s ease-in-out infinite;
-    animation-delay: 0.3s;
-  }
-
-  /* Badge pulse animation */
-  .animate-badge-pulse {
-    animation: badge-pulse 1.5s ease-in-out infinite;
-  }
-}
-
 @keyframes wiggle {
   0%, 100% {
     transform: rotate(0deg);
@@ -374,82 +381,67 @@ body {
   }
 }
 
-/* Clean forum theme override */
-:root {
-  --background: #f5f9ff;
-  --foreground: #0f172a;
-  --card: #ffffff;
-  --card-foreground: #0f172a;
-  --popover: #ffffff;
-  --popover-foreground: #0f172a;
-  --primary: #2f80ed;
-  --primary-foreground: #ffffff;
-  --secondary: #eaf2ff;
-  --secondary-foreground: #0f172a;
-  --muted: #eef4fb;
-  --muted-foreground: #667085;
-  --accent: #dcecff;
-  --accent-foreground: #0f172a;
-  --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --border: #d8e2f0;
-  --input: #d8e2f0;
-  --ring: rgba(47, 128, 237, 0.35);
-  --radius: 0.125rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #0f172a;
-  --sidebar-primary: #2f80ed;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef4fb;
-  --sidebar-accent-foreground: #0f172a;
-  --sidebar-border: #d8e2f0;
-  --sidebar-ring: rgba(47, 128, 237, 0.35);
+@keyframes shimmer-slide {
+  to {
+    transform: translate(calc(100cqw - 100%), 0);
+  }
 }
 
-[data-theme="dark"],
-.dark {
-  --background: #0b1220;
-  --foreground: #e5eefc;
-  --card: #101a2d;
-  --card-foreground: #e5eefc;
-  --popover: #101a2d;
-  --popover-foreground: #e5eefc;
-  --primary: #74a9ff;
-  --primary-foreground: #0b1220;
-  --secondary: #13233c;
-  --secondary-foreground: #e5eefc;
-  --muted: #13233c;
-  --muted-foreground: #9fb0ca;
-  --accent: #173153;
-  --accent-foreground: #e5eefc;
-  --destructive: #f87171;
-  --destructive-foreground: #0b1220;
-  --border: rgba(148, 163, 184, 0.18);
-  --input: rgba(148, 163, 184, 0.22);
-  --ring: rgba(116, 169, 255, 0.35);
-  --sidebar: #101a2d;
-  --sidebar-foreground: #e5eefc;
-  --sidebar-primary: #74a9ff;
-  --sidebar-primary-foreground: #0b1220;
-  --sidebar-accent: #13233c;
-  --sidebar-accent-foreground: #e5eefc;
-  --sidebar-border: rgba(148, 163, 184, 0.18);
-  --sidebar-ring: rgba(116, 169, 255, 0.35);
+@keyframes spin-around {
+  0% {
+    transform: translateZ(0) rotate(0);
+  }
+  15%, 35% {
+    transform: translateZ(0) rotate(90deg);
+  }
+  65%, 85% {
+    transform: translateZ(0) rotate(270deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
 }
 
-html {
-  background-color: var(--background) !important;
-}
+/* ===== Reduced Motion Support =====
+ *
+ * This block used to *replace* each animation with `pulse … infinite`, so someone
+ * who asked for less motion received a different perpetual animation rather than
+ * none. Everything now stops; loading indicators keep one slow pulse, because some
+ * signal that work is in progress is worth more than absolute stillness.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 
-body {
-  background-color: var(--background) !important;
-  color: var(--foreground) !important;
+  .hexagon-pulse,
+  .block-wave,
+  .orbital-spin,
+  .orbital-dot {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+    animation-duration: 2s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 .panel-surface {
-  background: var(--card);
-  color: var(--card-foreground);
+  background: var(--bg-card);
+  color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+/*
+ * 键盘可达的通用焦点样式。用 focus-visible 而不是 focus，鼠标点击不会触发；
+ * 可点击的 div / li 加上 .focus-ring 即可获得与按钮一致的品牌色焦点圈。
+ */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }

@@ -1,5 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { User } from './user.entity';
 import { ResourceCategory } from './resource-category.entity';
@@ -84,6 +85,12 @@ export class Resource {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  // The `deleted_at` column already existed in the schema but was not declared
+  // here, so nothing filtered on it and ResourcesService hard-deleted instead —
+  // unlike posts and replies, which are soft-deletable.
+  @DeleteDateColumn()
+  deleted_at: Date;
 
   @ManyToOne(() => User, { eager: false })
   @JoinColumn({ name: 'user_id' })

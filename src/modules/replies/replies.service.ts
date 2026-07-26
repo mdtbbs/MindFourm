@@ -11,6 +11,7 @@ import { CreateReplyDto } from './dto/create-reply.dto';
 import { parseMarkdown } from '../../common/utils/markdown.util';
 import { PointsService } from '../points/points.service';
 import { SettingsService } from '../settings/settings.service';
+import { REPLY_STATUS } from '../../common/utils/constants';
 
 @Injectable()
 export class RepliesService {
@@ -84,7 +85,7 @@ export class RepliesService {
       parent_reply_id: parent_reply_id,
       content,
       content_html: contentHtml,
-      status: requiresApproval ? 'pending' : 'published',
+      status: requiresApproval ? REPLY_STATUS.pending : REPLY_STATUS.published,
       like_count: 0,
     });
 
@@ -143,7 +144,7 @@ export class RepliesService {
     const [replies, total] = await this.replyRepository.findAndCount({
       where: {
         post_id: postId,
-        status: 'published',
+        status: REPLY_STATUS.published,
       },
       relations: ['user'],
       order: {
@@ -220,7 +221,7 @@ export class RepliesService {
     }
 
     // Soft delete
-    reply.status = 'deleted';
+    reply.status = REPLY_STATUS.deleted;
     reply.deleted_at = new Date();
 
     await this.replyRepository.save(reply);

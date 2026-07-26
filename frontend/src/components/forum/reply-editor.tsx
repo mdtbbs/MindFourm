@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
@@ -13,6 +13,8 @@ interface ReplyEditorProps {
   onSubmit: (content: string, parentReplyId?: number) => Promise<void>;
   quoteReply?: Reply | null;
   replyToReply?: Reply | null;
+  /** Clears the quote / reply-to target without submitting. */
+  onCancelTarget?: () => void;
 }
 
 export default function ReplyEditor({
@@ -20,21 +22,35 @@ export default function ReplyEditor({
   onSubmit,
   quoteReply,
   replyToReply,
+  onCancelTarget,
 }: ReplyEditorProps) {
   const [content, setContent] = useState('');
   const [preview, setPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const replyId = quoteReply?.id ?? replyToReply?.id;
   const draft = useDraft('reply', replyId ? `r-${replyId}` : `p-${postId}`);
   useDraftAutoSave({ content }, draft.save, !!content);
 
-  // Restore draft on mount
+  // Restore the draft when the editor mounts or switches target (quote/reply-to).
+  // Depending on `draft.load` — which is stable per draft key — rather than the
+  // whole `draft` object keeps this from re-running on every render and clobbering
+  // what the user is typing.
   useEffect(() => {
     const saved = draft.load();
     if (saved?.content) setContent(saved.content as string);
-  }, [draft]);
+  }, [draft.load]);
+
+  // The composer sits below a paginated reply list, so bring it into view when a
+  // quote/reply target is picked — otherwise the buttons look like they did nothing.
+  useEffect(() => {
+    if (!replyId) return;
+    containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    textareaRef.current?.focus();
+  }, [replyId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +73,10 @@ export default function ReplyEditor({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 overflow-hidden">
+    <div
+      ref={containerRef}
+      className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 overflow-hidden"
+    >
       <div className="px-4 py-3 bg-surface-50 dark:bg-gray-800 border-b border-surface-200 dark:border-gray-700">
         <h3 className="font-semibold text-surface-900 dark:text-gray-100">
           {quoteReply ? '引用回复' : replyToReply ? '回复' : '发表回复'}
@@ -65,9 +84,20 @@ export default function ReplyEditor({
       </div>
 
       <form onSubmit={handleSubmit} className="p-4">
-        {quoteReply && (
-          <div className="mb-4 p-3 bg-surface-50 dark:bg-gray-800 border-l-4 border-primary-500 text-sm text-surface-600 dark:text-gray-300">
-            引用 #{quoteReply.id} 的内容
+        {(quoteReply || replyToReply) && (
+          <div className="mb-4 flex items-start justify-between gap-3 p-3 bg-surface-50 dark:bg-gray-800 border-l-4 border-primary-500 text-sm text-surface-600 dark:text-gray-300">
+            <span>
+              {quoteReply ? `引用 #${quoteReply.id} 的内容` : `回复 #${replyToReply!.id}`}
+            </span>
+            {onCancelTarget && (
+              <button
+                type="button"
+                onClick={onCancelTarget}
+                className="shrink-0 text-xs underline hover:text-surface-900 dark:hover:text-gray-100"
+              >
+                取消
+              </button>
+            )}
           </div>
         )}
 
@@ -100,6 +130,7 @@ export default function ReplyEditor({
           <MarkdownRenderer content={content} className="min-h-[120px] p-4 bg-surface-50 dark:bg-gray-800 rounded-lg border border-surface-200 dark:border-gray-700" fallback="*暂无内容*" />
         ) : (
           <textarea
+            ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="使用 Markdown 格式编写回复..."

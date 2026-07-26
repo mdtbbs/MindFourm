@@ -20,13 +20,25 @@ export const POST_STATUS = {
 
 export type PostStatus = (typeof POST_STATUS)[keyof typeof POST_STATUS];
 
+/**
+ * Reply statuses deliberately mirror POST_STATUS.
+ *
+ * Replies used to be written as `published` but counted as `active` (the value the
+ * entity defaulted to and `getReplyCount` filtered on), so every post reported
+ * zero replies. Keeping one vocabulary for both content types is what stops that
+ * from happening again; historical `active` rows are normalised by
+ * NormalizeReplyStatus.
+ */
 export const REPLY_STATUS = {
-  active: 'active',
   pending: 'pending',
+  published: 'published',
   deleted: 'deleted',
 } as const;
 
 export type ReplyStatus = (typeof REPLY_STATUS)[keyof typeof REPLY_STATUS];
+
+/** Reply statuses that are visible to readers and counted in reply totals. */
+export const VISIBLE_REPLY_STATUSES: ReplyStatus[] = [REPLY_STATUS.published];
 
 export const RESOURCE_STATUS = {
   pending: 'pending',

@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { LikesService } from './likes.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
-import { Public } from '@common/decorators/public.decorator';
+import { Public, OptionalAuth } from '@common/decorators/public.decorator';
 import type { Request } from 'express';
 
 @Controller('likes')
@@ -24,10 +24,17 @@ export class LikesController {
     return { message: 'Post unliked successfully' };
   }
 
+  /**
+   * Like count for a post, plus whether the *caller* liked it.
+   *
+   * The liked flag comes from the session. Accepting `?userId=` here let anyone
+   * probe whether a given user had liked a given post.
+   */
   @Get('posts/:postId')
-  @Public()
-  async checkPostLike(@Param('postId', ParseIntPipe) postId: number, @Query('userId') userId?: string) {
-    const uid = userId ? Number(userId) : undefined;
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async checkPostLike(@Param('postId', ParseIntPipe) postId: number, @Req() req: Request) {
+    const uid = (req as any).user?.id;
     const isLiked = uid ? await this.likesService.isPostLiked(uid, postId) : false;
     const likeCount = await this.likesService.getPostLikeCount(postId);
     return { liked: isLiked, count: likeCount };
@@ -54,9 +61,10 @@ export class LikesController {
   }
 
   @Get('replies/:replyId')
-  @Public()
-  async checkReplyLike(@Param('replyId', ParseIntPipe) replyId: number, @Query('userId') userId?: string) {
-    const uid = userId ? Number(userId) : undefined;
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async checkReplyLike(@Param('replyId', ParseIntPipe) replyId: number, @Req() req: Request) {
+    const uid = (req as any).user?.id;
     const isLiked = uid ? await this.likesService.isReplyLiked(uid, replyId) : false;
     const likeCount = await this.likesService.getReplyLikeCount(replyId);
     return { liked: isLiked, count: likeCount };

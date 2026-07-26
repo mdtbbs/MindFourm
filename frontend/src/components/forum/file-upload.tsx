@@ -17,20 +17,60 @@ const ALLOWED_TYPES = [
   'application/x-7z-compressed', 'text/plain', 'text/markdown',
 ];
 
+/**
+ * Extension allowlist, kept in step with the `accept` attribute below.
+ *
+ * Validating on `file.type` alone rejected files the picker advertises as
+ * supported: browsers report `.rar` as `application/vnd.rar` (or an empty string),
+ * and `.md` as `text/plain` or nothing at all. The server re-checks both MIME and
+ * extension, so accepting on either signal here is safe.
+ */
+const ALLOWED_EXTENSIONS = [
+  '.png', '.jpg', '.jpeg', '.gif', '.webp',
+  '.pdf', '.zip', '.rar', '.7z', '.txt', '.md',
+];
+
+/** Matches the server's multer limit; the label below advertises the same. */
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+
+function hasAllowedExtension(name: string): boolean {
+  const lower = name.toLowerCase();
+  return ALLOWED_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 export default function FileUpload({ postId, replyId, onUploaded }: FileUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleFiles = async (files: FileList) => {
-    const validFiles = Array.from(files).filter((f) => ALLOWED_TYPES.includes(f.type));
+    const selected = Array.from(files);
+    const rejectedType = selected.filter(
+      (f) => !ALLOWED_TYPES.includes(f.type) && !hasAllowedExtension(f.name),
+    );
+    // Previously unchecked despite the "最大 10MB" label, so oversized files failed
+    // only after the whole upload had been sent.
+    const rejectedSize = selected.filter((f) => f.size > MAX_FILE_SIZE);
+
+    const validFiles = selected.filter(
+      (f) => !rejectedType.includes(f) && !rejectedSize.includes(f),
+    );
+
     if (validFiles.length === 0) {
-      setError('不支持的文件类型');
+      setError(
+        rejectedSize.length > 0 && rejectedType.length === 0
+          ? `文件超过 10MB 上限：${rejectedSize.map((f) => f.name).join('、')}`
+          : '不支持的文件类型',
+      );
       return;
     }
 
     setUploading(true);
-    setError(null);
+    // Report partial rejections rather than silently dropping them.
+    const skipped = [...rejectedType, ...rejectedSize];
+    setError(
+      skipped.length > 0 ? `已跳过 ${skipped.map((f) => f.name).join('、')}` : null,
+    );
     try {
       const formData = new FormData();
       for (const file of validFiles) {

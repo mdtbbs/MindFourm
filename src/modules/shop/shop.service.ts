@@ -4,6 +4,7 @@ import { Repository, DataSource } from 'typeorm';
 import { ShopItem } from '@entities/shop-item.entity';
 import { Purchase } from '@entities/purchase.entity';
 import { User } from '@entities/user.entity';
+import { PointsService } from '../points/points.service';
 
 @Injectable()
 export class ShopService {
@@ -15,6 +16,7 @@ export class ShopService {
     @InjectRepository(User)
     private userRepo: Repository<User>,
     private dataSource: DataSource,
+    private pointsService: PointsService,
   ) {}
 
   // === Public API ===
@@ -41,39 +43,50 @@ export class ShopService {
 
   async purchase(userId: number, itemId: number): Promise<Purchase> {
     return this.dataSource.transaction(async (manager) => {
-      // 1. Check user exists and has enough points
-      const user = await manager.findOne(User, {
-        where: { id: userId },
-        select: ['id', 'available_points'],
-      });
-      if (!user) throw new NotFoundException('用户不存在');
-
-      // 2. Check item exists, active, and has stock
+      // The item is read only for its price and for the 404/下架 messages. Both
+      // the stock and balance checks below are enforced by the database, not by
+      // what this snapshot says.
       const item = await manager.findOne(ShopItem, { where: { id: itemId } });
       if (!item) throw new NotFoundException('商品不存在');
       if (!item.is_active) throw new BadRequestException('商品已下架');
-      if (item.stock <= 0) throw new BadRequestException('商品库存不足');
 
-      if (user.available_points < item.points_cost) {
-        throw new BadRequestException('积分不足，需要 ' + item.points_cost + ' 积分');
+      // Conditional UPDATE rather than check-then-decrement: two buyers racing for
+      // the last unit both passed an `item.stock <= 0` guard read moments earlier
+      // and the item oversold to -1.
+      const stockResult = await manager
+        .createQueryBuilder()
+        .update(ShopItem)
+        .set({ stock: () => 'stock - 1' })
+        .where('id = :itemId', { itemId })
+        .andWhere('stock > 0')
+        .andWhere('is_active = 1')
+        .execute();
+
+      if (!stockResult.affected) {
+        throw new BadRequestException('商品库存不足');
       }
 
-      // 3. Deduct points
-      await manager.decrement(User, { id: userId }, 'available_points', item.points_cost);
+      // Delegated so the balance check is the same conditional UPDATE used
+      // everywhere else, and so the spend lands in `point_logs` — purchases used
+      // to decrement `available_points` directly and never appeared in a user's
+      // point history. `manager` keeps the debit inside this transaction.
+      await this.pointsService.deductPoints(
+        userId,
+        item.points_cost,
+        'shop_purchase',
+        'shop_item',
+        itemId,
+        manager,
+      );
 
-      // 4. Create purchase record
       const purchase = manager.create(Purchase, {
         user_id: userId,
         item_id: itemId,
         points_spent: item.points_cost,
         status: 'completed',
       });
-      const savedPurchase = await manager.save(Purchase, purchase);
 
-      // 5. Decrease stock
-      await manager.decrement(ShopItem, { id: itemId }, 'stock', 1);
-
-      return savedPurchase;
+      return manager.save(Purchase, purchase);
     });
   }
 

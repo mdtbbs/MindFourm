@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf } from 'class-validator';
 
 export class UpdateResourceDto {
   @IsOptional()
@@ -10,11 +10,19 @@ export class UpdateResourceDto {
   description?: string;
 
   @IsOptional()
-  @IsString()
+  @IsIn(['upload', 'external'])
   resource_type?: string;
 
+  /**
+   * `@IsString()` alone allowed `javascript:` here, and the download route 302s to
+   * this value — turning an approved resource into an open redirect and a script
+   * execution vector on the forum's own origin.
+   *
+   * An empty string is allowed so the link can be cleared.
+   */
   @IsOptional()
-  @IsString()
+  @ValidateIf((_o, value) => value !== '' && value !== null)
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   external_url?: string;
 
   @IsOptional()

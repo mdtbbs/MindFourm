@@ -1,7 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Unique } from 'typeorm';
 import { User } from './user.entity';
 import { Badge } from './badge.entity';
 
+// A badge is held or not held; without the constraint a re-run of the granting
+// logic awards it twice and the profile renders it twice.
+@Unique('uq_user_badges_user_badge', ['user_id', 'badge_id'])
 @Entity('user_badges')
 export class UserBadge {
   @PrimaryGeneratedColumn()

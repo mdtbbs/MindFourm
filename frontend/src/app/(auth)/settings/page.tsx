@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { api } from '@/lib/api/client';
-import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 
 interface EmailPreferences {
@@ -42,7 +41,7 @@ export default function SettingsPage() {
 
   const loadPreferences = async () => {
     try {
-      const res = await api.get<{ data: { data: EmailPreferences } }>('/notifications/email-preference');
+      const res = await api.get<{ data: { data: EmailPreferences } }>('/api/notifications/email-preference');
       setPreferences(res.data.data);
     } catch {
       // Use defaults
@@ -59,7 +58,7 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put('/notifications/email-preference', preferences);
+      await api.put('/api/notifications/email-preference', preferences);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {
@@ -69,13 +68,13 @@ export default function SettingsPage() {
     }
   };
 
+  // The header and footer come from the (auth) route group's layout; this page used
+  // to render its own UnifiedHeader because that layout did not exist.
   return (
-    <div className="min-h-screen bg-[var(--bg)]">
-      <UnifiedHeader />
-
+    <div className="bg-[var(--bg)]">
       <main className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <nav className="flex items-center gap-2 text-sm text-muted">
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-primary">首页</Link>
             <span>/</span>
             <span>设置</span>
@@ -90,7 +89,7 @@ export default function SettingsPage() {
           </div>
         ) : (
           <div className="card p-6">
-            <p className="text-sm text-muted mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               配置接收邮件通知的偏好设置。所有通知都会保存在站内通知列表中，邮件作为额外提醒。
             </p>
 
@@ -102,7 +101,7 @@ export default function SettingsPage() {
                 >
                   <div>
                     <div className="font-medium">{label}</div>
-                    <div className="text-sm text-muted">{description}</div>
+                    <div className="text-sm text-muted-foreground">{description}</div>
                   </div>
                   <button
                     onClick={() => handleToggle(key)}

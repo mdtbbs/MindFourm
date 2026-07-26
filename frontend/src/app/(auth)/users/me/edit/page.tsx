@@ -37,7 +37,8 @@ export default function ProfileEditPage() {
     setError(null);
     setMessage(null);
     try {
-      const updated = await userApi.updateProfile({ username, bio });
+      // Submit the trimmed value that was validated, not the raw input.
+      const updated = await userApi.updateProfile({ username: trimmed, bio });
       setProfile(updated);
       setMessage('资料已保存');
     } catch (err) {
@@ -69,6 +70,23 @@ export default function ProfileEditPage() {
     setMessage('头像已删除');
   };
 
+  // The error branch has to come first: gating solely on `profile === null` meant a
+  // failed load spun forever and the error state was never rendered.
+  if (!profile && error) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8 space-y-4">
+        <Alert type="error" message={error} />
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="text-sm text-[var(--primary)] underline"
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+
   if (!profile) {
     return <div className="max-w-2xl mx-auto px-4 py-8 flex justify-center"><LoadingSpinner variant="orbital" size="lg" /></div>;
   }
@@ -82,7 +100,7 @@ export default function ProfileEditPage() {
         <h1 className="text-xl font-bold text-[var(--text)]">编辑资料</h1>
       </div>
 
-      <div className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 p-6 space-y-6">
+      <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-6 space-y-6">
         <div className="flex flex-col items-center pb-6 border-b border-[var(--border-light)] dark:border-gray-800">
           <h2 className="text-sm font-semibold text-[var(--text)] mb-4 self-start">头像</h2>
           <AvatarUploader

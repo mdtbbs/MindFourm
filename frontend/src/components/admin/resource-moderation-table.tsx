@@ -10,26 +10,43 @@ export default function ResourceModerationTable() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  // Without this a failed load rendered "暂无待审批资源" — a moderator would read
+  // that as "nothing to review" and move on, while the queue was actually unread.
+  const [error, setError] = useState<string | null>(null);
 
   const loadPending = () => {
     setLoading(true);
+    setError(null);
     resourceAdminApi.list({ status: 'pending', limit: 50 })
-      .then(res => {
-        setResources(res.data || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      .then(res => setResources(res.data || []))
+      .catch((err) => setError(err instanceof Error ? err.message : '加载待审资源失败'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { loadPending(); }, []);
 
   const handleAction = async (id: number, action: 'approved' | 'rejected') => {
-    await resourceAdminApi.updateStatus(id, action);
-    setSelectedResource(null);
-    loadPending();
+    try {
+      await resourceAdminApi.updateStatus(id, action);
+      setSelectedResource(null);
+      loadPending();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '审核操作失败');
+    }
   };
 
   if (loading) return <div className="p-8 text-center">加载中...</div>;
+
+  if (error) {
+    return (
+      <div className="p-8 text-center space-y-3">
+        <p className="text-red-600">{error}</p>
+        <button type="button" onClick={loadPending} className="text-sm text-primary-600 underline">
+          重试
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>

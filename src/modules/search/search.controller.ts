@@ -2,13 +2,21 @@ import { Controller, Get, Delete, Query, UseGuards, Req } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalAuth } from '../../common/decorators/public.decorator';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 
 @Controller('search')
 export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get()
-  async search(@Query() dto: SearchQueryDto) {
+  // Optional auth so a signed-in searcher's history can actually be attributed to
+  // them; the route stays open to anonymous callers.
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  // Search runs `content LIKE '%…%'`, which is a table scan.
+  @RateLimit({ max: 30, window: 60 })
+  async search(@Query() dto: SearchQueryDto, @Req() req: any) {
     const postsResult = await this.searchService.searchPosts(dto.q, {
       page: dto.page,
       limit: dto.limit,
@@ -16,8 +24,7 @@ export class SearchController {
       sort: dto.sort,
     });
 
-    // Record search
-    await this.searchService.recordSearch(undefined, dto.q, postsResult.pagination.total);
+    await this.searchService.recordSearch(req?.user?.id, dto.q, postsResult.pagination.total);
 
     return {
       ...postsResult,

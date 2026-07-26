@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import PostContent from '@/components/forum/post-content';
@@ -8,44 +9,100 @@ import AttachmentList from '@/components/forum/attachment-list';
 import Link from 'next/link';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { Post, Attachment } from '@/types';
+import { toMetaDescription } from '@/lib/seo/description';
+import { absoluteUrl } from '@/lib/seo/site-url';
+import JsonLd from '@/components/seo/json-ld';
+import { buildHybridParam, extractIdFromHybridParam } from '@/lib/seo/hybrid-param';
 
-export const revalidate = 60;
+// This page forwards cookies (each viewer sees a different moderation state), which
+// calls `cookies()` and forces dynamic rendering — so the `revalidate` export that
+// used to sit here was inert. Declaring it was misleading rather than useful.
+export const dynamic = 'force-dynamic';
 
-async function fetchSettings(): Promise<Record<string, string>> {
+const fetchSettings = cache(async (): Promise<Record<string, string>> => {
   return fetchApiData<Record<string, string>>('/api/settings', {
     init: { next: { revalidate: 60 } },
     fallback: {},
   });
+});
+
+/**
+ * Memoised per request: `generateMetadata` and the page body both need the post, and
+ * without `cache()` that was two identical round trips for every page view.
+ */
+const fetchPost = cache(
+  async (id: number, page: number, limit: number): Promise<Post | null> => {
+    return fetchApiData<Post | null>(`/api/posts/${id}?reply_page=${page}&reply_limit=${limit}`, {
+      init: { cache: 'no-store' },
+      fallback: null,
+      forwardCookies: true,
+    });
+  },
+);
+
+/**
+ * Resolves the post with the same arguments the page body uses, so React's `cache()`
+ * actually deduplicates the two calls. Requesting a different reply page here would
+ * be a distinct cache key and therefore a second identical round trip.
+ */
+async function loadPost(idParam: string, pageParam?: string) {
+  const postId = extractIdFromHybridParam(idParam) ?? parseInt(idParam);
+  const page = parseInt(pageParam || '1');
+
+  if (!Number.isFinite(postId)) {
+    return { postId, page, repliesPerPage: 50, post: null };
+  }
+
+  const settings = await fetchSettings();
+  const repliesPerPage = parseInt(settings.replies_per_page || '50');
+  const post = await fetchPost(postId, page, repliesPerPage);
+
+  return { postId, page, repliesPerPage, post, settings };
 }
 
-async function fetchPost(id: number, page: number, limit: number): Promise<Post | null> {
-  return fetchApiData<Post | null>(`/api/posts/${id}?reply_page=${page}&reply_limit=${limit}`, {
-    init: { cache: 'no-store' },
-    fallback: null,
-    forwardCookies: true,
-  });
-}
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
+  const [{ id }, { page: pageStr }] = await Promise.all([params, searchParams]);
+  const { post, settings = {} } = await loadPost(id, pageStr);
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params;
-  const [post, settings] = await Promise.all([
-    fetchPost(parseInt(id), 1, 1),
-    fetchSettings(),
-  ]);
-  if (!post) return { title: 'Not Found' };
-  const titleSuffix = settings.seo_title_suffix || ' | MindForum';
+  if (!post) {
+    return { title: '帖子不存在', robots: { index: false, follow: false } };
+  }
+
+  // Bare title: the root layout's `title.template` appends the suffix. Appending it
+  // here too produced "标题 | MindForum | MindForum".
+  const description = toMetaDescription(post.content);
+  // One canonical form per post, so `/posts/123`, `/posts/123-slug` and
+  // `/posts/123-anything` stop competing as separate URLs.
+  const canonical = `/posts/${buildHybridParam(post.id, post.slug || '')}`;
+
   const meta: Metadata = {
-    title: `${post.title}${titleSuffix}`,
-    description: post.content.slice(0, 160),
+    title: post.title,
+    description,
+    alternates: { canonical },
     openGraph: {
-      title: `${post.title}${titleSuffix}`,
-      description: post.content.slice(0, 160),
+      title: post.title,
+      description,
       type: 'article',
+      url: canonical,
+    },
+    twitter: {
+      card: settings.seo_og_image ? 'summary_large_image' : 'summary',
+      title: post.title,
+      description,
     },
   };
+
   if (settings.seo_og_image) {
     meta.openGraph = { ...meta.openGraph, images: [settings.seo_og_image] };
+    meta.twitter = { ...meta.twitter, images: [settings.seo_og_image] };
   }
+
   return meta;
 }
 
@@ -56,41 +113,87 @@ export default async function PostDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ page?: string }>;
 }) {
-  const { id } = await params;
-  const { page: pageStr } = await searchParams;
-  const postId = parseInt(id);
-  const page = parseInt(pageStr || '1');
+  const [{ id }, { page: pageStr }] = await Promise.all([params, searchParams]);
+  // Accepts both `/posts/123` and `/posts/123-slug`. Resolved through the same helper
+  // generateMetadata uses, so the post is fetched once per request rather than twice.
+  const { postId, page, repliesPerPage, post } = await loadPost(id, pageStr);
 
-  const settings = await fetchSettings();
-  const repliesPerPage = parseInt(settings.replies_per_page || '50');
-  const post = await fetchPost(postId, page, repliesPerPage);
+  if (!post) {
+    // A missing or unpublished post must answer 404. Rendering a "帖子不存在" body
+    // with HTTP 200 kept every deleted post indexed as a thin-content page.
+    notFound();
+  }
 
-  // Fetch attachments
   const attachments = await fetchApiData<Attachment[]>(`/api/attachments/post/${postId}`, {
     init: { cache: 'no-store' },
     fallback: [],
   });
 
-  if (!post) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <article className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 overflow-hidden">
-          <div className="p-6 border-b border-[var(--border)] dark:border-gray-700">
-            <h1 className="text-2xl font-bold text-[var(--text)] mb-3">帖子不存在</h1>
-            <p className="text-sm text-[var(--text-secondary)]">该帖子可能已被删除或尚未发布。</p>
-          </div>
-          <div className="p-6" data-testid="post-content">
-            <p className="text-sm text-[var(--text-secondary)]">暂无可显示内容</p>
-          </div>
-        </article>
-      </div>
-    );
-  }
-
   const replies = post.replies ?? [];
   const pagination = post.replyPagination ?? { page: 1, limit: repliesPerPage, totalPages: 1, total: 0 };
+  const postPath = `/posts/${buildHybridParam(post.id, post.slug || '')}`;
+
+  // `DiscussionForumPosting` is the schema Google uses for forum rich results and
+  // discussion carousels; the breadcrumb mirrors the visual trail rendered below.
+  const jsonLd: Record<string, unknown>[] = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'DiscussionForumPosting',
+      '@id': absoluteUrl(postPath),
+      url: absoluteUrl(postPath),
+      headline: post.title,
+      articleBody: toMetaDescription(post.content, 5000),
+      datePublished: post.created_at,
+      dateModified: post.updated_at || post.created_at,
+      author: {
+        '@type': 'Person',
+        name: post.author_mindauth_id ? `#${post.author_mindauth_id}` : `#${post.user_id}`,
+        url: absoluteUrl(`/users/${post.user_id}`),
+      },
+      interactionStatistic: [
+        {
+          '@type': 'InteractionCounter',
+          interactionType: 'https://schema.org/CommentAction',
+          userInteractionCount: pagination.total,
+        },
+        {
+          '@type': 'InteractionCounter',
+          interactionType: 'https://schema.org/LikeAction',
+          userInteractionCount: post.like_count ?? 0,
+        },
+        {
+          '@type': 'InteractionCounter',
+          interactionType: 'https://schema.org/ViewAction',
+          userInteractionCount: post.view_count ?? 0,
+        },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: '首页', item: absoluteUrl('/') },
+        ...(post.category_name
+          ? [{
+              '@type': 'ListItem',
+              position: 2,
+              name: post.category_name,
+              item: absoluteUrl(`/categories/${post.category_id}`),
+            }]
+          : []),
+        {
+          '@type': 'ListItem',
+          position: post.category_name ? 3 : 2,
+          name: post.title,
+          item: absoluteUrl(postPath),
+        },
+      ],
+    },
+  ];
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <JsonLd data={jsonLd} />
       {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-[var(--text-secondary)]">
         <Link href="/" className="hover:text-[var(--primary)]">首页</Link>
@@ -144,6 +247,7 @@ export default async function PostDetailPage({
                 key={reply.id}
                 reply={reply}
                 index={(page - 1) * repliesPerPage + index}
+                postId={postId}
               />
             ))}
           </div>

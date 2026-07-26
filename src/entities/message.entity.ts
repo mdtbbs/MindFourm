@@ -1,9 +1,13 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn,
+  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { GroupChat } from './group-chat.entity';
 
+// The inbox unread count filters (recipient_id, is_read) and orders by created_at;
+// the conversation query walks both directions of a (sender, recipient) pair.
+@Index('idx_messages_recipient_read_created', ['recipient_id', 'is_read', 'created_at'])
+@Index('idx_messages_sender_recipient', ['sender_id', 'recipient_id'])
 @Entity('messages')
 export class Message {
   @PrimaryGeneratedColumn()

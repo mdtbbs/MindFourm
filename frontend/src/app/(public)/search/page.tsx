@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import SearchEnhancements from '@/components/forum/search-enhancements';
@@ -6,6 +7,19 @@ import { fetchApiPaginated } from '@/lib/api/server-fetch';
 import { SearchResultResponse } from '@/types';
 
 export const revalidate = 0;
+
+/**
+ * Search result pages are never indexed.
+ *
+ * `/search?q=<anything>` generates unlimited near-duplicate pages out of other
+ * pages' content — a classic thin-content farm. `follow` stays on so links out of a
+ * result page are still discovered. robots.txt disallows the path too; this covers
+ * crawlers arriving from an external link regardless.
+ */
+export const metadata: Metadata = {
+  title: '搜索',
+  robots: { index: false, follow: true },
+};
 
 async function fetchPosts(query: string, page: number, limit: number): Promise<SearchResultResponse> {
   const qs = new URLSearchParams();

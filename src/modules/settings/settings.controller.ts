@@ -12,13 +12,13 @@ export class SettingsController {
   @Get()
   @Public()
   async getAll() {
-    return this.settingsService.getAll();
+    return this.settingsService.getPublicSettings();
   }
 
   @Get(':category')
   @Public()
   async getByCategory(@Param('category') category: string) {
-    return this.settingsService.getByCategory(category);
+    return this.settingsService.getPublicByCategory(category);
   }
 
   @Put(':category')

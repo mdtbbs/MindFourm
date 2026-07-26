@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, LessThan } from 'typeorm';
-import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply } from '@entities/index';
+import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply, SessionAudit } from '@entities/index';
 import { StatsService } from '../stats/stats.service';
 import { SettingsService } from '../settings/settings.service';
 import { LogsService } from '../logs/logs.service';
@@ -33,6 +33,8 @@ export class AdminService {
     private settingRepository: Repository<Setting>,
     @InjectRepository(OperationLog)
     private operationLogRepository: Repository<OperationLog>,
+    @InjectRepository(SessionAudit)
+    private sessionAuditRepository: Repository<SessionAudit>,
     private dataSource: DataSource,
     private statsService: StatsService,
     private settingsService: SettingsService,
@@ -171,6 +173,12 @@ export class AdminService {
    * Bulk pin posts
    */
   async bulkPinPosts(postIds: number[], isPinned: number): Promise<void> {
+    // `Repository.update([], ...)` raises TypeORM's "Empty criteria(s) are not
+    // allowed" instead of updating nothing, so an empty selection must
+    // short-circuit rather than reach the query builder.
+    if (postIds.length === 0) {
+      return;
+    }
     await this.postRepository.update(postIds, { is_pinned: this.normalizePinnedValue(isPinned) });
   }
 
@@ -184,6 +192,11 @@ export class AdminService {
 
     if (!category) {
       throw new NotFoundException('Category not found');
+    }
+
+    // See bulkPinPosts — empty criteria is a TypeORM error, not a no-op.
+    if (postIds.length === 0) {
+      return;
     }
 
     await this.postRepository.update(postIds, { category_id: categoryId });
@@ -348,7 +361,10 @@ export class AdminService {
    * Reject a post (set status to deleted)
    */
   async rejectPost(id: number, reason?: string | null): Promise<void> {
-    const updateData: any = { status: 'deleted' };
+    // `deleted_at` has to be stamped alongside the status: `cleanupSoftDeleted`
+    // purges on `deleted_at < cutoff`, so a rejected post with a NULL timestamp
+    // is retained forever. `rejectReply` already does this.
+    const updateData: any = { status: 'deleted', deleted_at: new Date() };
     if (reason) updateData.reject_reason = reason;
     await this.postRepository.update(id, updateData);
   }
@@ -446,6 +462,28 @@ export class AdminService {
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
     const result = await this.operationLogRepository.delete({
+      created_at: LessThan(cutoffDate),
+    });
+
+    return result.affected || 0;
+  }
+
+  /**
+   * Prune old session audit rows.
+   *
+   * The Redis session keys themselves carry a TTL and expire on their own, so there
+   * is nothing to sweep there — but `session_audit` grows without bound, one row per
+   * login and logout, and holds a hashed token plus an IP address. The endpoint that
+   * called this used to return "Sessions cleaned up" without doing anything at all.
+   */
+  async cleanupSessions(): Promise<number> {
+    const retentionDays = await this.settingsService.getNumber('cleanup_session_retention_days');
+    const days = retentionDays || 30;
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    const result = await this.sessionAuditRepository.delete({
       created_at: LessThan(cutoffDate),
     });
 

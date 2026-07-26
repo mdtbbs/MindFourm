@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
-import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { Users, Hash, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
@@ -28,7 +27,7 @@ export default function GroupsPage() {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const data = await api.get<Group[]>('/groups');
+      const data = await api.get<Group[]>('/api/groups');
       setGroups(data || []);
     } catch (err) {
       console.error('Failed to load groups:', err);
@@ -43,7 +42,7 @@ export default function GroupsPage() {
     if (!isAuthenticated || !user) return;
     setJoining(groupId);
     try {
-      await api.post(`/groups/${groupId}/join?userId=${user.id}`);
+      await api.post(`/api/groups/${groupId}/join`);
       await fetchGroups();
     } catch (err) {
       console.error('Failed to join group:', err);
@@ -54,8 +53,7 @@ export default function GroupsPage() {
 
   if (loading) return (
     <FeatureGate settingKey="feature_groups_enabled" label="用户组">
-    <div className="min-h-screen bg-[var(--bg)]">
-      <UnifiedHeader />
+    <div>
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
@@ -65,12 +63,11 @@ export default function GroupsPage() {
 
   return (
     <FeatureGate settingKey="feature_groups_enabled" label="用户组">
-    <div className="min-h-screen bg-[var(--bg)]">
-      <UnifiedHeader />
+    <div>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <nav className="flex items-center gap-2 text-sm text-muted">
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-primary">首页</Link>
             <span>/</span>
             <span>用户组</span>
@@ -78,7 +75,7 @@ export default function GroupsPage() {
         </div>
 
         <h1 className="text-2xl font-bold mb-2">用户组</h1>
-        <p className="text-muted mb-6">加入感兴趣的用户组，与其他成员交流互动</p>
+        <p className="text-muted-foreground mb-6">加入感兴趣的用户组，与其他成员交流互动</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map((group) => (
@@ -102,9 +99,9 @@ export default function GroupsPage() {
                     )}
                   </div>
                   {group.description && (
-                    <p className="text-sm text-muted mt-1 line-clamp-2">{group.description}</p>
+                    <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{group.description}</p>
                   )}
-                  <div className="flex items-center gap-3 mt-3 text-xs text-muted">
+                  <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Users className="w-3 h-3" />
                       {group.member_count || 0} 成员
@@ -130,7 +127,7 @@ export default function GroupsPage() {
         </div>
 
         {groups.length === 0 && (
-          <div className="text-center py-16 text-muted">
+          <div className="text-center py-16 text-muted-foreground">
             <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>暂无用户组</p>
           </div>
@@ -138,10 +135,10 @@ export default function GroupsPage() {
 
         {!isAuthenticated && (
           <div className="mt-8 card p-6 text-center">
-            <Lock className="w-8 h-8 mx-auto text-muted mb-2" />
-            <p className="text-muted mb-3">请先登录后加入用户组</p>
+            <Lock className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-muted-foreground mb-3">请先登录后加入用户组</p>
             <a
-              href={`/login?redirect=${encodeURIComponent('/groups')}`}
+              href={`/login?redirect=${encodeURIComponent('/api/groups')}`}
               className="btn btn-primary"
             >
               登录

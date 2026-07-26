@@ -53,7 +53,7 @@ describe('StatsService', () => {
         ]),
     };
     const redisService = {
-      keys: jest.fn().mockResolvedValue(['session:1', 'session:2']),
+      countKeys: jest.fn().mockResolvedValue(2),
     };
 
     const service = new StatsService(
@@ -76,7 +76,7 @@ describe('StatsService', () => {
     });
 
     expect(postRepository.query).toHaveBeenCalledTimes(2);
-    expect(redisService.keys).toHaveBeenCalledWith('session:*');
+    expect(redisService.countKeys).toHaveBeenCalledWith('session:*');
   });
 
   it('returns homepage overview stats and prefers the latest login user', async () => {
@@ -98,7 +98,7 @@ describe('StatsService', () => {
       query: jest.fn().mockResolvedValue([{ username: 'alice' }]),
     };
     const redisService = {
-      keys: jest.fn().mockResolvedValue(['session:1', 'session:2']),
+      countKeys: jest.fn().mockResolvedValue(2),
     };
 
     const service = new StatsService(
@@ -146,7 +146,7 @@ describe('StatsService', () => {
       query: jest.fn().mockResolvedValue([]),
     };
     const redisService = {
-      keys: jest.fn().mockResolvedValue([]),
+      countKeys: jest.fn().mockResolvedValue(0),
     };
 
     const service = new StatsService(

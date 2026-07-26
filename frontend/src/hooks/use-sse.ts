@@ -10,13 +10,12 @@
 
 'use client';
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { SSEClient, createSSEClient } from '@/lib/sse/client';
+import { buildPublicApiUrl } from '@/lib/api/client';
 import { useUserStore } from '@/store/user-store';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const SSE_ENDPOINT = `${API_URL}/api/notifications/events`;
-
+const SSE_ENDPOINT = buildPublicApiUrl('/api/notifications/events');
 interface UseSseOptions {
   enabled?: boolean;
   url?: string;
@@ -38,51 +37,58 @@ export function useSse<T = unknown>(
   options: UseSseOptions = {}
 ): void {
   const { enabled = true, url = SSE_ENDPOINT, onConnect, onDisconnect, onError } = options;
-  const { isAuthenticated } = useUserStore();
+  const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const clientRef = useRef<SSEClient | null>(null);
+
+  // Held in refs so the connection effect does not depend on their identity. Both
+  // call sites pass inline arrow functions, which meant a new identity on every
+  // render — tearing down and re-establishing the EventSource in a loop.
+  const callbackRef = useRef(callback);
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    callbackRef.current = callback;
+    onConnectRef.current = onConnect;
+    onDisconnectRef.current = onDisconnect;
+    onErrorRef.current = onError;
+  }, [callback, onConnect, onDisconnect, onError]);
 
   // Only connect if authenticated and enabled
   const shouldConnect = enabled && isAuthenticated;
 
   useEffect(() => {
     if (!shouldConnect) {
-      // Disconnect if previously connected
-      if (clientRef.current) {
-        clientRef.current.disconnect();
-        clientRef.current = null;
-        onDisconnect?.();
-      }
       return;
     }
 
-    // Create and connect SSE client
-    if (!clientRef.current) {
-      clientRef.current = createSSEClient({
-        url,
-        onOpen: onConnect,
-        onError: (error) => {
-          onError?.(error);
-        },
-        maxRetries: 5,
-        retryDelay: 1000,
-      });
+    const client = createSSEClient({
+      url,
+      onOpen: () => onConnectRef.current?.(),
+      onError: (error) => onErrorRef.current?.(error),
+      maxRetries: 5,
+      retryDelay: 1000,
+    });
+    clientRef.current = client;
 
-      clientRef.current.connect();
-    }
+    const unsubscribe = client.subscribe(eventType, (data) => {
+      callbackRef.current(data as T);
+    });
 
-    // Subscribe to specific event type
-    const unsubscribe = clientRef.current.subscribe(
-      eventType,
-      (data) => {
-        callback(data as T);
-      }
-    );
+    client.connect();
 
-    // Cleanup on unmount or when shouldConnect changes
     return () => {
       unsubscribe();
+      // The previous cleanup only unsubscribed, leaving the EventSource open — one
+      // leaked connection per mount.
+      client.disconnect();
+      if (clientRef.current === client) {
+        clientRef.current = null;
+      }
+      onDisconnectRef.current?.();
     };
-  }, [shouldConnect, eventType, callback, onConnect, onDisconnect, onError, url]);
+  }, [shouldConnect, eventType, url]);
 }
 
 /**
@@ -91,9 +97,11 @@ export function useSse<T = unknown>(
  * Returns connection state and manual connect/disconnect functions
  */
 export function useSseConnection() {
-  const { isAuthenticated } = useUserStore();
+  const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const clientRef = useRef<SSEClient | null>(null);
-  const isConnectedRef = useRef(false);
+  // State, not a ref: consumers rendering a connection indicator never updated,
+  // because reading `ref.current` does not subscribe them to changes.
+  const [isConnected, setIsConnected] = useState(false);
 
   const connect = useCallback(() => {
     if (!isAuthenticated || clientRef.current) {
@@ -102,12 +110,8 @@ export function useSseConnection() {
 
     clientRef.current = createSSEClient({
       url: SSE_ENDPOINT,
-      onOpen: () => {
-        isConnectedRef.current = true;
-      },
-      onError: () => {
-        isConnectedRef.current = false;
-      },
+      onOpen: () => setIsConnected(true),
+      onError: () => setIsConnected(false),
     });
 
     clientRef.current.connect();
@@ -117,7 +121,7 @@ export function useSseConnection() {
     if (clientRef.current) {
       clientRef.current.disconnect();
       clientRef.current = null;
-      isConnectedRef.current = false;
+      setIsConnected(false);
     }
   }, []);
 
@@ -148,7 +152,7 @@ export function useSseConnection() {
   }, [isAuthenticated, connect, disconnect]);
 
   return {
-    isConnected: isConnectedRef.current,
+    isConnected,
     connect,
     disconnect,
     subscribe,

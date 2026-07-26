@@ -28,7 +28,7 @@ export default function AdminShopPage() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const data = await api.get<ShopItem[]>('/shop/admin/items');
+      const data = await api.get<ShopItem[]>('/api/shop/admin/items');
       setItems(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载商品失败');
@@ -50,10 +50,10 @@ export default function AdminShopPage() {
     try {
       const body = { ...formData, image_url: formData.image_url || null, description: formData.description || null };
       if (editing) {
-        await api.put(`/shop/admin/items/${editing.id}`, body);
+        await api.put(`/api/shop/admin/items/${editing.id}`, body);
         setMessage('商品已更新');
       } else {
-        await api.post('/shop/admin/items', body);
+        await api.post('/api/shop/admin/items', body);
         setMessage('商品已创建');
       }
       resetForm();
@@ -68,7 +68,7 @@ export default function AdminShopPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('确定要删除此商品吗？')) return;
     try {
-      await api.delete(`/shop/admin/items/${id}`);
+      await api.delete(`/api/shop/admin/items/${id}`);
       setMessage('商品已删除');
       setTimeout(() => setMessage(null), 3000);
       await fetchItems();

@@ -8,19 +8,21 @@ import { Resource, ResourceCategory } from '@/types';
 
 export const revalidate = 60;
 
+const RESOURCES_DESCRIPTION = '浏览和下载社区贡献的资源、模组和工具';
+
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
-  const titleSuffix = settings.seo_title_suffix || ' | MindForum';
+  // Bare title — the root layout's `title.template` appends the site suffix.
   return {
-    title: `资源中心${titleSuffix}`,
-    description: '浏览和下载社区贡献的资源、模组和工具',
+    title: '资源中心',
+    description: RESOURCES_DESCRIPTION,
+    // Filter and sort params produce the same listing in a different order, so they
+    // all fold onto one canonical URL.
+    alternates: { canonical: '/resources' },
     openGraph: {
-      title: `资源中心${titleSuffix}`,
-      description: '浏览和下载社区贡献的资源、模组和工具',
+      title: '资源中心',
+      description: RESOURCES_DESCRIPTION,
       type: 'website',
+      url: '/resources',
     },
   };
 }

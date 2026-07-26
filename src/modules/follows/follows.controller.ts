@@ -1,11 +1,9 @@
 import {
-  Controller, Get, Post, Delete, Param, Query, Body, UseGuards,
+  Controller, Get, Post, Delete, Param, Query, Req, UseGuards,
 } from '@nestjs/common';
 import { FollowsService } from './follows.service';
-import { QueryFollowsDto, FollowUserDto } from './dto/follow.dto';
+import { QueryFollowsDto } from './dto/follow.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
-import { RolesGuard } from '@common/guards/roles.guard';
-import { Roles } from '@common/decorators/roles.decorator';
 
 @Controller('follows')
 export class FollowsController {
@@ -13,22 +11,22 @@ export class FollowsController {
 
   @Post(':userId')
   @UseGuards(JwtAuthGuard)
-  async followUser(@Param('userId') followingId: number, @Body() dto: FollowUserDto) {
-    const follow = await this.followsService.followUser(dto.followerId, followingId);
+  async followUser(@Param('userId') followingId: number, @Req() req: any) {
+    const follow = await this.followsService.followUser(req.user.id, followingId);
     return { success: true, data: follow };
   }
 
   @Delete(':userId')
   @UseGuards(JwtAuthGuard)
-  async unfollowUser(@Param('userId') followingId: number, @Query('followerId') followerId: number) {
-    await this.followsService.unfollowUser(followerId, followingId);
+  async unfollowUser(@Param('userId') followingId: number, @Req() req: any) {
+    await this.followsService.unfollowUser(req.user.id, followingId);
     return { success: true, data: { message: '已取消关注' } };
   }
 
   @Get('check/:userId')
   @UseGuards(JwtAuthGuard)
-  async checkFollowStatus(@Param('userId') followingId: number, @Query('followerId') followerId: number) {
-    const isFollowing = await this.followsService.checkFollowStatus(followerId, followingId);
+  async checkFollowStatus(@Param('userId') followingId: number, @Req() req: any) {
+    const isFollowing = await this.followsService.checkFollowStatus(req.user.id, followingId);
     return { success: true, data: { isFollowing } };
   }
 

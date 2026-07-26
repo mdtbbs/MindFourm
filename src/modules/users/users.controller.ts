@@ -21,6 +21,7 @@ import { mkdirSync } from 'fs';
 import * as fs from 'fs/promises';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { toPublicUser, toPublicUsers } from './public-user.util';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
 
@@ -166,12 +167,13 @@ export class UsersController {
       return [];
     }
 
-    return this.usersService.searchByUsername(query, limit || 10);
+    return toPublicUsers(await this.usersService.searchByUsername(query, limit || 10));
   }
 
   @Get(':id')
   async getUserById(@Param('id') id: string) {
-    return this.usersService.getById(parseInt(id, 10));
+    // Unauthenticated route — must not return the raw entity (see toPublicUser).
+    return toPublicUser(await this.usersService.getById(parseInt(id, 10)));
   }
 
   @Get(':id/replies')

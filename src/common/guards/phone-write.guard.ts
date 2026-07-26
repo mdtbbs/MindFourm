@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthService } from '../../modules/auth/auth.service';
+import { BansService } from '../../modules/bans/bans.service';
 import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -16,6 +17,7 @@ export class PhoneWriteGuard implements CanActivate {
   constructor(
     private authService: AuthService,
     private reflector: Reflector,
+    private bansService: BansService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -35,6 +37,7 @@ export class PhoneWriteGuard implements CanActivate {
     }
 
     const user = request.user ?? await this.resolveUser(request);
+    await this.bansService.assertUserNotBanned(user.id);
     request.user = user;
 
     if (!user.phone_verified) {

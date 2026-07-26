@@ -1,5 +1,8 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
+import compression from 'compression';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -12,6 +15,8 @@ import { SettingsService } from './modules/settings/settings.service';
 import { ResourceCategoryService } from './modules/resources/resource-categories.service';
 import { DataSource } from 'typeorm';
 import { csrfMiddleware } from './common/middleware/csrf.middleware';
+import { appConfig } from './config/app.config';
+import { validateConfig } from './config/validate';
 
 function parseCookieHeader(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -33,12 +38,53 @@ function parseCookieHeader(header: string | undefined): Record<string, string> {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log'],
   });
 
+  // Runs after app creation so ConfigModule has loaded .env into process.env, but
+  // before any database or Redis connection — a misconfigured production deployment
+  // should refuse to start rather than fail later on the first login.
+  validateConfig(appConfig());
+
+  const isProduction = process.env.NODE_ENV === 'production';
+
+  // Behind nginx, X-Forwarded-For must be trusted or every request appears to come
+  // from the loopback proxy — which would collapse rate limiting into one bucket,
+  // make IP bans match all-or-nothing, and record 127.0.0.1 in every audit row.
+  app.set('trust proxy', 1);
+
   // Global prefix
   app.setGlobalPrefix('api');
+
+  app.use(
+    helmet({
+      strictTransportSecurity: isProduction
+        ? { maxAge: 31536000, includeSubDomains: true, preload: true }
+        : false, // disabled in dev so plain HTTP still works
+      // This service returns JSON and streams uploaded files; it serves no HTML of
+      // its own, so the policy only has to be restrictive enough that a stored
+      // payload cannot execute if a response is ever rendered directly.
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'none'"],
+          formAction: ["'none'"],
+          imgSrc: ["'self'", 'data:'],
+          scriptSrc: ["'none'"],
+          styleSrc: ["'none'"],
+          objectSrc: ["'none'"],
+        },
+      },
+      // Downloads are served cross-origin to the Next.js frontend.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      crossOriginEmbedderPolicy: false,
+      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    }),
+  );
+
+  app.use(compression());
 
   app.use((req: any, _res: any, next: () => void) => {
     req.cookies = req.cookies || parseCookieHeader(req.headers?.cookie);

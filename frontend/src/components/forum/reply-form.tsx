@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Reply } from '@/types';
 import { replyApi } from '@/lib/api/client';
+import {
+  useReplyComposeStore,
+  useReplyComposeTarget,
+} from '@/store/reply-compose-store';
 
 const ReplyEditor = dynamic(() => import('@/components/forum/reply-editor'), {
   loading: () => <div className="text-center py-4 text-surface-500">加载编辑器...</div>,
@@ -15,13 +17,13 @@ interface ReplyFormProps {
 }
 
 export default function ReplyForm({ postId, onReplyCreated }: ReplyFormProps) {
-  const [quoteReply, setQuoteReply] = useState<Reply | null>(null);
-  const [replyToReply, setReplyToReply] = useState<Reply | null>(null);
+  // Set by the 引用 / 回复 buttons on each reply — see reply-compose-store.
+  const { quoteReply, replyToReply } = useReplyComposeTarget(postId);
+  const clearComposeTarget = useReplyComposeStore((state) => state.clear);
 
   const handleSubmit = async (content: string, parentReplyId?: number) => {
     await replyApi.create(postId, { content, parent_reply_id: parentReplyId });
-    setQuoteReply(null);
-    setReplyToReply(null);
+    clearComposeTarget();
     onReplyCreated?.();
   };
 
@@ -31,6 +33,7 @@ export default function ReplyForm({ postId, onReplyCreated }: ReplyFormProps) {
       onSubmit={handleSubmit}
       quoteReply={quoteReply}
       replyToReply={replyToReply}
+      onCancelTarget={clearComposeTarget}
     />
   );
 }

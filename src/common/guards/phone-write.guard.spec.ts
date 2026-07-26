@@ -1,7 +1,11 @@
+jest.mock('../../modules/auth/auth.service', () => ({
+  AuthService: class AuthService {},
+}));
+
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PhoneWriteGuard } from './phone-write.guard';
-import { AuthService } from '../../modules/auth/auth.service';
+import type { AuthService } from '../../modules/auth/auth.service';
 
 function createContext(method: string, sessionToken?: string) {
   const request: any = {
@@ -30,10 +34,14 @@ describe('PhoneWriteGuard', () => {
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(skipPhoneVerification),
     } as unknown as jest.Mocked<Reflector>;
+    const bansService = {
+      assertUserNotBanned: jest.fn().mockResolvedValue(undefined),
+    } as any;
 
     return {
-      guard: new PhoneWriteGuard(authService, reflector),
+      guard: new PhoneWriteGuard(authService, reflector, bansService),
       authService,
+      bansService,
     };
   }
 

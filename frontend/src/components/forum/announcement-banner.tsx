@@ -3,24 +3,47 @@
 import { useState, useEffect } from 'react';
 import { useSettings } from '@/lib/settings/context';
 
+const DISMISSED_KEY = 'announcement_dismissed_id';
+
+/**
+ * Stable short id for an announcement's text.
+ *
+ * Dismissal used to be stored under a single boolean key, so closing one
+ * announcement suppressed every future one forever. Keying on the content means a
+ * new announcement shows again while the dismissed one stays hidden.
+ */
+function announcementId(content: string): string {
+  let hash = 0;
+  for (let i = 0; i < content.length; i += 1) {
+    hash = (hash << 5) - hash + content.charCodeAt(i);
+    hash |= 0; // force int32
+  }
+  return String(hash);
+}
+
 export default function AnnouncementBanner() {
   const settings = useSettings();
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
+  // Avoids briefly showing an already-dismissed banner before localStorage is read.
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      setDismissed(localStorage.getItem('announcement_dismissed') === 'true');
+      setDismissedId(localStorage.getItem(DISMISSED_KEY));
     }
+    setReady(true);
   }, []);
 
   const enabled = settings.announce_enabled === 'true';
   const content = settings.announce_content || '';
+  const trimmed = content.trim();
+  const currentId = trimmed ? announcementId(trimmed) : null;
 
-  if (!enabled || !content.trim() || dismissed) return null;
+  if (!ready || !enabled || !currentId || dismissedId === currentId) return null;
 
   const handleDismiss = () => {
-    setDismissed(true);
-    localStorage.setItem('announcement_dismissed', 'true');
+    setDismissedId(currentId);
+    localStorage.setItem(DISMISSED_KEY, currentId);
   };
 
   return (

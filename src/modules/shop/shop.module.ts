@@ -5,9 +5,10 @@ import { Purchase } from '@entities/purchase.entity';
 import { User } from '@entities/user.entity';
 import { ShopService } from './shop.service';
 import { ShopController } from './shop.controller';
+import { PointsModule } from '../points/points.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ShopItem, Purchase, User])],
+  imports: [TypeOrmModule.forFeature([ShopItem, Purchase, User]), PointsModule],
   controllers: [ShopController],
   providers: [ShopService],
   exports: [ShopService],

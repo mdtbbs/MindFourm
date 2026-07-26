@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsArray } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsArray, IsIn } from 'class-validator';
 
 export class CreatePostDto {
   @IsString()
@@ -30,7 +30,11 @@ export class CreatePostDto {
   @IsString({ each: true })
   tags?: string[];
 
+  /**
+   * Constrained so a caller cannot ask for `pending` or `deleted` directly. A
+   * request to publish still goes through `require_post_approval`.
+   */
   @IsOptional()
-  @IsString()
+  @IsIn(['draft', 'published'])
   status?: string;
 }

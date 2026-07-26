@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
@@ -5,11 +6,35 @@ import { fetchApiPaginated } from '@/lib/api/server-fetch';
 import { PostListResponse } from '@/types';
 
 async function fetchPosts(page: number, slug: string): Promise<PostListResponse> {
-  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/tags/${slug}/posts?page=${page}&limit=20`, {
-    init: { cache: 'no-store' },
-    fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
-    notFoundOn404: true,
-  });
+  // Encoded: an unencoded slug containing `../` is normalised by fetch and can reach
+  // a different endpoint.
+  return fetchApiPaginated<PostListResponse['data'][number]>(
+    `/api/tags/${encodeURIComponent(slug)}/posts?page=${page}&limit=20`,
+    {
+      init: { cache: 'no-store' },
+      fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
+      notFoundOn404: true,
+    },
+  );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const label = decodeURIComponent(slug);
+  const title = `#${label}`;
+  const description = `标签 ${label} 下的全部帖子`;
+
+  return {
+    title,
+    description,
+    // Paginated variants fold onto page one rather than competing with it.
+    alternates: { canonical: `/tags/${slug}` },
+    openGraph: { title, description, type: 'website', url: `/tags/${slug}` },
+  };
 }
 
 export default async function TagPage({

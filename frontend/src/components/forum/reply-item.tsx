@@ -1,35 +1,43 @@
-'use client';
-
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
-import { Reply } from '@/types';
-import Button from '@/components/ui/button';
-import { LikeButton } from '@/components/forum/like-button';
-import { Quote, Reply as ReplyIcon } from 'lucide-react';
+import ReplyActions from '@/components/forum/reply-actions';
+import { formatTime } from '@/lib/utils';
+import type { Reply } from '@/types';
 
 interface ReplyItemProps {
   reply: Reply;
   index: number;
-  onQuote?: (reply: Reply) => void;
-  onReply?: (reply: Reply) => void;
+  /** Scopes the quote/reply target to this post's composer. */
+  postId: number;
 }
 
-export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemProps) {
-  const handleQuote = onQuote ? () => onQuote(reply) : undefined;
-  const handleReply = onReply ? () => onReply(reply) : undefined;
+/**
+ * A single reply. Deliberately a server component: only the action row below needs
+ * interactivity, so the Markdown is rendered once on the server rather than shipped
+ * to the browser and re-parsed for every reply on the page.
+ */
+export default function ReplyItem({ reply, index, postId }: ReplyItemProps) {
   const authorLabel = reply.author_mindauth_id ?? `#${reply.user_id}`;
-  function formatTime(dateStr: string): string {
-    return new Date(dateStr).toLocaleString('zh-CN');
-  }
 
   return (
-    <div className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 overflow-hidden" id={`reply-${reply.id}`}>
+    <div
+      className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] overflow-hidden"
+      id={`reply-${reply.id}`}
+    >
       {/* Reply Header */}
-      <div className="px-4 py-3 bg-[var(--bg-elevated)] dark:bg-gray-800 border-b border-[var(--border)] dark:border-gray-700 flex items-center justify-between">
+      <div className="px-4 py-3 bg-[var(--bg-elevated)] border-b border-[var(--border)] flex items-center justify-between">
         <div className="flex items-center gap-3 text-sm">
           <span className="font-medium text-[var(--text)]">#{index + 1}</span>
           <span className="text-[var(--text-secondary)]">作者 ID: {authorLabel}</span>
           <span className="text-[var(--text-muted)]">|</span>
-          <span className="text-[var(--text-secondary)]">{formatTime(reply.created_at)}</span>
+          <time
+            dateTime={reply.created_at}
+            className="text-[var(--text-secondary)]"
+            // Relative times differ between server and client render; the server value
+            // is authoritative for the initial paint.
+            suppressHydrationWarning
+          >
+            {formatTime(reply.created_at)}
+          </time>
         </div>
       </div>
 
@@ -38,30 +46,7 @@ export default function ReplyItem({ reply, index, onQuote, onReply }: ReplyItemP
         <MarkdownRenderer content={reply.content} />
       </div>
 
-      {/* Reply Actions */}
-      <div className="px-4 py-3 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] dark:border-gray-700 flex items-center gap-2">
-        <LikeButton type="reply" id={reply.id} initialCount={reply.like_count || 0} />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleQuote}
-          className="text-[var(--text-secondary)]"
-          disabled={!handleQuote}
-        >
-          <Quote className="w-4 h-4 mr-1" />
-          引用
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleReply}
-          className="text-[var(--text-secondary)]"
-          disabled={!handleReply}
-        >
-          <ReplyIcon className="w-4 h-4 mr-1" />
-          回复
-        </Button>
-      </div>
+      <ReplyActions reply={reply} postId={postId} />
     </div>
   );
 }

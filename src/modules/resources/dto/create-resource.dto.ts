@@ -1,4 +1,6 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber } from 'class-validator';
+import {
+  IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf,
+} from 'class-validator';
 
 export class CreateResourceDto {
   @IsString()
@@ -9,12 +11,13 @@ export class CreateResourceDto {
   @IsString()
   description?: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsIn(['upload', 'external'])
   resource_type: string;
 
+  /** Must be a real http(s) URL — see UpdateResourceDto for why. */
   @IsOptional()
-  @IsString()
+  @ValidateIf((_o, value) => value !== '' && value !== null)
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true })
   external_url?: string;
 
   @IsOptional()

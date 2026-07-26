@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth/context';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import VersionSelector from '@/components/ui/version-selector';
 import { Resource, ResourceVersion } from '@/types';
+import { safeHref } from '@/lib/url/safe-url';
 
 function CategoryIcon({ icon }: { icon: string | null }) {
   const IconComponent =
@@ -42,6 +43,9 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const selectedFileName = selectedVersion?.file_name || resource.file_name;
   const isOwner = user?.id === resource.user_id;
   const hasDownloadFile = resource.resource_type === 'upload' || !!selectedVersion;
+  // Rejects `javascript:` and other script-bearing schemes; undefined when unsafe so
+  // no clickable link is rendered at all.
+  const externalHref = safeHref(resource.external_url);
 
   const handleVersionUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,16 +162,18 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             下载 {selectedFileName || '文件'}
           </a>
         )
-      ) : (
+      ) : externalHref ? (
         <a
-          href={resource.external_url || '#'}
+          href={externalHref}
           target="_blank"
-          rel="noopener noreferrer"
+          rel="nofollow noopener noreferrer"
           className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-6 py-3 font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
         >
           <ExternalLink className="h-5 w-5" />
           访问外链
         </a>
+      ) : (
+        <p className="text-sm text-[var(--text-secondary)]">该资源的外部链接无效或已被移除。</p>
       )}
 
       {isOwner && (

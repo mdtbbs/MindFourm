@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, Like, LessThan, In } from 'typeorm';
+import { Repository, DataSource, EntityManager, Like, LessThan, In } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
@@ -13,11 +13,10 @@ import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
 import { PUBLIC_RESOURCE_STATUSES, RESOURCE_STATUS } from '@common/utils/constants';
+import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { MflClientService } from './mfl-client.service';
-import { isValidRating, updateRatingAggregates, validateResourceSort } from './resource-rating.util';
-import * as fs from 'fs/promises';
-import * as path from 'path';
+import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -103,147 +102,138 @@ export class ResourcesService {
     };
   }
 
-  private async deleteStoredFile(filePath?: string | null): Promise<void> {
-    if (!filePath) return;
+  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta, mflMeta?: MflFileMeta): Promise<any> {
+    const categoryId = this.toOptionalNumber((dto as any).category_id);
+    const resourceType = this.normalizeResourceType(dto.resource_type);
+    const useMfl = !!dto.use_mfl;
 
-    try {
-      await fs.unlink(path.resolve(filePath));
-    } catch {
-      console.warn(`File not found: ${filePath}`);
+    const category = categoryId
+      ? await this.categoryRepository.findOne({ where: { id: categoryId } })
+      : null;
+    if (categoryId && !category) {
+      throw new BadRequestException('Category does not exist');
     }
+
+    if (!['upload', 'external'].includes(resourceType)) {
+      throw new BadRequestException('Invalid resource type');
+    }
+
+    if (resourceType === 'upload' && !file && !mflMeta) {
+      throw new BadRequestException('A file is required for uploaded resources');
+    }
+
+    if (resourceType === 'external' && !dto.external_url) {
+      throw new BadRequestException('An external URL is required');
+    }
+
+    const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
+
+    const newResource = this.resourceRepository.create({
+      user_id: userId,
+      title: dto.title,
+      description: dto.description,
+      resource_type: resourceType,
+      file_name: useMfl && mflMeta ? mflMeta.file_name : file?.file_name,
+      file_path: useMfl && mflMeta ? undefined : file?.file_path,
+      file_size: useMfl && mflMeta ? mflMeta.file_size : file?.file_size,
+      mime_type: useMfl && mflMeta ? mflMeta.mime_type : file?.mime_type,
+      external_url: resourceType === 'external' ? dto.external_url : undefined,
+      version: dto.version,
+      content: dto.content,
+      content_html: contentHtml,
+      category_id: categoryId,
+      is_public: this.toTinyInt((dto as any).is_public, 1),
+      status: RESOURCE_STATUS_PENDING,
+      download_count: 0,
+      use_mfl: useMfl && mflMeta ? 1 : 0,
+    });
+
+    const saved = await this.resourceRepository.save(newResource);
+
+    if (useMfl && mflMeta) {
+      await this.attachMflUpload(saved.id, mflMeta, category?.slug || 'uncategorized');
+    }
+
+    const finalResult = await this.resourceRepository.findOne({
+      where: { id: saved.id },
+      relations: ['user', 'category'],
+    });
+
+    if (!finalResult) {
+      throw new NotFoundException('Resource does not exist');
+    }
+
+    if (finalResult.status === RESOURCE_STATUS_PENDING) {
+      this.adminNotificationsService.publishModerationPending({
+        item_type: 'resource',
+        item_id: finalResult.id,
+        title: finalResult.title,
+        content: dto.description || dto.content || dto.external_url || mflMeta?.file_name || file?.file_name || null,
+        author_username: finalResult.user?.username || `#${userId}`,
+        action_url: '/admin/resources/moderation',
+      }).catch((err) =>
+        console.error('Admin resource moderation notification error:', err),
+      );
+    }
+
+    return this.normalizeResource(finalResult);
   }
 
-  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta, mflMeta?: MflFileMeta): Promise<any> {
-    return this.dataSource.transaction(async (manager) => {
-      const categoryId = this.toOptionalNumber((dto as any).category_id);
-      const resourceType = this.normalizeResourceType(dto.resource_type);
-      const useMfl = !!dto.use_mfl;
+  /**
+   * Push an already-persisted resource's payload to MindFileList and record the
+   * identifiers it hands back.
+   *
+   * Deliberately outside any database transaction. The upload used to run inside
+   * `create`'s transaction, so a 50 MB POST held a connection and row locks open
+   * for its whole duration — and the compensating `manager.delete` on the failure
+   * path was itself inside the doomed transaction, so it rolled back with
+   * everything else and the uploaded file was orphaned on MFL forever.
+   *
+   * The resource row is committed as `pending` first: a metadata row with no
+   * download URL is harmless (moderation hides it either way), whereas a remote
+   * file with nothing pointing at it is unreclaimable.
+   */
+  private async attachMflUpload(
+    resourceId: number,
+    mflMeta: MflFileMeta,
+    categorySlug: string,
+  ): Promise<void> {
+    let mflResult: Awaited<ReturnType<MflClientService['uploadFile']>>;
+    try {
+      mflResult = await this.mflClientService.uploadFile(
+        mflMeta.file_buffer,
+        mflMeta.file_name,
+        categorySlug,
+        mflMeta.mime_type,
+        { resourceId },
+      );
+    } catch (err) {
+      // Nothing was stored remotely, so the placeholder row is safe to drop.
+      await this.resourceRepository.delete(resourceId);
+      throw err;
+    }
 
-      if (categoryId) {
-        const category = await manager.findOne(ResourceCategory, {
-          where: { id: categoryId },
-        });
-        if (!category) {
-          throw new BadRequestException('Category does not exist');
-        }
-      }
+    if (!mflResult) {
+      await this.resourceRepository.delete(resourceId);
+      throw new BadRequestException('MindFileList service is not configured. Please upload locally or contact an admin.');
+    }
 
-      if (!['upload', 'external'].includes(resourceType)) {
-        throw new BadRequestException('Invalid resource type');
-      }
-
-      if (resourceType === 'upload' && !file && !mflMeta) {
-        throw new BadRequestException('A file is required for uploaded resources');
-      }
-
-      if (resourceType === 'external' && !dto.external_url) {
-        throw new BadRequestException('An external URL is required');
-      }
-
-      let savedResourceId: number;
-
-      if (useMfl && mflMeta) {
-        const categorySlug = categoryId
-          ? (await manager.findOne(ResourceCategory, { where: { id: categoryId } }))?.slug || 'uncategorized'
-          : 'uncategorized';
-
-        // Create resource first to get an ID for MFL
-        const tempResource = manager.create(Resource, {
-          user_id: userId,
-          title: dto.title,
-          resource_type: resourceType,
-          status: 'pending',
-        });
-        const tempSaved = await manager.save(tempResource);
-        savedResourceId = tempSaved.id;
-
-        const mflResult = await this.mflClientService.uploadFile(
-          mflMeta.file_buffer,
-          mflMeta.file_name,
-          categorySlug,
-          mflMeta.mime_type,
-          { resourceId: tempSaved.id },
-        );
-
-        if (!mflResult) {
-          // MFL not configured — clean up the temp record and fail
-          await manager.delete(Resource, tempSaved.id);
-          throw new BadRequestException('MindFileList service is not configured. Please upload locally or contact an admin.');
-        }
-
-        const mflFileId = mflResult.id;
-        const mflDownloadUrl = this.mflClientService.getDownloadUrl(mflResult.id);
-
-        // Update the resource with MFL metadata
-        const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
-
-        await manager.update(Resource, tempSaved.id, {
-          description: dto.description,
-          resource_type: resourceType,
-          file_name: mflMeta.file_name,
-          file_size: mflMeta.file_size,
-          mime_type: mflMeta.mime_type,
-          external_url: undefined,
-          version: dto.version,
-          content: dto.content,
-          content_html: contentHtml,
-          category_id: categoryId,
-          is_public: this.toTinyInt((dto as any).is_public, 1),
-          download_count: 0,
-          use_mfl: 1,
-          mfl_file_id: mflFileId,
-          mfl_download_url: mflDownloadUrl,
-        } as any);
-      } else {
-        // Standard local upload
-        const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
-
-        const newResource = manager.create(Resource, {
-          user_id: userId,
-          title: dto.title,
-          description: dto.description,
-          resource_type: resourceType,
-          file_name: file?.file_name,
-          file_path: file?.file_path,
-          file_size: file?.file_size,
-          mime_type: file?.mime_type,
-          external_url: resourceType === 'external' ? dto.external_url : undefined,
-          version: dto.version,
-          content: dto.content,
-          content_html: contentHtml,
-          category_id: categoryId,
-          is_public: this.toTinyInt((dto as any).is_public, 1),
-          status: 'pending',
-          download_count: 0,
-        });
-        const saved = await manager.save(newResource);
-        savedResourceId = saved.id;
-      }
-
-      const finalResult = await manager.findOne(Resource, {
-        where: { id: savedResourceId },
-        relations: ['user', 'category'],
+    try {
+      await this.resourceRepository.update(resourceId, {
+        mfl_file_id: mflResult.id,
+        mfl_download_url: this.mflClientService.getDownloadUrl(mflResult.id),
       });
-
-      if (!finalResult) {
-        throw new NotFoundException('Resource does not exist');
-      }
-
-      if (finalResult.status === RESOURCE_STATUS_PENDING) {
-        this.adminNotificationsService.publishModerationPending({
-          item_type: 'resource',
-          item_id: finalResult.id,
-          title: finalResult.title,
-          content: dto.description || dto.content || dto.external_url || mflMeta?.file_name || file?.file_name || null,
-          author_username: finalResult.user?.username || `#${userId}`,
-          action_url: '/admin/resources/moderation',
-        }).catch((err) =>
-          console.error('Admin resource moderation notification error:', err),
-        );
-      }
-
-      return this.normalizeResource(finalResult);
-    });
+    } catch (err) {
+      // The file exists on MFL but nothing will ever reference it — block it from
+      // being downloaded before discarding the row.
+      await this.mflClientService.blockDownloads(
+        mflResult.id,
+        resourceId,
+        'the forum could not record the upload',
+      );
+      await this.resourceRepository.delete(resourceId);
+      throw err;
+    }
   }
 
   async getList(
@@ -330,7 +320,34 @@ export class ResourcesService {
     };
   }
 
-  async getById(id: number): Promise<any> {
+  /**
+   * Authorize a single-resource read.
+   *
+   * Enforces the same scoping `getList` applies to lists. Without it, fetching by
+   * id returned pending and rejected resources — and, via the download route,
+   * served their files — which defeated the moderation queue entirely and turned
+   * `external_url` into an open redirect that needed no approval.
+   */
+  private assertResourceVisible(
+    resource: { status?: string; is_public?: number; user_id?: number },
+    viewer?: { id: number; role: string },
+  ): void {
+    const isStaff = !!viewer && ['admin', 'moderator'].includes(viewer.role);
+    const isOwner = !!viewer && resource.user_id === viewer.id;
+    if (isStaff || isOwner) {
+      return;
+    }
+
+    const isApproved = (PUBLIC_RESOURCE_STATUSES as readonly string[]).includes(
+      resource.status ?? '',
+    );
+    if (!isApproved || resource.is_public !== 1) {
+      // 404 rather than 403 so unapproved submissions are not enumerable.
+      throw new NotFoundException('Resource does not exist');
+    }
+  }
+
+  async getById(id: number, viewer?: { id: number; role: string }): Promise<any> {
     const resource = await this.resourceRepository.findOne({
       where: { id },
       relations: ['user', 'category'],
@@ -339,11 +356,13 @@ export class ResourcesService {
     if (!resource) {
       throw new NotFoundException('Resource does not exist');
     }
+
+    this.assertResourceVisible(resource, viewer);
 
     return this.normalizeResource(resource);
   }
 
-  async getByIdWithVersions(id: number): Promise<any> {
+  async getByIdWithVersions(id: number, viewer?: { id: number; role: string }): Promise<any> {
     const resource = await this.resourceRepository.findOne({
       where: { id },
       relations: ['user', 'category'],
@@ -352,6 +371,8 @@ export class ResourcesService {
     if (!resource) {
       throw new NotFoundException('Resource does not exist');
     }
+
+    this.assertResourceVisible(resource, viewer);
 
     const versions = await this.versionRepository.find({
       where: { resource_id: id },
@@ -421,7 +442,12 @@ export class ResourcesService {
     };
   }
 
-  async update(id: number, userId: number, dto: UpdateResourceDto): Promise<any> {
+  async update(
+    id: number,
+    userId: number,
+    dto: UpdateResourceDto,
+    userRole?: string,
+  ): Promise<any> {
     return this.dataSource.transaction(async (manager) => {
       const resource = await manager.findOne(Resource, {
         where: { id },
@@ -432,7 +458,9 @@ export class ResourcesService {
         throw new NotFoundException('Resource does not exist');
       }
 
-      if (resource.user_id !== userId) {
+      // Staff may edit any resource — this branch was missing, unlike PostsService.
+      const isStaff = userRole === 'admin' || userRole === 'moderator';
+      if (resource.user_id !== userId && !isStaff) {
         throw new ForbiddenException('No permission to edit this resource');
       }
 
@@ -457,7 +485,12 @@ export class ResourcesService {
         }
         updateData.resource_type = resourceType;
       }
-      if (dto.external_url !== undefined) updateData.external_url = dto.external_url;
+      if (dto.external_url !== undefined) {
+        if (dto.external_url && !isSafeExternalUrl(dto.external_url)) {
+          throw new BadRequestException('外部链接必须是 http 或 https 地址');
+        }
+        updateData.external_url = dto.external_url;
+      }
       if (dto.version !== undefined) updateData.version = dto.version;
       if (dto.content !== undefined) {
         updateData.content = dto.content;
@@ -466,6 +499,19 @@ export class ResourcesService {
       if ((dto as any).category_id !== undefined) updateData.category_id = categoryId;
       if ((dto as any).is_public !== undefined) {
         updateData.is_public = this.toTinyInt((dto as any).is_public, resource.is_public);
+      }
+
+      // Changing what people actually download has to go back through moderation.
+      // Otherwise an owner could get a benign resource approved and then swap
+      // `external_url` for a malware link while keeping the approved badge.
+      const payloadChanged =
+        (dto.external_url !== undefined && dto.external_url !== resource.external_url) ||
+        (dto.resource_type !== undefined &&
+          updateData.resource_type !== undefined &&
+          updateData.resource_type !== resource.resource_type);
+
+      if (payloadChanged && !isStaff && PUBLIC_RESOURCE_STATUSES.includes(resource.status as any)) {
+        updateData.status = 'pending';
       }
 
       await manager.update(Resource, id, updateData);
@@ -483,7 +529,7 @@ export class ResourcesService {
     });
   }
 
-  async delete(id: number, userId: number): Promise<void> {
+  async delete(id: number, userId: number, userRole?: string): Promise<void> {
     const resource = await this.resourceRepository.findOne({
       where: { id },
       relations: ['user'],
@@ -493,19 +539,12 @@ export class ResourcesService {
       throw new NotFoundException('Resource does not exist');
     }
 
-    if (resource.user_id !== userId) {
+    const isStaff = userRole === 'admin' || userRole === 'moderator';
+    if (resource.user_id !== userId && !isStaff) {
       throw new ForbiddenException('No permission to delete this resource');
     }
 
-    await this.deleteStoredFile(resource.file_path);
-
-    const versions = await this.versionRepository.find({ where: { resource_id: id } });
-    for (const version of versions) {
-      await this.deleteStoredFile(version.file_path);
-    }
-
-    await this.versionRepository.delete({ resource_id: id });
-    await this.resourceRepository.delete(id);
+    await this.softDeleteResource(resource);
   }
 
   async adminDelete(id: number): Promise<void> {
@@ -517,15 +556,32 @@ export class ResourcesService {
       throw new NotFoundException('Resource does not exist');
     }
 
-    await this.deleteStoredFile(resource.file_path);
+    await this.softDeleteResource(resource);
+  }
 
-    const versions = await this.versionRepository.find({ where: { resource_id: id } });
-    for (const version of versions) {
-      await this.deleteStoredFile(version.file_path);
+  /**
+   * Retire a resource, matching how posts and replies are deleted.
+   *
+   * `resources.deleted_at` has existed for a while, so hard-deleting the row (and
+   * its versions, and the files on disk) was both inconsistent with the rest of
+   * the forum and unrecoverable. Once the row is soft-deleted the entity's
+   * `@DeleteDateColumn` hides it from every read, so the forum stops serving it.
+   *
+   * An MFL-hosted payload is reachable by direct link regardless of what the forum
+   * shows, so it is explicitly quarantined. Local files stay on disk until the row
+   * is purged — see the note in the accompanying report; no retention sweep covers
+   * `resources` yet.
+   */
+  private async softDeleteResource(resource: Resource): Promise<void> {
+    if (resource.use_mfl && resource.mfl_file_id) {
+      await this.mflClientService.blockDownloads(
+        resource.mfl_file_id,
+        resource.id,
+        'the forum resource was deleted',
+      );
     }
 
-    await this.versionRepository.delete({ resource_id: id });
-    await this.resourceRepository.delete(id);
+    await this.resourceRepository.softDelete(resource.id);
   }
 
   async updateStatus(
@@ -615,84 +671,111 @@ export class ResourcesService {
       throw new BadRequestException('Rating must be an integer between 1 and 5');
     }
 
-    const resource = await this.resourceRepository.findOne({ where: { id: resourceId } });
-    if (!resource) {
-      throw new NotFoundException('Resource does not exist');
-    }
+    return this.dataSource.transaction(async (manager) => {
+      const resource = await manager.findOne(Resource, { where: { id: resourceId } });
+      if (!resource) {
+        throw new NotFoundException('Resource does not exist');
+      }
 
-    // Check if user already rated
-    const existingRating = await this.ratingRepository.findOne({
-      where: { resource_id: resourceId, user_id: userId },
-    });
-
-    const oldRating = existingRating?.rating ?? null;
-
-    // Update or create the rating
-    if (existingRating) {
-      existingRating.rating = rating;
-      await this.ratingRepository.save(existingRating);
-    } else {
-      const newRating = this.ratingRepository.create({
-        resource_id: resourceId,
-        user_id: userId,
-        rating,
+      // Locking the caller's own rating row (there is a unique index on
+      // resource_id+user_id) serialises concurrent submissions from the same user,
+      // so `oldRating` cannot go stale between here and the aggregate update.
+      const existingRating = await manager.findOne(ResourceRating, {
+        where: { resource_id: resourceId, user_id: userId },
+        lock: { mode: 'pessimistic_write' },
       });
-      await this.ratingRepository.save(newRating);
-    }
 
-    // Update aggregates
-    const aggregates = updateRatingAggregates(
-      resource.rating_count || 0,
-      resource.rating_sum || 0,
-      oldRating,
-      rating,
-    );
+      const oldRating = existingRating?.rating ?? null;
 
-    await this.resourceRepository.update(resourceId, aggregates);
+      if (existingRating) {
+        await manager.update(ResourceRating, existingRating.id, { rating });
+      } else {
+        await manager.save(
+          ResourceRating,
+          manager.create(ResourceRating, {
+            resource_id: resourceId,
+            user_id: userId,
+            rating,
+          }),
+        );
+      }
 
-    const updatedResource = await this.resourceRepository.findOne({
-      where: { id: resourceId },
-      relations: ['user', 'category'],
+      await this.applyRatingDelta(manager, resourceId, oldRating, rating);
+
+      const updatedResource = await manager.findOne(Resource, {
+        where: { id: resourceId },
+        relations: ['user', 'category'],
+      });
+
+      return this.normalizeResource(updatedResource!);
     });
-
-    return this.normalizeResource(updatedResource!);
   }
 
   /**
    * Delete a user's rating for a resource.
    */
   async deleteRating(resourceId: number, userId: number): Promise<any> {
-    const resource = await this.resourceRepository.findOne({ where: { id: resourceId } });
-    if (!resource) {
-      throw new NotFoundException('Resource does not exist');
-    }
+    return this.dataSource.transaction(async (manager) => {
+      const resource = await manager.findOne(Resource, { where: { id: resourceId } });
+      if (!resource) {
+        throw new NotFoundException('Resource does not exist');
+      }
 
-    const existingRating = await this.ratingRepository.findOne({
-      where: { resource_id: resourceId, user_id: userId },
+      const existingRating = await manager.findOne(ResourceRating, {
+        where: { resource_id: resourceId, user_id: userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+
+      if (!existingRating) {
+        throw new NotFoundException('Rating not found');
+      }
+
+      await manager.delete(ResourceRating, existingRating.id);
+
+      await this.applyRatingDelta(manager, resourceId, existingRating.rating, null);
+
+      const updatedResource = await manager.findOne(Resource, {
+        where: { id: resourceId },
+        relations: ['user', 'category'],
+      });
+
+      return this.normalizeResource(updatedResource!);
     });
+  }
 
-    if (!existingRating) {
-      throw new NotFoundException('Rating not found');
+  /**
+   * Apply a rating change to the denormalized aggregates in a single statement.
+   *
+   * The counters are shifted by a delta rather than overwritten with values
+   * computed in JS from an earlier SELECT: two users rating a resource at the same
+   * time both read the same `rating_count`/`rating_sum` and the second write
+   * silently discarded the first, corrupting the aggregate for good.
+   *
+   * `rating_average` is derived in the same statement — MySQL evaluates SET
+   * expressions left to right and later ones see the already-updated columns.
+   * GREATEST(..., 0) keeps a replayed delete from pushing the counters negative.
+   */
+  private async applyRatingDelta(
+    manager: EntityManager,
+    resourceId: number,
+    oldRating: number | null,
+    newRating: number | null,
+  ): Promise<void> {
+    const { countDelta, sumDelta } = ratingAggregateDelta(oldRating, newRating);
+    if (countDelta === 0 && sumDelta === 0) {
+      return;
     }
 
-    await this.ratingRepository.delete(existingRating.id);
-
-    // Update aggregates
-    const aggregates = updateRatingAggregates(
-      resource.rating_count || 0,
-      resource.rating_sum || 0,
-      existingRating.rating,
-      null,
+    await manager.query(
+      `UPDATE resources
+          SET rating_count = GREATEST(rating_count + ?, 0),
+              rating_sum = GREATEST(rating_sum + ?, 0),
+              rating_average = CASE WHEN rating_count > 0
+                                    THEN ROUND(rating_sum / rating_count, 2)
+                                    ELSE 0 END
+        WHERE id = ?`,
+      [countDelta, sumDelta, resourceId],
     );
-
-    await this.resourceRepository.update(resourceId, aggregates);
-
-    const updatedResource = await this.resourceRepository.findOne({
-      where: { id: resourceId },
-      relations: ['user', 'category'],
-    });
-
-    return this.normalizeResource(updatedResource!);
   }
 
   /**

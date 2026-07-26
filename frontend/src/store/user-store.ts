@@ -5,10 +5,15 @@
  * Provides persistent user state across page refreshes
  */
 
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { User } from '@/types';
-import { authApi } from '@/lib/api/client';
+import { authApi, resetApiCache } from '@/lib/api/client';
+import { clearUserScopedState } from './reset-registry';
+
+/** Upper bound on how long logout waits for the server before navigating away. */
+const LOGOUT_TIMEOUT_MS = 5000;
 
 interface UserState {
   user: User | null;
@@ -41,22 +46,30 @@ export const useUserStore = create<UserState>()(
           isLoading: false,
         });
 
-        // Clear MindAuth session token from localStorage
+        // Drop every other user's cached/persisted state too. Resetting only this
+        // store left the previous account's unread count, settings and like states
+        // in place — and the response cache serving their data for up to 30s.
+        resetApiCache();
+        clearUserScopedState();
+
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('mindauth_session_token');
-
           const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
-          const currentUrl = window.location.href;
-          const redirectUri = encodeURIComponent(currentUrl);
-          let redirected = false;
-          const redirectToMindAuthLogout = () => {
-            if (redirected) return;
-            redirected = true;
-            window.location.href = `${mindauthUrl}/logout?redirect_uri=${redirectUri}`;
-          };
+          const redirectUri = encodeURIComponent(window.location.href);
+          const logoutUrl = `${mindauthUrl}/logout?redirect_uri=${redirectUri}`;
 
-          authApi.logout().finally(redirectToMindAuthLogout);
-          window.setTimeout(redirectToMindAuthLogout, 1500);
+          // Wait for the forum session to actually be destroyed before leaving. The
+          // previous version raced a 1.5s timer against the request, so a slow
+          // response meant navigating away with the session still alive. The cap is
+          // now generous enough to normally complete, but still bounded so a hung
+          // request cannot trap the user on the page.
+          const logoutRequest = authApi.logout().catch(() => undefined);
+          const timeout = new Promise<void>((resolve) =>
+            window.setTimeout(resolve, LOGOUT_TIMEOUT_MS),
+          );
+
+          Promise.race([logoutRequest, timeout]).finally(() => {
+            window.location.href = logoutUrl;
+          });
         }
       },
 
@@ -64,22 +77,10 @@ export const useUserStore = create<UserState>()(
         try {
           set({ isLoading: true });
 
-          // Check for MindAuth session token first
-          const mindauthToken = typeof window !== 'undefined'
-            ? localStorage.getItem('mindauth_session_token')
-            : null;
-
-          if (mindauthToken) {
-            // Try to verify session
-            try {
-              await authApi.verifySession(mindauthToken);
-            } catch {
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('mindauth_session_token');
-              }
-            }
-          }
-
+          // The session lives in the HttpOnly `forum_session` cookie, so there is
+          // nothing to verify client-side. (A previous branch here read a
+          // `mindauth_session_token` from localStorage that nothing ever wrote, and
+          // POSTed it to a route that was never registered.)
           const response = await authApi.check();
           if (response.authenticated) {
             set({
@@ -118,13 +119,16 @@ export const useUserStore = create<UserState>()(
 // Export hooks for backward compatibility with existing components
 // This allows gradual migration without breaking existing code
 export function useAuth() {
-  const store = useUserStore();
+  // Field-level selectors rather than a bare `useUserStore()`, which subscribed
+  // every consumer to the entire store.
+  const user = useUserStore((state) => state.user);
+  const isAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const isLoading = useUserStore((state) => state.isLoading);
+  const logout = useUserStore((state) => state.logout);
+  const refreshAuth = useUserStore((state) => state.refreshAuth);
 
-  return {
-    user: store.user,
-    isAuthenticated: store.isAuthenticated,
-    isLoading: store.isLoading,
-    logout: store.logout,
-    refreshAuth: store.refreshAuth,
-  };
+  return useMemo(
+    () => ({ user, isAuthenticated, isLoading, logout, refreshAuth }),
+    [user, isAuthenticated, isLoading, logout, refreshAuth],
+  );
 }

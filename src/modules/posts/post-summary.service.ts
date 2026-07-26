@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
+import { VISIBLE_REPLY_STATUSES } from '@common/utils/constants';
 
 export interface PostSummaryTag {
   id: number;
@@ -148,8 +149,7 @@ export class PostSummaryService {
       .select('reply.post_id', 'post_id')
       .addSelect('COUNT(reply.id)', 'count')
       .where('reply.post_id IN (:...postIds)', { postIds })
-      // Historical data uses both "active" and "published" for visible replies.
-      .andWhere('reply.status IN (:...statuses)', { statuses: ['active', 'published'] })
+      .andWhere('reply.status IN (:...statuses)', { statuses: VISIBLE_REPLY_STATUSES })
       .groupBy('reply.post_id')
       .getRawMany<{ post_id: string; count: string }>();
 

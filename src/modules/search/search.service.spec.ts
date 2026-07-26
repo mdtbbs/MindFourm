@@ -1,3 +1,33 @@
+const decorator = () => () => undefined;
+
+jest.mock('@nestjs/typeorm', () => ({
+  InjectRepository: () => () => undefined,
+}));
+
+jest.mock('typeorm', () => ({
+  Repository: class Repository {},
+  Entity: decorator,
+  PrimaryGeneratedColumn: decorator,
+  PrimaryColumn: decorator,
+  Column: decorator,
+  ManyToOne: decorator,
+  OneToMany: decorator,
+  ManyToMany: decorator,
+  OneToOne: decorator,
+  JoinColumn: decorator,
+  JoinTable: decorator,
+  CreateDateColumn: decorator,
+  UpdateDateColumn: decorator,
+  DeleteDateColumn: decorator,
+  Index: decorator,
+  Unique: decorator,
+}));
+
+jest.mock('@entities/post.entity', () => ({ Post: class Post {} }));
+jest.mock('@entities/tag.entity', () => ({ Tag: class Tag {} }));
+jest.mock('@entities/category.entity', () => ({ Category: class Category {} }));
+jest.mock('@entities/user.entity', () => ({ User: class User {} }));
+
 import { SearchService } from './search.service';
 
 function createQueryBuilder(posts: any[], total: number) {

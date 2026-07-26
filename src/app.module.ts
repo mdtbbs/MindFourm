@@ -39,6 +39,8 @@ import { PluginsModule } from './modules/plugins/plugins.module';
 import { SearchModule } from './modules/search/search.module';
 import { ServiceApiModule } from './modules/service-api/service-api.module';
 import { PhoneWriteGuard } from './common/guards/phone-write.guard';
+import { BanGuard } from './common/guards/ban.guard';
+import { RateLimitGuard } from './common/guards/rate-limit.guard';
 
 @Module({
   imports: [
@@ -47,18 +49,16 @@ import { PhoneWriteGuard } from './common/guards/phone-write.guard';
       load: [appConfig],
     }),
     DatabaseModule,
+    // Avatars are public by nature, so serving them statically is fine.
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads', 'avatars'),
       serveRoot: '/uploads/avatars',
     }),
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads', 'attachments'),
-      serveRoot: '/uploads/attachments',
-    }),
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'uploads', 'resources'),
-      serveRoot: '/uploads/resources',
-    }),
+    // Attachments and resource files are NOT mounted statically: doing so served
+    // them outside every controller, so files belonging to pending, rejected,
+    // soft-deleted or group-restricted content were downloadable by path. They are
+    // streamed instead by AttachmentsController and ResourcesController, which check
+    // visibility first.
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'public'),
       serveRoot: '/public',
@@ -96,7 +96,19 @@ import { PhoneWriteGuard } from './common/guards/phone-write.guard';
     ServiceApiModule,
   ],
   controllers: [HealthController],
+  // Global guards run in registration order, before any controller-scoped guard.
+  // BanGuard is first so a blocked IP is rejected without touching Redis or the
+  // database; rate limiting comes next; PhoneWriteGuard last because it resolves
+  // the session and is the most expensive.
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: BanGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: PhoneWriteGuard,

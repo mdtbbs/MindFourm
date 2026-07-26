@@ -1,3 +1,37 @@
+const decorator = () => () => undefined;
+
+jest.mock('@nestjs/typeorm', () => ({
+  InjectRepository: () => () => undefined,
+}));
+
+jest.mock('typeorm', () => ({
+  Repository: class Repository {},
+  DataSource: class DataSource {},
+  In: jest.fn((value) => ({ _type: 'in', _value: value })),
+  IsNull: jest.fn(() => ({ _type: 'isNull' })),
+  Not: jest.fn((value) => ({ _type: 'not', _value: value })),
+  Entity: decorator,
+  PrimaryGeneratedColumn: decorator,
+  PrimaryColumn: decorator,
+  Column: decorator,
+  ManyToOne: decorator,
+  OneToMany: decorator,
+  ManyToMany: decorator,
+  OneToOne: decorator,
+  JoinColumn: decorator,
+  JoinTable: decorator,
+  CreateDateColumn: decorator,
+  UpdateDateColumn: decorator,
+  DeleteDateColumn: decorator,
+  Index: decorator,
+  Unique: decorator,
+}));
+
+jest.mock('@entities/resource.entity', () => ({ Resource: class Resource {} }));
+jest.mock('@entities/resource-category.entity', () => ({ ResourceCategory: class ResourceCategory {} }));
+jest.mock('@entities/resource-version.entity', () => ({ ResourceVersion: class ResourceVersion {} }));
+jest.mock('@entities/user.entity', () => ({ User: class User {} }));
+
 import { ResourcesService } from './resources.service';
 
 function createService(overrides: {
@@ -12,6 +46,16 @@ function createService(overrides: {
     findOne: jest.fn(),
     update: jest.fn().mockResolvedValue(undefined),
     count: jest.fn().mockResolvedValue(0),
+    // Creation no longer goes through a transaction manager: the MindFileList upload
+    // has to happen outside the transaction, so the row is persisted via the
+    // repository directly.
+    create: jest.fn().mockImplementation((value: unknown) => value),
+    save: jest.fn().mockImplementation(async (value: unknown) => ({
+      id: 81,
+      ...(value as Record<string, unknown>),
+    })),
+    delete: jest.fn().mockResolvedValue(undefined),
+    increment: jest.fn().mockResolvedValue(undefined),
     ...overrides.resourceRepository,
   };
   const manager = {
@@ -97,8 +141,10 @@ describe('ResourcesService', () => {
   });
 
   it('publishes a moderation pending notification when a resource is created for review', async () => {
-    const { service, adminNotificationsService, manager } = createService({
-      manager: {
+    // Creation persists via the repository rather than a transaction manager, so the
+    // post-save re-read is mocked there.
+    const { service, adminNotificationsService, resourceRepository } = createService({
+      resourceRepository: {
         findOne: jest.fn().mockResolvedValue({
           id: 81,
           title: 'Useful Pack',
@@ -130,7 +176,7 @@ describe('ResourcesService', () => {
       },
     );
 
-    expect(manager.save).toHaveBeenCalledTimes(1);
+    expect(resourceRepository.save).toHaveBeenCalledTimes(1);
     expect(adminNotificationsService.publishModerationPending).toHaveBeenCalledWith({
       item_type: 'resource',
       item_id: 81,

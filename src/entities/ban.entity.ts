@@ -1,8 +1,10 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn,
+  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
+// BanGuard checks every request as a (ban_type, value, is_active) lookup.
+@Index('idx_bans_type_value_active', ['ban_type', 'value', 'is_active'])
 @Entity('bans')
 export class Ban {
   @PrimaryGeneratedColumn()

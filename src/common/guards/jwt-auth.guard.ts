@@ -4,12 +4,14 @@ import {
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY, IS_OPTIONAL_AUTH_KEY } from '../decorators/public.decorator';
 import { AuthService } from '../../modules/auth/auth.service';
+import { BansService } from '../../modules/bans/bans.service';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private authService: AuthService,
     private reflector: Reflector,
+    private bansService: BansService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -38,6 +40,11 @@ export class JwtAuthGuard implements CanActivate {
       if (isOptional) return true;
       throw new UnauthorizedException('会话已过期');
     }
+
+    // Enforced here rather than in the global BanGuard, which runs before any user
+    // is resolved. Applies to optional-auth routes too: a banned user should not
+    // get the authenticated view of a public page.
+    await this.bansService.assertUserNotBanned(user.id);
 
     request.user = user;
     this.assertPhoneVerifiedForWrites(request);

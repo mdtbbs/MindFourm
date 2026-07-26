@@ -37,6 +37,39 @@ export function calculateAverageRating(ratingCount: number, ratingSum: number): 
 }
 
 /**
+ * Compute how a rating change shifts the denormalized aggregate columns.
+ *
+ * Deltas rather than absolute values, so callers can express the update as
+ * `rating_count = rating_count + ?` in SQL. Deriving absolutes from a prior
+ * SELECT is what let two concurrent raters each overwrite the other's
+ * contribution and corrupt `rating_count`/`rating_sum` permanently.
+ *
+ * @param oldRating - The previous rating value (null if newly rated)
+ * @param newRating - The new rating value (null if the rating is being removed)
+ */
+export function ratingAggregateDelta(
+  oldRating: number | null,
+  newRating: number | null,
+): { countDelta: number; sumDelta: number } {
+  let countDelta = 0;
+  let sumDelta = 0;
+
+  // Remove old rating if it exists
+  if (oldRating !== null) {
+    countDelta -= 1;
+    sumDelta -= oldRating;
+  }
+
+  // Add new rating if it exists
+  if (newRating !== null) {
+    countDelta += 1;
+    sumDelta += newRating;
+  }
+
+  return { countDelta, sumDelta };
+}
+
+/**
  * Update aggregate columns after a rating change.
  * This is used to maintain denormalized rating_count, rating_sum, and rating_average
  * on the resources table.
@@ -53,31 +86,16 @@ export function updateRatingAggregates(
   oldRating: number | null,
   newRating: number | null,
 ): { rating_count: number; rating_sum: number; rating_average: number } {
-  let count = currentCount;
-  let sum = currentSum;
-
-  // Remove old rating if it exists
-  if (oldRating !== null) {
-    count -= 1;
-    sum -= oldRating;
-  }
-
-  // Add new rating if it exists
-  if (newRating !== null) {
-    count += 1;
-    sum += newRating;
-  }
+  const { countDelta, sumDelta } = ratingAggregateDelta(oldRating, newRating);
 
   // Ensure non-negative values
-  count = Math.max(0, count);
-  sum = Math.max(0, sum);
-
-  const average = calculateAverageRating(count, sum);
+  const count = Math.max(0, currentCount + countDelta);
+  const sum = Math.max(0, currentSum + sumDelta);
 
   return {
     rating_count: count,
     rating_sum: sum,
-    rating_average: average,
+    rating_average: calculateAverageRating(count, sum),
   };
 }
 

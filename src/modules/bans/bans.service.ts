@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Ban, User } from '@entities/index';
@@ -9,10 +9,89 @@ interface BanCacheEntry {
   reason: string | null;
 }
 
+/**
+ * Strip the IPv4-mapped IPv6 prefix so `::ffff:203.0.113.5` compares equal to
+ * `203.0.113.5`.
+ */
+export function normalizeIp(ip: string): string {
+  return (ip || '').trim().replace(/^::ffff:/i, '');
+}
+
+/**
+ * Parse a dotted-quad IPv4 address into a 32-bit number, or null if it is not one.
+ *
+ * The previous version used `parseInt` per octet without validating, so an IPv6
+ * address produced NaN. `NaN & mask` is 0, which made every IPv6 client match any
+ * range whose network address also computed to 0 (`0.0.0.0/8`, for instance).
+ */
+export function ipv4ToNum(ip: string): number | null {
+  const octets = normalizeIp(ip).split('.');
+  if (octets.length !== 4) {
+    return null;
+  }
+
+  let result = 0;
+  for (const octet of octets) {
+    if (!/^\d{1,3}$/.test(octet)) {
+      return null;
+    }
+    const value = Number(octet);
+    if (value > 255) {
+      return null;
+    }
+    result = result * 256 + value;
+  }
+  return result;
+}
+
+/** Whether a string is a well-formed IPv4 CIDR block. */
+export function isValidCidr(cidr: string): boolean {
+  const [range, bits] = (cidr || '').split('/');
+  if (bits === undefined || !/^\d{1,2}$/.test(bits) || Number(bits) > 32) {
+    return false;
+  }
+  return ipv4ToNum(range) !== null;
+}
+
+/**
+ * Whether an IPv4 address falls inside a CIDR block.
+ *
+ * Returns false for anything malformed rather than guessing: a value with no `/`
+ * suffix used to yield a mask of -1 and silently degrade into an exact-match
+ * comparison, and IPv6 input matched unrelated ranges (see {@link ipv4ToNum}).
+ */
+export function ipInRange(ip: string, cidr: string): boolean {
+  const [range, bits] = (cidr || '').split('/');
+  if (bits === undefined || !/^\d{1,2}$/.test(bits)) {
+    return false;
+  }
+
+  const prefix = Number(bits);
+  if (prefix > 32) {
+    return false;
+  }
+
+  const ipNum = ipv4ToNum(ip);
+  const rangeNum = ipv4ToNum(range);
+  if (ipNum === null || rangeNum === null) {
+    return false;
+  }
+
+  // A /0 block covers everything; shifting by 32 is undefined in JS bitwise ops.
+  if (prefix === 0) {
+    return true;
+  }
+
+  const mask = (-1 << (32 - prefix)) >>> 0;
+  return (ipNum & mask) === (rangeNum & mask);
+}
+
 @Injectable()
 export class BansService {
+  private readonly logger = new Logger(BansService.name);
   private banCache: Map<string, BanCacheEntry> = new Map();
   private cacheExpiry: number = 0;
+  private refreshInFlight: Promise<void> | null = null;
   private readonly CACHE_TTL = 10000; // 10 seconds in milliseconds
 
   constructor(
@@ -34,6 +113,15 @@ export class BansService {
     // Validate ban type
     if (!['user', 'ip', 'ip_range'].includes(dto.ban_type)) {
       throw new BadRequestException('Invalid ban type');
+    }
+
+    // Reject unusable values up front — a malformed range would otherwise be stored
+    // and then silently never match.
+    if (dto.ban_type === 'ip' && ipv4ToNum(dto.value) === null) {
+      throw new BadRequestException('IP 封禁需要有效的 IPv4 地址');
+    }
+    if (dto.ban_type === 'ip_range' && !isValidCidr(dto.value)) {
+      throw new BadRequestException('IP 段封禁需要有效的 CIDR，例如 203.0.113.0/24');
     }
 
     const ban = this.banRepository.create({
@@ -153,31 +241,42 @@ export class BansService {
    * Check if a ban is active (with in-memory cache)
    */
   async isActive(type: string, value: string | number): Promise<boolean> {
-    // Refresh cache if expired
-    this.maybeRefreshCache();
+    await this.maybeRefreshCache();
 
     const cacheKey = `${type}:${value}`;
     return this.banCache.has(cacheKey);
   }
 
   /**
+   * Throw if the user is banned.
+   *
+   * Called from the session-resolution path so that every authenticated request is
+   * covered — a global guard cannot do it, because `req.user` is only populated by
+   * the controller-scoped auth guard that runs afterwards.
+   */
+  async assertUserNotBanned(userId: number): Promise<void> {
+    if (await this.isActive('user', userId)) {
+      throw new ForbiddenException('您的账号已被封禁');
+    }
+  }
+
+  /**
    * Check IP ban including CIDR range matching
    */
   async checkIp(ip: string): Promise<boolean> {
-    // Refresh cache if expired
-    this.maybeRefreshCache();
+    await this.maybeRefreshCache();
 
-    // Check exact IP match
-    if (this.banCache.has(`ip:${ip}`)) {
+    const normalized = normalizeIp(ip);
+
+    // Check exact IP match, against both the raw and IPv4-mapped forms.
+    if (this.banCache.has(`ip:${ip}`) || this.banCache.has(`ip:${normalized}`)) {
       return true;
     }
 
     // Check IP range matches
-    for (const [key, entry] of this.banCache.entries()) {
-      if (entry.ban_type === 'ip_range' && key.startsWith('ip_range:')) {
-        if (this.ipInRange(ip, entry.value)) {
-          return true;
-        }
+    for (const entry of this.banCache.values()) {
+      if (entry.ban_type === 'ip_range' && ipInRange(normalized, entry.value)) {
+        return true;
       }
     }
 
@@ -185,38 +284,33 @@ export class BansService {
   }
 
   /**
-   * Convert IP to numeric value
+   * Refresh the cache when the TTL has expired.
+   *
+   * Awaited, and concurrent callers share one in-flight query. Previously this was
+   * synchronous and kicked off a fire-and-forget refresh, so callers read the stale
+   * (on first use, empty) map and every ban check returned false.
    */
-  ipToNum(ip: string): number {
-    return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0);
-  }
-
-  /**
-   * Check if IP is within CIDR range
-   */
-  ipInRange(ip: string, cidr: string): boolean {
-    const [range, bits] = cidr.split('/');
-    const mask = ~(2 ** (32 - parseInt(bits, 10)) - 1);
-    return (this.ipToNum(ip) & mask) === (this.ipToNum(range) & mask);
-  }
-
-  /**
-   * Refresh ban cache if TTL has expired
-   */
-  private maybeRefreshCache(): void {
-    const now = Date.now();
-    if (now > this.cacheExpiry) {
-      this.refreshBanCache();
+  private async maybeRefreshCache(): Promise<void> {
+    if (Date.now() <= this.cacheExpiry) {
+      return;
     }
+
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.refreshBanCache().finally(() => {
+        this.refreshInFlight = null;
+      });
+    }
+
+    await this.refreshInFlight;
   }
 
   /**
    * Load all active bans into memory
    */
-  private refreshBanCache(): void {
-    this.banRepository.find({
-      where: { is_active: 1 },
-    }).then((bans) => {
+  private async refreshBanCache(): Promise<void> {
+    try {
+      const bans = await this.banRepository.find({ where: { is_active: 1 } });
+
       this.banCache.clear();
       for (const ban of bans) {
         const cacheKey = `${ban.ban_type}:${ban.value}`;
@@ -227,9 +321,11 @@ export class BansService {
         });
       }
       this.cacheExpiry = Date.now() + this.CACHE_TTL;
-    }).catch((err) => {
-      console.error('Failed to refresh ban cache:', err);
-    });
+    } catch (err) {
+      // Keep whatever is cached and retry on the next check rather than treating
+      // a transient database error as "nothing is banned" forever.
+      this.logger.error(`Failed to refresh ban cache: ${(err as Error).message}`);
+    }
   }
 
   /**

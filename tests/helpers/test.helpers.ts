@@ -112,7 +112,10 @@ export async function cleanupTestData(request: APIRequestContext): Promise<void>
 }
 
 /**
- * Login via test endpoint (if available)
+ * Login via test endpoint (if available).
+ *
+ * Requires the API to run with ENABLE_TEST_AUTH=true; without it the route is not
+ * registered and this returns `{ success: false }`.
  */
 export async function testLogin(
   request: APIRequestContext,
@@ -122,6 +125,9 @@ export async function testLogin(
     const response = await request.post(`${API_URL}/api/auth/test-login`, {
       data: { userType },
     });
+    if (!response.ok()) {
+      return { success: false };
+    }
     return await response.json();
   } catch {
     // Test endpoint not available

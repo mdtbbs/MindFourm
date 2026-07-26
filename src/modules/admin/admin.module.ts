@@ -11,11 +11,11 @@ import { TagsModule } from '../tags/tags.module';
 import { UsersModule } from '../users/users.module';
 import { PointsModule } from '../points/points.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
-import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply } from '@entities/index';
+import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply, SessionAudit } from '@entities/index';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply]),
+    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply, SessionAudit]),
     StatsModule,
     SettingsModule,
     LogsModule,

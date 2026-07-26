@@ -4,12 +4,18 @@ import { NotificationStreamService } from './notification-stream.service';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
 import { UpdateEmailPreferenceDto } from './dto/update-email-preference.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Observable, Subject } from 'rxjs';
+import { Observable, Subject, concat, of } from 'rxjs';
+import { finalize, tap } from 'rxjs/operators';
 import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 
 @Controller('notifications')
 export class NotificationsController implements OnModuleInit, OnModuleDestroy {
-  private notificationSubjects: Map<number, Subject<MessageEvent>> = new Map();
+  /**
+   * Open SSE connections per user. A Set rather than a single Subject because one
+   * user can have several tabs open, and each needs its own lifecycle so closing one
+   * does not tear down the others.
+   */
+  private connections: Map<number, Set<Subject<MessageEvent>>> = new Map();
   private streamSubscription: any;
 
   constructor(
@@ -18,60 +24,74 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    // Subscribe to the notification stream and forward to per-user SSE subjects
+    // Subscribe to the notification stream and fan out to that user's connections
     this.streamSubscription = this.notificationStream.stream$.subscribe(
       ({ userId, notification }) => {
-        const subject = this.notificationSubjects.get(userId);
-        if (subject) {
-          subject.next({
-            data: JSON.stringify({ type: 'notification', data: notification }),
-          } as MessageEvent);
+        const subjects = this.connections.get(userId);
+        if (!subjects) return;
+
+        const event = {
+          data: JSON.stringify({ type: 'notification', data: notification }),
+        } as MessageEvent;
+
+        for (const subject of subjects) {
+          subject.next(event);
         }
       },
     );
   }
 
   onModuleDestroy() {
-    // Unsubscribe from stream
     if (this.streamSubscription) {
       this.streamSubscription.unsubscribe();
     }
-    // Cleanup all SSE connections
-    for (const subject of this.notificationSubjects.values()) {
-      subject.complete();
+    for (const subjects of this.connections.values()) {
+      for (const subject of subjects) {
+        subject.complete();
+      }
     }
-    this.notificationSubjects.clear();
+    this.connections.clear();
   }
 
   /**
-   * SSE endpoint for real-time notifications
+   * SSE endpoint for real-time notifications.
    *
-   * Clients connect to this endpoint and receive real-time notification events.
-   * The endpoint uses JWT authentication via cookie/session.
+   * Each request gets its own Subject, registered on subscribe and removed on
+   * teardown. The previous version stored one Subject per user id and never removed
+   * it, so the map grew without bound as users came and went.
    */
   @Sse('events')
   @UseGuards(JwtAuthGuard)
   sseEvents(@Req() req: any): Observable<MessageEvent> {
     const userId = req.user.id;
+    const subject = new Subject<MessageEvent>();
 
-    // Create or get existing subject for this user
-    if (!this.notificationSubjects.has(userId)) {
-      this.notificationSubjects.set(userId, new Subject<MessageEvent>());
-    }
-
-    const subject = this.notificationSubjects.get(userId);
-
-    if (!subject) {
-      throw new Error('Failed to create SSE subject');
-    }
-
-    // Send initial connection message
-    subject.next({
+    const connected = {
       data: JSON.stringify({ type: 'connected', userId }),
-    } as MessageEvent);
+    } as MessageEvent;
 
-    // Return the observable stream
-    return subject.asObservable();
+    // `startWith` rather than an eager `subject.next(...)`: the handler returns
+    // before Nest subscribes, and a plain Subject does not replay, so the connected
+    // event used to be emitted into the void every single time.
+    return concat(of(connected), subject.asObservable()).pipe(
+      tap({
+        subscribe: () => {
+          const subjects = this.connections.get(userId) ?? new Set();
+          subjects.add(subject);
+          this.connections.set(userId, subjects);
+        },
+      }),
+      finalize(() => {
+        const subjects = this.connections.get(userId);
+        if (!subjects) return;
+
+        subjects.delete(subject);
+        subject.complete();
+        if (subjects.size === 0) {
+          this.connections.delete(userId);
+        }
+      }),
+    );
   }
 
   @UseGuards(JwtAuthGuard)

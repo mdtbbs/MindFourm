@@ -10,6 +10,12 @@ const ROLE_OPTIONS = [
   { value: 'admin', label: '管理员' },
 ];
 
+/**
+ * The API masks stored secrets with this sentinel. Posting it back leaves the
+ * stored value untouched, so it doubles as "keep what you have".
+ */
+const SECRET_PLACEHOLDER = '__unchanged__';
+
 function parseRoles(value: string | undefined): string[] {
   return (value || '')
     .split(',')
@@ -29,6 +35,8 @@ export default function NotificationSettingsPage() {
     [values.admin_notifications_recipient_roles],
   );
   const webhookEnabled = (values.admin_notifications_webhook_enabled ?? 'false') === 'true';
+  const secretValue = values.admin_notifications_webhook_secret ?? '';
+  const secretIsStored = secretValue === SECRET_PLACEHOLDER;
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -149,12 +157,29 @@ export default function NotificationSettingsPage() {
               <span className="mb-2 block">签名密钥</span>
               <input
                 type="password"
-                value={values.admin_notifications_webhook_secret ?? ''}
-                onChange={(e) => update('admin_notifications_webhook_secret', e.target.value)}
-                placeholder="optional shared secret"
+                value={secretIsStored ? '' : secretValue}
+                onChange={(e) =>
+                  update(
+                    'admin_notifications_webhook_secret',
+                    // An empty box means "leave the stored secret alone"; clearing
+                    // it requires the button below.
+                    e.target.value === '' ? SECRET_PLACEHOLDER : e.target.value,
+                  )
+                }
+                placeholder={secretIsStored ? '已设置，留空则保持不变' : 'optional shared secret'}
                 className="w-full border border-surface-200 bg-white px-3 py-2 text-sm"
                 disabled={!webhookEnabled}
               />
+              {secretIsStored && (
+                <button
+                  type="button"
+                  onClick={() => update('admin_notifications_webhook_secret', '')}
+                  className="mt-2 text-xs text-surface-500 underline"
+                  disabled={!webhookEnabled}
+                >
+                  清除已保存的密钥
+                </button>
+              )}
             </label>
 
             <label className="block text-sm text-surface-700 md:col-span-2">

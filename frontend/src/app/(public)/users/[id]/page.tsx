@@ -1,5 +1,9 @@
+import type { Metadata } from 'next';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
+import JsonLd from '@/components/seo/json-ld';
+import { toMetaDescription } from '@/lib/seo/description';
+import { absoluteUrl } from '@/lib/seo/site-url';
 import Badge from '@/components/ui/badge';
 import { UserProfile, PostListResponse, Reply, BookmarkListResponse, LikedPost } from '@/types';
 import { Bookmark, Calendar, Heart, Star, Users } from 'lucide-react';
@@ -33,18 +37,70 @@ async function fetchUserReplies(userId: number, page: number): Promise<{ data: R
   });
 }
 
-async function fetchUserBookmarks(page: number): Promise<BookmarkListResponse> {
+/**
+ * Bookmarks and likes are only exposed for your *own* profile.
+ *
+ * `/api/bookmarks` and `/api/likes/posts` return the authenticated caller's
+ * collections, not the profile owner's — so rendering them on someone else's page
+ * showed the visitor their own data under another user's name. They also need the
+ * session cookie forwarded, without which they always resolved to the empty
+ * fallback.
+ */
+async function fetchOwnBookmarks(page: number): Promise<BookmarkListResponse> {
   return fetchApiPaginated<BookmarkListResponse['data'][number]>(`/api/bookmarks?page=${page}&limit=20`, {
-    init: { next: { tags: ['bookmarks'] } },
+    init: { cache: 'no-store' },
+    forwardCookies: true,
     fallback: createEmptyPaginatedResult<BookmarkListResponse['data'][number]>(20),
   });
 }
 
-async function fetchUserLikes(page: number): Promise<{ data: LikedPost[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+async function fetchOwnLikes(page: number): Promise<{ data: LikedPost[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
   return fetchApiPaginated<LikedPost>(`/api/likes/posts?page=${page}&limit=20`, {
-    init: { next: { tags: ['likes'] } },
+    init: { cache: 'no-store' },
+    forwardCookies: true,
     fallback: createEmptyPaginatedResult<LikedPost>(20),
   });
+}
+
+async function fetchViewer(): Promise<{ id: number } | null> {
+  const result = await fetchApiData<{ authenticated?: boolean; user?: { id: number } } | null>(
+    '/api/auth/check',
+    { init: { cache: 'no-store' }, forwardCookies: true, fallback: null },
+  );
+  return result?.authenticated && result.user ? result.user : null;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const userId = parseInt(id);
+  const profile = Number.isFinite(userId) ? await fetchUserProfile(userId) : null;
+
+  if (!profile) {
+    return { title: '用户不存在', robots: { index: false, follow: false } };
+  }
+
+  const displayName = profile.username || `User #${profile.id}`;
+  const description = profile.bio
+    ? toMetaDescription(profile.bio)
+    : `${displayName} 的个人主页、帖子与回复`;
+
+  return {
+    title: displayName,
+    description,
+    // Tab and pagination params fold onto the profile's single canonical URL.
+    alternates: { canonical: `/users/${profile.id}` },
+    openGraph: {
+      title: displayName,
+      description,
+      type: 'profile',
+      url: `/users/${profile.id}`,
+      images: profile.avatar_url ? [profile.avatar_url] : undefined,
+    },
+  };
 }
 
 export default async function UserProfilePage({
@@ -58,23 +114,30 @@ export default async function UserProfilePage({
   const { page: pageStr, tab } = await searchParams;
   const userId = parseInt(id);
   const page = parseInt(pageStr || '1');
-  const tabValue = tab || 'posts';
-
-  const profile = await fetchUserProfile(userId);
+  const [profile, viewer] = await Promise.all([fetchUserProfile(userId), fetchViewer()]);
   if (!profile) return notFound();
 
+  const isOwnProfile = viewer?.id === userId;
+  // Private tabs are hidden on other people's profiles; asking for one directly
+  // falls back to the posts tab.
+  const requestedTab = tab || 'posts';
+  const tabValue =
+    !isOwnProfile && (requestedTab === 'bookmarks' || requestedTab === 'likes')
+      ? 'posts'
+      : requestedTab;
+
   const [postsResult, repliesResult, bookmarksResult, likesResult] = await Promise.all([
-    tab === 'posts'
+    tabValue === 'posts'
       ? fetchUserPosts(userId, page)
       : Promise.resolve(createEmptyPaginatedResult<PostListResponse['data'][number]>(20)),
-    tab === 'replies'
+    tabValue === 'replies'
       ? fetchUserReplies(userId, page)
       : Promise.resolve(createEmptyPaginatedResult<Reply>(20)),
-    tab === 'bookmarks'
-      ? fetchUserBookmarks(page)
+    tabValue === 'bookmarks' && isOwnProfile
+      ? fetchOwnBookmarks(page)
       : Promise.resolve(createEmptyPaginatedResult<BookmarkListResponse['data'][number]>(20)),
-    tab === 'likes'
-      ? fetchUserLikes(page)
+    tabValue === 'likes' && isOwnProfile
+      ? fetchOwnLikes(page)
       : Promise.resolve(createEmptyPaginatedResult<LikedPost>(20)),
   ]);
 
@@ -89,6 +152,21 @@ export default async function UserProfilePage({
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'ProfilePage',
+          mainEntity: {
+            '@type': 'Person',
+            name: displayName,
+            identifier: String(profile.id),
+            url: absoluteUrl(`/users/${profile.id}`),
+            image: profile.avatar_url || undefined,
+            description: profile.bio || undefined,
+          },
+        }}
+      />
+
       {/* User Info Card - 使用shared UserCard */}
       <div className="flex justify-center mb-8">
         <UserCard
@@ -127,11 +205,11 @@ export default async function UserProfilePage({
         )}
         {(profile.follower_count !== undefined || profile.following_count !== undefined) && (
           <div className="flex items-center gap-4 card px-4 py-2">
-            <span className="text-sm text-muted flex items-center gap-1">
+            <span className="text-sm text-muted-foreground flex items-center gap-1">
               <Users className="w-3 h-3" />
               <strong>{profile.following_count || 0}</strong> 关注
             </span>
-            <span className="text-sm text-muted flex items-center gap-1">
+            <span className="text-sm text-muted-foreground flex items-center gap-1">
               <Users className="w-3 h-3" />
               <strong>{profile.follower_count || 0}</strong> 粉丝
             </span>
@@ -180,12 +258,12 @@ export default async function UserProfilePage({
       )}
 
       {/* Tabs */}
-      <div className="border-b border-[var(--border)] dark:border-gray-700 mb-6">
+      <div className="border-b border-[var(--border)] mb-6">
         <nav className="flex gap-4">
           <Link
             href={`/users/${userId}?tab=posts`}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'posts'
+              tabValue === 'posts'
                 ? 'border-[var(--primary)] text-[var(--primary)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
@@ -195,40 +273,45 @@ export default async function UserProfilePage({
           <Link
             href={`/users/${userId}?tab=replies`}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'replies'
+              tabValue === 'replies'
                 ? 'border-[var(--primary)] text-[var(--primary)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
           >
             回复
           </Link>
-          <Link
-            href={`/users/${userId}?tab=bookmarks`}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'bookmarks'
-                ? 'border-[var(--primary)] text-[var(--primary)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
-            }`}
-          >
-            <Bookmark className="w-4 h-4 inline mr-1" />
-            收藏
-          </Link>
-          <Link
-            href={`/users/${userId}?tab=likes`}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              tab === 'likes'
-                ? 'border-[var(--primary)] text-[var(--primary)]'
-                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
-            }`}
-          >
-            <Heart className="w-4 h-4 inline mr-1" />
-            点赞
-          </Link>
+          {/* Own-profile only: these list the viewer's collections, not the owner's. */}
+          {isOwnProfile && (
+            <>
+              <Link
+                href={`/users/${userId}?tab=bookmarks`}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tabValue === 'bookmarks'
+                    ? 'border-[var(--primary)] text-[var(--primary)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
+                }`}
+              >
+                <Bookmark className="w-4 h-4 inline mr-1" />
+                收藏
+              </Link>
+              <Link
+                href={`/users/${userId}?tab=likes`}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tabValue === 'likes'
+                    ? 'border-[var(--primary)] text-[var(--primary)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
+                }`}
+              >
+                <Heart className="w-4 h-4 inline mr-1" />
+                点赞
+              </Link>
+            </>
+          )}
         </nav>
       </div>
 
       {/* Content */}
-      {tab === 'posts' && (
+      {tabValue === 'posts' && (
         <>
           {postsResult.data.length === 0 ? (
             <div className="text-center py-12 text-[var(--text-secondary)]">暂无帖子</div>
@@ -247,14 +330,14 @@ export default async function UserProfilePage({
         </>
       )}
 
-      {tab === 'replies' && (
+      {tabValue === 'replies' && (
         <>
           {repliesResult.data.length === 0 ? (
             <div className="text-center py-12 text-[var(--text-secondary)]">暂无回复</div>
           ) : (
             <div className="space-y-3">
               {repliesResult.data.map((reply) => (
-                <div key={reply.id} className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 p-4">
+                <div key={reply.id} className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4">
                   <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-2">
                     <Link href={`/posts/${reply.post_id}`} className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium">
                       {reply.post_title || '帖子'}
@@ -275,14 +358,14 @@ export default async function UserProfilePage({
         </>
       )}
 
-      {tab === 'bookmarks' && (
+      {tabValue === 'bookmarks' && (
         <>
           {bookmarksResult.data.length === 0 ? (
             <div className="text-center py-12 text-[var(--text-secondary)]">暂无收藏</div>
           ) : (
             <div className="space-y-3">
               {bookmarksResult.data.map((bookmark) => (
-                <div key={bookmark.id} className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 p-4">
+                <div key={bookmark.id} className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4">
                   <div className="flex items-center justify-between">
                     <Link href={`/posts/${bookmark.post_id}`} className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium">
                       {bookmark.title}
@@ -310,14 +393,14 @@ export default async function UserProfilePage({
         </>
       )}
 
-      {tab === 'likes' && (
+      {tabValue === 'likes' && (
         <>
           {likesResult.data.length === 0 ? (
             <div className="text-center py-12 text-[var(--text-secondary)]">暂无点赞</div>
           ) : (
             <div className="space-y-3">
               {likesResult.data.map((like) => (
-                <div key={like.id} className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 p-4">
+                <div key={like.id} className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4">
                   <div className="flex items-center justify-between">
                     <Link href={`/posts/${like.post_id}`} className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium">
                       {like.title}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -59,7 +59,14 @@ export function useDraft(type: string, id?: string | number) {
     setHasDraft(false);
   }, [key]);
 
-  return { load, save, clear, hasDraft };
+  // Memoised: returning a fresh object literal made this hook's result a new
+  // identity on every render, so consumers using it as an effect dependency
+  // (ReplyEditor did) re-ran their restore logic continuously — which meant a
+  // saved draft kept overwriting whatever the user was typing.
+  return useMemo(
+    () => ({ load, save, clear, hasDraft }),
+    [load, save, clear, hasDraft],
+  );
 }
 
 /**

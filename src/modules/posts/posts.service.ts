@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository,
   DataSource,
+  EntityManager,
   Brackets,
   In,
   LessThan,
@@ -35,6 +36,8 @@ import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
+import { REPLY_STATUS, VISIBLE_REPLY_STATUSES } from '@common/utils/constants';
+import { generateSlug, makeUniqueSlug } from '@common/utils/url-slug.util';
 
 @Injectable()
 export class PostsService {
@@ -73,10 +76,22 @@ export class PostsService {
     let modifiedDto = await this.eventBus.execute('post.create', { ...dto, userId });
     dto = modifiedDto;
 
-    return this.dataSource.transaction(async (manager) => {
-      // Parse markdown to HTML
-      const contentHtml = parseMarkdown(dto.content);
+    // Parse markdown to HTML
+    const contentHtml = parseMarkdown(dto.content);
 
+    // Resolved up front: this reads the settings table (and its cache) through a
+    // different repository and contributes nothing to the write below, so it has no
+    // business holding the write transaction open.
+    const requestedStatus = dto.status || 'published';
+    const requiresApproval = requestedStatus === 'published'
+      && await this.settingsService.getBoolean('require_post_approval', true);
+
+    // Only `manager`-bound work belongs in here. Everything with an effect outside
+    // this connection — point awards (which open their own transaction), Redis
+    // invalidation, notifications, plugin hooks — runs after the commit, so a
+    // rollback cannot leave the author paid and the moderators notified for a post
+    // that does not exist.
+    const { post, authorUsername } = await this.dataSource.transaction(async (manager) => {
       // Validate category if provided
       if (dto.category_id) {
         const category = await manager.findOne(Category, {
@@ -87,10 +102,6 @@ export class PostsService {
         }
       }
 
-      const requestedStatus = dto.status || 'published';
-      const requiresApproval = requestedStatus === 'published'
-        && await this.settingsService.getBoolean('require_post_approval', true);
-
       // Create the post
       const newPost = manager.create(Post, {
         user_id: userId,
@@ -99,6 +110,7 @@ export class PostsService {
         required_group_id: dto.required_group_id,
         post_type: dto.post_type || 'normal',
         title: dto.title,
+        slug: await this.resolveUniquePostSlug(manager, dto.title),
         content: dto.content,
         content_html: contentHtml,
         status: requiresApproval ? 'pending' : requestedStatus,
@@ -120,70 +132,69 @@ export class PostsService {
         relations: ['user', 'category', 'postTags', 'postTags.tag'],
       });
 
-      // Invalidate cache
-      await this.invalidatePostCache(savedPost.id);
-
-      // Award points for creating post
-      if (savedPost.status === 'published') {
-        await this.pointsService.awardPoints(userId, 'create_post', 'post', savedPost.id);
-      } else if (savedPost.status === 'pending') {
-        const author = await manager.findOne(User, {
+      const author = savedPost.status === 'pending'
+        ? await manager.findOne(User, {
           where: { id: userId },
           select: { username: true },
-        });
+        })
+        : null;
 
-        this.adminNotificationsService.publishModerationPending({
-          item_type: 'post',
-          item_id: savedPost.id,
-          title: savedPost.title,
-          content: dto.content,
-          author_username: author?.username || `#${userId}`,
-          action_url: '/admin/content/moderation?type=posts',
-        }).catch((err) =>
-          console.error('Admin post moderation notification error:', err),
-        );
-      }
-
-      // Execute "after" hook for plugins
-      this.eventBus.execute('post.created', { post: savedPost, userId }).catch((err) =>
-        console.error('post.created hook error:', err),
-      );
-
-      // Handle @mentions in post content (only for published posts)
-      if (savedPost.status === 'published' && dto.content) {
-        this.notificationsService.notifyMentionedUsers(
-          dto.content,
-          savedPost.id,
-          userId,
-          undefined, // replyId - not applicable for posts
-          [userId],  // skipUserIds - don't notify the author
-        ).catch((err) =>
-          console.error('Post mention notification error:', err),
-        );
-      }
-
-      return result;
+      return { post: result ?? savedPost, authorUsername: author?.username ?? null };
     });
+
+    // Invalidating the cache before the commit let a concurrent reader repopulate
+    // it from pre-commit state, where it then survived the full 5-minute TTL.
+    await this.invalidatePostCache(post.id);
+
+    // Award points for creating post
+    if (post.status === 'published') {
+      await this.pointsService.awardPoints(userId, 'create_post', 'post', post.id);
+    } else if (post.status === 'pending') {
+      this.adminNotificationsService.publishModerationPending({
+        item_type: 'post',
+        item_id: post.id,
+        title: post.title,
+        content: dto.content,
+        author_username: authorUsername || `#${userId}`,
+        action_url: '/admin/content/moderation?type=posts',
+      }).catch((err) =>
+        console.error('Admin post moderation notification error:', err),
+      );
+    }
+
+    // Execute "after" hook for plugins
+    this.eventBus.execute('post.created', { post, userId }).catch((err) =>
+      console.error('post.created hook error:', err),
+    );
+
+    // Handle @mentions in post content (only for published posts)
+    if (post.status === 'published' && dto.content) {
+      this.notificationsService.notifyMentionedUsers(
+        dto.content,
+        post.id,
+        userId,
+        undefined, // replyId - not applicable for posts
+        [userId],  // skipUserIds - don't notify the author
+      ).catch((err) =>
+        console.error('Post mention notification error:', err),
+      );
+    }
+
+    return post;
   }
 
   /**
    * Find post by ID with details, increment view count
    * Optional userId for group permission check
    */
-  async findById(id: number, userId?: number): Promise<PostDetailDto> {
+  async findById(id: number, viewer?: { id: number; role: string }): Promise<PostDetailDto> {
     const cacheKey = `${PostsService.POST_DETAIL_CACHE_PREFIX}${id}`;
 
     // Try cache first (without incrementing view count)
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
       const cachedPost = JSON.parse(cached);
-      // Check group permission if userId provided
-      if (userId && cachedPost.required_group_id) {
-        const isMember = await this.groupsService.checkMembership(cachedPost.required_group_id, userId);
-        if (!isMember) {
-          throw new ForbiddenException('需要加入该组才能查看此帖子');
-        }
-      }
+      await this.assertPostVisible(cachedPost, viewer);
       // Still increment view count in background
       await this.incrementViewCount(id);
       return cachedPost;
@@ -225,13 +236,7 @@ export class PostsService {
       throw new NotFoundException('帖子不存在');
     }
 
-    // Check group permission
-    if (userId && post.required_group_id) {
-      const isMember = await this.groupsService.checkMembership(post.required_group_id, userId);
-      if (!isMember) {
-        throw new ForbiddenException('需要加入该组才能查看此帖子');
-      }
-    }
+    await this.assertPostVisible(post, viewer);
 
     // Increment view count
     await this.incrementViewCount(id);
@@ -242,6 +247,38 @@ export class PostsService {
     await this.redisService.set(cacheKey, JSON.stringify(detail), 300);
 
     return detail;
+  }
+
+  /**
+   * Authorize a single-post read.
+   *
+   * Mirrors the visibility rules `findAll` applies to lists. Previously `findById`
+   * applied no status filter at all — so `draft`, `pending` and rejected posts were
+   * readable by id — and the group check was wrapped in `if (userId && ...)`, which
+   * meant it never ran for the controller (which passed no user) and could be
+   * bypassed entirely by logging out.
+   */
+  private async assertPostVisible(
+    post: { status?: string; user_id?: number; required_group_id?: number | null },
+    viewer?: { id: number; role: string },
+  ): Promise<void> {
+    const isStaff = !!viewer && ['admin', 'moderator'].includes(viewer.role);
+    const isAuthor = !!viewer && post.user_id === viewer.id;
+
+    if (post.status && post.status !== 'published' && !isStaff && !isAuthor) {
+      // 404 rather than 403: existence of unpublished content is itself private.
+      throw new NotFoundException('帖子不存在');
+    }
+
+    if (post.required_group_id && !isStaff) {
+      if (!viewer) {
+        throw new ForbiddenException('需要加入该组才能查看此帖子');
+      }
+      const isMember = await this.groupsService.checkMembership(post.required_group_id, viewer.id);
+      if (!isMember) {
+        throw new ForbiddenException('需要加入该组才能查看此帖子');
+      }
+    }
   }
 
   /**
@@ -427,14 +464,56 @@ export class PostsService {
   }
 
   /**
+   * Decide the status a post edit may move to, or null to leave it unchanged.
+   *
+   * Staff may set either status directly. An author may only park a post back as a
+   * draft or ask to publish one — and asking to publish routes through the same
+   * `require_post_approval` gate as creating a post, so it lands in `pending`
+   * rather than going live. Anything else (including touching an already-moderated
+   * post) is rejected.
+   */
+  private async resolveStatusTransition(
+    currentStatus: string,
+    requestedStatus: string,
+    isStaff: boolean,
+  ): Promise<string | null> {
+    if (requestedStatus === currentStatus) {
+      return null;
+    }
+
+    if (isStaff) {
+      return requestedStatus;
+    }
+
+    if (requestedStatus === 'draft') {
+      // Only an unpublished post can be pulled back to draft by its author.
+      if (currentStatus === 'draft' || currentStatus === 'pending') {
+        return 'draft';
+      }
+      throw new ForbiddenException('已发布的帖子无法退回草稿，请联系管理员');
+    }
+
+    // requestedStatus === 'published'
+    if (currentStatus !== 'draft') {
+      throw new ForbiddenException('无权修改此帖子的状态');
+    }
+
+    const requiresApproval = await this.settingsService.getBoolean('require_post_approval', true);
+    return requiresApproval ? 'pending' : 'published';
+  }
+
+  /**
    * Update a post with optional tag re-attachment in a transaction
    */
   async update(id: number, dto: UpdatePostDto, userId: number, userRole: string): Promise<Post | null> {
-    // Execute "before" hook
+    // Execute "before" hook. A plugin returning a value without a `dto` property
+    // would otherwise leave `dto` undefined and throw on the next line.
     const hookCtx = await this.eventBus.execute('post.update', { id, dto, userId, userRole });
-    dto = hookCtx.dto;
+    if (hookCtx?.dto) {
+      dto = hookCtx.dto;
+    }
 
-    return this.dataSource.transaction(async (manager) => {
+    const result = await this.dataSource.transaction(async (manager) => {
       // Find existing post
       const post = await manager.findOne(Post, {
         where: { id },
@@ -472,15 +551,29 @@ export class PostsService {
       // Update fields
       const updateData: Partial<Post> = {};
 
-      if (dto.title) updateData.title = dto.title;
+      if (dto.title) {
+        updateData.title = dto.title;
+        // Keep the slug in step with the title so the canonical URL keeps matching
+        // the content. The id stays the real key, so changing this breaks no links —
+        // the post route redirects a stale slug to the current one.
+        if (dto.title !== post.title) {
+          updateData.slug = await this.resolveUniquePostSlug(manager, dto.title);
+        }
+      }
       if (dto.content) updateData.content = dto.content;
       if (dto.content !== undefined) updateData.content_html = contentHtml;
       if (dto.category_id !== undefined) updateData.category_id = dto.category_id;
       if (dto.server_id !== undefined) updateData.server_id = dto.server_id;
       if (dto.required_group_id !== undefined) updateData.required_group_id = dto.required_group_id;
       if (dto.post_type) updateData.post_type = dto.post_type;
-      if (dto.status) updateData.status = dto.status;
-      if (dto.is_pinned !== undefined) updateData.is_pinned = dto.is_pinned;
+
+      if (dto.status) {
+        const nextStatus = await this.resolveStatusTransition(post.status, dto.status, canEditAny);
+        if (nextStatus) {
+          updateData.status = nextStatus;
+        }
+      }
+      // `is_pinned` is not editable here — see UpdatePostDto. Use PUT /api/posts/:id/pin.
 
       await manager.update(Post, id, updateData);
 
@@ -495,21 +588,22 @@ export class PostsService {
       }
 
       // Return updated post
-      const result = await manager.findOne(Post, {
+      return manager.findOne(Post, {
         where: { id },
         relations: ['user', 'category', 'postTags', 'postTags.tag'],
       });
-
-      // Invalidate cache
-      await this.invalidatePostCache(id);
-
-      // Execute "after" hook
-      this.eventBus.execute('post.updated', { post: result, userId }).catch((err) =>
-        console.error('post.updated hook error:', err),
-      );
-
-      return result;
     });
+
+    // After the commit, for the same reason as in `create`: invalidating first lets
+    // a concurrent reader re-cache the pre-update row for the whole TTL.
+    await this.invalidatePostCache(id);
+
+    // Execute "after" hook
+    this.eventBus.execute('post.updated', { post: result, userId }).catch((err) =>
+      console.error('post.updated hook error:', err),
+    );
+
+    return result;
   }
 
   /**
@@ -640,7 +734,7 @@ export class PostsService {
    */
   async getReplyCount(postId: number): Promise<number> {
     return this.replyRepository.count({
-      where: { post_id: postId, status: 'active' },
+      where: { post_id: postId, status: REPLY_STATUS.published },
     });
   }
 
@@ -657,7 +751,7 @@ export class PostsService {
     const skip = (page - 1) * limit;
 
     const [replies, total] = await this.replyRepository.findAndCount({
-      where: { post_id: postId, status: In(['active', 'published']) },
+      where: { post_id: postId, status: In(VISIBLE_REPLY_STATUSES) },
       relations: ['user'],
       select: {
         id: true,
@@ -709,8 +803,7 @@ export class PostsService {
       });
 
       if (!tag) {
-        // Create slug from name
-        const slug = tagName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '');
+        const slug = await this.resolveUniqueTagSlug(manager, tagName);
         tag = manager.create(Tag, {
           name: tagName,
           slug,
@@ -725,6 +818,54 @@ export class PostsService {
       });
       await manager.save(PostTag, postTag);
     }
+  }
+
+  /**
+   * A keyword-bearing slug for a post title.
+   *
+   * `posts.slug` existed on the entity but nothing ever assigned it, so it was
+   * always null — which meant the sitemap silently degraded every post URL to a bare
+   * numeric id with no keywords. Not unique-constrained in the database (the id
+   * remains the canonical key), but kept distinct so `/posts/{id}-{slug}` reads
+   * unambiguously.
+   */
+  private async resolveUniquePostSlug(
+    manager: EntityManager,
+    title: string,
+  ): Promise<string | undefined> {
+    const baseSlug = generateSlug(title);
+    if (!baseSlug) {
+      // Leaves the column at its NULL default rather than writing an empty string.
+      return undefined;
+    }
+
+    const existingCount = await manager.count(Post, {
+      where: [{ slug: baseSlug }, { slug: Like(`${baseSlug}-%`) }],
+    });
+
+    return makeUniqueSlug(baseSlug, existingCount);
+  }
+
+  /**
+   * A slug for a new tag that will not collide with an existing one.
+   *
+   * `tags.slug` is UNIQUE. The previous inline expression stripped every character
+   * outside `[\w-]`, and JS `\w` excludes CJK — so any Chinese tag name produced an
+   * empty slug, and creating a post with two of them violated the index with an
+   * unhandled 500. `generateSlug` preserves CJK; the timestamp fallback covers names
+   * that are entirely punctuation and still reduce to nothing.
+   */
+  private async resolveUniqueTagSlug(
+    manager: EntityManager,
+    tagName: string,
+  ): Promise<string> {
+    const baseSlug = generateSlug(tagName) || `tag-${Date.now()}`;
+
+    const existingCount = await manager.count(Tag, {
+      where: [{ slug: baseSlug }, { slug: Like(`${baseSlug}-%`) }],
+    });
+
+    return makeUniqueSlug(baseSlug, existingCount);
   }
 
   /**

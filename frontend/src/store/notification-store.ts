@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Notification } from '@/types';
 import { notificationApi } from '@/lib/api/client';
+import { registerUserScopedReset } from './reset-registry';
 
 interface NotificationState {
   notifications: Notification[];
@@ -135,6 +136,13 @@ export const useNotificationStore = create<NotificationState>()(
     }
   )
 );
+
+// The unread count is per-user and persisted to localStorage, so it must be dropped
+// on logout — otherwise the next person signing in on this browser inherits the
+// previous account's badge.
+registerUserScopedReset(() => {
+  useNotificationStore.getState().clearNotifications();
+});
 
 // Export convenience hooks
 export function useUnreadCount() {

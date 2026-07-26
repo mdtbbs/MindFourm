@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
+import { serverApi } from '@/lib/api/client';
 import { ServerIcon, Link2 } from 'lucide-react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
 
 interface Server {
   id: number;
@@ -27,12 +26,9 @@ export function ServerSelector({ value, onChange, postType, onPostTypeChange }: 
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
-    fetch(`${API_BASE}/api/post-servers/my-servers`, { credentials: 'include' })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.servers) {
-          setServers(data.servers);
-        }
+    serverApi.getUserServers()
+      .then((data) => {
+        setServers(data.servers ?? []);
         setLoading(false);
       })
       .catch(() => setLoading(false));

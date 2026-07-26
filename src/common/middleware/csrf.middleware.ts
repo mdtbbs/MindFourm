@@ -1,14 +1,27 @@
 import { randomBytes, timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
+import { isTestAuthEnabled } from '../../modules/auth/test-auth.util';
 
 const CSRF_COOKIE = 'csrf_token';
 const CSRF_HEADER = 'x-csrf-token';
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const EXEMPT_PATHS = new Set([
-  '/api/auth/callback',
-  '/api/auth/test-login',
-  '/api/auth/internal/users/sync',
-]);
+
+/**
+ * `/api/auth/callback` is a top-level browser redirect from MindAuth, so it can
+ * never carry a header token.
+ *
+ * The E2E test-login route is exempt only while test auth is enabled — leaving it
+ * permanently exempt meant the backdoor was also reachable cross-site.
+ */
+function buildExemptPaths(): Set<string> {
+  const paths = new Set(['/api/auth/callback']);
+  if (isTestAuthEnabled()) {
+    paths.add('/api/auth/test-login');
+  }
+  return paths;
+}
+
+const EXEMPT_PATHS = buildExemptPaths();
 
 function parseCookies(header: string | undefined): Record<string, string> {
   if (!header) return {};
