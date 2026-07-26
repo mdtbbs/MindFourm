@@ -6,6 +6,7 @@ import { AddMissingForeignKeys1720000004000 } from './1720000004000-AddMissingFo
 import { BackfillRejectedPostDeletedAt1720000005000 } from './1720000005000-BackfillRejectedPostDeletedAt';
 import { CreateReports1720000006000 } from './1720000006000-CreateReports';
 import { CreateBlocksAndReactions1720000009000 } from './1720000009000-CreateBlocksAndReactions';
+import { AddPostModerationFields1720000010000 } from './1720000010000-AddPostModerationFields';
 
 /**
  * Migrations in run order.
@@ -23,4 +24,5 @@ export const migrations = [
   BackfillRejectedPostDeletedAt1720000005000,
   CreateReports1720000006000,
   CreateBlocksAndReactions1720000009000,
+  AddPostModerationFields1720000010000,
 ];

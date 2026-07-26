@@ -91,6 +91,8 @@ export interface Post {
   author_role: UserRole | null;
   tags: Tag[];
   current_user_role?: UserRole | null;
+  /** Set by the post-detail endpoint: whether the requesting session authored this post. */
+  is_owner?: boolean;
   replies?: Reply[];
   replyPagination?: {
     total: number;

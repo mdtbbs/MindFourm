@@ -8,7 +8,7 @@ import Pagination from '@/components/ui/pagination';
 import AttachmentList from '@/components/forum/attachment-list';
 import Link from 'next/link';
 import { fetchApiData } from '@/lib/api/server-fetch';
-import { Post, Attachment } from '@/types';
+import { Post, Attachment, UserRole } from '@/types';
 import { toMetaDescription } from '@/lib/seo/description';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
@@ -235,7 +235,12 @@ export default async function PostDetailPage({
       )}
 
       {/* Post Content */}
-      <PostContent post={post} postId={postId} currentUserRole={post.current_user_role as any} />
+      <PostContent
+        post={post}
+        postId={postId}
+        currentUserRole={post.current_user_role as UserRole | null}
+        isOwner={post.is_owner ?? false}
+      />
       <AttachmentList attachments={attachments} />
 
       {/* Replies */}

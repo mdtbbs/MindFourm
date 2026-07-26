@@ -22,6 +22,7 @@ import { Category } from '@entities/category.entity';
 import { Tag } from '@entities/tag.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
+import { PostRevision } from '@entities/post-revision.entity';
 import { RedisService } from '../../database/redis.service';
 import { PointsService } from '../points/points.service';
 import { GroupsService } from '../groups/groups.service';
@@ -37,12 +38,21 @@ import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
-import { MAX_REPLY_DEPTH, REPLY_STATUS, VISIBLE_REPLY_STATUSES } from '@common/utils/constants';
+import {
+  MAX_REPLY_DEPTH,
+  NOTIFICATION_TYPES,
+  REPLY_STATUS,
+  VISIBLE_REPLY_STATUSES,
+} from '@common/utils/constants';
 import { generateSlug, makeUniqueSlug } from '@common/utils/url-slug.util';
+import { PostActor, isStaffActor } from './post-actor.util';
 
 @Injectable()
 export class PostsService {
-  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v2:';
+  // v3: the cached payload gained `is_locked` / `best_reply_id` / `edited_at`. Reusing
+  // the v2 key would have served shape-incomplete detail responses — a locked thread
+  // reading as unlocked — for the whole 5-minute TTL after a deploy.
+  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v3:';
 
   constructor(
     @InjectRepository(Post)
@@ -215,6 +225,9 @@ export class PostsService {
         content_html: true,
         status: true,
         is_pinned: true,
+        is_locked: true,
+        best_reply_id: true,
+        edited_at: true,
         view_count: true,
         like_count: true,
         required_group_id: true,
@@ -576,6 +589,28 @@ export class PostsService {
       }
       // `is_pinned` is not editable here — see UpdatePostDto. Use PUT /api/posts/:id/pin.
 
+      // Snapshot the values being replaced, in this same transaction. Written before
+      // the update purely for readability; what matters is that it shares the
+      // transaction, because a revision committed against a post update that then
+      // rolled back would claim an edit that never happened — and the reverse would
+      // silently lose a version of the text.
+      //
+      // Only a real title/content change counts: re-categorising or re-tagging a post
+      // leaves both fields identical, and a revision for that would be a row whose
+      // content matches the one before it, padding the history with no-ops.
+      const titleChanged = updateData.title !== undefined && updateData.title !== post.title;
+      const contentChanged = updateData.content !== undefined && updateData.content !== post.content;
+
+      if (titleChanged || contentChanged) {
+        await manager.insert(PostRevision, {
+          post_id: id,
+          editor_id: userId,
+          title: post.title,
+          content: post.content,
+        });
+        updateData.edited_at = new Date();
+      }
+
       await manager.update(Post, id, updateData);
 
       // Re-attach tags if provided
@@ -699,6 +734,116 @@ export class PostsService {
     }
 
     return post;
+  }
+
+  /**
+   * Open or close a post to new replies.
+   *
+   * The role is re-checked here even though `PUT /api/posts/:id/lock` is already
+   * behind `@Roles('moderator', 'admin')`: the guard protects the route, not the
+   * method, and this is the only place that decides who may change a lock.
+   */
+  async setLocked(
+    postId: number,
+    locked: boolean,
+    actor: PostActor,
+  ): Promise<{ id: number; is_locked: boolean }> {
+    if (!isStaffActor(actor)) {
+      throw new ForbiddenException('无权限锁定或解锁帖子');
+    }
+
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+      select: { id: true },
+    });
+    if (!post) {
+      throw new NotFoundException('帖子不存在');
+    }
+
+    await this.postRepository.update(postId, { is_locked: locked ? 1 : 0 });
+
+    // After the write, for the same reason as in `create`: invalidating first lets a
+    // concurrent reader re-cache the pre-lock row for the whole TTL, which would keep
+    // serving `is_locked: false` while the service is already rejecting replies.
+    await this.invalidatePostCache(postId);
+
+    // Just the flag, rather than the reloaded entity that `pin` and `move` return: those
+    // are eagerly joined to `user`, so they ship the author's email and notification
+    // preferences to the caller. There is nothing here the client needs beyond the new
+    // state.
+    return { id: postId, is_locked: locked };
+  }
+
+  /**
+   * Mark one of a post's replies as the accepted answer, or clear the mark.
+   *
+   * Read and write share a transaction so the reply cannot be deleted between the
+   * check that it belongs to this post and the update that points at it.
+   */
+  async setBestReply(
+    postId: number,
+    replyId: number | null,
+    actor: PostActor,
+  ): Promise<{ id: number; best_reply_id: number | null }> {
+    const markedReply = await this.dataSource.transaction(async (manager) => {
+      const post = await manager.findOne(Post, {
+        where: { id: postId },
+        select: { id: true, user_id: true, best_reply_id: true },
+      });
+      if (!post) {
+        throw new NotFoundException('帖子不存在');
+      }
+
+      // The author picks the answer to their own question; moderators can correct an
+      // abandoned or abused thread.
+      if (post.user_id !== actor.id && !isStaffActor(actor)) {
+        throw new ForbiddenException('只有帖子作者或管理组可以设置最佳答案');
+      }
+
+      let reply: Reply | null = null;
+      if (replyId !== null) {
+        // `post_id` is part of the lookup rather than checked afterwards, so a reply
+        // from another thread simply does not resolve — otherwise any visible reply id
+        // in the forum could be pinned to any post. The status filter keeps a pending
+        // or deleted reply from being promoted to the top of the page.
+        reply = await manager.findOne(Reply, {
+          where: {
+            id: replyId,
+            post_id: postId,
+            status: In(VISIBLE_REPLY_STATUSES),
+          },
+          select: { id: true, user_id: true, content: true },
+        });
+        if (!reply) {
+          throw new BadRequestException('该回复不存在或不属于此帖子');
+        }
+      }
+
+      await manager.update(Post, postId, { best_reply_id: replyId });
+
+      return reply;
+    });
+
+    await this.invalidatePostCache(postId);
+
+    // Post-commit and best-effort: the mark is already durable, and failing the
+    // request over a notification would tell the caller their change did not apply.
+    // Marking your own reply notifies nobody — including an author accepting their own
+    // answer, and a moderator accepting one they wrote themselves.
+    if (markedReply && markedReply.user_id !== actor.id) {
+      this.notificationsService.create({
+        user_id: markedReply.user_id,
+        type: NOTIFICATION_TYPES.best_answer,
+        actor_id: actor.id,
+        post_id: postId,
+        reply_id: markedReply.id,
+        content: markedReply.content,
+      }).catch((err) =>
+        console.error('best answer notification error:', err),
+      );
+    }
+
+    return { id: postId, best_reply_id: replyId };
   }
 
   /**

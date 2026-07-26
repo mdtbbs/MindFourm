@@ -68,6 +68,34 @@ export class Post {
   @Column({ default: 0 })
   is_pinned: number;
 
+  /**
+   * Closed to new replies.
+   *
+   * Deliberately not indexed: nothing ever filters a list on it, it is only read
+   * alongside the post it belongs to.
+   */
+  @Column({ type: 'tinyint', default: 0 })
+  is_locked: number;
+
+  /**
+   * The reply the author (or a moderator) marked as the accepted answer.
+   *
+   * `SET NULL` on delete rather than CASCADE — losing the chosen reply must unmark
+   * the post, not delete it.
+   */
+  @Column({ type: 'int', nullable: true })
+  best_reply_id: number | null;
+
+  /**
+   * When the title or body was last changed, or null if never edited.
+   *
+   * Distinct from `updated_at`, which any write touches — pinning, moving and
+   * moderation all bump that, and none of them are edits the reader should be told
+   * about.
+   */
+  @Column({ type: 'datetime', nullable: true })
+  edited_at: Date | null;
+
   @Column({ default: 0 })
   view_count: number;
 
@@ -94,6 +122,10 @@ export class Post {
   @ManyToOne(() => Group, { eager: false, nullable: true })
   @JoinColumn({ name: 'required_group_id' })
   requiredGroup: Group;
+
+  @ManyToOne(() => Reply, { eager: false, nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'best_reply_id' })
+  bestReply: Reply | null;
 
   @OneToMany(() => Reply, (reply) => reply.post)
   replies: Reply[];

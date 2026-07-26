@@ -8,14 +8,18 @@ import { Post, UserRole } from '@/types';
 import Badge from '@/components/ui/badge';
 import Button from '@/components/ui/button';
 import BookmarkButton from '@/components/forum/bookmark-button';
+import ReportDialog from '@/components/forum/report-dialog';
 import { adminApi } from '@/lib/api/client';
 import { formatTime } from '@/lib/utils';
-import { Pin, Move, Trash2, Check, X } from 'lucide-react';
+import Link from 'next/link';
+import { Pin, Move, Trash2, Check, X, Pencil } from 'lucide-react';
 
 interface PostContentProps {
   post: Post;
   postId?: number;
   currentUserRole?: UserRole | null;
+  /** Whether the viewer authored this post, as reported by the API. */
+  isOwner?: boolean;
   onPin?: () => void;
   onMove?: () => void;
   onDelete?: () => void;
@@ -25,6 +29,7 @@ export default function PostContent({
   post,
   postId,
   currentUserRole,
+  isOwner = false,
   onPin,
   onMove,
   onDelete,
@@ -32,6 +37,8 @@ export default function PostContent({
   const router = useRouter();
   const { showSuccess, showError } = useToast();
   const canModerate = currentUserRole === 'moderator' || currentUserRole === 'admin';
+  // The API authorises the write either way; this only decides whether to offer the link.
+  const canEdit = isOwner || canModerate;
   const authorLabel = post.author_mindauth_id ?? `#${post.user_id}`;
 
   // Moderation state
@@ -133,6 +140,19 @@ export default function PostContent({
         )}
 
         {postId && <BookmarkButton postId={postId} />}
+        {postId && canEdit && (
+          <Link
+            href={`/posts/${postId}/edit`}
+            data-testid="post-edit-link"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--primary)] transition-colors"
+          >
+            <Pencil className="w-4 h-4" />
+            编辑
+          </Link>
+        )}
+        {postId && !isOwner && (
+          <ReportDialog targetType="post" targetId={postId} />
+        )}
         {canModerate && onPin && (
           <Button
             variant="ghost"

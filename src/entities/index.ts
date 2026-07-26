@@ -63,6 +63,7 @@ import { ResourceRating } from './resource-rating.entity';
 import { Report } from './report.entity';
 import { UserBlock } from './user-block.entity';
 import { Reaction } from './reaction.entity';
+import { PostRevision } from './post-revision.entity';
 
 export const entities = [
   User,
@@ -120,6 +121,8 @@ export const entities = [
   Report,
   // User-to-user controls and reactions
   UserBlock, Reaction,
+  // Edit history
+  PostRevision,
 ];
 
 export {
@@ -154,4 +157,6 @@ export {
   Report,
   // User-to-user controls and reactions
   UserBlock, Reaction,
+  // Edit history
+  PostRevision,
 };

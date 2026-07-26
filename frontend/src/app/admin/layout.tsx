@@ -7,7 +7,7 @@ import { AdminSidebar as SharedAdminSidebar, SidebarItem, SidebarGroup } from '@
 import { useSetting } from '@/store/settings-store';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
-  AlertTriangle, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
+  AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
   Package, AlertCircle, FolderOpen, ToggleLeft
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
@@ -37,6 +37,7 @@ const navGroups: SidebarGroup[] = [
       { key: 'posts', label: '帖子管理', icon: <FileText size={16} />, href: '/admin/posts', roles: ['admin', 'moderator'] },
       { key: 'content-tags', label: '标签管理', icon: <Tag size={16} />, href: '/admin/content/tags', roles: ['admin'] },
       { key: 'content-moderation', label: '审核队列', icon: <AlertTriangle size={16} />, href: '/admin/content/moderation', roles: ['admin', 'moderator'] },
+      { key: 'content-reports', label: '举报处理', icon: <Flag size={16} />, href: '/admin/content/reports', roles: ['admin', 'moderator'] },
     ],
   },
   {

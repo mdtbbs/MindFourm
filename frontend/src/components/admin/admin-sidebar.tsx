@@ -8,7 +8,7 @@ import { adminApi } from '@/lib/api/client';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen, Puzzle, Award, Star, ShoppingBag
+  Package, AlertCircle, FolderOpen, Puzzle, Award, Star, ShoppingBag, Flag
 } from 'lucide-react';
 
 const navSections = [
@@ -33,6 +33,7 @@ const navSections = [
       { href: '/admin/posts', label: '帖子管理', icon: FileText, roles: ['admin', 'moderator'] },
       { href: '/admin/content/tags', label: '标签管理', icon: Tag, roles: ['admin'] },
       { href: '/admin/content/moderation', label: '审核队列', icon: AlertTriangle, roles: ['admin', 'moderator'] },
+      { href: '/admin/content/reports', label: '举报处理', icon: Flag, roles: ['admin', 'moderator'] },
     ],
   },
   {
