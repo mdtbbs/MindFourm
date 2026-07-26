@@ -2,7 +2,7 @@ import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import PostContent from '@/components/forum/post-content';
-import ReplyItem from '@/components/forum/reply-item';
+import ReplyThread, { buildReplyTree } from '@/components/forum/reply-thread';
 import ReplyFormWrapper from '@/components/forum/reply-form-wrapper';
 import Pagination from '@/components/ui/pagination';
 import AttachmentList from '@/components/forum/attachment-list';
@@ -247,16 +247,13 @@ export default async function PostDetailPage({
         {replies.length === 0 ? (
           <div className="text-center py-8 text-[var(--text-secondary)]">暂无回复，快来抢沙发吧</div>
         ) : (
-          <div className="space-y-4">
-            {replies.map((reply: any, index: number) => (
-              <ReplyItem
-                key={reply.id}
-                reply={reply}
-                index={(page - 1) * repliesPerPage + index}
-                postId={postId}
-              />
-            ))}
-          </div>
+          // Floors are numbered from the root replies on this page. The API paginates
+          // roots and returns their descendants alongside them, so the tree is always
+          // complete for whatever page is being shown.
+          <ReplyThread
+            nodes={buildReplyTree(replies, (page - 1) * repliesPerPage)}
+            postId={postId}
+          />
         )}
 
         <Pagination

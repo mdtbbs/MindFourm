@@ -11,6 +11,7 @@ import {
   EntityManager,
   Brackets,
   In,
+  IsNull,
   LessThan,
   MoreThan,
   Like,
@@ -36,7 +37,7 @@ import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
-import { REPLY_STATUS, VISIBLE_REPLY_STATUSES } from '@common/utils/constants';
+import { MAX_REPLY_DEPTH, REPLY_STATUS, VISIBLE_REPLY_STATUSES } from '@common/utils/constants';
 import { generateSlug, makeUniqueSlug } from '@common/utils/url-slug.util';
 
 @Injectable()
@@ -739,52 +740,82 @@ export class PostsService {
   }
 
   /**
-   * Get first page of replies for a post
+   * One page of reply threads.
+   *
+   * Pagination applies to root replies, and every descendant of the roots on this page
+   * is returned alongside them. Paginating the flat list — which is what this used to do
+   * — split threads across page boundaries, so a nested reply could land on a page
+   * without its parent and the client had no way to reconstruct the conversation.
+   *
+   * `total` remains the count of *all* replies because the UI presents it as "回复 (N)".
+   * `rootTotal` is what the page count is derived from.
    */
   async getReplies(postId: number, limit: number = 20, page: number = 1): Promise<{
     data: PostDetailReply[];
     total: number;
+    rootTotal: number;
     page: number;
     limit: number;
     totalPages: number;
   }> {
     const skip = (page - 1) * limit;
-
-    const [replies, total] = await this.replyRepository.findAndCount({
-      where: { post_id: postId, status: In(VISIBLE_REPLY_STATUSES) },
-      relations: ['user'],
-      select: {
+    const visible = In(VISIBLE_REPLY_STATUSES);
+    const select = {
+      id: true,
+      post_id: true,
+      user_id: true,
+      parent_reply_id: true,
+      content: true,
+      content_html: true,
+      status: true,
+      like_count: true,
+      created_at: true,
+      updated_at: true,
+      user: {
         id: true,
-        post_id: true,
-        user_id: true,
-        parent_reply_id: true,
-        content: true,
-        content_html: true,
-        status: true,
-        like_count: true,
-        created_at: true,
-        updated_at: true,
-        user: {
-          id: true,
-          mindauth_id: true,
-          role: true,
-        },
+        mindauth_id: true,
+        role: true,
       },
+    } as const;
+
+    const [roots, rootTotal] = await this.replyRepository.findAndCount({
+      where: { post_id: postId, parent_reply_id: IsNull(), status: visible },
+      relations: ['user'],
+      select,
       order: { created_at: 'ASC' },
       skip,
       take: limit,
     });
 
-    const totalPages = Math.ceil(total / limit);
+    // Descend one level per query. Bounded by MAX_REPLY_DEPTH so a parent cycle
+    // introduced by bad data cannot turn this into an unbounded loop.
+    const descendants: Reply[] = [];
+    let frontier = roots.map((reply) => reply.id);
+    for (let depth = 1; depth < MAX_REPLY_DEPTH && frontier.length > 0; depth += 1) {
+      const level = await this.replyRepository.find({
+        where: { post_id: postId, parent_reply_id: In(frontier), status: visible },
+        relations: ['user'],
+        select,
+        order: { created_at: 'ASC' },
+      });
+      if (level.length === 0) break;
+      descendants.push(...level);
+      frontier = level.map((reply) => reply.id);
+    }
 
-    const data = await this.postDetailService.toReplies(replies);
+    const total = await this.replyRepository.count({
+      where: { post_id: postId, status: visible },
+    });
+
+    const data = await this.postDetailService.toReplies([...roots, ...descendants]);
 
     return {
       data,
       total,
+      rootTotal,
       page,
       limit,
-      totalPages,
+      totalPages: Math.max(1, Math.ceil(rootTotal / limit)),
     };
   }
 

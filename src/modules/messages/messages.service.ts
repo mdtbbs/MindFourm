@@ -11,6 +11,7 @@ import { RedisService } from '@database/redis.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { parseDateCursor, toDateCursor } from '@common/utils/date-cursor.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UserBlocksService } from '../user-blocks/user-blocks.service';
 
 const DEFAULT_MESSAGE_LIMIT = 50;
 const MAX_MESSAGE_LIMIT = 100;
@@ -42,6 +43,7 @@ export class MessagesService {
     private groupChatMemberRepo: Repository<GroupChatMember>,
     private redisService: RedisService,
     private notificationsService: NotificationsService,
+    private userBlocksService: UserBlocksService,
     private dataSource: DataSource,
   ) {}
 
@@ -54,6 +56,9 @@ export class MessagesService {
       const recipient = await queryRunner.manager.findOne(User, { where: { id: dto.recipient_id } });
       if (!recipient) throw new NotFoundException('Recipient not found');
       if (senderId === dto.recipient_id) throw new BadRequestException('Cannot send to yourself');
+      // Checked before the write, not in the client: the block is invisible to the
+      // sender, so hiding the compose box would still leave this endpoint reachable.
+      await this.userBlocksService.assertNotBlocked(senderId, dto.recipient_id);
 
       const contentHtml = parseMarkdown(dto.content);
       saved = await queryRunner.manager.save(Message, {

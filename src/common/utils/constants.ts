@@ -40,6 +40,16 @@ export type ReplyStatus = (typeof REPLY_STATUS)[keyof typeof REPLY_STATUS];
 /** Reply statuses that are visible to readers and counted in reply totals. */
 export const VISIBLE_REPLY_STATUSES: ReplyStatus[] = [REPLY_STATUS.published];
 
+/**
+ * How many levels of nested replies are fetched and rendered.
+ *
+ * Serves two purposes: it keeps indentation readable, and it bounds the level-by-level
+ * descendant query so a `parent_reply_id` cycle in bad data cannot loop forever.
+ * Replies deeper than this are still stored, and still reachable from their parent's
+ * permalink — they are just not expanded inline.
+ */
+export const MAX_REPLY_DEPTH = 5;
+
 export const RESOURCE_STATUS = {
   pending: 'pending',
   approved: 'approved',

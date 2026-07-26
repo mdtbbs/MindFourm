@@ -60,6 +60,9 @@ import { PopularSearch } from './popular-search.entity';
 
 // Resource Ratings
 import { ResourceRating } from './resource-rating.entity';
+import { Report } from './report.entity';
+import { UserBlock } from './user-block.entity';
+import { Reaction } from './reaction.entity';
 
 export const entities = [
   User,
@@ -113,6 +116,10 @@ export const entities = [
   PopularSearch,
   // Resource Ratings
   ResourceRating,
+  // Moderation
+  Report,
+  // User-to-user controls and reactions
+  UserBlock, Reaction,
 ];
 
 export {
@@ -143,4 +150,8 @@ export {
   PopularSearch,
   // Resource Ratings
   ResourceRating,
+  // Moderation
+  Report,
+  // User-to-user controls and reactions
+  UserBlock, Reaction,
 };

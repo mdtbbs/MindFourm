@@ -106,7 +106,12 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
     // `pagination` fully populated whichever way the request arrived.
     const currentPage = query.page ?? 1;
     const perPage = query.limit ?? 20;
-    const result = await this.notificationsService.getByUserId(userId, currentPage, perPage);
+    const result = await this.notificationsService.getByUserId(
+      userId,
+      currentPage,
+      perPage,
+      query.filter ?? 'all',
+    );
     return {
       data: result.notifications,
       pagination: {

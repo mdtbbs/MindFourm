@@ -9,6 +9,7 @@ jest.mock('typeorm', () => ({
   DataSource: class DataSource {},
   Brackets: class Brackets {},
   In: (value: unknown) => ({ __op: 'In', value }),
+  IsNull: () => ({ __op: 'IsNull' }),
   LessThan: (value: unknown) => ({ __op: 'LessThan', value }),
   MoreThan: (value: unknown) => ({ __op: 'MoreThan', value }),
   Like: (value: unknown) => ({ __op: 'Like', value }),
@@ -228,7 +229,7 @@ describe('PostsService', () => {
     });
   });
 
-  it('maps reply DTOs with author metadata for post detail pages', async () => {
+  it('paginates root replies only, so page numbers count threads rather than rows', async () => {
     const { service, replyRepository, postDetailService } = createService({
       replyRepository: {
         findAndCount: jest.fn().mockResolvedValue([
@@ -242,6 +243,8 @@ describe('PostsService', () => {
           ],
           1,
         ]),
+        find: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(4),
       },
       postDetailService: {
         toReplies: jest.fn().mockResolvedValue([
@@ -256,9 +259,11 @@ describe('PostsService', () => {
 
     const result = await service.getReplies(88, 20, 2);
 
+    // parent_reply_id IS NULL is what restricts the page to roots; without it a nested
+    // reply could be paginated away from the parent it belongs to.
     expect(replyRepository.findAndCount).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { post_id: 88, status: expect.any(Object) },
+        where: expect.objectContaining({ post_id: 88, parent_reply_id: expect.any(Object) }),
         skip: 20,
         take: 20,
       }),
@@ -274,11 +279,50 @@ describe('PostsService', () => {
           author_mindauth_id: 7788,
         },
       ],
-      total: 1,
+      // `total` counts every reply because the UI shows it as "回复 (N)", while the page
+      // count comes from the root total.
+      total: 4,
+      rootTotal: 1,
       page: 2,
       limit: 20,
       totalPages: 1,
     });
+  });
+
+  it('returns the descendants of the roots on the page, not just the roots', async () => {
+    const roots = [{ id: 10, post_id: 88, user_id: 5, status: 'published' }];
+    const children = [
+      { id: 11, post_id: 88, user_id: 6, parent_reply_id: 10, status: 'published' },
+    ];
+    const grandchildren = [
+      { id: 12, post_id: 88, user_id: 7, parent_reply_id: 11, status: 'published' },
+    ];
+
+    const find = jest
+      .fn()
+      .mockResolvedValueOnce(children)
+      .mockResolvedValueOnce(grandchildren)
+      .mockResolvedValue([]);
+
+    const { service, postDetailService } = createService({
+      replyRepository: {
+        findAndCount: jest.fn().mockResolvedValue([roots, 1]),
+        find,
+        count: jest.fn().mockResolvedValue(3),
+      },
+      postDetailService: { toReplies: jest.fn().mockResolvedValue([]) },
+    });
+
+    await service.getReplies(88, 20, 1);
+
+    // One query per level, each seeded with the previous level's ids, stopping as soon
+    // as a level comes back empty.
+    expect(find).toHaveBeenCalledTimes(3);
+    expect(postDetailService.toReplies).toHaveBeenCalledWith([
+      ...roots,
+      ...children,
+      ...grandchildren,
+    ]);
   });
 
   it('maps search results into public summaries', async () => {

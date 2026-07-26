@@ -5,9 +5,16 @@ import type { Reply } from '@/types';
 
 interface ReplyItemProps {
   reply: Reply;
-  index: number;
+  /**
+   * Floor number, or null for a nested reply.
+   *
+   * Only root replies get one: numbering a nested reply would imply it holds a position
+   * in the post's sequence of floors, which it does not.
+   */
+  floor: number | null;
   /** Scopes the quote/reply target to this post's composer. */
   postId: number;
+  isNested?: boolean;
 }
 
 /**
@@ -15,7 +22,7 @@ interface ReplyItemProps {
  * interactivity, so the Markdown is rendered once on the server rather than shipped
  * to the browser and re-parsed for every reply on the page.
  */
-export default function ReplyItem({ reply, index, postId }: ReplyItemProps) {
+export default function ReplyItem({ reply, floor, postId, isNested = false }: ReplyItemProps) {
   const authorLabel = reply.author_mindauth_id ?? `#${reply.user_id}`;
 
   return (
@@ -24,9 +31,17 @@ export default function ReplyItem({ reply, index, postId }: ReplyItemProps) {
       id={`reply-${reply.id}`}
     >
       {/* Reply Header */}
-      <div className="px-4 py-3 bg-[var(--bg-elevated)] border-b border-[var(--border)] flex items-center justify-between">
-        <div className="flex items-center gap-3 text-sm">
-          <span className="font-medium text-[var(--text)]">#{index + 1}</span>
+      <div
+        className={`bg-[var(--bg-elevated)] border-b border-[var(--border)] flex items-center justify-between ${
+          isNested ? 'px-3 py-2' : 'px-4 py-3'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          {floor !== null ? (
+            <span className="font-medium text-[var(--text)]">#{floor}</span>
+          ) : (
+            <span className="text-xs text-[var(--text-muted)]">回复</span>
+          )}
           <span className="text-[var(--text-secondary)]">作者 ID: {authorLabel}</span>
           <span className="text-[var(--text-muted)]">|</span>
           <time
@@ -42,7 +57,7 @@ export default function ReplyItem({ reply, index, postId }: ReplyItemProps) {
       </div>
 
       {/* Reply Content */}
-      <div className="p-4">
+      <div className={isNested ? 'px-3 py-3' : 'p-4'}>
         <MarkdownRenderer content={reply.content} />
       </div>
 

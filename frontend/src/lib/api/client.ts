@@ -727,10 +727,12 @@ export const bookmarkApi = {
 
 // Notification APIs
 export const notificationApi = {
-  list: (params?: { page?: number; limit?: number }) =>
+  list: (params?: { page?: number; limit?: number; filter?: 'all' | 'unread' | 'read' }) =>
     request<NotificationListResponse>(`/api/notifications${buildQueryString({
       page: params?.page,
       limit: params?.limit,
+      // Filtering server side keeps `pagination.total` describing the rows returned.
+      filter: params?.filter,
     })}`),
   listCursor: (params?: { cursor?: string; limit?: number }) =>
     request<{ data: Notification[]; next_cursor: string | null; has_more: boolean }>(`/api/notifications/cursor${buildQueryString({

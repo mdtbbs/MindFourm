@@ -38,6 +38,9 @@ import { RssModule } from './modules/rss/rss.module';
 import { PluginsModule } from './modules/plugins/plugins.module';
 import { SearchModule } from './modules/search/search.module';
 import { ServiceApiModule } from './modules/service-api/service-api.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { UserBlocksModule } from './modules/user-blocks/user-blocks.module';
+import { ReactionsModule } from './modules/reactions/reactions.module';
 import { PhoneWriteGuard } from './common/guards/phone-write.guard';
 import { BanGuard } from './common/guards/ban.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -94,6 +97,9 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     PluginsModule,
     SearchModule,
     ServiceApiModule,
+    ReportsModule,
+    UserBlocksModule,
+    ReactionsModule,
   ],
   controllers: [HealthController],
   // Global guards run in registration order, before any controller-scoped guard.

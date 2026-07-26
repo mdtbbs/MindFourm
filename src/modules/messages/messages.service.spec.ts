@@ -53,17 +53,41 @@ function createService(overrides: Record<string, any> = {}) {
     delete: jest.fn().mockResolvedValue({ affected: 1 }),
     ...overrides.groupChatMemberRepo,
   };
+  const userBlocksService = {
+    assertNotBlocked: jest.fn().mockResolvedValue(undefined),
+    ...overrides.userBlocksService,
+  };
+  const notificationsService = {
+    create: jest.fn().mockResolvedValue(undefined),
+    ...overrides.notificationsService,
+  };
   const service = new MessagesService(
     messageRepo as any,
     { findOne: jest.fn() } as any,
     { findOne: jest.fn(), save: jest.fn() } as any,
     groupChatMemberRepo as any,
     { get: jest.fn().mockResolvedValue(null), set: jest.fn(), del: jest.fn() } as any,
-    { create: jest.fn() } as any,
-    {} as any,
+    notificationsService as any,
+    userBlocksService as any,
+    (overrides.dataSource ?? {}) as any,
   );
 
-  return { service, messageRepo, groupChatMemberRepo };
+  return { service, messageRepo, groupChatMemberRepo, userBlocksService, notificationsService };
+}
+
+/** Query runner double for the paths that open a transaction. */
+function createQueryRunnerMock(recipient: unknown = { id: 2 }) {
+  return {
+    connect: jest.fn(),
+    startTransaction: jest.fn(),
+    commitTransaction: jest.fn(),
+    rollbackTransaction: jest.fn(),
+    release: jest.fn(),
+    manager: {
+      findOne: jest.fn().mockResolvedValue(recipient),
+      save: jest.fn(async (_entity: unknown, value: unknown) => value),
+    },
+  };
 }
 
 describe('normalizeMessageLimit', () => {
@@ -267,5 +291,38 @@ describe('MessagesService.getGroupMessages pagination', () => {
     groupChatMemberRepo.findOne.mockResolvedValue(null);
 
     await expect(service.getGroupMessages(7, 99, 50)).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('MessagesService.create block enforcement', () => {
+  it('refuses a direct message when the recipient has blocked the sender', async () => {
+    const queryRunner = createQueryRunnerMock();
+    const { service, userBlocksService } = createService({
+      dataSource: { createQueryRunner: () => queryRunner },
+      userBlocksService: {
+        assertNotBlocked: jest.fn().mockRejectedValue(new ForbiddenException('blocked')),
+      },
+    });
+
+    await expect(service.create({ recipient_id: 2, content: 'hi' }, 1)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    // Checked with (sender, recipient) so that the block only stops the blocked
+    // direction, and checked before the insert rather than after it.
+    expect(userBlocksService.assertNotBlocked).toHaveBeenCalledWith(1, 2);
+    expect(queryRunner.manager.save).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('stores the message when no block is in place', async () => {
+    const queryRunner = createQueryRunnerMock();
+    const { service } = createService({
+      dataSource: { createQueryRunner: () => queryRunner },
+    });
+
+    await service.create({ recipient_id: 2, content: 'hi' }, 1);
+
+    expect(queryRunner.manager.save).toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).toHaveBeenCalled();
   });
 });
