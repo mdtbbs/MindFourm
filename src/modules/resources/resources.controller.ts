@@ -26,10 +26,13 @@ import { ResourcesService, ResourceFileMeta } from './resources.service';
 import { ResourceCategoryService } from './resource-categories.service';
 import { ResourceVersionService } from './resource-versions.service';
 import { UpdateResourceDto } from './dto/update-resource.dto';
+import { CreateResourceDto } from './dto/create-resource.dto';
 import { QueryResourcesDto } from './dto/query-resources.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
+import { OptionalAuth } from '@common/decorators/public.decorator';
+import { assertSafeRedirectUrl } from '@common/utils/safe-url.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -169,25 +172,35 @@ export class ResourcesController {
   }
 
   @Get(':id')
-  async getById(@Param('id', ParseIntPipe) id: number) {
-    return this.resourcesService.getByIdWithVersions(id);
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.resourcesService.getByIdWithVersions(id, req?.user);
   }
 
   @Get(':id/download')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
   async download(
     @Param('id', ParseIntPipe) id: number,
     @Query('version_id') versionId: string | undefined,
     @Res({ passthrough: true }) res: Response,
+    @Req() req?: any,
   ) {
-    const resource = await this.resourcesService.getById(id);
+    // getById enforces moderation status, so unapproved files are not downloadable.
+    const resource = await this.resourcesService.getById(id, req?.user);
 
     // MFL redirect: if resource uses MFL, redirect to MFL download URL
     if (!versionId && resource.use_mfl && resource.mfl_download_url) {
+      assertSafeRedirectUrl(resource.mfl_download_url);
       await this.resourcesService.incrementDownload(id);
       return res.redirect(resource.mfl_download_url);
     }
 
     if (!versionId && resource.resource_type === 'external' && resource.external_url) {
+      // Validated again at redirect time: rows predating the DTO's @IsUrl check may
+      // still hold a `javascript:` or `data:` URL.
+      assertSafeRedirectUrl(resource.external_url);
       await this.resourcesService.incrementDownload(id);
       return res.redirect(resource.external_url);
     }
@@ -222,20 +235,27 @@ export class ResourcesController {
   }
 
   @Get(':id/versions')
-  async getVersions(@Param('id', ParseIntPipe) id: number) {
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getVersions(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    // Resolve the resource first so version listings inherit its visibility rules.
+    await this.resourcesService.getById(id, req?.user);
     return this.versionService.list(id);
   }
 
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(resourceUploadInterceptor)
+  // `@Body() any` opted this route out of the global ValidationPipe entirely — its
+  // `whitelist`/`forbidNonWhitelisted` checks need a class metatype — so
+  // CreateResourceDto was imported for typing only and never actually enforced.
   async create(
-    @Body() body: any,
+    @Body() body: CreateResourceDto,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    const useMfl = body.use_mfl === '1' || body.use_mfl === 'true' || body.use_mfl === true;
+    const useMfl = body.use_mfl === '1' || body.use_mfl === 'true' || (body.use_mfl as any) === true;
 
     try {
       if (useMfl && file) {
@@ -265,14 +285,14 @@ export class ResourcesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    return this.resourcesService.update(id, userId, dto);
+    return this.resourcesService.update(id, userId, dto, req.user.role);
   }
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard)
   async delete(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const userId = req.user.id;
-    await this.resourcesService.delete(id, userId);
+    await this.resourcesService.delete(id, userId, req.user.role);
     return { message: 'Resource deleted successfully' };
   }
 

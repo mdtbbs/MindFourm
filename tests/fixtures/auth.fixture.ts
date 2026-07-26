@@ -3,6 +3,9 @@
  *
  * Provides helper methods for simulating authenticated state in tests.
  * Uses the test-login endpoint to bypass MindAuth OAuth flow in testing.
+ *
+ * The API must be started with `ENABLE_TEST_AUTH=true` — the endpoint is not
+ * registered otherwise (and is refused outright when NODE_ENV=production).
  */
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
@@ -37,6 +40,12 @@ async function createTestSession(
   });
 
   if (!response.ok()) {
+    if (response.status() === 404) {
+      throw new Error(
+        'test-login endpoint is not registered. Start the API with ENABLE_TEST_AUTH=true ' +
+          '(it stays disabled when NODE_ENV=production).',
+      );
+    }
     const body = await response.text();
     throw new Error(`Failed to create test session: ${response.status()} - ${body}`);
   }

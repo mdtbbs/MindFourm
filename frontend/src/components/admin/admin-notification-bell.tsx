@@ -1,17 +1,16 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, CheckCheck, ExternalLink, Radio } from 'lucide-react';
+import { buildPublicApiUrl } from '@/lib/api/client';
 import { useSse } from '@/hooks/use-sse';
 import Badge from '@/components/ui/badge';
 import { AdminNotification } from '@/types';
 import { useAdminNotificationStore } from '@/store/admin-notification-store';
 import { useToastStore } from '@/store/toast-store';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-const ADMIN_SSE_ENDPOINT = `${API_URL}/api/admin/notifications/events`;
-
+const ADMIN_SSE_ENDPOINT = buildPublicApiUrl('/api/admin/notifications/events');
 function getLevelVariant(level: AdminNotification['level']) {
   switch (level) {
     case 'success':
@@ -47,24 +46,38 @@ export default function AdminNotificationBell() {
   const showWarning = useToastStore((state) => state.showWarning);
   const showError = useToastStore((state) => state.showError);
 
-  useSse<AdminNotification>('admin-notification', (notification) => {
-    addNotification(notification);
+  // Memoised so the SSE hook is not handed a new closure on every render.
+  const handleAdminNotification = useCallback(
+    (notification: AdminNotification) => {
+      addNotification(notification);
 
-    if (notification.level === 'success') {
-      showSuccess(notification.title);
-    } else if (notification.level === 'warning') {
-      showWarning(notification.title);
-    } else if (notification.level === 'error') {
-      showError(notification.title);
-    } else {
-      showInfo(notification.title);
-    }
-  }, {
-    url: ADMIN_SSE_ENDPOINT,
-    onConnect: () => setConnected(true),
-    onDisconnect: () => setConnected(false),
-    onError: () => setConnected(false),
-  });
+      if (notification.level === 'success') {
+        showSuccess(notification.title);
+      } else if (notification.level === 'warning') {
+        showWarning(notification.title);
+      } else if (notification.level === 'error') {
+        showError(notification.title);
+      } else {
+        showInfo(notification.title);
+      }
+    },
+    [addNotification, showSuccess, showWarning, showError, showInfo],
+  );
+
+  const handleConnected = useCallback(() => setConnected(true), [setConnected]);
+  const handleDisconnected = useCallback(() => setConnected(false), [setConnected]);
+
+  const sseOptions = useMemo(
+    () => ({
+      url: ADMIN_SSE_ENDPOINT,
+      onConnect: handleConnected,
+      onDisconnect: handleDisconnected,
+      onError: handleDisconnected,
+    }),
+    [handleConnected, handleDisconnected],
+  );
+
+  useSse<AdminNotification>('admin-notification', handleAdminNotification, sseOptions);
 
   useEffect(() => {
     fetchNotifications(8).catch(() => undefined);

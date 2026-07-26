@@ -25,6 +25,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { BulkPostsDto } from './dto/bulk-posts.dto';
 import { MergeTagsDto } from './dto/merge-tags.dto';
+import { CreateBanDto } from '../bans/dto/create-ban.dto';
 
 /** Safely parse a query param to int, falling back to a default when the
  *  global ValidationPipe turns a missing param into `undefined`/NaN. */
@@ -78,7 +79,7 @@ export class AdminController {
   @Get('settings')
   @Roles('admin')
   async getAllSettings() {
-    return this.settingsService.getAll();
+    return this.settingsService.getAllForAdmin();
   }
 
   /**
@@ -87,7 +88,7 @@ export class AdminController {
   @Get('settings/:category')
   @Roles('admin')
   async getCategorySettings(@Param('category') category: string) {
-    return this.settingsService.getByCategory(category);
+    return this.settingsService.getByCategoryForAdmin(category);
   }
 
   /**
@@ -368,15 +369,14 @@ export class AdminController {
    */
   @Post('bans')
   @Roles('admin')
-  async createBan(
-    @Body() dto: { ban_type: string; value: string; reason?: string },
-    @Query('user_id') user_id: number,
-  ) {
+  async createBan(@Body() dto: CreateBanDto, @Req() req: any) {
     return this.bansService.create({
       ban_type: dto.ban_type,
       value: dto.value,
       reason: dto.reason,
-      created_by: user_id,
+      // Taken from the session: reading `?user_id=` made the audit trail
+      // attacker-supplied, or undefined (violating the FK) when omitted.
+      created_by: req.user.id,
     });
   }
 
@@ -408,8 +408,8 @@ export class AdminController {
   @Post('cleanup/sessions')
   @Roles('admin')
   async cleanupSessions() {
-    // This would use Redis to cleanup expired sessions
-    return { message: 'Sessions cleaned up' };
+    const removed = await this.adminService.cleanupSessions();
+    return { message: `已清理 ${removed} 条过期会话审计记录`, removed };
   }
 
   /**

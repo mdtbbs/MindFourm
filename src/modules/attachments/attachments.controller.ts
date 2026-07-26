@@ -11,15 +11,19 @@ import {
   Res,
   ParseIntPipe,
   UseGuards,
+  BadRequestException,
+  NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { createReadStream } from 'fs';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { AttachmentsService } from './attachments.service';
+import { UploadAttachmentDto } from './dto/upload-attachment.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
-import { RolesGuard } from '@common/guards/roles.guard';
-import { Roles } from '@common/decorators/roles.decorator';
 import { Public } from '@common/decorators/public.decorator';
 import type { Request, Response } from 'express';
 
@@ -68,6 +72,8 @@ function fileFilter(_req: any, file: Express.Multer.File, callback: (error: Erro
 
 @Controller('attachments')
 export class AttachmentsController {
+  private readonly logger = new Logger(AttachmentsController.name);
+
   constructor(private readonly attachmentsService: AttachmentsService) {}
 
   @Post('upload')
@@ -87,10 +93,23 @@ export class AttachmentsController {
   )
   async upload(
     @UploadedFiles() files: Express.Multer.File[],
-    @Body() body: { post_id?: number; reply_id?: number },
+    @Body() body: UploadAttachmentDto,
     @Req() req: Request,
   ) {
+    // Multer leaves `files` undefined when nothing is sent; iterating threw a
+    // TypeError and surfaced as a 500.
+    if (!files?.length) {
+      throw new BadRequestException('没有收到文件');
+    }
+
     const userId = (req as any).user?.id;
+    const role = (req as any).user?.role;
+    const isStaff = role === 'admin' || role === 'moderator';
+
+    if (body.post_id) {
+      await this.attachmentsService.assertCanAttachToPost(body.post_id, userId, isStaff);
+    }
+
     const results: any[] = [];
     for (const file of files) {
       const attachment = await this.attachmentsService.create({
@@ -116,16 +135,40 @@ export class AttachmentsController {
   @Get(':id/download')
   @Public()
   async download(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
-    const attachment = await this.attachmentsService.getById(id);
+    const attachment = await this.attachmentsService.getForDownload(id);
+
+    const filePath = path.resolve(attachment.file_path);
+    // Confirm the file is readable before committing to a 200 with download headers.
+    try {
+      await fs.access(filePath);
+    } catch {
+      throw new NotFoundException('File does not exist');
+    }
+
     await this.attachmentsService.incrementDownloadCount(id);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.file_name)}"`);
-    res.setHeader('Content-Type', attachment.mime_type);
-    createReadStream(attachment.file_path).pipe(res);
+    // nosniff (set by helmet) stops the browser from re-interpreting this.
+    res.setHeader('Content-Type', attachment.mime_type || 'application/octet-stream');
+
+    const stream = createReadStream(filePath);
+    // Without this listener a mid-stream read failure emits an unhandled 'error'
+    // event, which in Node is an uncaught exception — i.e. a remote crash.
+    stream.on('error', (error) => {
+      this.logger.error(`Failed to stream attachment ${id}: ${error.message}`);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Failed to read file' });
+      } else {
+        res.destroy(error);
+      }
+    });
+    stream.pipe(res);
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin', 'moderator')
+  @UseGuards(JwtAuthGuard)
+  // Any authenticated user may reach this; the service enforces "owner or staff".
+  // Restricting the route to @Roles('admin','moderator') made the owner branch in
+  // AttachmentsService.delete unreachable, so users could not remove their own files.
   async delete(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
     const userId = (req as any).user?.id;
     const role = (req as any).user?.role;

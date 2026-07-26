@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { createHmac } from 'crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '../settings/settings.service';
+import { isPublicHttpUrl } from '@common/utils/safe-url.util';
 import type {
   AdminNotificationView,
   PublishAdminNotificationInput,
@@ -24,6 +25,8 @@ export interface AdminNotificationWebhookPayload {
 
 @Injectable()
 export class AdminNotificationWebhookService {
+  private readonly logger = new Logger(AdminNotificationWebhookService.name);
+
   constructor(private readonly settingsService: SettingsService) {}
 
   async publish(
@@ -40,6 +43,14 @@ export class AdminNotificationWebhookService {
 
     const url = (await this.settingsService.get('admin_notifications_webhook_url'))?.trim();
     if (!url) {
+      return;
+    }
+
+    // The URL is admin-supplied and was posted to with no validation at all, which
+    // made this a server-side request forgery primitive: cloud metadata endpoints,
+    // internal-only services and loopback ports were all reachable.
+    if (!isPublicHttpUrl(url)) {
+      this.logger.warn(`Refusing to deliver admin notification webhook to ${url}`);
       return;
     }
 
@@ -71,9 +82,15 @@ export class AdminNotificationWebhookService {
         .digest('hex')}`;
     }
 
-    await axios.post(url, payload, {
+    // Send the exact bytes the signature was computed over. Passing the object let
+    // axios re-serialize it independently, so the HMAC was not guaranteed to match
+    // the body the receiver actually verified.
+    await axios.post(url, serializedPayload, {
       headers,
       timeout: this.parseTimeout(await this.settingsService.get('admin_notifications_webhook_timeout_ms')),
+      // Prevent axios from following a redirect into a blocked address.
+      maxRedirects: 0,
+      transformRequest: [(data) => data],
     });
   }
 

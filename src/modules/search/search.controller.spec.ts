@@ -1,3 +1,11 @@
+jest.mock('../../common/guards/jwt-auth.guard', () => ({
+  JwtAuthGuard: class JwtAuthGuard {},
+}));
+
+jest.mock('./search.service', () => ({
+  SearchService: class SearchService {},
+}));
+
 import { SearchController } from './search.controller';
 
 function createController(overrides: {

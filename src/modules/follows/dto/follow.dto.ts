@@ -15,9 +15,6 @@ export class QueryFollowsDto {
   limit?: number;
 }
 
-export class FollowUserDto {
-  @IsInt()
-  @Min(1)
-  @Type(() => Number)
-  followerId: number;
-}
+// `followerId` used to be accepted from the request body, which let any
+// authenticated caller create follows on behalf of another user. The follower is
+// now always taken from the session, so this payload carries nothing.

@@ -11,6 +11,23 @@ import { RedisService } from '@database/redis.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { NotificationsService } from '../notifications/notifications.service';
 
+const DEFAULT_MESSAGE_LIMIT = 50;
+const MAX_MESSAGE_LIMIT = 100;
+
+/**
+ * Clamp a caller-supplied page size.
+ *
+ * `Number(query.limit)` was passed straight to `take()`, so `?limit=abc` produced
+ * `LIMIT NaN` (a SQL error) and `?limit=999999` was honoured verbatim.
+ */
+export function normalizeMessageLimit(limit: unknown): number {
+  const parsed = Number(limit);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return DEFAULT_MESSAGE_LIMIT;
+  }
+  return Math.min(Math.floor(parsed), MAX_MESSAGE_LIMIT);
+}
+
 @Injectable()
 export class MessagesService {
   constructor(
@@ -31,13 +48,14 @@ export class MessagesService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+    let saved: Message;
     try {
       const recipient = await queryRunner.manager.findOne(User, { where: { id: dto.recipient_id } });
       if (!recipient) throw new NotFoundException('Recipient not found');
       if (senderId === dto.recipient_id) throw new BadRequestException('Cannot send to yourself');
 
       const contentHtml = parseMarkdown(dto.content);
-      const saved = await queryRunner.manager.save(Message, {
+      saved = await queryRunner.manager.save(Message, {
         sender_id: senderId,
         recipient_id: dto.recipient_id,
         content: dto.content,
@@ -47,24 +65,45 @@ export class MessagesService {
         deleted_by_recipient: 0,
       });
 
-      await this.notificationsService.create({
-        user_id: dto.recipient_id,
-        type: 'message',
-        actor_id: senderId,
-      });
-      await this.redisService.del(`unread_msg:${dto.recipient_id}`);
-
       await queryRunner.commitTransaction();
-      return saved;
     } catch (e) {
       await queryRunner.rollbackTransaction();
       throw e;
     } finally {
       await queryRunner.release();
     }
+
+    // Neither of these can join this transaction — the notification is written on a
+    // pooled connection of its own, and Redis has no transaction at all — so they
+    // run only once the message is durably committed. Inside the transaction, a
+    // rollback still left the recipient with a notification and an invalidated
+    // unread cache for a message that was never stored.
+    await this.notificationsService.create({
+      user_id: dto.recipient_id,
+      type: 'message',
+      actor_id: senderId,
+    }).catch((err) => console.error('Message notification error:', err));
+    await this.redisService.del(`unread_msg:${dto.recipient_id}`);
+
+    return saved;
   }
 
-  async getConversations(userId: number, limit: number, cursor?: string) {
+  /**
+   * Conversation list, newest activity first.
+   *
+   * Keyset pagination walks backwards through `latest_at`; the previous version
+   * accepted a `cursor` argument, ignored it, and still returned a `nextCursor` —
+   * so every "load more" re-fetched page one.
+   */
+  async getConversations(userId: number, limit: unknown, cursor?: string) {
+    const cappedLimit = normalizeMessageLimit(limit);
+    const cursorClause = cursor ? 'HAVING latest_at < ?' : '';
+    const params: unknown[] = [
+      userId, userId, userId, userId, userId, userId, userId, userId, userId, userId,
+    ];
+    if (cursor) params.push(cursor);
+    params.push(cappedLimit + 1);
+
     const conversations = await this.dataSource.query(`
       SELECT
         CASE WHEN m.sender_id = ? THEN m.recipient_id ELSE m.sender_id END as partner_id,
@@ -84,26 +123,33 @@ export class MessagesService {
       WHERE (m.sender_id = ? OR m.recipient_id = ?)
         AND m.deleted_by_sender = 0 AND m.deleted_by_recipient = 0
       GROUP BY partner_id, u.username, u.avatar_url
+      ${cursorClause}
       ORDER BY latest_at DESC LIMIT ?
-    `, [userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, limit + 1]);
+    `, params);
 
-    const hasMore = conversations.length > limit;
+    const hasMore = conversations.length > cappedLimit;
     if (hasMore) conversations.pop();
-    return { conversations, nextCursor: hasMore && conversations.length ? conversations[conversations.length - 1].latest_at : null };
+
+    const oldest = conversations.length ? conversations[conversations.length - 1] : null;
+    return {
+      conversations,
+      nextCursor: hasMore && oldest ? oldest.latest_at : null,
+    };
   }
 
-  async getConversation(userId: number, otherUserId: number, limit: number, cursor?: string) {
+  async getConversation(userId: number, otherUserId: number, limit: unknown, cursor?: string) {
+    const cappedLimit = normalizeMessageLimit(limit);
     const qb = this.messageRepo.createQueryBuilder('m')
       .where('(m.sender_id = :userId AND m.recipient_id = :otherId) OR (m.sender_id = :otherId AND m.recipient_id = :userId)',
         { userId, otherId: otherUserId })
       .andWhere('m.deleted_by_sender = 0 AND m.deleted_by_recipient = 0')
       .orderBy('m.created_at', 'DESC')
-      .take(limit + 1);
+      .take(cappedLimit + 1);
 
     if (cursor) qb.andWhere('m.created_at < :cursor', { cursor });
 
     const messages = await qb.getMany();
-    const hasMore = messages.length > limit;
+    const hasMore = messages.length > cappedLimit;
     if (hasMore) messages.pop();
 
     // Mark as read
@@ -113,7 +159,11 @@ export class MessagesService {
       await this.decrementUnreadCount(userId, unreadIds.length);
     }
 
-    return { messages: messages.reverse(), nextCursor: hasMore && messages.length ? messages[messages.length - 1].created_at.toISOString() : null };
+    // Oldest row of this newest-first page, captured before reversing for display.
+    const oldest = messages.length ? messages[messages.length - 1] : null;
+    const nextCursor = hasMore && oldest ? oldest.created_at.toISOString() : null;
+
+    return { messages: messages.reverse(), nextCursor };
   }
 
   async getUnreadCount(userId: number): Promise<number> {
@@ -124,15 +174,28 @@ export class MessagesService {
     return count;
   }
 
-  async deleteForUser(messageId: number, userId: number, isSender: boolean): Promise<void> {
+  /**
+   * Hide a direct message for one side of the conversation.
+   *
+   * Which side is derived from the message itself: the caller used to pass a
+   * hard-coded `isSender = false` and no ownership was checked at all, so any
+   * authenticated user could flag any message by id — and once both flags were
+   * set the row was hard-deleted for both parties.
+   */
+  async deleteForUser(messageId: number, userId: number): Promise<void> {
     const message = await this.messageRepo.findOne({ where: { id: messageId } });
     if (!message) throw new NotFoundException('Message not found');
 
-    if (isSender) {
-      await this.messageRepo.update({ id: messageId }, { deleted_by_sender: 1 });
-    } else {
-      await this.messageRepo.update({ id: messageId }, { deleted_by_recipient: 1 });
+    const isSender = message.sender_id === userId;
+    const isRecipient = message.recipient_id === userId;
+    if (!isSender && !isRecipient) {
+      throw new ForbiddenException('无权删除该消息');
     }
+
+    await this.messageRepo.update(
+      { id: messageId },
+      isSender ? { deleted_by_sender: 1 } : { deleted_by_recipient: 1 },
+    );
 
     // Check if both deleted
     const updated = await this.messageRepo.findOne({ where: { id: messageId } });
@@ -204,14 +267,12 @@ export class MessagesService {
     return groupChat;
   }
 
-  async getGroupMessages(groupId: number, userId: number, limit: number = 50, cursor?: string) {
+  async getGroupMessages(groupId: number, userId: number, limit: unknown = 50, cursor?: string) {
     // Check membership first
-    const member = await this.groupChatMemberRepo.findOne({
-      where: { group_chat_id: groupId, user_id: userId },
-    });
+    const member = await this.findGroupMembership(groupId, userId);
     if (!member) throw new ForbiddenException('你不是该群聊的成员');
 
-    const cappedLimit = Math.min(limit, 100);
+    const cappedLimit = normalizeMessageLimit(limit);
 
     const qb = this.messageRepo.createQueryBuilder('m')
       .where('m.group_chat_id = :groupId', { groupId })
@@ -227,7 +288,14 @@ export class MessagesService {
     const hasMore = messages.length > cappedLimit;
     if (hasMore) messages.pop();
 
-    return { messages: messages.reverse(), nextCursor: hasMore && messages.length ? messages[messages.length - 1].created_at.toISOString() : null };
+    // The query is newest-first, so the oldest row of this page is the last one —
+    // read it *before* reversing for display. Reversing first (as this used to do)
+    // yielded the newest timestamp instead, so the next page repeated this one
+    // forever.
+    const oldest = messages.length ? messages[messages.length - 1] : null;
+    const nextCursor = hasMore && oldest ? oldest.created_at.toISOString() : null;
+
+    return { messages: messages.reverse(), nextCursor };
   }
 
   async sendGroupMessage(groupId: number, senderId: number, content: string): Promise<Message> {
@@ -265,10 +333,43 @@ export class MessagesService {
     }
   }
 
-  async addGroupMember(groupId: number, userId: number, role: string = 'member'): Promise<GroupChatMember> {
-    const existing = await this.groupChatMemberRepo.findOne({
+  /**
+   * Membership of a group chat, or null. Used to authorise every group operation.
+   */
+  private async findGroupMembership(
+    groupId: number,
+    userId: number,
+  ): Promise<GroupChatMember | null> {
+    return this.groupChatMemberRepo.findOne({
       where: { group_chat_id: groupId, user_id: userId },
     });
+  }
+
+  /**
+   * Assert the caller administers the group chat.
+   *
+   * Without this, `addGroupMember` let anyone join any group as `admin` and then
+   * read its entire history, and `removeGroupMember` let anyone kick anyone.
+   */
+  private async assertGroupAdmin(groupId: number, actorId: number): Promise<void> {
+    const membership = await this.findGroupMembership(groupId, actorId);
+    if (!membership) throw new ForbiddenException('你不是该群聊的成员');
+    if (membership.role !== 'admin') throw new ForbiddenException('只有群管理员可以管理成员');
+  }
+
+  async addGroupMember(
+    groupId: number,
+    actorId: number,
+    userId: number,
+    role: string = 'member',
+  ): Promise<GroupChatMember> {
+    await this.assertGroupAdmin(groupId, actorId);
+
+    if (role !== 'member' && role !== 'admin') {
+      throw new BadRequestException('无效的成员角色');
+    }
+
+    const existing = await this.findGroupMembership(groupId, userId);
     if (existing) throw new BadRequestException('用户已在群聊中');
 
     const member = this.groupChatMemberRepo.create({
@@ -279,7 +380,13 @@ export class MessagesService {
     return this.groupChatMemberRepo.save(member);
   }
 
-  async removeGroupMember(groupId: number, userId: number): Promise<void> {
+  async removeGroupMember(groupId: number, actorId: number, userId: number): Promise<void> {
+    await this.assertGroupAdmin(groupId, actorId);
+
+    if (userId === actorId) {
+      throw new BadRequestException('群管理员请使用退出群聊或转让群主');
+    }
+
     const result = await this.groupChatMemberRepo.delete({
       group_chat_id: groupId,
       user_id: userId,

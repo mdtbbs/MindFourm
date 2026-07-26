@@ -26,9 +26,9 @@ export default function BookmarkButton({ postId }: BookmarkButtonProps) {
     bookmarkApi.check(postId)
       .then((res) => { if (!cancelled) setBookmarked(res.bookmarked); })
       .catch(() => {
-        if (!cancelled) {
-          setTimeout(() => setError(null), 5000);
-        }
+        // Failing to read the current state is not worth interrupting the user
+        // over; the button just starts un-bookmarked. (This branch previously
+        // scheduled `setError(null)` without ever setting an error — a no-op.)
       })
       .finally(() => { if (!cancelled) setChecking(false); });
     return () => { cancelled = true; };

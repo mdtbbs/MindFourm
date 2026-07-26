@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import { useToast } from '@/lib/toast/context';
 import { Post, UserRole } from '@/types';
 import Badge from '@/components/ui/badge';
 import Button from '@/components/ui/button';
 import BookmarkButton from '@/components/forum/bookmark-button';
 import { adminApi } from '@/lib/api/client';
+import { formatTime } from '@/lib/utils';
 import { Pin, Move, Trash2, Check, X } from 'lucide-react';
 
 interface PostContentProps {
@@ -26,6 +29,8 @@ export default function PostContent({
   onMove,
   onDelete,
 }: PostContentProps) {
+  const router = useRouter();
+  const { showSuccess, showError } = useToast();
   const canModerate = currentUserRole === 'moderator' || currentUserRole === 'admin';
   const authorLabel = post.author_mindauth_id ?? `#${post.user_id}`;
 
@@ -34,18 +39,19 @@ export default function PostContent({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
-  function formatTime(dateStr: string): string {
-    return new Date(dateStr).toLocaleString('zh-CN');
-  }
-
+  // `router.refresh()` re-runs the server components and keeps scroll position and
+  // client state; `window.location.reload()` threw both away on every moderation
+  // action. Failures now surface as a toast instead of only reaching the console.
   const handleApprove = async () => {
     if (!postId || modAction) return;
     setModAction('approving');
     try {
       await adminApi.approvePost(postId, 'post');
-      window.location.reload();
+      router.refresh();
+      showSuccess('帖子已通过审核');
     } catch (err) {
-      console.error('Approve failed:', err);
+      showError(err instanceof Error ? err.message : '审核通过失败');
+    } finally {
       setModAction(null);
     }
   };
@@ -55,18 +61,20 @@ export default function PostContent({
     setModAction('rejecting');
     try {
       await adminApi.rejectPost(postId, 'post', rejectReason || undefined);
-      window.location.reload();
-    } catch (err) {
-      console.error('Reject failed:', err);
-      setModAction(null);
+      router.refresh();
+      showSuccess('帖子已驳回');
       setShowRejectModal(false);
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '驳回失败');
+    } finally {
+      setModAction(null);
     }
   };
 
   return (
-    <article className="bg-[var(--bg-card)] dark:bg-gray-900 rounded-lg border border-[var(--border)] dark:border-gray-700 overflow-hidden">
+    <article className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] overflow-hidden">
       {/* Header */}
-      <div className="p-6 border-b border-[var(--border)] dark:border-gray-700">
+      <div className="p-6 border-b border-[var(--border)]">
         <h1 className="text-2xl font-bold text-[var(--text)] mb-3">{post.title}</h1>
 
         <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
@@ -98,7 +106,7 @@ export default function PostContent({
       </div>
 
       {/* Actions */}
-      <div className="px-6 py-4 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] dark:border-gray-700 flex items-center gap-2 flex-wrap">
+      <div className="px-6 py-4 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] flex items-center gap-2 flex-wrap">
         {/* Moderation actions for pending posts */}
         {post.status === 'pending' && canModerate && (
           <div className="flex items-center gap-2 mr-auto">

@@ -5,6 +5,7 @@
  * Supports multiple toast types: success, error, info, warning
  */
 
+import { useCallback, useMemo } from 'react';
 import { create } from 'zustand';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -136,13 +137,23 @@ export function useToast(): {
   showInfo: (message: string) => void;
   dismissToast: (id: string) => void;
 } {
-  const store = useToastStore();
+  // Selected individually rather than via a bare `useToastStore()`. Subscribing to
+  // the whole store re-rendered every consumer — including the site header — each
+  // time any toast appeared or dismissed. Zustand action identities are stable, so
+  // these selectors never fire a re-render.
+  const showToastAction = useToastStore((state) => state.showToast);
+  const showError = useToastStore((state) => state.showError);
+  const showSuccess = useToastStore((state) => state.showSuccess);
+  const showInfo = useToastStore((state) => state.showInfo);
+  const dismissToast = useToastStore((state) => state.dismissToast);
 
-  return {
-    showToast: (message, type = 'info') => store.showToast(message, type),
-    showError: store.showError,
-    showSuccess: store.showSuccess,
-    showInfo: store.showInfo,
-    dismissToast: store.dismissToast,
-  };
+  const showToast = useCallback(
+    (message: string, type: ToastType = 'info') => showToastAction(message, type),
+    [showToastAction],
+  );
+
+  return useMemo(
+    () => ({ showToast, showError, showSuccess, showInfo, dismissToast }),
+    [showToast, showError, showSuccess, showInfo, dismissToast],
+  );
 }

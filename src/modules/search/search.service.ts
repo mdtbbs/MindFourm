@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Post } from '@entities/post.entity';
@@ -11,6 +11,8 @@ import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.servic
 
 @Injectable()
 export class SearchService {
+  private readonly logger = new Logger(SearchService.name);
+
   constructor(
     @InjectRepository(Post)
     private postRepository: Repository<Post>,
@@ -111,17 +113,27 @@ export class SearchService {
   }
 
   async recordSearch(userId: number | undefined, query: string, resultsCount: number): Promise<void> {
-    // Record search history
-    this.searchHistoryRepo.save({
-      user_id: userId as number,
-      query: query.toLowerCase().trim(),
-      search_type: 'global',
-      results_count: resultsCount,
-    }).catch(() => {});
+    const normalized = query.toLowerCase().trim();
+    if (!normalized) return;
 
-    // Update popular searches in Redis
-    this.redisService.zIncrBy('search:popular', 1, query.toLowerCase().trim())
-      .catch(() => {});
+    // History belongs to a user. The controller used to pass `undefined` here, so
+    // every insert failed on the user_id constraint — and the failure was swallowed
+    // by an empty catch, leaving GET /api/search/history permanently empty.
+    if (userId) {
+      this.searchHistoryRepo.save({
+        user_id: userId,
+        query: normalized,
+        search_type: 'global',
+        results_count: resultsCount,
+      }).catch((error) => {
+        this.logger.warn(`Failed to record search history: ${(error as Error).message}`);
+      });
+    }
+
+    // Popularity is an aggregate, so anonymous searches count towards it too.
+    this.redisService.zIncrBy('search:popular', 1, normalized).catch((error) => {
+      this.logger.warn(`Failed to update popular searches: ${(error as Error).message}`);
+    });
   }
 
   async getPopularSearches(limit: number = 10): Promise<string[]> {

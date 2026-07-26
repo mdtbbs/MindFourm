@@ -28,6 +28,7 @@ export class LikesService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+    let authorId: number | null = null;
     try {
       const post = await queryRunner.manager.findOne(Post, { where: { id: postId } });
       if (!post) throw new NotFoundException('Post not found');
@@ -40,23 +41,22 @@ export class LikesService {
       await queryRunner.manager.save(PostLike, { user_id: userId, post_id: postId });
       await queryRunner.manager.increment(Post, { id: postId }, 'like_count', 1);
 
-      if (post.user_id !== userId) {
-        await this.notificationsService.create({
-          user_id: post.user_id,
-          type: 'post_like',
-          actor_id: userId,
-          post_id: postId,
-        });
+      authorId = post.user_id === userId ? null : post.user_id;
 
-        // Award points to post author for receiving a like
-        await this.pointsService.awardPoints(post.user_id, 'receive_like', 'post', postId);
-      }
       await queryRunner.commitTransaction();
     } catch (e) {
       await queryRunner.rollbackTransaction();
       throw e;
     } finally {
       await queryRunner.release();
+    }
+
+    // The notification and the point award both write on connections of their own —
+    // `awardPoints` opens its own transaction — so they cannot be rolled back with
+    // this one. Running them before the commit meant a like that failed to persist
+    // still paid the author and notified them.
+    if (authorId !== null) {
+      await this.creditLike(authorId, userId, 'post_like', 'post', postId);
     }
   }
 
@@ -110,6 +110,7 @@ export class LikesService {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+    let authorId: number | null = null;
     try {
       const reply = await queryRunner.manager.findOne(Reply, { where: { id: replyId } });
       if (!reply) throw new NotFoundException('Reply not found');
@@ -122,23 +123,52 @@ export class LikesService {
       await queryRunner.manager.save(ReplyLike, { user_id: userId, reply_id: replyId });
       await queryRunner.manager.increment(Reply, { id: replyId }, 'like_count', 1);
 
-      if (reply.user_id !== userId) {
-        await this.notificationsService.create({
-          user_id: reply.user_id,
-          type: 'reply_like',
-          actor_id: userId,
-          reply_id: replyId,
-        });
+      authorId = reply.user_id === userId ? null : reply.user_id;
 
-        // Award points to reply author for receiving a like
-        await this.pointsService.awardPoints(reply.user_id, 'receive_like', 'reply', replyId);
-      }
       await queryRunner.commitTransaction();
     } catch (e) {
       await queryRunner.rollbackTransaction();
       throw e;
     } finally {
       await queryRunner.release();
+    }
+
+    if (authorId !== null) {
+      await this.creditLike(authorId, userId, 'reply_like', 'reply', replyId);
+    }
+  }
+
+  /**
+   * Notify and reward the author of a liked item.
+   *
+   * Runs only after the like has been committed. Both operations write on their own
+   * connections — `awardPoints` opens its own transaction — so neither participates
+   * in the caller's transaction and neither can be rolled back with it. Failures are
+   * swallowed: the like itself is already durable, and losing a notification must not
+   * turn a successful action into an error for the user.
+   */
+  private async creditLike(
+    recipientId: number,
+    actorId: number,
+    notificationType: 'post_like' | 'reply_like',
+    targetType: 'post' | 'reply',
+    targetId: number,
+  ): Promise<void> {
+    try {
+      await this.notificationsService.create({
+        user_id: recipientId,
+        type: notificationType,
+        actor_id: actorId,
+        ...(targetType === 'post' ? { post_id: targetId } : { reply_id: targetId }),
+      });
+    } catch (error) {
+      console.error(`Like notification failed for ${targetType} ${targetId}:`, error);
+    }
+
+    try {
+      await this.pointsService.awardPoints(recipientId, 'receive_like', targetType, targetId);
+    } catch (error) {
+      console.error(`Like point award failed for ${targetType} ${targetId}:`, error);
     }
   }
 

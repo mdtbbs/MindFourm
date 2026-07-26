@@ -5,7 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, MoreThan, LessThan } from 'typeorm';
+import { Repository, DataSource, EntityManager, MoreThan, LessThan } from 'typeorm';
 import { PointLog } from '@entities/point-log.entity';
 import { PointRule } from '@entities/point-rule.entity';
 import { User } from '@entities/user.entity';
@@ -64,35 +64,56 @@ export class PointsService {
   }
 
   /**
-   * Deduct points from a user
+   * Deduct points from a user.
+   *
+   * Pass `manager` to enrol the deduction in a caller's transaction — the shop
+   * needs the debit, the stock decrement and the purchase row to commit or roll
+   * back together, which is impossible if this opens its own transaction on a
+   * second pooled connection.
    */
   async deductPoints(
     userId: number,
     amount: number,
     reason: string,
+    targetType?: string,
+    targetId?: number,
+    manager?: EntityManager,
   ): Promise<PointLog> {
-    return this.dataSource.transaction(async (manager) => {
-      const user = await manager.findOne(User, { where: { id: userId } });
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+    const run = async (em: EntityManager): Promise<PointLog> => {
+      // The balance check lives in the UPDATE's WHERE clause rather than in JS.
+      // Reading `available_points`, comparing, then decrementing let two
+      // concurrent spends both see a sufficient balance and drive it negative.
+      const result = await em
+        .createQueryBuilder()
+        .update(User)
+        .set({ available_points: () => 'available_points - :deduction' })
+        .where('id = :userId', { userId })
+        .andWhere('available_points >= :deduction')
+        .setParameter('deduction', amount)
+        .execute();
 
-      if (user.available_points < amount) {
+      if (!result.affected) {
+        // A zero-row update means either no such user or too few points; only a
+        // lookup can tell them apart, and it only runs on the failure path.
+        const user = await em.findOne(User, { where: { id: userId }, select: ['id'] });
+        if (!user) {
+          throw new NotFoundException('User not found');
+        }
         throw new BadRequestException('积分不足');
       }
-
-      await manager.decrement(User, { id: userId }, 'available_points', amount);
 
       const log = new PointLog();
       log.user_id = userId;
       log.action = reason;
       log.points_change = -amount;
-      log.target_type = undefined as any;
-      log.target_id = undefined as any;
-      await manager.save(PointLog, log);
+      log.target_type = targetType as string;
+      log.target_id = targetId as number;
+      await em.save(PointLog, log);
 
       return log;
-    });
+    };
+
+    return manager ? run(manager) : this.dataSource.transaction(run);
   }
 
   /**

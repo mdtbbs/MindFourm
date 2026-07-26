@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { VerifySessionDto } from './dto/verify-session.dto';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
+import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 
 function getSafeRedirectPath(state?: string): string {
   if (!state) {
@@ -115,8 +116,8 @@ export class AuthController {
    * Verify session token from MindAuth (service-to-service)
    */
   @Post('verify')
-  @Post('verify-session')
   @SkipPhoneVerification()
+  @RateLimit({ max: 60, window: 60 })
   async verifySession(
     @Body() body: VerifySessionDto,
     @Req() req: Request,
@@ -145,45 +146,6 @@ export class AuthController {
         phone_verified_at: user.phone_verified_at,
       },
     });
-  }
-
-  /**
-   * Test login endpoint for E2E testing
-   * Only available in development/test environment
-   */
-  @Post('test-login')
-  @SkipPhoneVerification()
-  async testLogin(
-    @Body('userType') userType: string = 'user',
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
-    const appEnv = this.authService['configService'].get<string>('app.env');
-    if (appEnv === 'production' || process.env.NODE_ENV === 'production') {
-      throw new UnauthorizedException('Test login not available in production');
-    }
-
-    // Create session for test user (using simplified test method)
-    const sessionToken = this.authService.generateSessionToken();
-    const ip = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-
-    try {
-      const user = await this.authService.getOrCreateTestUser(userType);
-      await this.authService.createTestSession(user.id, sessionToken, ip);
-
-      // Set HttpOnly cookie
-      res.cookie('forum_session', sessionToken, {
-        httpOnly: true,
-        secure: false,
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/',
-      });
-
-      return res.json({ success: true, userId: user.id, sessionToken });
-    } catch (error) {
-      return res.status(500).json({ error: (error as Error).message });
-    }
   }
 
   /**

@@ -15,12 +15,8 @@ export class PostServersController {
     return this.postServersService.getPostsByServer(Number(serverId));
   }
 
-  @Get('my')
-  @UseGuards(JwtAuthGuard)
-  async getMyServers() {
-    // Delegated to ServerService via separate endpoint
-    return { message: 'Use /api/servers/my endpoint' };
-  }
+  // `GET /post-servers/my` removed: it answered 200 with prose telling the caller to
+  // use /api/servers/my instead, which no client ever did.
 
   @Get('forum-posts/:serverId')
   @UseGuards(ServiceAuthGuard)

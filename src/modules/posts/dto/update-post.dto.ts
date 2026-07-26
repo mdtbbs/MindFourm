@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, IsIn } from 'class-validator';
 
 export class UpdatePostDto {
   @IsOptional()
@@ -30,11 +30,20 @@ export class UpdatePostDto {
   @IsString({ each: true })
   tags?: string[];
 
+  /**
+   * Only `draft` and `published` may be requested, and an author asking to publish
+   * still passes through the `require_post_approval` gate — see
+   * `PostsService.resolveStatusTransition`.
+   *
+   * This used to be a free-form `@IsString()` applied after nothing more than an
+   * ownership check, so `PUT /api/posts/:id {"status":"published"}` skipped the
+   * moderation queue outright.
+   */
   @IsOptional()
-  @IsString()
+  @IsIn(['draft', 'published'])
   status?: string;
 
-  @IsOptional()
-  @IsNumber()
-  is_pinned?: number;
+  // `is_pinned` is deliberately absent: it was writable here by any author, which
+  // bypassed the @Roles('admin','moderator') `PUT /api/posts/:id/pin` endpoint.
+  // The global ValidationPipe runs with forbidNonWhitelisted, so sending it now 400s.
 }

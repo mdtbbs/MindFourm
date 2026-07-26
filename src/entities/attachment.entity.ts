@@ -2,6 +2,8 @@ import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn,
 } from 'typeorm';
 import { Post } from './post.entity';
+import { Reply } from './reply.entity';
+import { User } from './user.entity';
 
 @Entity('attachments')
 export class Attachment {
@@ -35,7 +37,18 @@ export class Attachment {
   @CreateDateColumn()
   created_at: Date;
 
-  @ManyToOne(() => Post, { eager: false, nullable: true })
+  @ManyToOne(() => Post, { eager: false, nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
   post: Post;
+
+  // `reply_id` and `user_id` held ids with no relation declared, so TypeORM emitted
+  // neither a foreign key nor an index for either: attachments outlived the replies
+  // they belonged to, and every lookup by uploader scanned the table.
+  @ManyToOne(() => Reply, { eager: false, nullable: true, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'reply_id' })
+  reply: Reply;
+
+  @ManyToOne(() => User, { eager: false, onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user: User;
 }

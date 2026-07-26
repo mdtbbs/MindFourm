@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
-import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { Trophy, Medal, Star } from 'lucide-react';
 import FeatureGate from '@/components/forum/feature-gate';
@@ -24,7 +23,7 @@ export default function LeaderboardPage() {
 
   const fetchLeaderboard = useCallback(async (p: number) => {
     try {
-      const res = await api.get<{ data: LeaderboardUser[] }>(`/points/leaderboard?page=${p}&limit=20`);
+      const res = await api.get<{ data: LeaderboardUser[] }>(`/api/points/leaderboard?page=${p}&limit=20`);
       const data = res.data || [];
       if (p === 1) {
         setUsers(data);
@@ -45,7 +44,7 @@ export default function LeaderboardPage() {
     if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-500" />;
     if (rank === 2) return <Medal className="w-5 h-5 text-gray-400" />;
     if (rank === 3) return <Medal className="w-5 h-5 text-amber-600" />;
-    return <span className="w-5 h-5 flex items-center justify-center text-muted text-sm">{rank}</span>;
+    return <span className="w-5 h-5 flex items-center justify-center text-muted-foreground text-sm">{rank}</span>;
   };
 
   const getRoleBadge = (role: string) => {
@@ -67,12 +66,11 @@ export default function LeaderboardPage() {
 
   return (
     <FeatureGate settingKey="feature_leaderboard_enabled" label="积分排行">
-    <div className="min-h-screen bg-[var(--bg)]">
-      <UnifiedHeader />
+    <div>
 
       <main className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <nav className="flex items-center gap-2 text-sm text-muted">
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-primary">首页</Link>
             <span>/</span>
             <span>积分排行榜</span>
@@ -104,7 +102,7 @@ export default function LeaderboardPage() {
                       className="w-14 h-14 rounded-full border-2 border-white shadow"
                     />
                     <span className="text-sm font-medium mt-2">{u.username}</span>
-                    <span className="text-xs text-muted flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
                       <Star className="w-3 h-3" />
                       {u.total_points}
                     </span>

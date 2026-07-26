@@ -1,8 +1,13 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn,
+  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index,
 } from 'typeorm';
 import { User } from './user.entity';
 
+// `created_at` carries the retention sweep as well as the admin log viewer's default
+// ordering; `action` and the target pair are its filter facets.
+@Index('idx_operation_logs_created_at', ['created_at'])
+@Index('idx_operation_logs_action', ['action'])
+@Index('idx_operation_logs_target', ['target_type', 'target_id'])
 @Entity('operation_logs')
 export class OperationLog {
   @PrimaryGeneratedColumn()

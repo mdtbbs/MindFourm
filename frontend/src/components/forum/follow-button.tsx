@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { api } from '@/lib/api/client';
+import { useToastStore } from '@/store/toast-store';
 import { UserPlus, UserCheck } from 'lucide-react';
 
 export default function FollowButton({ targetUserId }: { targetUserId: number }) {
@@ -16,7 +17,7 @@ export default function FollowButton({ targetUserId }: { targetUserId: number })
       setChecking(false);
       return;
     }
-    api.get<{ isFollowing: boolean }>(`/follows/check/${targetUserId}?followerId=${user.id}`)
+    api.get<{ isFollowing: boolean }>(`/api/follows/check/${targetUserId}`)
       .then((res) => setIsFollowing(res.isFollowing || false))
       .catch(() => {})
       .finally(() => setChecking(false));
@@ -27,16 +28,20 @@ export default function FollowButton({ targetUserId }: { targetUserId: number })
 
   const handleToggle = async () => {
     setLoading(true);
+    // Optimistic: revert below if the request fails.
+    const previous = isFollowing;
+    setIsFollowing(!previous);
     try {
-      if (isFollowing) {
-        await api.delete(`/follows/${targetUserId}?followerId=${user!.id}`);
-        setIsFollowing(false);
+      if (previous) {
+        await api.delete(`/api/follows/${targetUserId}`);
       } else {
-        await api.post(`/follows/${targetUserId}`, { followerId: user!.id });
-        setIsFollowing(true);
+        await api.post(`/api/follows/${targetUserId}`);
       }
     } catch (err) {
-      console.error('Follow toggle failed:', err);
+      setIsFollowing(previous);
+      useToastStore
+        .getState()
+        .showError(err instanceof Error ? err.message : (previous ? '取消关注失败' : '关注失败'));
     } finally {
       setLoading(false);
     }

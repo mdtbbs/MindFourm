@@ -146,12 +146,15 @@ export default async function HomePage({
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
               MindForum
             </p>
-            <div className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+            {/* An h1, not a div: the site's most important page had no top-level
+                heading at all. The Markdown renderer's own headings are flattened to
+                inherit, so the outer element carries the semantics. */}
+            <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
               <MarkdownRenderer
                 content={activeCategoryName}
                 className="[&_p]:m-0 [&_p]:text-inherit [&_p]:font-inherit [&_h1]:m-0 [&_h1]:text-inherit [&_h1]:font-inherit [&_h2]:m-0 [&_h2]:text-inherit [&_h2]:font-inherit [&_h3]:m-0 [&_h3]:text-inherit [&_h3]:font-inherit"
               />
-            </div>
+            </h1>
             <MarkdownRenderer
               content={heroDescription}
               className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)] [&_p]:my-0 [&_p+p]:mt-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0"
@@ -179,7 +182,7 @@ export default async function HomePage({
       </div>
 
       <div className="flex gap-8">
-        <div className="hidden w-60 flex-shrink-0 lg:block">
+        <div className="hidden w-60 shrink-0 lg:block">
           <Sidebar categories={categories} tags={tags} selectedCategory={categoryId} />
         </div>
 

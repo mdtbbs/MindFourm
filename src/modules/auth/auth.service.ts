@@ -10,6 +10,29 @@ import { RedisService } from '@database/redis.service';
 import { PointsService } from '../points/points.service';
 import { joinMindAuthApiUrl } from './mindauth-url.util';
 
+/**
+ * Every outbound MindAuth call goes through this instance.
+ *
+ * The bare `axios` default is no timeout at all, so a hung or unreachable MindAuth
+ * left forum request handlers waiting indefinitely — and `verifySession` sits on the
+ * hot path of every authenticated request.
+ */
+const MINDAUTH_TIMEOUT_MS = 8000;
+const mindAuthHttp = axios.create({ timeout: MINDAUTH_TIMEOUT_MS });
+
+/**
+ * Digest a session token for the audit trail.
+ *
+ * `session_audit.session_token` used to hold the raw 96-hex-char bearer token,
+ * forever — so any SQL read primitive, database backup or read-replica leak handed
+ * over a set of directly replayable live sessions. Nothing ever reads the column
+ * back, so a one-way digest costs nothing. (MindAuth already does this for its own
+ * `user_sessions` table.)
+ */
+function hashSessionToken(sessionToken: string): string {
+  return crypto.createHash('sha256').update(sessionToken).digest('hex');
+}
+
 @Injectable()
 export class AuthService {
   private readonly sessionTtl = 7 * 24 * 60 * 60; // 7 days in seconds
@@ -34,7 +57,7 @@ export class AuthService {
     const callbackUrl = this.configService.get<string>('MINDAUTH_CALLBACK_URL');
 
     try {
-      const response = await axios.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
+      const response = await mindAuthHttp.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
         grant_type: 'authorization_code',
         code,
         client_id: clientId,
@@ -65,7 +88,7 @@ export class AuthService {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
 
     try {
-      const response = await axios.get(joinMindAuthApiUrl(mindauthUrl, '/userinfo'), {
+      const response = await mindAuthHttp.get(joinMindAuthApiUrl(mindauthUrl, '/userinfo'), {
         headers: {
           Authorization: `Bearer ${accessToken}`,
         },
@@ -81,7 +104,7 @@ export class AuthService {
       };
     } catch (error) {
       try {
-        const response = await axios.get(joinMindAuthApiUrl(mindauthUrl, '/user'), {
+        const response = await mindAuthHttp.get(joinMindAuthApiUrl(mindauthUrl, '/user'), {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -205,7 +228,7 @@ export class AuthService {
     const clientId = this.configService.get<string>('MINDAUTH_CLIENT_ID');
     const clientSecret = this.configService.get<string>('MINDAUTH_CLIENT_SECRET');
 
-    const response = await axios.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
+    const response = await mindAuthHttp.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: clientId,
@@ -238,7 +261,7 @@ export class AuthService {
     // Log to session_audit table
     const audit = this.sessionAuditRepository.create({
       user_id: userId,
-      session_token: sessionToken,
+      session_token: hashSessionToken(sessionToken),
       action: 'login',
       ip_address: ip,
     });
@@ -364,7 +387,7 @@ export class AuthService {
     if (userId) {
       const audit = this.sessionAuditRepository.create({
         user_id: userId,
-        session_token: sessionToken,
+        session_token: hashSessionToken(sessionToken),
         action: 'logout',
       });
       await this.sessionAuditRepository.save(audit);
@@ -381,7 +404,7 @@ export class AuthService {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
 
     try {
-      await axios.post(joinMindAuthApiUrl(mindauthUrl, '/revoke'), {
+      await mindAuthHttp.post(joinMindAuthApiUrl(mindauthUrl, '/revoke'), {
         access_token: accessToken,
         refresh_token: refreshToken,
       });

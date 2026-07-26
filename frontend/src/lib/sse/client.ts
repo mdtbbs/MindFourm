@@ -73,7 +73,6 @@ export class SSEClient {
         this.retryCount = 0;
         this.isConnecting = false;
         this.onOpen?.();
-        console.log('SSE connection established');
       };
 
       this.eventSource.onerror = (event) => {
@@ -152,22 +151,45 @@ export class SSEClient {
     }
 
     if (this.retryCount >= this.maxRetries) {
-      console.error('SSE max retries exceeded');
-      this.disconnect();
+      // Close the transport but keep subscriptions intact. Calling disconnect() here
+      // also cleared `listeners`, so the client could never be revived — the
+      // consuming hook caches it in a ref and only builds a new one when that ref is
+      // null, which left real-time updates dead for the rest of the page's life with
+      // no user-visible signal.
+      console.error('SSE max retries exceeded; giving up until reconnect() is called');
+      this.closeTransport();
       return;
     }
 
     this.retryCount++;
     const delay = this.retryDelay * Math.pow(2, this.retryCount - 1);
 
-    console.log(
-      `SSE reconnecting in ${delay}ms (attempt ${this.retryCount}/${this.maxRetries})`
-    );
-
     setTimeout(() => {
       this.eventSource = null;
       this.connect();
     }, delay);
+  }
+
+  /**
+   * Close the transport without discarding subscriptions, so the same client can be
+   * reconnected later.
+   */
+  private closeTransport(): void {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    this.registeredEventTypes.clear();
+  }
+
+  /**
+   * Reset the retry budget and reconnect, keeping existing subscriptions.
+   */
+  reconnect(): void {
+    this.closeTransport();
+    this.retryCount = 0;
+    this.shouldReconnect = true;
+    this.connect();
   }
 
   /**
@@ -190,15 +212,14 @@ export class SSEClient {
   /**
    * Disconnect from SSE endpoint
    */
+  /**
+   * Permanently close this client. Subscriptions are dropped; use `reconnect()` if
+   * you intend to resume.
+   */
   disconnect(): void {
     this.shouldReconnect = false;
-    if (this.eventSource) {
-      this.eventSource.close();
-      this.eventSource = null;
-    }
+    this.closeTransport();
     this.listeners.clear();
-    this.registeredEventTypes.clear();
-    console.log('SSE connection closed');
   }
 
   /**

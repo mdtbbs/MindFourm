@@ -45,7 +45,7 @@ export default function SearchEnhancements() {
               <Clock className="w-4 h-4" />
               最近搜索
             </h3>
-            <button onClick={handleClearHistory} className="text-xs text-muted hover:text-primary">
+            <button onClick={handleClearHistory} className="text-xs text-muted-foreground hover:text-primary">
               清空
             </button>
           </div>

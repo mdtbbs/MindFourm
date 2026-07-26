@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
-import { UnifiedHeader } from '@mindproject/shared';
 import Link from 'next/link';
 import { ShoppingBag, Star, Lock, Package } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
@@ -32,7 +31,7 @@ export default function ShopPage() {
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await api.get<{ data: ShopItem[] }>('/shop/items?page=1&limit=50');
+      const res = await api.get<{ data: ShopItem[] }>('/api/shop/items?page=1&limit=50');
       setItems((res.data || []).filter((i: ShopItem) => i.is_active));
     } catch (err) {
       console.error('Failed to load shop:', err);
@@ -44,7 +43,7 @@ export default function ShopPage() {
   const fetchMyPoints = useCallback(async () => {
     if (!isAuthenticated || !user) return;
     try {
-      const data = await api.get<{ available_points?: number; total_points?: number }>('/points/me');
+      const data = await api.get<{ available_points?: number; total_points?: number }>('/api/points/me');
       setMyPoints(data.available_points || data.total_points || 0);
     } catch {}
   }, [isAuthenticated, user]);
@@ -52,7 +51,7 @@ export default function ShopPage() {
   const fetchMyPurchases = useCallback(async () => {
     if (!isAuthenticated || !user) return;
     try {
-      const res = await api.get<{ data: any[] }>(`/shop/me/purchases?userId=${user.id}&page=1&limit=20`);
+      const res = await api.get<{ data: any[] }>('/api/shop/me/purchases?page=1&limit=20');
       setPurchases(res.data || []);
     } catch {}
   }, [isAuthenticated, user]);
@@ -68,7 +67,7 @@ export default function ShopPage() {
     setPurchasing(itemId);
     setError(null);
     try {
-      await api.post(`/shop/purchase/${itemId}?userId=${user.id}`);
+      await api.post(`/api/shop/purchase/${itemId}`);
       setMessage('购买成功！');
       setTimeout(() => setMessage(null), 3000);
       fetchMyPoints();
@@ -82,8 +81,7 @@ export default function ShopPage() {
 
   if (loading) return (
     <FeatureGate settingKey="feature_shop_enabled" label="积分商店">
-    <div className="min-h-screen bg-[var(--bg)]">
-      <UnifiedHeader />
+    <div>
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
@@ -93,12 +91,11 @@ export default function ShopPage() {
 
   return (
     <FeatureGate settingKey="feature_shop_enabled" label="积分商店">
-    <div className="min-h-screen bg-[var(--bg)]">
-      <UnifiedHeader />
+    <div>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6">
-          <nav className="flex items-center gap-2 text-sm text-muted">
+          <nav className="flex items-center gap-2 text-sm text-muted-foreground">
             <Link href="/" className="hover:text-primary">首页</Link>
             <span>/</span>
             <span>积分商城</span>
@@ -111,13 +108,13 @@ export default function ShopPage() {
               <ShoppingBag className="w-7 h-7 text-primary" />
               积分商城
             </h1>
-            <p className="text-muted mt-1">使用积分兑换精美礼品</p>
+            <p className="text-muted-foreground mt-1">使用积分兑换精美礼品</p>
           </div>
           {isAuthenticated && (
             <div className="card px-5 py-3 flex items-center gap-2">
               <Star className="w-5 h-5 text-yellow-500" />
               <span className="font-bold text-lg">{myPoints}</span>
-              <span className="text-sm text-muted">可用积分</span>
+              <span className="text-sm text-muted-foreground">可用积分</span>
             </div>
           )}
         </div>
@@ -138,7 +135,7 @@ export default function ShopPage() {
           <div className="flex gap-4 mb-6 border-b border-border">
             <button
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                tab === 'shop' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-text'
+                tab === 'shop' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setTab('shop')}
             >
@@ -146,7 +143,7 @@ export default function ShopPage() {
             </button>
             <button
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                tab === 'purchases' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-text'
+                tab === 'purchases' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
               onClick={() => setTab('purchases')}
             >
@@ -171,14 +168,14 @@ export default function ShopPage() {
                 <div className="p-4">
                   <h3 className="font-semibold mb-1">{item.name}</h3>
                   {item.description && (
-                    <p className="text-sm text-muted line-clamp-2 mb-3">{item.description}</p>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{item.description}</p>
                   )}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1 text-primary font-bold">
                       <Star className="w-4 h-4" />
                       {item.points_cost} 积分
                     </div>
-                    <span className="text-xs text-muted">
+                    <span className="text-xs text-muted-foreground">
                       {item.stock > 0 ? `库存 ${item.stock}` : '已售罄'}
                     </span>
                   </div>
@@ -207,7 +204,7 @@ export default function ShopPage() {
         {tab === 'purchases' && isAuthenticated && (
           <div className="space-y-3">
             {purchases.length === 0 ? (
-              <div className="text-center py-16 text-muted">
+              <div className="text-center py-16 text-muted-foreground">
                 <ShoppingBag className="w-12 h-12 mx-auto mb-4 opacity-40" />
                 <p>暂无兑换记录</p>
               </div>
@@ -219,7 +216,7 @@ export default function ShopPage() {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-medium">{p.item?.name || '商品'}</h3>
-                    <p className="text-sm text-muted">
+                    <p className="text-sm text-muted-foreground">
                       兑换于 {new Date(p.created_at).toLocaleDateString('zh-CN')}
                     </p>
                   </div>
@@ -234,7 +231,7 @@ export default function ShopPage() {
         )}
 
         {items.length === 0 && tab === 'shop' && (
-          <div className="text-center py-16 text-muted">
+          <div className="text-center py-16 text-muted-foreground">
             <ShoppingBag className="w-12 h-12 mx-auto mb-4 opacity-40" />
             <p>暂无商品，管理员可在后台添加</p>
           </div>

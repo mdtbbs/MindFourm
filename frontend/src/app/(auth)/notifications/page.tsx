@@ -82,6 +82,11 @@ export default function NotificationsPage() {
     }
   };
 
+  // First, last, and a window around the current page.
+  const visiblePages = Array.from({ length: pagination.totalPages }, (_, i) => i + 1).filter(
+    (p) => p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 2,
+  );
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -167,17 +172,30 @@ export default function NotificationsPage() {
 
       {pagination.totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-8">
-          {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => (
-            <button
-              key={p}
-              onClick={() => loadNotifications(p)}
-              className={`px-3 py-1 rounded ${
-                p === pagination.page ? 'bg-primary-600 text-white' : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+          {/* Windowed: rendering one button per page allocated an array the length of
+              totalPages on every render and produced an unusable strip once the count
+              grew. Mirrors the windowing in components/ui/pagination.tsx. */}
+          {visiblePages.map((p, idx) => {
+            const previous = visiblePages[idx - 1];
+            const gap = previous !== undefined && p - previous > 1;
+
+            return (
+              <span key={p} className="inline-flex items-center gap-2">
+                {gap && <span className="px-1 text-surface-400">…</span>}
+                <button
+                  onClick={() => loadNotifications(p)}
+                  aria-current={p === pagination.page ? 'page' : undefined}
+                  className={`px-3 py-1 rounded ${
+                    p === pagination.page
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300'
+                  }`}
+                >
+                  {p}
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

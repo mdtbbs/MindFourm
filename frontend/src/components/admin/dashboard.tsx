@@ -51,8 +51,8 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Activity chart */}
-        <div className="lg:col-span-2 bg-[var(--bg-card)] dark:bg-gray-900 border border-[var(--border)] dark:border-gray-700 rounded-lg">
-          <div className="px-5 py-4 border-b border-[var(--border)] dark:border-gray-700">
+        <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border)] rounded-lg">
+          <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">7 日活动</h3>
           </div>
           <div className="flex items-end justify-center gap-2 h-36 px-5 py-6">
@@ -67,8 +67,8 @@ export default function Dashboard() {
         </div>
 
         {/* Quick access */}
-        <div className="bg-[var(--bg-card)] dark:bg-gray-900 border border-[var(--border)] dark:border-gray-700 rounded-lg">
-          <div className="px-5 py-4 border-b border-[var(--border)] dark:border-gray-700">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-lg">
+          <div className="px-5 py-4 border-b border-[var(--border)]">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">快捷入口</h3>
           </div>
           <div>

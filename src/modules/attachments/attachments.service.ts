@@ -31,6 +31,53 @@ export class AttachmentsService {
     return await this.attachmentRepository.save(attachment);
   }
 
+  /**
+   * Assert the caller may attach files to this post.
+   *
+   * `post_id` came straight from the request body with no validation, so a user
+   * could graft files onto anyone else's post.
+   */
+  async assertCanAttachToPost(postId: number, userId: number, isStaff: boolean): Promise<void> {
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+      select: { id: true, user_id: true },
+    });
+
+    if (!post) {
+      throw new NotFoundException('帖子不存在');
+    }
+
+    if (post.user_id !== userId && !isStaff) {
+      throw new ForbiddenException('无权向该帖子添加附件');
+    }
+  }
+
+  /**
+   * Fetch an attachment for download, refusing when its parent post is not
+   * publicly visible.
+   *
+   * The download route is unauthenticated and previously performed no such check,
+   * so attachments of draft, pending, rejected, soft-deleted and group-restricted
+   * posts were all served to anyone holding an id.
+   */
+  async getForDownload(id: number): Promise<Attachment> {
+    const attachment = await this.getById(id);
+
+    if (attachment.post_id) {
+      const post = await this.postRepository.findOne({
+        where: { id: attachment.post_id },
+        select: { id: true, status: true, required_group_id: true, deleted_at: true } as any,
+      });
+
+      // 404 rather than 403 — the attachment's existence is as private as the post's.
+      if (!post || post.status !== 'published' || post.required_group_id) {
+        throw new NotFoundException('Attachment not found');
+      }
+    }
+
+    return attachment;
+  }
+
   async getByPostId(postId: number): Promise<Attachment[]> {
     return await this.attachmentRepository.find({
       where: { post_id: postId },

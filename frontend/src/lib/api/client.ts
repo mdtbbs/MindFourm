@@ -3,7 +3,20 @@ import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/res
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+function normalizePublicApiBase(value: string | undefined): string {
+  if (!value) return '';
+  return value.replace(/\/+$/, '');
+}
+
+export function getPublicApiBase(): string {
+  return normalizePublicApiBase(process.env.NEXT_PUBLIC_API_URL);
+}
+
+export function buildPublicApiUrl(path: string): string {
+  return `${getPublicApiBase()}${path}`;
+}
+
+const API_BASE = getPublicApiBase();
 const MINDAUTH_BASE = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
 
 class ApiRequestError extends Error {
@@ -34,7 +47,8 @@ export function createClientWithCookie(cookie: string) {
   if (cookie) headers['Cookie'] = cookie;
 
   return {
-    request: async <T>(path: string, options: RequestInit = {}): Promise<T> => {
+    request: async <T>(rawPath: string, options: RequestInit = {}): Promise<T> => {
+      const path = resolveApiPath(rawPath);
       const method = options.method || 'GET';
       const isFormData = options.body instanceof FormData;
       const requestHeaders = isFormData
@@ -66,10 +80,42 @@ export function createClientWithCookie(cookie: string) {
 const cache = new Map<string, { data: unknown; timestamp: number }>();
 const CACHE_TTL_MS = 30 * 1000; // 30 seconds
 
+/**
+ * Bumped whenever the signed-in identity may have changed.
+ *
+ * The cache was keyed on the path alone, so after switching accounts in one tab the
+ * previous user's `/api/auth/check`, `/api/users/me`, notifications and bookmarks
+ * were served for up to 30 seconds. Including a generation in the key retires every
+ * pre-existing entry at once, without having to enumerate them.
+ */
+let cacheGeneration = 0;
+
+/**
+ * Responses that belong to the current session and must never be served stale —
+ * a 30-second window on these is visible to the user even within one session.
+ */
+const UNCACHEABLE_PREFIXES = [
+  '/api/admin',
+  '/api/auth/',
+  '/api/users/me',
+  '/api/notifications',
+  '/api/bookmarks',
+  '/api/messages',
+  '/api/likes',
+  '/api/follows',
+  '/api/points/me',
+];
+
+/** Invalidate every cached response. Call when the signed-in user may have changed. */
+export function resetApiCache(): void {
+  cache.clear();
+  cacheGeneration += 1;
+}
+
 function getCacheKey(path: string, options: RequestInit): string | null {
   if (options.method && options.method !== 'GET') return null;
-  if (path.startsWith('/api/admin')) return null;
-  return `${options.method || 'GET'}:${path}`;
+  if (UNCACHEABLE_PREFIXES.some((prefix) => path.startsWith(prefix))) return null;
+  return `${cacheGeneration}:${options.method || 'GET'}:${path}`;
 }
 
 function getCached<T>(key: string): T | null {
@@ -146,10 +192,33 @@ async function ensureClientCsrfToken(method: string): Promise<void> {
   });
 }
 
+/**
+ * Ensure a request path carries the backend's global `/api` prefix.
+ *
+ * The NestJS app sets `setGlobalPrefix('api')`, but a number of call sites passed
+ * bare paths like `/shop/items` — which 404'd permanently, and in production (where
+ * NEXT_PUBLIC_API_URL is empty, so the path has to match the `/api/:path*` rewrite)
+ * returned Next's own 404 HTML, surfacing as "Invalid JSON response". Every one of
+ * those was wrapped in an empty catch, so the pages silently rendered empty states.
+ *
+ * Normalising here rather than only fixing the call sites means the mistake cannot
+ * recur.
+ */
+function resolveApiPath(path: string): string {
+  if (path.startsWith('/api/') || path === '/api') {
+    return path;
+  }
+  if (!path.startsWith('/')) {
+    return `/api/${path}`;
+  }
+  return `/api${path}`;
+}
+
 async function request<T>(
-  path: string,
+  rawPath: string,
   options: RequestOptions = {}
 ): Promise<T> {
+  const path = resolveApiPath(rawPath);
   const method = options.method || 'GET';
   const cacheKey = getCacheKey(path, options);
 
@@ -264,11 +333,6 @@ export const authApi = {
     request<{ success: boolean; user: User }>('/api/auth/sync-phone-status', {
       method: 'POST',
       body: JSON.stringify({ phone_sync_token }),
-    }),
-  verifySession: (session_token: string) =>
-    request<void>('/api/auth/verify-session', {
-      method: 'POST',
-      body: JSON.stringify({ session_token }),
     }),
   logout: async () => {
     const results = await Promise.allSettled([
@@ -459,6 +523,8 @@ export const adminApi = {
     ),
   getStats: () =>
     request<AdminStats>('/api/admin/stats'),
+  getBadgeCounts: () =>
+    request<{ moderation_pending: number; announce_active: number }>('/api/admin/badge-counts'),
   getSettings: (category?: string) =>
     request<Record<string, string>>(`/api/admin/settings${category ? `/${category}` : ''}`),
   updateSettings: (category: string, data: Record<string, string>) =>
@@ -620,6 +686,8 @@ export const groupsAdminApi = {
 // User APIs
 export const userApi = {
   getById: (id: number) => request<UserProfile>(`/api/users/${id}`),
+  search: (q: string, limit: number = 10) =>
+    request<Array<Pick<UserProfile, 'id' | 'username' | 'avatar_url'>>>(`/api/users/search${buildQueryString({ q, limit })}`),
   getMyProfile: () => request<UserProfile>('/api/users/me'),
   updateProfile: (data: { username?: string; bio?: string }) =>
     request<UserProfile>('/api/users/me/profile', {

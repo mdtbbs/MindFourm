@@ -1,4 +1,31 @@
-import { SettingsService } from './settings.service';
+const decorator = () => () => undefined;
+
+jest.mock('@nestjs/typeorm', () => ({
+  InjectRepository: () => () => undefined,
+}));
+
+jest.mock('typeorm', () => ({
+  Repository: class Repository {},
+  Entity: decorator,
+  PrimaryGeneratedColumn: decorator,
+  PrimaryColumn: decorator,
+  Column: decorator,
+  ManyToOne: decorator,
+  OneToMany: decorator,
+  ManyToMany: decorator,
+  OneToOne: decorator,
+  JoinColumn: decorator,
+  JoinTable: decorator,
+  CreateDateColumn: decorator,
+  UpdateDateColumn: decorator,
+  DeleteDateColumn: decorator,
+  Index: decorator,
+  Unique: decorator,
+}));
+
+jest.mock('@entities/setting.entity', () => ({ Setting: class Setting {} }));
+
+import { SECRET_PLACEHOLDER, SettingsService } from './settings.service';
 
 type SettingRow = {
   key: string;
@@ -147,6 +174,132 @@ describe('SettingsService', () => {
       admin_notifications_enabled: 'true',
       admin_notifications_webhook_enabled: 'true',
       admin_notifications_webhook_url: 'https://example.com/hooks/admin',
+    });
+  });
+
+  describe('public exposure', () => {
+    const sensitiveRows: SettingRow[] = [
+      {
+        key: 'site_name',
+        value: 'MindFourm',
+        category: 'basic',
+        description: 'Site name',
+        updated_at: new Date(),
+      },
+      {
+        key: 'admin_email',
+        value: 'admin@example.com',
+        category: 'basic',
+        description: 'Admin email',
+        updated_at: new Date(),
+      },
+      {
+        key: 'smtp_host',
+        value: 'smtp.example.com',
+        category: 'email',
+        description: 'SMTP host',
+        updated_at: new Date(),
+      },
+      {
+        key: 'smtp_user',
+        value: 'mailer',
+        category: 'email',
+        description: 'SMTP username',
+        updated_at: new Date(),
+      },
+      {
+        key: 'smtp_password',
+        value: 'super-secret',
+        category: 'email',
+        description: 'SMTP password',
+        updated_at: new Date(),
+      },
+      {
+        key: 'admin_notifications_webhook_secret',
+        value: 'hmac-key',
+        category: 'notifications',
+        description: 'Webhook secret',
+        updated_at: new Date(),
+      },
+      {
+        key: 'admin_notifications_webhook_url',
+        value: 'https://example.com/hooks/admin',
+        category: 'notifications',
+        description: 'Webhook URL',
+        updated_at: new Date(),
+      },
+    ];
+
+    it('omits credentials and other non-allowlisted keys from the public payload', async () => {
+      const { service } = createService(sensitiveRows);
+      await (service as any).loadSettings();
+
+      await expect(service.getPublicSettings()).resolves.toEqual({ site_name: 'MindFourm' });
+    });
+
+    it('returns nothing public for credential-bearing categories', async () => {
+      const { service } = createService(sensitiveRows);
+      await (service as any).loadSettings();
+
+      await expect(service.getPublicByCategory('email')).resolves.toEqual({});
+      await expect(service.getPublicByCategory('notifications')).resolves.toEqual({});
+    });
+
+    it('masks secrets for admins but keeps editable non-secret values readable', async () => {
+      const { service } = createService(sensitiveRows);
+      await (service as any).loadSettings();
+
+      const adminView = await service.getAllForAdmin();
+
+      expect(adminView.smtp_password).toBe(SECRET_PLACEHOLDER);
+      expect(adminView.admin_notifications_webhook_secret).toBe(SECRET_PLACEHOLDER);
+      expect(adminView.smtp_user).toBe('mailer');
+      expect(adminView.admin_notifications_webhook_url).toBe('https://example.com/hooks/admin');
+      expect(adminView.admin_email).toBe('admin@example.com');
+    });
+
+    it('leaves an unset secret as an empty string rather than masking it', async () => {
+      const { service } = createService([
+        {
+          key: 'smtp_password',
+          value: '',
+          category: 'email',
+          description: 'SMTP password',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      await expect(service.getByCategoryForAdmin('email')).resolves.toEqual({ smtp_password: '' });
+    });
+
+    it('keeps the stored secret when the masked placeholder is posted back', async () => {
+      const { service, query, rows } = createService(sensitiveRows);
+      await (service as any).loadSettings();
+
+      await service.setBatch('email', {
+        smtp_host: 'smtp.new.example.com',
+        smtp_password: SECRET_PLACEHOLDER,
+      });
+
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(query).toHaveBeenCalledWith(expect.any(String), [
+        'smtp_host',
+        'smtp.new.example.com',
+        'email',
+        'smtp.new.example.com',
+        'email',
+      ]);
+      expect(rows.find((row) => row.key === 'smtp_password')?.value).toBe('super-secret');
+    });
+
+    it('still allows an explicit empty value to clear a secret', async () => {
+      const { service, rows } = createService(sensitiveRows);
+      await (service as any).loadSettings();
+
+      await service.setBatch('email', { smtp_password: '' });
+
+      expect(rows.find((row) => row.key === 'smtp_password')?.value).toBe('');
     });
   });
 });

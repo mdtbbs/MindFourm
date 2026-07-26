@@ -6,25 +6,10 @@ import { PostSummary } from '@/types';
 import Badge from '@/components/ui/badge';
 import { LikeButton } from '@/components/forum/like-button';
 import { Pin, MessageSquare, Eye, Clock } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 
 interface PostCardProps {
   post: PostSummary;
-}
-
-function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return '刚刚';
-  if (diffMins < 60) return `${diffMins} 分钟前`;
-  if (diffHours < 24) return `${diffHours} 小时前`;
-  if (diffDays < 7) return `${diffDays} 天前`;
-  return date.toLocaleDateString('zh-CN');
 }
 
 export default function PostCard({ post }: PostCardProps) {
@@ -49,7 +34,7 @@ export default function PostCard({ post }: PostCardProps) {
                 animate={{ scale: [1, 1.08, 1] }}
                 transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <Pin className="w-4 h-4 text-[var(--primary)] flex-shrink-0" />
+                <Pin className="w-4 h-4 text-[var(--primary)] shrink-0" />
               </motion.div>
             )}
             {post.status === 'pending' && (

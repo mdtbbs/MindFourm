@@ -1,8 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, Index } from 'typeorm';
 import { User } from './user.entity';
 import { Post } from './post.entity';
 import { Reply } from './reply.entity';
 
+// The unread badge and the notification list are both (user_id, is_read) filters
+// ordered by created_at, and they run on nearly every authenticated page view.
+@Index('idx_notifications_user_read_created', ['user_id', 'is_read', 'created_at'])
 @Entity('notifications')
 export class Notification {
   @PrimaryGeneratedColumn()
@@ -32,19 +35,21 @@ export class Notification {
   @CreateDateColumn()
   created_at: Date;
 
-  @ManyToOne(() => User, { eager: false })
+  @ManyToOne(() => User, { eager: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => User, { eager: false, nullable: true })
+  @ManyToOne(() => User, { eager: false, nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'actor_id' })
   actor: User;
 
-  @ManyToOne(() => Post, { eager: false, nullable: true })
+  // SET NULL, not CASCADE: the notification stays readable after the post or reply
+  // it points at is removed, it just stops linking anywhere.
+  @ManyToOne(() => Post, { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'post_id' })
   post: Post;
 
-  @ManyToOne(() => Reply, { eager: false, nullable: true })
+  @ManyToOne(() => Reply, { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'reply_id' })
   reply: Reply;
 }

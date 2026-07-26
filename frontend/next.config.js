@@ -78,9 +78,28 @@ const nextConfig = {
     ];
   },
 
-  // Generate unique build ID for CDN cache invalidation
+  // Derived from the commit, not the clock. A timestamp changed the build id on every
+  // build, invalidating every static asset — including unchanged chunks — which threw
+  // away returning visitors' caches, hurt Core Web Vitals field data, and broke CDN
+  // and multi-instance cache coherence during a rolling deploy.
   generateBuildId: async () => {
-    return 'build-' + Date.now();
+    const fromEnv =
+      process.env.NEXT_BUILD_ID ||
+      process.env.GIT_COMMIT_SHA ||
+      process.env.VERCEL_GIT_COMMIT_SHA;
+    if (fromEnv) return fromEnv.slice(0, 12);
+
+    try {
+      const { execSync } = require('child_process');
+      return execSync('git rev-parse --short=12 HEAD', {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      })
+        .toString()
+        .trim();
+    } catch {
+      // Outside a git checkout (a source tarball, say) fall back to Next's default.
+      return null;
+    }
   },
 };
 

@@ -35,7 +35,7 @@ export default function AdminPointsPage() {
 
   const fetchRules = useCallback(async () => {
     try {
-      const data = await api.get<PointRule[]>('/points/admin/rules');
+      const data = await api.get<PointRule[]>('/api/points/admin/rules');
       setRules(data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载积分规则失败');
@@ -60,10 +60,10 @@ export default function AdminPointsPage() {
         cooldown_seconds: formData.cooldown_seconds ? parseInt(formData.cooldown_seconds) : null,
       };
       if (editing) {
-        await api.put(`/points/admin/rules/${editing.id}`, body);
+        await api.put(`/api/points/admin/rules/${editing.id}`, body);
         setMessage('规则已更新');
       } else {
-        await api.post('/points/admin/rules', body);
+        await api.post('/api/points/admin/rules', body);
         setMessage('规则已创建');
       }
       resetForm();
@@ -78,7 +78,7 @@ export default function AdminPointsPage() {
   const handleDelete = async (id: number) => {
     if (!confirm('确定要删除此规则吗？')) return;
     try {
-      await api.delete(`/points/admin/rules/${id}`);
+      await api.delete(`/api/points/admin/rules/${id}`);
       setMessage('规则已删除');
       setTimeout(() => setMessage(null), 3000);
       await fetchRules();

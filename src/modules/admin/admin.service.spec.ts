@@ -1,3 +1,42 @@
+const decorator = () => () => undefined;
+
+jest.mock('@nestjs/typeorm', () => ({
+  InjectRepository: () => () => undefined,
+}));
+
+jest.mock('typeorm', () => ({
+  Repository: class Repository {},
+  DataSource: class DataSource {},
+  LessThan: jest.fn((value) => ({ _type: 'lessThan', _value: value })),
+  Entity: decorator,
+  PrimaryGeneratedColumn: decorator,
+  PrimaryColumn: decorator,
+  Column: decorator,
+  ManyToOne: decorator,
+  OneToMany: decorator,
+  ManyToMany: decorator,
+  OneToOne: decorator,
+  JoinColumn: decorator,
+  JoinTable: decorator,
+  CreateDateColumn: decorator,
+  UpdateDateColumn: decorator,
+  DeleteDateColumn: decorator,
+  Index: decorator,
+  Unique: decorator,
+}));
+
+jest.mock('@entities/index', () => ({
+  Post: class Post {},
+  User: class User {},
+  Category: class Category {},
+  Tag: class Tag {},
+  PostTag: class PostTag {},
+  Ban: class Ban {},
+  Setting: class Setting {},
+  OperationLog: class OperationLog {},
+  Reply: class Reply {},
+}));
+
 import { AdminService } from './admin.service';
 
 function createService(overrides: {
@@ -35,23 +74,28 @@ function createService(overrides: {
     ...overrides.pointsService,
   };
 
+  // Positional, so the placeholder count must track the constructor exactly —
+  // inserting a dependency shifts every later argument into the wrong slot, and the
+  // resulting "Cannot read properties of undefined" names the displaced service
+  // rather than the cause. Hence the per-argument labels.
   const service = new AdminService(
     postRepository as any,
     replyRepository as any,
     userRepository as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
+    {} as any, // category
+    {} as any, // tag
+    {} as any, // postTag
+    {} as any, // ban
+    {} as any, // setting
+    {} as any, // operationLog
+    {} as any, // sessionAudit
+    {} as any, // dataSource
+    {} as any, // statsService
     settingsService as any,
-    {} as any,
-    {} as any,
-    {} as any,
-    {} as any,
+    {} as any, // logsService
+    {} as any, // bansService
+    {} as any, // categoriesService
+    {} as any, // tagsService
     pointsService as any,
   );
 

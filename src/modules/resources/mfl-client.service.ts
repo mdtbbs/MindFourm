@@ -13,6 +13,12 @@ export interface MflUploadResponse {
   files: MflUploadResult[];
 }
 
+// Neither call previously had a timeout, so an unresponsive MindFileList could
+// hold a forum request handler (and, for uploads, a database transaction) open
+// indefinitely.
+const MFL_UPLOAD_TIMEOUT_MS = 120_000;
+const MFL_REQUEST_TIMEOUT_MS = 10_000;
+
 @Injectable()
 export class MflClientService {
   private readonly logger = new Logger(MflClientService.name);
@@ -65,6 +71,9 @@ export class MflClientService {
           'Authorization': `Bearer ${this.apiKey}`,
         },
         body: form as any,
+        // Uploads can legitimately be slow (files up to 50 MB), but must not hang
+        // forever — this call previously had no timeout of any kind.
+        signal: AbortSignal.timeout(MFL_UPLOAD_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -113,6 +122,7 @@ export class MflClientService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(MFL_REQUEST_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -126,6 +136,24 @@ export class MflClientService {
       this.logger.error(`MFL approval update error: ${error.message}`);
       return false;
     }
+  }
+
+  /**
+   * Stop MFL serving a file the forum no longer stands behind.
+   *
+   * MFL exposes no delete endpoint, but it refuses to serve files whose approval
+   * status is `rejected`, so that is the strongest compensating action available
+   * when a forum-side record is dropped after its payload was already uploaded.
+   * Logged at error level because reclaiming the bytes still needs an operator on
+   * the MindFileList side.
+   */
+  async blockDownloads(mflFileId: number, resourceId: number, reason: string): Promise<void> {
+    const blocked = await this.updateApprovalStatus(mflFileId, 'rejected', resourceId, reason);
+
+    this.logger.error(
+      `MFL file ${mflFileId} (resource=${resourceId}) left behind: ${reason}; ` +
+      `download ${blocked ? 'blocked' : 'could NOT be blocked'} — needs manual removal on MindFileList`,
+    );
   }
 
   /**

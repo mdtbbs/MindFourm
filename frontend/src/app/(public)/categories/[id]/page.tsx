@@ -42,12 +42,24 @@ async function fetchCategory(id: number): Promise<Category | null> {
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const category = await fetchCategory(parseInt(id));
-  if (!category) return { title: 'Not Found' };
+  if (!category) {
+    return { title: '分类不存在', robots: { index: false, follow: false } };
+  }
+
+  // Bare title — the root layout's `title.template` appends the site suffix. Hardcoding
+  // it here produced "分类名 | MindForum | MindForum".
+  const description = `${category.name} 分类下的全部帖子`;
+  const canonical = `/categories/${category.id}`;
+
   return {
-    title: `${category.name} | MindForum`,
+    title: category.name,
+    description,
+    alternates: { canonical },
     openGraph: {
-      title: `${category.name} | MindForum`,
+      title: category.name,
+      description,
       type: 'website',
+      url: canonical,
     },
   };
 }
@@ -76,7 +88,7 @@ export default async function CategoryPage({
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex gap-8">
-        <div className="hidden lg:block w-64 flex-shrink-0">
+        <div className="hidden lg:block w-64 shrink-0">
           <Sidebar
             categories={categories}
             tags={tags}

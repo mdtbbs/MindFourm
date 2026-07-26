@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
 import { postApi, categoryApi, tagApi } from '@/lib/api/client';
 import { CreatePostInput, Category, Tag, Attachment } from '@/types';
@@ -78,12 +79,12 @@ export default function PostForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Redirect only for published posts
-  useEffect(() => {
-    if (createdPostId !== null && createdPostStatus && createdPostStatus !== 'pending') {
-      router.push(`/posts/${createdPostId}`);
-    }
-  }, [createdPostId, createdPostStatus, router]);
+  // Intentionally no auto-redirect after creating a post.
+  //
+  // The attachment uploader only renders once `createdPostId` is set, but a
+  // published post used to navigate away the moment it was created — so the
+  // attachment step was unreachable in the normal flow. The user now gets an
+  // explicit link once the post exists (see the panel below).
 
   // ── Helpers ──────────────────────────────────────────────
   const parseTags = (): string[] =>
@@ -374,10 +375,21 @@ export default function PostForm() {
           </div>
         </div>
 
-        {/* ── Attachments ───────────────────────────── */}
+        {/* ── Attachments (available once the post exists) ── */}
         {createdPostId && (
           <div className="bg-white dark:bg-gray-900 rounded-xl border border-surface-200 dark:border-gray-700 p-5">
-            <h3 className="text-sm font-medium text-surface-700 dark:text-gray-300 mb-3">附件</h3>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-medium text-surface-700 dark:text-gray-300">附件</h3>
+              <Link
+                href={`/posts/${createdPostId}`}
+                className="text-sm text-primary-600 hover:underline"
+              >
+                {createdPostStatus === 'pending' ? '查看待审核帖子' : '查看帖子'} →
+              </Link>
+            </div>
+            <p className="mb-3 text-xs text-surface-500 dark:text-gray-400">
+              帖子已创建，可以继续添加附件，完成后点击上方链接查看。
+            </p>
             <FileUpload postId={createdPostId}
               onUploaded={newAtts => setAttachments(prev => [...prev, ...newAtts])} />
             {attachments.length > 0 && (

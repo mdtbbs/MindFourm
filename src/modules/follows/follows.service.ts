@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Follow } from '@entities/follow.entity';
 import { User } from '@entities/user.entity';
+import { toPublicUsers } from '../users/public-user.util';
 
 @Injectable()
 export class FollowsService {
@@ -59,7 +60,8 @@ export class FollowsService {
     });
 
     return {
-      users: follows.map(f => f.follower),
+      // Unauthenticated route: strip email and other private columns.
+      users: toPublicUsers(follows.map(f => f.follower)),
       total,
       page,
       limit: cappedLimit,
@@ -80,7 +82,7 @@ export class FollowsService {
     });
 
     return {
-      users: follows.map(f => f.following),
+      users: toPublicUsers(follows.map(f => f.following)),
       total,
       page,
       limit: cappedLimit,

@@ -1,16 +1,31 @@
+const DEFAULT_PORT = 4000;
+
+function resolvePort(): number {
+  const parsed = parseInt(process.env.PORT || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_PORT;
+}
+
+/** This service's own base URL, derived from PORT when API_URL is unset. */
+function resolveApiUrl(): string {
+  return process.env.API_URL || `http://localhost:${resolvePort()}`;
+}
+
 export const appConfig = () => ({
   app: {
-    port: parseInt(process.env.PORT || '4000', 10),
+    port: resolvePort(),
     env: process.env.NODE_ENV || 'development',
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
-    apiUrl: process.env.API_URL || 'http://localhost:4000',
+    apiUrl: resolveApiUrl(),
   },
   mysql: {
     host: process.env.MYSQL_HOST || 'localhost',
     port: parseInt(process.env.MYSQL_PORT || '3306', 10),
     user: process.env.MYSQL_USER || 'root',
     password: process.env.MYSQL_PASSWORD || '',
-    database: process.env.MYSQL_DATABASE || 'mindforum',
+    // `mindfourm`, matching the repository's spelling — this is the database that
+    // actually exists. Defaulting to `mindforum` meant a deployment without an
+    // explicit MYSQL_DATABASE connected to a database that had never been created.
+    database: process.env.MYSQL_DATABASE || 'mindfourm',
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
@@ -22,7 +37,11 @@ export const appConfig = () => ({
     baseUrl: process.env.MINDAUTH_URL || 'http://localhost:4001',
     clientId: process.env.MINDAUTH_CLIENT_ID || 'forum',
     clientSecret: process.env.MINDAUTH_CLIENT_SECRET || '',
-    callbackUrl: process.env.MINDAUTH_CALLBACK_URL || 'http://localhost:4000/api/auth/callback',
+    // Derived from this service's own base URL rather than a fixed default. A
+    // hardcoded `http://localhost:4000/...` fallback silently contradicted
+    // deployments running on another port (this one uses 4500), producing a
+    // redirect_uri MindAuth rejects during the token exchange.
+    callbackUrl: process.env.MINDAUTH_CALLBACK_URL || `${resolveApiUrl()}/api/auth/callback`,
   },
   easymanager: {
     enabled: process.env.EASYMANAGER_ENABLED === 'true',

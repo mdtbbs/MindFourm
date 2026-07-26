@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { timingSafeEqual } from 'crypto';
+import { secretsMatch } from '../utils/secret-compare.util';
 
 @Injectable()
 export class ForumApiKeyGuard implements CanActivate {
@@ -14,7 +14,7 @@ export class ForumApiKeyGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const providedKey = this.extractApiKey(request);
-    if (!providedKey || !this.isEqual(providedKey, expectedKey)) {
+    if (!providedKey || !secretsMatch(providedKey, expectedKey)) {
       throw new ForbiddenException('Invalid service API key');
     }
 
@@ -39,15 +39,5 @@ export class ForumApiKeyGuard implements CanActivate {
     }
 
     return undefined;
-  }
-
-  private isEqual(providedKey: string, expectedKey: string): boolean {
-    const provided = Buffer.from(providedKey);
-    const expected = Buffer.from(expectedKey);
-    if (provided.length !== expected.length) {
-      return false;
-    }
-
-    return timingSafeEqual(provided, expected);
   }
 }

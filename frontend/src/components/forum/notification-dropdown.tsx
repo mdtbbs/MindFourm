@@ -10,7 +10,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { notificationApi } from '@/lib/api/client';
 import { useNotificationStore } from '@/store/notification-store';
@@ -38,21 +38,40 @@ export default function NotificationDropdown() {
 
   const showToast = useToast().showSuccess;
 
+  // Drives a one-shot bell/badge animation when the unread count goes up.
+  const [justArrived, setJustArrived] = useState(false);
+  const previousUnreadRef = useRef(unreadCount);
+
+  useEffect(() => {
+    const rose = unreadCount > previousUnreadRef.current;
+    previousUnreadRef.current = unreadCount;
+    if (!rose) return;
+
+    setJustArrived(true);
+    const timer = window.setTimeout(() => setJustArrived(false), 1200);
+    return () => window.clearTimeout(timer);
+  }, [unreadCount]);
+
+  // Stable identity: useSse keeps the handler in a ref, but a fresh closure every
+  // render still churns that ref for no reason.
+  const handleNotification = useCallback(
+    (notification: Notification) => {
+      addNotification(notification);
+
+      const typeText =
+        notification.type === 'reply' ? '回复了你的帖子'
+          : notification.type === 'mention' ? '提到了你'
+          : notification.type === 'post_like' ? '点赞了你的帖子'
+          : notification.type === 'reply_like' ? '点赞了你的回复'
+          : '新通知';
+
+      showToast(`${notification.actor_name} ${typeText}`);
+    },
+    [addNotification, showToast],
+  );
+
   // SSE real-time notifications
-  useSse<Notification>('notification', (notification) => {
-    // Add new notification to store
-    addNotification(notification);
-
-    // Show toast notification
-    const typeText =
-      notification.type === 'reply' ? '回复了你的帖子'
-        : notification.type === 'mention' ? '提到了你'
-        : notification.type === 'post_like' ? '点赞了你的帖子'
-        : notification.type === 'reply_like' ? '点赞了你的回复'
-        : '新通知';
-
-    showToast(`${notification.actor_name} ${typeText}`);
-  });
+  useSse<Notification>('notification', handleNotification);
 
   // Fetch unread count on mount
   useEffect(() => {
@@ -116,16 +135,15 @@ export default function NotificationDropdown() {
         aria-label={`通知 ${unreadCount > 0 ? `(${unreadCount}条未读)` : ''}`}
         aria-expanded={isOpen}
       >
-        {/* Bell icon - wiggle animation when unread */}
-        <Bell
-          className={`w-5 h-5 transition-transform ${
-            unreadCount > 0 ? 'animate-wiggle' : ''
-          }`}
-        />
-        {/* Unread badge - pulse animation */}
+        {/* Animates once when the count rises, not continuously. Keying the class off
+            `unreadCount > 0` meant a permanently shaking bell and a permanently
+            pulsing badge — constant compositor work for no added information. */}
+        <Bell className={`w-5 h-5 transition-transform ${justArrived ? 'animate-wiggle' : ''}`} />
         {unreadCount > 0 && (
           <span
-            className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center animate-badge-pulse shadow-sm"
+            className={`absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center shadow-sm ${
+              justArrived ? 'animate-badge-pulse' : ''
+            }`}
             aria-live="polite"
           >
             {unreadCount > 9 ? '9+' : unreadCount}

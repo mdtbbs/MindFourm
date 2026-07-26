@@ -114,7 +114,7 @@ describe('PostSummaryService', () => {
 
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       'reply.status IN (:...statuses)',
-      { statuses: ['active', 'published'] },
+      { statuses: ['published'] },
     );
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({

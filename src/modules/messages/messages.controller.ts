@@ -4,6 +4,10 @@ import {
 import { MessagesService } from './messages.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { CreateGroupChatDto } from './dto/create-group-chat.dto';
+import { CreateMessageDto } from './dto/create-message.dto';
+import { GroupMessageDto } from './dto/group-message.dto';
+import { AddGroupChatMemberDto } from './dto/add-group-chat-member.dto';
+import { UpdateGroupChatDto } from './dto/update-group-chat.dto';
 import type { Request } from 'express';
 
 @Controller('messages')
@@ -12,13 +16,14 @@ export class MessagesController {
   constructor(private readonly messagesService: MessagesService) {}
 
   @Post()
-  async send(@Body() dto: { recipient_id: number; content: string }, @Req() req: Request) {
+  async send(@Body() dto: CreateMessageDto, @Req() req: Request) {
     return this.messagesService.create(dto, (req as any).user?.id);
   }
 
   @Get()
   async getConversations(@Req() req: Request, @Query('limit') limit = '20', @Query('cursor') cursor?: string) {
-    return this.messagesService.getConversations((req as any).user?.id, Number(limit), cursor);
+    // The service clamps the limit; passing the raw value keeps NaN handling in one place.
+    return this.messagesService.getConversations((req as any).user?.id, limit, cursor);
   }
 
   @Get('unread-count')
@@ -28,12 +33,12 @@ export class MessagesController {
 
   @Get(':userId')
   async getConversation(@Req() req: Request, @Param('userId', ParseIntPipe) userId: number, @Query('limit') limit = '50', @Query('cursor') cursor?: string) {
-    return this.messagesService.getConversation((req as any).user?.id, userId, Number(limit), cursor);
+    return this.messagesService.getConversation((req as any).user?.id, userId, limit, cursor);
   }
 
   @Delete(':id')
   async deleteMessage(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
-    return this.messagesService.deleteForUser(id, (req as any).user?.id, false);
+    return this.messagesService.deleteForUser(id, (req as any).user?.id);
   }
 }
 
@@ -68,13 +73,13 @@ export class GroupChatsController {
     @Query('limit') limit = '50',
     @Query('cursor') cursor?: string,
   ) {
-    return this.messagesService.getGroupMessages(id, (req as any).user?.id, Number(limit), cursor);
+    return this.messagesService.getGroupMessages(id, (req as any).user?.id, limit, cursor);
   }
 
   @Post(':id/messages')
   async sendGroupMessage(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: { content: string },
+    @Body() dto: GroupMessageDto,
     @Req() req: Request,
   ) {
     const message = await this.messagesService.sendGroupMessage(id, (req as any).user?.id, dto.content);
@@ -84,9 +89,15 @@ export class GroupChatsController {
   @Post(':id/members')
   async addGroupMember(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: { user_id: number; role?: string },
+    @Body() dto: AddGroupChatMemberDto,
+    @Req() req: Request,
   ) {
-    const member = await this.messagesService.addGroupMember(id, dto.user_id, dto.role || 'member');
+    const member = await this.messagesService.addGroupMember(
+      id,
+      (req as any).user?.id,
+      dto.user_id,
+      dto.role || 'member',
+    );
     return { success: true, data: member };
   }
 
@@ -94,8 +105,9 @@ export class GroupChatsController {
   async removeGroupMember(
     @Param('id', ParseIntPipe) id: number,
     @Param('userId', ParseIntPipe) userId: number,
+    @Req() req: Request,
   ) {
-    await this.messagesService.removeGroupMember(id, userId);
+    await this.messagesService.removeGroupMember(id, (req as any).user?.id, userId);
     return { success: true, data: { message: '成员已移除' } };
   }
 
@@ -108,7 +120,7 @@ export class GroupChatsController {
   @Put(':id')
   async updateGroupChat(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: { name?: string; description?: string },
+    @Body() dto: UpdateGroupChatDto,
     @Req() req: Request,
   ) {
     const groupChat = await this.messagesService.updateGroupChat(id, (req as any).user?.id, dto);

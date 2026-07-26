@@ -3,10 +3,62 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '@entities/index';
 
+/**
+ * Placeholder returned instead of a stored secret. When an admin form posts this
+ * value back, `setBatch` leaves the stored secret untouched.
+ */
+export const SECRET_PLACEHOLDER = '__unchanged__';
+
 @Injectable()
 export class SettingsService implements OnModuleInit {
   private readonly logger = new Logger(SettingsService.name);
   private settingsCache: Map<string, Setting> = new Map();
+
+  /**
+   * Keys readable without authentication. Anything absent from this set is
+   * admin-only — the settings table also holds SMTP credentials and the
+   * admin-notification webhook secret, so this must stay an allowlist rather
+   * than a denylist of known-sensitive keys.
+   */
+  private static readonly PUBLIC_KEYS: ReadonlySet<string> = new Set([
+    'site_name',
+    'site_tagline',
+    'site_description',
+    'site_logo_url',
+    'site_footer',
+    'site_url',
+    'maintenance_mode',
+    'posts_per_page',
+    'default_sort',
+    'replies_per_page',
+    'latest_posts_title',
+    'latest_posts_description',
+    'latest_posts_density',
+    'latest_posts_accent_color',
+    'latest_posts_show_excerpt',
+    'latest_posts_show_tags',
+    'latest_posts_show_stats',
+    'latest_posts_show_index',
+    'announce_enabled',
+    'announce_content',
+    'seo_title_suffix',
+    'seo_default_description',
+    'seo_og_image',
+    'seo_sitemap_enabled',
+    'seo_robots_enabled',
+    'feature_resources_enabled',
+    'feature_servers_enabled',
+    'feature_groups_enabled',
+    'feature_leaderboard_enabled',
+    'feature_shop_enabled',
+  ]);
+
+  /** Never leaves the server in cleartext, not even to an authenticated admin. */
+  private static readonly SECRET_KEYS: ReadonlySet<string> = new Set([
+    'smtp_password',
+    'admin_notifications_webhook_secret',
+  ]);
+
   // Admin pages group settings by UI section, not always by the historical DB category.
   private readonly categoryKeyGroups: Record<string, Set<string>> = {
     basic: new Set([
@@ -151,7 +203,11 @@ export class SettingsService implements OnModuleInit {
   }
 
   /**
-   * Get all settings from memory
+   * Get all settings from memory.
+   *
+   * Returns secrets in cleartext — for internal service use only. Never expose
+   * the result on an HTTP response; use `getPublicSettings` or
+   * `getAllForAdmin` instead.
    */
   async getAll(): Promise<Record<string, string>> {
     const result: Record<string, string> = {};
@@ -162,7 +218,11 @@ export class SettingsService implements OnModuleInit {
   }
 
   /**
-   * Get settings by category
+   * Get settings by category.
+   *
+   * Returns secrets in cleartext — for internal service use only (e.g.
+   * `EmailService` reading the `email` category). Never expose the result on an
+   * HTTP response; use `getPublicByCategory` or `getByCategoryForAdmin`.
    */
   async getByCategory(category: string): Promise<Record<string, string>> {
     const result: Record<string, string> = {};
@@ -172,6 +232,54 @@ export class SettingsService implements OnModuleInit {
       if (logicalKeys ? logicalKeys.has(setting.key) : setting.category === category) {
         result[setting.key] = setting.value;
       }
+    }
+    return result;
+  }
+
+  /**
+   * Settings safe to serve to unauthenticated callers.
+   */
+  async getPublicSettings(): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+    for (const key of SettingsService.PUBLIC_KEYS) {
+      const setting = this.settingsCache.get(key);
+      if (setting) {
+        result[key] = setting.value;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Settings of one category, narrowed to the public allowlist.
+   */
+  async getPublicByCategory(category: string): Promise<Record<string, string>> {
+    const all = await this.getByCategory(category);
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(all)) {
+      if (SettingsService.PUBLIC_KEYS.has(key)) {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Everything, with stored secrets replaced by {@link SECRET_PLACEHOLDER} so an
+   * admin panel can render the form without receiving the credential itself.
+   */
+  async getAllForAdmin(): Promise<Record<string, string>> {
+    return this.maskSecrets(await this.getAll());
+  }
+
+  async getByCategoryForAdmin(category: string): Promise<Record<string, string>> {
+    return this.maskSecrets(await this.getByCategory(category));
+  }
+
+  private maskSecrets(settings: Record<string, string>): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (const [key, value] of Object.entries(settings)) {
+      result[key] = SettingsService.SECRET_KEYS.has(key) && value ? SECRET_PLACEHOLDER : value;
     }
     return result;
   }
@@ -205,6 +313,11 @@ export class SettingsService implements OnModuleInit {
    */
   async setBatch(category: string, keyValuePairs: Record<string, string>): Promise<void> {
     for (const [key, value] of Object.entries(keyValuePairs)) {
+      // An admin form that rendered a masked secret posts the placeholder back;
+      // writing it would replace the real credential with the literal string.
+      if (value === SECRET_PLACEHOLDER) {
+        continue;
+      }
       await this.settingRepository.query(
         'INSERT INTO settings (`key`, `value`, category, updated_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE `value` = ?, category = ?, updated_at = NOW()',
         [key, value, category, value, category],

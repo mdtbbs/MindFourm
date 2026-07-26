@@ -1,23 +1,33 @@
-import type { PostSummary, Category, Resource } from '@/types';
+import type { MetadataRoute } from 'next';
+import type { PostSummary, Category, Resource, Tag } from '@/types';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
+import { getSiteUrl } from '@/lib/seo/site-url';
+import { buildHybridParam } from '@/lib/seo/hybrid-param';
 
-async function fetchSitemapPosts(limit: number = 1000): Promise<PostSummary[]> {
-  const pageSize = 50;
-  const totalPages = Math.ceil(limit / pageSize);
+const POST_LIMIT = 5000;
+const RESOURCE_LIMIT = 1000;
+const PAGE_SIZE = 50;
+
+async function fetchSitemapPosts(limit: number = POST_LIMIT): Promise<PostSummary[]> {
+  const totalPages = Math.ceil(limit / PAGE_SIZE);
   const posts: PostSummary[] = [];
 
   for (let page = 1; page <= totalPages; page += 1) {
-    const result = await fetchApiPaginated<PostSummary>(`/api/posts?page=${page}&limit=${pageSize}`, {
+    const result = await fetchApiPaginated<PostSummary>(`/api/posts?page=${page}&limit=${PAGE_SIZE}`, {
       init: { next: { revalidate: 60 } },
-      fallback: createEmptyPaginatedResult<PostSummary>(pageSize),
+      fallback: createEmptyPaginatedResult<PostSummary>(PAGE_SIZE),
     });
 
     posts.push(...result.data);
 
-    if (result.pagination.page >= result.pagination.totalPages || result.data.length < pageSize) {
+    if (result.pagination.page >= result.pagination.totalPages || result.data.length < PAGE_SIZE) {
       break;
     }
+  }
+
+  if (posts.length >= limit) {
+    console.warn(`sitemap: post list truncated at ${limit}; consider a sitemap index`);
   }
 
   return posts.slice(0, limit);
@@ -30,69 +40,112 @@ async function fetchSitemapCategories(): Promise<Category[]> {
   });
 }
 
-async function fetchSitemapResources(limit: number = 500): Promise<Resource[]> {
-  const result = await fetchApiData<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-    '/api/resources?limit=50',
-    {
-      init: { next: { revalidate: 60 } },
-      fallback: { data: [], next_cursor: null, has_more: false },
-    },
-  );
-
-  return result.data.slice(0, limit);
+async function fetchSitemapTags(): Promise<Tag[]> {
+  return fetchApiData<Tag[]>('/api/tags', {
+    init: { next: { revalidate: 300 } },
+    fallback: [],
+  });
 }
 
-export default async function sitemap() {
+/**
+ * Walks the resource cursor. The previous version requested a single `?limit=50`
+ * page while advertising a limit of 500, so it silently emitted at most 50 resources
+ * no matter how many existed.
+ */
+async function fetchSitemapResources(limit: number = RESOURCE_LIMIT): Promise<Resource[]> {
+  const resources: Resource[] = [];
+  let cursor: string | null = null;
+
+  while (resources.length < limit) {
+    const query = new URLSearchParams({ limit: String(PAGE_SIZE) });
+    if (cursor) query.set('cursor', cursor);
+
+    const result: { data: Resource[]; next_cursor: string | null; has_more: boolean } =
+      await fetchApiData(`/api/resources?${query.toString()}`, {
+        init: { next: { revalidate: 60 } },
+        fallback: { data: [], next_cursor: null, has_more: false },
+      });
+
+    resources.push(...result.data);
+
+    if (!result.has_more || !result.next_cursor || result.data.length === 0) {
+      break;
+    }
+    cursor = result.next_cursor;
+  }
+
+  return resources.slice(0, limit);
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const settings = await fetchApiData<Record<string, string>>('/api/settings', {
     init: { next: { revalidate: 60 } },
     fallback: {},
   });
 
-  if (settings.seo_sitemap_enabled === 'false') {
+  // Matches the admin toggle, which renders `=== 'true'` as checked: anything unset
+  // or blank now reads as disabled here too, instead of the two disagreeing.
+  if ((settings.seo_sitemap_enabled ?? 'true') !== 'true') {
     return [];
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || settings.site_url;
-
-  // Security: Require proper URL in production, don't expose localhost
+  // Only the environment variable — never the admin-editable `site_url`, which is
+  // seeded to `http://localhost:3000` and so used to leak localhost URLs into a
+  // production sitemap while bypassing the guard below.
+  const baseUrl = getSiteUrl();
   if (!baseUrl) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('Security: NEXT_PUBLIC_SITE_URL or site_url setting is required in production for sitemap');
-      return [];
-    }
+    console.error('sitemap: NEXT_PUBLIC_SITE_URL is required; returning an empty sitemap');
     return [];
   }
 
-  // Static pages
-  const staticUrls = [
-    { url: baseUrl, lastModified: new Date().toISOString() },
-    { url: `${baseUrl}/resources`, lastModified: new Date().toISOString() },
-  ];
+  const now = new Date().toISOString();
 
-  // Fetch all data in parallel
-  const [posts, categories, resources] = await Promise.all([
+  const [posts, categories, tags, resources] = await Promise.all([
     fetchSitemapPosts(),
     fetchSitemapCategories(),
+    fetchSitemapTags(),
     fetchSitemapResources(),
   ]);
 
-  // Category URLs
-  const categoryUrls = categories.map((category) => ({
-    url: `${baseUrl}/categories/${category.slug || category.id}`,
-    lastModified: new Date().toISOString(),
+  const staticUrls: MetadataRoute.Sitemap = [
+    { url: baseUrl, lastModified: now, changeFrequency: 'hourly', priority: 1 },
+    { url: `${baseUrl}/resources`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${baseUrl}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.5 },
+    { url: `${baseUrl}/groups`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 },
+  ];
+
+  // Always the numeric id: there is no `/categories/[slug]` route, so emitting
+  // `category.slug` published URLs that 404.
+  const categoryUrls: MetadataRoute.Sitemap = categories.map((category) => ({
+    url: `${baseUrl}/categories/${category.id}`,
+    lastModified: now,
+    changeFrequency: 'daily',
+    priority: 0.7,
   }));
 
-  // Post URLs - use slug-based hybrid URLs
-  const postUrls = posts.map((post) => ({
-    url: `${baseUrl}/posts/${post.id}${post.slug ? `-${post.slug}` : ''}`,
+  const tagUrls: MetadataRoute.Sitemap = tags
+    .filter((tag) => !!tag.slug)
+    .map((tag) => ({
+      url: `${baseUrl}/tags/${tag.slug}`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.4,
+    }));
+
+  // Must match the canonical each page declares, and the links pointing at it.
+  const postUrls: MetadataRoute.Sitemap = posts.map((post) => ({
+    url: `${baseUrl}/posts/${buildHybridParam(post.id, post.slug || '')}`,
     lastModified: post.updated_at || post.created_at,
+    changeFrequency: 'weekly',
+    priority: 0.6,
   }));
 
-  // Resource URLs
-  const resourceUrls = resources.map((resource) => ({
-    url: `${baseUrl}/resources/${resource.id}${resource.slug ? `-${resource.slug}` : ''}`,
+  const resourceUrls: MetadataRoute.Sitemap = resources.map((resource) => ({
+    url: `${baseUrl}/resources/${buildHybridParam(resource.id, resource.slug || '')}`,
     lastModified: resource.updated_at || resource.created_at,
+    changeFrequency: 'weekly',
+    priority: 0.6,
   }));
 
-  return [...staticUrls, ...categoryUrls, ...postUrls, ...resourceUrls];
+  return [...staticUrls, ...categoryUrls, ...tagUrls, ...postUrls, ...resourceUrls];
 }

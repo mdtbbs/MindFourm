@@ -12,7 +12,7 @@ export default function AdminHeader() {
   };
 
   return (
-    <header className="bg-[var(--bg-card)] dark:bg-gray-900 border-b border-[var(--border)] dark:border-gray-700 px-6 py-4 flex items-center justify-between">
+    <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4 flex items-center justify-between">
       <h1 className="text-xl font-bold text-[var(--text)]">MindForum 管理后台</h1>
       <div className="flex items-center gap-4">
         <AdminNotificationBell />

@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  JoinColumn,
+  JoinColumn, Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { Category } from './category.entity';
@@ -12,6 +12,14 @@ import { PostLike } from './post-like.entity';
 import { PostTag } from './post-tag.entity';
 import { Group } from './group.entity';
 
+// The list endpoints all filter on (deleted_at IS NULL, status) and then order by
+// (is_pinned, created_at); one composite index covers that whole clause instead of
+// scanning the table and sorting in memory.
+@Index('idx_posts_deleted_status_pinned_created', ['deleted_at', 'status', 'is_pinned', 'created_at'])
+@Index('idx_posts_status', ['status'])
+@Index('idx_posts_slug', ['slug'])
+@Index('idx_posts_post_type', ['post_type'])
+@Index('idx_posts_server_id', ['server_id'])
 @Entity('posts')
 export class Post {
   @PrimaryGeneratedColumn()
@@ -23,6 +31,13 @@ export class Post {
   @Column({ nullable: true })
   category_id: number;
 
+  /**
+   * EasyManager server this post belongs to.
+   *
+   * EasyManager is a separate service with its own database, so this is a
+   * cross-service reference: it can be indexed but no foreign key can enforce it,
+   * and a missing server has to be tolerated at read time.
+   */
   @Column({ nullable: true })
   server_id: number;
 
@@ -68,11 +83,11 @@ export class Post {
   @DeleteDateColumn()
   deleted_at: Date;
 
-  @ManyToOne(() => User, { eager: false })
+  @ManyToOne(() => User, { eager: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Category, { eager: false, nullable: true })
+  @ManyToOne(() => Category, { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'category_id' })
   category: Category;
 

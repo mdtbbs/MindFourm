@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
 import { OptionalAuth } from '@common/decorators/public.decorator';
+import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { LogsService } from '../logs/logs.service';
 
 @Controller('posts')
@@ -104,7 +105,7 @@ export class PostsController {
       : limit
         ? parseInt(limit, 10)
         : 20;
-    const post = await this.postsService.findById(id);
+    const post = await this.postsService.findById(id, req?.user);
     const replies = await this.postsService.getReplies(
       id,
       Number.isFinite(parsedReplyLimit) ? parsedReplyLimit : 20,
@@ -129,6 +130,7 @@ export class PostsController {
    */
   @Post()
   @UseGuards(JwtAuthGuard)
+  @RateLimit({ max: 10, window: 60 })
   async create(@Body() dto: CreatePostDto, @Req() req: any) {
     const userId = req.user.id;
     const post = await this.postsService.create(dto, userId);

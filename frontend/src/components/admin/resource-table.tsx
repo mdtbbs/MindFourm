@@ -18,33 +18,57 @@ export default function ResourceTable() {
   const [status, setStatus] = useState<string>('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  // Swallowing the failure left the table showing "暂无资源", which is
+  // indistinguishable from genuinely having none.
+  const [error, setError] = useState<string | null>(null);
 
   const loadData = () => {
     setLoading(true);
+    setError(null);
     Promise.all([
       resourceAdminApi.list({ limit: 50, status: status || undefined, search: search || undefined }),
       resourceApi.getCategories(),
     ]).then(([resRes, cats]) => {
       setResources(resRes.data || []);
       setCategories(cats);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      setError(err instanceof Error ? err.message : '加载资源失败');
+    }).finally(() => setLoading(false));
   };
 
   useEffect(() => { loadData(); }, [status, search]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除此资源？')) return;
-    await resourceAdminApi.delete(id);
-    loadData();
+    try {
+      await resourceAdminApi.delete(id);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除失败');
+    }
   };
 
   const handleStatusChange = async (id: number, newStatus: string) => {
-    await resourceAdminApi.updateStatus(id, newStatus);
-    loadData();
+    try {
+      await resourceAdminApi.updateStatus(id, newStatus);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新状态失败');
+    }
   };
 
   if (loading) return <div className="p-8 text-center">加载中...</div>;
+
+  if (error) {
+    return (
+      <div className="p-8 text-center space-y-3">
+        <p className="text-red-600">{error}</p>
+        <button type="button" onClick={loadData} className="text-sm text-primary-600 underline">
+          重试
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div>

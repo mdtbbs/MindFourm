@@ -1,3 +1,7 @@
+jest.mock('./auth.service', () => ({
+  AuthService: class AuthService {},
+}));
+
 import { AuthController } from './auth.controller';
 
 describe('AuthController', () => {

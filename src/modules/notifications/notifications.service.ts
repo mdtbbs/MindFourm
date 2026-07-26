@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { RedisService } from '../../database/redis.service';
+import { escapeHtml } from '../../common/utils/escape-html.util';
 import { Notification } from '../../entities/notification.entity';
 import { User } from '../../entities/user.entity';
 import { Post } from '../../entities/post.entity';
@@ -14,6 +15,7 @@ import { NotificationStreamService } from './notification-stream.service';
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
   private frontendUrl: string = process.env.FRONTEND_URL || 'http://localhost:3000';
 
   constructor(
@@ -62,10 +64,13 @@ export class NotificationsService {
 
     const template = EMAIL_TEMPLATES[emailType];
     const siteName = await this.getSiteName();
+    const subject = this.sanitizeHeaderValue(
+      templateVars.subject || `[${siteName}] 新通知`,
+    );
 
     await this.emailQueueService.addEmailJob({
       to: user.email,
-      subject: templateVars.subject || `[${siteName}] 新通知`,
+      subject,
       html: this.renderEmailTemplate(template, {
         ...templateVars,
         username: user.username || '用户',
@@ -75,25 +80,44 @@ export class NotificationsService {
       }),
     });
 
-    // Log the email
+    // Records the attempt, not a confirmed delivery: the BullMQ worker has not run
+    // yet at this point. Status is reconciled when the job completes.
     this.emailLogRepository.save({
       user_id: userId,
       email_type: emailType,
       to_email: user.email,
-      subject: templateVars.subject || `[${siteName}] 新通知`,
-      status: 'sent',
-    }).catch(() => {});
+      subject,
+      status: 'queued',
+    }).catch((error) => {
+      this.logger.warn(`Failed to record email log: ${(error as Error).message}`);
+    });
   }
 
   /**
-   * Simple template rendering (replaces {{key}} with value)
+   * Simple template rendering (replaces {{key}} with value).
+   *
+   * Values are HTML-escaped. Several of them — `actor_name` in particular — come
+   * from MindAuth-controlled usernames and post titles, and were substituted raw
+   * into the message body.
    */
   private renderEmailTemplate(template: string, variables: Record<string, any>): string {
     let html = template;
     for (const [key, value] of Object.entries(variables)) {
-      html = html.replace(new RegExp(`{{${key}}}`, 'g'), String(value ?? ''));
+      // Replacement is a function so `$&`, `$1` and friends in user content are not
+      // interpreted as replacement patterns.
+      html = html.replace(new RegExp(`{{${key}}}`, 'g'), () => escapeHtml(String(value ?? '')));
     }
     return html;
+  }
+
+  /**
+   * Strip characters that would let a value break out of the Subject header.
+   *
+   * `actor_name` is interpolated into the subject line, and a CR/LF there splits the
+   * header and injects arbitrary ones.
+   */
+  private sanitizeHeaderValue(value: string): string {
+    return value.replace(/[\r\n]+/g, ' ').trim().slice(0, 200);
   }
 
   async create(data: {

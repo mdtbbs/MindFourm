@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { Eye, MessageSquare, Pin, ThumbsUp, Clock } from 'lucide-react';
 import { PostSummary } from '@/types';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 
 interface LatestPostsSettings {
@@ -20,21 +20,6 @@ interface LatestPostsListProps {
   settings: LatestPostsSettings;
 }
 
-function formatTime(dateStr: string): string {
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return '刚刚';
-  if (diffMins < 60) return `${diffMins} 分钟前`;
-  if (diffHours < 24) return `${diffHours} 小时前`;
-  if (diffDays < 7) return `${diffDays} 天前`;
-  return date.toLocaleDateString('zh-CN');
-}
-
 export default function LatestPostsList({ posts, settings }: LatestPostsListProps) {
   const comfortable = settings.density === 'comfortable';
 
@@ -43,7 +28,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
       className="border border-[var(--border)] bg-[var(--card)]"
       style={{ ['--latest-accent' as string]: settings.accentColor }}
     >
-      <div className="border-b border-[var(--border)] bg-[#f7fbff] px-4 py-3 sm:px-5">
+      <div className="border-b border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 sm:px-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div
@@ -81,7 +66,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
               key={post.id}
               data-testid="post-card"
               className={cn(
-                'grid gap-3 bg-white px-4 transition-colors sm:px-5',
+                'grid gap-3 bg-[var(--bg-card)] px-4 transition-colors sm:px-5',
                 comfortable
                   ? 'py-4 sm:grid-cols-[3rem_minmax(0,1fr)_9rem]'
                   : 'py-3 sm:grid-cols-[2.5rem_minmax(0,1fr)_8rem]',
@@ -91,7 +76,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                     : 'sm:grid-cols-[minmax(0,1fr)_8rem]'),
                 post.status === 'pending'
                   ? 'bg-amber-50/60 hover:bg-amber-50 border-l-3 border-l-amber-400'
-                  : 'hover:bg-[#f7fbff]',
+                  : 'hover:bg-[var(--bg-elevated)]',
               )}
             >
               {settings.showIndex && (
@@ -120,7 +105,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                   {post.category_name && (
                     <Link
                       href={`/categories/${post.category_id}`}
-                      className="shrink-0 border border-[#cfe0f5] bg-[#edf6ff] px-2 py-0.5 text-[11px] font-medium text-[#1d5ea8] hover:border-[var(--latest-accent)]"
+                      className="shrink-0 border border-[var(--border)] bg-[var(--bg-elevated)] px-2 py-0.5 text-[11px] font-medium text-[var(--primary)] hover:border-[var(--latest-accent)]"
                     >
                       {post.category_name}
                     </Link>
