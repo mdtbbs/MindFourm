@@ -28,7 +28,7 @@ export class PointsController {
   async getMyPoints(@Req() req: Request) {
     const userId = (req as any).user?.id;
     const points = await this.pointsService.getUserPoints(userId);
-    return { success: true, data: points };
+    return points;
   }
 
   @Get('me/history')
@@ -43,7 +43,7 @@ export class PointsController {
       query.limit || 20,
       query.cursor,
     );
-    return { success: true, data: result };
+    return result;
   }
 
   @Get('leaderboard')
@@ -52,13 +52,13 @@ export class PointsController {
       query.limit || 20,
       query.page || 1,
     );
-    return { success: true, data: result };
+    return result;
   }
 
   @Get('rules')
   async getRules() {
     const rules = await this.pointsService.getRules();
-    return { success: true, data: rules };
+    return rules;
   }
 
   // Admin endpoints
@@ -67,7 +67,7 @@ export class PointsController {
   @Roles('admin')
   async getAdminRules() {
     const rules = await this.pointsService.getRules();
-    return { success: true, data: rules };
+    return rules;
   }
 
   @Post('admin/rules')
@@ -75,7 +75,7 @@ export class PointsController {
   @Roles('admin')
   async createRule(@Body() dto: CreatePointRuleDto) {
     const rule = await this.pointsService.createRule(dto);
-    return { success: true, data: rule };
+    return rule;
   }
 
   @Put('admin/rules/:id')
@@ -83,7 +83,7 @@ export class PointsController {
   @Roles('admin')
   async updateRule(@Param('id') id: number, @Body() dto: UpdatePointRuleDto) {
     const rule = await this.pointsService.updateRule(id, dto);
-    return { success: true, data: rule };
+    return rule;
   }
 
   @Delete('admin/rules/:id')
@@ -91,7 +91,7 @@ export class PointsController {
   @Roles('admin')
   async deleteRule(@Param('id') id: number) {
     await this.pointsService.deleteRule(id);
-    return { success: true, data: { message: '规则已删除' } };
+    return { message: '规则已删除' };
   }
 
   @Post('admin/award')
@@ -99,6 +99,6 @@ export class PointsController {
   @Roles('admin')
   async awardPoints(@Body() dto: AwardPointsDto) {
     const log = await this.pointsService.awardPointsManual(dto.user_id, dto.points, dto.reason);
-    return { success: true, data: log };
+    return log;
   }
 }

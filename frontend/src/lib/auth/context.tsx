@@ -10,9 +10,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 import { useUserStore, useAuth } from '@/store/user-store';
-import LoadingSpinner from '@/components/ui/loading-spinner';
 
 // Re-export useAuth for backward compatibility
 export { useAuth };
@@ -24,23 +22,24 @@ export { useAuth };
  * Existing components using useAuth() will work without changes.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { isLoading, refreshAuth } = useUserStore();
-  const pathname = usePathname();
-  const shouldBypassLoading = pathname === '/login' || pathname === '/register';
+  const refreshAuth = useUserStore((state) => state.refreshAuth);
 
   // Trigger initial auth check on mount
   useEffect(() => {
     refreshAuth();
   }, [refreshAuth]);
 
-  // Show loading spinner while checking auth status
-  if (isLoading && !shouldBypassLoading) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--bg)]">
-        <LoadingSpinner variant="orbital" size="lg" />
-      </div>
-    );
-  }
-
+  // `children` renders unconditionally, and that is the point.
+  //
+  // This provider used to return a full-screen spinner while `isLoading` was true.
+  // `isLoading` starts true and is only cleared by the effect above, which never runs
+  // on the server — so every server-rendered page was a spinner and nothing else. No
+  // headings, no post bodies, no per-page JSON-LD, and `notFound()` never executed
+  // server-side, which is why deleted posts answered 200. The two routes that opted
+  // out by pathname, /login and /register, were the only ones that ever server-rendered.
+  //
+  // Anything that genuinely needs to wait for the session reads `isLoading` from
+  // `useAuth()` itself. Access control does not depend on this: `middleware.ts` gates
+  // authenticated routes and the API authorises every request independently.
   return <>{children}</>;
 }

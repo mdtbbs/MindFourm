@@ -16,54 +16,54 @@ export class PluginsController {
   @Get()
   async getPlugins() {
     const plugins = await this.pluginManager.getPlugins();
-    return { success: true, data: plugins };
+    return plugins;
   }
 
   @Get(':slug')
   async getPlugin(@Param('slug') slug: string) {
     const plugin = await this.pluginManager.getPlugin(slug);
-    return { success: true, data: plugin };
+    return plugin;
   }
 
   @Post('install')
   async installPlugin(@Body() metadata: PluginMetadata) {
     const plugin = await this.pluginManager.install(metadata);
-    return { success: true, data: plugin };
+    return plugin;
   }
 
   @Delete(':slug')
   async uninstallPlugin(@Param('slug') slug: string) {
     await this.pluginManager.uninstall(slug);
-    return { success: true, data: { message: '插件已卸载' } };
+    return { message: '插件已卸载' };
   }
 
   @Post(':slug/enable')
   async enablePlugin(@Param('slug') slug: string) {
     await this.pluginManager.enable(slug);
-    return { success: true, data: { message: '插件已启用' } };
+    return { message: '插件已启用' };
   }
 
   @Post(':slug/disable')
   async disablePlugin(@Param('slug') slug: string) {
     await this.pluginManager.disable(slug);
-    return { success: true, data: { message: '插件已禁用' } };
+    return { message: '插件已禁用' };
   }
 
   @Get(':slug/config')
   async getConfig(@Param('slug') slug: string) {
     const config = await this.pluginManager.getConfig(slug);
-    return { success: true, data: config };
+    return config;
   }
 
   @Put(':slug/config')
   async updateConfig(@Param('slug') slug: string, @Body() config: UpdatePluginConfigDto) {
     await this.pluginManager.configure(slug, config.config);
-    return { success: true, data: { message: '配置已更新' } };
+    return { message: '配置已更新' };
   }
 
   @Get(':slug/hooks')
   async getPluginHooks(@Param('slug') slug: string) {
     const hooks = await this.pluginManager.getPluginHooks(slug);
-    return { success: true, data: hooks };
+    return hooks;
   }
 }

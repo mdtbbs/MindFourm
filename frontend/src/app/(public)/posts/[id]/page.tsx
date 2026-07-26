@@ -71,7 +71,13 @@ export async function generateMetadata({
   const { post, settings = {} } = await loadPost(id, pageStr);
 
   if (!post) {
-    return { title: '帖子不存在', robots: { index: false, follow: false } };
+    // Raised here rather than only in the page body. `posts/[id]/loading.tsx` puts the
+    // page inside a Suspense boundary, so by the time the body runs the 200 shell has
+    // already been flushed and `notFound()` can no longer change the status — the
+    // deleted post rendered a "帖子不存在" page under HTTP 200, which is the soft-404
+    // this was meant to fix. generateMetadata runs before the first flush, so the
+    // status is still open. `loadPost` is cached, so this costs no extra fetch.
+    notFound();
   }
 
   // Bare title: the root layout's `title.template` appends the suffix. Appending it

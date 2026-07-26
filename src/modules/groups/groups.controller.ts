@@ -18,14 +18,14 @@ export class GroupsController {
   @Get()
   async getAllGroups() {
     const groups = await this.groupsService.getAllGroups();
-    return { success: true, data: groups };
+    return groups;
   }
 
   @Get('my')
   @UseGuards(JwtAuthGuard)
   async getMyGroups(@Req() req: any) {
     const groups = await this.groupsService.getMyGroups(req.user.id);
-    return { success: true, data: groups };
+    return groups;
   }
 
   // === Admin endpoints ===
@@ -35,7 +35,7 @@ export class GroupsController {
   @Roles('admin')
   async adminGetAllGroups() {
     const groups = await this.groupsService.adminGetAllGroups();
-    return { success: true, data: groups };
+    return groups;
   }
 
   @Post('admin')
@@ -43,7 +43,7 @@ export class GroupsController {
   @Roles('admin')
   async adminCreateGroup(@Body() dto: CreateGroupDto) {
     const group = await this.groupsService.adminCreateGroup(dto);
-    return { success: true, data: group };
+    return group;
   }
 
   @Put('admin/:id')
@@ -51,7 +51,7 @@ export class GroupsController {
   @Roles('admin')
   async adminUpdateGroup(@Param('id') id: number, @Body() dto: UpdateGroupDto) {
     const group = await this.groupsService.adminUpdateGroup(id, dto);
-    return { success: true, data: group };
+    return group;
   }
 
   @Delete('admin/:id')
@@ -59,7 +59,7 @@ export class GroupsController {
   @Roles('admin')
   async adminDeleteGroup(@Param('id') id: number) {
     await this.groupsService.adminDeleteGroup(id);
-    return { success: true, data: { message: '组已删除' } };
+    return { message: '组已删除' };
   }
 
   @Post('admin/:id/members')
@@ -67,7 +67,7 @@ export class GroupsController {
   @Roles('admin')
   async adminAddMember(@Param('id') id: number, @Body() dto: AddGroupMemberDto) {
     const member = await this.groupsService.adminAddMember(id, dto.user_id, dto.role || 'member');
-    return { success: true, data: member };
+    return member;
   }
 
   @Delete('admin/:id/members/:userId')
@@ -75,7 +75,7 @@ export class GroupsController {
   @Roles('admin')
   async adminRemoveMember(@Param('id') id: number, @Param('userId') userId: number) {
     await this.groupsService.adminRemoveMember(id, userId);
-    return { success: true, data: { message: '成员已移除' } };
+    return { message: '成员已移除' };
   }
 
   // === Membership actions ===
@@ -87,14 +87,14 @@ export class GroupsController {
   @UseGuards(JwtAuthGuard)
   async joinGroup(@Param('id') id: number, @Req() req: any) {
     const member = await this.groupsService.joinGroup(id, req.user.id);
-    return { success: true, data: member };
+    return member;
   }
 
   @Post(':id/leave')
   @UseGuards(JwtAuthGuard)
   async leaveGroup(@Param('id') id: number, @Req() req: any) {
     await this.groupsService.leaveGroup(id, req.user.id);
-    return { success: true, data: { message: '已离开该组' } };
+    return { message: '已离开该组' };
   }
 
   // === Slug lookups (declared last so they do not shadow literal routes) ===
@@ -102,12 +102,12 @@ export class GroupsController {
   @Get(':slug')
   async getGroupBySlug(@Param('slug') slug: string) {
     const group = await this.groupsService.getGroupBySlug(slug);
-    return { success: true, data: group };
+    return group;
   }
 
   @Get(':slug/members')
   async getGroupMembers(@Param('slug') slug: string, @Query() query: QueryGroupsDto) {
     const result = await this.groupsService.getGroupMembers(slug, query.page || 1, query.limit || 20);
-    return { success: true, data: result };
+    return result;
   }
 }

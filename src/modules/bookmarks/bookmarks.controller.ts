@@ -15,17 +15,18 @@ export class BookmarksController {
     @Query('limit') limit?: number,
   ) {
     const userId = req.user.id;
-    const result = await this.bookmarksService.getByUserId(
-      userId,
-      page ? Number(page) : 1,
-      limit ? Number(limit) : 20,
-    );
+    const currentPage = page ? Number(page) : 1;
+    const perPage = limit ? Number(limit) : 20;
+    const result = await this.bookmarksService.getByUserId(userId, currentPage, perPage);
     return {
       data: result.bookmarks,
       pagination: {
-        page: page ? Number(page) : 1,
-        limit: limit ? Number(limit) : 20,
+        page: currentPage,
+        limit: perPage,
         total: result.total,
+        // See notifications.controller: the web client's normalizer needs all four
+        // fields, and a missing one makes it report no data at all.
+        totalPages: Math.max(1, Math.ceil(result.total / Math.max(1, perPage))),
       },
     };
   }

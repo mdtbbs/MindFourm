@@ -80,7 +80,9 @@ export async function generateMetadata({
   const profile = Number.isFinite(userId) ? await fetchUserProfile(userId) : null;
 
   if (!profile) {
-    return { title: '用户不存在', robots: { index: false, follow: false } };
+    // Not in the page body: `loading.tsx` flushes a 200 shell before the body runs, and
+    // `notFound()` cannot change an already-sent status. generateMetadata runs first.
+    notFound();
   }
 
   const displayName = profile.username || `User #${profile.id}`;

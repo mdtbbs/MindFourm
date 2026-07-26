@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Resource } from '@/types';
@@ -8,14 +9,22 @@ import { fetchApiData } from '@/lib/api/server-fetch';
 import { toMetaDescription } from '@/lib/seo/description';
 import { buildHybridParam, extractIdFromHybridParam } from '@/lib/seo/hybrid-param';
 
-export const revalidate = 60;
-
-async function fetchResource(id: number): Promise<Resource | null> {
+/**
+ * Rendered per request, not on a revalidation timer.
+ *
+ * Who may see a resource depends on who is asking: the API hides anything not yet
+ * approved from everyone except its submitter and the moderators. Fetching this page
+ * anonymously — as it did — meant a user who had just submitted a resource was
+ * redirected to its detail page and shown "页面不存在". A shared cache cannot hold a
+ * viewer-dependent answer, so the ISR window that used to be here is gone by design.
+ */
+const fetchResource = cache(async (id: number): Promise<Resource | null> => {
   return fetchApiData<Resource | null>(`/api/resources/${id}`, {
-    init: { next: { revalidate: 60 } },
+    init: { cache: 'no-store' },
     fallback: null,
+    forwardCookies: true,
   });
-}
+});
 
 export async function generateMetadata({
   params,
@@ -27,7 +36,9 @@ export async function generateMetadata({
   const resource = Number.isFinite(resourceId) ? await fetchResource(resourceId) : null;
 
   if (!resource) {
-    return { title: '资源不存在', robots: { index: false, follow: false } };
+    // Not in the page body: `loading.tsx` flushes a 200 shell before the body runs, and
+    // `notFound()` cannot change an already-sent status. generateMetadata runs first.
+    notFound();
   }
 
   // These URLs are published in the sitemap, so having no metadata at all left them

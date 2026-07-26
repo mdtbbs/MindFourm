@@ -51,19 +51,19 @@ export class GroupChatsController {
   @Post()
   async createGroupChat(@Body() dto: CreateGroupChatDto, @Req() req: Request) {
     const groupChat = await this.messagesService.createGroupChat(dto, (req as any).user?.id);
-    return { success: true, data: groupChat };
+    return groupChat;
   }
 
   @Get()
   async getMyGroupChats(@Req() req: Request) {
     const groupChats = await this.messagesService.getMyGroupChats((req as any).user?.id);
-    return { success: true, data: groupChats };
+    return groupChats;
   }
 
   @Get(':id')
   async getGroupChat(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
     const groupChat = await this.messagesService.getGroupChat(id, (req as any).user?.id);
-    return { success: true, data: groupChat };
+    return groupChat;
   }
 
   @Get(':id/messages')
@@ -83,7 +83,7 @@ export class GroupChatsController {
     @Req() req: Request,
   ) {
     const message = await this.messagesService.sendGroupMessage(id, (req as any).user?.id, dto.content);
-    return { success: true, data: message };
+    return message;
   }
 
   @Post(':id/members')
@@ -98,7 +98,7 @@ export class GroupChatsController {
       dto.user_id,
       dto.role || 'member',
     );
-    return { success: true, data: member };
+    return member;
   }
 
   @Delete(':id/members/:userId')
@@ -108,13 +108,13 @@ export class GroupChatsController {
     @Req() req: Request,
   ) {
     await this.messagesService.removeGroupMember(id, (req as any).user?.id, userId);
-    return { success: true, data: { message: '成员已移除' } };
+    return { message: '成员已移除' };
   }
 
   @Post(':id/leave')
   async leaveGroupChat(@Param('id', ParseIntPipe) id: number, @Req() req: Request) {
     await this.messagesService.leaveGroupChat(id, (req as any).user?.id);
-    return { success: true, data: { message: '已离开群聊' } };
+    return { message: '已离开群聊' };
   }
 
   @Put(':id')
@@ -124,6 +124,6 @@ export class GroupChatsController {
     @Req() req: Request,
   ) {
     const groupChat = await this.messagesService.updateGroupChat(id, (req as any).user?.id, dto);
-    return { success: true, data: groupChat };
+    return groupChat;
   }
 }

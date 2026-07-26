@@ -18,6 +18,52 @@ let fixturePostId: number | null = null;
 let fixturePostTitle: string | null = null;
 let fixtureSetup: Promise<void> | null = null;
 
+/**
+ * Publish a fixture post through moderation.
+ *
+ * Posting with `status: 'published'` no longer publishes anything: the API forces
+ * everything except drafts into `pending` so an author cannot bypass review. The
+ * fixture has to be approved by an admin, or the public-viewing tests look for a post
+ * the public genuinely cannot see.
+ */
+async function approvePostAsAdmin(request: APIRequestContext, postId: number): Promise<void> {
+  const loginResponse = await request.post(`${API_URL}/api/auth/test-login`, {
+    data: { userType: 'admin' },
+  });
+
+  if (!loginResponse.ok()) {
+    throw new Error(`Failed to create admin test session: ${loginResponse.status()}`);
+  }
+
+  // Read from the context's cookie jar rather than this response's Set-Cookie headers.
+  // The jar already holds a `csrf_token` from the earlier user login, and the CSRF
+  // middleware only issues that cookie when it is absent — so the admin response
+  // carries `forum_session` alone and scraping Set-Cookie finds no token at all.
+  const jar = await request.storageState();
+  const cookieMap = new Map(jar.cookies.map((cookie) => [cookie.name, cookie.value]));
+
+  const csrfToken = cookieMap.get('csrf_token');
+  const sessionToken = cookieMap.get('forum_session');
+  if (!csrfToken || !sessionToken) {
+    throw new Error('Missing CSRF or session cookie from admin test login');
+  }
+
+  const approveResponse = await request.put(
+    `${API_URL}/api/admin/moderation/${postId}/approve`,
+    {
+      data: { type: 'post' },
+      headers: {
+        Cookie: `csrf_token=${csrfToken}; forum_session=${sessionToken}`,
+        'X-CSRF-Token': csrfToken,
+      },
+    },
+  );
+
+  if (!approveResponse.ok()) {
+    throw new Error(`Failed to approve fixture post ${postId}: ${approveResponse.status()}`);
+  }
+}
+
 async function ensureFixturePost(request: APIRequestContext): Promise<void> {
   if (fixturePostId !== null) {
     return;
@@ -76,6 +122,8 @@ async function ensureFixturePost(request: APIRequestContext): Promise<void> {
         throw new Error('Fixture post response did not include an id');
       }
 
+      await approvePostAsAdmin(request, postId);
+
       fixturePostId = postId;
       fixturePostTitle = `E2E Fixture Post`;
     })();
@@ -111,10 +159,12 @@ test.describe('Public Post Viewing', () => {
     // Wait for posts to load (with longer timeout)
     await page.waitForSelector('[data-testid="post-card"]', { timeout: 15000 }).catch(() => {});
 
-    // Click on first post card if visible
-    const firstPostCard = page.locator('[data-testid="post-card"]').first();
-    if (await firstPostCard.isVisible().catch(() => false)) {
-      await firstPostCard.click();
+    // Click the title link, not the row. The homepage list renders each post as an
+    // `<article data-testid="post-card">` whose row is not itself a link — clicking its
+    // centre lands on empty space. `post-link` exists for exactly this navigation.
+    const firstPostLink = page.locator('[data-testid="post-link"]').first();
+    if (await firstPostLink.isVisible().catch(() => false)) {
+      await firstPostLink.click();
 
       // Should navigate to post detail page
       await page.waitForURL(/posts\/\d+/, { timeout: 15000 });
