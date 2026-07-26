@@ -4,6 +4,12 @@
  * These paths are only exercisable end to end: the report dialog, the moderation queue
  * and the block enforcement each span the browser, the API and the database, and the
  * unit tests for them mock the layer where the interesting failures happen.
+ *
+ * `POST /reports` allows 10 per hour per IP. One pass through this file files about five,
+ * so a single run fits — but running it two or three times within the same hour will
+ * exhaust the quota and fail with 429 on whichever report comes eleventh. That limit is
+ * deliberate anti-abuse behaviour and worth keeping; if you need to re-run in quick
+ * succession, clear the `rate_limit:*` keys in Redis rather than raising it.
  */
 
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
@@ -89,8 +95,12 @@ authTest.describe('Reporting content', () => {
     await authExpect(authenticatedPage.getByRole('dialog')).toBeHidden();
 
     await fileReport();
+    // Scoped to the dialog: Next renders its own `role="alert"` route announcer, so an
+    // unscoped role query matches two elements and trips strict mode.
+    const dialog = authenticatedPage.getByRole('dialog');
+    await authExpect(dialog).toBeVisible();
     // The dialog stays open and says why, instead of silently accepting a duplicate.
-    await authExpect(authenticatedPage.getByRole('alert')).toContainText('已经举报过');
+    await authExpect(dialog.getByRole('alert')).toContainText('举报过');
   });
 
   authTest('the report dialog closes on Escape and returns focus to its trigger', async ({

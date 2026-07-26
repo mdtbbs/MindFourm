@@ -91,18 +91,15 @@ export default function ReportDialog({ targetType, targetId, label = '举报' }:
       setOpen(false);
       triggerRef.current?.focus();
     } catch (err) {
-      // The API distinguishes these cases, and each needs a different action from the
-      // user, so they must not collapse into one generic failure message.
+      // The API already answers with specific, user-facing Chinese ("您已举报过该内容…",
+      // "不能举报自己的内容"), so it is shown as-is. Only the phone-verification gate needs
+      // rewording, because it surfaces as an opaque `PHONE_NOT_VERIFIED` code.
       const message = err instanceof Error ? err.message : '';
-      if (/409|already|重复/i.test(message)) {
-        setError('你已经举报过这条内容，管理员正在处理');
-      } else if (/403|PHONE_NOT_VERIFIED/i.test(message)) {
-        setError('提交举报需要先完成手机号验证');
-      } else if (/400/.test(message)) {
-        setError('无法举报自己的内容');
-      } else {
-        setError(message || '提交失败，请稍后重试');
-      }
+      setError(
+        /PHONE_NOT_VERIFIED/i.test(message)
+          ? '提交举报需要先完成手机号验证'
+          : message || '提交失败，请稍后重试',
+      );
     }
     setSubmitting(false);
   };

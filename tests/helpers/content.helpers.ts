@@ -88,7 +88,9 @@ async function postWithBackoff(
   send: () => Promise<{ ok: () => boolean; status: () => number; json: () => Promise<unknown> }>,
   describe: string,
 ) {
-  const waitsMs = [7000, 15000, 30000];
+  // The limiter is a fixed 60-second window, so the last wait has to be long enough to
+  // outlast a full window — backing off 7+15+30s totalled 52s and still hit 429.
+  const waitsMs = [7000, 20000, 65000];
 
   for (let attempt = 0; ; attempt += 1) {
     const response = await send();
