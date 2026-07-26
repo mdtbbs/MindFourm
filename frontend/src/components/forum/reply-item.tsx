@@ -1,5 +1,6 @@
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import ReplyActions from '@/components/forum/reply-actions';
+import { Check } from 'lucide-react';
 import { formatTime } from '@/lib/utils';
 import type { Reply } from '@/types';
 
@@ -15,6 +16,10 @@ interface ReplyItemProps {
   /** Scopes the quote/reply target to this post's composer. */
   postId: number;
   isNested?: boolean;
+  /** Whether the viewer may accept an answer here — the post's author, or staff. */
+  canAcceptAnswer?: boolean;
+  /** True when this reply is the accepted answer. */
+  isBestReply?: boolean;
 }
 
 /**
@@ -22,12 +27,25 @@ interface ReplyItemProps {
  * interactivity, so the Markdown is rendered once on the server rather than shipped
  * to the browser and re-parsed for every reply on the page.
  */
-export default function ReplyItem({ reply, floor, postId, isNested = false }: ReplyItemProps) {
+export default function ReplyItem({
+  reply,
+  floor,
+  postId,
+  isNested = false,
+  canAcceptAnswer = false,
+  isBestReply = false,
+}: ReplyItemProps) {
   const authorLabel = reply.author_mindauth_id ?? `#${reply.user_id}`;
 
   return (
     <div
-      className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] overflow-hidden"
+      className={`bg-[var(--bg-card)] rounded-lg border overflow-hidden ${
+        // A ring rather than a background tint: the accepted answer has to stand out
+        // without making its body text sit on a different surface from every other reply.
+        isBestReply
+          ? 'border-[var(--success)] ring-1 ring-[var(--success)]'
+          : 'border-[var(--border)]'
+      }`}
       id={`reply-${reply.id}`}
     >
       {/* Reply Header */}
@@ -53,6 +71,12 @@ export default function ReplyItem({ reply, floor, postId, isNested = false }: Re
           >
             {formatTime(reply.created_at)}
           </time>
+          {isBestReply && (
+            <span className="inline-flex items-center gap-1 rounded bg-[var(--success)] px-2 py-0.5 text-xs font-medium text-white">
+              <Check className="h-3 w-3" />
+              已采纳
+            </span>
+          )}
         </div>
       </div>
 
@@ -61,7 +85,12 @@ export default function ReplyItem({ reply, floor, postId, isNested = false }: Re
         <MarkdownRenderer content={reply.content} />
       </div>
 
-      <ReplyActions reply={reply} postId={postId} />
+      <ReplyActions
+        reply={reply}
+        postId={postId}
+        canAcceptAnswer={canAcceptAnswer}
+        isBestReply={isBestReply}
+      />
     </div>
   );
 }

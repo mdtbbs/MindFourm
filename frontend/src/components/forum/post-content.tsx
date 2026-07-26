@@ -9,10 +9,12 @@ import Badge from '@/components/ui/badge';
 import Button from '@/components/ui/button';
 import BookmarkButton from '@/components/forum/bookmark-button';
 import ReportDialog from '@/components/forum/report-dialog';
+import ReactionBar from '@/components/forum/reaction-bar';
 import { adminApi } from '@/lib/api/client';
 import { formatTime } from '@/lib/utils';
 import Link from 'next/link';
-import { Pin, Move, Trash2, Check, X, Pencil } from 'lucide-react';
+import { Pin, Move, Trash2, Check, X, Pencil, Lock, Unlock } from 'lucide-react';
+import { postApi } from '@/lib/api/client';
 
 interface PostContentProps {
   post: Post;
@@ -39,6 +41,23 @@ export default function PostContent({
   const canModerate = currentUserRole === 'moderator' || currentUserRole === 'admin';
   // The API authorises the write either way; this only decides whether to offer the link.
   const canEdit = isOwner || canModerate;
+  const [lockPending, setLockPending] = useState(false);
+
+  const handleToggleLock = async () => {
+    if (!postId) return;
+    setLockPending(true);
+    try {
+      const next = !post.is_locked;
+      await postApi.setLocked(postId, next);
+      showSuccess(next ? '帖子已锁定，不再接受新回复' : '帖子已解锁');
+      // The lock badge and the composer both come from the server render, so the route
+      // has to re-render rather than this component patching its own copy of the post.
+      router.refresh();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '操作失败，请稍后重试');
+    }
+    setLockPending(false);
+  };
   const authorLabel = post.author_mindauth_id ?? `#${post.user_id}`;
 
   // Moderation state
@@ -92,6 +111,32 @@ export default function PostContent({
           <span className="text-[var(--text-muted)]">|</span>
           <span>{post.view_count} 浏览</span>
 
+          {post.edited_at && (
+            <>
+              <span className="text-[var(--text-muted)]">|</span>
+              {/* Only the author and staff may read the history, so only they get a link
+                  — but the "edited" marker itself is public: readers deserve to know the
+                  text has changed since it was posted. */}
+              {canEdit && postId ? (
+                <Link
+                  href={`/posts/${postId}/revisions`}
+                  className="text-[var(--text-secondary)] hover:text-[var(--primary)]"
+                >
+                  已编辑于 {formatTime(post.edited_at)}
+                </Link>
+              ) : (
+                <span>已编辑于 {formatTime(post.edited_at)}</span>
+              )}
+            </>
+          )}
+
+          {post.is_locked ? (
+            <>
+              <span className="text-[var(--text-muted)]">|</span>
+              <Badge variant="warning">已锁定</Badge>
+            </>
+          ) : null}
+
           {post.tags?.length > 0 && (
             <>
               <span className="text-[var(--text-muted)]">|</span>
@@ -139,6 +184,9 @@ export default function PostContent({
           </div>
         )}
 
+        {/* Before the bookmark and moderation controls: reactions belong to the content,
+            not to the row of things you can do about it. */}
+        {postId && <ReactionBar targetType="post" targetId={postId} />}
         {postId && <BookmarkButton postId={postId} />}
         {postId && canEdit && (
           <Link
@@ -152,6 +200,28 @@ export default function PostContent({
         )}
         {postId && !isOwner && (
           <ReportDialog targetType="post" targetId={postId} />
+        )}
+        {canModerate && postId && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={lockPending}
+            onClick={handleToggleLock}
+            className="text-[var(--text-secondary)]"
+            data-testid="post-lock-toggle"
+          >
+            {post.is_locked ? (
+              <>
+                <Unlock className="w-4 h-4 mr-1" />
+                解锁
+              </>
+            ) : (
+              <>
+                <Lock className="w-4 h-4 mr-1" />
+                锁定
+              </>
+            )}
+          </Button>
         )}
         {canModerate && onPin && (
           <Button

@@ -46,6 +46,10 @@ export function buildReplyTree(replies: Reply[], floorOffset = 0): ReplyNode[] {
 interface ReplyThreadProps {
   nodes: ReplyNode[];
   postId: number;
+  /** Whether the viewer may accept an answer on this post — its author, or staff. */
+  canAcceptAnswer?: boolean;
+  /** The reply currently accepted as the answer, if any. */
+  bestReplyId?: number | null;
   depth?: number;
 }
 
@@ -57,7 +61,13 @@ interface ReplyThreadProps {
  * page rendered one flat list, so a reply to a reply looked exactly like a new floor and
  * the conversation it belonged to was invisible.
  */
-export default function ReplyThread({ nodes, postId, depth = 0 }: ReplyThreadProps) {
+export default function ReplyThread({
+  nodes,
+  postId,
+  canAcceptAnswer = false,
+  bestReplyId = null,
+  depth = 0,
+}: ReplyThreadProps) {
   if (nodes.length === 0) return null;
 
   return (
@@ -69,6 +79,8 @@ export default function ReplyThread({ nodes, postId, depth = 0 }: ReplyThreadPro
             floor={node.floor}
             postId={postId}
             isNested={depth > 0}
+            canAcceptAnswer={canAcceptAnswer}
+            isBestReply={bestReplyId === node.reply.id}
           />
           {node.children.length > 0 && (
             // Indentation stops growing past a few levels so deep threads stay readable
@@ -78,7 +90,13 @@ export default function ReplyThread({ nodes, postId, depth = 0 }: ReplyThreadPro
                 depth < 3 ? 'ml-3 sm:ml-6' : 'ml-1 sm:ml-2'
               }`}
             >
-              <ReplyThread nodes={node.children} postId={postId} depth={depth + 1} />
+              <ReplyThread
+                nodes={node.children}
+                postId={postId}
+                canAcceptAnswer={canAcceptAnswer}
+                bestReplyId={bestReplyId}
+                depth={depth + 1}
+              />
             </div>
           )}
         </div>

@@ -423,7 +423,44 @@ export const postApi = {
     clearCache();
     return request<void>(`/api/posts/${id}`, { method: 'DELETE' });
   },
+  setLocked: (id: number, locked: boolean) => {
+    clearCache();
+    return request<{ id: number; is_locked: boolean }>(`/api/posts/${id}/lock`, {
+      method: 'PUT',
+      body: JSON.stringify({ locked }),
+    });
+  },
+  /** `null` clears the mark. */
+  setBestReply: (id: number, replyId: number | null) => {
+    clearCache();
+    return request<{ id: number; best_reply_id: number | null }>(`/api/posts/${id}/best-reply`, {
+      method: 'PUT',
+      body: JSON.stringify({ reply_id: replyId }),
+    });
+  },
+  revisions: (id: number, params?: { page?: number; limit?: number }) =>
+    request<{
+      data: PostRevisionSummary[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>(`/api/posts/${id}/revisions${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+    })}`),
+  revision: (id: number, revisionId: number) =>
+    request<PostRevisionDetail>(`/api/posts/${id}/revisions/${revisionId}`),
 };
+
+export interface PostRevisionSummary {
+  id: number;
+  post_id: number;
+  title: string;
+  editor: { id: number; username: string | null } | null;
+  created_at: string;
+}
+
+export interface PostRevisionDetail extends PostRevisionSummary {
+  content: string;
+}
 
 // Reply APIs
 export const replyApi = {

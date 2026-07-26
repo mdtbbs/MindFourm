@@ -14,13 +14,13 @@ export class LevelsController {
   @Get()
   async getAllLevels() {
     const levels = await this.levelsService.getAllLevels();
-    return { success: true, data: levels };
+    return levels;
   }
 
   @Get('user/:userId')
   async getUserLevel(@Param('userId') userId: number) {
     const info = await this.levelsService.getUserLevelInfo(userId);
-    return { success: true, data: info };
+    return info;
   }
 
   @Get('admin')
@@ -28,7 +28,7 @@ export class LevelsController {
   @Roles('admin')
   async getAdminLevels() {
     const levels = await this.levelsService.getAllLevels();
-    return { success: true, data: levels };
+    return levels;
   }
 
   @Post('admin')
@@ -36,7 +36,7 @@ export class LevelsController {
   @Roles('admin')
   async createLevel(@Body() dto: CreateLevelDto) {
     const level = await this.levelsService.createLevel(dto);
-    return { success: true, data: level };
+    return level;
   }
 
   @Put('admin/:id')
@@ -44,7 +44,7 @@ export class LevelsController {
   @Roles('admin')
   async updateLevel(@Param('id') id: number, @Body() dto: UpdateLevelDto) {
     const level = await this.levelsService.updateLevel(id, dto);
-    return { success: true, data: level };
+    return level;
   }
 
   @Delete('admin/:id')
@@ -52,6 +52,6 @@ export class LevelsController {
   @Roles('admin')
   async deleteLevel(@Param('id') id: number) {
     await this.levelsService.deleteLevel(id);
-    return { success: true, data: { message: '等级已删除' } };
+    return { message: '等级已删除' };
   }
 }

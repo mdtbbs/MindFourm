@@ -5,17 +5,22 @@ import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/button';
 import { LikeButton } from '@/components/forum/like-button';
 import ReportDialog from '@/components/forum/report-dialog';
+import ReactionBar from '@/components/forum/reaction-bar';
 import { useReplyComposeStore } from '@/store/reply-compose-store';
 import { useAuth } from '@/store/user-store';
-import { replyApi } from '@/lib/api/client';
+import { postApi, replyApi } from '@/lib/api/client';
 import { useToastStore } from '@/store/toast-store';
 import type { Reply } from '@/types';
-import { Pencil, Quote, Reply as ReplyIcon, Trash2 } from 'lucide-react';
+import { CheckCircle2, Pencil, Quote, Reply as ReplyIcon, Trash2 } from 'lucide-react';
 
 interface ReplyActionsProps {
   reply: Reply;
   /** Scopes the compose target so only this post's composer reacts. */
   postId: number;
+  /** Whether the viewer may accept an answer here — the post's author, or staff. */
+  canAcceptAnswer?: boolean;
+  /** True when this reply is the currently accepted answer. */
+  isBestReply?: boolean;
 }
 
 /**
@@ -30,7 +35,12 @@ interface ReplyActionsProps {
  * /replies/:id` and nothing in the UI ever called them: a member could post a reply and
  * then had no way to correct or withdraw it.
  */
-export default function ReplyActions({ reply, postId }: ReplyActionsProps) {
+export default function ReplyActions({
+  reply,
+  postId,
+  canAcceptAnswer = false,
+  isBestReply = false,
+}: ReplyActionsProps) {
   const router = useRouter();
   const quote = useReplyComposeStore((state) => state.quote);
   const replyTo = useReplyComposeStore((state) => state.replyTo);
@@ -63,6 +73,19 @@ export default function ReplyActions({ reply, postId }: ReplyActionsProps) {
       router.refresh();
     } catch (err) {
       showError(err instanceof Error ? err.message : '更新失败，请稍后重试');
+    }
+    setBusy(false);
+  };
+
+  const toggleBestAnswer = async () => {
+    setBusy(true);
+    try {
+      // Passing null clears the mark; the API treats it as "no accepted answer".
+      await postApi.setBestReply(postId, isBestReply ? null : reply.id);
+      showSuccess(isBestReply ? '已取消采纳' : '已采纳为答案');
+      router.refresh();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '操作失败，请稍后重试');
     }
     setBusy(false);
   };
@@ -117,6 +140,7 @@ export default function ReplyActions({ reply, postId }: ReplyActionsProps) {
 
       <div className="px-4 py-3 flex flex-wrap items-center gap-2">
         <LikeButton type="reply" id={reply.id} initialCount={reply.like_count || 0} />
+        <ReactionBar targetType="reply" targetId={reply.id} />
         <Button
           variant="ghost"
           size="sm"
@@ -136,6 +160,19 @@ export default function ReplyActions({ reply, postId }: ReplyActionsProps) {
           回复
         </Button>
 
+        {canAcceptAnswer && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={toggleBestAnswer}
+            className={isBestReply ? 'text-[var(--success)]' : 'text-[var(--text-secondary)]'}
+            data-testid={`reply-accept-${reply.id}`}
+          >
+            <CheckCircle2 className="w-4 h-4 mr-1" />
+            {isBestReply ? '取消采纳' : '采纳为答案'}
+          </Button>
+        )}
         {canModify && !editing && (
           <Button
             variant="ghost"

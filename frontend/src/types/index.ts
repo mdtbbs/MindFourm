@@ -93,6 +93,12 @@ export interface Post {
   current_user_role?: UserRole | null;
   /** Set by the post-detail endpoint: whether the requesting session authored this post. */
   is_owner?: boolean;
+  /** Closed to new replies. Enforced by the API, not just reflected here. */
+  is_locked?: boolean;
+  /** The reply the author or staff accepted as the answer. */
+  best_reply_id?: number | null;
+  /** Last time the title or body changed; absent if never edited. */
+  edited_at?: string | null;
   replies?: Reply[];
   replyPagination?: {
     total: number;

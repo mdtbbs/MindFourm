@@ -11,6 +11,7 @@ import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture
 import { expect, test } from '@playwright/test';
 import {
   API_URL,
+  createPendingPost,
   createPublishedPost,
   createPublishedReply,
   testLogin,
@@ -207,15 +208,14 @@ test.describe('Edit authorisation at the API', () => {
   test('an author cannot publish their own pending post by editing it', async ({ request }) => {
     // Self-publishing through the moderation queue is the bypass this guards.
     const session = await testLogin(request, 'user');
-    const created = await request.post(`${API_URL}/api/posts`, {
-      data: { title: unique('E2E Pending Post'), content: 'Awaiting review.' },
-      headers: { Cookie: session.cookieHeader, 'X-CSRF-Token': session.csrfToken },
+    const post = await createPendingPost(request, {
+      author: 'user',
+      title: unique('E2E Pending Post'),
+      content: 'Awaiting review.',
     });
-    const body = (await created.json()) as { data?: { id?: number; status?: string } };
-    const postId = body.data?.id;
-    expect(body.data?.status).toBe('pending');
+    expect(post.status).toBe('pending');
 
-    const response = await request.put(`${API_URL}/api/posts/${postId}`, {
+    const response = await request.put(`${API_URL}/api/posts/${post.id}`, {
       data: { title: 'Still pending', status: 'published' },
       headers: { Cookie: session.cookieHeader, 'X-CSRF-Token': session.csrfToken },
     });

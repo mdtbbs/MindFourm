@@ -8,8 +8,10 @@
 
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
 import { expect, test } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
 import {
   API_URL,
+  createPendingPost,
   createPublishedPost,
   createPublishedReply,
   testLogin,
@@ -126,16 +128,14 @@ test.describe('Report API guards', () => {
 
   test('a member cannot report their own post', async ({ request }) => {
     const session = await testLogin(request, 'user');
-    const created = await request.post(`${API_URL}/api/posts`, {
-      data: { title: unique('E2E Self Report'), content: 'Own content.' },
-      headers: { Cookie: session.cookieHeader, 'X-CSRF-Token': session.csrfToken },
+    const post = await createPendingPost(request, {
+      author: 'user',
+      title: unique('E2E Self Report'),
+      content: 'Own content.',
     });
-    const body = (await created.json()) as { data?: { id?: number } };
-    const postId = body.data?.id;
-    expect(postId).toBeTruthy();
 
     const response = await request.post(`${API_URL}/api/reports`, {
-      data: { target_type: 'post', target_id: postId, reason: 'spam' },
+      data: { target_type: 'post', target_id: post.id, reason: 'spam' },
       headers: { Cookie: session.cookieHeader, 'X-CSRF-Token': session.csrfToken },
     });
     expect(response.status()).toBe(400);
@@ -191,54 +191,43 @@ test.describe('Blocking', () => {
   test('a block stops the blocked member from sending messages, but not the blocker', async ({
     request,
   }) => {
+    // Each request carries its own Cookie header, so both identities are usable at once
+    // without logging in and out to swap the shared cookie jar.
     const moderator = await testLogin(request, 'moderator');
-    const moderatorId = await currentUserId(request, moderator.cookieHeader);
-
     const member = await testLogin(request, 'user');
+    const moderatorId = await currentUserId(request, moderator.cookieHeader);
     const memberId = await currentUserId(request, member.cookieHeader);
 
-    // Re-authenticate as the moderator: the shared cookie jar now holds the member's
-    // session, and whoever logged in last is who the API sees.
-    const moderatorAgain = await testLogin(request, 'moderator');
     const blocked = await request.post(`${API_URL}/api/user-blocks`, {
       data: { blocked_id: memberId, reason: 'E2E block' },
-      headers: {
-        Cookie: moderatorAgain.cookieHeader,
-        'X-CSRF-Token': moderatorAgain.csrfToken,
-      },
+      headers: { Cookie: moderator.cookieHeader, 'X-CSRF-Token': moderator.csrfToken },
     });
     expect(blocked.ok()).toBeTruthy();
 
     // The blocker can still open a conversation.
     const fromBlocker = await request.post(`${API_URL}/api/messages`, {
       data: { recipient_id: memberId, content: 'Blocker may still write' },
-      headers: {
-        Cookie: moderatorAgain.cookieHeader,
-        'X-CSRF-Token': moderatorAgain.csrfToken,
-      },
+      headers: { Cookie: moderator.cookieHeader, 'X-CSRF-Token': moderator.csrfToken },
     });
     expect(fromBlocker.ok()).toBeTruthy();
 
-    const memberAgain = await testLogin(request, 'user');
     const fromBlocked = await request.post(`${API_URL}/api/messages`, {
       data: { recipient_id: moderatorId, content: 'Blocked member should be refused' },
-      headers: {
-        Cookie: memberAgain.cookieHeader,
-        'X-CSRF-Token': memberAgain.csrfToken,
-      },
+      headers: { Cookie: member.cookieHeader, 'X-CSRF-Token': member.csrfToken },
     });
     expect(fromBlocked.status()).toBe(403);
 
     // Leave the fixture users unblocked so ordering cannot affect other specs.
-    const cleanup = await testLogin(request, 'moderator');
     await request.delete(`${API_URL}/api/user-blocks/${memberId}`, {
-      headers: { Cookie: cleanup.cookieHeader, 'X-CSRF-Token': cleanup.csrfToken },
+      headers: { Cookie: moderator.cookieHeader, 'X-CSRF-Token': moderator.csrfToken },
     });
   });
 
   test('staff cannot be blocked, and nobody can block themselves', async ({ request }) => {
     const member = await testLogin(request, 'user');
+    const moderator = await testLogin(request, 'moderator');
     const memberId = await currentUserId(request, member.cookieHeader);
+    const moderatorId = await currentUserId(request, moderator.cookieHeader);
 
     const self = await request.post(`${API_URL}/api/user-blocks`, {
       data: { blocked_id: memberId },
@@ -247,13 +236,9 @@ test.describe('Blocking', () => {
     expect(self.status()).toBe(400);
 
     // Blocking a moderator would let a member opt out of moderation.
-    const moderator = await testLogin(request, 'moderator');
-    const moderatorId = await currentUserId(request, moderator.cookieHeader);
-
-    const memberAgain = await testLogin(request, 'user');
     const staff = await request.post(`${API_URL}/api/user-blocks`, {
       data: { blocked_id: moderatorId },
-      headers: { Cookie: memberAgain.cookieHeader, 'X-CSRF-Token': memberAgain.csrfToken },
+      headers: { Cookie: member.cookieHeader, 'X-CSRF-Token': member.csrfToken },
     });
     expect(staff.status()).toBe(403);
   });
@@ -372,7 +357,10 @@ test.describe('Threaded replies', () => {
 });
 
 /** Resolve the id of whoever the given session belongs to. */
-async function currentUserId(request: APIRequestContextLike, cookieHeader: string): Promise<number> {
+async function currentUserId(
+  request: APIRequestContext,
+  cookieHeader: string,
+): Promise<number> {
   const response = await request.get(`${API_URL}/api/auth/check`, {
     headers: { Cookie: cookieHeader },
   });
@@ -381,7 +369,3 @@ async function currentUserId(request: APIRequestContextLike, cookieHeader: strin
   if (!id) throw new Error('Could not resolve the current user id');
   return id;
 }
-
-type APIRequestContextLike = {
-  get: (url: string, options?: { headers?: Record<string, string> }) => Promise<{ json: () => Promise<unknown> }>;
-};

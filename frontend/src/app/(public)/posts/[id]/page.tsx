@@ -258,6 +258,14 @@ export default async function PostDetailPage({
           <ReplyThread
             nodes={buildReplyTree(replies, (page - 1) * repliesPerPage)}
             postId={postId}
+            // Accepting an answer is the author's call, with staff able to step in. The
+            // API re-checks this; passing it here only decides whether to show the button.
+            canAcceptAnswer={
+              (post.is_owner ?? false)
+              || post.current_user_role === 'admin'
+              || post.current_user_role === 'moderator'
+            }
+            bestReplyId={post.best_reply_id ?? null}
           />
         )}
 
@@ -270,7 +278,15 @@ export default async function PostDetailPage({
 
       {/* Reply Form */}
       <div className="mt-8">
-        <ReplyFormWrapper postId={postId} />
+        {post.is_locked ? (
+          // Cosmetic only — `RepliesService` refuses the write regardless. Saying so is
+          // better than presenting a composer whose submit is guaranteed to fail.
+          <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
+            该帖子已被锁定，不再接受新回复。
+          </p>
+        ) : (
+          <ReplyFormWrapper postId={postId} />
+        )}
       </div>
     </div>
   );

@@ -23,11 +23,25 @@ export interface SessionCookies {
   csrfToken: string;
 }
 
+/**
+ * One session per user type, reused for the rest of the run.
+ *
+ * Logging in on every call ran the suite straight into the global write rate limit —
+ * seeding a single post takes two logins, and `test-login` started answering 429 partway
+ * through, failing tests for a reason that had nothing to do with what they assert.
+ * Caching is safe because every request below sends its `Cookie` header explicitly, so
+ * whichever session the shared cookie jar happens to hold is irrelevant.
+ */
+const sessionCache = new Map<TestUserType, SessionCookies>();
+
 /** Sign in as one of the seeded test users and return headers for writes. */
 export async function testLogin(
   request: APIRequestContext,
   userType: TestUserType,
 ): Promise<SessionCookies> {
+  const cached = sessionCache.get(userType);
+  if (cached) return cached;
+
   const response = await request.post(`${API_URL}/api/auth/test-login`, {
     data: { userType },
   });
@@ -50,14 +64,42 @@ export async function testLogin(
     throw new Error(`Missing CSRF or session cookie after ${userType} test-login`);
   }
 
-  return {
+  const session: SessionCookies = {
     cookieHeader: `csrf_token=${csrfToken}; forum_session=${sessionToken}`,
     csrfToken,
   };
+  sessionCache.set(userType, session);
+  return session;
 }
 
 function writeHeaders({ cookieHeader, csrfToken }: SessionCookies): Record<string, string> {
   return { Cookie: cookieHeader, 'X-CSRF-Token': csrfToken };
+}
+
+/**
+ * Retry a seeding write through the endpoint's rate limit.
+ *
+ * `POST /api/posts` allows 10 per minute, which is a sensible product limit and a real
+ * obstacle for a suite that seeds a post per test: whichever specs ran last failed with
+ * 429 for reasons unrelated to what they assert. Backing off keeps the limit intact —
+ * relaxing it for tests would stop exercising it — at the cost of some wall clock.
+ */
+async function postWithBackoff(
+  send: () => Promise<{ ok: () => boolean; status: () => number; json: () => Promise<unknown> }>,
+  describe: string,
+) {
+  const waitsMs = [7000, 15000, 30000];
+
+  for (let attempt = 0; ; attempt += 1) {
+    const response = await send();
+    if (response.ok()) return response;
+
+    if (response.status() !== 429 || attempt >= waitsMs.length) {
+      throw new Error(`${describe}: ${response.status()}`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, waitsMs[attempt]));
+  }
 }
 
 /** Approve a queued post or reply as an admin. */
@@ -88,14 +130,14 @@ export async function createPublishedPost(
   options: { author: TestUserType; title: string; content: string },
 ): Promise<SeededPost> {
   const session = await testLogin(request, options.author);
-  const response = await request.post(`${API_URL}/api/posts`, {
-    data: { title: options.title, content: options.content },
-    headers: writeHeaders(session),
-  });
-
-  if (!response.ok()) {
-    throw new Error(`Failed to create post: ${response.status()}`);
-  }
+  const response = await postWithBackoff(
+    () =>
+      request.post(`${API_URL}/api/posts`, {
+        data: { title: options.title, content: options.content },
+        headers: writeHeaders(session),
+      }),
+    'Failed to create post',
+  );
 
   const body = (await response.json()) as { data?: { id?: number }; id?: number };
   const id = body.data?.id ?? body.id;
@@ -103,6 +145,34 @@ export async function createPublishedPost(
 
   await approveAsAdmin(request, 'post', id);
   return { id, title: options.title };
+}
+
+/**
+ * Create a post and leave it in the moderation queue.
+ *
+ * For the specs that assert on unpublished content — that an author cannot report their
+ * own submission, or self-publish it by editing. Shares the backoff, which a hand-rolled
+ * `request.post` in a spec would not.
+ */
+export async function createPendingPost(
+  request: APIRequestContext,
+  options: { author: TestUserType; title: string; content: string },
+): Promise<SeededPost & { status: string }> {
+  const session = await testLogin(request, options.author);
+  const response = await postWithBackoff(
+    () =>
+      request.post(`${API_URL}/api/posts`, {
+        data: { title: options.title, content: options.content },
+        headers: writeHeaders(session),
+      }),
+    'Failed to create pending post',
+  );
+
+  const body = (await response.json()) as { data?: { id?: number; status?: string } };
+  const id = body.data?.id;
+  if (!id) throw new Error('Pending post creation response carried no id');
+
+  return { id, title: options.title, status: body.data?.status ?? 'unknown' };
 }
 
 /** Create a reply — optionally nested under `parentReplyId` — and publish it. */
@@ -116,17 +186,17 @@ export async function createPublishedReply(
   },
 ): Promise<number> {
   const session = await testLogin(request, options.author);
-  const response = await request.post(`${API_URL}/api/posts/${options.postId}/replies`, {
-    data: {
-      content: options.content,
-      ...(options.parentReplyId ? { parent_reply_id: options.parentReplyId } : {}),
-    },
-    headers: writeHeaders(session),
-  });
-
-  if (!response.ok()) {
-    throw new Error(`Failed to create reply: ${response.status()}`);
-  }
+  const response = await postWithBackoff(
+    () =>
+      request.post(`${API_URL}/api/posts/${options.postId}/replies`, {
+        data: {
+          content: options.content,
+          ...(options.parentReplyId ? { parent_reply_id: options.parentReplyId } : {}),
+        },
+        headers: writeHeaders(session),
+      }),
+    'Failed to create reply',
+  );
 
   const body = (await response.json()) as { data?: { id?: number }; id?: number };
   const id = body.data?.id ?? body.id;

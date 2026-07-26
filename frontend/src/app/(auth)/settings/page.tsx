@@ -81,7 +81,21 @@ export default function SettingsPage() {
           </nav>
         </div>
 
-        <h1 className="text-2xl font-bold mb-6">通知设置</h1>
+        <h1 className="text-2xl font-bold mb-6">设置</h1>
+
+        {/* The block list had no entry point at all and was reachable only by typing the
+            URL, which for a privacy control is the same as not shipping it. */}
+        <nav className="mb-6 flex flex-wrap gap-2">
+          <span className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm text-white">
+            通知设置
+          </span>
+          <Link
+            href="/settings/blocks"
+            className="rounded-lg bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+          >
+            拉黑列表
+          </Link>
+        </nav>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">

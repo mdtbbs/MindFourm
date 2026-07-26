@@ -183,7 +183,7 @@ export class PostsController {
     const userRole = req.user.role;
     await this.postsService.softDelete(id, userId, userRole);
     await this.logOperation(req, 'post.delete', 'post', id);
-    return { success: true, message: '帖子删除成功' };
+    return { message: '帖子删除成功' };
   }
 
   /**
