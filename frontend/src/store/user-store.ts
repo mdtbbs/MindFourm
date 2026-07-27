@@ -54,8 +54,9 @@ export const useUserStore = create<UserState>()(
 
         if (typeof window !== 'undefined') {
           const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
+          const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || 'forum';
           const redirectUri = encodeURIComponent(window.location.href);
-          const logoutUrl = `${mindauthUrl}/logout?redirect_uri=${redirectUri}`;
+          const logoutUrl = `${mindauthUrl}/logout?redirect_uri=${redirectUri}&client_id=${clientId}`;
 
           // Wait for the forum session to actually be destroyed before leaving. The
           // previous version raced a 1.5s timer against the request, so a slow
