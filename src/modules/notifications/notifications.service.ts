@@ -1,7 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { FindOptionsWhere, Repository } from 'typeorm';
 import { RedisService } from '../../database/redis.service';
+import { NotificationReadFilter } from './dto/query-notifications.dto';
 import { escapeHtml } from '../../common/utils/escape-html.util';
 import { Notification } from '../../entities/notification.entity';
 import { User } from '../../entities/user.entity';
@@ -347,9 +348,18 @@ export class NotificationsService {
     userId: number,
     page: number = 1,
     limit: number = 20,
+    filter: NotificationReadFilter = 'all',
   ): Promise<{ notifications: Notification[]; total: number }> {
+    // The read filter belongs in the WHERE clause so that `total` — and therefore the
+    // page count the client renders — describes the same rows being returned. Filtering
+    // one fetched page in the browser instead made "unread only" show an empty list
+    // whenever the unread items sat beyond page one.
+    const where: FindOptionsWhere<Notification> = { user_id: userId };
+    if (filter === 'unread') where.is_read = 0;
+    if (filter === 'read') where.is_read = 1;
+
     const [notifications, total] = await this.notificationRepository.findAndCount({
-      where: { user_id: userId },
+      where,
       relations: ['actor', 'post', 'reply'],
       order: { created_at: 'DESC' },
       skip: (page - 1) * limit,

@@ -40,7 +40,15 @@ export async function generateMetadata(): Promise<Metadata> {
       template: `%s${titleSuffix}`,
     },
     description,
-    alternates: { canonical: '/' },
+    alternates: {
+      canonical: '/',
+      // The feed was already being served and was already valid RSS, but nothing
+      // advertised it — with no <link rel="alternate">, browsers and feed readers
+      // have no way to discover it, so a working feature was effectively invisible.
+      types: {
+        'application/rss+xml': [{ url: '/api/rss/posts.xml', title: `${siteName} 最新帖子` }],
+      },
+    },
     openGraph: {
       type: 'website',
       siteName,

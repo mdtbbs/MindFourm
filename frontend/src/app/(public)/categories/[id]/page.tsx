@@ -43,7 +43,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const category = await fetchCategory(parseInt(id));
   if (!category) {
-    return { title: '分类不存在', robots: { index: false, follow: false } };
+    // Not in the page body: `loading.tsx` flushes a 200 shell before the body runs, and
+    // `notFound()` cannot change an already-sent status. generateMetadata runs first.
+    notFound();
   }
 
   // Bare title — the root layout's `title.template` appends the site suffix. Hardcoding

@@ -11,6 +11,7 @@ export default function NotificationsPage() {
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadNotifications(1);
@@ -18,31 +19,52 @@ export default function NotificationsPage() {
 
   const loadNotifications = async (page: number) => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await notificationApi.list({ page, limit: 50 });
-      let filtered = res.data;
-      if (filter === 'unread') filtered = res.data.filter(n => !n.is_read);
-      if (filter === 'read') filtered = res.data.filter(n => n.is_read);
-      setNotifications(filtered);
+      // The filter goes to the server. Fetching one page and filtering it here left the
+      // page count describing unfiltered rows, so "仅未读" showed an empty list whenever
+      // the unread items were past page one — while the bell still reported them.
+      const res = await notificationApi.list({ page, limit: 50, filter });
+      setNotifications(res.data);
       setPagination(res.pagination);
     } catch {
       setNotifications([]);
+      // Distinguished from a genuinely empty inbox: an empty list and a failed request
+      // used to render identically.
+      setError('通知加载失败,请稍后重试');
     }
     setLoading(false);
   };
 
+  // Under a read/unread filter the server decides membership, so a row that just
+  // changed state has to be re-fetched out of (or into) the list rather than mutated in
+  // place — otherwise "仅未读" keeps showing rows it has just marked read.
+  const isFiltered = filter !== 'all';
+
   const handleMarkAllRead = async () => {
     try {
       await notificationApi.markAllAsRead();
-      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
-    } catch {}
+      if (isFiltered) {
+        await loadNotifications(1);
+      } else {
+        setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+      }
+    } catch {
+      setError('标记已读失败,请稍后重试');
+    }
   };
 
   const handleMarkRead = async (id: number) => {
     try {
       await notificationApi.markAsRead(id);
-      setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
-    } catch {}
+      if (isFiltered) {
+        await loadNotifications(pagination.page);
+      } else {
+        setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
+      }
+    } catch {
+      setError('标记已读失败,请稍后重试');
+    }
   };
 
   const typeIcon = (type: string) => {
@@ -119,9 +141,19 @@ export default function NotificationsPage() {
 
       {loading ? (
         <div className="text-center py-12 text-surface-400 dark:text-gray-500">加载中...</div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <p className="text-[var(--error)] mb-4">{error}</p>
+          <button
+            onClick={() => loadNotifications(pagination.page)}
+            className="px-4 py-2 rounded-lg text-sm bg-surface-100 dark:bg-gray-700 text-surface-700 dark:text-gray-200 hover:bg-surface-200 dark:hover:bg-gray-600 transition-colors"
+          >
+            重试
+          </button>
+        </div>
       ) : notifications.length === 0 ? (
         <div className="text-center py-12 text-surface-400 dark:text-gray-500">
-          <p>暂无通知</p>
+          <p>{filter === 'unread' ? '没有未读通知' : filter === 'read' ? '没有已读通知' : '暂无通知'}</p>
         </div>
       ) : (
         <div className="space-y-3">

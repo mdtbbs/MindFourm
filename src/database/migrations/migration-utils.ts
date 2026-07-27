@@ -14,13 +14,23 @@ import { QueryRunner } from 'typeorm';
  * paths have to converge on one schema.
  */
 
-/** True when the current schema contains at least one base table. */
+/**
+ * True when the schema already holds application tables.
+ *
+ * TypeORM's own `migrations` bookkeeping table is excluded, and this is the whole
+ * point of the function: TypeORM creates that table *before* running any migration,
+ * so counting it made a genuinely empty database look like an existing one. The
+ * baseline then took its "patch an existing schema" branch, patched tables that did
+ * not exist, and every later migration skipped through its idempotency guards — all
+ * six recorded as applied against a database containing nothing but `migrations`.
+ */
 export async function hasAnyBaseTables(queryRunner: QueryRunner): Promise<boolean> {
   const rows = await queryRunner.query(
     `SELECT 1
        FROM information_schema.tables
       WHERE table_schema = DATABASE()
         AND table_type = 'BASE TABLE'
+        AND table_name <> 'migrations'
       LIMIT 1`,
   );
   return rows.length > 0;

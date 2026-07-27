@@ -13,38 +13,38 @@ export class FollowsController {
   @UseGuards(JwtAuthGuard)
   async followUser(@Param('userId') followingId: number, @Req() req: any) {
     const follow = await this.followsService.followUser(req.user.id, followingId);
-    return { success: true, data: follow };
+    return follow;
   }
 
   @Delete(':userId')
   @UseGuards(JwtAuthGuard)
   async unfollowUser(@Param('userId') followingId: number, @Req() req: any) {
     await this.followsService.unfollowUser(req.user.id, followingId);
-    return { success: true, data: { message: '已取消关注' } };
+    return { message: '已取消关注' };
   }
 
   @Get('check/:userId')
   @UseGuards(JwtAuthGuard)
   async checkFollowStatus(@Param('userId') followingId: number, @Req() req: any) {
     const isFollowing = await this.followsService.checkFollowStatus(req.user.id, followingId);
-    return { success: true, data: { isFollowing } };
+    return { isFollowing };
   }
 
   @Get('user/:userId/followers')
   async getFollowers(@Param('userId') userId: number, @Query() query: QueryFollowsDto) {
     const result = await this.followsService.getFollowers(userId, query.page || 1, query.limit || 20);
-    return { success: true, data: result };
+    return result;
   }
 
   @Get('user/:userId/following')
   async getFollowing(@Param('userId') userId: number, @Query() query: QueryFollowsDto) {
     const result = await this.followsService.getFollowing(userId, query.page || 1, query.limit || 20);
-    return { success: true, data: result };
+    return result;
   }
 
   @Get('user/:userId/stats')
   async getFollowCounts(@Param('userId') userId: number) {
     const counts = await this.followsService.getFollowCounts(userId);
-    return { success: true, data: counts };
+    return counts;
   }
 }

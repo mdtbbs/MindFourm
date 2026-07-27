@@ -7,11 +7,13 @@ import { User } from '@entities/user.entity';
 import { GroupChat } from '@entities/group-chat.entity';
 import { GroupChatMember } from '@entities/group-chat-member.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { UserBlocksModule } from '../user-blocks/user-blocks.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Message, User, GroupChat, GroupChatMember]),
     NotificationsModule,
+    UserBlocksModule,
   ],
   controllers: [MessagesController, GroupChatsController],
   providers: [MessagesService],

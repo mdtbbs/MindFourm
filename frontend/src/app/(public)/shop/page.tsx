@@ -30,11 +30,15 @@ export default function ShopPage() {
   const [purchases, setPurchases] = useState<any[]>([]);
 
   const fetchItems = useCallback(async () => {
+    setError(null);
     try {
       const res = await api.get<{ data: ShopItem[] }>('/api/shop/items?page=1&limit=50');
       setItems((res.data || []).filter((i: ShopItem) => i.is_active));
     } catch (err) {
-      console.error('Failed to load shop:', err);
+      // Previously a `console.error` only, which made a failed load indistinguishable
+      // from an empty shop — and the endpoint's response shape meant it always failed.
+      setError(err instanceof Error ? err.message : '商品加载失败，请稍后重试');
+      setItems([]);
     } finally {
       setLoading(false);
     }

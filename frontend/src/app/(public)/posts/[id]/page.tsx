@@ -2,13 +2,13 @@ import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import PostContent from '@/components/forum/post-content';
-import ReplyItem from '@/components/forum/reply-item';
+import ReplyThread, { buildReplyTree } from '@/components/forum/reply-thread';
 import ReplyFormWrapper from '@/components/forum/reply-form-wrapper';
 import Pagination from '@/components/ui/pagination';
 import AttachmentList from '@/components/forum/attachment-list';
 import Link from 'next/link';
 import { fetchApiData } from '@/lib/api/server-fetch';
-import { Post, Attachment } from '@/types';
+import { Post, Attachment, UserRole } from '@/types';
 import { toMetaDescription } from '@/lib/seo/description';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
@@ -71,7 +71,13 @@ export async function generateMetadata({
   const { post, settings = {} } = await loadPost(id, pageStr);
 
   if (!post) {
-    return { title: '帖子不存在', robots: { index: false, follow: false } };
+    // Raised here rather than only in the page body. `posts/[id]/loading.tsx` puts the
+    // page inside a Suspense boundary, so by the time the body runs the 200 shell has
+    // already been flushed and `notFound()` can no longer change the status — the
+    // deleted post rendered a "帖子不存在" page under HTTP 200, which is the soft-404
+    // this was meant to fix. generateMetadata runs before the first flush, so the
+    // status is still open. `loadPost` is cached, so this costs no extra fetch.
+    notFound();
   }
 
   // Bare title: the root layout's `title.template` appends the suffix. Appending it
@@ -229,7 +235,12 @@ export default async function PostDetailPage({
       )}
 
       {/* Post Content */}
-      <PostContent post={post} postId={postId} currentUserRole={post.current_user_role as any} />
+      <PostContent
+        post={post}
+        postId={postId}
+        currentUserRole={post.current_user_role as UserRole | null}
+        isOwner={post.is_owner ?? false}
+      />
       <AttachmentList attachments={attachments} />
 
       {/* Replies */}
@@ -241,16 +252,21 @@ export default async function PostDetailPage({
         {replies.length === 0 ? (
           <div className="text-center py-8 text-[var(--text-secondary)]">暂无回复，快来抢沙发吧</div>
         ) : (
-          <div className="space-y-4">
-            {replies.map((reply: any, index: number) => (
-              <ReplyItem
-                key={reply.id}
-                reply={reply}
-                index={(page - 1) * repliesPerPage + index}
-                postId={postId}
-              />
-            ))}
-          </div>
+          // Floors are numbered from the root replies on this page. The API paginates
+          // roots and returns their descendants alongside them, so the tree is always
+          // complete for whatever page is being shown.
+          <ReplyThread
+            nodes={buildReplyTree(replies, (page - 1) * repliesPerPage)}
+            postId={postId}
+            // Accepting an answer is the author's call, with staff able to step in. The
+            // API re-checks this; passing it here only decides whether to show the button.
+            canAcceptAnswer={
+              (post.is_owner ?? false)
+              || post.current_user_role === 'admin'
+              || post.current_user_role === 'moderator'
+            }
+            bestReplyId={post.best_reply_id ?? null}
+          />
         )}
 
         <Pagination
@@ -262,7 +278,15 @@ export default async function PostDetailPage({
 
       {/* Reply Form */}
       <div className="mt-8">
-        <ReplyFormWrapper postId={postId} />
+        {post.is_locked ? (
+          // Cosmetic only — `RepliesService` refuses the write regardless. Saying so is
+          // better than presenting a composer whose submit is guaranteed to fail.
+          <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
+            该帖子已被锁定，不再接受新回复。
+          </p>
+        ) : (
+          <ReplyFormWrapper postId={postId} />
+        )}
       </div>
     </div>
   );

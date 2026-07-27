@@ -41,6 +41,10 @@ export interface PostDetailDto {
   content_html: string | null;
   status: string;
   is_pinned: boolean;
+  is_locked: boolean;
+  /** Id of the reply marked as the accepted answer, which is how the client highlights it. */
+  best_reply_id: number | null;
+  edited_at: Date | null;
   view_count: number;
   like_count: number;
   created_at: Date;
@@ -90,6 +94,9 @@ export class PostDetailService {
       content_html: post.content_html || null,
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
+      is_locked: Boolean(post.is_locked),
+      best_reply_id: post.best_reply_id ?? null,
+      edited_at: post.edited_at ?? null,
       view_count: post.view_count,
       like_count: post.like_count,
       created_at: post.created_at,

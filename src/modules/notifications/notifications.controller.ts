@@ -101,17 +101,27 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
     @Query() query: QueryNotificationsDto,
   ) {
     const userId = req.user.id;
+    // The DTO's initialisers only apply when the field is absent from the query, so
+    // the declared type stays optional; resolve both here to keep the response's
+    // `pagination` fully populated whichever way the request arrived.
+    const currentPage = query.page ?? 1;
+    const perPage = query.limit ?? 20;
     const result = await this.notificationsService.getByUserId(
       userId,
-      query.page,
-      query.limit,
+      currentPage,
+      perPage,
+      query.filter ?? 'all',
     );
     return {
       data: result.notifications,
       pagination: {
-        page: query.page,
-        limit: query.limit,
+        page: currentPage,
+        limit: perPage,
         total: result.total,
+        // `totalPages` is not decoration: the web client's pagination normalizer
+        // requires all four fields and returns null when any is absent, and its
+        // callers read null as "no data" — so omitting it renders an empty list.
+        totalPages: Math.max(1, Math.ceil(result.total / Math.max(1, perPage))),
       },
     };
   }

@@ -423,7 +423,44 @@ export const postApi = {
     clearCache();
     return request<void>(`/api/posts/${id}`, { method: 'DELETE' });
   },
+  setLocked: (id: number, locked: boolean) => {
+    clearCache();
+    return request<{ id: number; is_locked: boolean }>(`/api/posts/${id}/lock`, {
+      method: 'PUT',
+      body: JSON.stringify({ locked }),
+    });
+  },
+  /** `null` clears the mark. */
+  setBestReply: (id: number, replyId: number | null) => {
+    clearCache();
+    return request<{ id: number; best_reply_id: number | null }>(`/api/posts/${id}/best-reply`, {
+      method: 'PUT',
+      body: JSON.stringify({ reply_id: replyId }),
+    });
+  },
+  revisions: (id: number, params?: { page?: number; limit?: number }) =>
+    request<{
+      data: PostRevisionSummary[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>(`/api/posts/${id}/revisions${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+    })}`),
+  revision: (id: number, revisionId: number) =>
+    request<PostRevisionDetail>(`/api/posts/${id}/revisions/${revisionId}`),
 };
+
+export interface PostRevisionSummary {
+  id: number;
+  post_id: number;
+  title: string;
+  editor: { id: number; username: string | null } | null;
+  created_at: string;
+}
+
+export interface PostRevisionDetail extends PostRevisionSummary {
+  content: string;
+}
 
 // Reply APIs
 export const replyApi = {
@@ -725,12 +762,91 @@ export const bookmarkApi = {
     request<void>(`/api/bookmarks/${postId}`, { method: 'DELETE' }),
 };
 
+// Report APIs
+/** Kept beside the client so the labels and the values the API accepts cannot drift. */
+export const REPORT_REASONS = [
+  { value: 'spam', label: '垃圾广告' },
+  { value: 'abuse', label: '人身攻击 / 辱骂' },
+  { value: 'porn', label: '色情低俗' },
+  { value: 'illegal', label: '违法违规' },
+  { value: 'off_topic', label: '与版块无关' },
+  { value: 'copyright', label: '侵权' },
+  { value: 'other', label: '其他' },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]['value'];
+export type ReportTargetType = 'post' | 'reply' | 'resource' | 'user';
+
+export interface MyReport {
+  id: number;
+  target_type: string;
+  target_id: number;
+  reason: string;
+  status: string;
+  resolution_note: string | null;
+  created_at: string;
+}
+
+export interface AdminReport {
+  id: number;
+  target_type: string;
+  target_id: number;
+  reason: string;
+  detail: string | null;
+  status: string;
+  resolution_note: string | null;
+  handled_at: string | null;
+  created_at: string;
+  reporter: { id: number; username: string | null } | null;
+  handler: { id: number; username: string | null } | null;
+}
+
+export const adminReportApi = {
+  list: (params?: { status?: string; target_type?: string; page?: number; limit?: number }) =>
+    request<{
+      data: AdminReport[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>(`/api/admin/reports${buildQueryString({
+      status: params?.status,
+      target_type: params?.target_type,
+      page: params?.page,
+      limit: params?.limit,
+    })}`),
+  resolve: (id: number, input: { status: 'resolved' | 'dismissed'; resolution_note?: string }) => {
+    clearCache();
+    return request<AdminReport>(`/api/admin/reports/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(input),
+    });
+  },
+};
+
+export const reportApi = {
+  create: (input: {
+    target_type: ReportTargetType;
+    target_id: number;
+    reason: ReportReason;
+    detail?: string;
+  }) =>
+    request<{ id: number }>('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  mine: (params?: { page?: number; limit?: number }) =>
+    request<{
+      data: MyReport[];
+      pagination: { page: number; limit: number; total: number; totalPages: number };
+    }>(`/api/reports/mine${buildQueryString({ page: params?.page, limit: params?.limit })}`),
+};
+
 // Notification APIs
 export const notificationApi = {
-  list: (params?: { page?: number; limit?: number }) =>
+  list: (params?: { page?: number; limit?: number; filter?: 'all' | 'unread' | 'read' }) =>
     request<NotificationListResponse>(`/api/notifications${buildQueryString({
       page: params?.page,
       limit: params?.limit,
+      // Filtering server side keeps `pagination.total` describing the rows returned.
+      filter: params?.filter,
     })}`),
   listCursor: (params?: { cursor?: string; limit?: number }) =>
     request<{ data: Notification[]; next_cursor: string | null; has_more: boolean }>(`/api/notifications/cursor${buildQueryString({

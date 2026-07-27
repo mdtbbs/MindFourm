@@ -9,7 +9,9 @@ import { CreateMessageDto } from './dto/create-message.dto';
 import { CreateGroupChatDto } from './dto/create-group-chat.dto';
 import { RedisService } from '@database/redis.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
+import { parseDateCursor, toDateCursor } from '@common/utils/date-cursor.util';
 import { NotificationsService } from '../notifications/notifications.service';
+import { UserBlocksService } from '../user-blocks/user-blocks.service';
 
 const DEFAULT_MESSAGE_LIMIT = 50;
 const MAX_MESSAGE_LIMIT = 100;
@@ -41,6 +43,7 @@ export class MessagesService {
     private groupChatMemberRepo: Repository<GroupChatMember>,
     private redisService: RedisService,
     private notificationsService: NotificationsService,
+    private userBlocksService: UserBlocksService,
     private dataSource: DataSource,
   ) {}
 
@@ -53,6 +56,9 @@ export class MessagesService {
       const recipient = await queryRunner.manager.findOne(User, { where: { id: dto.recipient_id } });
       if (!recipient) throw new NotFoundException('Recipient not found');
       if (senderId === dto.recipient_id) throw new BadRequestException('Cannot send to yourself');
+      // Checked before the write, not in the client: the block is invisible to the
+      // sender, so hiding the compose box would still leave this endpoint reachable.
+      await this.userBlocksService.assertNotBlocked(senderId, dto.recipient_id);
 
       const contentHtml = parseMarkdown(dto.content);
       saved = await queryRunner.manager.save(Message, {
@@ -101,7 +107,7 @@ export class MessagesService {
     const params: unknown[] = [
       userId, userId, userId, userId, userId, userId, userId, userId, userId, userId,
     ];
-    if (cursor) params.push(cursor);
+    if (cursor) params.push(parseDateCursor(cursor));
     params.push(cappedLimit + 1);
 
     const conversations = await this.dataSource.query(`
@@ -133,7 +139,7 @@ export class MessagesService {
     const oldest = conversations.length ? conversations[conversations.length - 1] : null;
     return {
       conversations,
-      nextCursor: hasMore && oldest ? oldest.latest_at : null,
+      nextCursor: hasMore && oldest ? toDateCursor(oldest.latest_at) : null,
     };
   }
 
@@ -146,7 +152,7 @@ export class MessagesService {
       .orderBy('m.created_at', 'DESC')
       .take(cappedLimit + 1);
 
-    if (cursor) qb.andWhere('m.created_at < :cursor', { cursor });
+    if (cursor) qb.andWhere('m.created_at < :cursor', { cursor: parseDateCursor(cursor) });
 
     const messages = await qb.getMany();
     const hasMore = messages.length > cappedLimit;
@@ -161,7 +167,7 @@ export class MessagesService {
 
     // Oldest row of this newest-first page, captured before reversing for display.
     const oldest = messages.length ? messages[messages.length - 1] : null;
-    const nextCursor = hasMore && oldest ? oldest.created_at.toISOString() : null;
+    const nextCursor = hasMore && oldest ? toDateCursor(oldest.created_at) : null;
 
     return { messages: messages.reverse(), nextCursor };
   }
@@ -281,7 +287,7 @@ export class MessagesService {
       .take(cappedLimit + 1);
 
     if (cursor) {
-      qb.andWhere('m.created_at < :cursor', { cursor });
+      qb.andWhere('m.created_at < :cursor', { cursor: parseDateCursor(cursor) });
     }
 
     const messages = await qb.getMany();
@@ -293,7 +299,7 @@ export class MessagesService {
     // yielded the newest timestamp instead, so the next page repeated this one
     // forever.
     const oldest = messages.length ? messages[messages.length - 1] : null;
-    const nextCursor = hasMore && oldest ? oldest.created_at.toISOString() : null;
+    const nextCursor = hasMore && oldest ? toDateCursor(oldest.created_at) : null;
 
     return { messages: messages.reverse(), nextCursor };
   }

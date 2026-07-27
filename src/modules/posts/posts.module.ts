@@ -8,6 +8,7 @@ import { Category } from '@entities/category.entity';
 import { Tag } from '@entities/tag.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
+import { PostRevision } from '@entities/post-revision.entity';
 import { DatabaseModule } from '../../database/database.module';
 import { PointsModule } from '../points/points.module';
 import { GroupsModule } from '../groups/groups.module';
@@ -18,6 +19,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { LogsModule } from '../logs/logs.module';
 import { PostSummaryService } from './post-summary.service';
 import { PostDetailService } from './post-detail.service';
+import { PostRevisionsService } from './post-revisions.service';
 
 @Module({
   imports: [
@@ -29,10 +31,10 @@ import { PostDetailService } from './post-detail.service';
     AdminNotificationsModule,
     SettingsModule,
     LogsModule,
-    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply]),
+    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision]),
   ],
-  providers: [PostsService, PostSummaryService, PostDetailService],
+  providers: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService],
   controllers: [PostsController],
-  exports: [PostsService, PostSummaryService, PostDetailService],
+  exports: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService],
 })
 export class PostsModule {}

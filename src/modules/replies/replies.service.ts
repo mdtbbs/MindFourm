@@ -49,6 +49,19 @@ export class RepliesService {
       throw new ForbiddenException('Cannot reply to unpublished post');
     }
 
+    // Enforced here rather than by hiding the composer: the client is not the security
+    // boundary, and this is the only path that writes a reply, so it is the only place
+    // the lock can actually hold.
+    //
+    // Applies to moderators too. A lock is a statement about the thread, not about who
+    // is asking — a moderator who needs to post an explanation unlocks it first, which
+    // leaves an operation-log entry saying so. It is also the only rule this method can
+    // enforce honestly: it is handed a user id and no role, so a staff exemption would
+    // mean plumbing privilege into a code path that has never needed it.
+    if (post.is_locked) {
+      throw new ForbiddenException('帖子已锁定，无法回复');
+    }
+
     // If replying to a parent reply, validate it exists
     if (parent_reply_id) {
       const parentReply = await this.replyRepository.findOne({

@@ -78,13 +78,17 @@ docker compose -f docker-compose.dev.yml up -d
 
 ### Module Structure (`src/modules/`)
 
-21 feature modules. Each follows: `*.module.ts` | `*.controller.ts` | `*.service.ts` | `dto/`
+Each follows: `*.module.ts` | `*.controller.ts` | `*.service.ts` | `dto/`. A count is
+deliberately not given here — it went stale the first time a module was added.
 
 | Module | Description |
 |--------|-------------|
 | `auth` | MindAuth OAuth callback, Redis session create/verify/destroy, sliding renewal |
 | `posts` | Post CRUD, Markdown parsing, tags, cursor pagination, search |
-| `replies` | Reply management (2-level nesting), @mention parsing, soft delete |
+| `replies` | Reply management, @mention parsing, soft delete; refuses to write to a locked post |
+| `reports` | Member-filed reports on posts/replies/resources/users; moderator queue at `/admin/reports`; auto-requeues content at `report_auto_hide_threshold` pending reports |
+| `user-blocks` | User-to-user blocking; enforced in `MessagesService.create`; staff and self cannot be blocked |
+| `reactions` | Emoji reactions on posts and replies from a fixed whitelist, one row per user/target/emoji |
 | `users` | User profiles, avatar updates, role management |
 | `categories` | Hierarchical category management (parent/child) |
 | `tags` | Tag CRUD with auto-slug generation, merge support |
@@ -139,11 +143,24 @@ docker compose -f docker-compose.dev.yml up -d
 
 ### Entities (`src/entities/`)
 
-19 TypeORM entities with `utf8mb4` charset, `ON DELETE CASCADE` foreign keys:
+TypeORM entities with `utf8mb4` charset and `ON DELETE CASCADE` foreign keys. The
+authoritative list is the `entities` array in `src/entities/index.ts` — an entity missing
+from it fails at boot with "No metadata for …", so that array, not this file, is what has
+to be correct.
 
-`user` | `post` (soft delete) | `reply` (soft delete) | `category` | `tag` | `post-tag` | `bookmark` | `notification` | `message` | `attachment` | `resource` (soft delete) | `resource-category` | `resource-version` | `post-like` | `reply-like` | `ban` | `setting` | `operation-log` | `session-audit`
+Core: `user` | `post` (soft delete) | `reply` (soft delete) | `category` | `tag` | `post-tag` | `bookmark` | `notification` | `message` | `attachment` | `resource` (soft delete) | `resource-category` | `resource-version` | `post-like` | `reply-like` | `ban` | `setting` | `operation-log` | `session-audit`
+
+Moderation and social: `report` | `user-block` | `reaction` | `post-revision`
 
 Soft-delete uses `@DeleteDateColumn` for posts, replies, and resources.
+
+`posts` also carries `is_locked`, `best_reply_id` (FK to `replies`, SET NULL) and
+`edited_at`. `post_revisions` stores the title and body as they were *before* each edit,
+written in the same transaction as the update.
+
+`reaction.emoji` is `utf8mb4_bin` on purpose: under a general_ci collation every
+supplementary-plane character sorts equal, so the unique index would treat 👍 and 🎉 as
+the same reaction.
 
 ## Frontend Architecture (`frontend/`)
 
@@ -186,11 +203,20 @@ Simple textarea + preview mode (no rich text editor). Backend parses with `marke
 ## Key Patterns
 
 ### Response Format
-All API responses wrapped by ResponseInterceptor:
+`ResponseInterceptor` wraps every response, so **handlers must return bare data**:
 ```json
 { "success": true, "data": ... }
 { "success": false, "message": "..." }
 ```
+
+Returning `{ success: true, data }` from a handler produces
+`{ success, data: { success, data } }`, and the web client unwraps exactly one layer —
+callers then receive an envelope where they expected their payload. Twenty-eight handlers
+across five modules did this; the shop page rendered as permanently empty because of it.
+
+Paginated endpoints return `{ data, pagination: { page, limit, total, totalPages } }`.
+**All four pagination keys are required**: the client's normaliser returns null when any
+is missing, and its callers read null as "no data" rather than as a partial page.
 
 ### Authentication
 - OAuth `access_token` is **ONE-TIME use only** (to exchange code for user info)
@@ -206,6 +232,14 @@ All API responses wrapped by ResponseInterceptor:
 ### Pagination
 - **Offset-based**: `?page=1&limit=20` (limit capped at 50) — for admin panels needing total count
 - **Cursor-based**: `?cursor=xxx&limit=20` — for public infinite scroll (efficient, no OFFSET penalty)
+
+Two traps, both of which shipped:
+
+- **Never declare optional numeric query params with `@Query('page', new ParseIntPipe({ optional: true }))`.** Under the global `ValidationPipe` that rejects a request which simply omits the parameter, so the endpoint 400s on its own default call. Use a class-transformer DTO — see `modules/posts/dto/query-post-lists.dto.ts`.
+- **A timestamp cursor must reach the driver as a `Date`, not an ISO string.** `created_at < '2026-07-26T19:07:14.726Z'` matches zero DATETIME rows in MySQL without erroring or warning, so pagination silently stops after page one. `common/utils/date-cursor.util.ts` exists for this.
+
+Reply pagination applies to **root replies**, returning all descendants of the roots on
+that page; paginating the flat list split threads across page boundaries.
 
 ### Validation
 - `class-validator` DTOs with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`

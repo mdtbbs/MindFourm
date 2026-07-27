@@ -15,6 +15,7 @@ import ProfileEditLink from '@/components/forum/profile-edit-link';
 import { UserCard } from '@mindproject/shared';
 import { Medal, Title } from '@mindproject/shared';
 import FollowButton from '@/components/forum/follow-button';
+import BlockUserButton from '@/components/user/block-user-button';
 
 async function fetchUserProfile(userId: number): Promise<UserProfile | null> {
   return fetchApiData<UserProfile | null>(`/api/users/${userId}`, {
@@ -80,7 +81,9 @@ export async function generateMetadata({
   const profile = Number.isFinite(userId) ? await fetchUserProfile(userId) : null;
 
   if (!profile) {
-    return { title: '用户不存在', robots: { index: false, follow: false } };
+    // Not in the page body: `loading.tsx` flushes a 200 shell before the body runs, and
+    // `notFound()` cannot change an already-sent status. generateMetadata runs first.
+    notFound();
   }
 
   const displayName = profile.username || `User #${profile.id}`;
@@ -241,9 +244,18 @@ export default async function UserProfilePage({
       )}
 
       {/* Role badge, Follow button and edit link */}
-      <div className="max-w-md mx-auto flex justify-center gap-3 mb-8">
+      <div className="max-w-md mx-auto flex flex-wrap justify-center gap-3 mb-8">
         <FollowButton targetUserId={userId} />
         <Badge variant={roleVariant}>{profile.role}</Badge>
+        {/* This page already has the role, so the button can decide for itself not to
+            offer blocking staff — the API refuses it either way. */}
+        {viewer && viewer.id !== profile.id && (
+          <BlockUserButton
+            userId={profile.id}
+            username={profile.username}
+            targetRole={profile.role}
+          />
+        )}
         <ProfileEditLink userId={profile.id} />
       </div>
 

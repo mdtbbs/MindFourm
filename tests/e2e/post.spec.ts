@@ -12,12 +12,18 @@ import { test, expect } from '../fixtures/page-objects/base.po';
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
 import type { APIRequestContext } from '@playwright/test';
 
-const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
+import { createPublishedPost } from '../helpers/content.helpers';
 
 let fixturePostId: number | null = null;
 let fixturePostTitle: string | null = null;
 let fixtureSetup: Promise<void> | null = null;
 
+/**
+ * A single published post shared by every spec in this file.
+ *
+ * Seeded through the shared helper so it goes through moderation and backs off the
+ * post-creation rate limit, rather than reimplementing both here.
+ */
 async function ensureFixturePost(request: APIRequestContext): Promise<void> {
   if (fixturePostId !== null) {
     return;
@@ -25,59 +31,13 @@ async function ensureFixturePost(request: APIRequestContext): Promise<void> {
 
   if (!fixtureSetup) {
     fixtureSetup = (async () => {
-      const loginResponse = await request.post(`${API_URL}/api/auth/test-login`, {
-        data: { userType: 'user' },
+      const post = await createPublishedPost(request, {
+        author: 'user',
+        title: `E2E Fixture Post ${Date.now()}`,
+        content: '# Fixture post\n\nThis post exists for E2E coverage.',
       });
-
-      if (!loginResponse.ok()) {
-        throw new Error(`Failed to create test session: ${loginResponse.status()}`);
-      }
-
-      const setCookies = loginResponse
-        .headersArray()
-        .filter((header) => header.name.toLowerCase() === 'set-cookie')
-        .map((header) => header.value);
-
-      const cookieMap = new Map<string, string>();
-      for (const rawCookie of setCookies) {
-        const [cookiePair] = rawCookie.split(';');
-        const separatorIndex = cookiePair.indexOf('=');
-        if (separatorIndex === -1) continue;
-        const name = cookiePair.slice(0, separatorIndex).trim();
-        const value = cookiePair.slice(separatorIndex + 1).trim();
-        cookieMap.set(name, value);
-      }
-
-      const csrfToken = cookieMap.get('csrf_token');
-      const sessionToken = cookieMap.get('forum_session');
-      if (!csrfToken || !sessionToken) {
-        throw new Error('Missing CSRF or session cookie from test login');
-      }
-
-      const createResponse = await request.post(`${API_URL}/api/posts`, {
-        data: {
-          title: `E2E Fixture Post ${Date.now()}`,
-          content: '# Fixture post\n\nThis post exists for E2E coverage.',
-          status: 'published',
-        },
-        headers: {
-          Cookie: `csrf_token=${csrfToken}; forum_session=${sessionToken}`,
-          'X-CSRF-Token': csrfToken,
-        },
-      });
-
-      if (!createResponse.ok()) {
-        throw new Error(`Failed to create fixture post: ${createResponse.status()}`);
-      }
-
-      const created = await createResponse.json() as { data?: { id?: number }; id?: number };
-      const postId = created.data?.id ?? created.id;
-      if (!postId) {
-        throw new Error('Fixture post response did not include an id');
-      }
-
-      fixturePostId = postId;
-      fixturePostTitle = `E2E Fixture Post`;
+      fixturePostId = post.id;
+      fixturePostTitle = 'E2E Fixture Post';
     })();
   }
 
@@ -111,10 +71,12 @@ test.describe('Public Post Viewing', () => {
     // Wait for posts to load (with longer timeout)
     await page.waitForSelector('[data-testid="post-card"]', { timeout: 15000 }).catch(() => {});
 
-    // Click on first post card if visible
-    const firstPostCard = page.locator('[data-testid="post-card"]').first();
-    if (await firstPostCard.isVisible().catch(() => false)) {
-      await firstPostCard.click();
+    // Click the title link, not the row. The homepage list renders each post as an
+    // `<article data-testid="post-card">` whose row is not itself a link — clicking its
+    // centre lands on empty space. `post-link` exists for exactly this navigation.
+    const firstPostLink = page.locator('[data-testid="post-link"]').first();
+    if (await firstPostLink.isVisible().catch(() => false)) {
+      await firstPostLink.click();
 
       // Should navigate to post detail page
       await page.waitForURL(/posts\/\d+/, { timeout: 15000 });

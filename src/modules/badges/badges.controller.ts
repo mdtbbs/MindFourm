@@ -14,13 +14,13 @@ export class BadgesController {
   @Get()
   async getAllBadges() {
     const badges = await this.badgesService.getAllBadges();
-    return { success: true, data: badges };
+    return badges;
   }
 
   @Get('user/:userId')
   async getUserBadges(@Param('userId') userId: number) {
     const userBadges = await this.badgesService.getUserBadges(userId);
-    return { success: true, data: userBadges };
+    return userBadges;
   }
 
   @Get('admin')
@@ -28,7 +28,7 @@ export class BadgesController {
   @Roles('admin')
   async adminGetAllBadges() {
     const badges = await this.badgesService.adminGetAllBadges();
-    return { success: true, data: badges };
+    return badges;
   }
 
   @Post('admin')
@@ -36,7 +36,7 @@ export class BadgesController {
   @Roles('admin')
   async adminCreateBadge(@Body() dto: CreateBadgeDto) {
     const badge = await this.badgesService.adminCreateBadge(dto);
-    return { success: true, data: badge };
+    return badge;
   }
 
   @Put('admin/:id')
@@ -44,7 +44,7 @@ export class BadgesController {
   @Roles('admin')
   async adminUpdateBadge(@Param('id') id: number, @Body() dto: UpdateBadgeDto) {
     const badge = await this.badgesService.adminUpdateBadge(id, dto);
-    return { success: true, data: badge };
+    return badge;
   }
 
   @Delete('admin/:id')
@@ -52,7 +52,7 @@ export class BadgesController {
   @Roles('admin')
   async adminDeleteBadge(@Param('id') id: number) {
     await this.badgesService.adminDeleteBadge(id);
-    return { success: true, data: { message: '徽章已删除' } };
+    return { message: '徽章已删除' };
   }
 
   @Post('admin/award')
@@ -60,6 +60,6 @@ export class BadgesController {
   @Roles('admin')
   async awardBadge(@Body() dto: AwardBadgeDto) {
     const userBadge = await this.badgesService.awardBadge(dto.user_id, dto.badge_id);
-    return { success: true, data: userBadge };
+    return userBadge;
   }
 }

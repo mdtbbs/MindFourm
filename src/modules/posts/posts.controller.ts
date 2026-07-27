@@ -13,9 +13,19 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { PostsService } from './posts.service';
+import { PostRevisionsService } from './post-revisions.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
+import { LockPostDto } from './dto/lock-post.dto';
+import { SetBestReplyDto } from './dto/set-best-reply.dto';
+import { QueryPostRevisionsDto } from './dto/query-post-revisions.dto';
+import {
+  QueryPinnedDto,
+  QueryPostPageDto,
+  QueryPostSearchDto,
+  QueryTrendingDto,
+} from './dto/query-post-lists.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
@@ -27,6 +37,7 @@ import { LogsService } from '../logs/logs.service';
 export class PostsController {
   constructor(
     private readonly postsService: PostsService,
+    private readonly postRevisionsService: PostRevisionsService,
     private readonly logsService: LogsService,
   ) {}
 
@@ -55,30 +66,28 @@ export class PostsController {
    * GET /api/posts/trending - Get trending posts
    */
   @Get('trending')
-  async getTrending(@Query('limit', new ParseIntPipe({ optional: true })) limit?: number) {
-    return this.postsService.getTrending(limit || 10);
+  async getTrending(@Query() query: QueryTrendingDto) {
+    return this.postsService.getTrending(query.limit ?? 10);
   }
 
   /**
    * GET /api/posts/pinned - Get pinned posts
    */
   @Get('pinned')
-  async getPinned(@Query('category_id', new ParseIntPipe({ optional: true })) categoryId?: number) {
-    return this.postsService.getPinned(categoryId);
+  async getPinned(@Query() query: QueryPinnedDto) {
+    return this.postsService.getPinned(query.category_id);
   }
 
   /**
    * GET /api/posts/search - Search posts
    */
   @Get('search')
-  async search(
-    @Query('q') query: string,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
-  ) {
-    if (!query || query.trim().length === 0) {
+  async search(@Query() query: QueryPostSearchDto) {
+    const term = query.q.trim();
+    if (!term) {
       return [];
     }
-    return this.postsService.search(query.trim(), limit || 20);
+    return this.postsService.search(term, query.limit ?? 20);
   }
 
   /**
@@ -115,6 +124,9 @@ export class PostsController {
     return {
       ...post,
       current_user_role: req?.user?.role ?? null,
+      // Lets the client decide whether to offer edit/delete without shipping the
+      // viewer's id to every reader. The API still authorises each write itself.
+      is_owner: req?.user?.id != null && req.user.id === post.user_id,
       replies: replies.data,
       replyPagination: {
         total: replies.total,
@@ -171,7 +183,7 @@ export class PostsController {
     const userRole = req.user.role;
     await this.postsService.softDelete(id, userId, userRole);
     await this.logOperation(req, 'post.delete', 'post', id);
-    return { success: true, message: '帖子删除成功' };
+    return { message: '帖子删除成功' };
   }
 
   /**
@@ -188,6 +200,69 @@ export class PostsController {
     const post = await this.postsService.pin(id, isPinned ? 1 : 0);
     await this.logOperation(req, 'post.pin', 'post', id, { is_pinned: isPinned ? 1 : 0 });
     return post;
+  }
+
+  /**
+   * PUT /api/posts/:id/lock - Close/reopen a post to replies (admin/moderator only)
+   *
+   * The guard is not the enforcement point: `RepliesService` refuses to write a reply
+   * to a locked post, so hiding the composer in the client is cosmetic.
+   */
+  @Put(':id/lock')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async lock(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: LockPostDto,
+    @Req() req: any,
+  ) {
+    const post = await this.postsService.setLocked(id, dto.locked, req.user);
+    await this.logOperation(req, 'post.lock', 'post', id, { is_locked: dto.locked ? 1 : 0 });
+    return post;
+  }
+
+  /**
+   * PUT /api/posts/:id/best-reply - Accept a reply as the answer, or clear the mark
+   *
+   * Author or staff, so the check lives in the service: ownership is not something
+   * `RolesGuard` can express.
+   */
+  @Put(':id/best-reply')
+  @UseGuards(JwtAuthGuard)
+  async setBestReply(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SetBestReplyDto,
+    @Req() req: any,
+  ) {
+    const result = await this.postsService.setBestReply(id, dto.reply_id, req.user);
+    await this.logOperation(req, 'post.best_reply', 'post', id, { reply_id: dto.reply_id });
+    return result;
+  }
+
+  /**
+   * GET /api/posts/:id/revisions - Edit history (post author or staff only)
+   */
+  @Get(':id/revisions')
+  @UseGuards(JwtAuthGuard)
+  async listRevisions(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: QueryPostRevisionsDto,
+    @Req() req: any,
+  ) {
+    return this.postRevisionsService.list(id, req.user, query.page, query.limit);
+  }
+
+  /**
+   * GET /api/posts/:id/revisions/:revisionId - One superseded version, with its body
+   */
+  @Get(':id/revisions/:revisionId')
+  @UseGuards(JwtAuthGuard)
+  async getRevision(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('revisionId', ParseIntPipe) revisionId: number,
+    @Req() req: any,
+  ) {
+    return this.postRevisionsService.get(id, revisionId, req.user);
   }
 
   /**
@@ -212,10 +287,9 @@ export class PostsController {
   @Get('user/:userId')
   async findByUser(
     @Param('userId', ParseIntPipe) userId: number,
-    @Query('page', new ParseIntPipe({ optional: true })) page?: number,
-    @Query('limit', new ParseIntPipe({ optional: true })) limit?: number,
+    @Query() query: QueryPostPageDto,
   ) {
-    return this.postsService.findByUser(userId, page || 1, limit || 20);
+    return this.postsService.findByUser(userId, query.page ?? 1, query.limit ?? 20);
   }
 
   private async logOperation(
