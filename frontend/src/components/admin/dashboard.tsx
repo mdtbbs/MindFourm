@@ -6,7 +6,7 @@ import { adminApi } from '@/lib/api/client';
 import type { AdminStats } from '@/types';
 import { Settings, FileText, AlertTriangle, Ban, FolderTree, ScrollText } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/loading-spinner';
-import { StatsGrid } from '@mindproject/shared';
+import { StatsGrid } from '@/lib/shared';
 
 const quickLinks = [
   { href: '/admin/settings/basic', label: '站点设置', icon: Settings },

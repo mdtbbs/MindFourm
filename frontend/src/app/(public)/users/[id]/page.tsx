@@ -12,8 +12,8 @@ import Link from 'next/link';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
-import { UserCard } from '@mindproject/shared';
-import { Medal, Title } from '@mindproject/shared';
+import { UserCard } from '@/lib/shared';
+import { Medal, Title } from '@/lib/shared';
 import FollowButton from '@/components/forum/follow-button';
 import BlockUserButton from '@/components/user/block-user-button';
 
