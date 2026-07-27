@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSse } from '@/hooks/use-sse';
-import { UnifiedHeader } from '@mindproject/shared';
+import { UnifiedHeader } from '@/lib/shared';
 import { useAuth } from '@/lib/auth/context';
 import { useSettings } from '@/lib/settings/context';
 import { messageApi } from '@/lib/api/client';

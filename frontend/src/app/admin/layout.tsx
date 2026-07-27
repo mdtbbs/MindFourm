@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
-import { AdminSidebar as SharedAdminSidebar, SidebarItem, SidebarGroup } from '@mindproject/shared';
+import { AdminSidebar as SharedAdminSidebar, SidebarItem, SidebarGroup } from '@/lib/shared';
 import { useSetting } from '@/store/settings-store';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
