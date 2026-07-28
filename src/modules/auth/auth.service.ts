@@ -1,9 +1,13 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import axios from 'axios';
 import * as crypto from 'crypto';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import { extname } from 'path';
+import { mkdirSync } from 'fs';
 import { User } from '@entities/user.entity';
 import { SessionAudit } from '@entities/session-audit.entity';
 import { RedisService } from '@database/redis.service';
@@ -34,8 +38,11 @@ function hashSessionToken(sessionToken: string): string {
   return crypto.createHash('sha256').update(sessionToken).digest('hex');
 }
 
+const AVATAR_UPLOAD_DIR = './uploads/avatars';
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly sessionTtl = 7 * 24 * 60 * 60; // 7 days in seconds
 
   constructor(
@@ -48,6 +55,88 @@ export class AuthService {
     private pointsService: PointsService,
     private notificationsService: NotificationsService,
   ) {}
+
+  /**
+   * Check if an avatar_url is a MindAuth-synced avatar (prefixed with "oa_").
+   * Locally uploaded avatars use a different naming pattern (timestamp-random).
+   */
+  private isMindAuthSyncedAvatar(avatarUrl?: string | null): boolean {
+    if (!avatarUrl) return false;
+    const filename = path.basename(avatarUrl);
+    return filename.startsWith('oa_');
+  }
+
+  /**
+   * Delete a locally stored avatar file. Only deletes files under /uploads/avatars/
+   * to prevent path traversal.
+   */
+  private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
+    if (!avatarUrl?.startsWith('/uploads/avatars/')) return;
+    const filePath = path.resolve(`.${avatarUrl}`);
+    await fs.unlink(filePath).catch(() => undefined);
+  }
+
+  /**
+   * Download an avatar from MindAuth and save it locally.
+   * Returns the local avatar_url path, or null if download failed.
+   */
+  private async downloadAvatarToLocal(
+    mindauthAvatarUrl: string,
+    mindauthId: number,
+  ): Promise<string | null> {
+    if (!mindauthAvatarUrl) return null;
+
+    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
+    const fullUrl = `${mindauthUrl}${mindauthAvatarUrl}`;
+    const ext = extname(mindauthAvatarUrl).toLowerCase() || '.png';
+    const filename = `oa_${mindauthId}_${Date.now()}${ext}`;
+
+    mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
+
+    const localPath = path.join(AVATAR_UPLOAD_DIR, filename);
+    const publicUrl = `/uploads/avatars/${filename}`;
+
+    try {
+      const response = await mindAuthHttp.get(fullUrl, {
+        responseType: 'arraybuffer',
+        timeout: 10000,
+      });
+
+      await fs.writeFile(localPath, Buffer.from(response.data));
+      return publicUrl;
+    } catch (err) {
+      this.logger.warn(
+        `Failed to download avatar from MindAuth (${fullUrl}): ${(err as Error).message}`,
+      );
+      // Clean up partial file
+      await fs.unlink(localPath).catch(() => undefined);
+      return null;
+    }
+  }
+
+  /**
+   * Sync an avatar from MindAuth: download the file locally, delete old synced avatar.
+   * Returns the new local avatar_url, or the original remote path if download failed.
+   */
+  private async syncAvatarFromMindAuth(
+    mindauthAvatarUrl: string,
+    mindauthId: number,
+    currentAvatarUrl?: string | null,
+  ): Promise<string> {
+    // Download new avatar to local disk
+    const localUrl = await this.downloadAvatarToLocal(mindauthAvatarUrl, mindauthId);
+
+    if (localUrl) {
+      // Delete old synced avatar file (only if it was a MindAuth-synced one)
+      if (this.isMindAuthSyncedAvatar(currentAvatarUrl)) {
+        await this.deleteLocalAvatar(currentAvatarUrl);
+      }
+      return localUrl;
+    }
+
+    // Download failed — fall back to the remote path so the DB at least has something
+    return mindauthAvatarUrl;
+  }
 
   /**
    * Exchange OAuth authorization code for access token
@@ -134,11 +223,16 @@ export class AuthService {
     });
 
     if (!user) {
+      // Download avatar from MindAuth to local disk for new users
+      const localAvatarUrl = mindauthUser.avatar_url
+        ? await this.syncAvatarFromMindAuth(mindauthUser.avatar_url, mindauthUser.id, null)
+        : undefined;
+
       user = this.usersRepository.create({
         mindauth_id: mindauthUser.id,
         username: mindauthUser.username,
         email: mindauthUser.email,
-        avatar_url: mindauthUser.avatar_url,
+        avatar_url: localAvatarUrl,
         role: 'user',
         phone_verified: !!mindauthUser.phone_verified,
         phone_verified_at: mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : null,
@@ -152,7 +246,12 @@ export class AuthService {
       user.username = mindauthUser.username;
       user.email = mindauthUser.email;
       if (mindauthUser.avatar_url) {
-        user.avatar_url = mindauthUser.avatar_url;
+        // Download avatar locally when it changes from MindAuth
+        user.avatar_url = await this.syncAvatarFromMindAuth(
+          mindauthUser.avatar_url,
+          mindauthUser.id,
+          user.avatar_url,
+        );
       }
       user.phone_verified = !!mindauthUser.phone_verified;
       user.phone_verified_at = mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : user.phone_verified_at;
@@ -183,7 +282,13 @@ export class AuthService {
 
     if (mindauthUser.username) user.username = mindauthUser.username;
     if (mindauthUser.email) user.email = mindauthUser.email;
-    if (mindauthUser.avatar_url) user.avatar_url = mindauthUser.avatar_url;
+    if (mindauthUser.avatar_url) {
+      user.avatar_url = await this.syncAvatarFromMindAuth(
+        mindauthUser.avatar_url,
+        mindauthId,
+        user.avatar_url,
+      );
+    }
     if (typeof mindauthUser.phone_verified === 'boolean') {
       user.phone_verified = mindauthUser.phone_verified;
     }
