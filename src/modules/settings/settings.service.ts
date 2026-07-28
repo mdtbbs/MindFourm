@@ -106,12 +106,12 @@ export class SettingsService implements OnModuleInit {
       'announce_enabled',
       'announce_content',
     ]),
-    seo: new Set([
-      'seo_title_suffix',
-      'seo_default_description',
-      'seo_og_image',
-      'seo_sitemap_enabled',
-      'seo_robots_enabled',
+    moderation: new Set([
+      'require_approval',
+      'require_post_approval',
+      'require_reply_approval',
+      'require_avatar_approval',
+      'auto_approve_trusted',
     ]),
     notifications: new Set([
       'admin_notifications_enabled',
