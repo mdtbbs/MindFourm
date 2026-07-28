@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import Link from 'next/link';
-import Sidebar from '@/components/forum/sidebar';
+import ForumContentLayout from '@/components/forum/forum-content-layout';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
@@ -89,15 +89,8 @@ export default async function CategoryPage({
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex gap-8">
-        <div className="hidden lg:block w-64 shrink-0">
-          <Sidebar
-            categories={categories}
-            tags={tags}
-            selectedCategory={categoryId}
-          />
-        </div>
-        <div className="flex-1 space-y-4">
+      <ForumContentLayout categories={categories} tags={tags} selectedCategory={categoryId}>
+        <div className="space-y-4">
           <h1 className="text-2xl font-bold text-surface-900">{category.name}</h1>
           {postsResult.data.length === 0 ? (
             <div className="text-center py-12">
@@ -119,7 +112,7 @@ export default async function CategoryPage({
             basePath={`/categories/${categoryId}`}
           />
         </div>
-      </div>
+      </ForumContentLayout>
     </div>
   );
 }

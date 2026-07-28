@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { messageApi } from '@/lib/api/client';
-import { Message, Conversation } from '@/types';
+import { Message } from '@/types';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import Button from '@/components/ui/button';
 import { ArrowLeft, Send } from 'lucide-react';
@@ -16,7 +16,6 @@ export default function ConversationPage() {
   const [content, setContent] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<{ username: string } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Load messages

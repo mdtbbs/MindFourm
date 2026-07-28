@@ -21,11 +21,6 @@ export interface ForumOverviewStats {
   total_replies: number;
   total_users: number;
   total_resources: number;
-  latest_user: string | null;
-  today_posts: number;
-  today_replies: number;
-  today_users: number;
-  active_24h: number;
 }
 
 @Injectable()
@@ -85,41 +80,16 @@ export class StatsService {
 
   async getForumOverview(): Promise<ForumOverviewStats> {
     const publicResourceStatusesSql = PUBLIC_RESOURCE_STATUSES.map((status) => `'${status}'`).join(', ');
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    const [statsRows, latestLoginRows, sessionCount] = await Promise.all([
+    const [statsRows] = await Promise.all([
       this.postRepository.query(`
         SELECT
           (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'published') as total_replies,
           (SELECT COUNT(*) FROM users) as total_users,
-          (SELECT COUNT(*) FROM resources WHERE status IN (${publicResourceStatusesSql})) as total_resources,
-          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND created_at >= ?) as today_posts,
-          (SELECT COUNT(*) FROM replies WHERE status = 'published' AND created_at >= ?) as today_replies,
-          (SELECT COUNT(*) FROM users WHERE created_at >= ?) as today_users
-      `, [today, today, today]),
-      this.sessionAuditRepository.query(`
-        SELECT u.username
-        FROM session_audit sa
-        INNER JOIN users u ON u.id = sa.user_id
-        WHERE sa.action = 'login'
-        ORDER BY sa.created_at DESC, sa.id DESC
-        LIMIT 1
+          (SELECT COUNT(*) FROM resources WHERE status IN (${publicResourceStatusesSql})) as total_resources
       `),
-      // This endpoint is public (GET /api/stats/overview); KEYS would block Redis
-      // for every caller.
-      this.redisService.countKeys('session:*'),
     ]);
-
-    const latestUserRows = latestLoginRows.length > 0
-      ? latestLoginRows
-      : await this.userRepository.query(`
-        SELECT username
-        FROM users
-        ORDER BY created_at DESC, id DESC
-        LIMIT 1
-      `);
 
     const [stats] = statsRows;
 
@@ -128,14 +98,6 @@ export class StatsService {
       total_replies: this.parseCount(stats?.total_replies),
       total_users: this.parseCount(stats?.total_users),
       total_resources: this.parseCount(stats?.total_resources),
-      latest_user: typeof latestUserRows[0]?.username === 'string'
-        ? latestUserRows[0].username
-        : null,
-      today_posts: this.parseCount(stats?.today_posts),
-      today_replies: this.parseCount(stats?.today_replies),
-      today_users: this.parseCount(stats?.today_users),
-      // Counts every live session (7-day TTL), not strictly 24-hour activity.
-      active_24h: sessionCount,
     };
   }
 

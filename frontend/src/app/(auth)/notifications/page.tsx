@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { notificationApi } from '@/lib/api/client';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Notification } from '@/types';
 import { MessageSquare, AtSign, CheckCheck, Filter, Heart, Mail, Bell } from 'lucide-react';
 import Link from 'next/link';
@@ -78,6 +79,8 @@ export default function NotificationsPage() {
         return <Heart className="w-5 h-5 text-red-500" />;
       case 'message':
         return <Mail className="w-5 h-5 text-green-500" />;
+      case 'best_answer':
+        return <CheckCheck className="w-5 h-5 text-emerald-600" />;
       case 'system':
         return <Bell className="w-5 h-5 text-purple-500" />;
       default:
@@ -99,9 +102,39 @@ export default function NotificationsPage() {
         return '给你发了私信';
       case 'system':
         return '系统通知';
+      case 'best_answer':
+        return '将你的回复设为最佳答案';
       default:
         return '新通知';
     }
+  };
+
+  const actorLabel = (notification: Notification) => {
+    if (notification.type === 'system') {
+      return null;
+    }
+    return notification.actor_name || '社区';
+  };
+
+  const renderContent = (notification: Notification) => {
+    if (!notification.content) {
+      return null;
+    }
+
+    if (notification.type === 'system') {
+      return (
+        <div className="mb-2 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-200">
+          <MarkdownRenderer
+            content={notification.content}
+            className="prose-p:my-1 prose-headings:my-2 prose-ul:my-2 prose-li:my-0"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <p className="mb-2 line-clamp-2 text-sm text-surface-600 dark:text-gray-300">{notification.content}</p>
+    );
   };
 
   // First, last, and a window around the current page.
@@ -168,12 +201,12 @@ export default function NotificationsPage() {
                 <div className="shrink-0">{typeIcon(n.type)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-surface-900 dark:text-gray-100">{n.actor_name}</span>
+                    {actorLabel(n) && (
+                      <span className="font-medium text-surface-900 dark:text-gray-100">{actorLabel(n)}</span>
+                    )}
                     <span className="text-sm text-surface-500 dark:text-gray-400">{typeText(n.type)}</span>
                   </div>
-                  {n.content && (
-                    <p className="text-sm text-surface-600 dark:text-gray-300 line-clamp-2 mb-2">{n.content}</p>
-                  )}
+                  {renderContent(n)}
                   {n.post_title && (
                     <Link
                       href={`/posts/${n.post_id}${n.reply_id ? `#reply-${n.reply_id}` : ''}`}

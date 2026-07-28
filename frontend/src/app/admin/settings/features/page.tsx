@@ -133,7 +133,7 @@ export default function FeaturesSettingsPage() {
                 <div
                   className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border ${
                     isEnabled
-                      ? 'border-[var(--primary)] bg-[rgba(47,128,237,0.06)] text-[var(--primary)]'
+                      ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
                       : 'border-surface-200 bg-surface-100 text-surface-400'
                   }`}
                 >
@@ -173,7 +173,7 @@ export default function FeaturesSettingsPage() {
                     checked={isEnabled}
                     onChange={(e) => toggle(feature.key, e.target.checked)}
                   />
-                  <div className="peer h-6 w-11 border border-surface-200 bg-surface-100 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:border after:border-surface-200 after:bg-white after:transition-all peer-checked:border-[var(--primary)] peer-checked:bg-[rgba(47,128,237,0.12)] peer-checked:after:translate-x-full peer-checked:after:border-[var(--primary)] peer-checked:after:bg-[var(--primary)]" />
+                  <div className="peer h-6 w-11 border border-surface-200 bg-surface-100 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:border after:border-surface-200 after:bg-white after:transition-all peer-checked:border-[var(--primary)] peer-checked:bg-[var(--primary-soft-strong)] peer-checked:after:translate-x-full peer-checked:after:border-[var(--primary)] peer-checked:after:bg-[var(--primary)]" />
                 </label>
               </div>
             );

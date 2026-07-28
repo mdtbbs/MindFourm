@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import Sidebar from '@/components/forum/sidebar';
+import ForumContentLayout from '@/components/forum/forum-content-layout';
 import ServerSection from '@/components/forum/server-section';
 import LatestPostsList, { LatestPostsSettings } from '@/components/forum/latest-posts-list';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
@@ -15,11 +15,6 @@ interface ForumOverviewStats {
   total_replies: number;
   total_users: number;
   total_resources: number;
-  latest_user: string | null;
-  today_posts: number;
-  today_replies: number;
-  today_users: number;
-  active_24h: number;
 }
 
 const emptyOverview: ForumOverviewStats = {
@@ -27,11 +22,6 @@ const emptyOverview: ForumOverviewStats = {
   total_replies: 0,
   total_users: 0,
   total_resources: 0,
-  latest_user: null,
-  today_posts: 0,
-  today_replies: 0,
-  today_users: 0,
-  active_24h: 0,
 };
 
 async function fetchCategories(): Promise<Category[]> {
@@ -127,15 +117,10 @@ export default async function HomePage({
     : latestPostsSettings.title;
   const heroDescription = latestPostsSettings.description;
   const statCards = [
-    { label: '已注册用户', value: formatStatValue(forumOverview.total_users) },
-    { label: '消息', value: formatStatValue(forumOverview.total_replies) },
+    { label: '用户', value: formatStatValue(forumOverview.total_users) },
+    { label: '回复', value: formatStatValue(forumOverview.total_replies) },
     { label: '主题', value: formatStatValue(forumOverview.total_posts) },
     { label: '资源', value: formatStatValue(forumOverview.total_resources) },
-    { label: '今日主题', value: formatStatValue(forumOverview.today_posts) },
-    { label: '今日回复', value: formatStatValue(forumOverview.today_replies) },
-    { label: '今日注册', value: formatStatValue(forumOverview.today_users) },
-    { label: '活跃用户', value: formatStatValue(forumOverview.active_24h) },
-    { label: '最新用户', value: forumOverview.latest_user || '暂无' },
   ];
 
   return (
@@ -165,9 +150,7 @@ export default async function HomePage({
             {statCards.map((item) => (
               <div
                 key={item.label}
-                className={`border border-[var(--border)] bg-[var(--muted)] p-3 ${
-                  item.label === '最新用户' ? 'sm:col-span-2' : ''
-                }`}
+                className="border border-[var(--border)] bg-[var(--muted)] p-3"
               >
                 <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
                   {item.label}
@@ -181,12 +164,8 @@ export default async function HomePage({
         </div>
       </div>
 
-      <div className="flex gap-8">
-        <div className="hidden w-60 shrink-0 lg:block">
-          <Sidebar categories={categories} tags={tags} selectedCategory={categoryId} />
-        </div>
-
-        <div className="min-w-0 flex-1 space-y-4">
+      <ForumContentLayout categories={categories} tags={tags} selectedCategory={categoryId}>
+        <div className="space-y-4">
           {parseBooleanSetting(settings.feature_servers_enabled, false) && <ServerSection />}
 
           {postsResult.data.length === 0 ? (
@@ -194,7 +173,7 @@ export default async function HomePage({
               <p className="text-sm text-[var(--muted-foreground)]">暂时没有帖子</p>
               <Link
                 href="/posts/new"
-                className="mt-4 inline-flex items-center border border-[var(--primary)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[rgba(47,128,237,0.9)]"
+                className="mt-4 inline-flex items-center border border-[var(--primary)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
               >
                 发布第一篇帖子
               </Link>
@@ -210,7 +189,7 @@ export default async function HomePage({
             queryParams={categoryId ? { category_id: String(categoryId) } : {}}
           />
         </div>
-      </div>
+      </ForumContentLayout>
     </div>
   );
 }

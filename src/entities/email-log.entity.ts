@@ -27,7 +27,7 @@ export class EmailLog {
   status: string; // 'sent', 'failed', 'bounced'
 
   @Column({ type: 'text', nullable: true })
-  error_message: string;
+  error_message: string | null;
 
   @CreateDateColumn()
   sent_at: Date;

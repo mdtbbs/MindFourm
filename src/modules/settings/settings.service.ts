@@ -2,6 +2,19 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '@entities/index';
+import {
+  assertValidColorSetting,
+  DEFAULT_BRAND_ACCENT,
+  DEFAULT_BRAND_PRIMARY,
+  DEFAULT_TOP_NAVIGATION_ITEMS,
+  parseTopNavigationItems,
+  serializeTopNavigationItems,
+} from './navigation-settings.util';
+import {
+  DEFAULT_WELCOME_NOTIFICATION_BODY,
+  DEFAULT_WELCOME_NOTIFICATION_TITLE,
+  EMAIL_TEMPLATE_DEFAULTS,
+} from '../notifications/email.templates';
 
 /**
  * Placeholder returned instead of a stored secret. When an admin form posts this
@@ -28,6 +41,9 @@ export class SettingsService implements OnModuleInit {
     'site_footer',
     'site_url',
     'maintenance_mode',
+    'brand_primary',
+    'brand_accent',
+    'top_navigation_items',
     'posts_per_page',
     'default_sort',
     'replies_per_page',
@@ -67,6 +83,8 @@ export class SettingsService implements OnModuleInit {
       'site_description',
       'site_logo_url',
       'site_footer',
+      'brand_primary',
+      'brand_accent',
     ]),
     display: new Set([
       'posts_per_page',
@@ -80,6 +98,9 @@ export class SettingsService implements OnModuleInit {
       'latest_posts_show_tags',
       'latest_posts_show_stats',
       'latest_posts_show_index',
+    ]),
+    navigation: new Set([
+      'top_navigation_items',
     ]),
     announce: new Set([
       'announce_enabled',
@@ -102,6 +123,22 @@ export class SettingsService implements OnModuleInit {
       'admin_notifications_webhook_url',
       'admin_notifications_webhook_secret',
       'admin_notifications_webhook_timeout_ms',
+    ]),
+    email: new Set([
+      'smtp_host',
+      'smtp_port',
+      'smtp_user',
+      'smtp_password',
+      'smtp_from',
+      'smtp_secure',
+      'welcome_notification_enabled',
+      'welcome_notification_title',
+      'welcome_notification_body',
+      ...Object.values(EMAIL_TEMPLATE_DEFAULTS).flatMap((config) => [
+        config.enabledSettingKey,
+        config.subjectSettingKey,
+        config.bodySettingKey,
+      ]),
     ]),
     features: new Set([
       'feature_resources_enabled',
@@ -136,6 +173,9 @@ export class SettingsService implements OnModuleInit {
       { key: 'site_description', value: 'Mindustry community forum', category: 'basic', description: 'Site description' },
       { key: 'site_logo_url', value: '', category: 'basic', description: 'Site logo URL' },
       { key: 'site_footer', value: '', category: 'basic', description: 'Footer text' },
+      { key: 'brand_primary', value: DEFAULT_BRAND_PRIMARY, category: 'basic', description: 'Global primary brand color' },
+      { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
+      { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
       { key: 'site_url', value: 'http://localhost:3000', category: 'basic', description: 'Site URL' },
       { key: 'admin_email', value: 'admin@example.com', category: 'basic', description: 'Admin email' },
       { key: 'maintenance_mode', value: 'false', category: 'basic', description: 'Maintenance mode toggle' },
@@ -189,6 +229,29 @@ export class SettingsService implements OnModuleInit {
       { key: 'smtp_password', value: '', category: 'email', description: 'SMTP password' },
       { key: 'smtp_from', value: 'noreply@mindforum.com', category: 'email', description: 'Email sender address' },
       { key: 'smtp_secure', value: 'true', category: 'email', description: 'Use TLS/SSL' },
+      { key: 'welcome_notification_enabled', value: 'true', category: 'email', description: 'Enable welcome notification for new users' },
+      { key: 'welcome_notification_title', value: DEFAULT_WELCOME_NOTIFICATION_TITLE, category: 'email', description: 'Welcome notification title template' },
+      { key: 'welcome_notification_body', value: DEFAULT_WELCOME_NOTIFICATION_BODY, category: 'email', description: 'Welcome notification body template' },
+      ...Object.entries(EMAIL_TEMPLATE_DEFAULTS).flatMap(([event, config]) => [
+        {
+          key: config.enabledSettingKey,
+          value: config.defaultEnabled ? 'true' : 'false',
+          category: 'email',
+          description: `Enable ${event} email notifications`,
+        },
+        {
+          key: config.subjectSettingKey,
+          value: config.defaultSubject,
+          category: 'email',
+          description: `Subject template for ${event} emails`,
+        },
+        {
+          key: config.bodySettingKey,
+          value: config.defaultBody,
+          category: 'email',
+          description: `Body template for ${event} emails`,
+        },
+      ]),
     ];
 
     for (const setting of defaults) {
@@ -312,12 +375,26 @@ export class SettingsService implements OnModuleInit {
    * Batch update settings (upsert)
    */
   async setBatch(category: string, keyValuePairs: Record<string, string>): Promise<void> {
+    const normalizedPairs = new Map<string, string>();
+
     for (const [key, value] of Object.entries(keyValuePairs)) {
-      // An admin form that rendered a masked secret posts the placeholder back;
-      // writing it would replace the real credential with the literal string.
       if (value === SECRET_PLACEHOLDER) {
         continue;
       }
+
+      let normalizedValue = value;
+      if (key === 'brand_primary' || key === 'brand_accent' || key === 'latest_posts_accent_color') {
+        assertValidColorSetting(key, value);
+        normalizedValue = value.trim();
+      }
+      if (key === 'top_navigation_items') {
+        normalizedValue = serializeTopNavigationItems(parseTopNavigationItems(value));
+      }
+
+      normalizedPairs.set(key, normalizedValue);
+    }
+
+    for (const [key, value] of normalizedPairs.entries()) {
       await this.settingRepository.query(
         'INSERT INTO settings (`key`, `value`, category, updated_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE `value` = ?, category = ?, updated_at = NOW()',
         [key, value, category, value, category],

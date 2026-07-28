@@ -1,13 +1,17 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Queue, Worker, Job } from 'bullmq';
-import { EmailService, MailOptions } from './email.service';
+import { Repository } from 'typeorm';
+import { EmailLog } from '../../entities/email-log.entity';
 import { RedisService } from '../../database/redis.service';
+import { EmailService, EmailTransportUnavailableError } from './email.service';
 
 export interface EmailJob {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
+  logId?: number;
 }
 
 /**
@@ -22,6 +26,8 @@ export class EmailQueueService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private emailService: EmailService,
+    @InjectRepository(EmailLog)
+    private emailLogRepository: Repository<EmailLog>,
     private redisService: RedisService,
   ) {}
 
@@ -40,10 +46,7 @@ export class EmailQueueService implements OnModuleInit, OnModuleDestroy {
 
     this.worker = new Worker(
       'email-queue',
-      async (job: Job<{ to: string | string[]; subject: string; html: string; text?: string }>) => {
-        const { to, subject, html, text } = job.data;
-        await this.emailService.sendMail({ to, subject, html, text });
-      },
+      async (job: Job<EmailJob>) => this.processEmailJob(job.data),
       {
         connection: redisConfig,
         concurrency: 5,
@@ -66,6 +69,52 @@ export class EmailQueueService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy(): Promise<void> {
     await this.queue.close();
     await this.worker.close();
+  }
+
+  private truncateErrorMessage(message: string): string {
+    return message.length > 1000 ? `${message.slice(0, 997)}...` : message;
+  }
+
+  async processEmailJob(job: EmailJob): Promise<void> {
+    const { to, subject, html, text, logId } = job;
+
+    try {
+      await this.emailService.sendMail({ to, subject, html, text });
+      await this.updateEmailLog(logId, {
+        status: 'sent',
+        error_message: null,
+      });
+    } catch (error) {
+      const err = error as Error;
+      await this.updateEmailLog(logId, {
+        status: 'failed',
+        error_message: this.truncateErrorMessage(err.message),
+      });
+
+      if (error instanceof EmailTransportUnavailableError) {
+        this.logger.warn(`Email transport unavailable: ${subject} -> ${to}`);
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  private async updateEmailLog(
+    logId: number | undefined,
+    patch: Pick<EmailLog, 'status' | 'error_message'>,
+  ): Promise<void> {
+    if (!logId) {
+      return;
+    }
+
+    try {
+      await this.emailLogRepository.update(logId, patch);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to update email log ${logId}: ${(error as Error).message}`,
+      );
+    }
   }
 
   /**

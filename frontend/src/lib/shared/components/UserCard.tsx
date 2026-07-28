@@ -131,10 +131,10 @@ const statVariants: Variants = {
 // 边框光效动画变体
 const borderGlowVariants: Variants = {
   idle: {
-    boxShadow: '0 0 0px rgba(255,107,53,0)',
+    boxShadow: '0 0 0px transparent',
   },
   hover: {
-    boxShadow: '0 0 15px rgba(255,107,53,0.2), 0 4px 12px rgba(0,0,0,0.1)',
+    boxShadow: '0 0 15px color-mix(in srgb, var(--primary) 20%, transparent), 0 4px 12px rgba(0,0,0,0.1)',
     transition: {
       duration: 0.3,
       ease: easeInOut,
@@ -214,7 +214,7 @@ export function UserCard({
           left: 0,
           right: 0,
           height: 40,
-          background: 'linear-gradient(to bottom, rgba(255,107,53,0.3), transparent)',
+          background: 'linear-gradient(to bottom, color-mix(in srgb, var(--primary) 30%, transparent), transparent)',
           borderRadius: '8px 8px 0 0',
         }}
       />
@@ -254,7 +254,7 @@ export function UserCard({
                 position: 'absolute',
                 inset: -3,
                 borderRadius: 8,
-                border: '1px solid rgba(255,107,53,0.3)',
+                border: '1px solid var(--primary-border-soft)',
                 background: 'transparent',
               }}
             />

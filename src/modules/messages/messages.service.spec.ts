@@ -325,4 +325,20 @@ describe('MessagesService.create block enforcement', () => {
     expect(queryRunner.manager.save).toHaveBeenCalled();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
   });
+
+  it('includes the message content in the notification payload', async () => {
+    const queryRunner = createQueryRunnerMock();
+    const { service, notificationsService } = createService({
+      dataSource: { createQueryRunner: () => queryRunner },
+    });
+
+    await service.create({ recipient_id: 2, content: 'hello **markdown**' }, 1);
+
+    expect(notificationsService.create).toHaveBeenCalledWith({
+      user_id: 2,
+      type: 'message',
+      actor_id: 1,
+      content: 'hello **markdown**',
+    });
+  });
 });

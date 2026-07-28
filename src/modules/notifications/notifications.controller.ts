@@ -174,8 +174,7 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
   @Get('email-preference')
   async getEmailPreference(@Req() req: any) {
     const userId = req.user.id;
-    const preference = await this.notificationsService.getEmailPreference(userId);
-    return { data: preference };
+    return this.notificationsService.getEmailPreference(userId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -185,7 +184,6 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
     @Body() dto: UpdateEmailPreferenceDto,
   ) {
     const userId = req.user.id;
-    const preference = await this.notificationsService.updateEmailPreference(userId, dto);
-    return { data: preference };
+    return this.notificationsService.updateEmailPreference(userId, dto);
   }
 }

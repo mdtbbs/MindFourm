@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { Conversation } from '@/types';
 import Link from 'next/link';
@@ -6,18 +5,11 @@ import { formatTime } from '@/lib/utils';
 
 export const revalidate = 0;
 
-async function fetchConversations(): Promise<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }> {
-  const cookieHeader = (await cookies())
-    .getAll()
-    .map(({ name, value }) => `${name}=${value}`)
-    .join('; ');
-
-  return fetchApiData<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }>('/api/messages', {
-    init: {
-      cache: 'no-store',
-      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
-    },
-    fallback: { data: [], next_cursor: null, has_more: false },
+async function fetchConversations(): Promise<{ data: Conversation[]; nextCursor: string | null; hasMore: boolean }> {
+  return fetchApiData<{ data: Conversation[]; nextCursor: string | null; hasMore: boolean }>('/api/messages', {
+    init: { cache: 'no-store' },
+    forwardCookies: true,
+    fallback: { data: [], nextCursor: null, hasMore: false },
   });
 }
 

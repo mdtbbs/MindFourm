@@ -36,11 +36,11 @@ export const useNotificationStore = create<NotificationState>()(
       lastUpdated: null,
 
       setNotifications: (notifications) => {
-        set({
+        set((state) => ({
           notifications,
-          unreadCount: notifications.filter((n) => !n.is_read).length,
+          unreadCount: state.unreadCount,
           lastUpdated: new Date().toISOString(),
-        });
+        }));
       },
 
       addNotification: (notification) => {
@@ -53,7 +53,7 @@ export const useNotificationStore = create<NotificationState>()(
 
           return {
             notifications: newNotifications,
-            unreadCount: newNotifications.filter((n) => !n.is_read).length,
+            unreadCount: notification.is_read ? state.unreadCount : state.unreadCount + 1,
             lastUpdated: new Date().toISOString(),
           };
         });
@@ -63,14 +63,17 @@ export const useNotificationStore = create<NotificationState>()(
         try {
           await notificationApi.markAsRead(notificationId);
 
-          set((state) => ({
-            notifications: state.notifications.map((n) =>
-              n.id === notificationId ? { ...n, is_read: true } : n
-            ),
-            unreadCount: state.notifications.filter(
-              (n) => n.id !== notificationId && !n.is_read
-            ).length,
-          }));
+          set((state) => {
+            const target = state.notifications.find((n) => n.id === notificationId);
+            const targetWasUnread = Boolean(target && !target.is_read);
+
+            return {
+              notifications: state.notifications.map((n) =>
+                n.id === notificationId ? { ...n, is_read: true } : n
+              ),
+              unreadCount: targetWasUnread ? Math.max(0, state.unreadCount - 1) : state.unreadCount,
+            };
+          });
         } catch (error) {
           console.error('Failed to mark notification as read:', error);
         }
@@ -95,10 +98,13 @@ export const useNotificationStore = create<NotificationState>()(
       fetchNotifications: async (limit = 20) => {
         set({ isLoading: true });
         try {
-          const response = await notificationApi.list({ page: 1, limit });
+          const [response, unread] = await Promise.all([
+            notificationApi.list({ page: 1, limit }),
+            notificationApi.unreadCount(),
+          ]);
           set({
             notifications: response.data || [],
-            unreadCount: response.data?.filter((n) => !n.is_read).length || 0,
+            unreadCount: unread.count,
             isLoading: false,
             lastUpdated: new Date().toISOString(),
           });

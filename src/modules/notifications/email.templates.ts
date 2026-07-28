@@ -1,28 +1,35 @@
-/**
- * Email templates for various notification types
- * All templates use Handlebars syntax
- */
-
-/**
- * Base layout for all emails
- * Wraps content with header and footer
- */
-export const BASE_EMAIL_LAYOUT = `<!DOCTYPE html>
+export const EMAIL_LAYOUT_TEMPLATE = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    /* Inline styles for email client compatibility */
-    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
-    .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; overflow: hidden; }
-    .header { background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); padding: 20px; text-align: center; color: #fff; }
-    .header h1 { margin: 0; font-size: 24px; }
-    .content { padding: 24px; line-height: 1.6; color: #333; }
-    .footer { background: #f5f5f5; padding: 16px; text-align: center; font-size: 12px; color: #666; }
-    .button { display: inline-block; padding: 12px 24px; background: #ff6b35; color: #fff; text-decoration: none; border-radius: 4px; font-weight: 500; }
-    .button:hover { background: #e55a2b; }
-    .link { color: #ff6b35; text-decoration: underline; }
-    .excerpt { background: #f5f5f5; padding: 16px; border-left: 4px solid #ff6b35; margin: 16px 0; }
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 0; background: #f5f7fb; color: #1f2937; }
+    .container { max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #dbe5f1; border-radius: 12px; overflow: hidden; }
+    .header { padding: 24px; background: linear-gradient(135deg, #2f80ed 0%, #5aa1ff 100%); color: #ffffff; }
+    .header h1 { margin: 0; font-size: 24px; font-weight: 700; }
+    .content { padding: 28px 24px; line-height: 1.7; color: #334155; }
+    .content h1, .content h2, .content h3, .content h4 { color: #0f172a; margin: 0 0 12px; }
+    .content p, .content ul, .content ol, .content blockquote { margin: 0 0 16px; }
+    .content a { color: #2f80ed; text-decoration: none; }
+    .content a:hover { text-decoration: underline; }
+    .content blockquote { margin: 16px 0; padding: 12px 16px; background: #f5f8ff; border-left: 4px solid #2f80ed; color: #475569; }
+    .content pre, .content code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .content pre { overflow-x: auto; padding: 12px 14px; background: #0f172a; color: #e2e8f0; border-radius: 8px; }
+    .content code { padding: 0.15em 0.35em; background: #eaf2ff; border-radius: 4px; }
+    .content pre code { padding: 0; background: transparent; }
+    .button-link {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 12px 18px;
+      background: #2f80ed;
+      color: #ffffff !important;
+      border-radius: 8px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .footer { padding: 16px 24px 24px; background: #f8fafc; color: #64748b; font-size: 12px; border-top: 1px solid #e2e8f0; }
+    .footer p { margin: 0 0 8px; }
   </style>
 </head>
 <body>
@@ -31,12 +38,12 @@ export const BASE_EMAIL_LAYOUT = `<!DOCTYPE html>
       <h1>{{site_name}}</h1>
     </div>
     <div class="content">
-      {{> content}}
+      {{{content_html}}}
     </div>
     <div class="footer">
-      <p>此邮件由系统自动发送,请勿直接回复。</p>
+      <p>此邮件由系统自动发送，请勿直接回复。</p>
       {{#if preferences_url}}
-      <p>如果要退订此类通知,请前往 <a href="{{preferences_url}}" class="link">邮件偏好设置</a></p>
+      <p>如需调整收件偏好，请前往 <a href="{{preferences_url}}">通知设置</a>。</p>
       {{/if}}
       <p>© {{year}} {{site_name}}</p>
     </div>
@@ -44,78 +51,100 @@ export const BASE_EMAIL_LAYOUT = `<!DOCTYPE html>
 </body>
 </html>`;
 
-/**
- * Reply notification email content
- */
-export const REPLY_EMAIL_CONTENT = `<p>你好,{{username}}!</p>
+export const DEFAULT_WELCOME_NOTIFICATION_TITLE = '欢迎来到 {{site_name}}';
 
-<p><strong>{{actor_name}}</strong> 回复了你的帖子:</p>
+export const DEFAULT_WELCOME_NOTIFICATION_BODY = `你好，**{{username}}**！
 
-<h2><a href="{{post_url}}" style="color: #ff6b35;">{{post_title}}</a></h2>
+欢迎加入 {{site_name}}，这里是一个以帖子讨论和资源分享为核心的社区。
 
-<div class="excerpt">
-  {{reply_excerpt}}
-</div>
+- 浏览你感兴趣的版块和资源
+- 完善个人资料，方便大家认识你
+- 遇到好内容时，记得回复、收藏或点赞
 
-<p><a href="{{post_url}}" class="button">查看完整回复</a></p>`;
+祝你在这里玩得开心。`;
 
-/**
- * Mention notification email content
- */
-export const MENTION_EMAIL_CONTENT = `<p>你好,{{username}}!</p>
+type EmailPreferenceKey = 'reply_email' | 'mention_email' | 'message_email' | 'system_email';
 
-<p><strong>{{actor_name}}</strong> 在帖子中提及了你:</p>
-
-<h2><a href="{{post_url}}" style="color: #ff6b35;">{{post_title}}</a></h2>
-
-<div class="excerpt" style="border-left-color: #f59e0b;">
-  {{mention_excerpt}}
-</div>
-
-<p><a href="{{post_url}}" class="button">查看完整内容</a></p>`;
-
-/**
- * Private message notification email content
- */
-export const MESSAGE_EMAIL_CONTENT = `<p>你好,{{username}}!</p>
-
-<p>你收到了一条来自 <strong>{{sender_name}}</strong> 的私信:</p>
-
-<div class="excerpt" style="border-left-color: #22c55e;">
-  {{message_excerpt}}
-</div>
-
-<p><a href="{{message_url}}" class="button">查看私信</a></p>`;
-
-/**
- * System notification email content
- */
-export const SYSTEM_EMAIL_CONTENT = `<p>你好,{{username}}!</p>
-
-<h2>{{title}}</h2>
-
-<p>{{content}}</p>
-
-{{#if action_url}}
-<p><a href="{{action_url}}" class="button">前往处理</a></p>
-{{/if}}`;
-
-/**
- * Compile full email template by combining base layout with content
- * @param content - Content partial template
- * @returns Full template string
- */
-export function compileEmailTemplate(content: string): string {
-  // Replace {{> content}} placeholder with actual content
-  return BASE_EMAIL_LAYOUT.replace('{{> content}}', content);
+interface EmailTemplateConfig {
+  enabledSettingKey: string;
+  subjectSettingKey: string;
+  bodySettingKey: string;
+  preferenceKey: EmailPreferenceKey;
+  defaultEnabled: boolean;
+  defaultSubject: string;
+  defaultBody: string;
 }
 
-/**
- * Pre-compiled email templates
- */
-export const EMAIL_TEMPLATES = {
-  reply: compileEmailTemplate(REPLY_EMAIL_CONTENT),
-  mention: compileEmailTemplate(MENTION_EMAIL_CONTENT),
-  message: compileEmailTemplate(MESSAGE_EMAIL_CONTENT),
-  system: compileEmailTemplate(SYSTEM_EMAIL_CONTENT),
-};
+export const EMAIL_TEMPLATE_DEFAULTS = {
+  reply: {
+    enabledSettingKey: 'email_reply_enabled',
+    subjectSettingKey: 'email_template_reply_subject',
+    bodySettingKey: 'email_template_reply_body',
+    preferenceKey: 'reply_email',
+    defaultEnabled: true,
+    defaultSubject: '[{{site_name}}] 有人回复了你的帖子',
+    defaultBody: `你好，{{username}}！
+
+**{{actor_name}}** 回复了你的帖子 **[{{post_title}}]({{post_url}})**。
+
+> {{reply_excerpt}}
+
+{{#if action_url}}[{{action_label}}]({{action_url}}){{/if}}`,
+  },
+  mention: {
+    enabledSettingKey: 'email_mention_enabled',
+    subjectSettingKey: 'email_template_mention_subject',
+    bodySettingKey: 'email_template_mention_body',
+    preferenceKey: 'mention_email',
+    defaultEnabled: true,
+    defaultSubject: '[{{site_name}}] 有人提到了你',
+    defaultBody: `你好，{{username}}！
+
+**{{actor_name}}** 在帖子 **[{{post_title}}]({{post_url}})** 中提到了你。
+
+> {{mention_excerpt}}
+
+{{#if action_url}}[{{action_label}}]({{action_url}}){{/if}}`,
+  },
+  message: {
+    enabledSettingKey: 'email_message_enabled',
+    subjectSettingKey: 'email_template_message_subject',
+    bodySettingKey: 'email_template_message_body',
+    preferenceKey: 'message_email',
+    defaultEnabled: true,
+    defaultSubject: '[{{site_name}}] {{sender_name}} 给你发了私信',
+    defaultBody: `你好，{{username}}！
+
+你收到了来自 **{{sender_name}}** 的一条私信。
+
+> {{message_excerpt}}
+
+{{#if action_url}}[{{action_label}}]({{action_url}}){{/if}}`,
+  },
+  system: {
+    enabledSettingKey: 'email_system_enabled',
+    subjectSettingKey: 'email_template_system_subject',
+    bodySettingKey: 'email_template_system_body',
+    preferenceKey: 'system_email',
+    defaultEnabled: true,
+    defaultSubject: '[{{site_name}}] 系统通知',
+    defaultBody: `你好，{{username}}！
+
+{{content}}
+
+{{#if action_url}}[{{action_label}}]({{action_url}}){{/if}}`,
+  },
+  welcome: {
+    enabledSettingKey: 'email_welcome_enabled',
+    subjectSettingKey: 'email_template_welcome_subject',
+    bodySettingKey: 'email_template_welcome_body',
+    preferenceKey: 'system_email',
+    defaultEnabled: true,
+    defaultSubject: '[{{site_name}}] 欢迎加入社区',
+    defaultBody: `{{content}}
+
+{{#if action_url}}[{{action_label}}]({{action_url}}){{/if}}`,
+  },
+} as const satisfies Record<string, EmailTemplateConfig>;
+
+export type EmailTemplateEventKey = keyof typeof EMAIL_TEMPLATE_DEFAULTS;

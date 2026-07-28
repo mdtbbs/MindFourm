@@ -5,11 +5,13 @@ import { usePathname } from 'next/navigation';
 
 const tabs = [
   { href: '/admin/settings/basic', label: '基本信息' },
+  { href: '/admin/settings/navigation', label: '顶部导航' },
   { href: '/admin/settings/announce', label: '公告管理' },
   { href: '/admin/settings/display', label: '显示设置' },
   { href: '/admin/settings/features', label: '功能管理' },
   { href: '/admin/settings/seo', label: 'SEO 设置' },
   { href: '/admin/settings/notifications', label: '通知设置' },
+  { href: '/admin/settings/email', label: '邮件模板' },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
@@ -19,7 +21,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-bold text-surface-900">站点设置</h1>
-        <p className="text-sm text-surface-500 mt-1">配置站点身份、显示和 SEO</p>
+        <p className="text-sm text-surface-500 mt-1">配置站点身份、品牌色、顶部导航、通知与邮件模板</p>
       </div>
       <div className="flex gap-1 border-b border-surface-200">
         {tabs.map((tab) => (

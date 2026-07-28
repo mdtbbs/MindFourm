@@ -3,6 +3,13 @@ import * as nodemailer from 'nodemailer';
 import { SettingsService } from '../settings/settings.service';
 import { TemplateService } from './template.service';
 
+export class EmailTransportUnavailableError extends Error {
+  constructor(message = 'SMTP not configured') {
+    super(message);
+    this.name = 'EmailTransportUnavailableError';
+  }
+}
+
 export interface MailOptions {
   to: string | string[];
   subject: string;
@@ -18,6 +25,7 @@ export interface MailOptions {
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
   private transporter: nodemailer.Transporter | null = null;
+  private transporterInitError: Error | null = null;
 
   constructor(
     private settingsService: SettingsService,
@@ -44,6 +52,8 @@ export class EmailService implements OnModuleInit {
       // Check if SMTP is configured
       if (!config.smtp_host || !config.smtp_user) {
         this.logger.warn('SMTP not configured. Email sending is disabled.');
+        this.transporter = null;
+        this.transporterInitError = new EmailTransportUnavailableError();
         return;
       }
 
@@ -59,10 +69,12 @@ export class EmailService implements OnModuleInit {
 
       // Verify connection
       await this.transporter.verify();
+      this.transporterInitError = null;
       this.logger.log('Email transporter initialized successfully');
     } catch (error) {
       this.logger.error(`Failed to initialize email transporter: ${(error as Error).message}`);
       this.transporter = null;
+      this.transporterInitError = error as Error;
     }
   }
 
@@ -76,8 +88,13 @@ export class EmailService implements OnModuleInit {
     }
 
     if (!this.transporter) {
-      this.logger.warn('Email not sent: SMTP not configured');
-      return;
+      if (this.transporterInitError instanceof EmailTransportUnavailableError) {
+        this.logger.warn('Email not sent: SMTP not configured');
+        throw this.transporterInitError;
+      }
+
+      this.logger.warn('Email not sent: SMTP transport unavailable');
+      throw this.transporterInitError ?? new Error('SMTP transport unavailable');
     }
 
     try {

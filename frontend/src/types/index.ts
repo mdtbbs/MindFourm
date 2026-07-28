@@ -305,9 +305,9 @@ export interface BookmarkListResponse {
 export interface Notification {
   id: number;
   user_id: number;
-  type: 'reply' | 'mention' | 'message' | 'post_like' | 'reply_like';
-  actor_id: number;
-  actor_name: string;
+  type: 'reply' | 'mention' | 'message' | 'post_like' | 'reply_like' | 'system' | 'best_answer';
+  actor_id: number | null;
+  actor_name: string | null;
   actor_avatar: string | null;
   post_id: number | null;
   post_title: string | null;

@@ -58,8 +58,8 @@ const titleConfig: Record<TitleType, TitleConfig> = {
     defaultIcon: '⭐',
     defaultText: '版主',
     animate: true,
-    shimmerGradient: 'linear-gradient(90deg, rgba(255,107,53,0) 0%, rgba(255,107,53,0.3) 50%, rgba(255,107,53,0) 100%)',
-    borderColor: 'rgba(255,107,53,0.5)',
+    shimmerGradient: 'linear-gradient(90deg, color-mix(in srgb, var(--primary) 0%, transparent) 0%, color-mix(in srgb, var(--primary) 30%, transparent) 50%, color-mix(in srgb, var(--primary) 0%, transparent) 100%)',
+    borderColor: 'var(--primary-border-strong)',
   },
   admin: {
     color: '#b8860b',
@@ -134,9 +134,9 @@ const textGlowVariants: Variants = {
 const borderGlowVariants: Variants = {
   glow: {
     boxShadow: [
-      '0 0 0px rgba(255,107,53,0)',
-      '0 0 10px rgba(255,107,53,0.3)',
-      '0 0 0px rgba(255,107,53,0)',
+      '0 0 0px transparent',
+      '0 0 10px color-mix(in srgb, var(--primary) 30%, transparent)',
+      '0 0 0px transparent',
     ],
     transition: {
       duration: 1.5,
@@ -171,7 +171,7 @@ export function Title({
       case 'admin':
         return 'rgba(255,193,7,0.15)';
       case 'mod':
-        return 'rgba(255,107,53,0.1)';
+        return 'var(--primary-soft-strong)';
       case 'active':
         return 'rgba(76,175,80,0.1)';
       case 'core':

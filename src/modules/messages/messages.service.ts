@@ -88,6 +88,7 @@ export class MessagesService {
       user_id: dto.recipient_id,
       type: 'message',
       actor_id: senderId,
+      content: dto.content,
     }).catch((err) => console.error('Message notification error:', err));
     await this.redisService.del(`unread_msg:${dto.recipient_id}`);
 
@@ -103,24 +104,24 @@ export class MessagesService {
    */
   async getConversations(userId: number, limit: unknown, cursor?: string) {
     const cappedLimit = normalizeMessageLimit(limit);
-    const cursorClause = cursor ? 'HAVING latest_at < ?' : '';
+    const cursorClause = cursor ? 'HAVING last_at < ?' : '';
     const params: unknown[] = [
       userId, userId, userId, userId, userId, userId, userId, userId, userId, userId,
     ];
     if (cursor) params.push(parseDateCursor(cursor));
     params.push(cappedLimit + 1);
 
-    const conversations = await this.dataSource.query(`
+    const rows = await this.dataSource.query(`
       SELECT
-        CASE WHEN m.sender_id = ? THEN m.recipient_id ELSE m.sender_id END as partner_id,
-        u.username as partner_name,
-        u.avatar_url as partner_avatar,
-        MAX(m.created_at) as latest_at,
-        SUM(CASE WHEN m.is_read = 0 AND m.recipient_id = ? THEN 1 ELSE 0 END) as unread,
+        CASE WHEN m.sender_id = ? THEN m.recipient_id ELSE m.sender_id END as user_id,
+        u.username as username,
+        u.avatar_url as avatar_url,
+        MAX(m.created_at) as last_at,
+        SUM(CASE WHEN m.is_read = 0 AND m.recipient_id = ? THEN 1 ELSE 0 END) as unread_count,
         (SELECT content FROM messages m2
          WHERE (m2.sender_id = ? AND m2.recipient_id = cp.partner_id)
             OR (m2.sender_id = cp.partner_id AND m2.recipient_id = ?)
-         ORDER BY m2.created_at DESC LIMIT 1) as last_message
+         ORDER BY m2.created_at DESC LIMIT 1) as last_content
       FROM messages m
       JOIN users u ON u.id = CASE WHEN m.sender_id = ? THEN m.recipient_id ELSE m.sender_id END
       CROSS JOIN (SELECT DISTINCT
@@ -128,18 +129,28 @@ export class MessagesService {
         FROM messages WHERE sender_id = ? OR recipient_id = ?) cp
       WHERE (m.sender_id = ? OR m.recipient_id = ?)
         AND m.deleted_by_sender = 0 AND m.deleted_by_recipient = 0
-      GROUP BY partner_id, u.username, u.avatar_url
+      GROUP BY user_id, u.username, u.avatar_url
       ${cursorClause}
-      ORDER BY latest_at DESC LIMIT ?
+      ORDER BY last_at DESC LIMIT ?
     `, params);
+
+    const conversations = rows.map((row: any) => ({
+      user_id: Number(row.user_id),
+      username: row.username,
+      avatar_url: row.avatar_url ?? null,
+      unread_count: Number.parseInt(String(row.unread_count ?? 0), 10) || 0,
+      last_at: row.last_at,
+      last_content: row.last_content ?? null,
+    }));
 
     const hasMore = conversations.length > cappedLimit;
     if (hasMore) conversations.pop();
 
     const oldest = conversations.length ? conversations[conversations.length - 1] : null;
     return {
-      conversations,
-      nextCursor: hasMore && oldest ? toDateCursor(oldest.latest_at) : null,
+      data: conversations,
+      nextCursor: hasMore && oldest ? toDateCursor(oldest.last_at) : null,
+      hasMore,
     };
   }
 
@@ -169,7 +180,11 @@ export class MessagesService {
     const oldest = messages.length ? messages[messages.length - 1] : null;
     const nextCursor = hasMore && oldest ? toDateCursor(oldest.created_at) : null;
 
-    return { messages: messages.reverse(), nextCursor };
+    return {
+      data: messages.reverse(),
+      nextCursor,
+      hasMore,
+    };
   }
 
   async getUnreadCount(userId: number): Promise<number> {

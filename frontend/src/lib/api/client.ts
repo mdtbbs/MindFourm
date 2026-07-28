@@ -564,11 +564,13 @@ export const adminApi = {
     request<{ moderation_pending: number; announce_active: number }>('/api/admin/badge-counts'),
   getSettings: (category?: string) =>
     request<Record<string, string>>(`/api/admin/settings${category ? `/${category}` : ''}`),
-  updateSettings: (category: string, data: Record<string, string>) =>
-    request<Record<string, string>>(`/api/admin/settings/${category}`, {
+  updateSettings: (category: string, data: Record<string, string>) => {
+    clearCache();
+    return request<Record<string, string>>(`/api/admin/settings/${category}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    });
+  },
   getTags: (params?: { page?: number; limit?: number }) =>
     request<{ data: Tag[]; pagination: PostListResponse['pagination'] }>('/api/admin/tags' + buildQueryString(params || {})),
   createTag: (data: { name: string; slug?: string }) => {
@@ -849,7 +851,7 @@ export const notificationApi = {
       filter: params?.filter,
     })}`),
   listCursor: (params?: { cursor?: string; limit?: number }) =>
-    request<{ data: Notification[]; next_cursor: string | null; has_more: boolean }>(`/api/notifications/cursor${buildQueryString({
+    request<{ data: Notification[]; nextCursor: string | null }>(`/api/notifications/cursor${buildQueryString({
       cursor: params?.cursor,
       limit: params?.limit,
     })}`),
@@ -859,6 +861,31 @@ export const notificationApi = {
     request<void>(`/api/notifications/${id}/read`, { method: 'PUT' }),
   markAllAsRead: () =>
     request<void>('/api/notifications/read-all', { method: 'PUT' }),
+  getEmailPreference: () =>
+    request<{
+      reply_email: boolean;
+      mention_email: boolean;
+      message_email: boolean;
+      system_email: boolean;
+      digest_email: boolean;
+    }>('/api/notifications/email-preference'),
+  updateEmailPreference: (data: {
+    reply_email?: boolean;
+    mention_email?: boolean;
+    message_email?: boolean;
+    system_email?: boolean;
+    digest_email?: boolean;
+  }) =>
+    request<{
+      reply_email: boolean;
+      mention_email: boolean;
+      message_email: boolean;
+      system_email: boolean;
+      digest_email: boolean;
+    }>('/api/notifications/email-preference', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
 };
 
 export const adminNotificationApi = {
@@ -922,11 +949,11 @@ export const messageApi = {
       body: JSON.stringify({ recipient_id, content }),
     }),
   getConversations: (params?: { cursor?: string; limit?: number }) =>
-    request<{ data: Conversation[]; next_cursor: string | null; has_more: boolean }>(
+    request<{ data: Conversation[]; nextCursor: string | null; hasMore: boolean }>(
       `/api/messages${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
     ),
   getConversation: (userId: number, params?: { cursor?: string; limit?: number }) =>
-    request<{ data: Message[]; next_cursor: string | null; has_more: boolean }>(
+    request<{ data: Message[]; nextCursor: string | null; hasMore: boolean }>(
       `/api/messages/${userId}${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
     ),
   unreadCount: () =>

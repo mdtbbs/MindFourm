@@ -52,7 +52,7 @@ const levelStyles: Record<MedalLevel, { bg: string; color: string; glow?: string
   4: {
     bg: 'linear-gradient(135deg, var(--badge-lv4-start), var(--badge-lv4-end))',
     color: '#fff',
-    glow: '0 0 15px rgba(255,107,53,0.6)',
+    glow: '0 0 15px color-mix(in srgb, var(--primary) 60%, transparent)',
   },
 };
 
@@ -76,9 +76,15 @@ export function Medal({
   // 动画变体
   const pulseAnimation = {
     scale: [1, 1.05, 1],
-    boxShadow: level >= 3
-      ? ['0 0 10px rgba(255,107,53,0.4)', '0 0 20px rgba(255,107,53,0.6)', '0 0 10px rgba(255,107,53,0.4)']
-      : undefined,
+    boxShadow: level === 4
+      ? [
+          '0 0 10px color-mix(in srgb, var(--primary) 40%, transparent)',
+          '0 0 20px color-mix(in srgb, var(--primary) 60%, transparent)',
+          '0 0 10px color-mix(in srgb, var(--primary) 40%, transparent)',
+        ]
+      : level === 3
+        ? ['0 0 10px rgba(255,193,7,0.35)', '0 0 18px rgba(255,193,7,0.55)', '0 0 10px rgba(255,193,7,0.35)']
+        : undefined,
     transition: {
       duration: 2,
       repeat: Infinity,

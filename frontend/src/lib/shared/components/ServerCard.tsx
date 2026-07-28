@@ -152,9 +152,9 @@ const iconVariants: Variants = {
     scale: [1, 1.08, 1],
     rotate: [0, 2, -2, 0],
     boxShadow: [
-      '0 0 0px rgba(255,107,53,0)',
-      '0 0 20px rgba(255,107,53,0.4)',
-      '0 0 0px rgba(255,107,53,0)',
+      '0 0 0px transparent',
+      '0 0 20px color-mix(in srgb, var(--primary) 40%, transparent)',
+      '0 0 0px transparent',
     ],
     transition: {
       duration: 2,
@@ -181,7 +181,7 @@ const tagVariants: Variants = {
   }),
   hover: {
     scale: 1.05,
-    background: 'rgba(255,107,53,0.1)',
+    background: 'var(--primary-soft)',
     color: 'var(--primary)',
   },
 };
@@ -243,7 +243,7 @@ export function ServerCard({
           style={{
             position: 'absolute',
             inset: 0,
-            background: 'linear-gradient(90deg, rgba(255,107,53,0) 0%, rgba(255,107,53,0.1) 50%, rgba(255,107,53,0) 100%)',
+            background: 'linear-gradient(90deg, transparent 0%, var(--primary-soft) 50%, transparent 100%)',
             backgroundSize: '200% 100%',
             borderRadius: 8,
           }}
@@ -254,8 +254,8 @@ export function ServerCard({
       <motion.div
         initial={{ borderColor: 'var(--border)' }}
         whileHover={{
-          borderColor: featured ? 'rgba(255,107,53,0.3)' : 'rgba(255,107,53,0.2)',
-          boxShadow: '0 4px 20px rgba(255,107,53,0.1)',
+          borderColor: featured ? 'var(--primary-border-strong)' : 'var(--primary-border-soft)',
+          boxShadow: '0 4px 20px color-mix(in srgb, var(--primary) 12%, transparent)',
         }}
         style={{
           position: 'absolute',
@@ -289,7 +289,7 @@ export function ServerCard({
               height: 48,
               borderRadius: 8,
               background: featured
-                ? 'linear-gradient(135deg, #ff6b35, #ff8c5a)'
+                ? 'linear-gradient(135deg, var(--primary), var(--primary-light))'
                 : 'var(--bg-elevated)',
               display: 'flex',
               alignItems: 'center',
@@ -314,9 +314,9 @@ export function ServerCard({
               </motion.span>
               {editable && (
                 <motion.span
-                  whileHover={{ scale: 1.1, color: '#1976d2' }}
+                  whileHover={{ scale: 1.1, color: 'var(--primary-dark)' }}
                   whileTap={{ scale: 0.9 }}
-                  style={{ fontSize: 11, color: '#2196f3', cursor: 'pointer' }}
+                  style={{ fontSize: 11, color: 'var(--primary)', cursor: 'pointer' }}
                   onClick={onEdit}
                 >
                   ✏️ 编辑
@@ -535,8 +535,8 @@ export function ServerCard({
             {owner && (
               <span>
                 Owner: <motion.span
-                  whileHover={{ color: '#ff6b35' }}
-                  style={{ color: '#ff6b35', cursor: 'pointer' }}
+                  whileHover={{ color: 'var(--primary-dark)' }}
+                  style={{ color: 'var(--primary)', cursor: 'pointer' }}
                 >
                   @{owner.username}
                 </motion.span>
@@ -564,10 +564,10 @@ export function ServerCard({
             {status.type === 'online' && onJoin && (
               <motion.button
                 onClick={onJoin}
-                whileHover={{ scale: 1.05, background: '#ff6b35' }}
+                whileHover={{ scale: 1.05, background: 'var(--primary-dark)' }}
                 whileTap={{ scale: 0.95 }}
                 style={{
-                  background: '#333',
+                  background: 'var(--primary)',
                   color: '#fff',
                   padding: '8px 16px',
                   borderRadius: 6,

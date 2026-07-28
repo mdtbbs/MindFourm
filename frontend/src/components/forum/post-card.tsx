@@ -23,11 +23,11 @@ export default function PostCard({ post }: PostCardProps) {
         'panel-surface p-4 transition-colors duration-200',
         post.status === 'pending'
           ? 'border-l-3 border-l-amber-400 bg-amber-50/40'
-          : post.is_pinned ? 'border-[rgba(47,128,237,0.35)]' : 'border-[var(--border)]'
+          : post.is_pinned ? 'border-[var(--primary-border-strong)]' : 'border-[var(--border)]'
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0 border-l-2 pl-4 border-[rgba(47,128,237,0.18)]">
+        <div className="flex-1 min-w-0 border-l-2 pl-4 border-[var(--primary-border-soft)]">
           <div className="flex items-center gap-2 mb-1">
             {post.is_pinned && (
               <motion.div

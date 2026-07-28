@@ -8,6 +8,7 @@ import { User } from '@entities/user.entity';
 import { SessionAudit } from '@entities/session-audit.entity';
 import { RedisService } from '@database/redis.service';
 import { PointsService } from '../points/points.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { joinMindAuthApiUrl } from './mindauth-url.util';
 
 /**
@@ -45,6 +46,7 @@ export class AuthService {
     private redisService: RedisService,
     private configService: ConfigService,
     private pointsService: PointsService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -142,6 +144,9 @@ export class AuthService {
         phone_verified_at: mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : null,
       });
       await this.usersRepository.save(user);
+      this.notificationsService.sendWelcomeNotification(user.id).catch((error) => {
+        console.error('Failed to send welcome notification:', error);
+      });
     } else {
       // Update user info if changed
       user.username = mindauthUser.username;

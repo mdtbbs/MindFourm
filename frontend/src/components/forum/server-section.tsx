@@ -14,7 +14,7 @@ function ServerCard({ server }: { server: Server }) {
         <span
           className={`border px-2 py-0.5 text-[11px] uppercase tracking-[0.14em] ${
             server.status === 'running'
-              ? 'border-[rgba(47,128,237,0.25)] text-[var(--primary)]'
+              ? 'border-[var(--primary-border-soft)] text-[var(--primary)]'
               : 'border-[var(--border)] text-[var(--muted-foreground)]'
           }`}
         >

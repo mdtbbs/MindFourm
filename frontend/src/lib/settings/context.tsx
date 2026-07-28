@@ -10,6 +10,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { buildBrandCssVariables } from '@/lib/theme/brand';
 import { useSettingsStore, useSettings } from '@/store/settings-store';
 
 // Re-export useSettings for backward compatibility
@@ -22,12 +23,21 @@ export { useSettings };
  * Existing components using useSettings() will work without changes.
  */
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const { fetchSettings } = useSettingsStore();
+  const { fetchSettings, settings } = useSettingsStore();
 
   // Fetch settings on mount
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const variables = buildBrandCssVariables(settings);
+
+    for (const [key, value] of Object.entries(variables)) {
+      root.style.setProperty(key, value);
+    }
+  }, [settings]);
 
   return <>{children}</>;
 }

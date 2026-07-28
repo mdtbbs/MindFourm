@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import type { CSSProperties } from 'react';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/lib/toast/context';
@@ -10,10 +11,10 @@ import { PhoneVerificationProvider } from '@/components/phone-verification-provi
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { getMetadataBase, getSiteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
-import { cn } from "@/lib/utils";
+import { cn } from '@/lib/utils';
+import { buildBrandCssVariables } from '@/lib/theme/brand';
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
-
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 async function fetchSettings(): Promise<Record<string, string>> {
@@ -77,11 +78,10 @@ export async function generateMetadata(): Promise<Metadata> {
  * Site-level structured data: identifies the forum and declares its search endpoint
  * so Google can offer a sitelinks search box.
  */
-async function buildWebSiteJsonLd(): Promise<Record<string, unknown> | null> {
+function buildWebSiteJsonLd(settings: Record<string, string>): Record<string, unknown> | null {
   const siteUrl = getSiteUrl();
   if (!siteUrl) return null;
 
-  const settings = await fetchSettings();
   const siteName = settings.site_name || 'MindForum';
 
   return {
@@ -101,15 +101,27 @@ async function buildWebSiteJsonLd(): Promise<Record<string, unknown> | null> {
   };
 }
 
+function buildBrandStyle(settings: Record<string, string>): CSSProperties {
+  return buildBrandCssVariables(settings) as CSSProperties;
+}
+
 export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const webSiteJsonLd = await buildWebSiteJsonLd();
+  const settings = await fetchSettings();
+  const webSiteJsonLd = buildWebSiteJsonLd(settings);
+  const brandStyle = buildBrandStyle(settings);
 
   return (
-    <html lang="zh-CN" data-theme="light" suppressHydrationWarning className={cn(inter.variable, jetbrainsMono.variable)}>
+    <html
+      lang="zh-CN"
+      data-theme="light"
+      suppressHydrationWarning
+      className={cn(inter.variable, jetbrainsMono.variable)}
+      style={brandStyle}
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{

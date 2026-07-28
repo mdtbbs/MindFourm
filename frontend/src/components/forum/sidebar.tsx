@@ -9,6 +9,8 @@ interface SidebarProps {
   categories: Category[];
   tags: Tag[];
   selectedCategory?: number;
+  activeQuickLinkHref?: string;
+  highlightAllPosts?: boolean;
 }
 
 const allQuickLinks = [
@@ -19,7 +21,13 @@ const allQuickLinks = [
   { href: '/shop', label: '积分商店', icon: ShoppingBag, settingKey: 'feature_shop_enabled' },
 ] as const;
 
-export default function Sidebar({ categories, tags, selectedCategory }: SidebarProps) {
+export default function Sidebar({
+  categories,
+  tags,
+  selectedCategory,
+  activeQuickLinkHref,
+  highlightAllPosts = true,
+}: SidebarProps) {
   const resourcesEnabled = useSetting('feature_resources_enabled', 'true');
   const serversEnabled = useSetting('feature_servers_enabled', 'false');
   const groupsEnabled = useSetting('feature_groups_enabled', 'true');
@@ -51,8 +59,8 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
           <Link
             href="/"
             className={`flex items-center justify-between border px-3 py-2 text-sm transition-colors ${
-              !selectedCategory
-                ? 'border-[var(--primary)] bg-[rgba(47,128,237,0.06)] text-[var(--primary)]'
+              highlightAllPosts && !selectedCategory && !activeQuickLinkHref
+                ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
                 : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
             }`}
           >
@@ -67,7 +75,7 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
                 href={`/categories/${category.id}`}
                 className={`flex items-center justify-between border px-3 py-2 text-sm transition-colors ${
                   selectedCategory === category.id
-                    ? 'border-[var(--primary)] bg-[rgba(47,128,237,0.06)] text-[var(--primary)]'
+                    ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
                     : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
                 }`}
                 title={category.name}
@@ -113,7 +121,11 @@ export default function Sidebar({ categories, tags, selectedCategory }: SidebarP
               <Link
                 key={item.href}
                 href={item.href}
-                className="flex items-center gap-2 border border-[var(--border)] px-3 py-2 text-sm text-[var(--foreground)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                className={`flex items-center gap-2 border px-3 py-2 text-sm transition-colors ${
+                  activeQuickLinkHref === item.href
+                    ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
+                    : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
+                }`}
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}

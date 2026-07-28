@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
-import { api } from '@/lib/api/client';
+import { notificationApi } from '@/lib/api/client';
 import Link from 'next/link';
 
 interface EmailPreferences {
@@ -41,8 +41,8 @@ export default function SettingsPage() {
 
   const loadPreferences = async () => {
     try {
-      const res = await api.get<{ data: { data: EmailPreferences } }>('/api/notifications/email-preference');
-      setPreferences(res.data.data);
+      const res = await notificationApi.getEmailPreference();
+      setPreferences(res);
     } catch {
       // Use defaults
     } finally {
@@ -58,7 +58,7 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await api.put('/api/notifications/email-preference', preferences);
+      await notificationApi.updateEmailPreference(preferences);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (error) {

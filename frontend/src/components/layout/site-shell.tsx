@@ -1,16 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSse } from '@/hooks/use-sse';
 import { UnifiedHeader } from '@/lib/shared';
 import { useAuth } from '@/lib/auth/context';
 import { useSettings } from '@/lib/settings/context';
+import { filterTopNavigationItemsBySettings, parseTopNavigationItems } from '@/lib/navigation/top-navigation';
 import { messageApi } from '@/lib/api/client';
+import type { Notification } from '@/types';
 import NotificationDropdown from '@/components/forum/notification-dropdown';
 import Footer from '@/components/forum/footer';
 import AnnouncementBanner from '@/components/forum/announcement-banner';
 import MobileNavMenu from '@/components/layout/mobile-nav-menu';
+import TopNavigationMenu from '@/components/layout/top-navigation-menu';
 
 interface SiteShellProps {
   children: React.ReactNode;
@@ -33,10 +36,17 @@ export default function SiteShell({ children }: SiteShellProps) {
 
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const topNavigationItems = useMemo(
+    () => filterTopNavigationItemsBySettings(
+      parseTopNavigationItems(settings.top_navigation_items),
+      settings,
+    ),
+    [settings],
+  );
 
-  // Fetched once per session rather than polled every 60s: an SSE channel is already
-  // open for this user, so the interval was duplicate work on every page for every
-  // signed-in visitor. Live updates arrive through `message` events below.
+  // Fetched once per session rather than polled every 60s: the SSE channel already
+  // tells us when a notification lands, and direct-message notifications are part of
+  // that stream.
   useEffect(() => {
     if (!isAuthenticated) {
       setUnreadMsgCount(0);
@@ -51,11 +61,17 @@ export default function SiteShell({ children }: SiteShellProps) {
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
-  const handleMessageEvent = useCallback(() => {
-    setUnreadMsgCount((count) => count + 1);
+  const handleMessageEvent = useCallback((notification: Notification) => {
+    if (notification.type !== 'message') {
+      return;
+    }
+
+    messageApi.unreadCount()
+      .then((res) => setUnreadMsgCount(res.count))
+      .catch(() => {});
   }, []);
 
-  useSse('message', handleMessageEvent, { enabled: isAuthenticated });
+  useSse('notification', handleMessageEvent, { enabled: isAuthenticated });
 
   /** MindAuth expects the backend callback, and `state` carries where to return to. */
   const buildAuthUrl = (endpoint: 'login' | 'register') => {
@@ -88,13 +104,16 @@ export default function SiteShell({ children }: SiteShellProps) {
         onRegister={() => { window.location.href = buildAuthUrl('register'); }}
         onLogout={logout}
         onSearch={handleSearch}
+        topNavigationSlot={<TopNavigationMenu items={topNavigationItems} />}
         notificationDropdownSlot={<NotificationDropdown />}
         // Without these the hamburger never renders, and since the home sidebar is
         // `lg:block` only, mobile visitors had no route to categories or tags at all.
         showMobileMenu
         onMobileMenuClick={() => setMobileMenuOpen((open) => !open)}
         mobileMenuSlot={
-          mobileMenuOpen ? <MobileNavMenu onNavigate={() => setMobileMenuOpen(false)} /> : null
+          mobileMenuOpen
+            ? <MobileNavMenu onNavigate={() => setMobileMenuOpen(false)} topNavigationItems={topNavigationItems} />
+            : null
         }
       />
       <AnnouncementBanner />

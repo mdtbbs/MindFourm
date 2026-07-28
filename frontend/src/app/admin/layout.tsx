@@ -8,7 +8,7 @@ import { useSetting } from '@/store/settings-store';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen, ToggleLeft
+  Package, AlertCircle, FolderOpen, ToggleLeft, Mail
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
 import AdminHeader from '@/components/admin/admin-header';
@@ -25,10 +25,13 @@ const navGroups: SidebarGroup[] = [
     label: '站点',
     items: [
       { key: 'settings-basic', label: '基本信息', icon: <Settings size={16} />, href: '/admin/settings/basic', roles: ['admin'] },
+      { key: 'settings-navigation', label: '顶部导航', icon: <FolderTree size={16} />, href: '/admin/settings/navigation', roles: ['admin'] },
       { key: 'settings-announce', label: '公告管理', icon: <Megaphone size={16} />, href: '/admin/settings/announce', roles: ['admin'] },
       { key: 'settings-display', label: '显示设置', icon: <Palette size={16} />, href: '/admin/settings/display', roles: ['admin'] },
       { key: 'settings-features', label: '功能管理', icon: <ToggleLeft size={16} />, href: '/admin/settings/features', roles: ['admin'] },
       { key: 'settings-seo', label: 'SEO 设置', icon: <Search size={16} />, href: '/admin/settings/seo', roles: ['admin'] },
+      { key: 'settings-notifications', label: '通知设置', icon: <BellRing size={16} />, href: '/admin/settings/notifications', roles: ['admin'] },
+      { key: 'settings-email', label: '邮件模板', icon: <Mail size={16} />, href: '/admin/settings/email', roles: ['admin'] },
     ],
   },
   {

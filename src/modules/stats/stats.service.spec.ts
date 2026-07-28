@@ -79,26 +79,23 @@ describe('StatsService', () => {
     expect(redisService.countKeys).toHaveBeenCalledWith('session:*');
   });
 
-  it('returns homepage overview stats and prefers the latest login user', async () => {
+  it('returns homepage overview stats with only safe public totals', async () => {
     const postRepository = {
       query: jest.fn().mockResolvedValue([{
         total_posts: '12',
         total_replies: '34',
         total_users: '56',
         total_resources: '7',
-        today_posts: '2',
-        today_replies: '3',
-        today_users: '1',
       }]),
     };
     const userRepository = {
       query: jest.fn(),
     };
     const sessionAuditRepository = {
-      query: jest.fn().mockResolvedValue([{ username: 'alice' }]),
+      query: jest.fn(),
     };
     const redisService = {
-      countKeys: jest.fn().mockResolvedValue(2),
+      countKeys: jest.fn(),
     };
 
     const service = new StatsService(
@@ -114,29 +111,22 @@ describe('StatsService', () => {
       total_replies: 34,
       total_users: 56,
       total_resources: 7,
-      latest_user: 'alice',
-      today_posts: 2,
-      today_replies: 3,
-      today_users: 1,
-      active_24h: 2,
     });
 
     expect(postRepository.query).toHaveBeenCalledTimes(1);
     expect(postRepository.query.mock.calls[0][0]).toContain("status IN ('approved', 'published')");
-    expect(sessionAuditRepository.query).toHaveBeenCalledTimes(1);
+    expect(sessionAuditRepository.query).not.toHaveBeenCalled();
     expect(userRepository.query).not.toHaveBeenCalled();
+    expect(redisService.countKeys).not.toHaveBeenCalled();
   });
 
-  it('falls back to the latest registered user when there is no login audit', async () => {
+  it('returns homepage overview stats without falling back to latest-registration metadata', async () => {
     const postRepository = {
       query: jest.fn().mockResolvedValue([{
         total_posts: '1',
         total_replies: '2',
         total_users: '3',
         total_resources: '4',
-        today_posts: '0',
-        today_replies: '0',
-        today_users: '1',
       }]),
     };
     const userRepository = {
@@ -162,14 +152,10 @@ describe('StatsService', () => {
       total_replies: 2,
       total_users: 3,
       total_resources: 4,
-      latest_user: 'newcomer',
-      today_posts: 0,
-      today_replies: 0,
-      today_users: 1,
-      active_24h: 0,
     });
 
-    expect(sessionAuditRepository.query).toHaveBeenCalledTimes(1);
-    expect(userRepository.query).toHaveBeenCalledTimes(1);
+    expect(sessionAuditRepository.query).not.toHaveBeenCalled();
+    expect(userRepository.query).not.toHaveBeenCalled();
+    expect(redisService.countKeys).not.toHaveBeenCalled();
   });
 });

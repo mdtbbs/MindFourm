@@ -31,7 +31,7 @@ function AnimatedGrid() {
     <div
       className="absolute inset-0 overflow-hidden"
       style={{
-        background: 'linear-gradient(135deg, #eef5ff 0%, #dcecff 100%)',
+        background: 'linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--primary) 14%, white) 100%)',
       }}
     >
       {/* 动画网格 */}
@@ -39,8 +39,8 @@ function AnimatedGrid() {
         className="absolute inset-0"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(47,128,237,0.08) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(47,128,237,0.08) 1px, transparent 1px)
+            linear-gradient(color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px),
+            linear-gradient(90deg, color-mix(in srgb, var(--primary) 8%, transparent) 1px, transparent 1px)
           `,
           backgroundSize: '50px 50px',
         }}
@@ -57,7 +57,7 @@ function AnimatedGrid() {
       <motion.div
         className="absolute inset-0"
         style={{
-          background: 'radial-gradient(circle at 50% 50%, rgba(47,128,237,0.14), transparent 70%)',
+          background: 'radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--primary) 14%, transparent), transparent 70%)',
         }}
         animate={{
           scale: [1, 1.2, 1],

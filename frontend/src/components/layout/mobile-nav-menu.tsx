@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { categoryApi, tagApi } from '@/lib/api/client';
 import { useSetting } from '@/store/settings-store';
 import type { Category, Tag } from '@/types';
+import type { TopNavigationItem } from '@/lib/navigation/top-navigation';
 import { FolderOpen, Server, ShoppingBag, Trophy, Users } from 'lucide-react';
 
 interface MobileNavMenuProps {
   /** Called after any link is followed, so the parent can close the menu. */
   onNavigate: () => void;
+  topNavigationItems?: TopNavigationItem[];
 }
 
 const QUICK_LINKS = [
@@ -26,7 +28,7 @@ const QUICK_LINKS = [
  * The desktop sidebar is `hidden lg:block`, so without this there is no path to
  * categories or tags on a phone.
  */
-export default function MobileNavMenu({ onNavigate }: MobileNavMenuProps) {
+export default function MobileNavMenu({ onNavigate, topNavigationItems = [] }: MobileNavMenuProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
 
@@ -59,8 +61,18 @@ export default function MobileNavMenu({ onNavigate }: MobileNavMenuProps) {
     return () => { cancelled = true; };
   }, []);
 
+  const topLinks = topNavigationItems.flatMap((item) =>
+    item.type === 'group'
+      ? item.items.map((child) => ({
+          href: child.href,
+          label: `${item.label} / ${child.label}`,
+          newTab: child.newTab,
+        }))
+      : [{ href: item.href, label: item.label, newTab: item.newTab }],
+  );
+  const topLinkHrefSet = new Set(topLinks.map((item) => item.href));
   const quickLinks = QUICK_LINKS.filter(
-    (item) => (enabledByKey[item.settingKey] ?? item.fallback) !== 'false',
+    (item) => (enabledByKey[item.settingKey] ?? item.fallback) !== 'false' && !topLinkHrefSet.has(item.href),
   );
 
   return (
@@ -68,6 +80,32 @@ export default function MobileNavMenu({ onNavigate }: MobileNavMenuProps) {
       aria-label="移动端导航"
       className="md:hidden border-t border-[var(--border)] bg-[var(--bg-card)] px-4 py-4 space-y-5"
     >
+      {topLinks.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            顶部导航
+          </h2>
+          <div className="grid grid-cols-1 gap-2">
+            {topLinks.map((item) => {
+              const external = item.href.startsWith('http://') || item.href.startsWith('https://');
+              return (
+                <Link
+                  key={`${item.label}-${item.href}`}
+                  href={item.href}
+                  target={item.newTab ? '_blank' : undefined}
+                  rel={item.newTab ? 'noreferrer noopener' : undefined}
+                  prefetch={!external && !item.newTab ? undefined : false}
+                  onClick={onNavigate}
+                  className="rounded px-3 py-2 text-sm text-[var(--text)] hover:bg-[var(--bg-elevated)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {quickLinks.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {quickLinks.map(({ href, label, icon: Icon }) => (

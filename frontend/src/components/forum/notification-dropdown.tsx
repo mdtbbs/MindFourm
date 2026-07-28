@@ -16,8 +16,9 @@ import { notificationApi } from '@/lib/api/client';
 import { useNotificationStore } from '@/store/notification-store';
 import { useSse } from '@/hooks/use-sse';
 import { useToast } from '@/store/toast-store';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Notification } from '@/types';
-import { Bell, CheckCheck, MessageSquare, AtSign, Heart, ExternalLink } from 'lucide-react';
+import { Bell, CheckCheck, MessageSquare, AtSign, Heart, ExternalLink, Mail } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 
 export default function NotificationDropdown() {
@@ -58,14 +59,18 @@ export default function NotificationDropdown() {
     (notification: Notification) => {
       addNotification(notification);
 
+      const actorLabel = notification.actor_name || (notification.type === 'system' ? '系统' : '社区');
       const typeText =
         notification.type === 'reply' ? '回复了你的帖子'
           : notification.type === 'mention' ? '提到了你'
           : notification.type === 'post_like' ? '点赞了你的帖子'
           : notification.type === 'reply_like' ? '点赞了你的回复'
-          : '新通知';
+          : notification.type === 'message' ? '给你发了私信'
+          : notification.type === 'best_answer' ? '将你的回复设为最佳答案'
+          : notification.type === 'system' ? '发送了系统通知'
+          : '发送了新通知';
 
-      showToast(`${notification.actor_name} ${typeText}`);
+      showToast(`${actorLabel} ${typeText}`);
     },
     [addNotification, showToast],
   );
@@ -108,15 +113,23 @@ export default function NotificationDropdown() {
       await markAsRead(n.id);
     }
     setIsOpen(false);
+    if (n.type === 'message') {
+      router.push('/messages');
+      return;
+    }
     if (n.post_id) {
       router.push(`/posts/${n.post_id}${n.reply_id ? `#reply-${n.reply_id}` : ''}`);
+      return;
     }
+    router.push('/notifications');
   };
 
   const typeIcon = (type: string) =>
     type === 'reply' ? <MessageSquare className="w-4 h-4" />
       : type === 'mention' ? <AtSign className="w-4 h-4" />
       : type === 'post_like' || type === 'reply_like' ? <Heart className="w-4 h-4 text-red-500" />
+      : type === 'message' ? <Mail className="w-4 h-4 text-emerald-500" />
+      : type === 'best_answer' ? <CheckCheck className="w-4 h-4 text-emerald-600" />
       : <Bell className="w-4 h-4" />;
 
   const typeText = (type: string) =>
@@ -124,7 +137,13 @@ export default function NotificationDropdown() {
       : type === 'mention' ? '提到了你'
       : type === 'post_like' ? '点赞了你的帖子'
       : type === 'reply_like' ? '点赞了你的回复'
+      : type === 'message' ? '给你发了私信'
+      : type === 'best_answer' ? '将你的回复设为最佳答案'
+      : type === 'system' ? '系统通知'
       : '通知';
+
+  const actorLabel = (notification: Notification) =>
+    notification.type === 'system' ? null : (notification.actor_name || '社区');
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -191,8 +210,22 @@ export default function NotificationDropdown() {
                     <div className="text-surface-500 dark:text-gray-400">{typeIcon(n.type)}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-surface-700 dark:text-gray-300 line-clamp-2">
-                        {n.actor_name} {typeText(n.type)}
+                        {actorLabel(n) ? `${actorLabel(n)} ${typeText(n.type)}` : typeText(n.type)}
                       </p>
+                      {n.content && (
+                        n.type === 'system' ? (
+                          <div className="mt-1 text-xs text-surface-600 dark:text-gray-300">
+                            <MarkdownRenderer
+                              content={n.content}
+                              className="prose-p:my-1 prose-headings:my-1 prose-ul:my-1 prose-li:my-0"
+                            />
+                          </div>
+                        ) : (
+                          <p className="mt-1 line-clamp-2 text-xs text-surface-500 dark:text-gray-400">
+                            {n.content}
+                          </p>
+                        )
+                      )}
                       {n.post_title && (
                         <p className="text-xs text-surface-500 dark:text-gray-400 truncate mt-1">
                           {n.post_title}

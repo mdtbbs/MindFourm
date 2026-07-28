@@ -116,7 +116,7 @@ export default function DisplaySettingsPage() {
         <div className="border-t border-surface-200 pt-6">
           <h3 className="text-sm font-semibold text-surface-800">最新帖子</h3>
           <p className="mt-1 text-xs text-surface-400">
-            这里的标题和说明会同时显示在首页顶部和“最新帖子”模块，支持 Markdown 预览。
+            这里的标题和说明会同时显示在首页顶部和“最新帖子”模块，支持 Markdown 预览；这里的颜色只影响该模块，不会覆盖全站品牌色。
           </p>
         </div>
 
@@ -133,7 +133,7 @@ export default function DisplaySettingsPage() {
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">
-              强调色
+              模块强调色
             </label>
             <div className="flex items-center gap-2">
               <input
