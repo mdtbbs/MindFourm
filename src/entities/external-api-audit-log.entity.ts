@@ -19,31 +19,31 @@ export class ExternalApiAuditLog {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   api_key_id: number | null;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   api_key_name: string | null;
 
   @Column({ length: 120 })
   action: string;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   scope: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   actor_user_id: number | null;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   target_type: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   target_id: number | null;
 
-  @Column({ length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true })
   request_id: string | null;
 
-  @Column({ length: 45, nullable: true })
+  @Column({ type: 'varchar', length: 45, nullable: true })
   ip_address: string | null;
 
   @Column({ type: 'text', nullable: true })

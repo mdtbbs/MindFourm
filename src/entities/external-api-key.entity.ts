@@ -32,7 +32,7 @@ export class ExternalApiKey {
   @Column({ type: 'text', nullable: true })
   allowed_ips_json: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   default_user_id: number | null;
 
   @Column({ type: 'int', default: 120 })
@@ -47,7 +47,7 @@ export class ExternalApiKey {
   @Column({ type: 'datetime', nullable: true })
   last_used_at: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   created_by: number | null;
 
   @CreateDateColumn()
