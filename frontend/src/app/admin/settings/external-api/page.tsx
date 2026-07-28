@@ -20,6 +20,7 @@ const AVAILABLE_SCOPES = [
   'users:read',
   'users:impersonate',
   'users:bypass_phone_verification',
+  'images:write',
   'categories:read',
   'tags:read',
   'audit:read',

@@ -41,6 +41,7 @@ import { ServiceApiModule } from './modules/service-api/service-api.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { UserBlocksModule } from './modules/user-blocks/user-blocks.module';
 import { ReactionsModule } from './modules/reactions/reactions.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 import { PhoneWriteGuard } from './common/guards/phone-write.guard';
 import { BanGuard } from './common/guards/ban.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -56,6 +57,12 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads', 'avatars'),
       serveRoot: '/uploads/avatars',
+    }),
+    // Public images are intentionally uploaded for unauthenticated display (logos,
+    // embeds, external API assets), unlike moderated attachments/resources below.
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'uploads', 'public-images'),
+      serveRoot: '/uploads/public-images',
     }),
     // Attachments and resource files are NOT mounted statically: doing so served
     // them outside every controller, so files belonging to pending, rejected,
@@ -96,6 +103,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     RssModule,
     PluginsModule,
     SearchModule,
+    UploadsModule,
     ServiceApiModule,
     ReportsModule,
     UserBlocksModule,
