@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -9,7 +10,9 @@ import {
   Put,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { StatsService } from '../stats/stats.service';
@@ -20,6 +23,8 @@ import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
 import { UsersService } from '../users/users.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { UploadsService } from '../uploads/uploads.service';
+import { cleanupUploadedPublicImage, publicImageUploadInterceptor } from '../uploads/public-image-upload';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -53,6 +58,7 @@ export class AdminController {
     private readonly tagsService: TagsService,
     private readonly usersService: UsersService,
     private readonly adminNotificationsService: AdminNotificationsService,
+    private readonly uploadsService: UploadsService,
   ) {}
 
   /**
@@ -102,6 +108,33 @@ export class AdminController {
   ) {
     await this.settingsService.setBatch(category, settings);
     return { message: 'Settings updated' };
+  }
+
+  /**
+   * POST /admin/settings/basic/site-logo - Upload and apply site logo (admin only)
+   */
+  @Post('settings/basic/site-logo')
+  @Roles('admin')
+  @UseInterceptors(publicImageUploadInterceptor)
+  async uploadSiteLogo(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    if (!file) {
+      throw new BadRequestException('没有收到图片');
+    }
+
+    const uploaded = this.uploadsService.toPublicImageResult(file);
+    try {
+      await this.settingsService.setBatch('basic', { site_logo_url: uploaded.url });
+      await this.logOperation(req, 'settings.site_logo.upload', 'setting', undefined, {
+        key: 'site_logo_url',
+        url: uploaded.url,
+        size: uploaded.size,
+        mime_type: uploaded.mime_type,
+      });
+      return uploaded;
+    } catch (error) {
+      await cleanupUploadedPublicImage(file);
+      throw error;
+    }
   }
 
   /**

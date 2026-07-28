@@ -10,6 +10,7 @@ import { AdminModule } from '../admin/admin.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { TagsModule } from '../tags/tags.module';
 import { LogsModule } from '../logs/logs.module';
+import { UploadsModule } from '../uploads/uploads.module';
 import { ExternalApiKeyGuard } from '../../common/guards/external-api-key.guard';
 import { ServiceApiController } from './service-api.controller';
 import { ExternalApiController } from './external-api.controller';
@@ -28,6 +29,7 @@ import { ExternalActorResolverService } from './external-actor-resolver.service'
     CategoriesModule,
     TagsModule,
     LogsModule,
+    UploadsModule,
   ],
   controllers: [ServiceApiController, ExternalApiController, AdminExternalApiController],
   providers: [

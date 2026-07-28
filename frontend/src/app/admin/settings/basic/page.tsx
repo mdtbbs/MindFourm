@@ -1,16 +1,29 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { adminApi } from '@/lib/api/client';
+import { useSettingsStore } from '@/store/settings-store';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 
+const MAX_SITE_LOGO_SIZE = 2 * 1024 * 1024;
+const ALLOWED_SITE_LOGO_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 export default function BasicSettingsPage() {
+  const updateGlobalSetting = useSettingsStore((state) => state.updateSetting);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -36,6 +49,39 @@ export default function BasicSettingsPage() {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    if (!ALLOWED_SITE_LOGO_TYPES.has(file.type)) {
+      setError('请选择 JPEG、PNG、GIF 或 WebP 图片');
+      return;
+    }
+
+    if (file.size > MAX_SITE_LOGO_SIZE) {
+      setError(`图片大小不能超过 ${formatBytes(MAX_SITE_LOGO_SIZE)}`);
+      return;
+    }
+
+    setUploadingLogo(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const uploaded = await adminApi.uploadSiteLogo(formData);
+      update('site_logo_url', uploaded.url);
+      updateGlobalSetting('site_logo_url', uploaded.url);
+      setMessage('站点图标已上传并应用');
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '上传站点图标失败');
+    } finally {
+      setUploadingLogo(false);
+      if (logoInputRef.current) {
+        logoInputRef.current.value = '';
+      }
     }
   };
 
@@ -70,10 +116,61 @@ export default function BasicSettingsPage() {
           <p className="text-xs text-surface-400 mt-1">用于首页和 SEO</p>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Logo 地址</label>
-          <input className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.site_logo_url ?? ''} onChange={(e) => update('site_logo_url', e.target.value)} placeholder="/logo.png" />
-          <p className="text-xs text-surface-400 mt-1">留空则显示文字 Logo</p>
+        <div className="grid gap-4 md:grid-cols-[160px_1fr]">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">站点图标</label>
+            <div className="flex h-28 w-28 items-center justify-center overflow-hidden rounded border border-surface-200 bg-surface-50">
+              {values.site_logo_url ? (
+                <img src={values.site_logo_url} alt="站点图标预览" className="max-h-full max-w-full object-contain" />
+              ) : (
+                <span className="px-3 text-center text-xs text-surface-400">未设置图标</span>
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Logo 地址</label>
+              <input
+                className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400"
+                value={values.site_logo_url ?? ''}
+                onChange={(e) => update('site_logo_url', e.target.value)}
+                placeholder="/uploads/public-images/logo.png"
+              />
+              <p className="text-xs text-surface-400 mt-1">留空则显示文字 Logo；也可手动填写外部图片 URL</p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void handleLogoUpload(file);
+                }}
+                disabled={uploadingLogo}
+              />
+              <Button type="button" variant="ghost" onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}>
+                {uploadingLogo ? '上传中...' : '上传图片'}
+              </Button>
+              {values.site_logo_url ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    update('site_logo_url', '');
+                    updateGlobalSetting('site_logo_url', '');
+                  }}
+                  disabled={uploadingLogo}
+                >
+                  清空
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-surface-400">支持 JPEG、PNG、GIF、WebP，最大 {formatBytes(MAX_SITE_LOGO_SIZE)}。上传成功后会立即应用到站点图标设置。</p>
+          </div>
         </div>
 
         <div>

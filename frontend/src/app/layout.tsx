@@ -66,6 +66,14 @@ export async function generateMetadata(): Promise<Metadata> {
     },
   };
 
+  if (settings.site_logo_url) {
+    meta.icons = {
+      icon: [{ url: settings.site_logo_url }],
+      shortcut: [settings.site_logo_url],
+      apple: [{ url: settings.site_logo_url }],
+    };
+  }
+
   if (settings.seo_og_image) {
     meta.openGraph = { ...meta.openGraph, images: [settings.seo_og_image] };
     meta.twitter = { ...meta.twitter, images: [settings.seo_og_image] };

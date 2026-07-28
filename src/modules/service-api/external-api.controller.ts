@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -9,7 +10,9 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -23,6 +26,8 @@ import { RepliesService } from '../replies/replies.service';
 import { ResourcesService } from '../resources/resources.service';
 import { ResourceCategoryService } from '../resources/resource-categories.service';
 import { AdminService } from '../admin/admin.service';
+import { UploadsService } from '../uploads/uploads.service';
+import { cleanupUploadedPublicImage, publicImageUploadInterceptor } from '../uploads/public-image-upload';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
 import { ExternalActorResolverService } from './external-actor-resolver.service';
@@ -52,6 +57,7 @@ export class ExternalApiController {
     private resourcesService: ResourcesService,
     private resourceCategoryService: ResourceCategoryService,
     private adminService: AdminService,
+    private uploadsService: UploadsService,
     private categoriesService: CategoriesService,
     private tagsService: TagsService,
     private actorResolver: ExternalActorResolverService,
@@ -64,6 +70,29 @@ export class ExternalApiController {
       api_key: req.externalApiKey,
       request_id: req.externalRequestId,
     };
+  }
+
+  @Post('images')
+  @ExternalScope('images:write')
+  @UseInterceptors(publicImageUploadInterceptor)
+  async uploadImage(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    if (!file) {
+      throw new BadRequestException('没有收到图片');
+    }
+
+    const uploaded = this.uploadsService.toPublicImageResult(file);
+    try {
+      await this.auditOperation(req, 'images.upload', 'images:write', null, 'image', null, {
+        url: uploaded.url,
+        filename: uploaded.filename,
+        size: uploaded.size,
+        mime_type: uploaded.mime_type,
+      });
+      return uploaded;
+    } catch (error) {
+      await cleanupUploadedPublicImage(file);
+      throw error;
+    }
   }
 
   @Get('users/:id')
