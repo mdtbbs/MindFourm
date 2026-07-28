@@ -108,6 +108,19 @@ ServiceAuthGuard (服务间认证)
 - 用于 EasyManager 回调接口 (`/api/auto-post/*`)
 - 配置项: `EASYMANAGER_API_KEY`
 
+### External API Key 认证
+
+第三方机器人/服务端自动化使用独立的 External API：
+
+- 对外前缀：`/api/external/v1`
+- 认证：`Authorization: Bearer <api-key>` 或 `X-API-Key: <api-key>`
+- 权限：API Key scopes，例如 `posts:write`、`users:impersonate`、`resources:moderate`
+- 管理后台：`/admin/settings/external-api`
+- 管理接口：`/api/admin/external-api/*`
+- 审计：写入 `external_api_audit_logs` 和普通 `operation_logs`
+
+详细接口、scope、curl 示例见：[External API 文档](../api/external.md)。
+
 ---
 
 ## API 端点总览

@@ -192,7 +192,7 @@ export class RepliesService {
     return reply;
   }
 
-  async update(id: number, content: string, userId: number): Promise<Reply> {
+  async update(id: number, content: string, userId: number, userRole?: string): Promise<Reply> {
     const reply = await this.replyRepository.findOne({
       where: { id },
     });
@@ -201,7 +201,8 @@ export class RepliesService {
       throw new NotFoundException('Reply not found');
     }
 
-    if (reply.user_id !== userId) {
+    const canEditAny = userRole === 'admin' || userRole === 'moderator';
+    if (reply.user_id !== userId && !canEditAny) {
       throw new ForbiddenException('You can only edit your own replies');
     }
 
@@ -220,7 +221,7 @@ export class RepliesService {
     return await this.replyRepository.save(reply);
   }
 
-  async softDelete(id: number, userId: number): Promise<void> {
+  async softDelete(id: number, userId: number, userRole?: string): Promise<void> {
     const reply = await this.replyRepository.findOne({
       where: { id },
     });
@@ -229,7 +230,8 @@ export class RepliesService {
       throw new NotFoundException('Reply not found');
     }
 
-    if (reply.user_id !== userId) {
+    const canDeleteAny = userRole === 'admin' || userRole === 'moderator';
+    if (reply.user_id !== userId && !canDeleteAny) {
       throw new ForbiddenException('You can only delete your own replies');
     }
 

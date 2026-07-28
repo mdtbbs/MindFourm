@@ -64,6 +64,8 @@ import { Report } from './report.entity';
 import { UserBlock } from './user-block.entity';
 import { Reaction } from './reaction.entity';
 import { PostRevision } from './post-revision.entity';
+import { ExternalApiKey } from './external-api-key.entity';
+import { ExternalApiAuditLog } from './external-api-audit-log.entity';
 
 export const entities = [
   User,
@@ -123,6 +125,9 @@ export const entities = [
   UserBlock, Reaction,
   // Edit history
   PostRevision,
+  // External API
+  ExternalApiKey,
+  ExternalApiAuditLog,
 ];
 
 export {
@@ -159,4 +164,7 @@ export {
   UserBlock, Reaction,
   // Edit history
   PostRevision,
+  // External API
+  ExternalApiKey,
+  ExternalApiAuditLog,
 };

@@ -623,6 +623,37 @@ export const adminApi = {
     request<{ message: string }>('/api/admin/cleanup/logs', { method: 'POST' }),
   cleanupSoftDeleted: () =>
     request<{ message: string }>('/api/admin/cleanup/soft-deleted', { method: 'POST' }),
+  listExternalApiKeys: (params?: { page?: number; limit?: number; enabled?: boolean }) =>
+    request<any>(`/api/admin/external-api/keys${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+      enabled: params?.enabled === undefined ? undefined : String(params.enabled),
+    })}`),
+  createExternalApiKey: (data: {
+    name: string;
+    scopes: string[];
+    allowed_ips?: string[];
+    default_user_id?: number;
+    rate_limit_per_minute?: number;
+    expires_at?: string;
+  }) => request<any>('/api/admin/external-api/keys', { method: 'POST', body: JSON.stringify(data) }),
+  updateExternalApiKey: (id: number, data: Record<string, unknown>) =>
+    request<any>(`/api/admin/external-api/keys/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  rotateExternalApiKey: (id: number) =>
+    request<any>(`/api/admin/external-api/keys/${id}/rotate`, { method: 'POST' }),
+  enableExternalApiKey: (id: number) =>
+    request<any>(`/api/admin/external-api/keys/${id}/enable`, { method: 'POST' }),
+  disableExternalApiKey: (id: number) =>
+    request<any>(`/api/admin/external-api/keys/${id}/disable`, { method: 'POST' }),
+  listExternalApiAuditLogs: (params?: { page?: number; limit?: number; api_key_id?: number; actor_user_id?: number; action?: string; status?: string }) =>
+    request<any>(`/api/admin/external-api/audit-logs${buildQueryString({
+      page: params?.page,
+      limit: params?.limit,
+      api_key_id: params?.api_key_id,
+      actor_user_id: params?.actor_user_id,
+      action: params?.action,
+      status: params?.status,
+    })}`),
   bulkDeletePosts: (post_ids: number[]) => {
     clearCache();
     return request<{ message: string }>('/api/admin/posts', { method: 'DELETE', body: JSON.stringify({ post_ids }) });

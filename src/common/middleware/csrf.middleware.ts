@@ -50,6 +50,7 @@ function tokensMatch(a: string, b: string): boolean {
 
 function isExempt(req: Request): boolean {
   if (EXEMPT_PATHS.has(req.path)) return true;
+  if (req.path.startsWith('/api/external/')) return true;
   if (req.path.startsWith('/api/service-api/')) return true;
   if (req.path.startsWith('/api/auto-post/')) return true;
   return false;

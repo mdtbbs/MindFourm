@@ -7,6 +7,7 @@ import { BackfillRejectedPostDeletedAt1720000005000 } from './1720000005000-Back
 import { CreateReports1720000006000 } from './1720000006000-CreateReports';
 import { CreateBlocksAndReactions1720000009000 } from './1720000009000-CreateBlocksAndReactions';
 import { AddPostModerationFields1720000010000 } from './1720000010000-AddPostModerationFields';
+import { CreateExternalApiTables1720000011000 } from './1720000011000-CreateExternalApiTables';
 
 /**
  * Migrations in run order.
@@ -25,4 +26,5 @@ export const migrations = [
   CreateReports1720000006000,
   CreateBlocksAndReactions1720000009000,
   AddPostModerationFields1720000010000,
+  CreateExternalApiTables1720000011000,
 ];

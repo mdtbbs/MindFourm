@@ -8,7 +8,7 @@ import { useSetting } from '@/store/settings-store';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen, ToggleLeft, Mail
+  Package, AlertCircle, FolderOpen, ToggleLeft, Mail, KeyRound
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
 import AdminHeader from '@/components/admin/admin-header';
@@ -32,6 +32,7 @@ const navGroups: SidebarGroup[] = [
       { key: 'settings-seo', label: 'SEO 设置', icon: <Search size={16} />, href: '/admin/settings/seo', roles: ['admin'] },
       { key: 'settings-notifications', label: '通知设置', icon: <BellRing size={16} />, href: '/admin/settings/notifications', roles: ['admin'] },
       { key: 'settings-email', label: '邮件模板', icon: <Mail size={16} />, href: '/admin/settings/email', roles: ['admin'] },
+      { key: 'settings-external-api', label: '外部 API', icon: <KeyRound size={16} />, href: '/admin/settings/external-api', roles: ['admin'] },
     ],
   },
   {

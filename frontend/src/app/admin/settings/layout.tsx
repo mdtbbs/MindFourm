@@ -12,6 +12,7 @@ const tabs = [
   { href: '/admin/settings/seo', label: 'SEO 设置' },
   { href: '/admin/settings/notifications', label: '通知设置' },
   { href: '/admin/settings/email', label: '邮件模板' },
+  { href: '/admin/settings/external-api', label: '外部 API' },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {

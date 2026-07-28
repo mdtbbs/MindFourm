@@ -28,5 +28,6 @@ import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply, 
   ],
   controllers: [AdminController],
   providers: [AdminService],
+  exports: [AdminService],
 })
 export class AdminModule {}
