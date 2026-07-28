@@ -83,6 +83,9 @@ function createService(overrides: { post?: unknown; requiresApproval?: boolean }
   const settingsService = {
     getBoolean: jest.fn().mockResolvedValue(overrides.requiresApproval ?? false),
   };
+  const redisService = {
+    del: jest.fn().mockResolvedValue(0),
+  };
 
   const service = new RepliesService(
     replyRepository as any,
@@ -93,6 +96,7 @@ function createService(overrides: { post?: unknown; requiresApproval?: boolean }
     eventBus as any,
     pointsService as any,
     settingsService as any,
+    redisService as any,
   );
 
   return {
@@ -102,6 +106,7 @@ function createService(overrides: { post?: unknown; requiresApproval?: boolean }
     notificationsService,
     pointsService,
     settingsService,
+    redisService,
   };
 }
 
@@ -145,11 +150,12 @@ describe('RepliesService.createReplyForPost', () => {
   });
 
   it('writes the reply when the post is unlocked', async () => {
-    const { service, replyRepository } = createService();
+    const { service, replyRepository, redisService } = createService();
 
     const reply = await service.createReplyForPost(88, { content: 'hello' }, REPLIER_ID);
 
     expect(replyRepository.save).toHaveBeenCalledTimes(1);
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v3:88');
     expect(reply).toMatchObject({ post_id: 88, user_id: REPLIER_ID, status: 'published' });
   });
 

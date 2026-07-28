@@ -9,6 +9,7 @@ import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
 import { PointsService } from '../points/points.service';
+import { RedisService } from '../../database/redis.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -43,6 +44,7 @@ export class AdminService {
     private categoriesService: CategoriesService,
     private tagsService: TagsService,
     private pointsService: PointsService,
+    private redisService: RedisService,
   ) {}
 
   private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
@@ -352,6 +354,7 @@ export class AdminService {
       throw new NotFoundException('Post not found');
     }
     await this.postRepository.update(id, { status: 'published' });
+    await this.invalidatePostCache(id);
     if (post.status !== 'published') {
       await this.pointsService.awardPoints(post.user_id, 'create_post', 'post', post.id);
     }
@@ -367,6 +370,7 @@ export class AdminService {
     const updateData: any = { status: 'deleted', deleted_at: new Date() };
     if (reason) updateData.reject_reason = reason;
     await this.postRepository.update(id, updateData);
+    await this.invalidatePostCache(id);
   }
 
   async approveReply(id: number): Promise<void> {
@@ -375,13 +379,18 @@ export class AdminService {
       throw new NotFoundException('Reply not found');
     }
     await this.replyRepository.update(id, { status: 'published' });
+    await this.invalidatePostCache(reply.post_id);
     if (reply.status !== 'published') {
       await this.pointsService.awardPoints(reply.user_id, 'create_reply', 'reply', reply.id);
     }
   }
 
   async rejectReply(id: number): Promise<void> {
+    const reply = await this.replyRepository.findOne({ where: { id } });
     await this.replyRepository.update(id, { status: 'deleted', deleted_at: new Date() });
+    if (reply) {
+      await this.invalidatePostCache(reply.post_id);
+    }
   }
 
   async approveAvatar(userId: number): Promise<void> {
@@ -421,6 +430,12 @@ export class AdminService {
     if (type === 'reply' || type === 'replies') return this.rejectReply(id);
     if (type === 'avatar' || type === 'avatars') return this.rejectAvatar(id);
     return this.rejectPost(id, reason);
+  }
+
+  private async invalidatePostCache(postId: number): Promise<void> {
+    await this.redisService.del(`post:${postId}`);
+    await this.redisService.del(`post:detail:v3:${postId}`);
+    await this.redisService.del(`post_view:${postId}`);
   }
 
   private normalizePinnedValue(value: number | boolean | null | undefined): 0 | 1 {

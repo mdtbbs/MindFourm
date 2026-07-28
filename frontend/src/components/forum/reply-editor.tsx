@@ -10,7 +10,7 @@ import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 
 interface ReplyEditorProps {
   postId: number;
-  onSubmit: (content: string, parentReplyId?: number) => Promise<void>;
+  onSubmit: (content: string, parentReplyId?: number) => Promise<Reply | void>;
   quoteReply?: Reply | null;
   replyToReply?: Reply | null;
   /** Clears the quote / reply-to target without submitting. */
@@ -28,6 +28,7 @@ export default function ReplyEditor({
   const [preview, setPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -58,13 +59,15 @@ export default function ReplyEditor({
 
     setIsSubmitting(true);
     setError(null);
+    setSuccess(null);
     try {
-      await onSubmit(
+      const reply = await onSubmit(
         content,
         quoteReply?.id || replyToReply?.id
       );
       setContent('');
       draft.clear();
+      setSuccess(reply?.status === 'pending' ? '回复已提交，等待管理员审核' : '回复已发布');
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败，请重试');
     } finally {
@@ -102,6 +105,7 @@ export default function ReplyEditor({
         )}
 
         {error && <Alert type="error" message={error} />}
+        {success && <Alert type="success" message={success} className="mt-3" />}
 
         <div className="mb-4 flex items-center gap-2">
           <button
