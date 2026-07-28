@@ -434,7 +434,7 @@ export class AdminService {
 
   private async invalidatePostCache(postId: number): Promise<void> {
     await this.redisService.del(`post:${postId}`);
-    await this.redisService.del(`post:detail:v3:${postId}`);
+    await this.redisService.del(`post:detail:v4:${postId}`);
     await this.redisService.del(`post_view:${postId}`);
   }
 

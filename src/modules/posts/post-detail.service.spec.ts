@@ -78,6 +78,8 @@ describe('PostDetailService', () => {
       updated_at: new Date('2026-07-09T08:30:00.000Z'),
       user: {
         mindauth_id: 8001,
+        username: 'Alice',
+        avatar_url: '/uploads/avatars/alice.png',
         role: 'moderator',
       },
       category: {
@@ -95,6 +97,8 @@ describe('PostDetailService', () => {
       category_slug: 'general',
       author_mindauth_id: 8001,
       author_role: 'moderator',
+      author_name: 'Alice',
+      author_avatar_url: '/uploads/avatars/alice.png',
       prefix: null,
       tags: [
         {

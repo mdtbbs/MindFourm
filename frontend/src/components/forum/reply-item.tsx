@@ -1,5 +1,6 @@
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import ReplyActions from '@/components/forum/reply-actions';
+import AuthorLink from '@/components/forum/author-link';
 import { Check } from 'lucide-react';
 import { formatTime } from '@/lib/utils';
 import type { Reply } from '@/types';
@@ -35,8 +36,6 @@ export default function ReplyItem({
   canAcceptAnswer = false,
   isBestReply = false,
 }: ReplyItemProps) {
-  const authorLabel = reply.author_mindauth_id ?? `#${reply.user_id}`;
-
   return (
     <div
       className={`bg-[var(--bg-card)] rounded-lg border overflow-hidden ${
@@ -54,13 +53,22 @@ export default function ReplyItem({
           isNested ? 'px-3 py-2' : 'px-4 py-3'
         }`}
       >
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-sm">
           {floor !== null ? (
-            <span className="font-medium text-[var(--text)]">#{floor}</span>
+            <span className="shrink-0 font-medium text-[var(--text)]">#{floor}</span>
           ) : (
-            <span className="text-xs text-[var(--text-muted)]">回复</span>
+            <span className="shrink-0 text-xs text-[var(--text-muted)]">回复</span>
           )}
-          <span className="text-[var(--text-secondary)]">作者 ID: {authorLabel}</span>
+          <AuthorLink
+            userId={reply.user_id}
+            name={reply.author_name}
+            avatarUrl={reply.author_avatar_url}
+            role={reply.author_role}
+            mindauthId={reply.author_mindauth_id}
+            size={isNested ? 'sm' : 'md'}
+            showMeta={!isNested}
+            className="min-w-0"
+          />
           <span className="text-[var(--text-muted)]">|</span>
           <time
             dateTime={reply.created_at}

@@ -33,6 +33,8 @@ export interface PostSummaryDto {
   category_slug: string | null;
   author_mindauth_id: number | null;
   author_role: string | null;
+  author_name: string | null;
+  author_avatar_url: string | null;
   tags: PostSummaryTag[];
 }
 
@@ -85,6 +87,8 @@ export class PostSummaryService {
       category_slug: post.category?.slug || null,
       author_mindauth_id: post.user?.mindauth_id ?? null,
       author_role: post.user?.role ?? null,
+      author_name: post.user?.username ?? null,
+      author_avatar_url: post.user?.avatar_url ?? null,
       tags,
     };
   }

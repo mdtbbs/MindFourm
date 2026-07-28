@@ -155,7 +155,7 @@ describe('RepliesService.createReplyForPost', () => {
     const reply = await service.createReplyForPost(88, { content: 'hello' }, REPLIER_ID);
 
     expect(replyRepository.save).toHaveBeenCalledTimes(1);
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v3:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
     expect(reply).toMatchObject({ post_id: 88, user_id: REPLIER_ID, status: 'published' });
   });
 

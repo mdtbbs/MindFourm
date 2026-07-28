@@ -63,6 +63,8 @@ export interface PostSummary {
   category_slug: string | null;
   author_mindauth_id: number | null;
   author_role: UserRole | null;
+  author_name?: string | null;
+  author_avatar_url?: string | null;
   tags: Tag[];
 }
 
@@ -89,6 +91,8 @@ export interface Post {
   category_slug: string | null;
   author_mindauth_id: number | null;
   author_role: UserRole | null;
+  author_name?: string | null;
+  author_avatar_url?: string | null;
   tags: Tag[];
   current_user_role?: UserRole | null;
   /** Set by the post-detail endpoint: whether the requesting session authored this post. */
@@ -141,6 +145,8 @@ export interface Reply {
   updated_at: string;
   author_mindauth_id: number | null;
   author_role: UserRole | null;
+  author_name?: string | null;
+  author_avatar_url?: string | null;
 }
 
 export interface ReplyListResponse {

@@ -26,6 +26,8 @@ export interface PostDetailReply {
   updated_at: Date;
   author_mindauth_id: number | null;
   author_role: string | null;
+  author_name: string | null;
+  author_avatar_url: string | null;
 }
 
 export interface PostDetailDto {
@@ -53,6 +55,8 @@ export interface PostDetailDto {
   category_slug: string | null;
   author_mindauth_id: number | null;
   author_role: string | null;
+  author_name: string | null;
+  author_avatar_url: string | null;
   prefix: { value: string; label: string; color: string } | null;
   tags: PostDetailTag[];
   replies?: PostDetailReply[];
@@ -105,6 +109,8 @@ export class PostDetailService {
       category_slug: post.category?.slug || null,
       author_mindauth_id: post.user?.mindauth_id ?? null,
       author_role: post.user?.role ?? null,
+      author_name: post.user?.username ?? null,
+      author_avatar_url: post.user?.avatar_url ?? null,
       prefix: prefixMeta ? { value: prefixMeta.value, label: prefixMeta.label, color: prefixMeta.color } : null,
       tags,
     };
@@ -128,6 +134,8 @@ export class PostDetailService {
       updated_at: reply.updated_at,
       author_mindauth_id: reply.user?.mindauth_id ?? null,
       author_role: reply.user?.role ?? null,
+      author_name: reply.user?.username ?? null,
+      author_avatar_url: reply.user?.avatar_url ?? null,
     }));
   }
 

@@ -153,8 +153,9 @@ export default async function PostDetailPage({
       dateModified: post.updated_at || post.created_at,
       author: {
         '@type': 'Person',
-        name: post.author_mindauth_id ? `#${post.author_mindauth_id}` : `#${post.user_id}`,
+        name: post.author_name || `用户 #${post.user_id}`,
         url: absoluteUrl(`/users/${post.user_id}`),
+        ...(post.author_avatar_url ? { image: absoluteUrl(post.author_avatar_url) } : {}),
       },
       interactionStatistic: [
         {

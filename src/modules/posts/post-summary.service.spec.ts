@@ -102,6 +102,8 @@ describe('PostSummaryService', () => {
         user: {
           id: 7,
           mindauth_id: 9001,
+          username: 'Alice',
+          avatar_url: '/uploads/avatars/alice.png',
           role: 'moderator',
         },
         category: {
@@ -128,6 +130,8 @@ describe('PostSummaryService', () => {
       category_slug: 'announcements',
       author_mindauth_id: 9001,
       author_role: 'moderator',
+      author_name: 'Alice',
+      author_avatar_url: '/uploads/avatars/alice.png',
       tags: [
         {
           id: 11,

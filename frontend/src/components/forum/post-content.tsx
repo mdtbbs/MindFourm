@@ -10,6 +10,7 @@ import Button from '@/components/ui/button';
 import BookmarkButton from '@/components/forum/bookmark-button';
 import ReportDialog from '@/components/forum/report-dialog';
 import ReactionBar from '@/components/forum/reaction-bar';
+import AuthorLink from '@/components/forum/author-link';
 import { adminApi } from '@/lib/api/client';
 import { formatTime } from '@/lib/utils';
 import Link from 'next/link';
@@ -58,8 +59,6 @@ export default function PostContent({
     }
     setLockPending(false);
   };
-  const authorLabel = post.author_mindauth_id ?? `#${post.user_id}`;
-
   // Moderation state
   const [modAction, setModAction] = useState<'approving' | 'rejecting' | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -103,13 +102,22 @@ export default function PostContent({
       <div className="p-6 border-b border-[var(--border)]">
         <h1 className="text-2xl font-bold text-[var(--text)] mb-3">{post.title}</h1>
 
-        <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)]">
-          <span className="font-medium text-[var(--text)]">作者</span>
-          <span>ID: {authorLabel}</span>
-          <span className="text-[var(--text-muted)]">|</span>
-          <span>发布于 {formatTime(post.created_at)}</span>
-          <span className="text-[var(--text-muted)]">|</span>
-          <span>{post.view_count} 浏览</span>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <AuthorLink
+            userId={post.user_id}
+            name={post.author_name}
+            avatarUrl={post.author_avatar_url}
+            role={post.author_role}
+            mindauthId={post.author_mindauth_id}
+            size="lg"
+            layout="stacked"
+            className="max-w-full"
+          />
+
+          <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)] sm:justify-end">
+            <span>发布于 {formatTime(post.created_at)}</span>
+            <span className="text-[var(--text-muted)]">|</span>
+            <span>{post.view_count} 浏览</span>
 
           {post.edited_at && (
             <>
@@ -149,6 +157,7 @@ export default function PostContent({
               </div>
             </>
           )}
+          </div>
         </div>
       </div>
 

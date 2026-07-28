@@ -167,7 +167,7 @@ describe('AdminService', () => {
     await service.rejectModerationItem('avatar', 5);
 
     expect(replyRepository.update).toHaveBeenCalledWith(9, { status: 'published' });
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v3:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
     expect(pointsService.awardPoints).toHaveBeenCalledWith(7, 'create_reply', 'reply', 9);
     expect(userRepository.update).toHaveBeenCalledWith(5, {
       pending_avatar_url: null,

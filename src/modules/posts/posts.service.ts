@@ -49,10 +49,10 @@ import { PostActor, isStaffActor } from './post-actor.util';
 
 @Injectable()
 export class PostsService {
-  // v3: the cached payload gained `is_locked` / `best_reply_id` / `edited_at`. Reusing
-  // the v2 key would have served shape-incomplete detail responses — a locked thread
-  // reading as unlocked — for the whole 5-minute TTL after a deploy.
-  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v3:';
+  // v4: the cached payload gained author display fields (`author_name` /
+  // `author_avatar_url`) for posts and replies. Reusing v3 would serve ID-only
+  // author data until the old 5-minute entries expired.
+  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v4:';
 
   constructor(
     @InjectRepository(Post)
@@ -236,6 +236,8 @@ export class PostsService {
         user: {
           id: true,
           mindauth_id: true,
+          username: true,
+          avatar_url: true,
           role: true,
         },
         category: {
@@ -919,6 +921,8 @@ export class PostsService {
       user: {
         id: true,
         mindauth_id: true,
+        username: true,
+        avatar_url: true,
         role: true,
       },
     } as const;
@@ -1080,6 +1084,8 @@ export class PostsService {
         user: {
           id: true,
           mindauth_id: true,
+          username: true,
+          avatar_url: true,
           role: true,
         },
         category: {
@@ -1131,6 +1137,8 @@ export class PostsService {
         user: {
           id: true,
           mindauth_id: true,
+          username: true,
+          avatar_url: true,
           role: true,
         },
         category: {
@@ -1186,6 +1194,8 @@ export class PostsService {
         user: {
           id: true,
           mindauth_id: true,
+          username: true,
+          avatar_url: true,
           role: true,
         },
         category: {
@@ -1231,6 +1241,8 @@ export class PostsService {
         user: {
           id: true,
           mindauth_id: true,
+          username: true,
+          avatar_url: true,
           role: true,
         },
         category: {
