@@ -14,6 +14,7 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import FileUpload from '@/components/forum/file-upload';
 import AttachmentList from '@/components/forum/attachment-list';
 import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import useInlineImageUpload from '@/hooks/use-inline-image-upload';
 import {
   Eye, Edit3, Bold, Italic, Link2, List, ListOrdered,
   Quote, Code, Heading2, Image, Minus, ChevronDown, Clock, Send, Save,
@@ -49,6 +50,35 @@ export default function PostForm() {
   // Validation errors
   const [titleError, setTitleError] = useState('');
   const [contentError, setContentError] = useState('');
+
+  // Inline image upload (paste / toolbar button)
+  const {
+    uploading: imageUploading,
+    fileInputRef: imageInputRef,
+    triggerImagePicker,
+    handlePaste,
+    handleDrop,
+  } = useInlineImageUpload({
+    insertMarkdown: (text) => {
+      const ta = textareaRef.current;
+      if (!ta) {
+        setContent((prev) => prev + '\n' + text);
+        return;
+      }
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const before = content.slice(0, start);
+      const after = content.slice(end);
+      const needsLeading = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
+      const needsTrailing = after.length > 0 && !after.startsWith('\n') ? '\n' : '';
+      const next = before + needsLeading + text + needsTrailing + after;
+      setContent(next);
+      requestAnimationFrame(() => {
+        const cursor = start + needsLeading.length + text.length;
+        ta.setSelectionRange(cursor, cursor);
+      });
+    },
+  });
 
   // Draft
   const draft = useDraft('post');
@@ -262,11 +292,38 @@ export default function PostForm() {
             <div className="w-px h-5 bg-surface-200 dark:border-gray-600 mx-1" />
             <ToolbarBtn icon={<Link2 className="w-4 h-4" />} tooltip="链接"
               onClick={() => insertMarkdown('[', '](https://)')} />
-            <ToolbarBtn icon={<Image className="w-4 h-4" />} tooltip="图片"
-              onClick={() => insertMarkdown('![alt](', ')')} />
+            <ToolbarBtn
+              icon={<Image className="w-4 h-4" />}
+              tooltip={imageUploading ? '图片上传中…' : '上传图片'}
+              onClick={triggerImagePicker}
+              disabled={imageUploading}
+            />
             <ToolbarBtn icon={<Minus className="w-4 h-4" />} tooltip="分割线"
               onClick={() => insertMarkdown('\n---\n')} />
           </div>
+
+          {/* Hidden image picker for inline upload */}
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif,image/webp"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              if (files.length > 0) {
+                // The hook's upload runs via triggerImagePicker → native click → change.
+                // Re-dispatch through a small helper that feeds files into the paste-like path.
+                const dt = new DataTransfer();
+                files.forEach((f) => dt.items.add(f));
+                handlePaste({
+                  clipboardData: dt,
+                  preventDefault: () => undefined,
+                } as unknown as React.ClipboardEvent);
+              }
+              if (e.target) e.target.value = '';
+            }}
+          />
 
           {/* Tabs: Write / Preview */}
           <div className="flex border-b border-surface-200 dark:border-gray-700">
@@ -298,7 +355,10 @@ export default function PostForm() {
               ref={textareaRef}
               value={content}
               onChange={e => { setContent(e.target.value); if (contentError) setContentError(''); }}
-              placeholder="使用 Markdown 格式编写帖子内容..."
+              onPaste={handlePaste}
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              placeholder="使用 Markdown 格式编写帖子内容（支持粘贴图片）..."
               className={`w-full min-h-[280px] px-4 py-3 resize-y outline-none
                 bg-white dark:bg-gray-800 text-surface-900 dark:text-gray-100
                 placeholder:text-surface-400 dark:placeholder:text-gray-500 font-mono text-sm leading-relaxed
@@ -432,17 +492,19 @@ export default function PostForm() {
 }
 
 // ── Toolbar button ───────────────────────────────────────
-function ToolbarBtn({ icon, tooltip, onClick }: {
-  icon: React.ReactNode; tooltip: string; onClick: () => void;
+function ToolbarBtn({ icon, tooltip, onClick, disabled = false }: {
+  icon: React.ReactNode; tooltip: string; onClick: () => void; disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       title={tooltip}
       onClick={onClick}
+      disabled={disabled}
       className="p-1.5 rounded text-surface-500 dark:text-gray-400
         hover:text-surface-700 dark:hover:text-gray-200
-        hover:bg-surface-100 dark:hover:bg-gray-700 transition-colors shrink-0">
+        hover:bg-surface-100 dark:hover:bg-gray-700 transition-colors shrink-0
+        disabled:opacity-50 disabled:cursor-not-allowed">
       {icon}
     </button>
   );
