@@ -13,7 +13,7 @@ const ReplyEditor = dynamic(() => import('@/components/forum/reply-editor'), {
 
 interface ReplyFormProps {
   postId: number;
-  onReplyCreated?: () => void;
+  onReplyCreated?: (reply: Awaited<ReturnType<typeof replyApi.create>>) => void;
 }
 
 export default function ReplyForm({ postId, onReplyCreated }: ReplyFormProps) {
@@ -22,9 +22,9 @@ export default function ReplyForm({ postId, onReplyCreated }: ReplyFormProps) {
   const clearComposeTarget = useReplyComposeStore((state) => state.clear);
 
   const handleSubmit = async (content: string, parentReplyId?: number) => {
-    await replyApi.create(postId, { content, parent_reply_id: parentReplyId });
+    const reply = await replyApi.create(postId, { content, parent_reply_id: parentReplyId });
     clearComposeTarget();
-    onReplyCreated?.();
+    onReplyCreated?.(reply);
   };
 
   return (

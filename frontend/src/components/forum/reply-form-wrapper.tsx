@@ -9,7 +9,11 @@ export default function ReplyFormWrapper({ postId }: { postId: number }) {
   return (
     <ReplyForm
       postId={postId}
-      onReplyCreated={() => router.refresh()}
+      onReplyCreated={(reply) => {
+        if (reply.status === 'published') {
+          router.refresh();
+        }
+      }}
     />
   );
 }

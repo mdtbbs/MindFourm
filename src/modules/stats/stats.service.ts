@@ -102,21 +102,26 @@ export class StatsService {
   }
 
   /**
-   * Get 7-day activity data using CTE
+   * Get 7-day activity data without CTEs.
+   *
+   * Production may run on MySQL 5.7-compatible engines, where `WITH RECURSIVE`
+   * is a syntax error. A fixed derived table gives the same seven rows and works
+   * on both MySQL 5.7 and 8.x.
    */
   async get7DayActivity(): Promise<Array<{ date: string; count: number }>> {
     const result = await this.postRepository.query(`
-      WITH RECURSIVE dates AS (
-        SELECT CURDATE() as date
-        UNION ALL
-        SELECT DATE_SUB(date, INTERVAL 1 DAY)
-        FROM dates
-        WHERE DATE_SUB(date, INTERVAL 1 DAY) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
-      )
       SELECT
         d.date,
         COUNT(p.id) as count
-      FROM dates d
+      FROM (
+        SELECT DATE_SUB(CURDATE(), INTERVAL 6 DAY) as date
+        UNION ALL SELECT DATE_SUB(CURDATE(), INTERVAL 5 DAY)
+        UNION ALL SELECT DATE_SUB(CURDATE(), INTERVAL 4 DAY)
+        UNION ALL SELECT DATE_SUB(CURDATE(), INTERVAL 3 DAY)
+        UNION ALL SELECT DATE_SUB(CURDATE(), INTERVAL 2 DAY)
+        UNION ALL SELECT DATE_SUB(CURDATE(), INTERVAL 1 DAY)
+        UNION ALL SELECT CURDATE()
+      ) d
       LEFT JOIN posts p ON DATE(p.created_at) = d.date AND p.status = 'published'
       GROUP BY d.date
       ORDER BY d.date ASC

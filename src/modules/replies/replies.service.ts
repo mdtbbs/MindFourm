@@ -11,6 +11,7 @@ import { CreateReplyDto } from './dto/create-reply.dto';
 import { parseMarkdown } from '../../common/utils/markdown.util';
 import { PointsService } from '../points/points.service';
 import { SettingsService } from '../settings/settings.service';
+import { RedisService } from '../../database/redis.service';
 import { REPLY_STATUS } from '../../common/utils/constants';
 
 @Injectable()
@@ -27,6 +28,7 @@ export class RepliesService {
     private eventBus: EventBusService,
     private pointsService: PointsService,
     private settingsService: SettingsService,
+    private redisService: RedisService,
   ) {}
 
   async createReplyForPost(postId: number, dto: CreateReplyDto, userId: number): Promise<Reply> {
@@ -103,6 +105,7 @@ export class RepliesService {
     });
 
     const savedReply = await this.replyRepository.save(newReply);
+    await this.invalidatePostCache(postId);
 
     // Create notification for post author (if not the same user)
     if (savedReply.status === 'published' && post.user_id !== userId) {
@@ -218,7 +221,9 @@ export class RepliesService {
     reply.content_html = contentHtml;
     reply.updated_at = new Date();
 
-    return await this.replyRepository.save(reply);
+    const saved = await this.replyRepository.save(reply);
+    await this.invalidatePostCache(reply.post_id);
+    return saved;
   }
 
   async softDelete(id: number, userId: number, userRole?: string): Promise<void> {
@@ -240,5 +245,12 @@ export class RepliesService {
     reply.deleted_at = new Date();
 
     await this.replyRepository.save(reply);
+    await this.invalidatePostCache(reply.post_id);
+  }
+
+  private async invalidatePostCache(postId: number): Promise<void> {
+    await this.redisService.del(`post:${postId}`);
+    await this.redisService.del(`post:detail:v3:${postId}`);
+    await this.redisService.del(`post_view:${postId}`);
   }
 }

@@ -73,6 +73,9 @@ function createService(overrides: {
     awardPoints: jest.fn().mockResolvedValue(undefined),
     ...overrides.pointsService,
   };
+  const redisService = {
+    del: jest.fn().mockResolvedValue(0),
+  };
 
   // Positional, so the placeholder count must track the constructor exactly —
   // inserting a dependency shifts every later argument into the wrong slot, and the
@@ -97,6 +100,7 @@ function createService(overrides: {
     {} as any, // categoriesService
     {} as any, // tagsService
     pointsService as any,
+    redisService as any,
   );
 
   return {
@@ -106,6 +110,7 @@ function createService(overrides: {
     userRepository,
     settingsService,
     pointsService,
+    redisService,
   };
 }
 
@@ -144,9 +149,9 @@ describe('AdminService', () => {
   });
 
   it('routes moderation actions by item type', async () => {
-    const { service, replyRepository, userRepository, pointsService } = createService({
+    const { service, replyRepository, userRepository, pointsService, redisService } = createService({
       replyRepository: {
-        findOne: jest.fn().mockResolvedValue({ id: 9, user_id: 7, status: 'pending' }),
+        findOne: jest.fn().mockResolvedValue({ id: 9, post_id: 88, user_id: 7, status: 'pending' }),
       },
       userRepository: {
         findOne: jest.fn().mockResolvedValue({
@@ -162,6 +167,7 @@ describe('AdminService', () => {
     await service.rejectModerationItem('avatar', 5);
 
     expect(replyRepository.update).toHaveBeenCalledWith(9, { status: 'published' });
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v3:88');
     expect(pointsService.awardPoints).toHaveBeenCalledWith(7, 'create_reply', 'reply', 9);
     expect(userRepository.update).toHaveBeenCalledWith(5, {
       pending_avatar_url: null,
