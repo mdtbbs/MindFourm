@@ -74,6 +74,7 @@ async function assertRequiredTables(dataSource: DataSource): Promise<void> {
     'resource_versions',
     'external_api_keys',
     'external_api_audit_logs',
+    'lanlink_quick_codes',
   ];
   const missing: string[] = [];
   for (const table of requiredTables) {
