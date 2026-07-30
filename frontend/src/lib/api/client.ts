@@ -329,10 +329,9 @@ export const settingsApi = {
 // Auth APIs
 export const authApi = {
   check: () => request<{ authenticated: boolean; user?: User }>('/api/auth/check'),
-  syncPhoneStatus: (phone_sync_token: string) =>
-    request<{ success: boolean; user: User }>('/api/auth/sync-phone-status', {
+  syncPhoneStatus: () =>
+    request<{ user: User }>('/api/auth/sync-phone-status', {
       method: 'POST',
-      body: JSON.stringify({ phone_sync_token }),
     }),
   logout: async () => {
     const results = await Promise.allSettled([
@@ -379,9 +378,9 @@ async function mindAuthRequest<T>(path: string, body: unknown): Promise<T> {
 
 export const smsApi = {
   send: (phone: string) =>
-    mindAuthRequest<{ success: boolean; message: string; code?: string; phone_verified?: boolean; phone_sync_token?: string }>('/api/sms/send', { phone }),
+    mindAuthRequest<{ success: boolean; message: string; code?: string; phone_verified?: boolean }>('/api/sms/send', { phone }),
   verify: (phone: string, code: string) =>
-    mindAuthRequest<{ success: boolean; message: string; phone_verified: boolean; phone_sync_token: string }>(
+    mindAuthRequest<{ success: boolean; message: string; phone_verified: boolean }>(
       '/api/sms/verify',
       { phone, code },
     ),
