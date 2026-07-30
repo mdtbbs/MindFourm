@@ -495,3 +495,6 @@ export interface LikedPost {
   author_role: UserRole;
   author_name: string | null;
 }
+
+// LanLink types
+export * from './lanlink';
