@@ -66,6 +66,7 @@ import { Reaction } from './reaction.entity';
 import { PostRevision } from './post-revision.entity';
 import { ExternalApiKey } from './external-api-key.entity';
 import { ExternalApiAuditLog } from './external-api-audit-log.entity';
+import { LanLinkQuickCode } from './lanlink-quick-code.entity';
 
 export const entities = [
   User,
@@ -128,6 +129,8 @@ export const entities = [
   // External API
   ExternalApiKey,
   ExternalApiAuditLog,
+  // LanLink integration
+  LanLinkQuickCode,
 ];
 
 export {
@@ -167,4 +170,6 @@ export {
   // External API
   ExternalApiKey,
   ExternalApiAuditLog,
+  // LanLink integration
+  LanLinkQuickCode,
 };

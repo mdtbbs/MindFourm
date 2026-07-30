@@ -42,6 +42,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { UserBlocksModule } from './modules/user-blocks/user-blocks.module';
 import { ReactionsModule } from './modules/reactions/reactions.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { LanLinkModule } from './modules/lanlink/lanlink.module';
 import { PhoneWriteGuard } from './common/guards/phone-write.guard';
 import { BanGuard } from './common/guards/ban.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -108,6 +109,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     ReportsModule,
     UserBlocksModule,
     ReactionsModule,
+    LanLinkModule,
   ],
   controllers: [HealthController],
   // Global guards run in registration order, before any controller-scoped guard.

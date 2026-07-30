@@ -17,6 +17,7 @@ export const EXTERNAL_API_SCOPES = [
   'categories:read',
   'tags:read',
   'audit:read',
+  'lanlink:auth',
   'admin:*',
   '*',
 ] as const;

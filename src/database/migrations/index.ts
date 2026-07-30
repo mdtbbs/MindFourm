@@ -8,6 +8,7 @@ import { CreateReports1720000006000 } from './1720000006000-CreateReports';
 import { CreateBlocksAndReactions1720000009000 } from './1720000009000-CreateBlocksAndReactions';
 import { AddPostModerationFields1720000010000 } from './1720000010000-AddPostModerationFields';
 import { CreateExternalApiTables1720000011000 } from './1720000011000-CreateExternalApiTables';
+import { CreateLanLinkQuickCodes1720000012000 } from './1720000012000-CreateLanLinkQuickCodes';
 
 /**
  * Migrations in run order.
@@ -27,4 +28,5 @@ export const migrations = [
   CreateBlocksAndReactions1720000009000,
   AddPostModerationFields1720000010000,
   CreateExternalApiTables1720000011000,
+  CreateLanLinkQuickCodes1720000012000,
 ];
