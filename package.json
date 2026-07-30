@@ -1,6 +1,6 @@
 {
   "name": "mindforum",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Forum with MindAuth integration - NestJS + TypeScript + TypeORM",
   "main": "dist/main.js",
   "scripts": {
