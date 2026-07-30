@@ -55,6 +55,10 @@ export const appConfig = () => ({
   automation: {
     apiKey: process.env.FORUM_API_KEY || '',
   },
+  lanlink: {
+    enabled: process.env.LANLINK_ENABLED === 'true',
+    baseUrl: process.env.LANLINK_URL || '',
+  },
   session: {
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   },

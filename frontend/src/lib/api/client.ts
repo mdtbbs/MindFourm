@@ -1,4 +1,4 @@
-import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse } from '@/types';
+import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse, QuickCodeStatus, QuickCodeGenerateResponse, QuickCodeResetResponse } from '@/types';
 import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/response';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
@@ -1145,3 +1145,21 @@ export const api = {
     return request<T>(path, { method: 'DELETE' });
   },
 };
+
+// LanLink Quick Code APIs
+export const lanlinkApi = {
+  getQuickCodeStatus: () => request<QuickCodeStatus>('/api/lanlink/quick-code/status'),
+  generateQuickCode: () => {
+    clearCache();
+    return request<QuickCodeGenerateResponse>('/api/lanlink/quick-code/generate', {
+      method: 'POST',
+    });
+  },
+  resetQuickCode: () => {
+    clearCache();
+    return request<QuickCodeResetResponse>('/api/lanlink/quick-code/reset', {
+      method: 'POST',
+    });
+  },
+};
+

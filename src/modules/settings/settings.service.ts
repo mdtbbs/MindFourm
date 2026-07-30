@@ -67,6 +67,7 @@ export class SettingsService implements OnModuleInit {
     'feature_groups_enabled',
     'feature_leaderboard_enabled',
     'feature_shop_enabled',
+    'feature_lanlink_enabled',
   ]);
 
   /** Never leaves the server in cleartext, not even to an authenticated admin. */
@@ -146,6 +147,7 @@ export class SettingsService implements OnModuleInit {
       'feature_groups_enabled',
       'feature_leaderboard_enabled',
       'feature_shop_enabled',
+      'feature_lanlink_enabled',
     ]),
   };
 
@@ -222,6 +224,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_groups_enabled', value: 'true', category: 'features', description: 'Enable user groups' },
       { key: 'feature_leaderboard_enabled', value: 'true', category: 'features', description: 'Enable points leaderboard' },
       { key: 'feature_shop_enabled', value: 'true', category: 'features', description: 'Enable points shop' },
+      { key: 'feature_lanlink_enabled', value: 'false', category: 'features', description: 'Enable LanLink game integration' },
       // Email settings
       { key: 'smtp_host', value: '', category: 'email', description: 'SMTP server host' },
       { key: 'smtp_port', value: '587', category: 'email', description: 'SMTP server port' },
