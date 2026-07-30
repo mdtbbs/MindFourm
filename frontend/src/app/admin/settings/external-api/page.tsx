@@ -24,6 +24,11 @@ const AVAILABLE_SCOPES = [
   'categories:read',
   'tags:read',
   'audit:read',
+  // LanLink integration scopes
+  'friends:read',
+  'presence:read',
+  'presence:write',
+  'notifications:write',
   'admin:*',
 ] as const;
 
