@@ -29,7 +29,7 @@ export function QuickCodeStatus({ status }: Props) {
           {status.has_code ? (
             <Badge variant="success">已生成</Badge>
           ) : (
-            <Badge variant="secondary">未生成</Badge>
+            <Badge variant="default">未生成</Badge>
           )}
         </div>
 
