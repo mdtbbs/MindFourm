@@ -25,7 +25,7 @@ import { SettingsModule } from '../settings/settings.module';
     EmailQueueService,
     TemplateService,
   ],
-  exports: [NotificationsService, EmailService, EmailQueueService, TemplateService],
+  exports: [NotificationsService, EmailService, EmailQueueService, TemplateService, NotificationStreamService],
   controllers: [NotificationsController],
 })
 export class NotificationsModule {}

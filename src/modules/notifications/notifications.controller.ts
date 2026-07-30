@@ -17,6 +17,7 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
    */
   private connections: Map<number, Set<Subject<MessageEvent>>> = new Map();
   private streamSubscription: any;
+  private rawStreamSubscription: any;
 
   constructor(
     private readonly notificationsService: NotificationsService,
@@ -39,11 +40,30 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
         }
       },
     );
+
+    // Subscribe to raw events (friend_presence, etc.) and forward them verbatim
+    this.rawStreamSubscription = this.notificationStream.rawStream$.subscribe(
+      ({ userId, type, data }) => {
+        const subjects = this.connections.get(userId);
+        if (!subjects) return;
+
+        const event = {
+          data: JSON.stringify({ type, data }),
+        } as MessageEvent;
+
+        for (const subject of subjects) {
+          subject.next(event);
+        }
+      },
+    );
   }
 
   onModuleDestroy() {
     if (this.streamSubscription) {
       this.streamSubscription.unsubscribe();
+    }
+    if (this.rawStreamSubscription) {
+      this.rawStreamSubscription.unsubscribe();
     }
     for (const subjects of this.connections.values()) {
       for (const subject of subjects) {

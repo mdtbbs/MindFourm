@@ -18,6 +18,10 @@ export const EXTERNAL_API_SCOPES = [
   'tags:read',
   'audit:read',
   'lanlink:auth',
+  'friends:read',
+  'presence:read',
+  'presence:write',
+  'notifications:write',
   'admin:*',
   '*',
 ] as const;

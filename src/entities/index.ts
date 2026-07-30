@@ -67,6 +67,7 @@ import { PostRevision } from './post-revision.entity';
 import { ExternalApiKey } from './external-api-key.entity';
 import { ExternalApiAuditLog } from './external-api-audit-log.entity';
 import { LanLinkQuickCode } from './lanlink-quick-code.entity';
+import { Friendship } from './friendship.entity';
 
 export const entities = [
   User,
@@ -131,6 +132,8 @@ export const entities = [
   ExternalApiAuditLog,
   // LanLink integration
   LanLinkQuickCode,
+  // Friends
+  Friendship,
 ];
 
 export {
@@ -172,4 +175,6 @@ export {
   ExternalApiAuditLog,
   // LanLink integration
   LanLinkQuickCode,
+  // Friends
+  Friendship,
 };
