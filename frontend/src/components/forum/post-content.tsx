@@ -59,6 +59,22 @@ export default function PostContent({
     }
     setLockPending(false);
   };
+
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDeleteForOwner = async () => {
+    if (!postId || deleting) return;
+    if (!window.confirm('确定删除这篇帖子？删除后无法恢复。')) return;
+    setDeleting(true);
+    try {
+      await postApi.delete(postId);
+      showSuccess('帖子已删除');
+      router.push('/');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '删除失败，请稍后重试');
+      setDeleting(false);
+    }
+  };
   // Moderation state
   const [modAction, setModAction] = useState<'approving' | 'rejecting' | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -263,6 +279,18 @@ export default function PostContent({
           >
             <Trash2 className="w-4 h-4 mr-1" />
             删除
+          </Button>
+        )}
+        {isOwner && postId && !canModerate && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDeleteForOwner}
+            disabled={deleting}
+            className="text-red-600 hover:text-red-700"
+          >
+            <Trash2 className="w-4 h-4 mr-1" />
+            {deleting ? '删除中...' : '删除'}
           </Button>
         )}
       </div>

@@ -4,9 +4,10 @@ import { useState, useEffect, useRef } from 'react';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
-import { Eye, Edit3 } from 'lucide-react';
+import { Eye, Edit3, Loader2 } from 'lucide-react';
 import Alert from '@/components/ui/alert';
 import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import { useToastStore } from '@/store/toast-store';
 
 interface ReplyEditorProps {
   postId: number;
@@ -31,6 +32,7 @@ export default function ReplyEditor({
   const [success, setSuccess] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const showSuccess = useToastStore((state) => state.showSuccess);
 
   const replyId = quoteReply?.id ?? replyToReply?.id;
   const draft = useDraft('reply', replyId ? `r-${replyId}` : `p-${postId}`);
@@ -67,7 +69,9 @@ export default function ReplyEditor({
       );
       setContent('');
       draft.clear();
-      setSuccess(reply?.status === 'pending' ? '回复已提交，等待管理员审核' : '回复已发布');
+      const msg = reply?.status === 'pending' ? '回复已提交，等待管理员审核' : '回复发布成功！';
+      setSuccess(msg);
+      showSuccess(msg);
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败，请重试');
     } finally {
@@ -147,7 +151,12 @@ export default function ReplyEditor({
             type="submit"
             disabled={isSubmitting || !content.trim()}
           >
-            {isSubmitting ? '提交中...' : '提交回复'}
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
+                提交中...
+              </>
+            ) : '提交回复'}
           </Button>
         </div>
       </form>

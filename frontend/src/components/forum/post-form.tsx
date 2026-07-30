@@ -17,8 +17,9 @@ import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import useInlineImageUpload from '@/hooks/use-inline-image-upload';
 import {
   Eye, Edit3, Bold, Italic, Link2, List, ListOrdered,
-  Quote, Code, Heading2, Image, Minus, ChevronDown, Clock, Send, Save,
+  Quote, Code, Heading2, Image, Minus, ChevronDown, Clock, Send, Save, Loader2, CheckCircle2,
 } from 'lucide-react';
+import { useToastStore } from '@/store/toast-store';
 
 type EditorTab = 'write' | 'preview';
 
@@ -27,6 +28,7 @@ export default function PostForm() {
   const router = useRouter();
   const pathname = usePathname();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const showSuccess = useToastStore((state) => state.showSuccess);
 
   // Form fields
   const [title, setTitle] = useState('');
@@ -172,6 +174,7 @@ export default function PostForm() {
       draft.clear();
       setCreatedPostId(post.id);
       setCreatedPostStatus(post.status);
+      showSuccess('帖子发布成功！');
     } catch (err) {
       setError(err instanceof Error ? err.message : '发帖失败，请重试');
     } finally {
@@ -463,27 +466,45 @@ export default function PostForm() {
           <Button type="button" variant="secondary" onClick={() => router.back()}>
             取消
           </Button>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
             <Button type="button" variant="secondary"
               onClick={() => { draft.save(draftValues); }}>
               <Save className="w-4 h-4 inline mr-1" />
               存草稿
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                '提交中...'
-              ) : status === 'draft' ? (
-                <>
-                  <Save className="w-4 h-4 inline mr-1" />
-                  保存草稿
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 inline mr-1" />
-                  发布帖子
-                </>
-              )}
-            </Button>
+            {createdPostId ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                  <CheckCircle2 className="w-4 h-4" />
+                  已发布
+                </span>
+                <Link
+                  href={`/posts/${createdPostId}`}
+                  className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
+                >
+                  查看帖子 →
+                </Link>
+              </>
+            ) : (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
+                    提交中...
+                  </>
+                ) : status === 'draft' ? (
+                  <>
+                    <Save className="w-4 h-4 inline mr-1" />
+                    保存草稿
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 inline mr-1" />
+                    发布帖子
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </form>

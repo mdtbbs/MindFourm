@@ -8,11 +8,13 @@ import { Input } from '@/components/ui/input';
 import MarkdownEditor from '@/components/ui/markdown-editor';
 import { Textarea } from '@/components/ui/textarea';
 import { ResourceCategory } from '@/types';
+import { useToastStore } from '@/store/toast-store';
 
 type ResourceType = 'upload' | 'external';
 
 export default function ResourceSubmitForm() {
   const router = useRouter();
+  const showSuccess = useToastStore((state) => state.showSuccess);
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
   const [resourceType, setResourceType] = useState<ResourceType | null>(null);
   const [title, setTitle] = useState('');
@@ -78,6 +80,7 @@ export default function ResourceSubmitForm() {
       }
 
       const resource = await resourceApi.upload(formData);
+      showSuccess('资源提交成功！');
       router.push(`/resources/${resource.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '提交失败');

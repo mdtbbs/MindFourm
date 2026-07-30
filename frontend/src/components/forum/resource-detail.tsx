@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, Download, ExternalLink, FileText, Loader2, Upload, User } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Calendar, Download, ExternalLink, FileText, Loader2, Trash2, Upload, User } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/context';
+import { useToastStore } from '@/store/toast-store';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import VersionSelector from '@/components/ui/version-selector';
 import { Resource, ResourceVersion } from '@/types';
@@ -28,13 +30,17 @@ interface ResourceDetailProps {
 }
 
 export default function ResourceDetail({ resource }: ResourceDetailProps) {
+  const router = useRouter();
   const { user } = useAuth();
+  const showSuccess = useToastStore((state) => state.showSuccess);
+  const showError = useToastStore((state) => state.showError);
   const [versions, setVersions] = useState<ResourceVersion[]>(resource.versions || []);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [newVersion, setNewVersion] = useState('');
   const [versionFile, setVersionFile] = useState<File | null>(null);
   const [isUploadingVersion, setIsUploadingVersion] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const selectedVersion = selectedVersionId
     ? versions.find((version) => version.id === selectedVersionId) || null
@@ -70,6 +76,20 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       setVersionError(err instanceof Error ? err.message : '版本上传失败');
     } finally {
       setIsUploadingVersion(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (isDeleting) return;
+    if (!window.confirm('确定删除这个资源？删除后无法恢复。')) return;
+    setIsDeleting(true);
+    try {
+      await resourceApi.delete(resource.id);
+      showSuccess('资源已删除');
+      router.push('/resources');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '删除失败，请稍后重试');
+      setIsDeleting(false);
     }
   };
 
@@ -174,6 +194,23 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         </a>
       ) : (
         <p className="text-sm text-[var(--text-secondary)]">该资源的外部链接无效或已被移除。</p>
+      )}
+
+      {isOwner && (
+        <div className="mt-6 flex items-center justify-between border-t border-[var(--border)] pt-6">
+          <div>
+            <p className="text-sm font-medium text-[var(--text)]">管理此资源</p>
+            <p className="text-xs text-[var(--text-muted)]">删除后资源将对所有用户不可见</p>
+          </div>
+          <button
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="inline-flex items-center gap-2 rounded-[var(--radius)] border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+          >
+            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            {isDeleting ? '删除中...' : '删除资源'}
+          </button>
+        </div>
       )}
 
       {isOwner && (
