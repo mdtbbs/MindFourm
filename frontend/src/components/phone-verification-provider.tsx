@@ -15,7 +15,6 @@ type PendingRequest = {
 
 type SendCodeResult = {
   phone_verified?: boolean;
-  phone_sync_token?: string;
 };
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
@@ -32,7 +31,7 @@ export function PhoneVerificationProvider({ children }: { children: React.ReactN
   const [error, setError] = useState('');
   const pendingRef = useRef<PendingRequest[]>([]);
   const user = useUserStore((state) => state.user);
-  const refreshAuth = useUserStore((state) => state.refreshAuth);
+  const setUser = useUserStore((state) => state.setUser);
   const showSuccess = useToastStore((state) => state.showSuccess);
   const showPersistentToast = useToastStore((state) => state.showPersistentToast);
   const dismissToast = useToastStore((state) => state.dismissToast);
@@ -70,9 +69,23 @@ export function PhoneVerificationProvider({ children }: { children: React.ReactN
     pendingRef.current = [];
     setOpen(false);
     setError('');
+    setPhone('');
     setCode('');
     setStep('phone');
     setCountdown(0);
+  };
+
+  const syncPhoneStatus = async () => {
+    try {
+      const result = await authApi.syncPhoneStatus();
+      setUser(result.user);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message) {
+        throw new Error(`手机号已验证，但论坛状态同步失败：${message}`);
+      }
+      throw new Error('手机号已验证，但论坛状态同步失败，请稍后重试');
+    }
   };
 
   const sendCode = async () => {
@@ -85,9 +98,8 @@ export function PhoneVerificationProvider({ children }: { children: React.ReactN
     setLoading(true);
     try {
       const result = await smsApi.send(phone) as SendCodeResult;
-      if (result.phone_verified && result.phone_sync_token) {
-        await authApi.syncPhoneStatus(result.phone_sync_token);
-        await refreshAuth();
+      if (result.phone_verified) {
+        await syncPhoneStatus();
         showSuccess('手机号验证成功');
         close(true);
         return;
@@ -110,9 +122,8 @@ export function PhoneVerificationProvider({ children }: { children: React.ReactN
 
     setLoading(true);
     try {
-      const result = await smsApi.verify(phone, code);
-      await authApi.syncPhoneStatus(result.phone_sync_token);
-      await refreshAuth();
+      await smsApi.verify(phone, code);
+      await syncPhoneStatus();
       showSuccess('手机号验证成功');
       close(true);
     } catch (err) {

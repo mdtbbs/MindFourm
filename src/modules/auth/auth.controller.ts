@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { User } from '@entities/user.entity';
 import { AuthService } from './auth.service';
 import { VerifySessionDto } from './dto/verify-session.dto';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
@@ -22,6 +23,21 @@ function getSafeRedirectPath(state?: string): string {
   }
 
   return path;
+}
+
+function toAuthUser(user: User) {
+  return {
+    id: user.id,
+    mindauth_id: user.mindauth_id,
+    username: user.username,
+    email: user.email,
+    avatar_url: user.avatar_url,
+    role: user.role,
+    bio: user.bio,
+    phone_verified: user.phone_verified,
+    phone_verified_at: user.phone_verified_at,
+    created_at: user.created_at,
+  };
 }
 
 @Controller('auth')
@@ -47,19 +63,28 @@ export class AuthController {
 
     return res.json({
       authenticated: true,
-      user: {
-        id: user.id,
-        mindauth_id: user.mindauth_id,
-        username: user.username,
-        email: user.email,
-        avatar_url: user.avatar_url,
-        role: user.role,
-        bio: user.bio,
-        phone_verified: user.phone_verified,
-        phone_verified_at: user.phone_verified_at,
-        created_at: user.created_at,
-      },
+      user: toAuthUser(user),
     });
+  }
+
+  /**
+   * Force-refresh phone verification state after MindAuth SMS binding succeeds.
+   */
+  @Post('sync-phone-status')
+  @SkipPhoneVerification()
+  @RateLimit({ max: 20, window: 60 })
+  async syncPhoneStatus(@Req() req: Request) {
+    const sessionToken = req.cookies?.forum_session;
+
+    if (!sessionToken) {
+      throw new UnauthorizedException('论坛登录状态已失效，请重新登录后再同步手机号');
+    }
+
+    const user = await this.authService.syncPhoneStatusFromSession(sessionToken);
+
+    return {
+      user: toAuthUser(user),
+    };
   }
 
   /**
@@ -135,16 +160,7 @@ export class AuthController {
 
     return res.json({
       valid: true,
-      user: {
-        id: user.id,
-        mindauth_id: user.mindauth_id,
-        username: user.username,
-        email: user.email,
-        avatar_url: user.avatar_url,
-        role: user.role,
-        phone_verified: user.phone_verified,
-        phone_verified_at: user.phone_verified_at,
-      },
+      user: toAuthUser(user),
     });
   }
 

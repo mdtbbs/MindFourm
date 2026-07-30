@@ -1,4 +1,10 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -327,6 +333,91 @@ export class AuthService {
         }
       }
       return user;
+    }
+  }
+
+  async syncPhoneStatusFromSession(sessionToken: string): Promise<User> {
+    const sessionKey = `session:${sessionToken}`;
+    const sessionData = await this.redisService.hgetall(sessionKey);
+
+    if (!sessionData || !sessionData.userId) {
+      throw new UnauthorizedException({
+        code: 'PHONE_SYNC_RELOGIN_REQUIRED',
+        message: '论坛登录状态已失效，请重新登录后再同步手机号',
+      });
+    }
+
+    const userId = parseInt(sessionData.userId, 10);
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new UnauthorizedException({
+        code: 'PHONE_SYNC_RELOGIN_REQUIRED',
+        message: '论坛登录状态已失效，请重新登录后再同步手机号',
+      });
+    }
+
+    const accessToken = sessionData.accessToken;
+    const refreshToken = sessionData.refreshToken;
+    if (!accessToken) {
+      throw new UnauthorizedException({
+        code: 'PHONE_SYNC_RELOGIN_REQUIRED',
+        message: '论坛登录状态缺少认证中心令牌，请重新登录后再同步手机号',
+      });
+    }
+
+    const mindauthUser = await this.getUserInfoForPhoneSync(accessToken, refreshToken);
+    const updated = await this.syncMindAuthUserData(mindauthUser);
+    if (!updated) {
+      throw new HttpException(
+        {
+          code: 'PHONE_SYNC_FAILED',
+          message: '手机号已验证，但论坛状态同步失败，请稍后重试',
+        },
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+
+    if (!updated.phone_verified) {
+      throw new HttpException(
+        {
+          code: 'PHONE_NOT_VERIFIED_AFTER_SYNC',
+          message: '认证中心手机号状态尚未刷新，请稍后重试',
+        },
+        HttpStatus.CONFLICT,
+      );
+    }
+
+    return updated;
+  }
+
+  private async getUserInfoForPhoneSync(accessToken: string, refreshToken?: string): Promise<{
+    id: number;
+    username: string;
+    email: string;
+    avatar_url: string;
+    phone_verified?: boolean;
+    phone_verified_at?: string | Date | null;
+  }> {
+    try {
+      return await this.getUserInfo(accessToken);
+    } catch {
+      if (!refreshToken) {
+        throw new UnauthorizedException({
+          code: 'PHONE_SYNC_RELOGIN_REQUIRED',
+          message: '认证中心登录状态已失效，请重新登录后再同步手机号',
+        });
+      }
+
+      try {
+        const newTokens = await this.refreshAccessToken(refreshToken);
+        return await this.getUserInfo(newTokens.accessToken);
+      } catch {
+        throw new UnauthorizedException({
+          code: 'PHONE_SYNC_RELOGIN_REQUIRED',
+          message: '认证中心登录状态已失效，请重新登录后再同步手机号',
+        });
+      }
     }
   }
 
