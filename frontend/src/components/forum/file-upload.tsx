@@ -80,8 +80,7 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
       if (replyId !== undefined) formData.append('reply_id', String(replyId));
 
       const result = await attachmentApi.upload(formData);
-      const attachments = Array.isArray(result) ? result : [result];
-      onUploaded?.(attachments);
+      onUploaded?.(result.attachments);
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     } finally {

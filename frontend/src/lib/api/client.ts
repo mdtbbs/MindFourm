@@ -972,7 +972,7 @@ export const likeApi = {
 // Attachment APIs
 export const attachmentApi = {
   upload: (formData: FormData) =>
-    request<Attachment | Attachment[]>('/api/attachments/upload', {
+    request<{ message: string; attachments: Attachment[] }>('/api/attachments/upload', {
       method: 'POST',
       body: formData,
     }),

@@ -26,7 +26,7 @@ export async function uploadImage(file: File): Promise<UploadImageResult> {
   const formData = new FormData();
   formData.append('files', file);
   const result = await attachmentApi.upload(formData);
-  const attachment = Array.isArray(result) ? result[0] : result;
+  const attachment = result.attachments?.[0];
 
   if (!attachment?.id) {
     throw new Error('上传成功但未返回文件信息');
