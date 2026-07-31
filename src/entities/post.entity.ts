@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  JoinColumn, Index,
+  JoinColumn, Index, forwardRef,
 } from 'typeorm';
 import { User } from './user.entity';
 import { Category } from './category.entity';
@@ -111,11 +111,11 @@ export class Post {
   @DeleteDateColumn()
   deleted_at: Date;
 
-  @ManyToOne(() => User, { eager: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => forwardRef(() => User), { eager: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Category, { eager: false, nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => forwardRef(() => Category), { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'category_id' })
   category: Category;
 
@@ -123,25 +123,25 @@ export class Post {
   @JoinColumn({ name: 'required_group_id' })
   requiredGroup: Group;
 
-  @ManyToOne(() => Reply, { eager: false, nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => forwardRef(() => Reply), { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'best_reply_id' })
   bestReply: Reply | null;
 
-  @OneToMany(() => Reply, (reply) => reply.post)
+  @OneToMany(() => forwardRef(() => Reply), (reply) => reply.post)
   replies: Reply[];
 
-  @OneToMany(() => Bookmark, (bookmark) => bookmark.post)
+  @OneToMany(() => forwardRef(() => Bookmark), (bookmark) => bookmark.post)
   bookmarks: Bookmark[];
 
-  @OneToMany(() => Attachment, (attachment) => attachment.post)
+  @OneToMany(() => forwardRef(() => Attachment), (attachment) => attachment.post)
   attachments: Attachment[];
 
-  @OneToMany(() => Notification, (notification) => notification.post)
+  @OneToMany(() => forwardRef(() => Notification), (notification) => notification.post)
   notifications: Notification[];
 
-  @OneToMany(() => PostLike, (postLike) => postLike.post)
+  @OneToMany(() => forwardRef(() => PostLike), (postLike) => postLike.post)
   likes: PostLike[];
 
-  @OneToMany(() => PostTag, (postTag) => postTag.post)
+  @OneToMany(() => forwardRef(() => PostTag), (postTag) => postTag.post)
   postTags: PostTag[];
 }

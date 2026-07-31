@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  JoinColumn, Index,
+  JoinColumn, Index, forwardRef,
 } from 'typeorm';
 import { Post } from './post.entity';
 import { User } from './user.entity';
@@ -45,15 +45,15 @@ export class Reply {
   @DeleteDateColumn()
   deleted_at: Date;
 
-  @ManyToOne(() => Post, { eager: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => forwardRef(() => Post), { eager: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
   post: Post;
 
-  @ManyToOne(() => User, { eager: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => forwardRef(() => User), { eager: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => Reply, { eager: false, nullable: true, onDelete: 'CASCADE' })
+  @ManyToOne(() => forwardRef(() => Reply), { eager: false, nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'parent_reply_id' })
   parentReply: Reply;
 }
