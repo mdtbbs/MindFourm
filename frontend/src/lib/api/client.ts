@@ -1163,3 +1163,50 @@ export const lanlinkApi = {
   },
 };
 
+// 好友管理 API（论坛内部）
+export const friendsApi = {
+  /** 搜索非好友用户 */
+  search: (q: string, limit = 10) =>
+    request<{ data: Array<{ id: number; username: string; avatar_url: string }> }>(
+      `/api/friends/search?q=${encodeURIComponent(q)}&limit=${limit}`
+    ),
+
+  /** 获取好友列表 */
+  getList: (page = 1, limit = 50) =>
+    request<{ friends: Array<{ id: number; username: string; avatar_url: string; friendship_since: string }>; total: number }>(
+      `/api/friends?page=${page}&limit=${limit}`
+    ),
+
+  /** 获取待处理好友请求 */
+  getRequests: (page = 1, limit = 20) =>
+    request<{ requests: Array<{ id: number; requester: { id: number; username: string; avatar_url: string }; created_at: string }>; total: number }>(
+      `/api/friends/requests?page=${page}&limit=${limit}`
+    ),
+
+  /** 发送好友请求 */
+  sendRequest: (userId: number) =>
+    request<{ message: string }>(`/api/friends/request/${userId}`, { method: 'POST' }),
+
+  /** 接受好友请求 */
+  acceptRequest: (userId: number) =>
+    request<{ message: string }>(`/api/friends/accept/${userId}`, { method: 'POST' }),
+
+  /** 拒绝好友请求 */
+  rejectRequest: (userId: number) =>
+    request<{ message: string }>(`/api/friends/reject/${userId}`, { method: 'POST' }),
+
+  /** 取消好友请求 */
+  cancelRequest: (userId: number) =>
+    request<{ message: string }>(`/api/friends/cancel/${userId}`, { method: 'POST' }),
+
+  /** 删除好友 */
+  removeFriend: (userId: number) =>
+    request<{ message: string }>(`/api/friends/${userId}`, { method: 'DELETE' }),
+
+  /** 检查好友状态 */
+  checkStatus: (userId: number) =>
+    request<{ status: 'none' | 'incoming' | 'outgoing' | 'friends' }>(
+      `/api/friends/check/${userId}`
+    ),
+};
+

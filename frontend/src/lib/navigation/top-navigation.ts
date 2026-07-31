@@ -28,7 +28,7 @@ export const DEFAULT_TOP_NAVIGATION_ITEMS: TopNavigationItem[] = [
       { label: '积分商店', href: '/shop' },
     ],
   },
-  { type: 'link', label: 'LanLink', href: '/lanlink/quick-code' },
+  { type: 'link', label: 'LanLink', href: '/lanlink' },
 ];
 
 const FEATURE_SETTING_BY_HREF: Record<string, { key: string; defaultEnabled: boolean }> = {
@@ -37,7 +37,7 @@ const FEATURE_SETTING_BY_HREF: Record<string, { key: string; defaultEnabled: boo
   '/groups': { key: 'feature_groups_enabled', defaultEnabled: true },
   '/leaderboard': { key: 'feature_leaderboard_enabled', defaultEnabled: true },
   '/shop': { key: 'feature_shop_enabled', defaultEnabled: true },
-  '/lanlink/quick-code': { key: 'feature_lanlink_enabled', defaultEnabled: false },
+  '/lanlink': { key: 'feature_lanlink_enabled', defaultEnabled: false },
 };
 
 function isSafeHref(value: unknown): value is string {
