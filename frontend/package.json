@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack -p 4502",
     "build": "next build",
     "analyze": "ANALYZE=true next build",
-    "start": "next start",
+    "start": "node scripts/start-standalone.js",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck",
     "lint": "next lint"

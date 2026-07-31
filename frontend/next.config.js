@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
   // Security: Hide technology stack
   poweredByHeader: false,
@@ -6,8 +8,18 @@ const nextConfig = {
   // CDN support: prefix for static assets
   assetPrefix: process.env.NEXT_PUBLIC_CDN_URL || '',
 
-  // Production: standalone output for PM2 (no full node_modules needed)
+  // Production: standalone output (smaller deployment tree, only needed deps)
   output: 'standalone',
+
+  // Pin file-tracing root to this package directory. Without this, Next.js
+  // walks upward looking for a lockfile. When it finds multiple lockfiles
+  // (monorepo root + frontend + a stray one on BT Panel at /www/wwwroot/),
+  // it treats the project as a monorepo workspace and nests the standalone
+  // output under `.next/standalone/frontend/server.js` instead of
+  // `.next/standalone/server.js`. Forcing the root to the frontend
+  // directory keeps the standalone layout flat regardless of lockfiles
+  // above the project.
+  outputFileTracingRoot: __dirname,
 
   // Production: strip console.log/warn/info, keep error
   compiler: {
