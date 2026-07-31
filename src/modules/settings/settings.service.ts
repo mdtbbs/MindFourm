@@ -178,7 +178,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'brand_primary', value: DEFAULT_BRAND_PRIMARY, category: 'basic', description: 'Global primary brand color' },
       { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
       { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
-      { key: 'site_url', value: 'http://localhost:3000', category: 'basic', description: 'Site URL' },
+      { key: 'site_url', value: process.env.FRONTEND_URL || 'http://localhost:3000', category: 'basic', description: '站点URL - 用于生成邮件链接、RSS订阅等，必须设置为实际运营域名' },
       { key: 'admin_email', value: 'admin@example.com', category: 'basic', description: 'Admin email' },
       { key: 'maintenance_mode', value: 'false', category: 'basic', description: 'Maintenance mode toggle' },
       { key: 'posts_per_page', value: '20', category: 'posts', description: 'Posts per page' },

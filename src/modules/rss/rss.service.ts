@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { Category } from '@entities/category.entity';
 import { ConfigService } from '@nestjs/config';
+import { SettingsService } from '../settings/settings.service';
 
 @Injectable()
 export class RssService {
@@ -13,6 +14,7 @@ export class RssService {
     @InjectRepository(Category)
     private categoryRepo: Repository<Category>,
     private configService: ConfigService,
+    private settingsService: SettingsService,
   ) {}
 
   private escapeXml(text: string): string {
@@ -32,7 +34,9 @@ export class RssService {
   }
 
   async generatePostsRss(): Promise<string> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = await this.settingsService.get('site_url')
+      || this.configService.get<string>('app.frontendUrl')
+      || 'http://localhost:3000';
     const posts = await this.postRepo.find({
       where: { status: 'published' },
       relations: ['user', 'category'],
@@ -64,7 +68,9 @@ export class RssService {
   }
 
   async generateCategoryRss(categorySlug: string): Promise<string> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = await this.settingsService.get('site_url')
+      || this.configService.get<string>('app.frontendUrl')
+      || 'http://localhost:3000';
 
     const category = await this.categoryRepo.findOne({ where: { slug: categorySlug } });
     if (!category) throw new Error('Category not found');

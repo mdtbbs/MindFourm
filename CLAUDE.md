@@ -579,6 +579,9 @@ npm run test:cov       # Coverage report
 ```bash
 # Server
 PORT=4000
+# 重要：生产环境必须设置为实际运营域名
+# 此配置用于初始化数据库的 site_url 设置，影响邮件链接、RSS订阅等
+# 部署后可以在管理后台「基础设置」中修改
 FRONTEND_URL=http://localhost:3000
 
 # Database
@@ -602,6 +605,15 @@ EASYMANAGER_API_KEY=<key>
 MFL_BASE_URL=http://localhost:3000
 MFL_API_KEY=<write-permission-key>
 ```
+
+### 重要配置说明
+
+**`FRONTEND_URL` 配置**：
+- 用于初始化数据库的 `site_url` 设置
+- 影响所有邮件链接（回复通知、@提及、私信、欢迎邮件等）和RSS订阅链接
+- 首次启动时，`site_url` 会自动使用 `FRONTEND_URL` 的值
+- 生产环境必须设置为实际运营域名（如 `https://forum.example.com`）
+- 部署后可以在管理后台「基础设置」→「站点URL」中修改
 
 ## Technology Stack
 
