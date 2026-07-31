@@ -445,3 +445,361 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+/* ─── TipTap WYSIWYG Editor ──────────────────────────── */
+
+.tiptap-wrapper {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.tiptap-wrapper:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+/* ── Toolbar ─────────────────────────────────────────── */
+
+.tiptap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tiptap-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tiptap-btn:hover {
+  color: var(--text);
+  background: var(--bg-hover, rgba(0,0,0,0.05));
+}
+
+.tiptap-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tiptap-btn-active {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.tiptap-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ── Content area ────────────────────────────────────── */
+
+.tiptap-content {
+  position: relative;
+}
+
+.tiptap-content .tiptap {
+  padding: 12px 16px;
+  outline: none;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.7;
+  overflow-y: auto;
+}
+
+/* TipTap content styles — match prose rendering */
+.tiptap-content .tiptap > *:first-child {
+  margin-top: 0;
+}
+
+.tiptap-content .tiptap p {
+  margin: 0 0 0.75em;
+}
+
+.tiptap-content .tiptap h1,
+.tiptap-content .tiptap h2,
+.tiptap-content .tiptap h3 {
+  font-weight: 700;
+  color: var(--text);
+  margin: 1.2em 0 0.5em;
+  line-height: 1.3;
+}
+
+.tiptap-content .tiptap h1 { font-size: 1.75em; }
+.tiptap-content .tiptap h2 { font-size: 1.4em; }
+.tiptap-content .tiptap h3 { font-size: 1.15em; }
+
+.tiptap-content .tiptap blockquote {
+  border-left: 3px solid var(--primary);
+  padding: 0.5em 1em;
+  margin: 0.75em 0;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.tiptap-content .tiptap blockquote p {
+  margin: 0.25em 0;
+}
+
+.tiptap-content .tiptap code {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.15em 0.35em;
+  font-size: 0.875em;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: var(--primary-dark, #e55a2b);
+}
+
+.tiptap-content .tiptap pre {
+  background: #1e1e2e;
+  color: #cdd6f4;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 0.75em 0;
+  overflow-x: auto;
+  font-size: 0.875em;
+  line-height: 1.6;
+}
+
+.tiptap-content .tiptap pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+}
+
+.tiptap-content .tiptap ul,
+.tiptap-content .tiptap ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.tiptap-content .tiptap li {
+  margin: 0.25em 0;
+}
+
+.tiptap-content .tiptap li p {
+  margin: 0.25em 0;
+}
+
+.tiptap-content .tiptap hr {
+  border: none;
+  border-top: 2px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.tiptap-content .tiptap a,
+.tiptap-content .tiptap .editor-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.tiptap-content .tiptap a:hover {
+  color: var(--primary-dark, #e55a2b);
+}
+
+.tiptap-content .tiptap img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  margin: 0.5em 0;
+}
+
+.tiptap-content .tiptap img.ProseMirror-selectednode {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Table styles */
+.tiptap-content .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0;
+  overflow: hidden;
+}
+
+.tiptap-content .tiptap table td,
+.tiptap-content .tiptap table th {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  min-width: 80px;
+}
+
+.tiptap-content .tiptap table th {
+  background: var(--bg-elevated);
+  font-weight: 600;
+}
+
+.tiptap-content .tiptap table .selectedCell {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+/* Placeholder */
+.tiptap-content .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+  font-style: italic;
+}
+
+/* Code block language label */
+.tiptap-content .tiptap pre .hljs-meta,
+.tiptap-content .tiptap pre [class*="language-"] {
+  /* Syntax highlighting tokens — lowlight provides the classes */
+}
+
+/* ── Source mode textarea ────────────────────────────── */
+
+.tiptap-source {
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  outline: none;
+  resize: vertical;
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ── Status bar ──────────────────────────────────────── */
+
+.tiptap-status {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 4px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.tiptap-status-uploading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+}
+
+/* ── Link dialog ─────────────────────────────────────── */
+
+.tiptap-link-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.tiptap-link-dialog-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.tiptap-link-input {
+  width: 300px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+}
+
+.tiptap-link-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.tiptap-link-apply {
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tiptap-link-apply:hover {
+  background: var(--primary-dark, #e55a2b);
+}
+
+.tiptap-link-cancel {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tiptap-link-cancel:hover {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+/* ── Drag & drop overlay ─────────────────────────────── */
+
+.tiptap-content.drag-active::after {
+  content: '📷 释放以上传图片';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius);
+  font-size: 16px;
+  color: var(--primary);
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 10;
+}

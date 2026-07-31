@@ -1,13 +1,24 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import dynamic from 'next/dynamic';
 import { Reply } from '@/types';
 import Button from '@/components/ui/button';
-import { Eye, Edit3, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Alert from '@/components/ui/alert';
 import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import { useToastStore } from '@/store/toast-store';
+
+// TipTap editor is client-only
+const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full min-h-[120px] flex items-center justify-center border border-surface-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+      <Loader2 className="w-4 h-4 animate-spin text-surface-400" />
+      <span className="ml-2 text-xs text-surface-400">加载编辑器…</span>
+    </div>
+  ),
+});
 
 interface ReplyEditorProps {
   postId: number;
@@ -26,12 +37,10 @@ export default function ReplyEditor({
   onCancelTarget,
 }: ReplyEditorProps) {
   const [content, setContent] = useState('');
-  const [preview, setPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const showSuccess = useToastStore((state) => state.showSuccess);
 
   const replyId = quoteReply?.id ?? replyToReply?.id;
@@ -39,9 +48,6 @@ export default function ReplyEditor({
   useDraftAutoSave({ content }, draft.save, !!content);
 
   // Restore the draft when the editor mounts or switches target (quote/reply-to).
-  // Depending on `draft.load` — which is stable per draft key — rather than the
-  // whole `draft` object keeps this from re-running on every render and clobbering
-  // what the user is typing.
   useEffect(() => {
     const saved = draft.load();
     if (saved?.content) setContent(saved.content as string);
@@ -52,7 +58,6 @@ export default function ReplyEditor({
   useEffect(() => {
     if (!replyId) return;
     containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    textareaRef.current?.focus();
   }, [replyId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -111,40 +116,14 @@ export default function ReplyEditor({
         {error && <Alert type="error" message={error} />}
         {success && <Alert type="success" message={success} className="mt-3" />}
 
-        <div className="mb-4 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setPreview(false)}
-            className={`px-3 py-1.5 text-sm rounded transition-colors ${
-              !preview ? 'bg-primary-600 text-white' : 'text-surface-600 hover:bg-surface-100'
-            }`}
-          >
-            <Edit3 className="w-4 h-4 inline mr-1" />
-            编辑
-          </button>
-          <button
-            type="button"
-            onClick={() => setPreview(true)}
-            className={`px-3 py-1.5 text-sm rounded transition-colors ${
-              preview ? 'bg-primary-600 text-white' : 'text-surface-600 hover:bg-surface-100'
-            }`}
-          >
-            <Eye className="w-4 h-4 inline mr-1" />
-            预览
-          </button>
-        </div>
-
-        {preview ? (
-          <MarkdownRenderer content={content} className="min-h-[120px] p-4 bg-surface-50 dark:bg-gray-800 rounded-lg border border-surface-200 dark:border-gray-700" fallback="*暂无内容*" />
-        ) : (
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="使用 Markdown 格式编写回复..."
-            className="w-full min-h-[120px] px-3 py-2 border border-surface-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none resize-y bg-white dark:bg-gray-800 text-surface-900 dark:text-gray-100 placeholder:text-surface-400 dark:placeholder:text-gray-500"
-          />
-        )}
+        <TiptapEditor
+          value={content}
+          onChange={setContent}
+          placeholder="使用富文本编辑器编写回复，支持粘贴 / 拖放上传图片..."
+          minHeight="120px"
+          compact
+          imageUpload
+        />
 
         <div className="mt-4 flex justify-end">
           <Button

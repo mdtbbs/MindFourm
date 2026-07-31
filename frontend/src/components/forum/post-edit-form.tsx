@@ -1,14 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Eye, Pencil, Image, Bold, Italic, Link2, List, ListOrdered, Quote, Code, Heading2, Minus } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { categoryApi, postApi } from '@/lib/api/client';
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Button } from '@/components/ui/button';
-import useInlineImageUpload from '@/hooks/use-inline-image-upload';
 import type { Category, Post } from '@/types';
+
+// TipTap editor is client-only
+const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full min-h-[18rem] flex items-center justify-center border border-[var(--border)] rounded-lg bg-[var(--bg-card)]">
+      <Loader2 className="w-5 h-5 animate-spin text-[var(--text-muted)]" />
+      <span className="ml-2 text-sm text-[var(--text-muted)]">加载编辑器…</span>
+    </div>
+  ),
+});
 
 interface PostEditFormProps {
   post: Post;
@@ -28,7 +38,6 @@ interface PostEditFormProps {
  */
 export default function PostEditForm({ post }: PostEditFormProps) {
   const router = useRouter();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [categoryId, setCategoryId] = useState<number | undefined>(post.category_id ?? undefined);
@@ -36,61 +45,13 @@ export default function PostEditForm({ post }: PostEditFormProps) {
     (post.tags ?? []).map((tag) => tag.name).join(', '),
   );
   const [categories, setCategories] = useState<Category[]>([]);
-  const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Inline image upload (paste / toolbar button)
-  const {
-    uploading: imageUploading,
-    fileInputRef: imageInputRef,
-    triggerImagePicker,
-    handlePaste,
-    handleDrop,
-  } = useInlineImageUpload({
-    insertMarkdown: (text) => {
-      const ta = textareaRef.current;
-      if (!ta) {
-        setContent((prev) => prev + '\n' + text);
-        return;
-      }
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const before = content.slice(0, start);
-      const after = content.slice(end);
-      const needsLeading = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
-      const needsTrailing = after.length > 0 && !after.startsWith('\n') ? '\n' : '';
-      const next = before + needsLeading + text + needsTrailing + after;
-      setContent(next);
-      requestAnimationFrame(() => {
-        const cursor = start + needsLeading.length + text.length;
-        ta.setSelectionRange(cursor, cursor);
-      });
-    },
-  });
-
-  const insertMarkdown = (prefix: string, suffix = '') => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = content.slice(start, end);
-    const replacement = prefix + (selected || '文本') + suffix;
-    const newContent = content.slice(0, start) + replacement + content.slice(end);
-    setContent(newContent);
-    requestAnimationFrame(() => {
-      ta.focus();
-      const cursorPos = start + prefix.length + (selected ? selected.length : 2);
-      ta.setSelectionRange(cursorPos, cursorPos);
-    });
-  };
 
   useEffect(() => {
     categoryApi
       .getList()
       .then(setCategories)
-      // A failed category list must not block editing the text; the field just falls
-      // back to "keep current".
       .catch(() => setCategories([]));
   }, []);
 
@@ -117,8 +78,6 @@ export default function PostEditForm({ post }: PostEditFormProps) {
     setSaving(true);
     try {
       await postApi.update(post.id, {
-        // Trimmed on submit, not just validated — the previous account edit page
-        // validated the trimmed value and then sent the untrimmed one.
         title: trimmedTitle,
         content,
         category_id: categoryId,
@@ -127,8 +86,6 @@ export default function PostEditForm({ post }: PostEditFormProps) {
           .map((tag) => tag.trim())
           .filter(Boolean),
       });
-      // refresh() so the server-rendered detail page picks up the new content, rather
-      // than navigating to a cached copy of the old one.
       router.push(`/posts/${post.id}`);
       router.refresh();
     } catch (err) {
@@ -186,92 +143,16 @@ export default function PostEditForm({ post }: PostEditFormProps) {
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label htmlFor="post-content" className="block text-sm font-medium text-[var(--text)]">
-              内容
-            </label>
-            <button
-              type="button"
-              onClick={() => setPreview((value) => !value)}
-              className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--primary)]"
-            >
-              {preview ? <Pencil className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              {preview ? '继续编辑' : '预览'}
-            </button>
-          </div>
-
-          {preview ? (
-            <div className="min-h-[18rem] px-4 py-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)]">
-              <MarkdownRenderer content={content} />
-            </div>
-          ) : (
-            <>
-              {/* Markdown toolbar */}
-              <div className="flex items-center gap-0.5 px-3 py-2 rounded-t-lg border border-b-0 border-[var(--border)] bg-[var(--bg-elevated)] overflow-x-auto">
-                <EditToolbarBtn icon={<Bold className="w-4 h-4" />} tooltip="粗体"
-                  onClick={() => insertMarkdown('**', '**')} />
-                <EditToolbarBtn icon={<Italic className="w-4 h-4" />} tooltip="斜体"
-                  onClick={() => insertMarkdown('*', '*')} />
-                <EditToolbarBtn icon={<Code className="w-4 h-4" />} tooltip="行内代码"
-                  onClick={() => insertMarkdown('`', '`')} />
-                <div className="w-px h-5 bg-[var(--border)] mx-1" />
-                <EditToolbarBtn icon={<Heading2 className="w-4 h-4" />} tooltip="标题"
-                  onClick={() => insertMarkdown('\n## ')} />
-                <EditToolbarBtn icon={<Quote className="w-4 h-4" />} tooltip="引用"
-                  onClick={() => insertMarkdown('\n> ')} />
-                <EditToolbarBtn icon={<List className="w-4 h-4" />} tooltip="无序列表"
-                  onClick={() => insertMarkdown('\n- ')} />
-                <EditToolbarBtn icon={<ListOrdered className="w-4 h-4" />} tooltip="有序列表"
-                  onClick={() => insertMarkdown('\n1. ')} />
-                <div className="w-px h-5 bg-[var(--border)] mx-1" />
-                <EditToolbarBtn icon={<Link2 className="w-4 h-4" />} tooltip="链接"
-                  onClick={() => insertMarkdown('[', '](https://)')} />
-                <EditToolbarBtn
-                  icon={<Image className="w-4 h-4" />}
-                  tooltip={imageUploading ? '图片上传中…' : '上传图片'}
-                  onClick={triggerImagePicker}
-                  disabled={imageUploading}
-                />
-                <EditToolbarBtn icon={<Minus className="w-4 h-4" />} tooltip="分割线"
-                  onClick={() => insertMarkdown('\n---\n')} />
-              </div>
-
-              {/* Hidden image picker */}
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/gif,image/webp"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  if (files.length > 0) {
-                    const dt = new DataTransfer();
-                    files.forEach((f) => dt.items.add(f));
-                    handlePaste({
-                      clipboardData: dt,
-                      preventDefault: () => undefined,
-                    } as unknown as React.ClipboardEvent);
-                  }
-                  if (e.target) e.target.value = '';
-                }}
-              />
-
-              <textarea
-                id="post-content"
-                ref={textareaRef}
-                data-testid="post-edit-content"
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                onPaste={handlePaste}
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-                rows={16}
-                placeholder="使用 Markdown 格式编写帖子内容（支持粘贴图片）..."
-                className="w-full px-3 py-2 rounded-b-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] font-mono text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
-              />
-            </>
-          )}
+          <label htmlFor="post-content" className="block text-sm font-medium text-[var(--text)] mb-2">
+            内容
+          </label>
+          <TiptapEditor
+            value={content}
+            onChange={setContent}
+            placeholder="使用富文本编辑器编辑帖子内容..."
+            minHeight="18rem"
+            imageUpload
+          />
         </div>
 
         <div>
@@ -304,22 +185,5 @@ export default function PostEditForm({ post }: PostEditFormProps) {
         </div>
       </form>
     </div>
-  );
-}
-
-function EditToolbarBtn({ icon, tooltip, onClick, disabled = false }: {
-  icon: React.ReactNode; tooltip: string; onClick: () => void; disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={tooltip}
-      onClick={onClick}
-      disabled={disabled}
-      className="p-1.5 rounded text-[var(--text-secondary)]
-        hover:text-[var(--text)] hover:bg-[var(--bg-hover)] transition-colors shrink-0
-        disabled:opacity-50 disabled:cursor-not-allowed">
-      {icon}
-    </button>
   );
 }

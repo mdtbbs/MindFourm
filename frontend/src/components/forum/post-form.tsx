@@ -1,33 +1,34 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth/context';
 import { postApi, categoryApi, tagApi } from '@/lib/api/client';
-import { CreatePostInput, Category, Tag, Attachment } from '@/types';
+import { CreatePostInput, Category, Tag } from '@/types';
 import Button from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import Alert from '@/components/ui/alert';
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
-import FileUpload from '@/components/forum/file-upload';
-import AttachmentList from '@/components/forum/attachment-list';
 import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
-import useInlineImageUpload from '@/hooks/use-inline-image-upload';
-import {
-  Eye, Edit3, Bold, Italic, Link2, List, ListOrdered,
-  Quote, Code, Heading2, Image, Minus, ChevronDown, Clock, Send, Save, Loader2, CheckCircle2,
-} from 'lucide-react';
+import { Send, Save, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
 
-type EditorTab = 'write' | 'preview';
+// TipTap editor is client-only (depends on document/window)
+const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full min-h-[200px] flex items-center justify-center border border-surface-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900">
+      <Loader2 className="w-5 h-5 animate-spin text-surface-400" />
+      <span className="ml-2 text-sm text-surface-400">加载编辑器…</span>
+    </div>
+  ),
+});
 
 export default function PostForm() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const showSuccess = useToastStore((state) => state.showSuccess);
 
   // Form fields
@@ -38,12 +39,8 @@ export default function PostForm() {
   const [status, setStatus] = useState<'draft' | 'published'>('published');
 
   // UI state
-  const [editorTab, setEditorTab] = useState<EditorTab>('write');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdPostId, setCreatedPostId] = useState<number | null>(null);
-  const [createdPostStatus, setCreatedPostStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   // Reference data
   const [categories, setCategories] = useState<Category[]>([]);
@@ -52,35 +49,6 @@ export default function PostForm() {
   // Validation errors
   const [titleError, setTitleError] = useState('');
   const [contentError, setContentError] = useState('');
-
-  // Inline image upload (paste / toolbar button)
-  const {
-    uploading: imageUploading,
-    fileInputRef: imageInputRef,
-    triggerImagePicker,
-    handlePaste,
-    handleDrop,
-  } = useInlineImageUpload({
-    insertMarkdown: (text) => {
-      const ta = textareaRef.current;
-      if (!ta) {
-        setContent((prev) => prev + '\n' + text);
-        return;
-      }
-      const start = ta.selectionStart;
-      const end = ta.selectionEnd;
-      const before = content.slice(0, start);
-      const after = content.slice(end);
-      const needsLeading = before.length > 0 && !before.endsWith('\n') ? '\n' : '';
-      const needsTrailing = after.length > 0 && !after.startsWith('\n') ? '\n' : '';
-      const next = before + needsLeading + text + needsTrailing + after;
-      setContent(next);
-      requestAnimationFrame(() => {
-        const cursor = start + needsLeading.length + text.length;
-        ta.setSelectionRange(cursor, cursor);
-      });
-    },
-  });
 
   // Draft
   const draft = useDraft('post');
@@ -111,13 +79,6 @@ export default function PostForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Intentionally no auto-redirect after creating a post.
-  //
-  // The attachment uploader only renders once `createdPostId` is set, but a
-  // published post used to navigate away the moment it was created — so the
-  // attachment step was unreachable in the normal flow. The user now gets an
-  // explicit link once the post exists (see the panel below).
-
   // ── Helpers ──────────────────────────────────────────────
   const parseTags = (): string[] =>
     tagsInput
@@ -134,25 +95,6 @@ export default function PostForm() {
     if (!title.trim()) { setTitleError('请输入标题'); valid = false; } else { setTitleError(''); }
     if (!content.trim()) { setContentError('请输入内容'); valid = false; } else { setContentError(''); }
     return valid;
-  };
-
-  // ── Markdown toolbar helpers ─────────────────────────────
-  const insertMarkdown = (prefix: string, suffix = '') => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = content.slice(start, end);
-    const replacement = prefix + (selected || '文本') + suffix;
-    const newContent = content.slice(0, start) + replacement + content.slice(end);
-    setContent(newContent);
-    setEditorTab('write');
-    // Restore cursor after React re-render
-    requestAnimationFrame(() => {
-      ta.focus();
-      const cursorPos = start + prefix.length + (selected ? selected.length : 2);
-      ta.setSelectionRange(cursorPos, cursorPos);
-    });
   };
 
   // ── Submit ───────────────────────────────────────────────
@@ -172,12 +114,11 @@ export default function PostForm() {
       };
       const post = await postApi.create(input);
       draft.clear();
-      setCreatedPostId(post.id);
-      setCreatedPostStatus(post.status);
-      showSuccess('帖子发布成功！');
+      showSuccess(status === 'draft' ? '草稿已保存' : '帖子发布成功！');
+      // Redirect to the new post page
+      router.push(`/posts/${post.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : '发帖失败，请重试');
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -205,31 +146,6 @@ export default function PostForm() {
     );
   }
 
-  // ── Pending moderation banner ────────────────────────────
-  if (createdPostStatus === 'pending') {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-12">
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-8 text-center">
-          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-            <Clock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-          </div>
-          <h2 className="text-xl font-bold text-amber-900 dark:text-amber-200 mb-2">
-            帖子已提交，等待审核
-          </h2>
-          <p className="text-amber-700 dark:text-amber-300 mb-6 leading-relaxed">
-            您的帖子正在等待管理员审核。<br />
-            审核通过后将会自动发布，请耐心等待。<br />
-            如有疑问请联系管理组。
-          </p>
-          <div className="flex gap-3 justify-center">
-            <Button variant="secondary" onClick={() => router.push('/')}>返回首页</Button>
-            <Button onClick={() => router.push(`/posts/${createdPostId}`)}>查看帖子</Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const categoryOptions = [
     { value: '', label: '选择分类（可选）' },
     ...categories.map(c => ({ value: String(c.id), label: c.name })),
@@ -244,7 +160,7 @@ export default function PostForm() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">发布新帖子</h1>
         <p className="text-sm text-surface-500 dark:text-gray-400 mt-1">
-          使用 Markdown 格式编写您的内容
+          使用富文本编辑器编写，支持粘贴 / 拖放上传图片
         </p>
       </div>
 
@@ -272,115 +188,18 @@ export default function PostForm() {
           {titleError && <p className="text-sm text-red-500 mt-1.5 ml-1">{titleError}</p>}
         </div>
 
-        {/* ── Editor card ───────────────────────────── */}
-        <div className="bg-white dark:bg-gray-900 rounded-xl border border-surface-200 dark:border-gray-700 overflow-hidden">
-
-          {/* Toolbar */}
-          <div className="flex items-center gap-0.5 px-3 py-2 border-b border-surface-200 dark:border-gray-700 bg-surface-50 dark:bg-gray-800/50 overflow-x-auto">
-            <ToolbarBtn icon={<Bold className="w-4 h-4" />} tooltip="粗体"
-              onClick={() => insertMarkdown('**', '**')} />
-            <ToolbarBtn icon={<Italic className="w-4 h-4" />} tooltip="斜体"
-              onClick={() => insertMarkdown('*', '*')} />
-            <ToolbarBtn icon={<Code className="w-4 h-4" />} tooltip="行内代码"
-              onClick={() => insertMarkdown('`', '`')} />
-            <div className="w-px h-5 bg-surface-200 dark:border-gray-600 mx-1" />
-            <ToolbarBtn icon={<Heading2 className="w-4 h-4" />} tooltip="标题"
-              onClick={() => insertMarkdown('\n## ')} />
-            <ToolbarBtn icon={<Quote className="w-4 h-4" />} tooltip="引用"
-              onClick={() => insertMarkdown('\n> ')} />
-            <ToolbarBtn icon={<List className="w-4 h-4" />} tooltip="无序列表"
-              onClick={() => insertMarkdown('\n- ')} />
-            <ToolbarBtn icon={<ListOrdered className="w-4 h-4" />} tooltip="有序列表"
-              onClick={() => insertMarkdown('\n1. ')} />
-            <div className="w-px h-5 bg-surface-200 dark:border-gray-600 mx-1" />
-            <ToolbarBtn icon={<Link2 className="w-4 h-4" />} tooltip="链接"
-              onClick={() => insertMarkdown('[', '](https://)')} />
-            <ToolbarBtn
-              icon={<Image className="w-4 h-4" />}
-              tooltip={imageUploading ? '图片上传中…' : '上传图片'}
-              onClick={triggerImagePicker}
-              disabled={imageUploading}
-            />
-            <ToolbarBtn icon={<Minus className="w-4 h-4" />} tooltip="分割线"
-              onClick={() => insertMarkdown('\n---\n')} />
-          </div>
-
-          {/* Hidden image picker for inline upload */}
-          <input
-            ref={imageInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/gif,image/webp"
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []);
-              if (files.length > 0) {
-                // The hook's upload runs via triggerImagePicker → native click → change.
-                // Re-dispatch through a small helper that feeds files into the paste-like path.
-                const dt = new DataTransfer();
-                files.forEach((f) => dt.items.add(f));
-                handlePaste({
-                  clipboardData: dt,
-                  preventDefault: () => undefined,
-                } as unknown as React.ClipboardEvent);
-              }
-              if (e.target) e.target.value = '';
-            }}
+        {/* ── Editor ────────────────────────────────── */}
+        <div>
+          <TiptapEditor
+            value={content}
+            onChange={setContent}
+            placeholder="使用富文本编辑器编写帖子内容，支持粘贴 / 拖放上传图片..."
+            minHeight="280px"
+            imageUpload
+            className={contentError ? 'ring-1 ring-red-400 rounded-xl' : ''}
           />
-
-          {/* Tabs: Write / Preview */}
-          <div className="flex border-b border-surface-200 dark:border-gray-700">
-            <button
-              type="button"
-              onClick={() => setEditorTab('write')}
-              className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors
-                ${editorTab === 'write'
-                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                  : 'border-transparent text-surface-500 hover:text-surface-700 dark:hover:text-gray-300'}`}>
-              <Edit3 className="w-4 h-4" />
-              编写
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditorTab('preview')}
-              className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors
-                ${editorTab === 'preview'
-                  ? 'border-primary-600 text-primary-600 dark:text-primary-400'
-                  : 'border-transparent text-surface-500 hover:text-surface-700 dark:hover:text-gray-300'}`}>
-              <Eye className="w-4 h-4" />
-              预览
-            </button>
-          </div>
-
-          {/* Editor area */}
-          {editorTab === 'write' ? (
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={e => { setContent(e.target.value); if (contentError) setContentError(''); }}
-              onPaste={handlePaste}
-              onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
-              placeholder="使用 Markdown 格式编写帖子内容（支持粘贴图片）..."
-              className={`w-full min-h-[280px] px-4 py-3 resize-y outline-none
-                bg-white dark:bg-gray-800 text-surface-900 dark:text-gray-100
-                placeholder:text-surface-400 dark:placeholder:text-gray-500 font-mono text-sm leading-relaxed
-                ${contentError ? 'ring-1 ring-red-400' : ''}`}
-            />
-          ) : (
-            <div className="min-h-[280px] p-4 overflow-auto">
-              {content.trim() ? (
-                <MarkdownRenderer content={content} />
-              ) : (
-                <p className="text-surface-400 dark:text-gray-500 italic">暂无内容，请先在编写标签页中输入</p>
-              )}
-            </div>
-          )}
-
           {contentError && (
-            <div className="px-4 pb-3">
-              <p className="text-sm text-red-500">{contentError}</p>
-            </div>
+            <p className="text-sm text-red-500 mt-1.5 ml-1">{contentError}</p>
           )}
         </div>
 
@@ -438,29 +257,6 @@ export default function PostForm() {
           </div>
         </div>
 
-        {/* ── Attachments (available once the post exists) ── */}
-        {createdPostId && (
-          <div className="bg-white dark:bg-gray-900 rounded-xl border border-surface-200 dark:border-gray-700 p-5">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-medium text-surface-700 dark:text-gray-300">附件</h3>
-              <Link
-                href={`/posts/${createdPostId}`}
-                className="text-sm text-primary-600 hover:underline"
-              >
-                {createdPostStatus === 'pending' ? '查看待审核帖子' : '查看帖子'} →
-              </Link>
-            </div>
-            <p className="mb-3 text-xs text-surface-500 dark:text-gray-400">
-              帖子已创建，可以继续添加附件，完成后点击上方链接查看。
-            </p>
-            <FileUpload postId={createdPostId}
-              onUploaded={newAtts => setAttachments(prev => [...prev, ...newAtts])} />
-            {attachments.length > 0 && (
-              <div className="mt-3"><AttachmentList attachments={attachments} /></div>
-            )}
-          </div>
-        )}
-
         {/* ── Actions ───────────────────────────────── */}
         <div className="flex items-center justify-between pt-4 border-t border-surface-200 dark:border-gray-700">
           <Button type="button" variant="secondary" onClick={() => router.back()}>
@@ -472,61 +268,27 @@ export default function PostForm() {
               <Save className="w-4 h-4 inline mr-1" />
               存草稿
             </Button>
-            {createdPostId ? (
-              <>
-                <span className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                  <CheckCircle2 className="w-4 h-4" />
-                  已发布
-                </span>
-                <Link
-                  href={`/posts/${createdPostId}`}
-                  className="inline-flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700 font-medium"
-                >
-                  查看帖子 →
-                </Link>
-              </>
-            ) : (
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
-                    提交中...
-                  </>
-                ) : status === 'draft' ? (
-                  <>
-                    <Save className="w-4 h-4 inline mr-1" />
-                    保存草稿
-                  </>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 inline mr-1" />
-                    发布帖子
-                  </>
-                )}
-              </Button>
-            )}
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
+                  提交中...
+                </>
+              ) : status === 'draft' ? (
+                <>
+                  <Save className="w-4 h-4 inline mr-1" />
+                  保存草稿
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 inline mr-1" />
+                  发布帖子
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </form>
     </div>
-  );
-}
-
-// ── Toolbar button ───────────────────────────────────────
-function ToolbarBtn({ icon, tooltip, onClick, disabled = false }: {
-  icon: React.ReactNode; tooltip: string; onClick: () => void; disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={tooltip}
-      onClick={onClick}
-      disabled={disabled}
-      className="p-1.5 rounded text-surface-500 dark:text-gray-400
-        hover:text-surface-700 dark:hover:text-gray-200
-        hover:bg-surface-100 dark:hover:bg-gray-700 transition-colors shrink-0
-        disabled:opacity-50 disabled:cursor-not-allowed">
-      {icon}
-    </button>
   );
 }
