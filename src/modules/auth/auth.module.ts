@@ -8,6 +8,7 @@ import { TestAuthController } from './test-auth.controller';
 import { isTestAuthEnabled } from './test-auth.util';
 import { PointsModule } from '../points/points.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ServiceApiModule } from '../service-api/service-api.module';
 
 @Global()
 @Module({
@@ -15,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     TypeOrmModule.forFeature([User, SessionAudit]),
     PointsModule,
     NotificationsModule,
+    ServiceApiModule,
   ],
   providers: [AuthService],
   // The E2E session shortcut is only routable when explicitly enabled via
