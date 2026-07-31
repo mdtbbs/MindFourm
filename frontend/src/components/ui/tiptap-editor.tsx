@@ -67,11 +67,19 @@ export default function TiptapEditor({
   // Track whether a value change comes from the editor itself (to avoid re-setting content)
   const internalUpdateRef = useRef(false);
   const lastExternalValueRef = useRef(value);
+  // Ref for the image upload function — editorProps captures this at creation time,
+  // but the actual handler is defined later (depends on `editor`). The ref bridges
+  // the gap so paste/drop always calls the latest version.
+  const imageUploadFnRef = useRef<(files: File[]) => Promise<void>>();
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         codeBlock: false, // replaced by CodeBlockLowlight
+        // StarterKit v3 includes link and underline — disable to avoid duplicates
+        // since we add our own configured versions below.
+        link: false,
+        underline: false,
       }),
       Markdown.configure({
         html: false,
@@ -110,7 +118,7 @@ export default function TiptapEditor({
         const images = Array.from(files).filter(isUploadableImage);
         if (!images.length) return false;
         event.preventDefault();
-        handleImageUploads(images);
+        imageUploadFnRef.current?.(images);
         return true;
       },
       handleDrop(_view, event) {
@@ -120,7 +128,7 @@ export default function TiptapEditor({
         const images = Array.from(files).filter(isUploadableImage);
         if (!images.length) return false;
         event.preventDefault();
-        handleImageUploads(images);
+        imageUploadFnRef.current?.(images);
         return true;
       },
     },
@@ -157,6 +165,9 @@ export default function TiptapEditor({
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }, [editor, showError]);
+
+  // Keep the ref in sync so editorProps paste/drop handlers always call the latest version
+  imageUploadFnRef.current = handleImageUploads;
 
   const triggerImagePicker = useCallback(() => {
     fileInputRef.current?.click();
