@@ -83,7 +83,7 @@ export default function PostCard({ post }: PostCardProps) {
 
             <LikeButton type="post" id={post.id} initialCount={post.like_count || 0} />
 
-            <span>{formatTime(post.created_at)}</span>
+            <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('zh-CN')}>{formatTime(post.created_at)}</time>
           </div>
         </div>
       </div>

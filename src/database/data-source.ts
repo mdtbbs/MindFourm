@@ -33,7 +33,6 @@ const AppDataSource = new DataSource({
   migrationsTransactionMode: 'each',
   // The CLI must never mutate the schema as a side effect of connecting.
   synchronize: false,
-  timezone: '+08:00',
 });
 
 export default AppDataSource;

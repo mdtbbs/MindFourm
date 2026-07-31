@@ -36,7 +36,6 @@ import { RedisModule } from './redis.module';
         // the only thing permitted to change the schema.
         synchronize: false,
         logging: config.get<string>('app.env') === 'development',
-        timezone: '+08:00',
       }),
     }),
     RedisModule,

@@ -131,7 +131,7 @@ export default function PostContent({
           />
 
           <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)] sm:justify-end">
-            <span>发布于 {formatTime(post.created_at)}</span>
+            <span>发布于 <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('zh-CN')}>{formatTime(post.created_at)}</time></span>
             <span className="text-[var(--text-muted)]">|</span>
             <span>{post.view_count} 浏览</span>
 
@@ -146,7 +146,7 @@ export default function PostContent({
                   href={`/posts/${postId}/revisions`}
                   className="text-[var(--text-secondary)] hover:text-[var(--primary)]"
                 >
-                  已编辑于 {formatTime(post.edited_at)}
+                  已编辑于 <time dateTime={post.edited_at} title={new Date(post.edited_at).toLocaleString('zh-CN')}>{formatTime(post.edited_at)}</time>
                 </Link>
               ) : (
                 <span>已编辑于 {formatTime(post.edited_at)}</span>

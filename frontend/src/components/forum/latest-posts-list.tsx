@@ -163,7 +163,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                   </div>
                 )}
                 <div className={cn(settings.showStats && 'sm:mt-2')}>
-                  {formatTime(post.created_at)}
+                  <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('zh-CN')}>{formatTime(post.created_at)}</time>
                 </div>
               </div>
             </article>

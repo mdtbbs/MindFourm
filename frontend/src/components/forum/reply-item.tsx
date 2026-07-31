@@ -72,6 +72,7 @@ export default function ReplyItem({
           <span className="text-[var(--text-muted)]">|</span>
           <time
             dateTime={reply.created_at}
+            title={new Date(reply.created_at).toLocaleString('zh-CN')}
             className="text-[var(--text-secondary)]"
             // Relative times differ between server and client render; the server value
             // is authoritative for the initial paint.
