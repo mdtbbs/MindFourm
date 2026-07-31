@@ -9,6 +9,20 @@ const nextConfig = {
   // Production: standalone output for PM2 (no full node_modules needed)
   output: 'standalone',
 
+  // Production: strip console.log/warn/info, keep error
+  compiler: {
+    removeConsole: process.env.NODE_ENV === 'production' ? {
+      exclude: ['error', 'warn'],
+    } : false,
+  },
+
+  // Tree-shake icon libraries — avoid bundling entire lucide-react
+  modularizeImports: {
+    'lucide-react': {
+      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
+    },
+  },
+
   async rewrites() {
     // 生产和开发环境都使用 rewrites
     // 浏览器请求 /api/* 和 /uploads/* 时，由 Next.js 代理到后端
@@ -103,4 +117,6 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = require('@next/bundle-analyzer')({
+  enabled: process.env.ANALYZE === 'true',
+})(nextConfig);

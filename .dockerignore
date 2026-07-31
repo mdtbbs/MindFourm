@@ -12,3 +12,8 @@ docker-compose*.yml
 *.md
 docs/
 tests/
+playwright-report/
+test-results/
+*.log
+frontend/node_modules
+frontend/.next

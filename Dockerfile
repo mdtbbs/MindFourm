@@ -2,13 +2,13 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --production=false
+RUN --mount=type=cache,target=/root/.npm npm ci --production=false
 COPY . .
-RUN npm run build
+RUN npm run build:backend
 
 # Reinstall with production deps only, so the runner does not carry the build
 # toolchain (nest CLI, typescript, jest, playwright) into the shipped image.
-RUN npm ci --omit=dev
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
 
 FROM node:20-alpine AS runner
 WORKDIR /app
