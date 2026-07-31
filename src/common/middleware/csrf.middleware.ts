@@ -14,7 +14,10 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * permanently exempt meant the backdoor was also reachable cross-site.
  */
 function buildExemptPaths(): Set<string> {
-  const paths = new Set(['/api/auth/callback']);
+  const paths = new Set([
+    '/api/auth/callback',
+    '/api/auth/validate-credentials', // Service-to-service API (uses ExternalApiKeyGuard)
+  ]);
   if (isTestAuthEnabled()) {
     paths.add('/api/auth/test-login');
   }
