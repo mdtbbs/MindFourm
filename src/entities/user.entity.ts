@@ -81,64 +81,64 @@ export class User {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToMany(() => Post, (post) => post.user)
+  @OneToMany('Post', 'user')
   posts: Post[];
 
-  @OneToMany(() => Reply, (reply) => reply.user)
+  @OneToMany('Reply', 'user')
   replies: Reply[];
 
-  @OneToMany(() => Bookmark, (bookmark) => bookmark.user)
+  @OneToMany('Bookmark', 'user')
   bookmarks: Bookmark[];
 
-  @OneToMany(() => Notification, (notification) => notification.user)
+  @OneToMany('Notification', 'user')
   notifications: Notification[];
 
-  @OneToMany(() => Notification, (notification) => notification.actor)
+  @OneToMany('Notification', 'actor')
   sentNotifications: Notification[];
 
-  @OneToMany(() => Message, (message) => message.sender)
+  @OneToMany('Message', 'sender')
   sentMessages: Message[];
 
-  @OneToMany(() => Message, (message) => message.recipient)
+  @OneToMany('Message', 'recipient')
   receivedMessages: Message[];
 
-  @OneToMany(() => Resource, (resource) => resource.user)
+  @OneToMany('Resource', 'user')
   resources: Resource[];
 
-  @OneToMany(() => PostLike, (postLike) => postLike.user)
+  @OneToMany('PostLike', 'user')
   postLikes: PostLike[];
 
-  @OneToMany(() => ReplyLike, (replyLike) => replyLike.user)
+  @OneToMany('ReplyLike', 'user')
   replyLikes: ReplyLike[];
 
-  @OneToMany(() => Ban, (ban) => ban.creator)
+  @OneToMany('Ban', 'creator')
   createdBans: Ban[];
 
-  @OneToMany(() => OperationLog, (log) => log.user)
+  @OneToMany('OperationLog', 'user')
   operationLogs: OperationLog[];
 
-  @OneToMany(() => PointLog, (pointLog) => pointLog.user)
+  @OneToMany('PointLog', 'user')
   pointLogs: PointLog[];
 
   // Follow relationships
-  @OneToMany(() => Follow, (follow) => follow.follower)
+  @OneToMany('Follow', 'follower')
   following: Follow[];
 
-  @OneToMany(() => Follow, (follow) => follow.following)
+  @OneToMany('Follow', 'following')
   followers: Follow[];
 
   // Badge relationships
-  @OneToMany(() => UserBadge, (userBadge) => userBadge.user)
+  @OneToMany('UserBadge', 'user')
   userBadges: UserBadge[];
 
-  @OneToMany(() => UserBadge, (userBadge) => userBadge.granter)
+  @OneToMany('UserBadge', 'granter')
   grantedBadges: UserBadge[];
 
   // Group relationships
-  @OneToMany(() => GroupMember, (member) => member.user)
+  @OneToMany('GroupMember', 'user')
   groupMemberships: GroupMember[];
 
   // Purchase relationships
-  @OneToMany(() => Purchase, (purchase) => purchase.user)
+  @OneToMany('Purchase', 'user')
   purchases: Purchase[];
 }

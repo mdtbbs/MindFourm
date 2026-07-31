@@ -24,6 +24,6 @@ export class Category {
   @CreateDateColumn()
   created_at: Date;
 
-  @OneToMany(() => Post, (post) => post.category)
+  @OneToMany('Post', 'category')
   posts: Post[];
 }

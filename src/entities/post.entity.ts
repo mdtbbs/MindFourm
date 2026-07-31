@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
-  JoinColumn, Index, forwardRef,
+  JoinColumn, Index,
 } from 'typeorm';
 import { User } from './user.entity';
 import { Category } from './category.entity';
@@ -111,11 +111,11 @@ export class Post {
   @DeleteDateColumn()
   deleted_at: Date;
 
-  @ManyToOne(() => forwardRef(() => User), { eager: false, onDelete: 'CASCADE' })
+  @ManyToOne(() => User, { eager: false, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'user_id' })
   user: User;
 
-  @ManyToOne(() => forwardRef(() => Category), { eager: false, nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => Category, { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'category_id' })
   category: Category;
 
@@ -123,25 +123,25 @@ export class Post {
   @JoinColumn({ name: 'required_group_id' })
   requiredGroup: Group;
 
-  @ManyToOne(() => forwardRef(() => Reply), { eager: false, nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne('Reply', { eager: false, nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'best_reply_id' })
   bestReply: Reply | null;
 
-  @OneToMany(() => forwardRef(() => Reply), (reply) => reply.post)
+  @OneToMany('Reply', 'post')
   replies: Reply[];
 
-  @OneToMany(() => forwardRef(() => Bookmark), (bookmark) => bookmark.post)
+  @OneToMany('Bookmark', 'post')
   bookmarks: Bookmark[];
 
-  @OneToMany(() => forwardRef(() => Attachment), (attachment) => attachment.post)
+  @OneToMany('Attachment', 'post')
   attachments: Attachment[];
 
-  @OneToMany(() => forwardRef(() => Notification), (notification) => notification.post)
+  @OneToMany('Notification', 'post')
   notifications: Notification[];
 
-  @OneToMany(() => forwardRef(() => PostLike), (postLike) => postLike.post)
+  @OneToMany('PostLike', 'post')
   likes: PostLike[];
 
-  @OneToMany(() => forwardRef(() => PostTag), (postTag) => postTag.post)
+  @OneToMany('PostTag', 'post')
   postTags: PostTag[];
 }

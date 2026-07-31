@@ -15,6 +15,6 @@ export class Tag {
   @CreateDateColumn()
   created_at: Date;
 
-  @OneToMany(() => PostTag, (postTag) => postTag.tag)
+  @OneToMany('PostTag', 'tag')
   postTags: PostTag[];
 }

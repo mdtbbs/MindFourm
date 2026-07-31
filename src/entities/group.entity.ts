@@ -33,6 +33,6 @@ export class Group {
   @UpdateDateColumn()
   updated_at: Date;
 
-  @OneToMany(() => GroupMember, (member) => member.group)
+  @OneToMany('GroupMember', 'group')
   members: GroupMember[];
 }

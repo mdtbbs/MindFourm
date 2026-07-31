@@ -23,6 +23,6 @@ export class GroupChat {
   @JoinColumn({ name: 'creator_id' })
   creator: User;
 
-  @OneToMany(() => GroupChatMember, (member) => member.groupChat)
+  @OneToMany('GroupChatMember', 'groupChat')
   members: GroupChatMember[];
 }
