@@ -1,10 +1,13 @@
-import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { User } from '@entities/user.entity';
 import { AuthService } from './auth.service';
 import { VerifySessionDto } from './dto/verify-session.dto';
+import { ValidateCredentialsDto } from './dto/validate-credentials.dto';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
+import { ExternalApiKeyGuard } from '../../common/guards/external-api-key.guard';
+import { ExternalScope } from '../../common/decorators/external-scope.decorator';
 
 function getSafeRedirectPath(state?: string): string {
   if (!state) {
@@ -83,6 +86,30 @@ export class AuthController {
     const user = await this.authService.syncPhoneStatusFromSession(sessionToken);
 
     return {
+      user: toAuthUser(user),
+    };
+  }
+
+  /**
+   * Validate username/password credentials (service-to-service API)
+   * Called by LanLink control plane for direct login
+   */
+  @Post('validate-credentials')
+  @SkipPhoneVerification()
+  @UseGuards(ExternalApiKeyGuard)
+  @ExternalScope('lanlink:auth')
+  @RateLimit({ max: 30, window: 60 })
+  async validateCredentials(@Body() body: ValidateCredentialsDto) {
+    const { username, password } = body;
+
+    const user = await this.authService.validateUsernamePassword(username, password);
+
+    if (!user) {
+      return { valid: false };
+    }
+
+    return {
+      valid: true,
       user: toAuthUser(user),
     };
   }

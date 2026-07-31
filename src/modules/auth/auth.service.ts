@@ -267,6 +267,55 @@ export class AuthService {
     return user;
   }
 
+  /**
+   * Validate username/password via MindAuth service-to-service API
+   * Returns user if valid, null if invalid
+   */
+  async validateUsernamePassword(username: string, password: string): Promise<User | null> {
+    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
+    const serviceApiKey = this.configService.get<string>('MINDAUTH_SERVICE_API_KEY');
+
+    if (!mindauthUrl || !serviceApiKey) {
+      this.logger.warn('MindAuth URL or service API key not configured');
+      return null;
+    }
+
+    try {
+      const response = await mindAuthHttp.post(
+        joinMindAuthApiUrl(mindauthUrl, '/service/validate-credentials'),
+        { username, password },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Service-API-Key': serviceApiKey,
+          },
+        }
+      );
+
+      if (!response.data?.valid || !response.data?.user) {
+        return null;
+      }
+
+      // Find or create local user based on MindAuth user data
+      const mindauthUser = {
+        id: response.data.user.id,
+        username: response.data.user.username,
+        email: response.data.user.email,
+        avatar_url: response.data.user.avatar_url || '',
+        phone_verified: response.data.user.phone_verified,
+        phone_verified_at: response.data.user.phone_verified_at,
+      };
+
+      return await this.getOrCreateUser(mindauthUser);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        return null; // Invalid credentials
+      }
+      this.logger.error(`MindAuth validation failed: ${error.message}`);
+      throw new Error('认证服务暂时不可用');
+    }
+  }
+
   async syncMindAuthUserData(mindauthUser: {
     id?: number;
     mindauth_id?: number;
