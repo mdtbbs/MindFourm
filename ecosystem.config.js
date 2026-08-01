@@ -45,14 +45,14 @@ module.exports = {
     },
     {
       name: 'mindforum-frontend',
-      script: 'node_modules/next/dist/bin/next',
+      script: 'npm',
       args: 'start',
       cwd: './frontend',
       instances: 1,
       exec_mode: 'fork',
       watch: false,
       max_memory_restart: '1G',
-      env_file: './frontend/.env.local',
+      env_file: './frontend/.env.production',
       env: {
         NODE_ENV: 'production',
       },
