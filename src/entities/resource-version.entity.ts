@@ -30,6 +30,12 @@ export class ResourceVersion {
   @Column({ length: 100, nullable: true })
   mime_type: string;
 
+  @Column({ type: 'text', nullable: true })
+  content: string;
+
+  @Column({ type: 'text', nullable: true })
+  content_html: string;
+
   @CreateDateColumn()
   created_at: Date;
 

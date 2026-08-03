@@ -45,6 +45,8 @@ interface TiptapEditorProps {
   compact?: boolean;
   /** Enable paste/drop/button image upload. */
   imageUpload?: boolean;
+  /** Applied to the editable surface and source textarea for E2E/tests. */
+  testId?: string;
   className?: string;
 }
 
@@ -57,6 +59,7 @@ export default function TiptapEditor({
   minHeight = '200px',
   compact = false,
   imageUpload = false,
+  testId,
   className = '',
 }: TiptapEditorProps) {
   const [uploading, setUploading] = useState(false);
@@ -111,6 +114,7 @@ export default function TiptapEditor({
       queueMicrotask(() => { internalUpdateRef.current = false; });
     },
     editorProps: {
+      attributes: testId ? { 'data-testid': testId } : {},
       handlePaste(_view, event) {
         if (!imageUpload) return false;
         const files = event.clipboardData?.files;
@@ -262,6 +266,7 @@ export default function TiptapEditor({
             onChange(e.target.value);
           }}
           placeholder={placeholder}
+          data-testid={testId}
           className="tiptap-source"
           style={{ minHeight }}
         />

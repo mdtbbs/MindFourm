@@ -301,14 +301,14 @@ export class ResourcesController {
   @UseInterceptors(resourceUploadInterceptor)
   async addVersion(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { version?: string },
+    @Body() body: { version?: string; content?: string },
     @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: any,
   ) {
     const userId = req.user.id;
     try {
       return await this.versionService.create(
-        { resource_id: id, version: body.version || '' },
+        { resource_id: id, version: body.version || '', content: body.content },
         toFileMeta(file),
         userId,
       );

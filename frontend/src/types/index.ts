@@ -448,6 +448,8 @@ export interface ResourceVersion {
   file_name: string | null;
   file_size: number;
   mime_type: string | null;
+  content: string | null;
+  content_html: string | null;
   created_at: string;
 }
 

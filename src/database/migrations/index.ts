@@ -10,6 +10,7 @@ import { AddPostModerationFields1720000010000 } from './1720000010000-AddPostMod
 import { CreateExternalApiTables1720000011000 } from './1720000011000-CreateExternalApiTables';
 import { CreateLanLinkQuickCodes1720000012000 } from './1720000012000-CreateLanLinkQuickCodes';
 import { CreateFriendships1720000013000 } from './1720000013000-CreateFriendships';
+import { AddResourceVersionContent1720000014000 } from './1720000014000-AddResourceVersionContent';
 
 /**
  * Migrations in run order.
@@ -31,4 +32,5 @@ export const migrations = [
   CreateExternalApiTables1720000011000,
   CreateLanLinkQuickCodes1720000012000,
   CreateFriendships1720000013000,
+  AddResourceVersionContent1720000014000,
 ];

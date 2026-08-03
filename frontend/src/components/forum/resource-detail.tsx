@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { Calendar, Download, ExternalLink, FileText, Loader2, Trash2, Upload, User } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -29,6 +30,16 @@ interface ResourceDetailProps {
   resource: Resource;
 }
 
+const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex min-h-[120px] items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
+      <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
+      <span className="ml-2 text-xs text-[var(--text-muted)]">加载编辑器…</span>
+    </div>
+  ),
+});
+
 export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const router = useRouter();
   const { user } = useAuth();
@@ -37,6 +48,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const [versions, setVersions] = useState<ResourceVersion[]>(resource.versions || []);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
   const [newVersion, setNewVersion] = useState('');
+  const [newVersionContent, setNewVersionContent] = useState('');
   const [versionFile, setVersionFile] = useState<File | null>(null);
   const [isUploadingVersion, setIsUploadingVersion] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
@@ -47,6 +59,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     : null;
   const selectedFileSize = selectedVersion?.file_size || resource.file_size;
   const selectedFileName = selectedVersion?.file_name || resource.file_name;
+  const selectedVersionContent = selectedVersion?.content || null;
   const isOwner = user?.id === resource.user_id;
   const hasDownloadFile = resource.resource_type === 'upload' || !!selectedVersion;
   // Rejects `javascript:` and other script-bearing schemes; undefined when unsafe so
@@ -66,11 +79,13 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     try {
       const formData = new FormData();
       formData.append('version', newVersion.trim());
+      if (newVersionContent.trim()) formData.append('content', newVersionContent.trim());
       formData.append('file', versionFile);
       const created = await resourceApi.addVersion(resource.id, formData);
       setVersions((current) => [created, ...current]);
       setSelectedVersionId(created.id);
       setNewVersion('');
+      setNewVersionContent('');
       setVersionFile(null);
     } catch (err) {
       setVersionError(err instanceof Error ? err.message : '版本上传失败');
@@ -98,9 +113,9 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       <h1 className="mb-3 text-2xl font-bold text-[var(--text)]">{resource.title}</h1>
 
       {resource.description && (
-        <p className="mb-4 max-w-3xl text-sm leading-6 text-[var(--text-muted)]">
-          {resource.description}
-        </p>
+        <div className="mb-4 max-w-3xl rounded-[var(--radius-card)] bg-[var(--bg-elevated)] p-4 text-sm leading-6">
+          <MarkdownRenderer content={resource.description} />
+        </div>
       )}
 
       <div className="mb-4 flex flex-wrap gap-4 text-sm text-[var(--text-muted)]">
@@ -136,9 +151,16 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         </div>
       )}
 
-      {resource.content_html && (
+      {resource.content && (
         <div className="mb-6 rounded-[var(--radius-card)] bg-[var(--bg-elevated)] p-4">
-          <MarkdownRenderer content={resource.content_html} />
+          <MarkdownRenderer content={resource.content} />
+        </div>
+      )}
+
+      {selectedVersionContent && (
+        <div className="mb-6 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-4">
+          <h2 className="mb-3 text-sm font-semibold text-[var(--text)]">{selectedVersion?.version} 更新说明</h2>
+          <MarkdownRenderer content={selectedVersionContent} />
         </div>
       )}
 
@@ -221,6 +243,18 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
               {versionError}
             </div>
           )}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-[var(--text)]">版本说明 / 更新日志</label>
+            <TiptapEditor
+              value={newVersionContent}
+              onChange={setNewVersionContent}
+              placeholder="可选：说明本版本的改动、兼容性和注意事项，支持粘贴 / 拖放上传图片..."
+              minHeight="140px"
+              compact
+              imageUpload
+              testId="resource-version-content-input"
+            />
+          </div>
           <div className="grid gap-3 md:grid-cols-[180px_1fr_auto]">
             <input
               value={newVersion}

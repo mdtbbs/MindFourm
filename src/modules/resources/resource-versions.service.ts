@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { Resource } from '@entities/resource.entity';
 import { ResourceFileMeta } from './resources.service';
+import { parseMarkdown } from '@common/utils/markdown.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -50,7 +51,7 @@ export class ResourceVersionService {
   }
 
   async create(
-    dto: { resource_id: number; version: string },
+    dto: { resource_id: number; version: string; content?: string },
     file: ResourceFileMeta | undefined,
     userId: number,
   ): Promise<any> {
@@ -82,6 +83,7 @@ export class ResourceVersionService {
       throw new BadRequestException('This version already exists');
     }
 
+    const content = dto.content?.trim() || undefined;
     const version = this.versionRepository.create({
       resource_id: dto.resource_id,
       version: dto.version.trim(),
@@ -89,6 +91,8 @@ export class ResourceVersionService {
       file_name: file.file_name,
       file_size: file.file_size,
       mime_type: file.mime_type,
+      content,
+      content_html: content ? parseMarkdown(content) : undefined,
     });
 
     return this.normalizeVersion(await this.versionRepository.save(version));

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Resource } from '@/types';
+import { markdownToPlainExcerpt } from '@/lib/markdown/excerpt';
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString('zh-CN');
@@ -28,7 +29,7 @@ export default function ResourceCard({ resource }: { resource: Resource }) {
             )}
           </div>
           <p className="mt-1 truncate text-sm text-[var(--text-muted)]">
-            {resource.description || '暂无短介绍'}
+            {markdownToPlainExcerpt(resource.description)}
           </p>
         </div>
 

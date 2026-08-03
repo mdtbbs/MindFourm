@@ -53,10 +53,16 @@ export default function ResourceModerationTable() {
       {selectedResource && (
         <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold mb-4">{selectedResource.title}</h3>
-          {selectedResource.content_html ? (
-            <MarkdownRenderer content={selectedResource.content_html} className="mb-4" />
+          {selectedResource.description && (
+            <div className="mb-4 rounded-lg bg-surface-50 p-4 dark:bg-gray-800">
+              <h4 className="mb-2 text-sm font-medium text-surface-700 dark:text-gray-300">短介绍</h4>
+              <MarkdownRenderer content={selectedResource.description} />
+            </div>
+          )}
+          {selectedResource.content ? (
+            <MarkdownRenderer content={selectedResource.content} className="mb-4" />
           ) : (
-            <p className="text-surface-500 mb-4">{selectedResource.description || '暂无介绍'}</p>
+            !selectedResource.description && <p className="text-surface-500 mb-4">暂无介绍</p>
           )}
           {selectedResource.resource_type === 'external' && selectedResource.external_url && (
             <p className="text-sm text-surface-500 mb-2">外链: {selectedResource.external_url}</p>

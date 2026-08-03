@@ -289,6 +289,8 @@ CREATE TABLE IF NOT EXISTS resource_versions (
     file_name VARCHAR(255),
     file_size INT,
     mime_type VARCHAR(100),
+    content TEXT,
+    content_html TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
     UNIQUE KEY unique_version (resource_id, version),

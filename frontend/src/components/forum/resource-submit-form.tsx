@@ -1,16 +1,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { ExternalLink, Loader2, Upload } from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
-import MarkdownEditor from '@/components/ui/markdown-editor';
-import { Textarea } from '@/components/ui/textarea';
 import { ResourceCategory } from '@/types';
 import { useToastStore } from '@/store/toast-store';
 
 type ResourceType = 'upload' | 'external';
+
+const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex min-h-[160px] items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
+      <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
+      <span className="ml-2 text-xs text-[var(--text-muted)]">加载编辑器…</span>
+    </div>
+  ),
+});
 
 export default function ResourceSubmitForm() {
   const router = useRouter();
@@ -178,16 +187,18 @@ export default function ResourceSubmitForm() {
         maxLength={50}
       />
 
-      <Textarea
-        data-testid="resource-description-input"
-        label="短介绍"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="会显示在资源列表标题下方"
-        rows={3}
-        maxLength={300}
-        className="min-h-[88px]"
-      />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">短介绍</label>
+        <TiptapEditor
+          value={description}
+          onChange={setDescription}
+          placeholder="会显示在资源列表标题下方，支持富文本和图片"
+          minHeight="120px"
+          compact
+          imageUpload
+          testId="resource-description-input"
+        />
+      </div>
 
       <div>
         <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">分类</label>
@@ -208,14 +219,17 @@ export default function ResourceSubmitForm() {
         </select>
       </div>
 
-      <MarkdownEditor
-        label="正文（长介绍）"
-        value={content}
-        onChange={setContent}
-        placeholder="使用 Markdown 详细介绍资源内容、使用方式和注意事项"
-        rows={8}
-        testId="resource-content-input"
-      />
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">正文（长介绍）</label>
+        <TiptapEditor
+          value={content}
+          onChange={setContent}
+          placeholder="使用富文本编辑器详细介绍资源内容、使用方式和注意事项，支持粘贴 / 拖放上传图片"
+          minHeight="260px"
+          imageUpload
+          testId="resource-content-input"
+        />
+      </div>
 
       {resourceType === 'external' && (
         <Input
