@@ -11,6 +11,9 @@ import {
   serializeTopNavigationItems,
 } from './navigation-settings.util';
 import {
+  normalizeFooterFriendlyLinks,
+} from './footer-settings.util';
+import {
   DEFAULT_WELCOME_NOTIFICATION_BODY,
   DEFAULT_WELCOME_NOTIFICATION_TITLE,
   EMAIL_TEMPLATE_DEFAULTS,
@@ -39,6 +42,12 @@ export class SettingsService implements OnModuleInit {
     'site_description',
     'site_logo_url',
     'site_footer',
+    'footer_copyright',
+    'footer_icp_number',
+    'footer_icp_url',
+    'footer_police_number',
+    'footer_police_url',
+    'footer_friendly_links',
     'site_url',
     'maintenance_mode',
     'brand_primary',
@@ -102,6 +111,14 @@ export class SettingsService implements OnModuleInit {
     ]),
     navigation: new Set([
       'top_navigation_items',
+    ]),
+    footer: new Set([
+      'footer_copyright',
+      'footer_icp_number',
+      'footer_icp_url',
+      'footer_police_number',
+      'footer_police_url',
+      'footer_friendly_links',
     ]),
     announce: new Set([
       'announce_enabled',
@@ -175,6 +192,12 @@ export class SettingsService implements OnModuleInit {
       { key: 'site_description', value: 'Mindustry community forum', category: 'basic', description: 'Site description' },
       { key: 'site_logo_url', value: '', category: 'basic', description: 'Site logo URL' },
       { key: 'site_footer', value: '', category: 'basic', description: 'Footer text' },
+      { key: 'footer_copyright', value: '', category: 'footer', description: 'Footer copyright text' },
+      { key: 'footer_icp_number', value: '', category: 'footer', description: 'ICP filing number' },
+      { key: 'footer_icp_url', value: '', category: 'footer', description: 'ICP filing link URL' },
+      { key: 'footer_police_number', value: '', category: 'footer', description: 'Public security filing number' },
+      { key: 'footer_police_url', value: '', category: 'footer', description: 'Public security filing link URL' },
+      { key: 'footer_friendly_links', value: '[]', category: 'footer', description: 'Footer friendly links as JSON' },
       { key: 'brand_primary', value: DEFAULT_BRAND_PRIMARY, category: 'basic', description: 'Global primary brand color' },
       { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
       { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
@@ -392,6 +415,9 @@ export class SettingsService implements OnModuleInit {
       }
       if (key === 'top_navigation_items') {
         normalizedValue = serializeTopNavigationItems(parseTopNavigationItems(value));
+      }
+      if (key === 'footer_friendly_links') {
+        normalizedValue = normalizeFooterFriendlyLinks(value);
       }
 
       normalizedPairs.set(key, normalizedValue);
