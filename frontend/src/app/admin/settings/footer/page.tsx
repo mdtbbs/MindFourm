@@ -14,6 +14,13 @@ import { useSettingsStore } from '@/store/settings-store';
 
 const EMPTY_LINK: FooterFriendlyLink = { label: '', href: '', description: '' };
 
+const CONTENT_FIELDS = [
+  { key: 'footer_about_content', label: '关于我们', placeholder: '填写 /about 页面内容，支持 Markdown。' },
+  { key: 'footer_thanks_content', label: '鸣谢', placeholder: '填写 /thanks 页面内容，支持 Markdown。' },
+  { key: 'footer_terms_content', label: '服务条款', placeholder: '填写 /terms 页面内容，支持 Markdown。' },
+  { key: 'footer_privacy_content', label: '隐私政策', placeholder: '填写 /privacy 页面内容，支持 Markdown。' },
+];
+
 function toEditableLinks(rawValue: string | undefined): FooterFriendlyLink[] {
   const links = parseFooterFriendlyLinks(rawValue);
   return links.length > 0 ? links : [{ ...EMPTY_LINK }];
@@ -163,6 +170,24 @@ export default function FooterSettingsPage() {
               onChange={(e) => update('footer_police_url', e.target.value)}
               placeholder="https://www.beian.gov.cn/portal/registerSystemInfo"
             />
+          </div>
+        </div>
+
+        <div className="border-t border-surface-200 pt-6">
+          <h3 className="text-sm font-semibold text-surface-800">底部页面内容</h3>
+          <p className="mt-1 text-xs text-surface-400">配置页脚里“关于我们 / 鸣谢 / 服务条款 / 隐私政策”的页面正文，支持 Markdown；留空则显示默认占位说明。</p>
+          <div className="mt-4 grid gap-5 lg:grid-cols-2">
+            {CONTENT_FIELDS.map((field) => (
+              <div key={field.key}>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">{field.label}</label>
+                <textarea
+                  className="min-h-[180px] w-full rounded border border-surface-200 px-3 py-2 text-sm focus:outline-none focus:border-surface-400"
+                  value={values[field.key] ?? ''}
+                  onChange={(e) => update(field.key, e.target.value)}
+                  placeholder={field.placeholder}
+                />
+              </div>
+            ))}
           </div>
         </div>
 
