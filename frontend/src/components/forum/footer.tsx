@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { ExternalLink } from 'lucide-react';
 import { useSettings } from '@/lib/settings/context';
 import {
@@ -43,14 +44,14 @@ function FriendlyLinkCard({ link }: { link: FooterFriendlyLink }) {
   return (
     <FooterAnchor
       href={link.href}
-      className="group rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-3 text-left hover:border-[var(--primary)]"
+      className="group rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-left hover:border-[var(--primary)]"
     >
-      <span className="flex items-center justify-between gap-3 text-sm font-medium text-[var(--text)] group-hover:text-[var(--primary)]">
+      <span className="flex items-center justify-between gap-2 text-xs font-medium text-[var(--text)] group-hover:text-[var(--primary)]">
         <span className="truncate">{link.label}</span>
-        {external && <ExternalLink className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--primary)]" aria-hidden="true" />}
+        {external && <ExternalLink className="h-3 w-3 shrink-0 text-[var(--text-muted)] group-hover:text-[var(--primary)]" aria-hidden="true" />}
       </span>
       {link.description && (
-        <span className="mt-1 block line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">
+        <span className="mt-0.5 block truncate text-[11px] leading-4 text-[var(--text-muted)]">
           {link.description}
         </span>
       )}
@@ -67,25 +68,24 @@ function FilingText({ number, href }: { number: string; href: string }) {
 }
 
 export default function Footer() {
+  const pathname = usePathname();
   const settings = useSettings();
   const footer = getFooterSettings(settings);
-  const featuredLinks = footer.friendlyLinks.slice(0, 3);
+  const showFriendlyLinks = pathname === '/';
+  const featuredLinks = showFriendlyLinks ? footer.friendlyLinks.slice(0, 3) : [];
 
   return (
     <footer className="mt-auto border-t border-[var(--border)] bg-[var(--bg-card)]">
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         {featuredLinks.length > 0 && (
-          <section className="mb-8 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-5" aria-labelledby="footer-friendly-links">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 id="footer-friendly-links" className="text-sm font-semibold text-[var(--text)]">友情链接</h2>
-                <p className="mt-1 text-xs text-[var(--text-muted)]">一起建设 Mindustry 社区生态。</p>
-              </div>
+          <section className="mb-5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-3" aria-labelledby="footer-friendly-links">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <h2 id="footer-friendly-links" className="text-xs font-semibold text-[var(--text)]">友情链接</h2>
               <Link href="/links" className="text-xs font-medium text-[var(--primary)] hover:underline">
-                更多友情链接 →
+                更多 →
               </Link>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
               {featuredLinks.map((link) => (
                 <FriendlyLinkCard key={`${link.label}-${link.href}`} link={link} />
               ))}
