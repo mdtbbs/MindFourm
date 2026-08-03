@@ -8,8 +8,33 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { escapeLike } from '@common/utils/search.util';
 import { SettingsService } from '../settings/settings.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { POST_STATUS, REPLY_STATUS } from '../../common/utils/constants';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+
+export interface UserReplyItem {
+  id: number;
+  post_id: number;
+  user_id: number;
+  parent_reply_id: number | null;
+  content: string;
+  content_html: string | null;
+  post_title: string | null;
+  status: string;
+  like_count: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface UserReplyPage {
+  data: UserReplyItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
 
 @Injectable()
 export class UsersService {
@@ -43,13 +68,17 @@ export class UsersService {
       .createQueryBuilder('post')
       .select('COUNT(*)', 'count')
       .where('post.user_id = :userId', { userId: id })
+      .andWhere('post.status = :status', { status: POST_STATUS.published })
       .getRawOne();
 
-    // Get reply count via subquery
+    // Get public reply count via subquery
     const replyCountResult = await this.replyRepository
       .createQueryBuilder('reply')
+      .innerJoin('reply.post', 'post')
       .select('COUNT(*)', 'count')
       .where('reply.user_id = :userId', { userId: id })
+      .andWhere('reply.status = :replyStatus', { replyStatus: REPLY_STATUS.published })
+      .andWhere('post.status = :postStatus', { postStatus: POST_STATUS.published })
       .getRawOne();
 
     return {
@@ -138,16 +167,56 @@ export class UsersService {
     userId: number,
     page: number = 1,
     limit: number = 20,
-  ): Promise<{ replies: Reply[]; total: number }> {
-    const [replies, total] = await this.replyRepository.findAndCount({
-      where: { user_id: userId },
-      relations: ['post'],
-      order: { created_at: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+  ): Promise<UserReplyPage> {
+    const currentPage = Math.max(1, Number(page) || 1);
+    const cappedLimit = Math.min(50, Math.max(1, Number(limit) || 20));
 
-    return { replies, total };
+    const [replies, total] = await this.replyRepository
+      .createQueryBuilder('reply')
+      .innerJoinAndSelect('reply.post', 'post')
+      .select([
+        'reply.id',
+        'reply.post_id',
+        'reply.user_id',
+        'reply.parent_reply_id',
+        'reply.content',
+        'reply.content_html',
+        'reply.status',
+        'reply.like_count',
+        'reply.created_at',
+        'reply.updated_at',
+        'post.id',
+        'post.title',
+      ])
+      .where('reply.user_id = :userId', { userId })
+      .andWhere('reply.status = :replyStatus', { replyStatus: REPLY_STATUS.published })
+      .andWhere('post.status = :postStatus', { postStatus: POST_STATUS.published })
+      .orderBy('reply.created_at', 'DESC')
+      .skip((currentPage - 1) * cappedLimit)
+      .take(cappedLimit)
+      .getManyAndCount();
+
+    return {
+      data: replies.map((reply) => ({
+        id: reply.id,
+        post_id: reply.post_id,
+        user_id: reply.user_id,
+        parent_reply_id: reply.parent_reply_id,
+        content: reply.content,
+        content_html: reply.content_html,
+        post_title: reply.post?.title ?? null,
+        status: reply.status,
+        like_count: reply.like_count,
+        created_at: reply.created_at,
+        updated_at: reply.updated_at,
+      })),
+      pagination: {
+        page: currentPage,
+        limit: cappedLimit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / cappedLimit)),
+      },
+    };
   }
 
   async updateRole(id: number, role: string): Promise<User> {

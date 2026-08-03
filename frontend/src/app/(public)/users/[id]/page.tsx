@@ -33,7 +33,7 @@ async function fetchUserPosts(userId: number, page: number): Promise<PostListRes
 
 async function fetchUserReplies(userId: number, page: number): Promise<{ data: Reply[]; pagination: PostListResponse['pagination'] }> {
   return fetchApiPaginated<Reply>(`/api/users/${userId}/replies?page=${page}&limit=20`, {
-    init: { next: { tags: ['replies'] } },
+    init: { cache: 'no-store' },
     fallback: createEmptyPaginatedResult<Reply>(20),
   });
 }
