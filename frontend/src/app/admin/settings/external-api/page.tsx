@@ -24,7 +24,9 @@ const AVAILABLE_SCOPES = [
   'categories:read',
   'tags:read',
   'audit:read',
-  // LanLink integration scopes
+  // LanLink / BackupSave integration scopes
+  'lanlink:auth',
+  'backupsave:auth',
   'friends:read',
   'presence:read',
   'presence:write',

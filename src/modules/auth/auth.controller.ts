@@ -97,7 +97,7 @@ export class AuthController {
   @Post('validate-credentials')
   @SkipPhoneVerification()
   @UseGuards(ExternalApiKeyGuard)
-  @ExternalScope('lanlink:auth')
+  @ExternalScope('lanlink:auth', 'backupsave:auth')
   @RateLimit({ max: 30, window: 60 })
   async validateCredentials(@Body() body: ValidateCredentialsDto) {
     const { username, password } = body;
