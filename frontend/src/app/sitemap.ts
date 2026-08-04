@@ -2,6 +2,7 @@ import type { MetadataRoute } from 'next';
 import type { PostSummary, Category, Resource, Tag } from '@/types';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
+import { fetchPublicSettings } from '@/lib/settings/server';
 import { getSiteUrl } from '@/lib/seo/site-url';
 import { buildHybridParam } from '@/lib/seo/hybrid-param';
 
@@ -78,10 +79,7 @@ async function fetchSitemapResources(limit: number = RESOURCE_LIMIT): Promise<Re
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const settings = await fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
+  const settings = await fetchPublicSettings();
 
   // Matches the admin toggle, which renders `=== 'true'` as checked: anything unset
   // or blank now reads as disabled here too, instead of the two disagreeing.

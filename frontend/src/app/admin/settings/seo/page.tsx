@@ -4,8 +4,10 @@ import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 
 export default function SeoSettingsPage() {
+  const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -22,7 +24,7 @@ export default function SeoSettingsPage() {
 
   const handleSave = async () => {
     setSaving(true); setError(null);
-    try { await adminApi.updateSettings('seo', values); setMessage('Saved'); setTimeout(() => setMessage(null), 3000); }
+    try { await adminApi.updateSettings('seo', values); await refreshAfterSettingsSave(); setMessage('Saved'); setTimeout(() => setMessage(null), 3000); }
     catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
     finally { setSaving(false); }
   };

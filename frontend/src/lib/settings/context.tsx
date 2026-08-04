@@ -22,12 +22,25 @@ export { useSettings };
  * Triggers the initial settings fetch when the app loads.
  * Existing components using useSettings() will work without changes.
  */
-export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const { fetchSettings, settings } = useSettingsStore();
+export function SettingsProvider({
+  children,
+  initialSettings,
+}: {
+  children: React.ReactNode;
+  initialSettings?: Record<string, string>;
+}) {
+  const { fetchSettings, setSettings, settings } = useSettingsStore();
 
-  // Fetch settings on mount
   useEffect(() => {
-    fetchSettings();
+    if (initialSettings) {
+      setSettings(initialSettings);
+    }
+  }, [initialSettings, setSettings]);
+
+  // Fetch once on mount as a safety net for static build fallbacks and persisted stale
+  // localStorage state. The server-provided settings still drive the first render.
+  useEffect(() => {
+    fetchSettings({ fresh: true });
   }, [fetchSettings]);
 
   useEffect(() => {

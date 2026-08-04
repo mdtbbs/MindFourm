@@ -10,7 +10,7 @@ import {
   serializeFooterFriendlyLinks,
   type FooterFriendlyLink,
 } from '@/lib/footer/footer-settings';
-import { useSettingsStore } from '@/store/settings-store';
+import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 
 const EMPTY_LINK: FooterFriendlyLink = { label: '', href: '', description: '' };
 
@@ -27,7 +27,7 @@ function toEditableLinks(rawValue: string | undefined): FooterFriendlyLink[] {
 }
 
 export default function FooterSettingsPage() {
-  const fetchGlobalSettings = useSettingsStore((state) => state.fetchSettings);
+  const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [links, setLinks] = useState<FooterFriendlyLink[]>([{ ...EMPTY_LINK }]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +97,7 @@ export default function FooterSettingsPage() {
         footer_friendly_links: serializeFooterFriendlyLinks(links),
       };
       await adminApi.updateSettings('footer', payload);
-      await fetchGlobalSettings();
+      await refreshAfterSettingsSave();
       setValues(payload);
       setLinks(toEditableLinks(payload.footer_friendly_links));
       setMessage('页脚设置已保存');

@@ -16,7 +16,7 @@ interface SettingsState {
   // Actions
   setSettings: (settings: Record<string, string>) => void;
   updateSetting: (key: string, value: string) => void;
-  fetchSettings: () => Promise<void>;
+  fetchSettings: (options?: { fresh?: boolean }) => Promise<void>;
   getSetting: (key: string, defaultValue?: string) => string | undefined;
 }
 
@@ -41,10 +41,10 @@ export const useSettingsStore = create<SettingsState>()(
         }));
       },
 
-      fetchSettings: async () => {
+      fetchSettings: async (options?: { fresh?: boolean }) => {
         set({ isLoading: true });
         try {
-          const settings = await settingsApi.get();
+          const settings = await settingsApi.get({ fresh: options?.fresh });
           set({
             settings: settings || {},
             isLoading: false,

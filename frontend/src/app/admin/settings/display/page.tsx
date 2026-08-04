@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 import MarkdownEditor from '@/components/ui/markdown-editor';
 
 const latestPostToggles = [
@@ -14,6 +15,7 @@ const latestPostToggles = [
 ] as const;
 
 export default function DisplaySettingsPage() {
+  const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -39,6 +41,7 @@ export default function DisplaySettingsPage() {
     setError(null);
     try {
       await adminApi.updateSettings('display', values);
+      await refreshAfterSettingsSave();
       setMessage('Saved');
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {

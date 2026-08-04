@@ -1,19 +1,12 @@
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
-import { fetchApiData } from '@/lib/api/server-fetch';
 import { getFooterSettings, isExternalHref } from '@/lib/footer/footer-settings';
+import { fetchPublicSettings } from '@/lib/settings/server';
 
 export const revalidate = 60;
 
-async function fetchSettings(): Promise<Record<string, string>> {
-  return fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
-}
-
 export default async function LinksPage() {
-  const settings = await fetchSettings();
+  const settings = await fetchPublicSettings();
   const footer = getFooterSettings(settings);
 
   return (

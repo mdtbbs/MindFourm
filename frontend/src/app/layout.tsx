@@ -8,7 +8,7 @@ import { SettingsProvider } from '@/lib/settings/context';
 import { ThemeProvider } from '@/lib/shared';
 import { LikeProvider } from '@/lib/like/context';
 import { PhoneVerificationProvider } from '@/components/phone-verification-provider';
-import { fetchApiData } from '@/lib/api/server-fetch';
+import { fetchPublicSettings } from '@/lib/settings/server';
 import { getMetadataBase, getSiteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
 import { cn } from '@/lib/utils';
@@ -17,15 +17,8 @@ import { buildBrandCssVariables } from '@/lib/theme/brand';
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
-async function fetchSettings(): Promise<Record<string, string>> {
-  return fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
-}
-
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await fetchSettings();
+  const settings = await fetchPublicSettings();
   const titleSuffix = settings.seo_title_suffix || ' | MindForum';
   const siteName = settings.site_name || 'MindForum';
   const description = settings.seo_default_description || '一个现代化的社区论坛';
@@ -118,7 +111,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const settings = await fetchSettings();
+  const settings = await fetchPublicSettings();
   const webSiteJsonLd = buildWebSiteJsonLd(settings);
   const brandStyle = buildBrandStyle(settings);
 
@@ -153,7 +146,7 @@ export default async function RootLayout({
       </head>
       <body className={inter.className}>
         <ThemeProvider>
-          <SettingsProvider>
+          <SettingsProvider initialSettings={settings}>
             <AuthProvider>
               <LikeProvider>
                 <ToastProvider>

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { adminApi } from '@/lib/api/client';
 import { useSettingsStore } from '@/store/settings-store';
+import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 
@@ -16,6 +17,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function BasicSettingsPage() {
+  const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const updateGlobalSetting = useSettingsStore((state) => state.updateSetting);
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -43,6 +45,7 @@ export default function BasicSettingsPage() {
     setError(null);
     try {
       await adminApi.updateSettings('basic', values);
+      await refreshAfterSettingsSave();
       setMessage('Settings saved successfully');
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {
@@ -73,6 +76,7 @@ export default function BasicSettingsPage() {
       const uploaded = await adminApi.uploadSiteLogo(formData);
       update('site_logo_url', uploaded.url);
       updateGlobalSetting('site_logo_url', uploaded.url);
+      await refreshAfterSettingsSave();
       setMessage('站点图标已上传并应用');
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {

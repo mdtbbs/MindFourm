@@ -33,6 +33,7 @@ class ApiRequestError extends Error {
 
 type RequestOptions = RequestInit & {
   skipPhoneVerificationRetry?: boolean;
+  skipCache?: boolean;
 };
 
 /**
@@ -112,7 +113,8 @@ export function resetApiCache(): void {
   cacheGeneration += 1;
 }
 
-function getCacheKey(path: string, options: RequestInit): string | null {
+function getCacheKey(path: string, options: RequestOptions): string | null {
+  if (options.skipCache) return null;
   if (options.method && options.method !== 'GET') return null;
   if (UNCACHEABLE_PREFIXES.some((prefix) => path.startsWith(prefix))) return null;
   return `${cacheGeneration}:${options.method || 'GET'}:${path}`;
@@ -218,8 +220,9 @@ async function request<T>(
   rawPath: string,
   options: RequestOptions = {}
 ): Promise<T> {
+  const { skipPhoneVerificationRetry: _skipPhoneVerificationRetry, skipCache: _skipCache, ...fetchOptions } = options;
   const path = resolveApiPath(rawPath);
-  const method = options.method || 'GET';
+  const method = fetchOptions.method || 'GET';
   const cacheKey = getCacheKey(path, options);
 
   // Return cached data for GET requests
@@ -228,16 +231,16 @@ async function request<T>(
     if (cached !== null) return cached;
   }
 
-  const isFormData = options.body instanceof FormData;
+  const isFormData = fetchOptions.body instanceof FormData;
 
   let res: Response;
   try {
     await ensureClientCsrfToken(String(method));
     const requestHeaders = isFormData
-      ? { 'X-API-Version': '1', ...(options.headers as Record<string, string> | undefined) }
-      : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...(options.headers as Record<string, string> | undefined) };
+      ? { 'X-API-Version': '1', ...(fetchOptions.headers as Record<string, string> | undefined) }
+      : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...(fetchOptions.headers as Record<string, string> | undefined) };
     res = await fetch(`${API_BASE}${path}`, {
-      ...options,
+      ...fetchOptions,
       headers: withCsrfHeader(requestHeaders, String(method)),
       credentials: 'include',
     });
@@ -323,7 +326,8 @@ function clearCache(): void {
 
 // Public settings (no auth)
 export const settingsApi = {
-  get: () => request<Record<string, string>>('/api/settings'),
+  get: (options?: { fresh?: boolean }) =>
+    request<Record<string, string>>('/api/settings', { skipCache: options?.fresh }),
 };
 
 // Auth APIs
@@ -563,12 +567,14 @@ export const adminApi = {
     request<{ moderation_pending: number; announce_active: number }>('/api/admin/badge-counts'),
   getSettings: (category?: string) =>
     request<Record<string, string>>(`/api/admin/settings${category ? `/${category}` : ''}`),
-  updateSettings: (category: string, data: Record<string, string>) => {
-    clearCache();
-    return request<Record<string, string>>(`/api/admin/settings/${category}`, {
+  updateSettings: async (category: string, data: Record<string, string>) => {
+    const result = await request<Record<string, string>>(`/api/admin/settings/${category}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+    invalidateCache('/api/settings');
+    invalidateCache('/api/admin/settings');
+    return result;
   },
   uploadSiteLogo: (formData: FormData) => {
     clearCache();

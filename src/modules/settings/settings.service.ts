@@ -409,6 +409,15 @@ export class SettingsService implements OnModuleInit {
     return ['true', '1', 'yes', 'on'].includes(value.toLowerCase());
   }
 
+  hasPublicKeys(keys: Iterable<string>): boolean {
+    for (const key of keys) {
+      if (SettingsService.PUBLIC_KEYS.has(key)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Batch update settings (upsert)
    */

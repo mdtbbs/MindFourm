@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
-import { fetchApiData } from '@/lib/api/server-fetch';
 import { getSiteUrl } from '@/lib/seo/site-url';
+import { fetchPublicSettings } from '@/lib/settings/server';
 
 /**
  * Paths that produce unbounded thin or duplicate content.
@@ -17,15 +17,14 @@ const DISALLOWED_PATHS = [
   '/bookmarks',
   '/messages',
   '/settings',
+  // Internal Next-only endpoints are guarded and not documents.
+  '/internal/',
   // API responses are not documents.
   '/api/',
 ];
 
 export default async function robots(): Promise<MetadataRoute.Robots> {
-  const settings = await fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
+  const settings = await fetchPublicSettings();
 
   // Matches the admin toggle, which renders `=== 'true'` as checked. Reading this as
   // `!== 'false'` meant an unset value showed as off in the UI while behaving as on.

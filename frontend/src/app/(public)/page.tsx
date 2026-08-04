@@ -6,6 +6,7 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import Pagination from '@/components/ui/pagination';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
+import { fetchPublicSettings } from '@/lib/settings/server';
 import { Category, PostListResponse, Tag } from '@/types';
 
 export const revalidate = 30;
@@ -35,13 +36,6 @@ async function fetchTags(): Promise<Tag[]> {
   return fetchApiData<Tag[]>('/api/tags', {
     init: { next: { tags: ['tags'] } },
     fallback: [],
-  });
-}
-
-async function fetchSettings(): Promise<Record<string, string>> {
-  return fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
   });
 }
 
@@ -101,7 +95,7 @@ export default async function HomePage({
   const page = parseInt(params.page || '1', 10);
   const categoryId = params.category_id ? parseInt(params.category_id, 10) : undefined;
 
-  const settings = await fetchSettings();
+  const settings = await fetchPublicSettings();
   const postsPerPage = parseInt(settings.posts_per_page || '20', 10);
   const latestPostsSettings = parseLatestPostsSettings(settings);
 

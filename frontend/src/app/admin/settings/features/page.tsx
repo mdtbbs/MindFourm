@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 import { Server, Users, Trophy, ShoppingBag, FolderOpen } from 'lucide-react';
 
 interface FeatureItem {
@@ -53,6 +54,7 @@ const features: FeatureItem[] = [
 ];
 
 export default function FeaturesSettingsPage() {
+  const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -78,6 +80,7 @@ export default function FeaturesSettingsPage() {
     setError(null);
     try {
       await adminApi.updateSettings('features', values);
+      await refreshAfterSettingsSave();
       setMessage('已保存');
       setTimeout(() => setMessage(null), 3000);
     } catch (err) {

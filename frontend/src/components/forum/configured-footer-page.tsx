@@ -1,5 +1,5 @@
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
-import { fetchApiData } from '@/lib/api/server-fetch';
+import { fetchPublicSettings } from '@/lib/settings/server';
 
 interface ConfiguredFooterPageProps {
   eyebrow: string;
@@ -8,20 +8,13 @@ interface ConfiguredFooterPageProps {
   fallback: React.ReactNode;
 }
 
-async function fetchSettings(): Promise<Record<string, string>> {
-  return fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
-}
-
 export default async function ConfiguredFooterPage({
   eyebrow,
   title,
   settingKey,
   fallback,
 }: ConfiguredFooterPageProps) {
-  const settings = await fetchSettings();
+  const settings = await fetchPublicSettings();
   const content = settings[settingKey]?.trim();
 
   return (

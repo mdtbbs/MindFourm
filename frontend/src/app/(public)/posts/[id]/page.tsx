@@ -8,6 +8,7 @@ import Pagination from '@/components/ui/pagination';
 import AttachmentList from '@/components/forum/attachment-list';
 import Link from 'next/link';
 import { fetchApiData } from '@/lib/api/server-fetch';
+import { fetchPublicSettings } from '@/lib/settings/server';
 import { Post, Attachment, UserRole } from '@/types';
 import { toMetaDescription } from '@/lib/seo/description';
 import { absoluteUrl } from '@/lib/seo/site-url';
@@ -19,12 +20,7 @@ import { buildHybridParam, extractIdFromHybridParam } from '@/lib/seo/hybrid-par
 // used to sit here was inert. Declaring it was misleading rather than useful.
 export const dynamic = 'force-dynamic';
 
-const fetchSettings = cache(async (): Promise<Record<string, string>> => {
-  return fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
-});
+const fetchSettings = cache(fetchPublicSettings);
 
 /**
  * Memoised per request: `generateMetadata` and the page body both need the post, and

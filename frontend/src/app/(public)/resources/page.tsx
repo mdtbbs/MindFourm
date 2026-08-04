@@ -5,6 +5,7 @@ import ForumContentLayout from '@/components/forum/forum-content-layout';
 import ResourceCard from '@/components/forum/resource-card';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
 import { fetchApiData } from '@/lib/api/server-fetch';
+import { fetchPublicSettings } from '@/lib/settings/server';
 import { Category, Resource, ResourceCategory, Tag } from '@/types';
 
 export const revalidate = 60;
@@ -71,10 +72,7 @@ export default async function ResourcesPage({
   searchParams: Promise<{ category_id?: string; search?: string; sort?: string }>;
 }) {
   const params = await searchParams;
-  const settings = await fetchApiData<Record<string, string>>('/api/settings', {
-    init: { next: { revalidate: 60 } },
-    fallback: {},
-  });
+  const settings = await fetchPublicSettings();
 
   const resourcesEnabled = settings.feature_resources_enabled !== 'false';
 

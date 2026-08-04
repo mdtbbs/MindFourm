@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 import {
   DEFAULT_TOP_NAVIGATION_ITEMS,
   parseTopNavigationItems,
@@ -15,6 +16,7 @@ function prettyPrintNavigation(items: TopNavigationItem[]): string {
 }
 
 export default function NavigationSettingsPage() {
+  const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,6 +64,7 @@ export default function NavigationSettingsPage() {
     setError(null);
     try {
       await adminApi.updateSettings('navigation', values);
+      await refreshAfterSettingsSave();
       setMessage('Navigation settings saved successfully');
       setTimeout(() => setMessage(null), 3000);
       await fetchSettings();

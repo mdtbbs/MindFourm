@@ -17,6 +17,7 @@ import {
 import { AdminService } from './admin.service';
 import { StatsService } from '../stats/stats.service';
 import { SettingsService } from '../settings/settings.service';
+import { SettingsRevalidationService } from '../settings/settings-revalidation.service';
 import { LogsService } from '../logs/logs.service';
 import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
@@ -52,6 +53,7 @@ export class AdminController {
     private readonly adminService: AdminService,
     private readonly statsService: StatsService,
     private readonly settingsService: SettingsService,
+    private readonly settingsRevalidationService: SettingsRevalidationService,
     private readonly logsService: LogsService,
     private readonly bansService: BansService,
     private readonly categoriesService: CategoriesService,
@@ -106,7 +108,11 @@ export class AdminController {
     @Param('category') category: string,
     @Body() settings: Record<string, string>,
   ) {
+    const touchesPublicSettings = this.settingsService.hasPublicKeys(Object.keys(settings));
     await this.settingsService.setBatch(category, settings);
+    if (touchesPublicSettings) {
+      await this.settingsRevalidationService.revalidatePublicSettings();
+    }
     return { message: 'Settings updated' };
   }
 
@@ -124,6 +130,7 @@ export class AdminController {
     const uploaded = this.uploadsService.toPublicImageResult(file);
     try {
       await this.settingsService.setBatch('basic', { site_logo_url: uploaded.url });
+      await this.settingsRevalidationService.revalidatePublicSettings();
       await this.logOperation(req, 'settings.site_logo.upload', 'setting', undefined, {
         key: 'site_logo_url',
         url: uploaded.url,
