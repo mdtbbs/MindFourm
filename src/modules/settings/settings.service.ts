@@ -1,4 +1,4 @@
-﻿import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '@entities/index';
@@ -32,7 +32,7 @@ export class SettingsService implements OnModuleInit {
 
   /**
    * Keys readable without authentication. Anything absent from this set is
-   * admin-only 鈥?the settings table also holds SMTP credentials and the
+   * admin-only — the settings table also holds SMTP credentials and the
    * admin-notification webhook secret, so this must stay an allowlist rather
    * than a denylist of known-sensitive keys.
    */
@@ -123,8 +123,6 @@ export class SettingsService implements OnModuleInit {
       'footer_police_number',
       'footer_police_url',
       'footer_friendly_links',
-    ]),
-    pages: new Set([
       'footer_about_content',
       'footer_thanks_content',
       'footer_terms_content',
@@ -215,7 +213,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'brand_primary', value: DEFAULT_BRAND_PRIMARY, category: 'basic', description: 'Global primary brand color' },
       { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
       { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
-      { key: 'site_url', value: process.env.FRONTEND_URL || 'http://localhost:3000', category: 'basic', description: '绔欑偣URL - 鐢ㄤ簬鐢熸垚閭欢閾炬帴銆丷SS璁㈤槄绛夛紝蹇呴』璁剧疆涓哄疄闄呰繍钀ュ煙鍚? },
+      { key: 'site_url', value: process.env.FRONTEND_URL || 'http://localhost:3000', category: 'basic', description: '站点URL - 用于生成邮件链接、RSS订阅等，必须设置为实际运营域名' },
       { key: 'admin_email', value: 'admin@example.com', category: 'basic', description: 'Admin email' },
       { key: 'maintenance_mode', value: 'false', category: 'basic', description: 'Maintenance mode toggle' },
       { key: 'posts_per_page', value: '20', category: 'posts', description: 'Posts per page' },
@@ -223,8 +221,8 @@ export class SettingsService implements OnModuleInit {
       { key: 'allow_attachments', value: 'true', category: 'posts', description: 'Allow file attachments' },
       { key: 'default_sort', value: 'newest', category: 'display', description: 'Default post sort order' },
       { key: 'replies_per_page', value: '50', category: 'display', description: 'Replies per page' },
-      { key: 'latest_posts_title', value: '鏈€鏂板笘瀛?, category: 'display', description: 'Latest posts section title' },
-      { key: 'latest_posts_description', value: '娴呰摑銆佺洿瑙掋€佷綆鍣煶鐨勮鍧涚晫闈紝閲嶇偣鏀惧湪甯栧瓙灞傜骇鍜屾祻瑙堟晥鐜囥€?, category: 'display', description: 'Latest posts section description' },
+      { key: 'latest_posts_title', value: '最新帖子', category: 'display', description: 'Latest posts section title' },
+      { key: 'latest_posts_description', value: '浅蓝、直角、低噪音的论坛界面，重点放在帖子层级和浏览效率。', category: 'display', description: 'Latest posts section description' },
       { key: 'latest_posts_density', value: 'compact', category: 'display', description: 'Latest posts display density: compact or comfortable' },
       { key: 'latest_posts_accent_color', value: '#2f80ed', category: 'display', description: 'Latest posts accent color' },
       { key: 'latest_posts_show_excerpt', value: 'true', category: 'display', description: 'Show post excerpt in latest posts list' },
@@ -255,7 +253,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'cleanup_log_retention_days', value: '365', category: 'cleanup', description: 'Days to retain operation logs' },
       { key: 'cleanup_session_retention_days', value: '30', category: 'cleanup', description: 'Days to retain expired sessions' },
       { key: 'cleanup_soft_delete_retention_days', value: '30', category: 'cleanup', description: 'Days to retain soft-deleted items' },
-      // Feature toggles (蹇嵎鍏ュ彛寮€鍏?
+      // Feature toggles (快捷入口开关)
       { key: 'feature_resources_enabled', value: 'true', category: 'features', description: 'Enable resources center' },
       { key: 'feature_servers_enabled', value: 'false', category: 'features', description: 'Enable game servers' },
       { key: 'feature_groups_enabled', value: 'true', category: 'features', description: 'Enable user groups' },
@@ -308,7 +306,7 @@ export class SettingsService implements OnModuleInit {
   /**
    * Get all settings from memory.
    *
-   * Returns secrets in cleartext 鈥?for internal service use only. Never expose
+   * Returns secrets in cleartext — for internal service use only. Never expose
    * the result on an HTTP response; use `getPublicSettings` or
    * `getAllForAdmin` instead.
    */
@@ -323,7 +321,7 @@ export class SettingsService implements OnModuleInit {
   /**
    * Get settings by category.
    *
-   * Returns secrets in cleartext 鈥?for internal service use only (e.g.
+   * Returns secrets in cleartext — for internal service use only (e.g.
    * `EmailService` reading the `email` category). Never expose the result on an
    * HTTP response; use `getPublicByCategory` or `getByCategoryForAdmin`.
    */
