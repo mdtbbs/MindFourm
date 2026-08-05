@@ -11,10 +11,12 @@ import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceRating } from '@entities/resource-rating.entity';
 import { User } from '@entities/user.entity';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
     AdminNotificationsModule,
+    NotificationsModule,
     TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User]),
   ],
   providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService],

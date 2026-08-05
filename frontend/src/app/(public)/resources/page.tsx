@@ -2,8 +2,9 @@ import Link from 'next/link';
 import { Metadata } from 'next';
 import { FileText, AlertCircle } from 'lucide-react';
 import ForumContentLayout from '@/components/forum/forum-content-layout';
-import ResourceCard from '@/components/forum/resource-card';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
+import ResourceLoadMore from '@/components/forum/resource-load-more';
+import HotResources from '@/components/forum/hot-resources';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { Category, Resource, ResourceCategory, Tag } from '@/types';
@@ -36,7 +37,7 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
   if (params.search) qs.set('search', params.search);
   if (params.sort) qs.set('sort', params.sort);
 
-  const [resourcesResult, resourceCategories, forumCategories, tags] = await Promise.all([
+  const [resourcesResult, resourceCategories, forumCategories, tags, hotResources] = await Promise.all([
     fetchApiData<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
       `/api/resources?${qs.toString()}`,
       {
@@ -56,13 +57,20 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
       init: { next: { tags: ['tags'] } },
       fallback: [],
     }),
+    fetchApiData<Resource[]>('/api/resources/hot', {
+      init: { next: { revalidate: 300 } },
+      fallback: [],
+    }),
   ]);
 
   return {
     resources: resourcesResult.data,
+    nextCursor: resourcesResult.next_cursor,
+    hasMore: resourcesResult.has_more,
     resourceCategories,
     forumCategories,
     tags,
+    hotResources,
   };
 }
 
@@ -90,7 +98,7 @@ export default async function ResourcesPage({
     );
   }
 
-  const { resources, resourceCategories, forumCategories, tags } = await fetchData(params);
+  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, hotResources } = await fetchData(params);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -114,6 +122,8 @@ export default async function ResourcesPage({
             </Link>
           </div>
 
+          {hotResources.length > 0 && <HotResources resources={hotResources} />}
+
           <ResourceFilters
             categories={resourceCategories}
             initialCategory={params.category_id}
@@ -133,11 +143,14 @@ export default async function ResourcesPage({
               </Link>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] divide-y divide-[var(--border)]">
-              {resources.map((resource) => (
-                <ResourceCard key={resource.id} resource={resource} />
-              ))}
-            </div>
+            <ResourceLoadMore
+              initialResources={resources}
+              initialCursor={nextCursor}
+              hasMore={hasMore}
+              categoryId={params.category_id ? parseInt(params.category_id) : undefined}
+              search={params.search}
+              sort={params.sort}
+            />
           )}
         </div>
       </ForumContentLayout>

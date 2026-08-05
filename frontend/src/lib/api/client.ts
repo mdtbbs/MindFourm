@@ -1049,6 +1049,24 @@ export const resourceApi = {
     clearCache();
     return request<void>(`/api/resources/${id}/versions/${versionId}`, { method: 'DELETE' });
   },
+  getUserRating: (id: number) =>
+    request<{ rating: number | null }>(`/api/resources/${id}/rating`),
+  upsertRating: (id: number, rating: number) => {
+    clearCache();
+    return request<Resource>(`/api/resources/${id}/rating`, {
+      method: 'POST',
+      body: JSON.stringify({ rating }),
+    });
+  },
+  deleteRating: (id: number) => {
+    clearCache();
+    return request<void>(`/api/resources/${id}/rating`, { method: 'DELETE' });
+  },
+  getMyResources: (params?: { cursor?: string; limit?: number }) =>
+    request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
+      `/api/resources/my${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`
+    ),
+  getHot: () => request<Resource[]>('/api/resources/hot'),
 };
 
 // Resource Category Admin APIs
@@ -1080,11 +1098,11 @@ export const resourceAdminApi = {
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
       `/api/resources/admin${buildQueryString({ cursor: params?.cursor, limit: params?.limit, status: params?.status, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
     ),
-  updateStatus: (id: number, status: string) => {
+  updateStatus: (id: number, status: string, rejectReason?: string) => {
     clearCache();
     return request<Resource>(`/api/resources/${id}/status`, {
       method: 'PUT',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, reject_reason: rejectReason }),
     });
   },
   delete: (id: number) => {

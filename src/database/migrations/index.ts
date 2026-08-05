@@ -11,6 +11,9 @@ import { CreateExternalApiTables1720000011000 } from './1720000011000-CreateExte
 import { CreateLanLinkQuickCodes1720000012000 } from './1720000012000-CreateLanLinkQuickCodes';
 import { CreateFriendships1720000013000 } from './1720000013000-CreateFriendships';
 import { AddResourceVersionContent1720000014000 } from './1720000014000-AddResourceVersionContent';
+import { AddResourceRejectReason1720000015000 } from './1720000015000-AddResourceRejectReason';
+import { AddResourceIndexes1720000016000 } from './1720000016000-AddResourceIndexes';
+import { AddQQAuthTables1720000017000 } from './1720000017000-AddQQAuthTables';
 
 /**
  * Migrations in run order.
@@ -33,4 +36,7 @@ export const migrations = [
   CreateLanLinkQuickCodes1720000012000,
   CreateFriendships1720000013000,
   AddResourceVersionContent1720000014000,
+  AddResourceRejectReason1720000015000,
+  AddResourceIndexes1720000016000,
+  AddQQAuthTables1720000017000,
 ];

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Resource } from '@/types';
+import { Star } from 'lucide-react';
 import { markdownToPlainExcerpt } from '@/lib/markdown/excerpt';
 
 function formatDate(value: string): string {
@@ -13,6 +14,9 @@ function resourceTypeLabel(resourceType: Resource['resource_type']): string {
 }
 
 export default function ResourceCard({ resource }: { resource: Resource }) {
+  const rating = resource.rating_average ?? 0;
+  const ratingCount = resource.rating_count ?? 0;
+
   return (
     <Link
       href={`/resources/${resource.id}`}
@@ -33,7 +37,7 @@ export default function ResourceCard({ resource }: { resource: Resource }) {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4 lg:min-w-[430px] lg:justify-items-end">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-5 lg:min-w-[520px] lg:justify-items-end">
           <div>
             <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">分类</div>
             <div className="mt-1 text-[var(--text)]">{resource.category_name || '未分类'}</div>
@@ -41,6 +45,20 @@ export default function ResourceCard({ resource }: { resource: Resource }) {
           <div>
             <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">类型</div>
             <div className="mt-1 text-[var(--text)]">{resourceTypeLabel(resource.resource_type)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">评分</div>
+            <div className="mt-1 flex items-center gap-1 text-[var(--text)]">
+              {ratingCount > 0 ? (
+                <>
+                  <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                  {rating.toFixed(1)}
+                  <span className="text-[var(--text-muted)]">({ratingCount})</span>
+                </>
+              ) : (
+                <span className="text-[var(--text-muted)]">暂无</span>
+              )}
+            </div>
           </div>
           <div>
             <div className="text-[11px] uppercase tracking-[0.14em] text-[var(--text-muted)]">下载</div>

@@ -15,6 +15,7 @@ import { escapeLike } from '@common/utils/search.util';
 import { PUBLIC_RESOURCE_STATUSES, RESOURCE_STATUS } from '@common/utils/constants';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { MflClientService } from './mfl-client.service';
 import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
 
@@ -53,6 +54,7 @@ export class ResourcesService {
     private ratingRepository: Repository<ResourceRating>,
     private dataSource: DataSource,
     private adminNotificationsService: AdminNotificationsService,
+    private notificationsService: NotificationsService,
     private mflClientService: MflClientService,
   ) {}
 
@@ -64,7 +66,7 @@ export class ResourcesService {
     if (value === undefined || value === null || value === '') return undefined;
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) {
-      throw new BadRequestException('Invalid numeric value');
+      throw new BadRequestException('无效的数值');
     }
     return parsed;
   }
@@ -111,19 +113,19 @@ export class ResourcesService {
       ? await this.categoryRepository.findOne({ where: { id: categoryId } })
       : null;
     if (categoryId && !category) {
-      throw new BadRequestException('Category does not exist');
+      throw new BadRequestException('分类不存在');
     }
 
     if (!['upload', 'external'].includes(resourceType)) {
-      throw new BadRequestException('Invalid resource type');
+      throw new BadRequestException('无效的资源类型');
     }
 
     if (resourceType === 'upload' && !file && !mflMeta) {
-      throw new BadRequestException('A file is required for uploaded resources');
+      throw new BadRequestException('文件类资源必须上传文件');
     }
 
     if (resourceType === 'external' && !dto.external_url) {
-      throw new BadRequestException('An external URL is required');
+      throw new BadRequestException('外链类资源必须填写外链地址');
     }
 
     const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
@@ -160,7 +162,7 @@ export class ResourcesService {
     });
 
     if (!finalResult) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     if (finalResult.status === RESOURCE_STATUS_PENDING) {
@@ -215,7 +217,7 @@ export class ResourcesService {
 
     if (!mflResult) {
       await this.resourceRepository.delete(resourceId);
-      throw new BadRequestException('MindFileList service is not configured. Please upload locally or contact an admin.');
+      throw new BadRequestException('文件站服务未配置，请改用本地上传或联系管理员');
     }
 
     try {
@@ -313,8 +315,6 @@ export class ResourcesService {
 
     return {
       data: resources.map((resource) => this.normalizeResource(resource)),
-      nextCursor,
-      hasMore,
       next_cursor: nextCursor,
       has_more: hasMore,
     };
@@ -343,7 +343,7 @@ export class ResourcesService {
     );
     if (!isApproved || resource.is_public !== 1) {
       // 404 rather than 403 so unapproved submissions are not enumerable.
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
   }
 
@@ -354,7 +354,7 @@ export class ResourcesService {
     });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     this.assertResourceVisible(resource, viewer);
@@ -369,7 +369,7 @@ export class ResourcesService {
     });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     this.assertResourceVisible(resource, viewer);
@@ -435,8 +435,67 @@ export class ResourcesService {
 
     return {
       data: resources.map((resource) => this.normalizeResource(resource)),
-      nextCursor,
-      hasMore,
+      next_cursor: nextCursor,
+      has_more: hasMore,
+    };
+  }
+
+  /**
+   * Get public approved resources by user ID (for user profile display)
+   */
+  async getPublicByUserId(
+    userId: number,
+    limit: number = 20,
+    cursor?: string,
+  ): Promise<any> {
+    const where: any = {
+      user_id: userId,
+      status: 'approved',
+      is_public: 1,
+    };
+
+    let cursorCondition: any = {};
+    if (cursor) {
+      try {
+        const decoded = decodeCursor(cursor);
+        const cursorValue = new Date(parseInt(decoded[0]));
+        const idValue = parseInt(decoded[1]);
+
+        cursorCondition = [
+          { created_at: LessThan(cursorValue) },
+          { created_at: cursorValue, id: LessThan(idValue) },
+        ];
+      } catch {
+        // Ignore invalid cursors.
+      }
+    }
+
+    const resources = await this.resourceRepository.find({
+      where: cursorCondition.length > 0
+        ? [{ ...where, ...cursorCondition[0] }, { ...where, ...cursorCondition[1] }]
+        : where,
+      relations: ['user', 'category'],
+      order: {
+        created_at: 'DESC',
+        id: 'DESC',
+      },
+      take: Number(limit) + 1,
+    });
+
+    const hasMore = resources.length > Number(limit);
+    if (hasMore) {
+      resources.pop();
+    }
+
+    let nextCursor: string | null = null;
+    if (hasMore && resources.length > 0) {
+      const lastResource = resources[resources.length - 1];
+      const cursorValue = lastResource.created_at.getTime().toString();
+      nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
+    }
+
+    return {
+      data: resources.map((resource) => this.normalizeResource(resource)),
       next_cursor: nextCursor,
       has_more: hasMore,
     };
@@ -455,13 +514,13 @@ export class ResourcesService {
       });
 
       if (!resource) {
-        throw new NotFoundException('Resource does not exist');
+        throw new NotFoundException('资源不存在');
       }
 
       // Staff may edit any resource — this branch was missing, unlike PostsService.
       const isStaff = userRole === 'admin' || userRole === 'moderator';
       if (resource.user_id !== userId && !isStaff) {
-        throw new ForbiddenException('No permission to edit this resource');
+        throw new ForbiddenException('没有权限编辑此资源');
       }
 
       const categoryId = this.toOptionalNumber((dto as any).category_id);
@@ -470,7 +529,7 @@ export class ResourcesService {
           where: { id: categoryId },
         });
         if (!category) {
-          throw new BadRequestException('Category does not exist');
+          throw new BadRequestException('分类不存在');
         }
       }
 
@@ -481,7 +540,7 @@ export class ResourcesService {
       if (dto.resource_type) {
         const resourceType = this.normalizeResourceType(dto.resource_type);
         if (!['upload', 'external'].includes(resourceType)) {
-          throw new BadRequestException('Invalid resource type');
+          throw new BadRequestException('无效的资源类型');
         }
         updateData.resource_type = resourceType;
       }
@@ -522,7 +581,7 @@ export class ResourcesService {
       });
 
       if (!result) {
-        throw new NotFoundException('Resource does not exist');
+        throw new NotFoundException('资源不存在');
       }
 
       return this.normalizeResource(result);
@@ -536,12 +595,12 @@ export class ResourcesService {
     });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     const isStaff = userRole === 'admin' || userRole === 'moderator';
     if (resource.user_id !== userId && !isStaff) {
-      throw new ForbiddenException('No permission to delete this resource');
+      throw new ForbiddenException('没有权限删除此资源');
     }
 
     await this.softDeleteResource(resource);
@@ -553,7 +612,7 @@ export class ResourcesService {
     });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     await this.softDeleteResource(resource);
@@ -587,7 +646,7 @@ export class ResourcesService {
   async updateStatus(
     id: number,
     status: string,
-    options: { actorUsername?: string | null } = {},
+    options: { actorUsername?: string | null; rejectReason?: string | null } = {},
   ): Promise<any> {
     const validStatuses: string[] = [
       RESOURCE_STATUS_PENDING,
@@ -595,7 +654,7 @@ export class ResourcesService {
       RESOURCE_STATUS_REJECTED,
     ];
     if (!validStatuses.includes(status)) {
-      throw new BadRequestException('Invalid status');
+      throw new BadRequestException('无效的状态');
     }
 
     const existingResource = await this.resourceRepository.findOne({
@@ -604,11 +663,17 @@ export class ResourcesService {
     });
 
     if (!existingResource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     if (existingResource.status !== status) {
-      await this.resourceRepository.update(id, { status });
+      const updateData: Partial<Resource> = { status };
+      if (status === RESOURCE_STATUS_REJECTED) {
+        updateData.reject_reason = options.rejectReason || null;
+      } else if (status === RESOURCE_STATUS_APPROVED) {
+        updateData.reject_reason = null;
+      }
+      await this.resourceRepository.update(id, updateData);
 
       // Sync approval status to MFL if applicable
       if (existingResource.use_mfl && existingResource.mfl_file_id) {
@@ -634,7 +699,7 @@ export class ResourcesService {
       });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     if (
@@ -650,6 +715,20 @@ export class ResourcesService {
         action_url: `/admin/resources?status=${status}`,
       }).catch((err) =>
         console.error('Admin resource moderation result notification error:', err),
+      );
+
+      // Notify the resource author about the moderation result
+      const notificationContent = status === RESOURCE_STATUS_APPROVED
+        ? `你的资源「${resource.title}」已通过审核`
+        : `你的资源「${resource.title}」未通过审核${options.rejectReason ? '：' + options.rejectReason : ''}`;
+
+      this.notificationsService.create({
+        user_id: resource.user_id,
+        type: 'system',
+        content: notificationContent,
+        emailEvent: 'system',
+      }).catch((err) =>
+        console.error('Resource author notification error:', err),
       );
     }
 
@@ -668,13 +747,13 @@ export class ResourcesService {
    */
   async upsertRating(resourceId: number, userId: number, rating: number): Promise<any> {
     if (!isValidRating(rating)) {
-      throw new BadRequestException('Rating must be an integer between 1 and 5');
+      throw new BadRequestException('评分必须是 1 到 5 的整数');
     }
 
     return this.dataSource.transaction(async (manager) => {
       const resource = await manager.findOne(Resource, { where: { id: resourceId } });
       if (!resource) {
-        throw new NotFoundException('Resource does not exist');
+        throw new NotFoundException('资源不存在');
       }
 
       // Locking the caller's own rating row (there is a unique index on
@@ -718,7 +797,7 @@ export class ResourcesService {
     return this.dataSource.transaction(async (manager) => {
       const resource = await manager.findOne(Resource, { where: { id: resourceId } });
       if (!resource) {
-        throw new NotFoundException('Resource does not exist');
+        throw new NotFoundException('资源不存在');
       }
 
       const existingRating = await manager.findOne(ResourceRating, {
@@ -727,7 +806,7 @@ export class ResourcesService {
       });
 
       if (!existingRating) {
-        throw new NotFoundException('Rating not found');
+        throw new NotFoundException('未找到评分记录');
       }
 
       await manager.delete(ResourceRating, existingRating.id);
@@ -787,5 +866,21 @@ export class ResourcesService {
     });
 
     return rating?.rating ?? null;
+  }
+
+  async getHotResources(limit: number = 10): Promise<any[]> {
+    const resources = await this.resourceRepository.find({
+      where: {
+        status: In(PUBLIC_RESOURCE_STATUSES),
+        is_public: 1,
+      },
+      relations: ['user', 'category'],
+      order: {
+        download_count: 'DESC',
+      },
+      take: limit,
+    });
+
+    return resources.map((resource) => this.normalizeResource(resource));
   }
 }

@@ -81,6 +81,7 @@ export class SettingsService implements OnModuleInit {
     'feature_leaderboard_enabled',
     'feature_shop_enabled',
     'feature_lanlink_enabled',
+    'feature_qq_login_enabled',
   ]);
 
   /** Never leaves the server in cleartext, not even to an authenticated admin. */
@@ -260,6 +261,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_leaderboard_enabled', value: 'true', category: 'features', description: 'Enable points leaderboard' },
       { key: 'feature_shop_enabled', value: 'true', category: 'features', description: 'Enable points shop' },
       { key: 'feature_lanlink_enabled', value: 'false', category: 'features', description: 'Enable LanLink game integration' },
+      { key: 'feature_qq_login_enabled', value: 'false', category: 'features', description: 'Enable QQ login' },
       // Email settings
       { key: 'smtp_host', value: '', category: 'email', description: 'SMTP server host' },
       { key: 'smtp_port', value: '587', category: 'email', description: 'SMTP server port' },

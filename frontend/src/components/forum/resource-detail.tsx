@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Calendar, Download, ExternalLink, FileText, Loader2, Trash2, Upload, User } from 'lucide-react';
+import { Calendar, Download, ExternalLink, FileText, Loader2, Star, Trash2, Upload, User } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth/context';
@@ -24,6 +25,53 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+interface StarRatingProps {
+  average: number;
+  count: number;
+  userRating: number | null;
+  onRate: (rating: number) => void;
+  readOnly?: boolean;
+}
+
+function StarRating({ average, count, userRating, onRate, readOnly }: StarRatingProps) {
+  const [hoverRating, setHoverRating] = useState(0);
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center">
+        {[1, 2, 3, 4, 5].map((star) => {
+          const filled = hoverRating ? star <= hoverRating : star <= Math.round(average);
+          return (
+            <button
+              key={star}
+              type="button"
+              disabled={readOnly}
+              onClick={() => onRate(star)}
+              onMouseEnter={() => !readOnly && setHoverRating(star)}
+              onMouseLeave={() => !readOnly && setHoverRating(0)}
+              className={`p-0.5 transition-colors ${readOnly ? 'cursor-default' : 'cursor-pointer hover:scale-110'}`}
+            >
+              <Star
+                className={`h-5 w-5 ${
+                  filled
+                    ? 'fill-yellow-400 text-yellow-400'
+                    : 'fill-none text-[var(--text-muted)]'
+                }`}
+              />
+            </button>
+          );
+        })}
+      </div>
+      <span className="text-sm text-[var(--text-muted)]">
+        {average.toFixed(1)} ({count} 评分)
+      </span>
+      {userRating && !readOnly && (
+        <span className="text-xs text-[var(--text-muted)]">你的评分: {userRating}</span>
+      )}
+    </div>
+  );
 }
 
 interface ResourceDetailProps {
@@ -53,6 +101,18 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const [isUploadingVersion, setIsUploadingVersion] = useState(false);
   const [versionError, setVersionError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [userRating, setUserRating] = useState<number | null>(null);
+  const [ratingCount, setRatingCount] = useState(resource.rating_count || 0);
+  const [ratingAverage, setRatingAverage] = useState(resource.rating_average || 0);
+
+  // Load user's rating on mount
+  useEffect(() => {
+    if (user) {
+      resourceApi.getUserRating(resource.id)
+        .then((res) => setUserRating(res.rating))
+        .catch(() => {});
+    }
+  }, [user, resource.id]);
 
   const selectedVersion = selectedVersionId
     ? versions.find((version) => version.id === selectedVersionId) || null
@@ -108,6 +168,48 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     }
   };
 
+  const handleRate = async (rating: number) => {
+    if (!user) {
+      showError('请先登录再评分');
+      return;
+    }
+    try {
+      const updated = await resourceApi.upsertRating(resource.id, rating);
+      setUserRating(rating);
+      setRatingCount(updated.rating_count || 0);
+      setRatingAverage(updated.rating_average || 0);
+      showSuccess('评分成功');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '评分失败');
+    }
+  };
+
+  const handleDeleteRating = async () => {
+    if (!user) return;
+    try {
+      await resourceApi.deleteRating(resource.id);
+      const updated = await resourceApi.getById(resource.id);
+      setUserRating(null);
+      setRatingCount(updated.rating_count || 0);
+      setRatingAverage(updated.rating_average || 0);
+      showSuccess('已取消评分');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '取消评分失败');
+    }
+  };
+
+  const handleDeleteVersion = async (versionId: number, versionLabel: string) => {
+    if (!window.confirm(`确定删除版本 ${versionLabel}？文件也会被删除。`)) return;
+    try {
+      await resourceApi.deleteVersion(resource.id, versionId);
+      setVersions((current) => current.filter((v) => v.id !== versionId));
+      if (selectedVersionId === versionId) setSelectedVersionId(null);
+      showSuccess('版本已删除');
+    } catch (err) {
+      showError(err instanceof Error ? err.message : '删除版本失败');
+    }
+  };
+
   return (
     <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-6">
       <h1 className="mb-3 text-2xl font-bold text-[var(--text)]">{resource.title}</h1>
@@ -140,6 +242,24 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         )}
       </div>
 
+      <div className="mb-4 flex items-center gap-3">
+        <StarRating
+          average={ratingAverage}
+          count={ratingCount}
+          userRating={userRating}
+          onRate={handleRate}
+          readOnly={!user}
+        />
+        {userRating && user && (
+          <button
+            onClick={handleDeleteRating}
+            className="text-xs text-[var(--text-muted)] hover:text-red-500 underline"
+          >
+            取消评分
+          </button>
+        )}
+      </div>
+
       {(versions.length > 0 || resource.version) && (
         <div className="mb-4 rounded-[var(--radius-sm)] bg-[var(--bg-elevated)] p-3">
           <VersionSelector
@@ -148,6 +268,16 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             selectedVersionId={selectedVersionId}
             onSelect={setSelectedVersionId}
           />
+          {isOwner && selectedVersion && versions.length > 1 && (
+            <div className="mt-2 flex justify-end">
+              <button
+                onClick={() => handleDeleteVersion(selectedVersion.id, selectedVersion.version || '')}
+                className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+              >
+                删除此版本
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -224,14 +354,22 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             <p className="text-sm font-medium text-[var(--text)]">管理此资源</p>
             <p className="text-xs text-[var(--text-muted)]">删除后资源将对所有用户不可见</p>
           </div>
-          <button
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="inline-flex items-center gap-2 rounded-[var(--radius)] border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
-          >
-            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            {isDeleting ? '删除中...' : '删除资源'}
-          </button>
+          <div className="flex gap-2">
+            <Link
+              href={`/resources/${resource.id}/edit`}
+              className="inline-flex items-center gap-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-sm font-medium text-[var(--text)] transition-colors hover:bg-[var(--bg-card)]"
+            >
+              编辑资源
+            </Link>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="inline-flex items-center gap-2 rounded-[var(--radius)] border border-red-300 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-red-800 dark:bg-red-950/30 dark:text-red-400 dark:hover:bg-red-950/50"
+            >
+              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {isDeleting ? '删除中...' : '删除资源'}
+            </button>
+          </div>
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { Post } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
 import { SearchHistory } from '@entities/search-history.entity';
 import { PopularSearch } from '@entities/popular-search.entity';
+import { Resource } from '@entities/resource.entity';
 import { RedisService } from '../../database/redis.service';
 import { escapeLike } from '../../common/utils/search.util';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
@@ -22,6 +23,8 @@ export class SearchService {
     private searchHistoryRepo: Repository<SearchHistory>,
     @InjectRepository(PopularSearch)
     private popularSearchRepo: Repository<PopularSearch>,
+    @InjectRepository(Resource)
+    private resourceRepository: Repository<Resource>,
     private redisService: RedisService,
     private postSummaryService: PostSummaryService,
   ) {}
@@ -110,6 +113,50 @@ export class SearchService {
       take: limit,
       select: ['id', 'username', 'avatar_url', 'bio'],
     });
+  }
+
+  /**
+   * Search resources by title and description.
+   * Only returns approved and public resources.
+   */
+  async searchResources(query: string, limit: number = 20): Promise<any[]> {
+    const resources = await this.resourceRepository.find({
+      where: [
+        {
+          status: 'approved',
+          is_public: 1,
+          title: Like(`%${escapeLike(query)}%`),
+        },
+        {
+          status: 'approved',
+          is_public: 1,
+          description: Like(`%${escapeLike(query)}%`),
+        },
+      ],
+      relations: ['user', 'category'],
+      order: {
+        download_count: 'DESC',
+        rating_average: 'DESC',
+        created_at: 'DESC',
+      },
+      take: limit,
+    });
+
+    return resources.map((resource) => ({
+      id: resource.id,
+      title: resource.title,
+      description: resource.description,
+      resource_type: resource.resource_type,
+      version: resource.version,
+      slug: resource.slug,
+      download_count: resource.download_count,
+      rating_average: resource.rating_average,
+      rating_count: resource.rating_count,
+      category_name: resource.category?.name || null,
+      username: resource.user?.username || null,
+      user_id: resource.user_id,
+      created_at: resource.created_at,
+    }));
   }
 
   async recordSearch(userId: number | undefined, query: string, resultsCount: number): Promise<void> {

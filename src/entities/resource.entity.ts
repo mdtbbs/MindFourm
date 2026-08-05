@@ -68,6 +68,9 @@ export class Resource {
   @Column({ length: 50, default: 'pending' })
   status: string;
 
+  @Column({ length: 500, nullable: true })
+  reject_reason: string | null;
+
   @Column({ default: 0 })
   download_count: number;
 

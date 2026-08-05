@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import PostCard from '@/components/forum/post-card';
+import ResourceCard from '@/components/forum/resource-card';
 import Pagination from '@/components/ui/pagination';
 import SearchEnhancements from '@/components/forum/search-enhancements';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiPaginated } from '@/lib/api/server-fetch';
-import { SearchResultResponse } from '@/types';
+import { fetchApiData } from '@/lib/api/server-fetch';
+import { SearchResultResponse, Resource } from '@/types';
 
 export const revalidate = 0;
 
@@ -27,13 +29,28 @@ async function fetchPosts(query: string, page: number, limit: number): Promise<S
   qs.set('page', String(page));
   qs.set('limit', String(limit));
 
-  return fetchApiPaginated<SearchResultResponse['data'][number], { popular_searches?: string[] }>(`/api/search?${qs.toString()}`, {
+  return fetchApiPaginated<SearchResultResponse['data'][number], { popular_searches?: string[]; resources?: any[] }>(`/api/search?${qs.toString()}`, {
     init: { next: { revalidate: 0 } },
     fallback: {
       ...createEmptyPaginatedResult<SearchResultResponse['data'][number]>(limit),
       popular_searches: undefined,
+      resources: [],
     },
   });
+}
+
+async function fetchResources(query: string): Promise<Resource[]> {
+  if (!query) return [];
+
+  const qs = new URLSearchParams();
+  qs.set('q', query);
+
+  const result = await fetchApiData<{ resources?: Resource[] }>(`/api/search?${qs.toString()}`, {
+    init: { next: { revalidate: 0 } },
+    fallback: { resources: [] },
+  });
+
+  return result.resources || [];
 }
 
 export default async function SearchPage({
@@ -46,12 +63,21 @@ export default async function SearchPage({
   const page = parseInt(params.page || '1', 10);
   const postsPerPage = 20;
 
-  const postsResult = query
-    ? await fetchPosts(query, page, postsPerPage)
-    : ({
-        ...createEmptyPaginatedResult<SearchResultResponse['data'][number]>(postsPerPage),
-        popular_searches: undefined,
-      } satisfies SearchResultResponse);
+  const [postsResult, resources] = query
+    ? await Promise.all([
+        fetchPosts(query, page, postsPerPage),
+        fetchResources(query),
+      ])
+    : [
+        {
+          ...createEmptyPaginatedResult<SearchResultResponse['data'][number]>(postsPerPage),
+          popular_searches: undefined,
+          resources: [],
+        } satisfies SearchResultResponse,
+        [] as Resource[],
+      ];
+
+  const totalResults = postsResult.pagination.total + resources.length;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -60,22 +86,49 @@ export default async function SearchPage({
           搜索结果
           {query && <span className="text-surface-500 font-normal text-lg ml-2">&ldquo;{query}&rdquo;</span>}
         </h1>
-        {postsResult.pagination.total > 0 && (
+        {totalResults > 0 && (
           <p className="text-sm text-surface-500 mt-1">
-            找到 {postsResult.pagination.total} 条结果
+            找到 {totalResults} 条结果
+            {postsResult.pagination.total > 0 && resources.length > 0 && (
+              <span className="ml-2">
+                ({postsResult.pagination.total} 个帖子，{resources.length} 个资源)
+              </span>
+            )}
           </p>
         )}
       </div>
 
-      {postsResult.data.length === 0 ? (
+      {postsResult.data.length === 0 && resources.length === 0 ? (
         <div className="text-center py-12 text-surface-500">
-          {query ? '没有找到匹配的帖子' : '请输入搜索关键词'}
+          {query ? '没有找到匹配的结果' : '请输入搜索关键词'}
         </div>
       ) : (
-        <div className="space-y-3">
-          {postsResult.data.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
+        <div className="space-y-6">
+          {resources.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold text-surface-900 mb-3">
+                资源 ({resources.length})
+              </h2>
+              <div className="space-y-3">
+                {resources.map((resource) => (
+                  <ResourceCard key={resource.id} resource={resource} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {postsResult.data.length > 0 && (
+            <div>
+              <h2 className="text-lg font-semibold text-surface-900 mb-3">
+                帖子 ({postsResult.pagination.total})
+              </h2>
+              <div className="space-y-3">
+                {postsResult.data.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

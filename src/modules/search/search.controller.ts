@@ -17,17 +17,21 @@ export class SearchController {
   // Search runs `content LIKE '%…%'`, which is a table scan.
   @RateLimit({ max: 30, window: 60 })
   async search(@Query() dto: SearchQueryDto, @Req() req: any) {
-    const postsResult = await this.searchService.searchPosts(dto.q, {
-      page: dto.page,
-      limit: dto.limit,
-      category: dto.category,
-      sort: dto.sort,
-    });
+    const [postsResult, resources] = await Promise.all([
+      this.searchService.searchPosts(dto.q, {
+        page: dto.page,
+        limit: dto.limit,
+        category: dto.category,
+        sort: dto.sort,
+      }),
+      this.searchService.searchResources(dto.q, 20),
+    ]);
 
     await this.searchService.recordSearch(req?.user?.id, dto.q, postsResult.pagination.total);
 
     return {
       ...postsResult,
+      resources,
       popular_searches: await this.searchService.getPopularSearches(),
     };
   }

@@ -16,6 +16,7 @@ import {
   StreamableFile,
   BadRequestException,
   NotFoundException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -32,6 +33,7 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
 import { OptionalAuth } from '@common/decorators/public.decorator';
+import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { assertSafeRedirectUrl } from '@common/utils/safe-url.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -127,6 +129,27 @@ export class ResourcesController {
     return this.resourcesService.getList(query, { scope: 'public' });
   }
 
+  @Get('hot')
+  async getHotResources() {
+    return this.resourcesService.getHotResources();
+  }
+
+  @Get('user/:userId')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getUserResources(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Query() query: QueryResourcesDto,
+    @Req() req?: any,
+  ) {
+    // Public endpoint: only returns approved and public resources
+    return this.resourcesService.getPublicByUserId(
+      userId,
+      query.limit,
+      query.cursor,
+    );
+  }
+
   @Get('categories')
   async listCategories() {
     return this.categoryService.list();
@@ -171,6 +194,12 @@ export class ResourcesController {
     return this.resourcesService.getList(query, { scope: 'admin' });
   }
 
+  @Get('my')
+  @UseGuards(JwtAuthGuard)
+  async getMyResources(@Query() query: QueryResourcesDto, @Req() req: any) {
+    return this.resourcesService.getByUserId(req.user.id, query.limit, query.cursor);
+  }
+
   @Get(':id')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
@@ -181,6 +210,7 @@ export class ResourcesController {
   @Get(':id/download')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
+  @RateLimit({ max: 60, window: 60 })
   async download(
     @Param('id', ParseIntPipe) id: number,
     @Query('version_id') versionId: string | undefined,
@@ -246,16 +276,21 @@ export class ResourcesController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(resourceUploadInterceptor)
-  // `@Body() any` opted this route out of the global ValidationPipe entirely — its
-  // `whitelist`/`forbidNonWhitelisted` checks need a class metatype — so
-  // CreateResourceDto was imported for typing only and never actually enforced.
+  @RateLimit({ max: 5, window: 60 })
+  // `@Body()` with `FileInterceptor` opts this route out of the global ValidationPipe,
+  // so we validate the body manually below to enforce whitelist + forbidNonWhitelisted.
   async create(
-    @Body() body: CreateResourceDto,
+    @Body() rawBody: Record<string, any>,
     @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: any,
   ) {
+    const body = await new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
     const userId = req.user.id;
-    const useMfl = body.use_mfl === '1' || body.use_mfl === 'true' || (body.use_mfl as any) === true;
+    const useMfl = body.use_mfl === '1' || body.use_mfl === 'true' || body.use_mfl === true;
 
     try {
       if (useMfl && file) {
@@ -299,6 +334,7 @@ export class ResourcesController {
   @Post(':id/versions')
   @UseGuards(JwtAuthGuard)
   @UseInterceptors(resourceUploadInterceptor)
+  @RateLimit({ max: 5, window: 60 })
   async addVersion(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: { version?: string; content?: string },
@@ -336,10 +372,12 @@ export class ResourcesController {
   async updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body('status') status: string,
+    @Body('reject_reason') rejectReason: string | undefined,
     @Req() req: any,
   ) {
     return this.resourcesService.updateStatus(id, status, {
       actorUsername: req.user?.username,
+      rejectReason,
     });
   }
 
@@ -353,6 +391,7 @@ export class ResourcesController {
 
   @Post(':id/rating')
   @UseGuards(JwtAuthGuard)
+  @RateLimit({ max: 30, window: 60 })
   async upsertRating(
     @Param('id', ParseIntPipe) id: number,
     @Body('rating') rating: number,

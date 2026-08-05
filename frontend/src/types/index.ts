@@ -11,6 +11,10 @@ export interface User {
   bio?: string | null;
   phone_verified?: boolean;
   phone_verified_at?: string | null;
+  qq_openid?: string | null;
+  qq_unionid?: string | null;
+  qq_nickname?: string | null;
+  qq_avatar?: string | null;
   createdAt: string;
 }
 
@@ -258,6 +262,7 @@ export interface SearchResultResponse {
     totalPages: number;
   };
   popular_searches?: string[];
+  resources?: Resource[];
 }
 
 // Phase 2: User Profile

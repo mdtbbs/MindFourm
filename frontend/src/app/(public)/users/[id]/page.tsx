@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
 import PostCard from '@/components/forum/post-card';
+import ResourceCard from '@/components/forum/resource-card';
 import Pagination from '@/components/ui/pagination';
 import JsonLd from '@/components/seo/json-ld';
 import { toMetaDescription } from '@/lib/seo/description';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import Badge from '@/components/ui/badge';
-import { UserProfile, PostListResponse, Reply, BookmarkListResponse, LikedPost } from '@/types';
-import { Bookmark, Calendar, Heart, Star, Users } from 'lucide-react';
+import { UserProfile, PostListResponse, Reply, BookmarkListResponse, LikedPost, Resource } from '@/types';
+import { Bookmark, Calendar, Heart, Star, Users, Package } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
@@ -35,6 +36,13 @@ async function fetchUserReplies(userId: number, page: number): Promise<{ data: R
   return fetchApiPaginated<Reply>(`/api/users/${userId}/replies?page=${page}&limit=20`, {
     init: { cache: 'no-store' },
     fallback: createEmptyPaginatedResult<Reply>(20),
+  });
+}
+
+async function fetchUserResources(userId: number, page: number): Promise<{ data: Resource[]; pagination: PostListResponse['pagination'] }> {
+  return fetchApiPaginated<Resource>(`/api/resources/user/${userId}?page=${page}&limit=20`, {
+    init: { cache: 'no-store' },
+    fallback: createEmptyPaginatedResult<Resource>(20),
   });
 }
 
@@ -129,13 +137,16 @@ export default async function UserProfilePage({
       ? 'posts'
       : requestedTab;
 
-  const [postsResult, repliesResult, bookmarksResult, likesResult] = await Promise.all([
+  const [postsResult, repliesResult, resourcesResult, bookmarksResult, likesResult] = await Promise.all([
     tabValue === 'posts'
       ? fetchUserPosts(userId, page)
       : Promise.resolve(createEmptyPaginatedResult<PostListResponse['data'][number]>(20)),
     tabValue === 'replies'
       ? fetchUserReplies(userId, page)
       : Promise.resolve(createEmptyPaginatedResult<Reply>(20)),
+    tabValue === 'resources'
+      ? fetchUserResources(userId, page)
+      : Promise.resolve(createEmptyPaginatedResult<Resource>(20)),
     tabValue === 'bookmarks' && isOwnProfile
       ? fetchOwnBookmarks(page)
       : Promise.resolve(createEmptyPaginatedResult<BookmarkListResponse['data'][number]>(20)),
@@ -292,6 +303,17 @@ export default async function UserProfilePage({
           >
             回复
           </Link>
+          <Link
+            href={`/users/${userId}?tab=resources`}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tabValue === 'resources'
+                ? 'border-[var(--primary)] text-[var(--primary)]'
+                : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
+            }`}
+          >
+            <Package className="w-4 h-4 inline mr-1" />
+            资源
+          </Link>
           {/* Own-profile only: these list the viewer's collections, not the owner's. */}
           {isOwnProfile && (
             <>
@@ -366,6 +388,25 @@ export default async function UserProfilePage({
             currentPage={repliesResult.pagination.page}
             totalPages={repliesResult.pagination.totalPages}
             basePath={`/users/${userId}?tab=replies`}
+          />
+        </>
+      )}
+
+      {tabValue === 'resources' && (
+        <>
+          {resourcesResult.data.length === 0 ? (
+            <div className="text-center py-12 text-[var(--text-secondary)]">暂无资源</div>
+          ) : (
+            <div className="space-y-3">
+              {resourcesResult.data.map((resource) => (
+                <ResourceCard key={resource.id} resource={resource} />
+              ))}
+            </div>
+          )}
+          <Pagination
+            currentPage={resourcesResult.pagination.page}
+            totalPages={resourcesResult.pagination.totalPages}
+            basePath={`/users/${userId}?tab=resources`}
           />
         </>
       )}

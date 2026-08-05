@@ -39,7 +39,7 @@ export class ResourceVersionService {
     });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     const versions = await this.versionRepository.find({
@@ -56,11 +56,11 @@ export class ResourceVersionService {
     userId: number,
   ): Promise<any> {
     if (!dto.version?.trim()) {
-      throw new BadRequestException('Version is required');
+      throw new BadRequestException('版本号不能为空');
     }
 
     if (!file) {
-      throw new BadRequestException('A version file is required');
+      throw new BadRequestException('版本必须包含文件');
     }
 
     const resource = await this.resourceRepository.findOne({
@@ -68,11 +68,11 @@ export class ResourceVersionService {
     });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     if (resource.user_id !== userId) {
-      throw new ForbiddenException('No permission to add versions to this resource');
+      throw new ForbiddenException('没有权限为此资源添加版本');
     }
 
     const existing = await this.versionRepository.findOne({
@@ -80,7 +80,7 @@ export class ResourceVersionService {
     });
 
     if (existing) {
-      throw new BadRequestException('This version already exists');
+      throw new BadRequestException('该版本已存在');
     }
 
     const content = dto.content?.trim() || undefined;
@@ -104,7 +104,7 @@ export class ResourceVersionService {
     });
 
     if (!version) {
-      throw new NotFoundException('Version does not exist');
+      throw new NotFoundException('版本不存在');
     }
 
     return version;
@@ -116,11 +116,11 @@ export class ResourceVersionService {
     });
 
     if (!resource) {
-      throw new NotFoundException('Resource does not exist');
+      throw new NotFoundException('资源不存在');
     }
 
     if (resource.user_id !== userId) {
-      throw new ForbiddenException('No permission to delete versions from this resource');
+      throw new ForbiddenException('没有权限删除此资源的版本');
     }
 
     const version = await this.versionRepository.findOne({
@@ -128,7 +128,7 @@ export class ResourceVersionService {
     });
 
     if (!version) {
-      throw new NotFoundException('Version does not exist');
+      throw new NotFoundException('版本不存在');
     }
 
     await this.deleteStoredFile(version.file_path);
