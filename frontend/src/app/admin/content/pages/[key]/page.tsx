@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import MarkdownEditor from '@/components/ui/markdown-editor';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 
 const PAGES: Record<string, { title: string; path: string; description: string }> = {
@@ -106,20 +107,13 @@ export default function PageEditPage() {
           {message && <Alert type="success" message={message} />}
           {error && <Alert type="error" message={error} />}
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">
-              页面内容（Markdown）
-            </label>
-            <textarea
-              className="w-full px-4 py-3 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400 min-h-[500px] font-mono"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder={`输入 ${pageInfo.title} 的内容，支持 Markdown 格式...\n\n# 标题\n\n正文内容...`}
-            />
-            <p className="text-xs text-surface-400 mt-2">
-              支持 Markdown 语法：标题（#）、列表（-）、链接（[text](url)）、图片（![alt](url)）、代码块（```）等
-            </p>
-          </div>
+          <MarkdownEditor
+            value={content}
+            onChange={setContent}
+            label="页面内容（Markdown）"
+            placeholder={`输入 ${pageInfo.title} 的内容，支持 Markdown 格式...`}
+            rows={20}
+          />
         </div>
 
         <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
