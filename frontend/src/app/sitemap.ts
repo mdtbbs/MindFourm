@@ -110,6 +110,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${baseUrl}/resources`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
     { url: `${baseUrl}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.5 },
     { url: `${baseUrl}/groups`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 },
+    { url: `${baseUrl}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
+    { url: `${baseUrl}/thanks`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
+    { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
   ];
 
   // Always the numeric id: there is no `/categories/[slug]` route, so emitting

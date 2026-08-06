@@ -1,4 +1,22 @@
+import { Metadata } from 'next';
 import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
+
+const DESCRIPTION = '感谢为 Mindustry 社区做出贡献的模组作者、地图作者、教程作者、服务器运营者与每一位参与者';
+
+export async function generateMetadata(): Promise<Metadata> {
+  // Bare title — the root layout's `title.template` appends the site suffix.
+  return {
+    title: '鸣谢',
+    description: DESCRIPTION,
+    alternates: { canonical: '/thanks' },
+    openGraph: {
+      title: '鸣谢',
+      description: DESCRIPTION,
+      type: 'website',
+      url: '/thanks',
+    },
+  };
+}
 
 export default function ThanksPage() {
   return (

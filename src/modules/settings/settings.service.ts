@@ -25,6 +25,208 @@ import {
  */
 export const SECRET_PLACEHOLDER = '__unchanged__';
 
+// --- Default content for informational pages (about / terms / privacy / thanks).
+// Seeded via seedDefaults() with INSERT IGNORE semantics, so existing installs
+// keep whatever the admin has edited; these only populate fresh databases.
+// Wording is neutral ("本站"/"本论坛") so it applies to any installation
+// regardless of the admin-configured site_name.
+
+const DEFAULT_ABOUT_CONTENT = `# 欢迎来到本论坛
+
+这是一个面向 **Mindustry** 玩家与创作者的中文社区论坛。无论你是刚入门的新手、经验丰富的工厂设计老手，还是热爱分享模组、地图、教程的创作者，这里都欢迎你。
+
+## 我们做什么
+
+- **玩法交流**：分享你的工厂设计、逻辑电路、资源产线优化心得
+- **资源发布**：发布与下载模组、地图、材质包
+- **教程沉淀**：从入门到进阶的系统化教程，由社区共同维护
+- **服务器信息**：寻找联机服务器、发布自己的服务器、分享联机经验
+- **活动组织**：社区赛事、创作征集、主题讨论
+
+## 面向谁
+
+- **玩家**：原版通关党、联机对战爱好者、模组重度用户
+- **模组作者**：发布作品、收集反馈、与玩家交流
+- **地图作者**：展示作品、接受评价、寻找合作者
+- **服务器主**：宣传服务器、招募玩家、交流运营经验
+
+## 如何参与
+
+1. 通过 MindAuth 一键注册登录
+2. 在对应版块发起或参与讨论
+3. 在资源中心上传你的模组、地图
+4. 为优质内容点赞，帮助它们被更多人看到
+
+## 联系我们
+
+- 问题反馈：使用站内的「意见反馈」入口
+- 合作联系：通过论坛私信联系管理员
+
+> 本社区与 Mindustry 原作者 [Anuken](https://github.com/Anuken) 无官方隶属关系，是由社区爱好者自发运营的交流平台。
+`;
+
+const DEFAULT_TERMS_CONTENT = `# 服务条款
+
+欢迎使用本站。使用本站即表示你同意以下条款。如果你不同意，请停止使用本站。
+
+## 账号
+
+- 你通过 MindAuth 统一身份认证系统登录本站
+- 你有责任妥善保管自己的账号凭证
+- 一个自然人仅应持有一个账号
+- 本站不对因账号被盗用导致的损失承担责任
+
+## 用户行为规范
+
+你在使用本站时应当遵守以下规范：
+
+- 遵守中华人民共和国法律法规
+- 尊重他人，不进行人身攻击、歧视、骚扰
+- 不发布色情、暴力、政治敏感等违规内容
+- 不发布广告、垃圾信息、恶意链接
+- 不冒充他人或误导他人关于你的身份
+- 不试图干扰或破坏本站的正常运行
+
+## 内容版权
+
+- 你发布的内容（帖子、回复、资源）著作权归你本人所有
+- 你发布的内容即视为授予本站非独占的、全球性的、免费的展示与传播权
+- 你应确保对发布的内容拥有合法权利，不侵犯他人版权
+- **模组与地图**：Mindustry 模组和地图的版权遵循各自项目声明的 LICENSE；转载时须保留原 LICENSE 与作者信息
+- 引用他人内容时应注明来源，并在必要时取得授权
+
+## 资源审核
+
+- 上传到资源中心的文件会经过管理员审核
+- 严禁上传含恶意代码、后门、挖矿程序的模组
+- 严禁上传未获授权的商业内容
+- 违规资源将被下架，严重者账号将被处理
+
+## 违规处理
+
+对于违反本条款的行为，本站有权采取以下措施（根据情节轻重）：
+
+- 警告、删帖、禁言
+- 临时封禁或永久封禁账号
+- 屏蔽 IP 地址
+- 必要时向有关部门报告
+
+## 免责声明
+
+- 本站按"现状"提供，不对可用性、准确性作任何明示或暗示的保证
+- 用户发布的内容仅代表作者个人观点，不代表本站立场
+- 因不可抗力或本站无法控制的原因导致的服务中断，本站不承担责任
+
+## 条款更新
+
+本条款可能不定期更新。重大变更会通过站内公告通知。
+
+*最后更新：2026 年 1 月*
+`;
+
+const DEFAULT_PRIVACY_CONTENT = `# 隐私政策
+
+本站重视你的隐私。本政策说明我们收集哪些数据、如何使用、以及如何保护。
+
+## 我们收集什么
+
+**账号数据**：你通过 MindAuth 登录时，我们会保存你的用户名、邮箱、头像等基础资料。
+
+**行为数据**：你发布的帖子、回复、点赞、收藏、私信、上传的资源，以及浏览行为（如浏览量统计）。
+
+**技术数据**：浏览器类型、操作系统、IP 地址、访问时间，用于安全和反作弊目的。
+
+## 如何使用这些数据
+
+- 提供论坛核心功能（发帖、回复、私信、资源分享）
+- 推送你订阅的通知（站内、邮件、实时推送）
+- 维护社区秩序（反垃圾、反作弊、处理举报）
+- 改进站点体验（统计分析，不涉及个人识别）
+
+## 数据保护
+
+- 密码和会话凭证采用加密存储
+- 敏感操作（如密码变更、邮箱变更）通过 MindAuth 单点登录保护
+- 我们仅保留提供服务所需的最小数据量
+- 定期清理过期日志与临时数据
+
+## Cookie 与本地存储
+
+本站仅使用必要的 session cookie 维持登录状态，不使用第三方跟踪 cookie。
+
+## 第三方服务
+
+本站可能接入以下第三方服务：
+
+- **MindAuth**：统一身份认证服务，处理你的登录流程
+- **MindFileList**：资源文件托管服务，存储你上传的文件
+
+这些服务有各自独立的隐私政策，建议你查阅。
+
+## 你的权利
+
+你有权：
+
+- **查询**：通过个人设置页查看我们保存的你的数据
+- **更正**：修改个人资料、头像等可编辑信息
+- **删除**：联系管理员申请注销账号、删除你的数据
+- **撤回同意**：在个人设置中关闭邮件通知等可选功能
+
+## 未成年人保护
+
+本站不主动面向未满 14 周岁的未成年人提供服务。如发现未成年人未经监护人同意注册账号，我们将在核实后删除其账号与相关数据。
+
+## 联系我们
+
+对本政策有任何疑问，请通过论坛私信联系管理员。
+
+*最后更新：2026 年 1 月*
+`;
+
+const DEFAULT_THANKS_CONTENT = `# 鸣谢
+
+本站的诞生与运行离不开许多人的贡献。我们在此向他们致以诚挚的感谢。
+
+## Mindustry 原作者
+
+感谢 **[Anuken](https://github.com/Anuken)** 创造了 Mindustry 这款优秀的作品，并以开源的方式让全世界玩家与创作者共同参与它的成长。Mindustry 本身是本站一切活动的源头。
+
+## 模组开发者
+
+感谢所有为 Mindustry 开发模组的作者——无论是新增内容、优化体验、还是拓展玩法边界。你们让这款游戏拥有了远超原版的生命力。
+
+## 地图作者
+
+感谢绘制并分享地图的创作者。每一张精心设计的地图，都是一次独特的挑战或一段值得体验的故事。
+
+## 教程作者
+
+感谢那些把经验写成文字的人。从新手入门、逻辑电路入门、到产线优化、服务器搭建，你们的教程让后来者少走无数弯路。
+
+## 翻译团队
+
+感谢参与 Mindustry 本体、模组、文档翻译的贡献者。语言不应成为享受这款游戏的障碍。
+
+## 服务器运营者
+
+感谢搭建并维护公开服务器的朋友们。你们为无法自建环境的玩家提供了联机对战、合作建造、角色扮演的场所。
+
+## 社区活跃成员
+
+感谢每一位发帖、回复、点赞、举报垃圾内容的成员。一个健康的社区需要每个人的日常参与。
+
+## 成为贡献者
+
+如果你也希望自己的名字出现在这里，欢迎通过以下方式参与：
+
+- 发布高质量的模组、地图、教程
+- 在讨论中乐于助人
+- 帮助翻译或校对内容
+- 反馈站点问题或提出改进建议
+
+> 如有遗漏或希望添加 / 移除你的名字，请通过站内私信联系管理员。
+`;
+
 @Injectable()
 export class SettingsService implements OnModuleInit {
   private readonly logger = new Logger(SettingsService.name);
@@ -81,7 +283,6 @@ export class SettingsService implements OnModuleInit {
     'feature_leaderboard_enabled',
     'feature_shop_enabled',
     'feature_lanlink_enabled',
-    'feature_qq_login_enabled',
   ]);
 
   /** Never leaves the server in cleartext, not even to an authenticated admin. */
@@ -207,10 +408,10 @@ export class SettingsService implements OnModuleInit {
       { key: 'footer_police_number', value: '', category: 'footer', description: 'Public security filing number' },
       { key: 'footer_police_url', value: '', category: 'footer', description: 'Public security filing link URL' },
       { key: 'footer_friendly_links', value: '[]', category: 'footer', description: 'Footer friendly links as JSON' },
-      { key: 'footer_about_content', value: '', category: 'footer', description: 'About page Markdown content' },
-      { key: 'footer_thanks_content', value: '', category: 'footer', description: 'Thanks page Markdown content' },
-      { key: 'footer_terms_content', value: '', category: 'footer', description: 'Terms page Markdown content' },
-      { key: 'footer_privacy_content', value: '', category: 'footer', description: 'Privacy page Markdown content' },
+      { key: 'footer_about_content', value: DEFAULT_ABOUT_CONTENT, category: 'footer', description: 'About page Markdown content' },
+      { key: 'footer_thanks_content', value: DEFAULT_THANKS_CONTENT, category: 'footer', description: 'Thanks page Markdown content' },
+      { key: 'footer_terms_content', value: DEFAULT_TERMS_CONTENT, category: 'footer', description: 'Terms page Markdown content' },
+      { key: 'footer_privacy_content', value: DEFAULT_PRIVACY_CONTENT, category: 'footer', description: 'Privacy page Markdown content' },
       { key: 'brand_primary', value: DEFAULT_BRAND_PRIMARY, category: 'basic', description: 'Global primary brand color' },
       { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
       { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
@@ -261,7 +462,6 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_leaderboard_enabled', value: 'true', category: 'features', description: 'Enable points leaderboard' },
       { key: 'feature_shop_enabled', value: 'true', category: 'features', description: 'Enable points shop' },
       { key: 'feature_lanlink_enabled', value: 'false', category: 'features', description: 'Enable LanLink game integration' },
-      { key: 'feature_qq_login_enabled', value: 'false', category: 'features', description: 'Enable QQ login' },
       // Email settings
       { key: 'smtp_host', value: '', category: 'email', description: 'SMTP server host' },
       { key: 'smtp_port', value: '587', category: 'email', description: 'SMTP server port' },

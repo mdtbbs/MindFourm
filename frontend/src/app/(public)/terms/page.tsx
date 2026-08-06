@@ -1,4 +1,22 @@
+import { Metadata } from 'next';
 import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
+
+const DESCRIPTION = '使用本站时需遵守的服务条款与社区规则';
+
+export async function generateMetadata(): Promise<Metadata> {
+  // Bare title — the root layout's `title.template` appends the site suffix.
+  return {
+    title: '服务条款',
+    description: DESCRIPTION,
+    alternates: { canonical: '/terms' },
+    openGraph: {
+      title: '服务条款',
+      description: DESCRIPTION,
+      type: 'website',
+      url: '/terms',
+    },
+  };
+}
 
 export default function TermsPage() {
   return (

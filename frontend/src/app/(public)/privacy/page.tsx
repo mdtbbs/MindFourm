@@ -1,4 +1,22 @@
+import { Metadata } from 'next';
 import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
+
+const DESCRIPTION = '本站的数据收集、使用与保护说明';
+
+export async function generateMetadata(): Promise<Metadata> {
+  // Bare title — the root layout's `title.template` appends the site suffix.
+  return {
+    title: '隐私政策',
+    description: DESCRIPTION,
+    alternates: { canonical: '/privacy' },
+    openGraph: {
+      title: '隐私政策',
+      description: DESCRIPTION,
+      type: 'website',
+      url: '/privacy',
+    },
+  };
+}
 
 export default function PrivacyPage() {
   return (

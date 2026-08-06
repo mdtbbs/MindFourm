@@ -1,4 +1,22 @@
+import { Metadata } from 'next';
 import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
+
+const DESCRIPTION = 'Mindustry 玩家与创作者的社区论坛 — 交流玩法、发布资源、记录教程、连接同好';
+
+export async function generateMetadata(): Promise<Metadata> {
+  // Bare title — the root layout's `title.template` appends the site suffix.
+  return {
+    title: '关于我们',
+    description: DESCRIPTION,
+    alternates: { canonical: '/about' },
+    openGraph: {
+      title: '关于我们',
+      description: DESCRIPTION,
+      type: 'website',
+      url: '/about',
+    },
+  };
+}
 
 export default function AboutPage() {
   return (
