@@ -5,6 +5,7 @@ import { User } from '@entities/user.entity';
 import { AuthService } from './auth.service';
 import { VerifySessionDto } from './dto/verify-session.dto';
 import { ValidateCredentialsDto } from './dto/validate-credentials.dto';
+import { AcceptTermsDto } from './dto/accept-terms.dto';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { ExternalApiKeyGuard } from '../../common/guards/external-api-key.guard';
@@ -148,6 +149,7 @@ export class AuthController {
         await this.authService.storePendingTermsAcceptance(pendingToken, {
           userId: user.id,
           redirectPath: getSafeRedirectPath(state),
+          clientIp: (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, ''),
           oauthTokens: { accessToken, refreshToken },
         });
         const frontendUrl = this.authService['configService'].get<string>('FRONTEND_URL') || 'http://localhost:3000';
@@ -253,7 +255,7 @@ export class AuthController {
   @SkipPhoneVerification()
   @RateLimit({ max: 10, window: 60 })
   async acceptTerms(
-    @Body() body: { token?: string; accepted?: boolean },
+    @Body() body: AcceptTermsDto,
     @Res() res: Response,
   ) {
     const frontendUrl = this.authService['configService'].get<string>('FRONTEND_URL') || 'http://localhost:3000';
@@ -278,7 +280,7 @@ export class AuthController {
     await this.authService.createSession(
       pending.userId,
       sessionToken,
-      '',
+      pending.clientIp,
       pending.oauthTokens,
     );
 

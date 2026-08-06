@@ -47,6 +47,16 @@ function hashSessionToken(sessionToken: string): string {
 
 const AVATAR_UPLOAD_DIR = './uploads/avatars';
 
+type PendingTermsPayload = {
+  userId: number;
+  redirectPath: string;
+  clientIp: string;
+  oauthTokens: {
+    accessToken: string;
+    refreshToken?: string;
+  };
+};
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -699,11 +709,7 @@ export class AuthService {
    */
   async storePendingTermsAcceptance(
     token: string,
-    payload: {
-      userId: number;
-      redirectPath: string;
-      oauthTokens: { accessToken: string; refreshToken?: string };
-    },
+    payload: PendingTermsPayload,
   ): Promise<void> {
     await this.redisService.set(
       `pending_terms:${token}`,
@@ -716,17 +722,51 @@ export class AuthService {
    * Atomically consume a pending terms-acceptance payload. Returns null when
    * the token is unknown, expired, or already used.
    */
-  async consumePendingTermsAcceptance(
-    token: string,
-  ): Promise<{ userId: number; redirectPath: string; oauthTokens: { accessToken: string; refreshToken?: string } } | null> {
+  async consumePendingTermsAcceptance(token: string): Promise<PendingTermsPayload | null> {
     const raw = await this.redisService.get(`pending_terms:${token}`);
     if (!raw) return null;
     await this.redisService.del(`pending_terms:${token}`);
+
+    let value: unknown;
     try {
-      return JSON.parse(raw);
+      value = JSON.parse(raw);
     } catch {
       return null;
     }
+
+    if (!value || typeof value !== 'object') return null;
+    const payload = value as Record<string, unknown>;
+    const oauthTokens = payload.oauthTokens;
+    const oauth = oauthTokens && typeof oauthTokens === 'object'
+      ? oauthTokens as Record<string, unknown>
+      : null;
+    const redirectPath = payload.redirectPath;
+    const clientIp = payload.clientIp;
+    if (
+      !Number.isInteger(payload.userId) ||
+      (payload.userId as number) <= 0 ||
+      typeof redirectPath !== 'string' ||
+      !redirectPath.startsWith('/') ||
+      redirectPath.startsWith('//') ||
+      redirectPath.includes('\\') ||
+      typeof clientIp !== 'string' ||
+      !oauth ||
+      typeof oauth.accessToken !== 'string' ||
+      oauth.accessToken.length === 0 ||
+      (oauth.refreshToken !== undefined && typeof oauth.refreshToken !== 'string')
+    ) {
+      return null;
+    }
+
+    return {
+      userId: payload.userId as number,
+      redirectPath,
+      clientIp,
+      oauthTokens: {
+        accessToken: oauth.accessToken,
+        ...(oauth.refreshToken === undefined ? {} : { refreshToken: oauth.refreshToken }),
+      },
+    };
   }
 
   /**

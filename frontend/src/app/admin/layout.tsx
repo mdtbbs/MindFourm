@@ -34,6 +34,7 @@ const navGroups: SidebarGroup[] = [
       { key: 'settings-notifications', label: '通知设置', icon: <BellRing size={16} />, href: '/admin/settings/notifications', roles: ['admin'] },
       { key: 'settings-email', label: '邮件模板', icon: <Mail size={16} />, href: '/admin/settings/email', roles: ['admin'] },
       { key: 'settings-external-api', label: '外部 API', icon: <KeyRound size={16} />, href: '/admin/settings/external-api', roles: ['admin'] },
+      { key: 'settings-terms', label: '条款设置', icon: <FileCheck size={16} />, href: '/admin/settings/terms', roles: ['admin'] },
     ],
   },
   {
