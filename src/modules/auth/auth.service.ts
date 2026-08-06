@@ -723,9 +723,13 @@ export class AuthService {
    * the token is unknown, expired, or already used.
    */
   async consumePendingTermsAcceptance(token: string): Promise<PendingTermsPayload | null> {
-    const raw = await this.redisService.get(`pending_terms:${token}`);
+    const key = `pending_terms:${token}`;
+    const raw = await this.redisService.eval(
+      "local value = redis.call('GET', KEYS[1]); if value then redis.call('DEL', KEYS[1]); end; return value",
+      [key],
+      [],
+    ) as string | null;
     if (!raw) return null;
-    await this.redisService.del(`pending_terms:${token}`);
 
     let value: unknown;
     try {

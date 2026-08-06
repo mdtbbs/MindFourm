@@ -7,6 +7,35 @@ import { Button } from '@/components/ui/button';
 import Alert from '@/components/ui/alert';
 import { Loader2, ShieldCheck } from 'lucide-react';
 
+function readCsrfToken(): string | undefined {
+  const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('csrf_token='));
+  return pair ? decodeURIComponent(pair.slice('csrf_token='.length)) : undefined;
+}
+
+async function postTerms(token: string, accepted: boolean): Promise<string> {
+  let csrfToken = readCsrfToken();
+  if (!csrfToken) {
+    await fetch('/api/auth/check', { credentials: 'include' });
+    csrfToken = readCsrfToken();
+  }
+  const response = await fetch('/api/auth/accept-terms', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    },
+    body: JSON.stringify({ token, accepted }),
+    credentials: 'include',
+    redirect: 'follow',
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body?.message || `请求失败 (${response.status})`);
+  }
+  const body = await response.json().catch(() => ({}));
+  return typeof body?.redirectPath === 'string' ? body.redirectPath : '/';
+}
+
 export default function AcceptTermsPage() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
@@ -41,19 +70,9 @@ export default function AcceptTermsPage() {
 
       // POSTing with redirect: 'manual' lets the browser follow the 302 back
       // to the forum root or the original target page.
-      fetch('/api/auth/accept-terms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, accepted }),
-        redirect: 'follow',
-      })
-        .then((res) => {
-          if (!res.ok && !res.redirected) {
-            return res.json().catch(() => ({})).then((body) => {
-              throw new Error(body?.message || `请求失败 (${res.status})`);
-            });
-          }
-          // Browser is navigating away; no further state updates needed.
+      postTerms(token, accepted)
+        .then((redirectPath) => {
+          window.location.href = redirectPath;
         })
         .catch((err) => {
           setError(err instanceof Error ? err.message : '请求失败，请重试');

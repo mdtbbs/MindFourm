@@ -271,7 +271,7 @@ export class AuthController {
     }
 
     if (!body.accepted) {
-      return res.redirect(`${frontendUrl}/`);
+      return res.json({ redirectPath: '/' });
     }
 
     await this.authService.recordTermsAcceptance(pending.userId);
@@ -292,6 +292,6 @@ export class AuthController {
       path: '/',
     });
 
-    return res.redirect(`${frontendUrl}${pending.redirectPath}`);
+    return res.json({ redirectPath: `${frontendUrl}${pending.redirectPath}` });
   }
 }
