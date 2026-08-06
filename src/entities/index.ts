@@ -69,10 +69,6 @@ import { ExternalApiAuditLog } from './external-api-audit-log.entity';
 import { LanLinkQuickCode } from './lanlink-quick-code.entity';
 import { Friendship } from './friendship.entity';
 
-// QQ Auth
-import { UserDevice } from './user-device.entity';
-import { LoginLog } from './login-log.entity';
-
 export const entities = [
   User,
   Post,
@@ -138,9 +134,6 @@ export const entities = [
   LanLinkQuickCode,
   // Friends
   Friendship,
-  // QQ Auth
-  UserDevice,
-  LoginLog,
 ];
 
 export {
@@ -184,7 +177,4 @@ export {
   LanLinkQuickCode,
   // Friends
   Friendship,
-  // QQ Auth
-  UserDevice,
-  LoginLog,
 };

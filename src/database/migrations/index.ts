@@ -14,6 +14,7 @@ import { AddResourceVersionContent1720000014000 } from './1720000014000-AddResou
 import { AddResourceRejectReason1720000015000 } from './1720000015000-AddResourceRejectReason';
 import { AddResourceIndexes1720000016000 } from './1720000016000-AddResourceIndexes';
 import { AddQQAuthTables1720000017000 } from './1720000017000-AddQQAuthTables';
+import { RemoveForumQQAuth1720000018000 } from './1720000018000-RemoveForumQQAuth';
 
 /**
  * Migrations in run order.
@@ -39,4 +40,5 @@ export const migrations = [
   AddResourceRejectReason1720000015000,
   AddResourceIndexes1720000016000,
   AddQQAuthTables1720000017000,
+  RemoveForumQQAuth1720000018000,
 ];

@@ -11,10 +11,6 @@ export interface User {
   bio?: string | null;
   phone_verified?: boolean;
   phone_verified_at?: string | null;
-  qq_openid?: string | null;
-  qq_unionid?: string | null;
-  qq_nickname?: string | null;
-  qq_avatar?: string | null;
   createdAt: string;
 }
 

@@ -75,19 +75,6 @@ export class User {
   @Column({ type: 'datetime', nullable: true })
   phone_verified_at: Date | null;
 
-  // QQ OAuth fields
-  @Column({ length: 100, nullable: true, unique: true })
-  qq_openid: string | null;
-
-  @Column({ length: 100, nullable: true, unique: true })
-  qq_unionid: string | null;
-
-  @Column({ length: 100, nullable: true })
-  qq_nickname: string | null;
-
-  @Column({ length: 500, nullable: true })
-  qq_avatar: string | null;
-
   @CreateDateColumn()
   created_at: Date;
 

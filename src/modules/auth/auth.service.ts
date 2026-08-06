@@ -596,9 +596,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Verify session token - returns user if valid, null otherwise
-   */
   async verifySession(sessionToken: string): Promise<User | null> {
     const sessionKey = `session:${sessionToken}`;
     const sessionData = await this.redisService.hgetall(sessionKey);
