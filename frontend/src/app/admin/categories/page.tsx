@@ -7,20 +7,24 @@ import CategoryForm from '@/components/admin/category-form';
 import Button from '@/components/ui/button';
 import Badge from '@/components/ui/badge';
 import Alert from '@/components/ui/alert';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const fetchCategories = async () => {
     setIsLoading(true);
     try {
+      setError(null);
       const data = await categoryApi.getList();
       setCategories(data);
-    } catch {
-      setAlert({ type: 'error', message: '加载分类列表失败' });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加载分类列表失败');
     } finally {
       setIsLoading(false);
     }
@@ -65,7 +69,9 @@ export default function CategoriesPage() {
 
       <div className="bg-white rounded-lg border border-surface-200">
         {isLoading ? (
-          <div className="p-8 text-center text-surface-500">加载中...</div>
+          <InlineLoading label="正在加载分类" className="min-h-32" />
+        ) : error ? (
+          <ErrorState title="分类加载失败" description={error} onRetry={fetchCategories} />
         ) : categories.length === 0 ? (
           <div className="p-8 text-center text-surface-500">暂无分类</div>
         ) : (

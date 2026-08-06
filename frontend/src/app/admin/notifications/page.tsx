@@ -9,6 +9,9 @@ import Alert from '@/components/ui/alert';
 import Badge from '@/components/ui/badge';
 import Button from '@/components/ui/button';
 import Pagination from '@/components/ui/pagination';
+import EmptyState from '@/components/ui/empty-state';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 const PAGE_SIZE = 20;
 
@@ -111,13 +114,16 @@ export default function AdminNotificationsPage() {
         </Button>
       </div>
 
-      {error ? <Alert type="error" message={error} /> : null}
+      {error && notifications.length > 0 ? <Alert type="error" message={error} /> : null}
+      {loading && notifications.length > 0 ? <InlineLoading label="正在刷新通知" /> : null}
 
       <div className="overflow-hidden rounded-lg border border-surface-200 bg-white">
-        {loading ? (
-          <div className="px-6 py-12 text-center text-sm text-surface-500">加载中...</div>
+        {loading && notifications.length === 0 ? (
+          <InlineLoading label="正在加载通知" className="min-h-32" />
+        ) : error && notifications.length === 0 ? (
+          <ErrorState title="后台通知加载失败" description={error} onRetry={() => fetchNotifications(currentPage)} />
         ) : notifications.length === 0 ? (
-          <div className="px-6 py-12 text-center text-sm text-surface-500">暂无后台通知</div>
+          <EmptyState title="暂无后台通知" />
         ) : (
           <div className="divide-y divide-surface-100">
             {notifications.map((notification) => (

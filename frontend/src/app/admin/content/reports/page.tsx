@@ -4,6 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
+import EmptyState from '@/components/ui/empty-state';
 import { REPORT_REASONS, adminReportApi, type AdminReport } from '@/lib/api/client';
 
 const STATUS_FILTERS = [
@@ -63,7 +66,6 @@ export default function AdminReportsPage() {
       // An empty queue and a failed request are very different things for a moderator,
       // so they must not render the same way.
       setError(err instanceof Error ? err.message : '加载举报队列失败');
-      setReports([]);
     } finally {
       setLoading(false);
     }
@@ -101,7 +103,8 @@ export default function AdminReportsPage() {
       </div>
 
       {message && <Alert type="success" message={message} />}
-      {error && <Alert type="error" message={error} />}
+      {error && reports.length > 0 ? <Alert type="error" message={error} /> : null}
+      {loading && reports.length > 0 ? <InlineLoading label="正在刷新举报队列" /> : null}
 
       <div className="flex flex-wrap gap-2">
         {STATUS_FILTERS.map((option) => (
@@ -119,12 +122,12 @@ export default function AdminReportsPage() {
         ))}
       </div>
 
-      {loading ? (
-        <p className="py-10 text-center text-sm text-[var(--text-muted)]">加载中…</p>
+      {loading && reports.length === 0 ? (
+        <InlineLoading label="正在加载举报队列" className="min-h-32" />
+      ) : error && reports.length === 0 ? (
+        <ErrorState title="举报队列加载失败" description={error} onRetry={() => fetchReports(pagination.page)} />
       ) : reports.length === 0 ? (
-        <p className="py-10 text-center text-sm text-[var(--text-muted)]">
-          {status === 'pending' ? '没有待处理的举报' : '没有符合条件的举报'}
-        </p>
+        <EmptyState title={status === 'pending' ? '没有待处理的举报' : '没有符合条件的举报'} />
       ) : (
         <ul className="space-y-3">
           {reports.map((report) => {

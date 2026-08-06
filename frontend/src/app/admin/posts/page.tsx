@@ -9,6 +9,8 @@ import Button from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import Alert from '@/components/ui/alert';
 import Pagination from '@/components/ui/pagination';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 const PAGE_SIZE = 20;
 
@@ -217,19 +219,16 @@ export default function AdminPostsPage() {
   ];
 
   if (loading && posts.length === 0) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <p className="text-surface-500">加载帖子中...</p>
-      </div>
-    );
+    return <InlineLoading label="正在加载帖子" className="min-h-64" />;
   }
 
   if (error && posts.length === 0) {
     return (
-      <div className="space-y-4">
-        <Alert type="error" message={error} />
-        <Button onClick={() => fetchPosts(currentPage, currentStatus)}>重试</Button>
-      </div>
+      <ErrorState
+        title="帖子加载失败"
+        description={error}
+        onRetry={() => fetchPosts(currentPage, currentStatus)}
+      />
     );
   }
 
@@ -284,6 +283,8 @@ export default function AdminPostsPage() {
 
       {actionSuccess ? <Alert type="success" message={actionSuccess} /> : null}
       {actionError ? <Alert type="error" message={actionError} /> : null}
+      {error ? <Alert type="error" message={error} /> : null}
+      {loading && posts.length > 0 ? <InlineLoading label="正在刷新帖子" /> : null}
 
       <div className="overflow-hidden rounded-lg border border-surface-200 bg-white">
         <div className="overflow-x-auto">

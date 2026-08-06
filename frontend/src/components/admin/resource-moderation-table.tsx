@@ -5,6 +5,8 @@ import { resourceAdminApi } from '@/lib/api/client';
 import { Resource } from '@/types';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Check, X, Eye } from 'lucide-react';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 export default function ResourceModerationTable() {
   const [resources, setResources] = useState<Resource[]>([]);
@@ -58,17 +60,10 @@ export default function ResourceModerationTable() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">加载中...</div>;
+  if (loading && resources.length === 0) return <InlineLoading label="正在加载待审批资源" className="min-h-32" />;
 
-  if (error) {
-    return (
-      <div className="p-8 text-center space-y-3">
-        <p className="text-red-600">{error}</p>
-        <button type="button" onClick={loadPending} className="text-sm text-primary-600 underline">
-          重试
-        </button>
-      </div>
-    );
+  if (error && resources.length === 0) {
+    return <ErrorState title="待审批资源加载失败" description={error} onRetry={loadPending} />;
   }
 
   return (

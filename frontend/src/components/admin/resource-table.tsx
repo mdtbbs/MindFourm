@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { resourceAdminApi, resourceApi } from '@/lib/api/client';
 import { Resource, ResourceCategory } from '@/types';
 import { ExternalLink, Download, Trash2 } from 'lucide-react';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 function formatSize(bytes: number): string {
   if (!bytes) return '';
@@ -57,22 +59,17 @@ export default function ResourceTable() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">加载中...</div>;
+  if (loading && resources.length === 0) return <InlineLoading label="正在加载资源" className="min-h-32" />;
 
-  if (error) {
-    return (
-      <div className="p-8 text-center space-y-3">
-        <p className="text-red-600">{error}</p>
-        <button type="button" onClick={loadData} className="text-sm text-primary-600 underline">
-          重试
-        </button>
-      </div>
-    );
+  if (error && resources.length === 0) {
+    return <ErrorState title="资源加载失败" description={error} onRetry={loadData} />;
   }
 
   return (
     <div>
       <div className="flex gap-3 mb-4">
+        {loading && resources.length > 0 ? <InlineLoading label="正在刷新资源" className="min-h-8" /> : null}
+        {error && resources.length > 0 ? <ErrorState title="刷新资源失败" description={error} onRetry={loadData} className="min-h-0 py-3" /> : null}
         <input
           type="text"
           value={search}

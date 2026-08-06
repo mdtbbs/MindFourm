@@ -5,6 +5,9 @@ import { adminApi } from '@/lib/api/client';
 import type { ModerationItem } from '@/types';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
+import EmptyState from '@/components/ui/empty-state';
 
 const FILTER_OPTIONS = [
   { value: 'posts', label: '帖子' },
@@ -76,8 +79,12 @@ export default function ModerationPage() {
     }
   };
 
-  if (loading) {
-    return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading && items.length === 0) {
+    return <InlineLoading label="正在加载审核队列" className="min-h-32" />;
+  }
+
+  if (error && items.length === 0) {
+    return <ErrorState title="审核队列加载失败" description={error} onRetry={fetchItems} />;
   }
 
   return (
@@ -101,11 +108,12 @@ export default function ModerationPage() {
       </div>
 
       {message && <Alert type="success" message={message} />}
-      {error && <Alert type="error" message={error} />}
+      {error && items.length > 0 && <Alert type="error" message={error} />}
+      {loading && items.length > 0 && <InlineLoading label="正在刷新审核队列" />}
 
       <div className="overflow-hidden border border-surface-200 bg-white">
         {items.length === 0 ? (
-          <div className="p-8 text-center text-surface-400">当前筛选下没有待审核内容。</div>
+          <EmptyState title="当前筛选下没有待审核内容" className="border-0" />
         ) : (
           <div>
             {items.map((item) => (
