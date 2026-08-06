@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Metadata } from 'next';
 import { FileText, AlertCircle } from 'lucide-react';
+import ErrorState from '@/components/ui/error-state';
 import ForumContentLayout from '@/components/forum/forum-content-layout';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
 import ResourceLoadMore from '@/components/forum/resource-load-more';
@@ -43,23 +44,28 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
       {
         init: { next: { revalidate: 60 } },
         fallback: { data: [], next_cursor: null, has_more: false },
+        throwOnError: true,
       },
     ),
     fetchApiData<ResourceCategory[]>('/api/resources/categories', {
       init: { next: { revalidate: 300 } },
       fallback: [],
+      throwOnError: true,
     }),
     fetchApiData<Category[]>('/api/categories', {
       init: { next: { tags: ['categories'] } },
       fallback: [],
+      throwOnError: true,
     }),
     fetchApiData<Tag[]>('/api/tags', {
       init: { next: { tags: ['tags'] } },
       fallback: [],
+      throwOnError: true,
     }),
     fetchApiData<Resource[]>('/api/resources/hot', {
       init: { next: { revalidate: 300 } },
       fallback: [],
+      throwOnError: true,
     }),
   ]);
 
@@ -98,7 +104,14 @@ export default async function ResourcesPage({
     );
   }
 
-  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, hotResources } = await fetchData(params);
+  let data: Awaited<ReturnType<typeof fetchData>>;
+  try {
+    data = await fetchData(params);
+  } catch {
+    return <ErrorState title="资源加载失败" description="暂时无法获取资源列表，请稍后重试。" action={{ label: '重新加载', href: '/resources' }} />;
+  }
+
+  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, hotResources } = data;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">

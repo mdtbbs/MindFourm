@@ -32,6 +32,8 @@ const fetchPost = cache(
       init: { cache: 'no-store' },
       fallback: null,
       forwardCookies: true,
+      notFoundOn404: true,
+      throwOnError: true,
     });
   },
 );

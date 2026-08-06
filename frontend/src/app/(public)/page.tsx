@@ -4,6 +4,7 @@ import ServerSection from '@/components/forum/server-section';
 import LatestPostsList, { LatestPostsSettings } from '@/components/forum/latest-posts-list';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import Pagination from '@/components/ui/pagination';
+import ErrorState from '@/components/ui/error-state';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
@@ -42,10 +43,12 @@ async function fetchTags(): Promise<Tag[]> {
 }
 
 async function fetchForumOverview(): Promise<ForumOverviewStats> {
-  return fetchApiData<ForumOverviewStats>('/api/stats/overview', {
+  const overview = await fetchApiData<ForumOverviewStats>('/api/stats/overview', {
     init: { next: { revalidate: 30 } },
     fallback: emptyOverview,
-  }).then((overview) => ({ ...emptyOverview, ...overview }));
+    throwOnError: true,
+  });
+  return { ...emptyOverview, ...overview };
 }
 
 async function fetchPosts(page: number, limit: number, categoryId?: number): Promise<PostListResponse> {
@@ -102,12 +105,20 @@ export default async function HomePage({
   const postsPerPage = parseInt(settings.posts_per_page || '20', 10);
   const latestPostsSettings = parseLatestPostsSettings(settings);
 
-  const [categories, tags, postsResult, forumOverview] = await Promise.all([
-    fetchCategories(),
-    fetchTags(),
-    fetchPosts(page, postsPerPage, categoryId),
-    fetchForumOverview(),
-  ]);
+  let categories: Category[];
+  let tags: Tag[];
+  let postsResult: PostListResponse;
+  let forumOverview: ForumOverviewStats;
+  try {
+    [categories, tags, postsResult, forumOverview] = await Promise.all([
+      fetchCategories(),
+      fetchTags(),
+      fetchPosts(page, postsPerPage, categoryId),
+      fetchForumOverview(),
+    ]);
+  } catch {
+    return <ErrorState title="首页加载失败" description="暂时无法获取论坛内容，请稍后重试。" action={{ label: '重新加载', href: '/' }} />;
+  }
 
   const activeCategoryName = categoryId
     ? categories.find((category) => category.id === categoryId)?.name || '分类'

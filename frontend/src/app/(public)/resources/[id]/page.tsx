@@ -23,6 +23,8 @@ const fetchResource = cache(async (id: number): Promise<Resource | null> => {
     init: { cache: 'no-store' },
     fallback: null,
     forwardCookies: true,
+    notFoundOn404: true,
+    throwOnError: true,
   });
 });
 
