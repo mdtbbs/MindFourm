@@ -283,6 +283,9 @@ export class SettingsService implements OnModuleInit {
     'feature_leaderboard_enabled',
     'feature_shop_enabled',
     'feature_lanlink_enabled',
+    'terms_required',
+    'terms_updated_at',
+    'terms_summary',
   ]);
 
   /** Never leaves the server in cleartext, not even to an authenticated admin. */
@@ -376,6 +379,11 @@ export class SettingsService implements OnModuleInit {
       'feature_shop_enabled',
       'feature_lanlink_enabled',
     ]),
+    terms: new Set([
+      'terms_required',
+      'terms_updated_at',
+      'terms_summary',
+    ]),
   };
 
   constructor(
@@ -462,6 +470,10 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_leaderboard_enabled', value: 'true', category: 'features', description: 'Enable points leaderboard' },
       { key: 'feature_shop_enabled', value: 'true', category: 'features', description: 'Enable points shop' },
       { key: 'feature_lanlink_enabled', value: 'false', category: 'features', description: 'Enable LanLink game integration' },
+      // Terms & Conditions enforcement
+      { key: 'terms_required', value: 'false', category: 'terms', description: 'Require users to accept Terms & Privacy before forum access' },
+      { key: 'terms_updated_at', value: new Date().toISOString(), category: 'terms', description: 'Bump to force all users to re-accept terms' },
+      { key: 'terms_summary', value: '使用本站前请阅读并同意我们的服务条款与隐私政策。', category: 'terms', description: 'Short guidance text shown on the terms acceptance screen' },
       // Email settings
       { key: 'smtp_host', value: '', category: 'email', description: 'SMTP server host' },
       { key: 'smtp_port', value: '587', category: 'email', description: 'SMTP server port' },

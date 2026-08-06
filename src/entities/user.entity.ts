@@ -75,6 +75,11 @@ export class User {
   @Column({ type: 'datetime', nullable: true })
   phone_verified_at: Date | null;
 
+  // Terms & Conditions acceptance — null means the user has never accepted, or
+  // needs to re-accept after the admin bumped terms_updated_at.
+  @Column({ type: 'datetime', nullable: true })
+  terms_accepted_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 

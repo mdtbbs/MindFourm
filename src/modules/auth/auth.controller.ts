@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Body, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Request, Response } from 'express';
+import * as crypto from 'crypto';
 import { User } from '@entities/user.entity';
 import { AuthService } from './auth.service';
 import { VerifySessionDto } from './dto/verify-session.dto';
@@ -138,6 +139,21 @@ export class AuthController {
       // Find or create local user
       const user = await this.authService.getOrCreateUser(mindauthUser);
 
+      // T&C gate: if the admin has enabled terms enforcement and the user has
+      // not yet accepted (or needs to re-accept after a policy update), skip
+      // session creation and redirect to the frontend's /accept-terms screen
+      // with a one-time token the screen can exchange for a session.
+      if (await this.authService.checkNeedsTermsAcceptance(user)) {
+        const pendingToken = crypto.randomBytes(16).toString('hex');
+        await this.authService.storePendingTermsAcceptance(pendingToken, {
+          userId: user.id,
+          redirectPath: getSafeRedirectPath(state),
+          oauthTokens: { accessToken, refreshToken },
+        });
+        const frontendUrl = this.authService['configService'].get<string>('FRONTEND_URL') || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/accept-terms?token=${pendingToken}`);
+      }
+
       // Generate session token and create session
       const sessionToken = this.authService.generateSessionToken();
       const ip = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
@@ -222,5 +238,58 @@ export class AuthController {
     });
 
     return res.json({ success: true });
+  }
+
+  /**
+   * Accept (or reject) the forum Terms / Privacy after a MindAuth callback was
+   * paused by the T&C gate.
+   *
+   * Body: `{ token, accepted }`. The token is the one-time key returned by the
+   * MindAuth callback; accepting writes `terms_accepted_at` on the user and
+   * creates a normal forum session. Rejecting discards the pending state and
+   * redirects to the homepage.
+   */
+  @Post('accept-terms')
+  @SkipPhoneVerification()
+  @RateLimit({ max: 10, window: 60 })
+  async acceptTerms(
+    @Body() body: { token?: string; accepted?: boolean },
+    @Res() res: Response,
+  ) {
+    const frontendUrl = this.authService['configService'].get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    if (!body.token) {
+      throw new UnauthorizedException('缺少接受条款所需的凭证，请重新登录');
+    }
+
+    const pending = await this.authService.consumePendingTermsAcceptance(body.token);
+    if (!pending) {
+      throw new UnauthorizedException('条款接受凭证无效或已过期，请重新登录');
+    }
+
+    if (!body.accepted) {
+      return res.redirect(`${frontendUrl}/`);
+    }
+
+    await this.authService.recordTermsAcceptance(pending.userId);
+
+    const sessionToken = this.authService.generateSessionToken();
+    await this.authService.createSession(
+      pending.userId,
+      sessionToken,
+      '',
+      pending.oauthTokens,
+    );
+
+    res.cookie('forum_session', sessionToken, {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    return res.redirect(`${frontendUrl}${pending.redirectPath}`);
   }
 }

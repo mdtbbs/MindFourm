@@ -9,6 +9,7 @@ import { isTestAuthEnabled } from './test-auth.util';
 import { PointsModule } from '../points/points.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ServiceApiModule } from '../service-api/service-api.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Global()
 @Module({
@@ -17,6 +18,7 @@ import { ServiceApiModule } from '../service-api/service-api.module';
     PointsModule,
     NotificationsModule,
     ServiceApiModule,
+    SettingsModule,
   ],
   providers: [AuthService],
   // The E2E session shortcut is only routable when explicitly enabled via

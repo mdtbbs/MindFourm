@@ -19,6 +19,7 @@ import { SessionAudit } from '@entities/session-audit.entity';
 import { RedisService } from '@database/redis.service';
 import { PointsService } from '../points/points.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { joinMindAuthApiUrl } from './mindauth-url.util';
 
 /**
@@ -60,6 +61,7 @@ export class AuthService {
     private configService: ConfigService,
     private pointsService: PointsService,
     private notificationsService: NotificationsService,
+    private settingsService: SettingsService,
   ) {}
 
   /**
@@ -666,5 +668,71 @@ export class AuthService {
    */
   generateSessionToken(): string {
     return crypto.randomBytes(48).toString('hex');
+  }
+
+  // ---------- Terms & Conditions acceptance ----------
+
+  /**
+   * Decide whether a user must accept (or re-accept) the forum Terms / Privacy
+   * before being allowed to use the forum.
+   *
+   * Returns true when the admin has enabled `terms_required` AND the user's
+   * `terms_accepted_at` is missing or older than the admin-maintained
+   * `terms_updated_at` timestamp.
+   */
+  async checkNeedsTermsAcceptance(user: User): Promise<boolean> {
+    const required = await this.settingsService.getBoolean('terms_required', false);
+    if (!required) return false;
+
+    const updatedAtRaw = await this.settingsService.get('terms_updated_at');
+    const updatedAt = updatedAtRaw ? new Date(updatedAtRaw) : null;
+    if (!updatedAt || Number.isNaN(updatedAt.getTime())) return false;
+
+    if (!user.terms_accepted_at) return true;
+    return user.terms_accepted_at < updatedAt;
+  }
+
+  /**
+   * Stash a "pending terms acceptance" payload in Redis during the MindAuth
+   * callback redirect dance. The frontend /accept-terms page trades the token
+   * back via POST /auth/accept-terms.
+   */
+  async storePendingTermsAcceptance(
+    token: string,
+    payload: {
+      userId: number;
+      redirectPath: string;
+      oauthTokens: { accessToken: string; refreshToken?: string };
+    },
+  ): Promise<void> {
+    await this.redisService.set(
+      `pending_terms:${token}`,
+      JSON.stringify(payload),
+      10 * 60, // 10 minutes
+    );
+  }
+
+  /**
+   * Atomically consume a pending terms-acceptance payload. Returns null when
+   * the token is unknown, expired, or already used.
+   */
+  async consumePendingTermsAcceptance(
+    token: string,
+  ): Promise<{ userId: number; redirectPath: string; oauthTokens: { accessToken: string; refreshToken?: string } } | null> {
+    const raw = await this.redisService.get(`pending_terms:${token}`);
+    if (!raw) return null;
+    await this.redisService.del(`pending_terms:${token}`);
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Record that the user has accepted the current Terms/Privacy revision.
+   */
+  async recordTermsAcceptance(userId: number): Promise<void> {
+    await this.usersRepository.update(userId, { terms_accepted_at: new Date() });
   }
 }
