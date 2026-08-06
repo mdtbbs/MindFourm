@@ -6,6 +6,9 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Notification } from '@/types';
 import { MessageSquare, AtSign, CheckCheck, Filter, Heart, Mail, Bell } from 'lucide-react';
 import Link from 'next/link';
+import EmptyState from '@/components/ui/empty-state';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -13,6 +16,7 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     loadNotifications(1);
@@ -29,9 +33,6 @@ export default function NotificationsPage() {
       setNotifications(res.data);
       setPagination(res.pagination);
     } catch {
-      setNotifications([]);
-      // Distinguished from a genuinely empty inbox: an empty list and a failed request
-      // used to render identically.
       setError('通知加载失败,请稍后重试');
     }
     setLoading(false);
@@ -51,7 +52,7 @@ export default function NotificationsPage() {
         setNotifications(notifications.map(n => ({ ...n, is_read: true })));
       }
     } catch {
-      setError('标记已读失败,请稍后重试');
+      setActionError('标记已读失败,请稍后重试');
     }
   };
 
@@ -64,7 +65,7 @@ export default function NotificationsPage() {
         setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
       }
     } catch {
-      setError('标记已读失败,请稍后重试');
+      setActionError('标记已读失败,请稍后重试');
     }
   };
 
@@ -173,21 +174,11 @@ export default function NotificationsPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-surface-400 dark:text-gray-500">加载中...</div>
+        <InlineLoading label="正在加载通知" className="min-h-[180px]" />
       ) : error ? (
-        <div className="text-center py-12">
-          <p className="text-[var(--error)] mb-4">{error}</p>
-          <button
-            onClick={() => loadNotifications(pagination.page)}
-            className="px-4 py-2 rounded-lg text-sm bg-surface-100 dark:bg-gray-700 text-surface-700 dark:text-gray-200 hover:bg-surface-200 dark:hover:bg-gray-600 transition-colors"
-          >
-            重试
-          </button>
-        </div>
+        <ErrorState title="通知加载失败" description={error} onRetry={() => void loadNotifications(pagination.page)} />
       ) : notifications.length === 0 ? (
-        <div className="text-center py-12 text-surface-400 dark:text-gray-500">
-          <p>{filter === 'unread' ? '没有未读通知' : filter === 'read' ? '没有已读通知' : '暂无通知'}</p>
-        </div>
+        <EmptyState title={filter === 'unread' ? '没有未读通知' : filter === 'read' ? '没有已读通知' : '暂无通知'} />
       ) : (
         <div className="space-y-3">
           {notifications.map(n => (
@@ -232,6 +223,13 @@ export default function NotificationsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300" role="alert">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="font-medium underline">关闭</button>
         </div>
       )}
 
