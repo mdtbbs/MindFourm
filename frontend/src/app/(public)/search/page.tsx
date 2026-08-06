@@ -7,6 +7,8 @@ import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiPaginated } from '@/lib/api/server-fetch';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { SearchResultResponse, Resource } from '@/types';
+import ErrorState from '@/components/ui/error-state';
+import EmptyState from '@/components/ui/empty-state';
 
 export const revalidate = 0;
 
@@ -36,6 +38,7 @@ async function fetchPosts(query: string, page: number, limit: number): Promise<S
       popular_searches: undefined,
       resources: [],
     },
+    throwOnError: true,
   });
 }
 
@@ -48,6 +51,7 @@ async function fetchResources(query: string): Promise<Resource[]> {
   const result = await fetchApiData<{ resources?: Resource[] }>(`/api/search?${qs.toString()}`, {
     init: { next: { revalidate: 0 } },
     fallback: { resources: [] },
+    throwOnError: true,
   });
 
   return result.resources || [];
@@ -63,19 +67,22 @@ export default async function SearchPage({
   const page = parseInt(params.page || '1', 10);
   const postsPerPage = 20;
 
-  const [postsResult, resources] = query
-    ? await Promise.all([
-        fetchPosts(query, page, postsPerPage),
-        fetchResources(query),
-      ])
-    : [
-        {
-          ...createEmptyPaginatedResult<SearchResultResponse['data'][number]>(postsPerPage),
-          popular_searches: undefined,
-          resources: [],
-        } satisfies SearchResultResponse,
-        [] as Resource[],
-      ];
+  let postsResult: SearchResultResponse;
+  let resources: Resource[];
+  try {
+    [postsResult, resources] = query
+      ? await Promise.all([fetchPosts(query, page, postsPerPage), fetchResources(query)])
+      : [
+          {
+            ...createEmptyPaginatedResult<SearchResultResponse['data'][number]>(postsPerPage),
+            popular_searches: undefined,
+            resources: [],
+          } satisfies SearchResultResponse,
+          [] as Resource[],
+        ];
+  } catch {
+    return <ErrorState title="搜索失败" description="暂时无法获取搜索结果，请稍后重试。" action={{ label: '返回搜索', href: '/search' }} />;
+  }
 
   const totalResults = postsResult.pagination.total + resources.length;
 
@@ -99,9 +106,7 @@ export default async function SearchPage({
       </div>
 
       {postsResult.data.length === 0 && resources.length === 0 ? (
-        <div className="text-center py-12 text-surface-500">
-          {query ? '没有找到匹配的结果' : '请输入搜索关键词'}
-        </div>
+        <EmptyState title={query ? '没有找到匹配的结果' : '请输入搜索关键词'} className="border-0 bg-transparent" />
       ) : (
         <div className="space-y-6">
           {resources.length > 0 && (

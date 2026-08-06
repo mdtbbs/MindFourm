@@ -17,6 +17,8 @@ type FetchApiOptions<T> = {
   fallback: T;
   init?: FetchOptions;
   notFoundOn404?: boolean;
+  /** Throw request/response failures instead of returning the fallback value. */
+  throwOnError?: boolean;
   /** Forward the current request's session cookie to the backend API. */
   forwardCookies?: boolean;
 };
@@ -51,7 +53,7 @@ export async function fetchApiData<T>(
   path: string,
   options: FetchApiOptions<T>,
 ): Promise<T> {
-  const { fallback, init, notFoundOn404, forwardCookies } = options;
+  const { fallback, init, notFoundOn404, forwardCookies, throwOnError } = options;
 
   if (shouldSkipLocalApiFetchDuringBuild()) {
     return fallback;
@@ -62,6 +64,7 @@ export async function fetchApiData<T>(
     const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
     if (!res.ok) {
       handleHttpFailure(res.status, notFoundOn404);
+      if (throwOnError) throw new Error(`请求失败（${res.status}）`);
       return fallback;
     }
 
@@ -72,6 +75,7 @@ export async function fetchApiData<T>(
       throw error;
     }
 
+    if (throwOnError) throw error;
     return fallback;
   }
 }
@@ -83,7 +87,7 @@ export async function fetchApiPaginated<
   path: string,
   options: FetchApiOptions<ApiPaginatedResult<TItem, TExtra>>,
 ): Promise<ApiPaginatedResult<TItem, TExtra>> {
-  const { fallback, init, notFoundOn404, forwardCookies } = options;
+  const { fallback, init, notFoundOn404, forwardCookies, throwOnError } = options;
 
   if (shouldSkipLocalApiFetchDuringBuild()) {
     return fallback;
@@ -94,6 +98,7 @@ export async function fetchApiPaginated<
     const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
     if (!res.ok) {
       handleHttpFailure(res.status, notFoundOn404);
+      if (throwOnError) throw new Error(`请求失败（${res.status}）`);
       return fallback;
     }
 
@@ -104,6 +109,7 @@ export async function fetchApiPaginated<
       throw error;
     }
 
+    if (throwOnError) throw error;
     return fallback;
   }
 }

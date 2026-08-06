@@ -29,6 +29,7 @@ async function fetchCategories(): Promise<Category[]> {
   return fetchApiData<Category[]>('/api/categories', {
     init: { next: { tags: ['categories'] } },
     fallback: [],
+    throwOnError: true,
   });
 }
 
@@ -36,6 +37,7 @@ async function fetchTags(): Promise<Tag[]> {
   return fetchApiData<Tag[]>('/api/tags', {
     init: { next: { tags: ['tags'] } },
     fallback: [],
+    throwOnError: true,
   });
 }
 
@@ -56,6 +58,7 @@ async function fetchPosts(page: number, limit: number, categoryId?: number): Pro
     init: { cache: 'no-store' },
     fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(limit),
     forwardCookies: true,
+    throwOnError: true,
   });
 }
 
