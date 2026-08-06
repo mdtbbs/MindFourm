@@ -751,20 +751,65 @@ export const badgesApi = {
   },
 };
 
-// Groups API (for admin)
+// Groups API
+export interface Group {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  icon: string | null;
+  color: string | null;
+  sort_order: number;
+  is_system: number;
+  member_count?: number;
+}
+
+export interface GroupMember {
+  id: number;
+  username: string;
+  avatar_url: string | null;
+  role: 'member' | 'moderator' | 'admin';
+  joined_at: string;
+}
+
+export interface GroupInput {
+  name: string;
+  slug?: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  sort_order?: number;
+}
+
+export const groupsApi = {
+  getAll: () => request<Group[]>('/api/groups'),
+  getMy: () => request<Group[]>('/api/groups/my'),
+  join: (id: number) => request<void>(`/api/groups/${id}/join`, { method: 'POST' }),
+  leave: (id: number) => request<void>(`/api/groups/${id}/leave`, { method: 'POST' }),
+};
+
 export const groupsAdminApi = {
-  getAll: () => request<any[]>('/api/groups/admin'),
-  create: (data: { name: string; slug?: string; description?: string; icon?: string; color?: string; sort_order?: number }) => {
+  getAll: () => request<Group[]>('/api/groups/admin'),
+  getMembers: (slug: string) => request<{ members: GroupMember[]; total: number }>(`/api/groups/${encodeURIComponent(slug)}/members`),
+  create: (data: GroupInput) => {
     clearCache();
-    return request<any>('/api/groups/admin', { method: 'POST', body: JSON.stringify(data) });
+    return request<Group>('/api/groups/admin', { method: 'POST', body: JSON.stringify(data) });
   },
-  update: (id: number, data: any) => {
+  update: (id: number, data: Partial<GroupInput>) => {
     clearCache();
-    return request<any>(`/api/groups/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    return request<Group>(`/api/groups/admin/${id}`, { method: 'PUT', body: JSON.stringify(data) });
   },
   delete: (id: number) => {
     clearCache();
     return request<{ message: string }>(`/api/groups/admin/${id}`, { method: 'DELETE' });
+  },
+  addMember: (groupId: number, data: { user_id: number; role: GroupMember['role'] }) => {
+    clearCache();
+    return request<GroupMember>(`/api/groups/admin/${groupId}/members`, { method: 'POST', body: JSON.stringify(data) });
+  },
+  removeMember: (groupId: number, userId: number) => {
+    clearCache();
+    return request<{ message: string }>(`/api/groups/admin/${groupId}/members/${userId}`, { method: 'DELETE' });
   },
 };
 

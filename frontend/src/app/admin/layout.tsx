@@ -8,7 +8,8 @@ import { useSetting } from '@/store/settings-store';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen, ToggleLeft, Mail, KeyRound, FileEdit
+  Package, AlertCircle, FolderOpen, ToggleLeft, Mail, KeyRound, FileEdit,
+  UsersRound, Coins, Puzzle, TrendingUp, Award, ShoppingBag
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
 import AdminHeader from '@/components/admin/admin-header';
@@ -60,6 +61,17 @@ const navGroups: SidebarGroup[] = [
       { key: 'categories', label: '分类管理', icon: <FolderTree size={16} />, href: '/admin/categories', roles: ['admin'] },
       { key: 'users', label: '用户管理', icon: <Users size={16} />, href: '/admin/users', roles: ['admin'] },
       { key: 'logs', label: '系统日志', icon: <ScrollText size={16} />, href: '/admin/logs', roles: ['admin'] },
+    ],
+  },
+  {
+    label: '扩展',
+    items: [
+      { key: 'groups', label: '用户组管理', icon: <UsersRound size={16} />, href: '/admin/groups', roles: ['admin'] },
+      { key: 'points', label: '积分规则', icon: <Coins size={16} />, href: '/admin/points', roles: ['admin'] },
+      { key: 'plugins', label: '插件管理', icon: <Puzzle size={16} />, href: '/admin/plugins', roles: ['admin'] },
+      { key: 'levels', label: '等级管理', icon: <TrendingUp size={16} />, href: '/admin/levels', roles: ['admin'] },
+      { key: 'badges', label: '徽章管理', icon: <Award size={16} />, href: '/admin/badges', roles: ['admin'] },
+      { key: 'shop', label: '商城管理', icon: <ShoppingBag size={16} />, href: '/admin/shop', roles: ['admin'] },
     ],
   },
   {

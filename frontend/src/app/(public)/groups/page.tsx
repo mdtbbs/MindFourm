@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { api } from '@/lib/api/client';
+import { groupsApi } from '@/lib/api/client';
 import Link from 'next/link';
 import { Users, Hash, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
@@ -24,11 +24,18 @@ export default function GroupsPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState<number | null>(null);
+  const [memberIds, setMemberIds] = useState<Set<number>>(new Set());
 
   const fetchGroups = useCallback(async () => {
     try {
-      const data = await api.get<Group[]>('/api/groups');
+      const data = await groupsApi.getAll();
       setGroups(data || []);
+      if (isAuthenticated) {
+        const mine = await groupsApi.getMy();
+        setMemberIds(new Set(mine.map(group => group.id)));
+      } else {
+        setMemberIds(new Set());
+      }
     } catch (err) {
       console.error('Failed to load groups:', err);
     } finally {
@@ -42,7 +49,7 @@ export default function GroupsPage() {
     if (!isAuthenticated || !user) return;
     setJoining(groupId);
     try {
-      await api.post(`/api/groups/${groupId}/join`);
+      await groupsApi.join(groupId);
       await fetchGroups();
     } catch (err) {
       console.error('Failed to join group:', err);
@@ -116,10 +123,10 @@ export default function GroupsPage() {
               {isAuthenticated && (
                 <button
                   onClick={() => handleJoin(group.id)}
-                  disabled={joining === group.id}
+                  disabled={joining === group.id || memberIds.has(group.id)}
                   className="mt-4 w-full btn btn-primary text-sm"
                 >
-                  {joining === group.id ? '加入中...' : '加入'}
+                  {joining === group.id ? '加入中...' : memberIds.has(group.id) ? '已加入' : '加入'}
                 </button>
               )}
             </div>
