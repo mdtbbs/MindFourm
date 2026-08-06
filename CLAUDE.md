@@ -18,7 +18,7 @@ Features include:
 - Search (MySQL LIKE, upgrade path to Full-Text → Elasticsearch)
 - Email notifications (SMTP, Handlebars templates, Bull queue, user preferences)
 
-**NOT implemented**: polls, badges/reputation, points system, user follow, group chat, RSS, plugin management UI.
+**NOT implemented**: polls, group chat UI (entity exists, no chat screen).
 
 ## Commands
 
@@ -53,8 +53,8 @@ docker compose -f docker-compose.dev.yml up -d
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                   NestJS Backend (Port 4000)                               │
 │  src/main.ts - Bootstrap with global prefix /api                           │
-│  src/app.module.ts - Root module importing 21 feature modules              │
-│  src/modules/ - 21 feature modules (controller + service + DTO)            │
+│  src/app.module.ts - Root module importing 45 feature modules              │
+│  src/modules/ - 45 feature modules (controller + service + DTO)            │
 │  src/common/ - Guards, filters, interceptors, decorators, utils            │
 │  src/entities/ - 19 TypeORM entity definitions                             │
 │  src/database/ - TypeORM MySQL + Redis modules                             │
@@ -106,6 +106,21 @@ deliberately not given here — it went stale the first time a module was added.
 | `stats` | Dashboard statistics, 7-day activity charts |
 | `settings` | Key-value settings with in-memory cache |
 | `logs` | Operation logging service (MySQL `operation_logs` table) |
+| `points` | Points: earn via actions (rules), cursor-paginated history, leaderboard, manual award/deduct; race-safe atomic deduction |
+| `levels` | Level tiers by point thresholds, user progress calculation, default seed |
+| `badges` | Badge definitions, per-user awards (duplicate-safe), bulk transactional grant |
+| `follows` | User-to-user follow/unfollow, follower/following lists, follow counts, public-data stripping for unauth viewers |
+| `groups` | Group CRUD with auto-slug, membership management, join/leave, role within group; security-hardened against privilege escalation |
+| `shop` | Shop items, point-based purchase in a single transaction (atomic stock decrement + point deduction); fixes past overselling bug |
+| `rss` | RSS 2.0 feeds for all posts and per-category; XML escape + RFC 822 dates, 50 latest posts |
+| `plugins` | Full plugin lifecycle: install/load/enable/disable/configure, dynamic `require()`, EventBus hook system, dependency check, path-traversal protection |
+| `presence` | Redis-backed presence with TTL + batch MGET, keyspace notifications for real-time friend push via SSE, 30s cooldown |
+| `friends` | Friend requests (auto-accept on reverse request), block checks both directions, notification integration, search non-friends; has unit tests |
+| `lanlink` | Quick code generation (8-char, restricted alphabet, SHA-256 hashed), rotation with version tracking, session-based auth; has unit tests |
+| `service-api` | External API platform: 24+ endpoints for posts/replies/resources CRUD, API key management (prefix+hash), scoped permissions, impersonation, full audit trail |
+| `search` | LIKE + `escapeLike`, relevance-ranked results, Redis-backed popular searches (5-min cache), search history; rate limited |
+| `uploads` | Public image upload interceptor for external API: UUID filenames, MIME filtering (JPEG/PNG/GIF/WebP), 2MB limit |
+| `admin-notifications` | Admin-targeted notifications: SSE stream + webhook dispatch; has unit tests |
 
 ### Common Layer (`src/common/`)
 
@@ -143,14 +158,24 @@ deliberately not given here — it went stale the first time a module was added.
 
 ### Entities (`src/entities/`)
 
-TypeORM entities with `utf8mb4` charset and `ON DELETE CASCADE` foreign keys. The
+TypeORM entities with `utf8mb4` charset and `ON DELETE CASCADE` foreign keys. 46 entity classes total. The
 authoritative list is the `entities` array in `src/entities/index.ts` — an entity missing
 from it fails at boot with "No metadata for …", so that array, not this file, is what has
 to be correct.
 
-Core: `user` | `post` (soft delete) | `reply` (soft delete) | `category` | `tag` | `post-tag` | `bookmark` | `notification` | `message` | `attachment` | `resource` (soft delete) | `resource-category` | `resource-version` | `post-like` | `reply-like` | `ban` | `setting` | `operation-log` | `session-audit`
+Core: `user` (has `total_points`, `available_points`) | `post` (soft delete) | `reply` (soft delete) | `category` | `tag` | `post-tag` | `bookmark` | `notification` | `admin-notification` | `message` | `attachment` | `resource` (soft delete) | `resource-category` | `resource-version` | `post-like` | `reply-like` | `ban` | `setting` | `operation-log` | `session-audit`
 
-Moderation and social: `report` | `user-block` | `reaction` | `post-revision`
+Moderation and social: `report` | `user-block` | `reaction` | `post-revision` | `follow` | `friendship`
+
+Gamification: `point-log` | `point-rule` | `level` | `badge` | `user-badge` | `shop-item` | `purchase`
+
+Groups and chat: `group` | `group-member` | `group-chat` | `group-chat-member`
+
+Plugins: `plugin` | `plugin-hook` | `plugin-config` | `plugin-permission`
+
+External API: `external-api-key` | `external-api-audit-log`
+
+Other: `email-log` | `search-history` | `popular-search` | `resource-rating` | `lanlink-quick-code`
 
 Soft-delete uses `@DeleteDateColumn` for posts, replies, and resources.
 
@@ -179,6 +204,7 @@ the same reaction.
 | `user-store` | Current user info, login state, points/badges/reputation updates |
 | `notification-store` | Notification list, unread count, SSE real-time updates |
 | `online-store` | Online users collection and count |
+| `friend-store` | Friend list and presence state (consumes Presence SSE) |
 
 ### Data Fetching & Real-time
 
@@ -388,6 +414,10 @@ Users can upload resource files to MindFileList (external file hosting) instead 
 - User management: role updates, ban/unban, quota management
 - Content moderation: post/reply review, bulk delete/hide
 - Tag merge, cleanup operations
+- Gamification: points/levels/badges/shop CRUD, leaderboard
+- External API: key management, scope/permission config, audit log
+- Content pages: admin-editable static pages (about/terms/privacy/thanks/feedback)
+- Notification center: admin-targeted notifications with SSE refresh
 - System settings, announcements, sensitive words
 
 ### Search
@@ -404,7 +434,38 @@ Users can upload resource files to MindFileList (external file hosting) instead 
 - Unsubscribe link in every email → preferences page
 - Email logs for monitoring (sent/failed/bounced)
 
-## Plugin System (PLANNED - NOT IMPLEMENTED)
+### Gamification (Points, Levels, Badges)
+
+Three intertwined systems powered by `user.total_points` / `user.available_points`:
+
+| System | Mechanism |
+|--------|-----------|
+| **Points** | Rule-based (configurable per action). `awardPoints()` matches `action` against active rules, updates both counters inside a transaction. `deductPoints()` uses `WHERE available_points >= :amount` to prevent overspend; optionally joins an outer transaction (used by shop purchases) |
+| **Levels** | Tier thresholds on `total_points`. `getUserLevelInfo()` returns current level + progress % toward next |
+| **Badges** | Named awards with JSON `criteria`, duplicate-safe `awardBadge()`, bulk transactional grant |
+| **Shop** | Point-cost items. Purchase is one transaction: atomic `stock > 0` decrement + `deductPoints()` inside the same EntityManager |
+
+Default rules, levels, and badges are seeded on first boot. Admin UI covers CRUD for all four, plus manual award/deduct. Leaderboard at `/leaderboard` (offset pagination).
+
+### Social Features (Follows, Groups, Friends)
+
+| Feature | Backend | Frontend |
+|---------|---------|----------|
+| **Follows** | `POST /follow/:userId`, follower/following lists, stats; strips private data for unauth viewers via `toPublicUsers()` | Integrated in user profiles |
+| **Groups** | Group CRUD + auto-slug + join/leave + member roles. Security-hardened: system groups protected, past `?userId=` privilege escalation patched. 10 endpoints | `/groups` (grid + join) + `/admin/groups` (CRUD + member management) |
+| **Friends** | Request flow: send → accept/reject/cancel; auto-accepts if reverse request pending; checks blocks both directions; notifies on request/accept; search excludes blocked + existing friends. 12 endpoints, has unit tests | Via `/lanlink` (friends panel + search + requests) |
+
+### Presence
+
+Redis-backed online state with TTL per user, batched queries (MGET), and Redis keyspace notification subscription to push friend presence changes via SSE. 30-second cooldown prevents notification spam. `PresenceService` exposes `setPresence`/`deletePresence`/`getPresence`/`getPresences` (batch) + cooldown helpers.
+
+### RSS
+
+Two public endpoints — `GET /rss/posts.xml` (all posts) and `GET /rss/categories/:slug.xml` (per-category) — emit RSS 2.0 XML. 50 most recent posts, `escapeXml()` for content, `toRFC822()` for dates. Site URL from settings service (falls back to `FRONTEND_URL` config).
+
+## Plugin System
+
+Implemented plugin architecture (runtime load of `plugins/<slug>/index.js`, no UI for template/theme injection yet):
 
 ### Plugin Structure
 ```
@@ -424,23 +485,29 @@ plugins/<name>/
 ### Available Hooks
 `post.create` / `post.created` / `reply.create` / `reply.created` / `user.login` / `content.render`
 
+### Plugin Lifecycle
+1. **Install**: `POST /plugins/install` validates slug, checks dependencies, dynamic `require()` of `plugins/<slug>/index.js`
+2. **Enable**: registers declared hooks with EventBus (ordered by priority)
+3. **Disable**: unregisters hooks, keeps DB rows
+4. **Configure**: `PUT /plugins/:slug/config` persists JSON config
+5. **Uninstall**: removes DB rows (`plugin`, `plugin_hook`, `plugin_config`, `plugin_permission`), calls plugin's teardown if defined
+
+### Plugin Database
+`plugin` (metadata + slug + state) | `plugin_hook` (hook name + priority + enabled) | `plugin_config` (per-plugin JSON settings) | `plugin_permission` (scope-based permissions)
+
+### Security
+- Slug validation rejects path traversal (`..`, `/`, `\`, null bytes)
+- Dependency check at install time (missing dependency → reject)
+- Permission system enforced at hook execution
+- Each plugin loaded in its own `require()` call (no shared module state across plugins)
+
 ### Plugin API
-Access via `context.services.*` (postService, userService, etc.)
+`PluginManagerService` — `loadPlugins` / `loadPlugin` / `install` / `uninstall` / `enable` / `disable` / `configure` / `getConfig` / `getPlugins` / `getPlugin` / `getPluginHooks` / `getPluginConfigs` / `executeHook`.
+`EventBusService` — `register` / `unregister` / `execute` / `getRegisteredHooks` / `getPluginHooks` / `clear`.
 
-## Plugin Architecture (PLANNED - NOT IMPLEMENTED)
-
-- **EventBus**-based hook system
-- **Plugin Manager**: Installer, Loader, Registry, Config Manager
-- **Frontend injection points**: header, footer, sidebar, post-toolbar, user-profile, admin-sidebar
-- **Dynamic route** registration for plugins
-- **Dependency management** with semver
-
-## Frontend Template System (PLANNED - NOT IMPLEMENTED)
-
-- **Template Registry** with priority: Plugin > Custom Theme > System Default
-- **18 predefined injection points** for component injection
-- Theme switching via admin panel
-- Template inheritance (extends base template)
+### Not Yet Implemented
+- Frontend template/theme injection (planned)
+- Hot reload of plugin changes without restart
 
 ## Deployment
 
@@ -633,4 +700,4 @@ MFL_API_KEY=<write-permission-key>
 | Deployment | Docker + Docker Compose, Nginx (reverse proxy + SSL) |
 
 ---
-*Last updated: 2026-07-13*
+*Last updated: 2026-08-06*
