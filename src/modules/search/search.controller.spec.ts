@@ -23,6 +23,7 @@ function createController(overrides: {
         totalPages: 1,
       },
     }),
+    searchResources: jest.fn().mockResolvedValue([]),
     recordSearch: jest.fn().mockResolvedValue(undefined),
     getPopularSearches: jest.fn().mockResolvedValue(['guide']),
     getSearchHistory: jest.fn().mockResolvedValue([
@@ -57,6 +58,7 @@ describe('SearchController', () => {
       category: undefined,
       sort: 'relevance',
     });
+    expect(searchService.searchResources).toHaveBeenCalledWith('guide', 20);
     expect(searchService.recordSearch).toHaveBeenCalledWith(undefined, 'guide', 1);
     expect(result).toMatchObject({
       data: [

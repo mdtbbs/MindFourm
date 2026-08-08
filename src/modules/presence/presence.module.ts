@@ -7,6 +7,7 @@ import { ServiceApiModule } from '../service-api/service-api.module';
 import { PresenceService } from './presence.service';
 import { ExternalPresenceController } from './external-presence.controller';
 import { ExternalNotificationsController } from './external-notifications.controller';
+import { PresenceController } from './presence.controller';
 
 @Module({
   imports: [
@@ -14,7 +15,7 @@ import { ExternalNotificationsController } from './external-notifications.contro
     NotificationsModule,
     ServiceApiModule,
   ],
-  controllers: [ExternalPresenceController, ExternalNotificationsController],
+  controllers: [PresenceController, ExternalPresenceController, ExternalNotificationsController],
   providers: [PresenceService],
   exports: [PresenceService],
 })

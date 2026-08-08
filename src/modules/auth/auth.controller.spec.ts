@@ -22,6 +22,8 @@ describe('AuthController', () => {
       created_at: createdAt,
     };
     const authService = {
+      checkNeedsTermsAcceptance: jest.fn().mockResolvedValue(false),
+      storePendingTermsAcceptance: jest.fn(),
       exchangeCode: jest.fn().mockResolvedValue({ accessToken: 'access-token', refreshToken: 'refresh-token' }),
       getUserInfo: jest.fn().mockResolvedValue({
         id: 123,

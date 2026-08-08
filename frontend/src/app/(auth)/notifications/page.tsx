@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { notificationApi } from '@/lib/api/client';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Notification } from '@/types';
-import { MessageSquare, AtSign, CheckCheck, Filter, Heart, Mail, Bell } from 'lucide-react';
+import { MessageSquare, AtSign, CheckCheck, Filter, Heart, Mail, Bell, UserPlus, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import EmptyState from '@/components/ui/empty-state';
 import ErrorState from '@/components/ui/error-state';
@@ -82,6 +82,10 @@ export default function NotificationsPage() {
         return <Mail className="w-5 h-5 text-green-500" />;
       case 'best_answer':
         return <CheckCheck className="w-5 h-5 text-emerald-600" />;
+      case 'friend_request':
+        return <UserPlus className="w-5 h-5 text-cyan-500" />;
+      case 'friend_accepted':
+        return <UserCheck className="w-5 h-5 text-teal-500" />;
       case 'system':
         return <Bell className="w-5 h-5 text-purple-500" />;
       default:
@@ -101,6 +105,10 @@ export default function NotificationsPage() {
         return '点赞了你的回复';
       case 'message':
         return '给你发了私信';
+      case 'friend_request':
+        return '请求添加你为好友';
+      case 'friend_accepted':
+        return '接受了你的好友请求';
       case 'system':
         return '系统通知';
       case 'best_answer':

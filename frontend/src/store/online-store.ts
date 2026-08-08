@@ -5,6 +5,7 @@
  */
 
 import { create } from 'zustand';
+import type { PresenceData, PresenceStatus } from '@/lib/api/client';
 
 interface OnlineUser {
   id: number;
@@ -16,6 +17,8 @@ interface OnlineState {
   onlineUsers: OnlineUser[];
   onlineCount: number;
   lastUpdated: string | null;
+  /** Map of userId -> PresenceData for granular presence tracking */
+  presences: Map<number, PresenceData>;
 
   // Actions
   setOnlineUsers: (users: OnlineUser[]) => void;
@@ -23,12 +26,16 @@ interface OnlineState {
   removeOnlineUser: (userId: number) => void;
   updateOnlineCount: (count: number) => void;
   clearOnlineUsers: () => void;
+  setPresences: (presences: Record<string, PresenceData>) => void;
+  setPresence: (userId: number, data: PresenceData) => void;
+  removePresence: (userId: number) => void;
 }
 
 export const useOnlineStore = create<OnlineState>((set, get) => ({
   onlineUsers: [],
   onlineCount: 0,
   lastUpdated: null,
+  presences: new Map(),
 
   setOnlineUsers: (users) => {
     set({
@@ -74,6 +81,29 @@ export const useOnlineStore = create<OnlineState>((set, get) => ({
       lastUpdated: null,
     });
   },
+
+  setPresences: (presences) => {
+    const newMap = new Map(get().presences);
+    for (const [idStr, data] of Object.entries(presences)) {
+      const id = parseInt(idStr, 10);
+      if (!isNaN(id)) {
+        newMap.set(id, data);
+      }
+    }
+    set({ presences: newMap });
+  },
+
+  setPresence: (userId, data) => {
+    const newMap = new Map(get().presences);
+    newMap.set(userId, data);
+    set({ presences: newMap });
+  },
+
+  removePresence: (userId) => {
+    const newMap = new Map(get().presences);
+    newMap.delete(userId);
+    set({ presences: newMap });
+  },
 }));
 
 // Export convenience hooks
@@ -83,4 +113,30 @@ export function useOnlineCount() {
 
 export function useOnlineUsers() {
   return useOnlineStore((state) => state.onlineUsers);
+}
+
+/**
+ * Hook to get a single user's presence status.
+ * Returns 'offline' if no presence data exists.
+ */
+export function usePresence(userId: number): PresenceStatus {
+  return useOnlineStore((state) => {
+    const presence = state.presences.get(userId);
+    return presence?.status || 'offline';
+  });
+}
+
+/**
+ * Hook to get multiple users' presence statuses.
+ * Returns a Map of userId -> PresenceStatus.
+ */
+export function usePresences(userIds: number[]): Map<number, PresenceStatus> {
+  return useOnlineStore((state) => {
+    const result = new Map<number, PresenceStatus>();
+    for (const id of userIds) {
+      const presence = state.presences.get(id);
+      result.set(id, presence?.status || 'offline');
+    }
+    return result;
+  });
 }

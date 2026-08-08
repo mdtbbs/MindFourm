@@ -86,6 +86,10 @@ function createService(overrides: {
     ...overrides.mflClientService,
   };
 
+  const notificationsService = {
+    create: jest.fn().mockResolvedValue(undefined),
+  };
+
   const service = new ResourcesService(
     resourceRepository as any,
     {} as any,
@@ -94,6 +98,7 @@ function createService(overrides: {
     {} as any,
     dataSource as any,
     adminNotificationsService as any,
+    notificationsService as any,
     mflClientService as any,
   );
 
@@ -218,7 +223,10 @@ describe('ResourcesService', () => {
 
     await service.updateStatus(22, 'approved', { actorUsername: 'moderatorA' });
 
-    expect(resourceRepository.update).toHaveBeenCalledWith(22, { status: 'approved' });
+    expect(resourceRepository.update).toHaveBeenCalledWith(22, {
+      status: 'approved',
+      reject_reason: null,
+    });
     expect(adminNotificationsService.publishModerationResult).toHaveBeenCalledWith({
       item_type: 'resource',
       item_id: 22,

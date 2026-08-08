@@ -21,3 +21,7 @@ test-results/
 
 # Tool artifacts
 .claude/scheduled_tasks.lock
+.superpowers/
+
+# Local service state
+*.rdb

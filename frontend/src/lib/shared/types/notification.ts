@@ -1,4 +1,4 @@
-export type NotificationType = 'reply' | 'mention' | 'message' | 'system';
+export type NotificationType = 'reply' | 'mention' | 'message' | 'system' | 'friend_request' | 'friend_accepted';
 
 export interface Notification {
   id: number;

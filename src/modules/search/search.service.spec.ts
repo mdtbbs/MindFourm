@@ -72,12 +72,23 @@ function createService(overrides: {
     ...overrides.postSummaryService,
   };
 
+  const resourceRepository = {
+    find: jest.fn().mockResolvedValue([]),
+  };
+  const redisService = {
+    get: jest.fn(),
+    set: jest.fn(),
+    incr: jest.fn(),
+    expire: jest.fn(),
+  };
+
   const service = new SearchService(
     postRepository as any,
     {} as any,
     {} as any,
     {} as any,
-    {} as any,
+    resourceRepository as any,
+    redisService as any,
     postSummaryService as any,
   );
 

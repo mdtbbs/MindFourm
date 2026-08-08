@@ -1,4 +1,4 @@
-import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse, QuickCodeStatus, QuickCodeGenerateResponse, QuickCodeResetResponse } from '@/types';
+import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse, QuickCodeStatus, QuickCodeGenerateResponse, QuickCodeResetResponse, ResourceComment, ResourceCommentListResponse } from '@/types';
 import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/response';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
@@ -1277,5 +1277,75 @@ export const friendsApi = {
     request<{ status: 'none' | 'incoming' | 'outgoing' | 'friends' }>(
       `/api/friends/check/${userId}`
     ),
+};
+
+// 用户在线状态 API
+export type PresenceStatus = 'online' | 'hosting' | 'playing' | 'offline';
+
+export interface PresenceData {
+  status: PresenceStatus;
+  room_code?: string;
+  room_name?: string;
+  node_name?: string;
+  updated_at: number;
+}
+
+export const presenceApi = {
+  /** 批量查询用户在线状态 */
+  getPresences: (userIds: number[]) =>
+    request<Record<string, PresenceData>>(
+      `/api/presence?user_ids=${userIds.join(',')}`
+    ),
+};
+
+// 资源评论 API
+export const resourceCommentApi = {
+  /** 获取资源的评论列表 */
+  getByResource: (resourceId: number, params?: { page?: number; limit?: number }) =>
+    request<ResourceCommentListResponse>(
+      `/api/resources/${resourceId}/comments?page=${params?.page || 1}&limit=${params?.limit || 20}`
+    ),
+
+  /** 创建评论 */
+  create: (resourceId: number, input: { content: string; parent_comment_id?: number }) => {
+    clearCache();
+    return request<ResourceComment>(`/api/resources/${resourceId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** 更新评论 */
+  update: (id: number, content: string) => {
+    clearCache();
+    return request<ResourceComment>(`/api/resource-comments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ content }),
+    });
+  },
+
+  /** 删除评论 */
+  delete: (id: number) => {
+    clearCache();
+    return request<{ success: boolean }>(`/api/resource-comments/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /** 点赞评论 */
+  like: (id: number) => {
+    clearCache();
+    return request<{ success: boolean }>(`/api/resource-comments/${id}/like`, {
+      method: 'POST',
+    });
+  },
+
+  /** 取消点赞 */
+  unlike: (id: number) => {
+    clearCache();
+    return request<{ success: boolean }>(`/api/resource-comments/${id}/like`, {
+      method: 'DELETE',
+    });
+  },
 };
 

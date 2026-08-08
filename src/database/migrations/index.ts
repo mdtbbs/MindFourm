@@ -10,6 +10,7 @@ import { AddPostModerationFields1720000010000 } from './1720000010000-AddPostMod
 import { CreateExternalApiTables1720000011000 } from './1720000011000-CreateExternalApiTables';
 import { CreateLanLinkQuickCodes1720000012000 } from './1720000012000-CreateLanLinkQuickCodes';
 import { CreateFriendships1720000013000 } from './1720000013000-CreateFriendships';
+import { CreateResourceComments1720000025000 } from './1720000025000-CreateResourceComments';
 import { AddResourceVersionContent1720000014000 } from './1720000014000-AddResourceVersionContent';
 import { AddResourceRejectReason1720000015000 } from './1720000015000-AddResourceRejectReason';
 import { AddResourceIndexes1720000016000 } from './1720000016000-AddResourceIndexes';
@@ -43,4 +44,5 @@ export const migrations = [
   AddQQAuthTables1720000017000,
   RemoveForumQQAuth1720000018000,
   AddTermsAcceptedToUsers1720000021000,
+  CreateResourceComments1720000025000,
 ];

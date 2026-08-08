@@ -2,10 +2,12 @@ import Link from 'next/link';
 import { Metadata } from 'next';
 import { FileText, AlertCircle } from 'lucide-react';
 import ErrorState from '@/components/ui/error-state';
-import ForumContentLayout from '@/components/forum/forum-content-layout';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
 import ResourceLoadMore from '@/components/forum/resource-load-more';
-import HotResources from '@/components/forum/hot-resources';
+import ResourceCategoryTree from '@/components/forum/resource-category-tree';
+import ResourceCarousel from '@/components/forum/resource-carousel';
+import ResourceSidebar from '@/components/forum/resource-sidebar';
+import ResourceListItem from '@/components/forum/resource-list-item';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { Category, Resource, ResourceCategory, Tag } from '@/types';
@@ -15,12 +17,9 @@ export const revalidate = 60;
 const RESOURCES_DESCRIPTION = '浏览和下载社区贡献的资源、模组和工具';
 
 export async function generateMetadata(): Promise<Metadata> {
-  // Bare title — the root layout's `title.template` appends the site suffix.
   return {
     title: '资源中心',
     description: RESOURCES_DESCRIPTION,
-    // Filter and sort params produce the same listing in a different order, so they
-    // all fold onto one canonical URL.
     alternates: { canonical: '/resources' },
     openGraph: {
       title: '资源中心',
@@ -38,7 +37,7 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
   if (params.search) qs.set('search', params.search);
   if (params.sort) qs.set('sort', params.sort);
 
-  const [resourcesResult, resourceCategories, forumCategories, tags, hotResources] = await Promise.all([
+  const [resourcesResult, resourceCategories, forumCategories, tags, hotResources, featuredResources] = await Promise.all([
     fetchApiData<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
       `/api/resources?${qs.toString()}`,
       {
@@ -67,6 +66,12 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
       fallback: [],
       throwOnError: true,
     }),
+    // Featured resources - using hot resources as fallback if API doesn't exist yet
+    fetchApiData<Resource[]>('/api/resources/featured', {
+      init: { next: { revalidate: 300 } },
+      fallback: [],
+      throwOnError: false, // Don't throw if endpoint doesn't exist yet
+    }),
   ]);
 
   return {
@@ -77,6 +82,7 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
     forumCategories,
     tags,
     hotResources,
+    featuredResources: featuredResources.length > 0 ? featuredResources : hotResources.slice(0, 4),
   };
 }
 
@@ -111,32 +117,44 @@ export default async function ResourcesPage({
     return <ErrorState title="资源加载失败" description="暂时无法获取资源列表，请稍后重试。" action={{ label: '重新加载', href: '/resources' }} />;
   }
 
-  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, hotResources } = data;
+  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, hotResources, featuredResources } = data;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <ForumContentLayout
-        categories={forumCategories}
-        tags={tags}
-        activeQuickLinkHref="/resources"
-        highlightAllPosts={false}
-      >
-        <div className="space-y-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-[var(--text)]">资源中心</h1>
-              <p className="mt-1 text-sm text-[var(--text-muted)]">按列表浏览社区资源，快速查看版本、简介和下载信息。</p>
-            </div>
-            <Link
-              href="/resources/submit"
-              className="inline-flex items-center rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
-            >
-              提交资源
-            </Link>
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--text)]">资源中心</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">三栏布局浏览社区资源，快速查看版本、简介和下载信息。</p>
+        </div>
+        <Link
+          href="/resources/submit"
+          className="inline-flex items-center rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
+        >
+          提交资源
+        </Link>
+      </div>
+
+      {/* Three-column layout */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[240px_1fr_260px]">
+        {/* Left sidebar - Category tree */}
+        <aside className="hidden xl:block">
+          <div className="sticky top-4">
+            <ResourceCategoryTree
+              categories={resourceCategories}
+              currentCategoryId={params.category_id}
+            />
           </div>
+        </aside>
 
-          {hotResources.length > 0 && <HotResources resources={hotResources} />}
+        {/* Main content */}
+        <main className="space-y-4">
+          {/* Featured carousel */}
+          {featuredResources.length > 0 && (
+            <ResourceCarousel resources={featuredResources} />
+          )}
 
+          {/* Filters */}
           <ResourceFilters
             categories={resourceCategories}
             initialCategory={params.category_id}
@@ -144,6 +162,7 @@ export default async function ResourcesPage({
             initialSort={params.sort}
           />
 
+          {/* Resource list */}
           {resources.length === 0 ? (
             <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] py-12 text-center">
               <FileText className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]" />
@@ -156,17 +175,43 @@ export default async function ResourcesPage({
               </Link>
             </div>
           ) : (
-            <ResourceLoadMore
-              initialResources={resources}
-              initialCursor={nextCursor}
-              hasMore={hasMore}
-              categoryId={params.category_id ? parseInt(params.category_id) : undefined}
-              search={params.search}
-              sort={params.sort}
-            />
+            <div className="space-y-3">
+              {resources.map((resource) => (
+                <ResourceListItem key={resource.id} resource={resource} />
+              ))}
+              {/* Load more */}
+              {hasMore && (
+                <ResourceLoadMore
+                  initialResources={[]}
+                  initialCursor={nextCursor}
+                  hasMore={hasMore}
+                  categoryId={params.category_id ? parseInt(params.category_id) : undefined}
+                  search={params.search}
+                  sort={params.sort}
+                />
+              )}
+            </div>
           )}
-        </div>
-      </ForumContentLayout>
+        </main>
+
+        {/* Right sidebar */}
+        <aside className="hidden xl:block">
+          <div className="sticky top-4">
+            <ResourceSidebar
+              hotResources={hotResources}
+              totalResources={resources.length}
+            />
+          </div>
+        </aside>
+      </div>
+
+      {/* Mobile: Show filters and categories below */}
+      <div className="mt-6 space-y-4 xl:hidden">
+        <ResourceCategoryTree
+          categories={resourceCategories}
+          currentCategoryId={params.category_id}
+        />
+      </div>
     </div>
   );
 }

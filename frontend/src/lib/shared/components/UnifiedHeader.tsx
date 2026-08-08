@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { motion, type Easing, type Variants } from 'framer-motion';
-import { Search, User as UserIcon, LogOut, Shield, Moon, Sun, Mail, Bell, Plus, Menu } from 'lucide-react';
+import { Search, User as UserIcon, LogOut, Shield, Moon, Sun, Mail, Bell, Plus, Menu, Users } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { User } from '../types';
 
@@ -16,6 +16,7 @@ export interface UnifiedHeaderProps {
   showPostButton?: boolean;
   showMessages?: boolean;
   showNotifications?: boolean;
+  showFriends?: boolean;
   showServerCount?: boolean;
   showMobileMenu?: boolean;
 
@@ -28,6 +29,7 @@ export interface UnifiedHeaderProps {
   serverCount?: number;
   unreadMessageCount?: number;
   unreadNotificationCount?: number;
+  unreadFriendRequestCount?: number;
 
   onLogin?: () => void;
   onRegister?: () => void;
@@ -147,6 +149,7 @@ export function UnifiedHeader({
   showPostButton = false,
   showMessages = false,
   showNotifications = false,
+  showFriends = false,
   showServerCount = false,
   showMobileMenu = false,
   siteName = 'Mindustry',
@@ -157,6 +160,7 @@ export function UnifiedHeader({
   serverCount = 0,
   unreadMessageCount = 0,
   unreadNotificationCount = 0,
+  unreadFriendRequestCount = 0,
   onLogin,
   onRegister,
   onLogout,
@@ -314,7 +318,7 @@ export function UnifiedHeader({
                 onClick={onMobileMenuClick}
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.95 }}
-                className="rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] md:hidden"
+                className="rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] lg:hidden"
                 aria-label="菜单"
               >
                 <Menu className="h-6 w-6" />
@@ -365,6 +369,29 @@ export function UnifiedHeader({
                           className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white"
                         >
                           {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
+                        </motion.span>
+                      )}
+                    </Link>
+                  </motion.div>
+                )}
+
+                {showFriends && (
+                  <motion.div variants={itemVariants}>
+                    <Link
+                      href="/friends"
+                      className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
+                      title="好友"
+                    >
+                      <motion.div whileHover={{ scale: 1.08 }}>
+                        <Users className="h-5 w-5" />
+                      </motion.div>
+                      {unreadFriendRequestCount > 0 && (
+                        <motion.span
+                          variants={badgePulseVariants}
+                          animate="pulse"
+                          className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white"
+                        >
+                          {unreadFriendRequestCount > 9 ? '9+' : unreadFriendRequestCount}
                         </motion.span>
                       )}
                     </Link>

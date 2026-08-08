@@ -1,4 +1,4 @@
-// Tailwind v4 走独立的 PostCSS 插件；autoprefixer 已内置在 @tailwindcss/postcss 里
+// Tailwind v4 uses a dedicated PostCSS plugin; @tailwindcss/postcss includes autoprefixer.
 module.exports = {
   plugins: {
     '@tailwindcss/postcss': {},

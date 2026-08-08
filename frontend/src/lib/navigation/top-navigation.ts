@@ -51,12 +51,26 @@ function isEnabledSetting(value: string | undefined, defaultEnabled: boolean): b
   return !['false', '0', 'no', 'off'].includes(value.toLowerCase());
 }
 
-function isLinkEnabled(href: string, settings: Record<string, string>): boolean {
-  const feature = FEATURE_SETTING_BY_HREF[href];
+function getFeatureByHref(href: string) {
+  const direct = FEATURE_SETTING_BY_HREF[href];
+  if (direct) {
+    return direct;
+  }
+
+  if (!href.startsWith('/')) {
+    return undefined;
+  }
+
+  return Object.entries(FEATURE_SETTING_BY_HREF).find(([prefix]) => href === prefix || href.startsWith(`${prefix}/`))?.[1];
+}
+
+export function isHrefEnabled(href: string, settings: Record<string, string> | undefined): boolean {
+  const feature = getFeatureByHref(href);
   if (!feature) {
     return true;
   }
-  return isEnabledSetting(settings[feature.key], feature.defaultEnabled);
+
+  return isEnabledSetting(settings?.[feature.key], feature.defaultEnabled);
 }
 
 export function parseTopNavigationItems(rawValue: string | undefined): TopNavigationItem[] {
@@ -132,10 +146,10 @@ export function filterTopNavigationItemsBySettings(
 
   return items.flatMap((item): TopNavigationItem[] => {
     if (item.type === 'group') {
-      const visibleItems = item.items.filter((child) => isLinkEnabled(child.href, currentSettings));
+      const visibleItems = item.items.filter((child) => isHrefEnabled(child.href, currentSettings));
       return visibleItems.length > 0 ? [{ ...item, items: visibleItems }] : [];
     }
 
-    return isLinkEnabled(item.href, currentSettings) ? [item] : [];
+    return isHrefEnabled(item.href, currentSettings) ? [item] : [];
   });
 }

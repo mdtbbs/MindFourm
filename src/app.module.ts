@@ -45,6 +45,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
 import { LanLinkModule } from './modules/lanlink/lanlink.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { PresenceModule } from './modules/presence/presence.module';
+import { ResourceCommentsModule } from './modules/resource-comments/resource-comments.module';
 import { PhoneWriteGuard } from './common/guards/phone-write.guard';
 import { BanGuard } from './common/guards/ban.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -114,6 +115,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     LanLinkModule,
     FriendsModule,
     PresenceModule,
+    ResourceCommentsModule,
   ],
   controllers: [HealthController],
   // Global guards run in registration order, before any controller-scoped guard.

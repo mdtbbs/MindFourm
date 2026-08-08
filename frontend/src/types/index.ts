@@ -312,7 +312,7 @@ export interface BookmarkListResponse {
 export interface Notification {
   id: number;
   user_id: number;
-  type: 'reply' | 'mention' | 'message' | 'post_like' | 'reply_like' | 'system' | 'best_answer';
+  type: 'reply' | 'mention' | 'message' | 'post_like' | 'reply_like' | 'system' | 'best_answer' | 'friend_request' | 'friend_accepted';
   actor_id: number | null;
   actor_name: string | null;
   actor_avatar: string | null;
@@ -452,6 +452,35 @@ export interface ResourceVersion {
   content: string | null;
   content_html: string | null;
   created_at: string;
+}
+
+// Resource Comments
+export interface ResourceComment {
+  id: number;
+  resource_id: number;
+  user_id: number;
+  parent_id: number | null;
+  content: string;
+  content_html: string | null;
+  status: string;
+  edited_at: string | null;
+  upvote_count: number;
+  downvote_count: number;
+  report_count: number;
+  created_at: string;
+  updated_at: string;
+  username?: string;
+  avatar_url?: string | null;
+}
+
+export interface ResourceCommentListResponse {
+  data: ResourceComment[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 // Servers (EasyManager integration)

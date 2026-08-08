@@ -7,14 +7,14 @@
  * --color-* 全部指向它。故意不分层引入：未分层的 :root 声明会盖过 Tailwind
  * theme 层的同名变量，这正是我们想要的覆盖方向。
  */
-@import '../../../../shared-styles/variables.css';
+@import '../../shared-styles/variables.css';
 
 /*
  * components.css 必须落到 components 层。Tailwind v4 把工具类放进
  * @layer utilities，而未分层的 CSS 在级联里永远赢过任何 layer，
  * 直接引入会让 .card 的 padding 盖掉 p-6 这类工具类。
  */
-@import '../../../../shared-styles/components.css' layer(components);
+@import '../../shared-styles/components.css' layer(components);
 
 /*
  * 帖子正文 / 回复 / 资源简介 / 私信气泡都靠 prose 渲染 Markdown，
