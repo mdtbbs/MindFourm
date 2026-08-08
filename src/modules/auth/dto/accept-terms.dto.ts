@@ -1,9 +1,9 @@
-import { IsBoolean, IsNotEmpty, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class AcceptTermsDto {
   @IsString()
-  @IsNotEmpty()
-  token: string;
+  @IsOptional()
+  token?: string;
 
   @IsBoolean()
   accepted: boolean;

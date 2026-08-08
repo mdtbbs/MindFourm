@@ -66,9 +66,16 @@ export class AuthController {
       return res.json({ authenticated: false });
     }
 
+    // Check if the user needs to accept (or re-accept) the forum Terms & Privacy.
+    // The frontend polls this endpoint and redirects to /accept-terms when the
+    // flag is true, so already-logged-in users can be nudged to re-confirm after
+    // the admin bumps terms_updated_at — without forcing a full re-login.
+    const needsTermsAcceptance = await this.authService.checkNeedsTermsAcceptance(user);
+
     return res.json({
       authenticated: true,
       user: toAuthUser(user),
+      needs_terms_acceptance: needsTermsAcceptance,
     });
   }
 
@@ -243,55 +250,88 @@ export class AuthController {
   }
 
   /**
-   * Accept (or reject) the forum Terms / Privacy after a MindAuth callback was
-   * paused by the T&C gate.
+   * Accept (or reject) the forum Terms / Privacy.
    *
-   * Body: `{ token, accepted }`. The token is the one-time key returned by the
-   * MindAuth callback; accepting writes `terms_accepted_at` on the user and
-   * creates a normal forum session. Rejecting discards the pending state and
-   * redirects to the homepage.
+   * Supports two flows:
+   *
+   * 1. **OAuth callback flow** (new login): Body is `{ token, accepted }`. The
+   *    token is the one-time key returned by the MindAuth callback; accepting
+   *    writes `terms_accepted_at` on the user and creates a normal forum session.
+   *    Rejecting discards the pending state and redirects to the homepage.
+   *
+   * 2. **Session flow** (already logged in): Body is `{ accepted }` (no token).
+   *    The user is identified via the session cookie. This lets existing users
+   *    re-accept terms after the admin bumps `terms_updated_at`, without forcing
+   *    a full re-login. Rejecting logs the user out.
    */
   @Post('accept-terms')
   @SkipPhoneVerification()
   @RateLimit({ max: 10, window: 60 })
   async acceptTerms(
     @Body() body: AcceptTermsDto,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const frontendUrl = this.authService['configService'].get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const isProduction = process.env.NODE_ENV === 'production';
 
-    if (!body.token) {
+    // Flow 1: OAuth callback flow (token provided)
+    if (body.token) {
+      const pending = await this.authService.consumePendingTermsAcceptance(body.token);
+      if (!pending) {
+        throw new UnauthorizedException('条款接受凭证无效或已过期，请重新登录');
+      }
+
+      if (!body.accepted) {
+        return res.json({ redirectPath: '/' });
+      }
+
+      await this.authService.recordTermsAcceptance(pending.userId);
+
+      const sessionToken = this.authService.generateSessionToken();
+      await this.authService.createSession(
+        pending.userId,
+        sessionToken,
+        pending.clientIp,
+        pending.oauthTokens,
+      );
+
+      res.cookie('forum_session', sessionToken, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+        path: '/',
+      });
+
+      return res.json({ redirectPath: `${frontendUrl}${pending.redirectPath}` });
+    }
+
+    // Flow 2: Session flow (already logged in)
+    const sessionToken = req.cookies?.forum_session;
+    if (!sessionToken) {
       throw new UnauthorizedException('缺少接受条款所需的凭证，请重新登录');
     }
 
-    const pending = await this.authService.consumePendingTermsAcceptance(body.token);
-    if (!pending) {
-      throw new UnauthorizedException('条款接受凭证无效或已过期，请重新登录');
+    const user = await this.authService.verifySession(sessionToken);
+    if (!user) {
+      throw new UnauthorizedException('会话已失效，请重新登录');
     }
 
     if (!body.accepted) {
+      // User rejected terms — log them out
+      await this.authService.logout(sessionToken, user.id);
+      res.clearCookie('forum_session', {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: 'lax',
+        path: '/',
+      });
       return res.json({ redirectPath: '/' });
     }
 
-    await this.authService.recordTermsAcceptance(pending.userId);
-
-    const sessionToken = this.authService.generateSessionToken();
-    await this.authService.createSession(
-      pending.userId,
-      sessionToken,
-      pending.clientIp,
-      pending.oauthTokens,
-    );
-
-    res.cookie('forum_session', sessionToken, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
-
-    return res.json({ redirectPath: `${frontendUrl}${pending.redirectPath}` });
+    // User accepted terms — update their record
+    await this.authService.recordTermsAcceptance(user.id);
+    return res.json({ redirectPath: '/' });
   }
 }

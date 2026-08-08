@@ -283,8 +283,6 @@ export class SettingsService implements OnModuleInit {
     'feature_leaderboard_enabled',
     'feature_shop_enabled',
     'feature_lanlink_enabled',
-    'terms_required',
-    'terms_updated_at',
     'terms_summary',
   ]);
 

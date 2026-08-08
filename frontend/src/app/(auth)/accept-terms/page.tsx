@@ -12,28 +12,29 @@ function readCsrfToken(): string | undefined {
   return pair ? decodeURIComponent(pair.slice('csrf_token='.length)) : undefined;
 }
 
-async function postTerms(token: string, accepted: boolean): Promise<string> {
+async function postTerms(token: string | null, accepted: boolean): Promise<string> {
   let csrfToken = readCsrfToken();
   if (!csrfToken) {
     await fetch('/api/auth/check', { credentials: 'include' });
     csrfToken = readCsrfToken();
   }
+  const body = token ? { token, accepted } : { accepted };
   const response = await fetch('/api/auth/accept-terms', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
     },
-    body: JSON.stringify({ token, accepted }),
+    body: JSON.stringify(body),
     credentials: 'include',
     redirect: 'follow',
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body?.message || `请求失败 (${response.status})`);
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.message || `请求失败 (${response.status})`);
   }
-  const body = await response.json().catch(() => ({}));
-  return typeof body?.redirectPath === 'string' ? body.redirectPath : '/';
+  const data = await response.json().catch(() => ({}));
+  return typeof data?.redirectPath === 'string' ? data.redirectPath : '/';
 }
 
 export default function AcceptTermsPage() {
@@ -44,6 +45,8 @@ export default function AcceptTermsPage() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(!token); // If token flow, skip session check
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     // Pull the admin-configured summary line from public settings (best-effort;
@@ -59,12 +62,23 @@ export default function AcceptTermsPage() {
       });
   }, []);
 
+  useEffect(() => {
+    // Session flow (no token): verify the user is logged in before showing the form.
+    if (token) return;
+    fetch('/api/auth/check', { credentials: 'include' })
+      .then((res) => res.json())
+      .then((data) => {
+        setIsAuthenticated(!!data?.authenticated);
+        setAuthChecked(true);
+      })
+      .catch(() => {
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+      });
+  }, [token]);
+
   const handleSubmit = useCallback(
     (accepted: boolean) => {
-      if (!token) {
-        setError('缺少接受凭证，请返回登录页重试');
-        return;
-      }
       setSubmitting(true);
       setError(null);
 
@@ -82,13 +96,28 @@ export default function AcceptTermsPage() {
     [token],
   );
 
-  if (!token) {
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-card rounded-lg shadow-lg p-8 text-center">
+          <Loader2 className="h-12 w-12 mx-auto text-muted-foreground mb-4 animate-spin" />
+          <p className="text-muted-foreground">加载中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Token flow: token is required
+  // Session flow: must be authenticated
+  if (token) {
+    // Token flow — token present, proceed to form below
+  } else if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-card rounded-lg shadow-lg p-8 text-center">
           <ShieldCheck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h1 className="text-xl font-bold mb-2">无法处理请求</h1>
-          <p className="text-muted-foreground mb-6">缺少接受凭证，请返回登录页重试。</p>
+          <h1 className="text-xl font-bold mb-2">未登录</h1>
+          <p className="text-muted-foreground mb-6">请先登录后再接受条款。</p>
           <Link href="/login">
             <Button>返回登录</Button>
           </Link>

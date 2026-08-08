@@ -89,6 +89,16 @@ export const useUserStore = create<UserState>()(
               isAuthenticated: true,
               isLoading: false,
             });
+
+            // Terms & Privacy gate: if the admin has enabled terms enforcement and
+            // the user hasn't accepted (or needs to re-accept after a policy update),
+            // redirect them to the /accept-terms screen. Skip if already there.
+            if (response.needs_terms_acceptance && typeof window !== 'undefined') {
+              const currentPath = window.location.pathname;
+              if (currentPath !== '/accept-terms') {
+                window.location.href = '/accept-terms';
+              }
+            }
           } else {
             set({
               user: null,

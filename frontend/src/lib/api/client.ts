@@ -332,7 +332,7 @@ export const settingsApi = {
 
 // Auth APIs
 export const authApi = {
-  check: () => request<{ authenticated: boolean; user?: User }>('/api/auth/check'),
+  check: () => request<{ authenticated: boolean; user?: User; needs_terms_acceptance?: boolean }>('/api/auth/check'),
   syncPhoneStatus: () =>
     request<{ user: User }>('/api/auth/sync-phone-status', {
       method: 'POST',
