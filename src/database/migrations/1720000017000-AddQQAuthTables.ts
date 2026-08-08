@@ -1,10 +1,26 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
+import {
+  addColumnIfMissing,
+  addUniqueIfMissing,
+  createIndexIfMissing,
+} from './migration-utils';
 
+/**
+ * Creates the forum-side QQ OAuth tables and user binding columns.
+ *
+ * NOTE: These tables/columns are removed by migration 18000 (RemoveForumQQAuth).
+ * The two migrations exist as a historical pair: 17000 added QQ OAuth support,
+ * then 18000 removed it when QQ login was moved to the external Auth service.
+ *
+ * MySQL 8 does not support `ADD COLUMN IF NOT EXISTS` or `CREATE INDEX IF NOT
+ * EXISTS` (MariaDB-only syntax), so every DDL here uses information_schema
+ * guards via migration-utils helpers.
+ */
 export class AddQQAuthTables1720000017000 implements MigrationInterface {
   name = 'AddQQAuthTables1720000017000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // 1. 创建 user_devices 表
+    // 1. 创建 user_devices 表 (MySQL 8 supports CREATE TABLE IF NOT EXISTS)
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS user_devices (
         id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -24,7 +40,7 @@ export class AddQQAuthTables1720000017000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户设备表';
     `);
 
-    // 2. 创建 login_log 表
+    // 2. 创建 login_log 表 (MySQL 8 supports CREATE TABLE IF NOT EXISTS)
     await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS login_log (
         id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -41,39 +57,41 @@ export class AddQQAuthTables1720000017000 implements MigrationInterface {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='登录日志表';
     `);
 
-    // 3. 修改 users 表，添加 QQ 相关字段
-    await queryRunner.query(`
-      ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS qq_openid VARCHAR(100) UNIQUE COMMENT 'QQ OpenID',
-      ADD COLUMN IF NOT EXISTS qq_unionid VARCHAR(100) UNIQUE COMMENT 'QQ UnionID',
-      ADD COLUMN IF NOT EXISTS qq_nickname VARCHAR(100) COMMENT 'QQ昵称',
-      ADD COLUMN IF NOT EXISTS qq_avatar VARCHAR(500) COMMENT 'QQ头像URL';
-    `);
+    // 3. 修改 users 表，添加 QQ 相关字段 (使用 migration-utils 守卫以兼容 MySQL 8)
+    await addColumnIfMissing(queryRunner, 'users', 'qq_openid', "VARCHAR(100) COMMENT 'QQ OpenID'");
+    await addColumnIfMissing(queryRunner, 'users', 'qq_unionid', "VARCHAR(100) COMMENT 'QQ UnionID'");
+    await addColumnIfMissing(queryRunner, 'users', 'qq_nickname', "VARCHAR(100) COMMENT 'QQ昵称'");
+    await addColumnIfMissing(queryRunner, 'users', 'qq_avatar', "VARCHAR(500) COMMENT 'QQ头像URL'");
 
-    // 4. 添加索引
-    await queryRunner.query(`
-      ALTER TABLE users
-      ADD INDEX idx_qq_openid (qq_openid),
-      ADD INDEX idx_qq_unionid (qq_unionid);
-    `);
+    // 4. 添加唯一约束和索引 (使用 migration-utils 守卫以兼容 MySQL 8)
+    await addUniqueIfMissing(queryRunner, 'users', 'uq_users_qq_openid', ['qq_openid']);
+    await addUniqueIfMissing(queryRunner, 'users', 'uq_users_qq_unionid', ['qq_unionid']);
+    await createIndexIfMissing(queryRunner, 'users', 'idx_qq_openid', ['qq_openid']);
+    await createIndexIfMissing(queryRunner, 'users', 'idx_qq_unionid', ['qq_unionid']);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // 1. 删除 users 表的 QQ 字段
-    await queryRunner.query(`
-      ALTER TABLE users
-      DROP INDEX idx_qq_openid,
-      DROP INDEX idx_qq_unionid,
-      DROP COLUMN IF EXISTS qq_openid,
-      DROP COLUMN IF EXISTS qq_unionid,
-      DROP COLUMN IF EXISTS qq_nickname,
-      DROP COLUMN IF EXISTS qq_avatar;
-    `);
+    // MySQL 8 不支持 DROP COLUMN IF EXISTS，使用信息模式守卫
+    const { indexExists, columnExists, tableExists } = await import('./migration-utils');
 
-    // 2. 删除 login_log 表
-    await queryRunner.query(`DROP TABLE IF EXISTS login_log;`);
+    if (await indexExists(queryRunner, 'users', 'idx_qq_openid')) {
+      await queryRunner.query('DROP INDEX `idx_qq_openid` ON `users`');
+    }
+    if (await indexExists(queryRunner, 'users', 'idx_qq_unionid')) {
+      await queryRunner.query('DROP INDEX `idx_qq_unionid` ON `users`');
+    }
 
-    // 3. 删除 user_devices 表
-    await queryRunner.query(`DROP TABLE IF EXISTS user_devices;`);
+    for (const column of ['qq_openid', 'qq_unionid', 'qq_nickname', 'qq_avatar']) {
+      if (await columnExists(queryRunner, 'users', column)) {
+        await queryRunner.query(`ALTER TABLE \`users\` DROP COLUMN \`${column}\``);
+      }
+    }
+
+    if (await tableExists(queryRunner, 'login_log')) {
+      await queryRunner.query('DROP TABLE `login_log`');
+    }
+    if (await tableExists(queryRunner, 'user_devices')) {
+      await queryRunner.query('DROP TABLE `user_devices`');
+    }
   }
 }
