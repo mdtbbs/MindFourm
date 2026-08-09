@@ -2,17 +2,19 @@
 
 import Link from 'next/link';
 import { useSettings } from '@/lib/settings/context';
+import { resolveBrand } from '@/lib/theme/brand';
 
 export default function AuthFlowShell({ children }: { children: React.ReactNode }) {
   const settings = useSettings();
-  const siteName = settings.site_name || 'MindFourm';
+  const brand = resolveBrand(settings);
+  const siteName = brand.siteName;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-surface-50 to-surface-100 px-4 py-10 dark:from-surface-900 dark:to-surface-800">
       <div className="mx-auto mb-8 max-w-5xl">
         <Link href="/" className="inline-flex items-center gap-3 text-[var(--text)] transition-colors hover:text-[var(--primary)]">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white">
-            {siteName.slice(0, 1) || 'M'}
+            {siteName.slice(0, 1)}
           </div>
           <div>
             <div className="text-base font-semibold">{siteName}</div>

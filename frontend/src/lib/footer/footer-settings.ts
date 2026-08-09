@@ -1,3 +1,5 @@
+import { resolveBrand } from '@/lib/theme/brand';
+
 export interface FooterFriendlyLink {
   label: string;
   href: string;
@@ -83,12 +85,12 @@ export function serializeFooterFriendlyLinks(links: FooterFriendlyLink[]): strin
 }
 
 export function getFooterSettings(settings: Record<string, string>): FooterSettingsViewModel {
-  const siteName = trim(settings.site_name) || 'MindForum';
+  const brand = resolveBrand(settings);
   const currentYear = new Date().getFullYear();
   const copyright =
     trim(settings.footer_copyright) ||
     trim(settings.site_footer) ||
-    `© ${currentYear} ${siteName}. All rights reserved.`;
+    `© ${currentYear} ${brand.siteName}. All rights reserved.`;
 
   return {
     copyright,

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useSse } from '@/hooks/use-sse';
 import { useAuth } from '@/lib/auth/context';
 import { useSettings } from '@/lib/settings/context';
+import { resolveBrand } from '@/lib/theme/brand';
 import { buildSiteNavigationModel } from '@/lib/navigation/site-navigation';
 import { messageApi, friendsApi } from '@/lib/api/client';
 import type { Notification } from '@/types';
@@ -17,6 +18,7 @@ import ContentToolbar from '@/components/layout/content-toolbar';
 export default function ContentShell({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout } = useAuth();
   const settings = useSettings();
+  const brand = resolveBrand(settings);
   const router = useRouter();
   const pathname = usePathname();
   const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
@@ -96,7 +98,8 @@ export default function ContentShell({ children }: { children: React.ReactNode }
       <ContentSidebar
         navigation={navigation}
         currentPathname={pathname ?? '/'}
-        siteName={settings.site_name || 'MindFourm'}
+        siteName={brand.siteName}
+        sidebarTitle={brand.sidebarTitle}
         logoUrl={settings.site_logo_url || undefined}
         userName={user?.username || undefined}
         userMeta={userMeta}
@@ -111,12 +114,12 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         onClose={() => setMobileMenuOpen(false)}
         onLogin={() => { window.location.href = buildAuthUrl('login'); }}
         onRegister={() => { window.location.href = buildAuthUrl('register'); }}
-        siteName={settings.site_name || 'MindFourm'}
+        siteName={brand.siteName}
       />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <ContentToolbar
-          siteName={settings.site_name || 'MindFourm'}
+          siteName={brand.siteName}
           logoUrl={settings.site_logo_url || undefined}
           user={user}
           isAuthenticated={isAuthenticated}

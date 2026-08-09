@@ -8,6 +8,7 @@ import type { SiteNavigationModel } from '@/lib/navigation/site-navigation';
 export default function ContentSidebar({
   navigation,
   siteName,
+  sidebarTitle,
   logoUrl,
   userName,
   userMeta,
@@ -17,6 +18,7 @@ export default function ContentSidebar({
   navigation: SiteNavigationModel;
   currentPathname: string;
   siteName: string;
+  sidebarTitle?: string;
   logoUrl?: string;
   userName?: string;
   userMeta?: string;
@@ -31,12 +33,12 @@ export default function ContentSidebar({
             <img src={logoUrl} alt={siteName} className="h-8 max-w-[140px] object-contain" />
           ) : (
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white">
-              {siteName.slice(0, 1) || 'M'}
+              {siteName.slice(0, 1)}
             </div>
           )}
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div>
-            <div className="text-xs text-[var(--text-muted)]">内容导航中心</div>
+            <div className="text-xs text-[var(--text-muted)]">{sidebarTitle}</div>
           </div>
         </Link>
       </div>
