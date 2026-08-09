@@ -106,7 +106,7 @@ function normalizeCategoryBody(body: any) {
     slug: body.slug,
     description: body.description || null,
     icon: body.icon || null,
-    sort_order: body.sort_order === undefined ? 0 : Number(body.sort_order),
+    sort_order: body.sort_order !== undefined ? Number(body.sort_order) : undefined,
     is_active: body.is_active === false || body.is_active === 'false' ? 0 : 1,
   };
 }
@@ -152,14 +152,14 @@ export class ResourcesController {
 
   @Get('categories')
   async listCategories() {
-    return this.categoryService.list();
+    return this.categoryService.getPublicCategories();
   }
 
   @Get('categories/admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async listAdminCategories() {
-    return this.categoryService.list(true);
+    return this.categoryService.getAllCategories();
   }
 
   @Post('categories')

@@ -17,6 +17,7 @@ import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MflClientService } from './mfl-client.service';
+import { ResourceCategoryService } from './resource-categories.service';
 import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
 
 export interface ResourceFileMeta {
@@ -56,6 +57,7 @@ export class ResourcesService {
     private adminNotificationsService: AdminNotificationsService,
     private notificationsService: NotificationsService,
     private mflClientService: MflClientService,
+    private categoryService: ResourceCategoryService,
   ) {}
 
   private normalizeResourceType(resourceType: string): string {
@@ -102,6 +104,82 @@ export class ResourcesService {
       category_icon: resource.category?.icon || null,
       versions: versions?.map((version) => this.normalizeVersion(version)),
     };
+  }
+
+  /**
+   * Unified public-visibility predicate for resources.
+   *
+   * A resource is publicly accessible when ALL of the following hold:
+   *   1. Its status is in PUBLIC_RESOURCE_STATUSES (approved / published).
+   *   2. It is marked public (is_public = 1).
+   *   3. Its category exists and is active — or it has no category at all.
+   *
+   * Centralising the check here keeps `assertResourceVisible`, list queries,
+   * and single-resource reads consistent: a disabled category hides every
+   * resource beneath it, not just some.
+   */
+  async isResourcePubliclyAccessible(resource: {
+    status?: string;
+    is_public?: number;
+    category_id?: number | null;
+  }): Promise<boolean> {
+    const isApproved = (PUBLIC_RESOURCE_STATUSES as readonly string[]).includes(
+      resource.status ?? '',
+    );
+    if (!isApproved || resource.is_public !== 1) {
+      return false;
+    }
+
+    if (resource.category_id) {
+      try {
+        const category = await this.categoryService.getById(resource.category_id);
+        if (!category || category.is_active !== 1) {
+          return false;
+        }
+      } catch (e) {
+        if (e instanceof NotFoundException) {
+          return false;
+        }
+        throw e;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * List only resources that pass the public-visibility predicate, using a
+   * single query with a LEFT JOIN on the category so inactive categories
+   * are excluded at the database level rather than in application code,
+   * while resources without a category are still included.
+   */
+  async getPublicResources(): Promise<Resource[]> {
+    return this.resourceRepository
+      .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.user', 'user')
+      .leftJoin('resource.category', 'category')
+      .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
+      .orderBy('resource.created_at', 'DESC')
+      .getMany();
+  }
+
+  /**
+   * Fetch a single resource by ID, returning null when it exists but is not
+   * publicly accessible (rather than throwing). Composes `getById` with the
+   * visibility predicate.
+   */
+  async getPublicResourceById(id: number): Promise<any | null> {
+    const resource = await this.resourceRepository.findOne({
+      where: { id },
+      relations: ['user', 'category'],
+    });
+
+    if (!resource) return null;
+
+    const isAccessible = await this.isResourcePubliclyAccessible(resource);
+    return isAccessible ? this.normalizeResource(resource) : null;
   }
 
   async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta, mflMeta?: MflFileMeta): Promise<any> {
@@ -252,16 +330,79 @@ export class ResourcesService {
     const scope = options.scope ?? 'public';
     const sort = validateResourceSort(query.sort);
 
+    if (scope === 'public') {
+      // Use createQueryBuilder with LEFT JOIN on category so resources whose
+      // category has been disabled are excluded at the database level, while
+      // resources without any category are still included.
+      const qb = this.resourceRepository
+        .createQueryBuilder('resource')
+        .leftJoinAndSelect('resource.user', 'user')
+        .leftJoin('resource.category', 'category')
+        .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+        .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+        .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
+
+      if (category_id) {
+        qb.andWhere('resource.category_id = :categoryId', { categoryId: category_id });
+      }
+
+      if (search) {
+        qb.andWhere('resource.title LIKE :search', { search: `%${escapeLike(search)}%` });
+      }
+
+      // Cursor-based pagination
+      if (cursor) {
+        try {
+          const decoded = decodeCursor(cursor);
+          const cursorValue =
+            sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
+          const idValue = parseInt(decoded[1]);
+
+          qb.andWhere(
+            `(resource.${sort} < :cursorValue OR (resource.${sort} = :cursorValue AND resource.id < :idValue))`,
+            { cursorValue, idValue },
+          );
+        } catch {
+          // Ignore invalid cursors.
+        }
+      }
+
+      qb.orderBy(`resource.${sort}`, 'DESC')
+        .addOrderBy('resource.id', 'DESC')
+        .take(Number(limit) + 1);
+
+      const resources = await qb.getMany();
+
+      const hasMore = resources.length > Number(limit);
+      if (hasMore) {
+        resources.pop();
+      }
+
+      let nextCursor: string | null = null;
+      if (hasMore && resources.length > 0) {
+        const lastResource = resources[resources.length - 1];
+        const cursorValue =
+          sort === 'created_at'
+            ? lastResource.created_at.getTime().toString()
+            : lastResource[sort].toString();
+        nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
+      }
+
+      return {
+        data: resources.map((resource) => this.normalizeResource(resource)),
+        next_cursor: nextCursor,
+        has_more: hasMore,
+      };
+    }
+
+    // Admin scope — use find() without category-active filter
     const where: any = {};
 
     if (category_id) {
       where.category_id = category_id;
     }
 
-    if (scope === 'public') {
-      where.status = In(PUBLIC_RESOURCE_STATUSES);
-      where.is_public = 1;
-    } else if (status) {
+    if (status) {
       where.status = status;
     }
 
@@ -327,21 +468,22 @@ export class ResourcesService {
    * id returned pending and rejected resources — and, via the download route,
    * served their files — which defeated the moderation queue entirely and turned
    * `external_url` into an open redirect that needed no approval.
+   *
+   * Delegates to `isResourcePubliclyAccessible` for the public path so the
+   * category-active check is applied uniformly.
    */
-  private assertResourceVisible(
-    resource: { status?: string; is_public?: number; user_id?: number },
+  private async assertResourceVisible(
+    resource: { status?: string; is_public?: number; user_id?: number; category_id?: number | null },
     viewer?: { id: number; role: string },
-  ): void {
+  ): Promise<void> {
     const isStaff = !!viewer && ['admin', 'moderator'].includes(viewer.role);
     const isOwner = !!viewer && resource.user_id === viewer.id;
     if (isStaff || isOwner) {
       return;
     }
 
-    const isApproved = (PUBLIC_RESOURCE_STATUSES as readonly string[]).includes(
-      resource.status ?? '',
-    );
-    if (!isApproved || resource.is_public !== 1) {
+    const accessible = await this.isResourcePubliclyAccessible(resource);
+    if (!accessible) {
       // 404 rather than 403 so unapproved submissions are not enumerable.
       throw new NotFoundException('资源不存在');
     }
@@ -357,7 +499,7 @@ export class ResourcesService {
       throw new NotFoundException('资源不存在');
     }
 
-    this.assertResourceVisible(resource, viewer);
+    await this.assertResourceVisible(resource, viewer);
 
     return this.normalizeResource(resource);
   }
@@ -372,7 +514,7 @@ export class ResourcesService {
       throw new NotFoundException('资源不存在');
     }
 
-    this.assertResourceVisible(resource, viewer);
+    await this.assertResourceVisible(resource, viewer);
 
     const versions = await this.versionRepository.find({
       where: { resource_id: id },
@@ -448,39 +590,35 @@ export class ResourcesService {
     limit: number = 20,
     cursor?: string,
   ): Promise<any> {
-    const where: any = {
-      user_id: userId,
-      status: 'approved',
-      is_public: 1,
-    };
+    const qb = this.resourceRepository
+      .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.user', 'user')
+      .leftJoin('resource.category', 'category')
+      .where('resource.user_id = :userId', { userId })
+      .andWhere('resource.status = :status', { status: 'approved' })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
 
-    let cursorCondition: any = {};
     if (cursor) {
       try {
         const decoded = decodeCursor(cursor);
         const cursorValue = new Date(parseInt(decoded[0]));
         const idValue = parseInt(decoded[1]);
 
-        cursorCondition = [
-          { created_at: LessThan(cursorValue) },
-          { created_at: cursorValue, id: LessThan(idValue) },
-        ];
+        qb.andWhere(
+          `(resource.created_at < :cursorValue OR (resource.created_at = :cursorValue AND resource.id < :idValue))`,
+          { cursorValue, idValue },
+        );
       } catch {
         // Ignore invalid cursors.
       }
     }
 
-    const resources = await this.resourceRepository.find({
-      where: cursorCondition.length > 0
-        ? [{ ...where, ...cursorCondition[0] }, { ...where, ...cursorCondition[1] }]
-        : where,
-      relations: ['user', 'category'],
-      order: {
-        created_at: 'DESC',
-        id: 'DESC',
-      },
-      take: Number(limit) + 1,
-    });
+    qb.orderBy('resource.created_at', 'DESC')
+      .addOrderBy('resource.id', 'DESC')
+      .take(Number(limit) + 1);
+
+    const resources = await qb.getMany();
 
     const hasMore = resources.length > Number(limit);
     if (hasMore) {
@@ -869,17 +1007,16 @@ export class ResourcesService {
   }
 
   async getHotResources(limit: number = 10): Promise<any[]> {
-    const resources = await this.resourceRepository.find({
-      where: {
-        status: In(PUBLIC_RESOURCE_STATUSES),
-        is_public: 1,
-      },
-      relations: ['user', 'category'],
-      order: {
-        download_count: 'DESC',
-      },
-      take: limit,
-    });
+    const resources = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.user', 'user')
+      .leftJoin('resource.category', 'category')
+      .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
+      .orderBy('resource.download_count', 'DESC')
+      .take(limit)
+      .getMany();
 
     return resources.map((resource) => this.normalizeResource(resource));
   }

@@ -41,6 +41,18 @@ function createService(overrides: {
   adminNotificationsService?: Record<string, jest.Mock>;
   mflClientService?: Record<string, jest.Mock>;
 } = {}) {
+  const defaultQb = {
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    innerJoin: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue([]),
+  };
+
   const resourceRepository = {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn(),
@@ -56,6 +68,7 @@ function createService(overrides: {
     })),
     delete: jest.fn().mockResolvedValue(undefined),
     increment: jest.fn().mockResolvedValue(undefined),
+    createQueryBuilder: jest.fn(() => defaultQb),
     ...overrides.resourceRepository,
   };
   const manager = {
@@ -109,21 +122,32 @@ function createService(overrides: {
     dataSource,
     adminNotificationsService,
     mflClientService,
+    defaultQb,
   };
 }
 
 describe('ResourcesService', () => {
-  it('uses public resource statuses for the public list regardless of requested status', async () => {
-    const { service, resourceRepository } = createService();
+  it('uses public resource statuses for the public list and filters disabled categories', async () => {
+    const { service, resourceRepository, defaultQb } = createService();
 
     await service.getList({ status: 'pending', limit: 20 }, { scope: 'public' });
 
-    const where = resourceRepository.find.mock.calls[0][0].where;
-    expect(where.is_public).toBe(1);
-    expect(where.status).toMatchObject({
-      _type: 'in',
-      _value: ['approved', 'published'],
-    });
+    // Public scope now uses createQueryBuilder (not find) to LEFT JOIN category
+    expect(resourceRepository.createQueryBuilder).toHaveBeenCalledWith('resource');
+    expect(defaultQb.leftJoin).toHaveBeenCalledWith('resource.category', 'category');
+    expect(defaultQb.where).toHaveBeenCalledWith(
+      'resource.status IN (:...statuses)',
+      { statuses: ['approved', 'published'] },
+    );
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      'resource.is_public = :isPublic',
+      { isPublic: 1 },
+    );
+    // The category-active filter ensures disabled categories are excluded
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      '(category.id IS NULL OR category.is_active = :categoryActive)',
+      { categoryActive: 1 },
+    );
   });
 
   it('does not force a default status filter for the admin list', async () => {
