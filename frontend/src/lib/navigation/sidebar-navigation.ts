@@ -7,6 +7,47 @@
  * and an optional `featureKey` that gates visibility on a feature toggle.
  */
 
+/**
+ * Icon whitelist — must stay in sync with the backend's
+ * `SIDEBAR_ICON_WHITELIST` in `src/common/utils/sidebar-navigation.util.ts`.
+ */
+export const SIDEBAR_ICON_OPTIONS = [
+  'Home',
+  'Search',
+  'Folder',
+  'Tag',
+  'Users',
+  'MessageSquare',
+  'Bell',
+  'Settings',
+  'Shield',
+  'Book',
+  'FileText',
+  'Image',
+  'Video',
+  'Music',
+  'Calendar',
+  'Map',
+  'Star',
+  'Heart',
+  'TrendingUp',
+  'ExternalLink',
+  'Link',
+  'HelpCircle',
+  'Info',
+  'Mail',
+  'ShoppingCart',
+  'Gift',
+  'Award',
+  'User',
+  'LogIn',
+  'LogOut',
+] as const;
+
+export type SidebarIconName = (typeof SIDEBAR_ICON_OPTIONS)[number];
+
+const ICON_SET: Set<string> = new Set<string>(SIDEBAR_ICON_OPTIONS);
+
 export interface SidebarNavigationItem {
   id: string;
   label: string;
@@ -27,7 +68,7 @@ export interface SidebarNavigationContext {
  * `getDefaultSidebarNavigation()` in
  * `src/common/utils/sidebar-navigation-defaults.ts`.
  */
-const DEFAULT_SIDEBAR_NAVIGATION: SidebarNavigationItem[] = [
+export const DEFAULT_SIDEBAR_NAVIGATION: SidebarNavigationItem[] = [
   { id: 'home', label: '首页', href: '/', icon: 'Home', enabled: true, requiresAuth: false },
   { id: 'categories', label: '分类', href: '/categories', icon: 'Folder', enabled: true, requiresAuth: false },
   { id: 'tags', label: '标签', href: '/tags', icon: 'Tag', enabled: true, requiresAuth: false },
@@ -107,4 +148,51 @@ export function buildSidebarNavigation(context: SidebarNavigationContext): Sideb
 
     return true;
   });
+}
+
+// ─── Editor validation ──────────────────────────────────────────────────────
+
+export interface SidebarValidationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+/**
+ * Client-side validation mirroring the backend `validateSidebarNavigation`.
+ * Used by the navigation editor to show instant feedback before saving.
+ */
+export function validateSidebarNavigation(
+  items: SidebarNavigationItem[],
+): SidebarValidationResult {
+  const errors: string[] = [];
+  const seenIds = new Set<string>();
+
+  items.forEach((item) => {
+    if (!item.label || item.label.trim() === '') {
+      errors.push(`项目 "${item.id}" 标签不能为空`);
+    }
+
+    if (!item.href || item.href.trim() === '') {
+      errors.push(`项目 "${item.id}" 链接不能为空`);
+    }
+
+    if (seenIds.has(item.id)) {
+      errors.push(`重复 ID "${item.id}"`);
+    }
+    seenIds.add(item.id);
+
+    if (!ICON_SET.has(item.icon)) {
+      errors.push(`项目 "${item.id}" 使用了无效图标 "${item.icon}"`);
+    }
+
+    if (typeof item.href === 'string' && item.href.trim() !== '') {
+      const isRelative = item.href.startsWith('/');
+      const isHttps = item.href.startsWith('https://');
+      if (!isRelative && !isHttps) {
+        errors.push(`项目 "${item.id}" 链接无效：必须以 / 或 https:// 开头`);
+      }
+    }
+  });
+
+  return { valid: errors.length === 0, errors };
 }
