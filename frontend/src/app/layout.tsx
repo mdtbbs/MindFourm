@@ -19,8 +19,8 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings();
-  const titleSuffix = settings.seo_title_suffix || ' | MindForum';
-  const siteName = settings.site_name || 'MindForum';
+  const titleSuffix = settings.seo_title_suffix || ' | 社区论坛';
+  const siteName = settings.site_name || '社区论坛';
   const description = settings.seo_default_description || '一个现代化的社区论坛';
 
   const meta: Metadata = {
