@@ -13,7 +13,6 @@ import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
 import { Category, Resource, ResourceCategory, Tag } from '@/types';
-import '@/styles/resources-responsive.css';
 
 export const revalidate = 60;
 
@@ -138,12 +137,12 @@ export default async function ResourcesPage({
 
       {/* Three-column responsive layout
        * - Mobile (<768px): single column, categories shown below main content
-       * - Tablet/Small desktop (768–1023px): single column, sidebars hidden
-       * - Desktop (≥1024px): three columns [240px | 1fr | 260px]
+       * - Tablet/Small desktop (768–1279px): single column, sidebars hidden
+       * - Desktop (≥1280px / xl): three columns [240px | 1fr | 260px]
        * Layout wrapper (layout.tsx) applies min-w-0 + overflow-x-hidden */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr_260px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[240px_1fr_260px]">
         {/* Left sidebar - Category tree (desktop only) */}
-        <aside className="hidden lg:block min-w-0">
+        <aside className="hidden xl:block min-w-0">
           <div className="sticky top-4">
             <ResourceCategoryTree
               categories={resourceCategories}
@@ -200,7 +199,7 @@ export default async function ResourcesPage({
         </main>
 
         {/* Right sidebar (desktop only) */}
-        <aside className="hidden lg:block min-w-0">
+        <aside className="hidden xl:block min-w-0">
           <div className="sticky top-4">
             <ResourceSidebar
               hotResources={hotResources}
@@ -211,7 +210,7 @@ export default async function ResourcesPage({
       </div>
 
       {/* Mobile/Tablet: Show categories below main content (hidden on desktop) */}
-      <div className="mt-6 space-y-4 lg:hidden">
+      <div className="mt-6 space-y-4 xl:hidden">
         <ResourceCategoryTree
           categories={resourceCategories}
           currentCategoryId={params.category_id}
