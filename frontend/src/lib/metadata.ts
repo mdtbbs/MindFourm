@@ -34,6 +34,9 @@ export function generatePageMetadata({
   return {
     title: fullTitle,
     description: finalDescription,
+    alternates: {
+      canonical: path,
+    },
     icons: {
       icon: favicon,
       shortcut: favicon,

@@ -192,4 +192,38 @@ const brandInfo: BrandInfo = {
   assertDeepEqual(metadata.openGraph!.images, [], 'OG images should be empty when no logoUrl');
 })();
 
+// ────────────────────────────────────────────────────────────────────────────
+// Test: should include alternates.canonical from provided path
+// ────────────────────────────────────────────────────────────────────────────
+(function testAlternatesCanonical() {
+  const metadata = generatePageMetadata({
+    title: 'Resources',
+    path: '/resources',
+    brandInfo,
+  });
+
+  assert(metadata.alternates !== undefined, 'alternates should be defined');
+  assertEqual(
+    (metadata.alternates as { canonical?: string }).canonical,
+    '/resources',
+    'alternates.canonical should equal provided path',
+  );
+})();
+
+// ────────────────────────────────────────────────────────────────────────────
+// Test: should default alternates.canonical to /
+// ────────────────────────────────────────────────────────────────────────────
+(function testAlternatesCanonicalDefault() {
+  const metadata = generatePageMetadata({
+    title: 'Home',
+    brandInfo,
+  });
+
+  assertEqual(
+    (metadata.alternates as { canonical?: string }).canonical,
+    '/',
+    'alternates.canonical should default to /',
+  );
+})();
+
 assert(true, 'metadata spec executed');
