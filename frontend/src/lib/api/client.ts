@@ -719,6 +719,29 @@ export const adminApi = {
   getPluginHooks: (slug: string) => request<any>(`/api/plugins/${slug}/hooks`),
 };
 
+// Sidebar Navigation API
+export interface SidebarNavigationItem {
+  id: string;
+  label: string;
+  href: string;
+  icon: string;
+  enabled: boolean;
+  requiresAuth: boolean;
+  featureKey?: string;
+}
+
+export const sidebarNavApi = {
+  get: () =>
+    request<SidebarNavigationItem[]>('/api/settings/admin/sidebar-navigation'),
+  update: (items: SidebarNavigationItem[]) => {
+    clearCache();
+    return request<{ success: boolean }>('/api/settings/admin/sidebar-navigation', {
+      method: 'PUT',
+      body: JSON.stringify({ items }),
+    });
+  },
+};
+
 // Levels API
 export const levelsApi = {
   getAll: () => request<any[]>('/api/levels'),
