@@ -29,7 +29,6 @@ export default function ContentDrawer({
 }: {
   open: boolean;
   items: SidebarNavigationItem[];
-  currentPathname: string;
   onClose: () => void;
   siteName: string;
 }) {

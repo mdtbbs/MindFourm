@@ -30,7 +30,6 @@ export default function ContentSidebar({
   userMeta,
 }: {
   items: SidebarNavigationItem[];
-  currentPathname: string;
   siteName: string;
   sidebarTitle?: string;
   logoUrl?: string;

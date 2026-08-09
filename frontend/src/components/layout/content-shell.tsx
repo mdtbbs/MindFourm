@@ -96,7 +96,6 @@ export default function ContentShell({ children }: { children: React.ReactNode }
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex">
       <ContentSidebar
         items={sidebarItems}
-        currentPathname={pathname ?? '/'}
         siteName={brand.siteName}
         sidebarTitle={brand.sidebarTitle}
         logoUrl={settings.site_logo_url || undefined}
@@ -107,7 +106,6 @@ export default function ContentShell({ children }: { children: React.ReactNode }
       <ContentDrawer
         open={mobileMenuOpen}
         items={sidebarItems}
-        currentPathname={pathname ?? '/'}
         onClose={() => setMobileMenuOpen(false)}
         siteName={brand.siteName}
       />
