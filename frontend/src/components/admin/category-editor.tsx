@@ -5,30 +5,29 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import type { ResourceCategory } from '@/types';
 
 const ICON_OPTIONS = [
   'Wrench', 'Map', 'FileText', 'Image', 'Video', 'Music',
   'Code', 'Package', 'Box', 'Folder', 'Archive', 'Zap',
 ];
 
-export interface Category {
-  id?: number;
-  name: string;
-  slug: string;
-  icon: string;
-  description: string;
-  sort_order: number;
-  is_active: boolean;
-}
+// Form-local type: all optional fields defaulted so the form always has values.
+type CategoryForm = Omit<ResourceCategory, 'id' | 'created_at'> & { id?: number };
 
 interface CategoryEditorProps {
-  category: Category;
-  onSave: (category: Category) => Promise<void>;
+  category: CategoryForm;
+  onSave: (category: CategoryForm) => Promise<void>;
   onCancel: () => void;
 }
 
 export function CategoryEditor({ category, onSave, onCancel }: CategoryEditorProps) {
-  const [formData, setFormData] = useState<Category>(category);
+  // Default nullable fields so the controlled inputs never see null/undefined.
+  const [formData, setFormData] = useState<CategoryForm>({
+    ...category,
+    icon: category.icon ?? 'Folder',
+    description: category.description ?? '',
+  });
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -69,7 +68,7 @@ export function CategoryEditor({ category, onSave, onCancel }: CategoryEditorPro
         <Label htmlFor="icon">图标</Label>
         <select
           id="icon"
-          value={formData.icon}
+          value={formData.icon ?? 'Folder'}
           onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
           className="w-full px-3 py-2 border border-surface-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors"
         >
@@ -85,7 +84,7 @@ export function CategoryEditor({ category, onSave, onCancel }: CategoryEditorPro
         <Label htmlFor="description">描述</Label>
         <Input
           id="description"
-          value={formData.description}
+          value={formData.description ?? ''}
           onChange={(e) => setFormData({ ...formData, description: e.target.value })}
         />
       </div>

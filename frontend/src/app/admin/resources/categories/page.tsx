@@ -3,12 +3,16 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CategoryEditor, type Category } from '@/components/admin/category-editor';
+import type { ResourceCategory } from '@/types';
+import { CategoryEditor } from '@/components/admin/category-editor';
 import { resourceCategoryApi } from '@/lib/api/client';
 
+// Form-local alias: nullable fields defaulted before reaching the editor.
+type CategoryForm = Omit<ResourceCategory, 'id' | 'created_at'> & { id?: number };
+
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categories, setCategories] = useState<ResourceCategory[]>([]);
+  const [editingCategory, setEditingCategory] = useState<CategoryForm | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,7 +22,7 @@ export default function CategoriesPage() {
   async function loadCategories() {
     try {
       const data = await resourceCategoryApi.list();
-      setCategories(data as Category[]);
+      setCategories(data as ResourceCategory[]);
     } catch (error) {
       console.error('Failed to load categories:', error);
     } finally {
@@ -26,7 +30,7 @@ export default function CategoriesPage() {
     }
   }
 
-  async function handleSave(category: Category) {
+  async function handleSave(category: CategoryForm) {
     if (category.id) {
       await resourceCategoryApi.update(category.id, category);
     } else {

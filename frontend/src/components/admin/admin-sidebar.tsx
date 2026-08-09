@@ -60,7 +60,7 @@ const navSections = [
     items: [
       { href: '/admin/resources', label: '资源管理', icon: Package, roles: ['admin', 'moderator'] },
       { href: '/admin/resources/moderation', label: '资源审批', icon: AlertCircle, roles: ['admin', 'moderator'] },
-      { href: '/admin/resource-categories', label: '类别管理', icon: FolderOpen, roles: ['admin'] },
+      { href: '/admin/resources/categories', label: '类别管理', icon: FolderOpen, roles: ['admin'] },
     ],
   },
   {

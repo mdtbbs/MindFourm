@@ -84,7 +84,7 @@ const navGroups: SidebarGroup[] = [
     items: [
       { key: 'resources', label: '资源管理', icon: <Package size={16} />, href: '/admin/resources', roles: ['admin', 'moderator'] },
       { key: 'resources-moderation', label: '资源审批', icon: <AlertCircle size={16} />, href: '/admin/resources/moderation', roles: ['admin', 'moderator'] },
-      { key: 'resource-categories', label: '类别管理', icon: <FolderOpen size={16} />, href: '/admin/resource-categories', roles: ['admin'] },
+      { key: 'resource-categories', label: '类别管理', icon: <FolderOpen size={16} />, href: '/admin/resources/categories', roles: ['admin'] },
     ],
   },
 ];
