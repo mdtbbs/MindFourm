@@ -21,6 +21,27 @@ function isActivePath(currentPathname: string | null, href: string): boolean {
   return currentPathname === href || currentPathname.startsWith(`${href}/`);
 }
 
+/**
+ * Layout class tokens for the desktop sidebar.
+ *
+ * The sidebar must use a fixed viewport height (`h-[100dvh]`) so that the
+ * navigation region can scroll independently. Using `min-h-screen` would
+ * let the aside grow past the viewport and push the whole page into a
+ * single scroll, which breaks the sticky layout on long nav lists.
+ *
+ * Exported for testability — see `content-sidebar.spec.ts`.
+ */
+export const SIDEBAR_LAYOUT_CLASSES = {
+  /** Root <aside> — pinned, viewport-height, overflow-clipped flex column. */
+  root: 'hidden w-72 shrink-0 border-r border-[var(--border)] bg-[var(--bg-card)] lg:flex lg:h-[100dvh] lg:flex-col lg:sticky lg:top-0 lg:overflow-hidden',
+  /** Brand / logo header — must not shrink. */
+  brand: 'shrink-0 border-b border-[var(--border)] p-4',
+  /** Navigation region — flex-grows to fill, scrolls vertically. */
+  nav: 'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4',
+  /** User panel footer — must not shrink. */
+  user: 'shrink-0',
+} as const;
+
 export default function ContentSidebar({
   items,
   siteName,
@@ -39,8 +60,8 @@ export default function ContentSidebar({
   const pathname = usePathname();
 
   return (
-    <aside data-testid="content-sidebar" className="hidden w-72 shrink-0 border-r border-[var(--border)] bg-[var(--bg-card)] lg:flex lg:min-h-screen lg:flex-col lg:sticky lg:top-0">
-      <div className="border-b border-[var(--border)] p-4">
+    <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
+      <div data-testid="sidebar-brand" className={SIDEBAR_LAYOUT_CLASSES.brand}>
         <Link href="/" className="flex items-center gap-3">
           {logoUrl ? (
             <img src={logoUrl} alt={siteName} className="h-8 max-w-[140px] object-contain" />
@@ -56,7 +77,7 @@ export default function ContentSidebar({
         </Link>
       </div>
 
-      <nav data-testid="sidebar-nav" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
+      <nav data-testid="sidebar-nav" role="navigation" className={SIDEBAR_LAYOUT_CLASSES.nav}>
         {items.map((item) => {
           const IconComponent = resolveIcon(item.icon);
           const active = isActivePath(pathname, item.href);
@@ -84,7 +105,9 @@ export default function ContentSidebar({
         })}
       </nav>
 
-      <SidebarUserPanel userName={userName} userMeta={userMeta} />
+      <div data-testid="sidebar-user" className={SIDEBAR_LAYOUT_CLASSES.user}>
+        <SidebarUserPanel userName={userName} userMeta={userMeta} />
+      </div>
     </aside>
   );
 }
