@@ -26,6 +26,8 @@ jest.mock('typeorm', () => ({
 jest.mock('@entities/setting.entity', () => ({ Setting: class Setting {} }));
 
 import { SECRET_PLACEHOLDER, SettingsService } from './settings.service';
+import { UpdateBrandSettingsDto } from './dto/update-brand-settings.dto';
+import { validate } from 'class-validator';
 
 type SettingRow = {
   key: string;
@@ -234,7 +236,68 @@ describe('SettingsService', () => {
       const { service } = createService(sensitiveRows);
       await (service as any).loadSettings();
 
-      await expect(service.getPublicSettings()).resolves.toEqual({ site_name: 'MindFourm' });
+      await expect(service.getPublicSettings()).resolves.toEqual({
+        site_name: 'MindFourm',
+        site_tagline: '',
+        site_description: '',
+        site_logo_url: '',
+        site_favicon_url: '',
+        sidebar_title: '',
+      });
+    });
+
+    it('fills empty-string defaults for brand fields missing from the database', async () => {
+      const { service } = createService([
+        {
+          key: 'site_name',
+          value: 'Test Forum',
+          category: 'basic',
+          description: 'Site name',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      const result = await service.getPublicSettings();
+
+      expect(result.site_name).toBe('Test Forum');
+      expect(result.site_tagline).toBe('');
+      expect(result.site_description).toBe('');
+      expect(result.site_logo_url).toBe('');
+      expect(result.site_favicon_url).toBe('');
+      expect(result.sidebar_title).toBe('');
+    });
+
+    it('includes site_favicon_url and sidebar_title when present in the database', async () => {
+      const { service } = createService([
+        {
+          key: 'site_name',
+          value: 'Test Forum',
+          category: 'basic',
+          description: 'Site name',
+          updated_at: new Date(),
+        },
+        {
+          key: 'site_favicon_url',
+          value: 'https://example.com/favicon.ico',
+          category: 'basic',
+          description: 'Favicon URL',
+          updated_at: new Date(),
+        },
+        {
+          key: 'sidebar_title',
+          value: 'Navigation',
+          category: 'basic',
+          description: 'Sidebar title',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      const result = await service.getPublicSettings();
+
+      expect(result.site_favicon_url).toBe('https://example.com/favicon.ico');
+      expect(result.sidebar_title).toBe('Navigation');
     });
 
     it('returns nothing public for credential-bearing categories', async () => {
@@ -300,6 +363,57 @@ describe('SettingsService', () => {
       await service.setBatch('email', { smtp_password: '' });
 
       expect(rows.find((row) => row.key === 'smtp_password')?.value).toBe('');
+    });
+  });
+
+  describe('UpdateBrandSettingsDto', () => {
+    it('accepts valid brand fields', async () => {
+      const dto = new UpdateBrandSettingsDto();
+      dto.site_name = 'My Forum';
+      dto.site_tagline = 'A great place';
+      dto.site_description = 'Description';
+      dto.site_logo_url = 'https://example.com/logo.png';
+      dto.site_favicon_url = 'https://example.com/favicon.ico';
+      dto.sidebar_title = 'Nav';
+
+      const errors = await validate(dto);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('accepts empty strings for URL fields (clearing)', async () => {
+      const dto = new UpdateBrandSettingsDto();
+      dto.site_logo_url = '';
+      dto.site_favicon_url = '';
+
+      const errors = await validate(dto);
+      expect(errors).toHaveLength(0);
+    });
+
+    it('rejects invalid logo URL', async () => {
+      const dto = new UpdateBrandSettingsDto();
+      dto.site_logo_url = 'not-a-url';
+
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('site_logo_url');
+    });
+
+    it('rejects invalid favicon URL', async () => {
+      const dto = new UpdateBrandSettingsDto();
+      dto.site_favicon_url = 'javascript:alert(1)';
+
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('site_favicon_url');
+    });
+
+    it('rejects non-string values for string fields', async () => {
+      const dto = new UpdateBrandSettingsDto();
+      (dto as any).site_name = 123;
+
+      const errors = await validate(dto);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe('site_name');
     });
   });
 });

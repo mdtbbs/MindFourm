@@ -284,6 +284,22 @@ export class SettingsService implements OnModuleInit {
     'feature_shop_enabled',
     'feature_lanlink_enabled',
     'terms_summary',
+    'site_favicon_url',
+    'sidebar_title',
+  ]);
+
+  /**
+   * Brand fields that must always appear in the public payload, even when
+   * absent from the database. Missing values are returned as empty strings so
+   * that frontend consumers can rely on a stable shape.
+   */
+  private static readonly BRAND_FIELDS: ReadonlySet<string> = new Set([
+    'site_name',
+    'site_tagline',
+    'site_description',
+    'site_logo_url',
+    'site_favicon_url',
+    'sidebar_title',
   ]);
 
   /** Never leaves the server in cleartext, not even to an authenticated admin. */
@@ -299,6 +315,8 @@ export class SettingsService implements OnModuleInit {
       'site_tagline',
       'site_description',
       'site_logo_url',
+      'site_favicon_url',
+      'sidebar_title',
       'site_footer',
       'brand_primary',
       'brand_accent',
@@ -407,6 +425,8 @@ export class SettingsService implements OnModuleInit {
       { key: 'site_tagline', value: '', category: 'basic', description: 'Site tagline' },
       { key: 'site_description', value: 'Mindustry community forum', category: 'basic', description: 'Site description' },
       { key: 'site_logo_url', value: '', category: 'basic', description: 'Site logo URL' },
+      { key: 'site_favicon_url', value: '', category: 'basic', description: 'Site favicon URL' },
+      { key: 'sidebar_title', value: '', category: 'basic', description: 'Sidebar title' },
       { key: 'site_footer', value: '', category: 'basic', description: 'Footer text' },
       { key: 'footer_copyright', value: '', category: 'footer', description: 'Footer copyright text' },
       { key: 'footer_icp_number', value: '', category: 'footer', description: 'ICP filing number' },
@@ -550,10 +570,19 @@ export class SettingsService implements OnModuleInit {
   }
 
   /**
-   * Settings safe to serve to unauthenticated callers.
+   * Settings safe to serve to unauthenticated callers. Brand fields are always
+   * present with empty-string defaults so the frontend receives a stable shape
+   * even before the admin has configured them.
    */
   async getPublicSettings(): Promise<Record<string, string>> {
     const result: Record<string, string> = {};
+
+    // Ensure all brand fields are present with empty defaults
+    for (const key of SettingsService.BRAND_FIELDS) {
+      result[key] = '';
+    }
+
+    // Populate with actual values from cache
     for (const key of SettingsService.PUBLIC_KEYS) {
       const setting = this.settingsCache.get(key);
       if (setting) {
