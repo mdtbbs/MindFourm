@@ -10,6 +10,8 @@ import ResourceSidebar from '@/components/forum/resource-sidebar';
 import ResourceListItem from '@/components/forum/resource-list-item';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
+import { resolveBrand } from '@/lib/theme/brand';
+import { generatePageMetadata } from '@/lib/metadata';
 import { Category, Resource, ResourceCategory, Tag } from '@/types';
 
 export const revalidate = 60;
@@ -17,17 +19,15 @@ export const revalidate = 60;
 const RESOURCES_DESCRIPTION = '浏览和下载社区贡献的资源、模组和工具';
 
 export async function generateMetadata(): Promise<Metadata> {
-  return {
+  const settings = await fetchPublicSettings();
+  const brandInfo = resolveBrand(settings);
+
+  return generatePageMetadata({
     title: '资源中心',
     description: RESOURCES_DESCRIPTION,
-    alternates: { canonical: '/resources' },
-    openGraph: {
-      title: '资源中心',
-      description: RESOURCES_DESCRIPTION,
-      type: 'website',
-      url: '/resources',
-    },
-  };
+    path: '/resources',
+    brandInfo,
+  });
 }
 
 async function fetchData(params: { category_id?: string; search?: string; sort?: string }) {
