@@ -547,4 +547,58 @@ describe('SettingsService', () => {
       expect(result).toEqual(getDefaultSidebarNavigation());
     });
   });
+
+  describe('updateSetting', () => {
+    it('updates an existing setting', async () => {
+      const { service, query, rows } = createService([
+        {
+          key: 'sidebar_navigation_items',
+          value: '[]',
+          category: 'navigation',
+          description: 'Sidebar nav',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      await service.updateSetting('sidebar_navigation_items', '[{"id":"home"}]');
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO settings'),
+        ['sidebar_navigation_items', '[{"id":"home"}]', 'navigation', '[{"id":"home"}]', 'navigation'],
+      );
+      expect(rows.find((r) => r.key === 'sidebar_navigation_items')?.value).toBe('[{"id":"home"}]');
+    });
+
+    it('creates a new setting if it does not exist', async () => {
+      const { service, query, rows } = createService([]);
+      await (service as any).loadSettings();
+
+      await service.updateSetting('new_key', 'new_value');
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO settings'),
+        ['new_key', 'new_value', 'general', 'new_value', 'general'],
+      );
+      expect(rows.find((r) => r.key === 'new_key')?.value).toBe('new_value');
+    });
+
+    it('reloads the cache after updating', async () => {
+      const { service } = createService([
+        {
+          key: 'sidebar_navigation_items',
+          value: '[]',
+          category: 'navigation',
+          description: 'Sidebar nav',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      await service.updateSetting('sidebar_navigation_items', '["updated"]');
+
+      const value = await service.get('sidebar_navigation_items');
+      expect(value).toBe('["updated"]');
+    });
+  });
 });

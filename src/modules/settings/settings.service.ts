@@ -703,6 +703,22 @@ export class SettingsService implements OnModuleInit {
   }
 
   /**
+   * Upsert a single setting by key. The category is resolved from the existing
+   * row when present, or defaults to `'general'` for new rows.
+   */
+  async updateSetting(key: string, value: string): Promise<void> {
+    const existing = this.settingsCache.get(key);
+    const category = existing?.category || 'general';
+
+    await this.settingRepository.query(
+      'INSERT INTO settings (`key`, `value`, category, updated_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE `value` = ?, category = ?, updated_at = NOW()',
+      [key, value, category, value, category],
+    );
+
+    await this.loadSettings();
+  }
+
+  /**
    * Batch update settings (upsert)
    */
   async setBatch(category: string, keyValuePairs: Record<string, string>): Promise<void> {
