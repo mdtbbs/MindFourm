@@ -207,7 +207,7 @@ describe('SettingsController', () => {
       expect(revalidationService.revalidatePublicSettings).toHaveBeenCalledTimes(1);
     });
 
-    it('skips revalidation when only non-public keys are updated', async () => {
+    it('skips revalidation when hasPublicKeys returns false', async () => {
       const { controller, settingsService, revalidationService } = createController({
         settingsService: {
           hasPublicKeys: jest.fn().mockReturnValue(false),

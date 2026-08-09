@@ -90,6 +90,9 @@ test.describe('Brand Consistency Across Pages', () => {
       const count = await brandContent.count();
       expect(count).toBeGreaterThan(0);
 
+      // The brand link should display the configured brand name
+      await expect(brandLink).toContainText(expectedName);
+
       // If it's an image, it should have an alt attribute matching the site name
       const logoImg = brandLink.locator('img');
       if (await logoImg.isVisible().catch(() => false)) {
@@ -122,6 +125,7 @@ test.describe('Brand Consistency Across Pages', () => {
         const sidebarText = sidebar.locator('a[href="/"]');
         const text = await sidebarBrand.textContent();
         expect(text).toBeTruthy();
+        expect(text).toContain(expectedName);
       }
     }
   });
