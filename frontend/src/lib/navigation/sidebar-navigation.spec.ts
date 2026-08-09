@@ -1,6 +1,9 @@
 import {
   buildSidebarNavigation,
   parseSidebarNavigationItems,
+  validateSidebarNavigation,
+  DEFAULT_SIDEBAR_NAVIGATION,
+  SIDEBAR_ICON_OPTIONS,
   type SidebarNavigationItem,
 } from './sidebar-navigation';
 
@@ -206,6 +209,101 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
 
   assert(result.length === 4, 'empty array should fall back to defaults');
   assert(result[0].id === 'home', 'defaults should include home');
+})();
+
+// ─── validateSidebarNavigation ──────────────────────────────────────────────
+
+(function testValidateAcceptsValidItems() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'home', label: '首页', href: '/', icon: 'Home', enabled: true, requiresAuth: false },
+    { id: 'tags', label: '标签', href: '/tags', icon: 'Tag', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === true, 'valid items should pass validation');
+  assert(result.errors.length === 0, 'no errors for valid items');
+})();
+
+(function testValidateRejectsEmptyLabel() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'home', label: '', href: '/', icon: 'Home', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === false, 'empty label should fail validation');
+  assert(result.errors.some((e) => e.includes('标签不能为空')), 'error should mention empty label');
+})();
+
+(function testValidateRejectsEmptyHref() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'home', label: '首页', href: '', icon: 'Home', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === false, 'empty href should fail validation');
+  assert(result.errors.some((e) => e.includes('链接不能为空')), 'error should mention empty href');
+})();
+
+(function testValidateRejectsDuplicateIds() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'dup', label: 'A', href: '/a', icon: 'Home', enabled: true, requiresAuth: false },
+    { id: 'dup', label: 'B', href: '/b', icon: 'Tag', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === false, 'duplicate IDs should fail validation');
+  assert(result.errors.some((e) => e.includes('重复 ID')), 'error should mention duplicate ID');
+})();
+
+(function testValidateRejectsInvalidIcon() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'home', label: '首页', href: '/', icon: 'InvalidIcon', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === false, 'invalid icon should fail validation');
+  assert(result.errors.some((e) => e.includes('无效图标')), 'error should mention invalid icon');
+})();
+
+(function testValidateRejectsJavascriptHref() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'xss', label: 'XSS', href: 'javascript:alert(1)', icon: 'Home', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === false, 'javascript: href should fail validation');
+  assert(result.errors.some((e) => e.includes('链接无效')), 'error should mention invalid href');
+})();
+
+(function testValidateAcceptsHttpsHref() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'ext', label: 'External', href: 'https://example.com', icon: 'ExternalLink', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === true, 'https href should pass validation');
+})();
+
+(function testValidateRejectsHttpHref() {
+  const items: SidebarNavigationItem[] = [
+    { id: 'http', label: 'HTTP', href: 'http://example.com', icon: 'ExternalLink', enabled: true, requiresAuth: false },
+  ];
+  const result = validateSidebarNavigation(items);
+  assert(result.valid === false, 'http (non-https) href should fail validation');
+})();
+
+(function testValidateEmptyArrayIsValid() {
+  const result = validateSidebarNavigation([]);
+  assert(result.valid === true, 'empty array should be valid');
+})();
+
+// ─── SIDEBAR_ICON_OPTIONS ───────────────────────────────────────────────────
+
+(function testIconOptionsNotEmpty() {
+  assert(SIDEBAR_ICON_OPTIONS.length > 0, 'icon options should not be empty');
+  assert(SIDEBAR_ICON_OPTIONS.includes('Home'), 'icon options should include "Home"');
+  assert(SIDEBAR_ICON_OPTIONS.includes('ExternalLink'), 'icon options should include "ExternalLink"');
+  assert(SIDEBAR_ICON_OPTIONS.includes('LogOut'), 'icon options should include "LogOut"');
+})();
+
+// ─── DEFAULT_SIDEBAR_NAVIGATION ─────────────────────────────────────────────
+
+(function testDefaultsExported() {
+  assert(DEFAULT_SIDEBAR_NAVIGATION.length === 4, 'defaults should have 4 items');
+  assert(DEFAULT_SIDEBAR_NAVIGATION[0].id === 'home', 'first default should be home');
 })();
 
 assert(true, 'sidebar navigation spec executed');

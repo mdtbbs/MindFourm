@@ -108,6 +108,10 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         items={sidebarItems}
         onClose={() => setMobileMenuOpen(false)}
         siteName={brand.siteName}
+        sidebarTitle={brand.sidebarTitle}
+        logoUrl={settings.site_logo_url || undefined}
+        userName={user?.username || undefined}
+        userMeta={userMeta}
       />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">

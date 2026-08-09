@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Button from '@/components/ui/button';
+import Alert from '@/components/ui/alert';
 import {
   Home, Search, Folder, Tag, Users, MessageSquare, Bell,
   Settings, Shield, Book, FileText, Image, Video, Music,
@@ -11,14 +12,13 @@ import {
   ArrowUp, ArrowDown, Trash2, Plus,
   type LucideIcon,
 } from 'lucide-react';
+import {
+  SIDEBAR_ICON_OPTIONS,
+  validateSidebarNavigation,
+  type SidebarNavigationItem,
+} from '@/lib/navigation/sidebar-navigation';
 
-export const SIDEBAR_ICON_OPTIONS = [
-  'Home', 'Search', 'Folder', 'Tag', 'Users', 'MessageSquare', 'Bell',
-  'Settings', 'Shield', 'Book', 'FileText', 'Image', 'Video', 'Music',
-  'Calendar', 'Map', 'Star', 'Heart', 'TrendingUp', 'ExternalLink',
-  'Link', 'HelpCircle', 'Info', 'Mail', 'ShoppingCart', 'Gift', 'Award',
-  'User', 'LogIn', 'LogOut',
-] as const;
+export type { SidebarNavigationItem };
 
 const ICON_COMPONENTS: Record<string, LucideIcon> = {
   Home, Search, Folder, Tag, Users, MessageSquare, Bell,
@@ -28,15 +28,6 @@ const ICON_COMPONENTS: Record<string, LucideIcon> = {
   User, LogIn, LogOut,
 };
 
-export interface SidebarNavigationItem {
-  id: string;
-  label: string;
-  href: string;
-  icon: string;
-  enabled: boolean;
-  requiresAuth: boolean;
-}
-
 interface NavigationEditorProps {
   initialItems: SidebarNavigationItem[];
   onSave: (items: SidebarNavigationItem[]) => Promise<void>;
@@ -45,6 +36,8 @@ interface NavigationEditorProps {
 export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps) {
   const [items, setItems] = useState<SidebarNavigationItem[]>(initialItems);
   const [saving, setSaving] = useState(false);
+
+  const validation = useMemo(() => validateSidebarNavigation(items), [items]);
 
   function moveUp(index: number) {
     if (index === 0) return;
@@ -93,6 +86,13 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
 
   return (
     <div className="space-y-4">
+      {!validation.valid && (
+        <Alert
+          type="error"
+          message={`请修正以下问题后再保存：${validation.errors.join('；')}`}
+        />
+      )}
+
       {items.length === 0 && (
         <div className="border border-dashed border-surface-200 bg-surface-50 px-4 py-6 text-sm text-surface-500">
           暂无导航项目，点击下方「添加项目」按钮开始配置。
@@ -218,7 +218,7 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
           <Plus className="h-4 w-4 mr-1.5" />
           添加项目
         </Button>
-        <Button data-testid="save-nav-button" onClick={handleSave} disabled={saving}>
+        <Button data-testid="save-nav-button" onClick={handleSave} disabled={saving || !validation.valid}>
           {saving ? '保存中...' : '保存'}
         </Button>
       </div>

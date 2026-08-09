@@ -76,6 +76,128 @@ authTest.describe('Admin Dashboard', () => {
   });
 });
 
+authTest.describe('Admin Sidebar Responsive Behavior', () => {
+  authTest('desktop (>1024px): sidebar 200px, labels visible, toggle hidden', async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize({ width: 1280, height: 800 });
+    await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await authenticatedPage.waitForTimeout(500);
+
+    const sidebar = authenticatedPage.locator('[data-testid="admin-sidebar"]');
+    await authExpect(sidebar).toBeVisible();
+
+    const box = await sidebar.boundingBox();
+    authExpect(box).not.toBeNull();
+    // Sidebar width should match --sidebar-width (200px) within 5px tolerance
+    authExpect(box!.width).toBeGreaterThan(190);
+    authExpect(box!.width).toBeLessThan(210);
+
+    // Nav labels should be visible at desktop
+    const labels = authenticatedPage.locator('[data-testid="admin-sidebar"] .nav-label');
+    const count = await labels.count();
+    authExpect(count).toBeGreaterThan(0);
+    // First label should be visible
+    if (count > 0) {
+      authExpect(await labels.first().isVisible()).toBeTruthy();
+    }
+
+    // Toggle button should be hidden at desktop
+    const toggle = authenticatedPage.locator('.admin-sidebar-toggle');
+    authExpect(await toggle.isVisible()).toBeFalsy();
+
+    // Content margin should match sidebar width
+    const content = authenticatedPage.locator('.admin-content');
+    const contentBox = await content.boundingBox();
+    authExpect(contentBox).not.toBeNull();
+    authExpect(contentBox!.x).toBeGreaterThan(190);
+    authExpect(contentBox!.x).toBeLessThan(215);
+  });
+
+  authTest('tablet (769-1024px): sidebar collapsed to 60px, labels hidden', async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize({ width: 900, height: 800 });
+    await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await authenticatedPage.waitForTimeout(500);
+
+    const sidebar = authenticatedPage.locator('[data-testid="admin-sidebar"]');
+    await authExpect(sidebar).toBeVisible();
+
+    const box = await sidebar.boundingBox();
+    authExpect(box).not.toBeNull();
+    // Sidebar width should match --sidebar-width-collapsed (60px) within 5px tolerance
+    authExpect(box!.width).toBeGreaterThan(55);
+    authExpect(box!.width).toBeLessThan(70);
+
+    // Nav labels should be hidden via CSS (display: none)
+    const labels = authenticatedPage.locator('[data-testid="admin-sidebar"] .nav-label');
+    const count = await labels.count();
+    if (count > 0) {
+      authExpect(await labels.first().isVisible()).toBeFalsy();
+    }
+
+    // Content margin should match collapsed sidebar width
+    const content = authenticatedPage.locator('.admin-content');
+    const contentBox = await content.boundingBox();
+    authExpect(contentBox).not.toBeNull();
+    authExpect(contentBox!.x).toBeGreaterThan(55);
+    authExpect(contentBox!.x).toBeLessThan(75);
+  });
+
+  authTest('mobile (≤768px): sidebar hidden off-screen, toggle visible, drawer opens on click', async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize({ width: 375, height: 800 });
+    await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await authenticatedPage.waitForTimeout(500);
+
+    const sidebar = authenticatedPage.locator('[data-testid="admin-sidebar"]');
+    const toggle = authenticatedPage.locator('.admin-sidebar-toggle');
+
+    // Toggle button should be visible on mobile
+    authExpect(await toggle.isVisible()).toBeTruthy();
+
+    // Sidebar should be off-screen (transform: translateX(-100%))
+    const boxBefore = await sidebar.boundingBox();
+    if (boxBefore) {
+      // Sidebar right edge should be at or before x=0 (off-screen)
+      authExpect(boxBefore.x + boxBefore.width).toBeLessThanOrEqual(5);
+    }
+
+    // Click hamburger to open drawer
+    await toggle.click();
+    await authenticatedPage.waitForTimeout(400); // Wait for CSS transition
+
+    // Sidebar should now be visible on-screen
+    const boxAfter = await sidebar.boundingBox();
+    authExpect(boxAfter).not.toBeNull();
+    authExpect(boxAfter!.x).toBeGreaterThanOrEqual(0);
+    authExpect(boxAfter!.width).toBeGreaterThan(50);
+
+    // Sidebar should have the 'open' class
+    const className = await sidebar.getAttribute('class');
+    authExpect(className).toContain('open');
+
+    // Content should start from left edge (no margin offset)
+    const content = authenticatedPage.locator('.admin-content');
+    const contentBox = await content.boundingBox();
+    authExpect(contentBox).not.toBeNull();
+    authExpect(contentBox!.x).toBeLessThan(10);
+
+    // Click overlay to close drawer
+    const overlay = authenticatedPage.locator('.admin-sidebar-overlay');
+    if (await overlay.isVisible()) {
+      await overlay.click();
+      await authenticatedPage.waitForTimeout(400);
+
+      // Sidebar should be off-screen again
+      const boxClosed = await sidebar.boundingBox();
+      if (boxClosed) {
+        authExpect(boxClosed.x + boxClosed.width).toBeLessThanOrEqual(5);
+      }
+
+      // 'open' class should be removed
+      const classNameAfterClose = await sidebar.getAttribute('class');
+      authExpect(classNameAfterClose).not.toContain('open');
+    }
+  });
+});
+
 authTest.describe('Admin User Management', () => {
   authTest('should display users table', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/users', { waitUntil: 'domcontentloaded', timeout: 60000 });

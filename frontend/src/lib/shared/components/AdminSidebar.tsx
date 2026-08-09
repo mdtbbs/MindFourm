@@ -37,6 +37,8 @@ export interface AdminSidebarProps {
   footerContent?: React.ReactNode;
   /** 菜单项点击回调 */
   onItemClick?: (key: string) => void;
+  /** 额外的 CSS 类名 */
+  className?: string;
 }
 
 export function AdminSidebar({
@@ -49,9 +51,8 @@ export function AdminSidebar({
   logoUrl,
   footerContent,
   onItemClick,
+  className,
 }: AdminSidebarProps) {
-  const width = collapsed ? 60 : 200;
-
   const handleItemClick = (item: SidebarItem) => {
     if (item.onClick) {
       item.onClick();
@@ -62,36 +63,26 @@ export function AdminSidebar({
 
   const renderItem = (item: SidebarItem) => {
     const isActive = item.key === activeKey;
-    const baseStyle: React.CSSProperties = {
-      display: 'flex',
-      alignItems: 'center',
-      gap: collapsed ? 0 : 8,
-      padding: collapsed ? 8 : '8px 12px',
-      fontSize: collapsed ? 18 : 13,
-      borderRadius: 6,
-      marginBottom: 4,
-      cursor: 'pointer',
-      transition: 'all 0.15s ease',
-      justifyContent: collapsed ? 'center' : 'flex-start',
-      background: isActive ? 'var(--bg-elevated)' : 'transparent',
-      color: isActive ? 'var(--text)' : 'var(--text-secondary)',
-      textDecoration: 'none',
-    };
 
     const content = (
       <>
         {item.icon}
-        {!collapsed && <span>{item.label}</span>}
+        {!collapsed && <span className="nav-label">{item.label}</span>}
       </>
     );
+
+    const itemClassName = [
+      'admin-sidebar-item',
+      isActive ? 'active' : '',
+      collapsed ? 'admin-sidebar-item-collapsed' : '',
+    ].filter(Boolean).join(' ');
 
     if (item.href) {
       return (
         <Link
           key={item.key}
           href={item.href}
-          style={baseStyle}
-          className={isActive ? 'admin-sidebar-item active' : 'admin-sidebar-item'}
+          className={itemClassName}
         >
           {content}
         </Link>
@@ -102,68 +93,43 @@ export function AdminSidebar({
       <div
         key={item.key}
         onClick={() => handleItemClick(item)}
-        style={baseStyle}
-        className={isActive ? 'admin-sidebar-item active' : 'admin-sidebar-item'}
+        className={itemClassName}
       >
         {content}
       </div>
     );
   };
 
+  const asideClassName = [
+    'admin-sidebar',
+    collapsed ? 'admin-sidebar-collapsed' : '',
+    className ?? '',
+  ].filter(Boolean).join(' ');
+
   return (
     <aside
-      className="admin-sidebar"
-      style={{
-        width,
-        height: '100vh',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        background: 'var(--bg-card)',
-        borderRight: '1px solid var(--border)',
-        padding: collapsed ? 8 : 16,
-        overflowY: 'auto',
-        transition: 'width 0.2s ease',
-      }}
+      className={asideClassName}
+      data-testid="admin-sidebar"
     >
       {/* Logo / Service Name */}
       <div
-        style={{
-          textAlign: collapsed ? 'center' : 'left',
-          marginBottom: collapsed ? 24 : 16,
-        }}
+        className={collapsed ? 'admin-sidebar-logo-wrapper admin-sidebar-logo-collapsed' : 'admin-sidebar-logo-wrapper'}
       >
         {logoUrl ? (
           <img
             src={logoUrl}
             alt={serviceName}
-            style={{
-              width: collapsed ? 32 : 40,
-              height: collapsed ? 32 : 40,
-              borderRadius: 8,
-              marginBottom: collapsed ? 0 : 8,
-            }}
+            className={collapsed ? 'admin-sidebar-logo-img admin-sidebar-logo-img-sm' : 'admin-sidebar-logo-img'}
           />
         ) : (
           <div
-            style={{
-              fontSize: collapsed ? 16 : 14,
-              fontWeight: 600,
-              color: 'var(--text)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-            }}
+            className={collapsed ? 'admin-sidebar-logo-text admin-sidebar-logo-text-sm' : 'admin-sidebar-logo-text'}
           >
             {collapsed ? serviceName.charAt(0) : serviceName}
           </div>
         )}
         {!collapsed && subtitle && (
-          <div
-            style={{
-              fontSize: 12,
-              color: 'var(--text-muted)',
-            }}
-          >
+          <div className="admin-sidebar-subtitle">
             {subtitle}
           </div>
         )}
@@ -185,13 +151,7 @@ export function AdminSidebar({
 
       {/* Footer */}
       {footerContent && (
-        <div
-          style={{
-            marginTop: 16,
-            borderTop: '1px solid var(--border-light)',
-            paddingTop: 16,
-          }}
-        >
+        <div className="admin-sidebar-footer">
           {footerContent}
         </div>
       )}
