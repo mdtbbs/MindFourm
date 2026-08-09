@@ -6,7 +6,7 @@ import { useSse } from '@/hooks/use-sse';
 import { useAuth } from '@/lib/auth/context';
 import { useSettings } from '@/lib/settings/context';
 import { resolveBrand } from '@/lib/theme/brand';
-import { buildSiteNavigationModel } from '@/lib/navigation/site-navigation';
+import { buildSidebarNavigation } from '@/lib/navigation/sidebar-navigation';
 import { messageApi, friendsApi } from '@/lib/api/client';
 import type { Notification } from '@/types';
 import Footer from '@/components/forum/footer';
@@ -27,13 +27,12 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   const [unreadFriendRequestCount, setUnreadFriendRequestCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const navigation = useMemo(
-    () => buildSiteNavigationModel({
+  const sidebarItems = useMemo(
+    () => buildSidebarNavigation({
       settings,
       isAuthenticated,
-      userRole: user?.role,
     }),
-    [settings, isAuthenticated, user?.role],
+    [settings, isAuthenticated],
   );
 
   useEffect(() => {
@@ -96,24 +95,20 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex">
       <ContentSidebar
-        navigation={navigation}
+        items={sidebarItems}
         currentPathname={pathname ?? '/'}
         siteName={brand.siteName}
         sidebarTitle={brand.sidebarTitle}
         logoUrl={settings.site_logo_url || undefined}
         userName={user?.username || undefined}
         userMeta={userMeta}
-        onLogin={() => { window.location.href = buildAuthUrl('login'); }}
-        onRegister={() => { window.location.href = buildAuthUrl('register'); }}
       />
 
       <ContentDrawer
         open={mobileMenuOpen}
-        navigation={navigation}
+        items={sidebarItems}
         currentPathname={pathname ?? '/'}
         onClose={() => setMobileMenuOpen(false)}
-        onLogin={() => { window.location.href = buildAuthUrl('login'); }}
-        onRegister={() => { window.location.href = buildAuthUrl('register'); }}
         siteName={brand.siteName}
       />
 
