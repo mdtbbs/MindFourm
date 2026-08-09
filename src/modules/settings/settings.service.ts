@@ -311,15 +311,17 @@ export class SettingsService implements OnModuleInit {
   // Admin pages group settings by UI section, not always by the historical DB category.
   private readonly categoryKeyGroups: Record<string, Set<string>> = {
     basic: new Set([
+      'site_footer',
+      'brand_primary',
+      'brand_accent',
+    ]),
+    brand: new Set([
       'site_name',
       'site_tagline',
       'site_description',
       'site_logo_url',
       'site_favicon_url',
       'sidebar_title',
-      'site_footer',
-      'brand_primary',
-      'brand_accent',
     ]),
     display: new Set([
       'posts_per_page',

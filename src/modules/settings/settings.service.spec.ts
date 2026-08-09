@@ -77,17 +77,17 @@ describe('SettingsService', () => {
   it('loads basic settings from legacy rows stored under the general category', async () => {
     const { service } = createService([
       {
-        key: 'site_name',
-        value: 'Legacy Forum',
+        key: 'site_footer',
+        value: 'Footer text',
         category: 'general',
-        description: 'Site name',
+        description: 'Site footer',
         updated_at: new Date(),
       },
       {
-        key: 'site_description',
-        value: 'Legacy description',
+        key: 'brand_primary',
+        value: '#2f80ed',
         category: 'general',
-        description: 'Site description',
+        description: 'Brand primary color',
         updated_at: new Date(),
       },
       {
@@ -102,8 +102,8 @@ describe('SettingsService', () => {
     await (service as any).loadSettings();
 
     await expect(service.getByCategory('basic')).resolves.toEqual({
-      site_name: 'Legacy Forum',
-      site_description: 'Legacy description',
+      site_footer: 'Footer text',
+      brand_primary: '#2f80ed',
     });
   });
 
@@ -139,8 +139,11 @@ describe('SettingsService', () => {
       expect.objectContaining({ key: 'site_name', value: 'Forums', category: 'basic' }),
       expect.objectContaining({ key: 'site_footer', value: 'Footer text', category: 'basic' }),
     ]));
-    await expect(service.getByCategory('basic')).resolves.toEqual({
+    // site_name belongs to the brand logical group; site_footer stays in basic
+    await expect(service.getByCategory('brand')).resolves.toEqual({
       site_name: 'Forums',
+    });
+    await expect(service.getByCategory('basic')).resolves.toEqual({
       site_footer: 'Footer text',
     });
   });

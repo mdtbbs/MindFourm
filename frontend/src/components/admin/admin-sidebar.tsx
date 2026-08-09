@@ -22,6 +22,7 @@ const navSections = [
     title: '站点',
     items: [
       { href: '/admin/settings/basic', label: '基本信息', icon: Settings, roles: ['admin'] },
+      { href: '/admin/settings/brand', label: '品牌设置', icon: Settings, roles: ['admin'] },
       { href: '/admin/settings/announce', label: '公告管理', icon: Megaphone, roles: ['admin'] },
       { href: '/admin/settings/display', label: '显示设置', icon: Palette, roles: ['admin'] },
       { href: '/admin/settings/seo', label: 'SEO 设置', icon: Search, roles: ['admin'] },
