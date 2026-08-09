@@ -423,12 +423,12 @@ export class SettingsService implements OnModuleInit {
    */
   async seedDefaults(): Promise<void> {
     const defaults = [
-      { key: 'site_name', value: 'MindFourm', category: 'basic', description: 'Site name' },
-      { key: 'site_tagline', value: '', category: 'basic', description: 'Site tagline' },
-      { key: 'site_description', value: 'Mindustry community forum', category: 'basic', description: 'Site description' },
-      { key: 'site_logo_url', value: '', category: 'basic', description: 'Site logo URL' },
-      { key: 'site_favicon_url', value: '', category: 'basic', description: 'Site favicon URL' },
-      { key: 'sidebar_title', value: '', category: 'basic', description: 'Sidebar title' },
+      { key: 'site_name', value: 'MindFourm', category: 'brand', description: 'Site name' },
+      { key: 'site_tagline', value: '', category: 'brand', description: 'Site tagline' },
+      { key: 'site_description', value: 'Mindustry community forum', category: 'brand', description: 'Site description' },
+      { key: 'site_logo_url', value: '', category: 'brand', description: 'Site logo URL' },
+      { key: 'site_favicon_url', value: '', category: 'brand', description: 'Site favicon URL' },
+      { key: 'sidebar_title', value: '', category: 'brand', description: 'Sidebar title' },
       { key: 'site_footer', value: '', category: 'basic', description: 'Footer text' },
       { key: 'footer_copyright', value: '', category: 'footer', description: 'Footer copyright text' },
       { key: 'footer_icp_number', value: '', category: 'footer', description: 'ICP filing number' },
