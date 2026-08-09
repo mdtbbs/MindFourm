@@ -152,14 +152,14 @@ export class ResourcesController {
 
   @Get('categories')
   async listCategories() {
-    return this.categoryService.list();
+    return this.categoryService.getPublicCategories();
   }
 
   @Get('categories/admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   async listAdminCategories() {
-    return this.categoryService.list(true);
+    return this.categoryService.getAllCategories();
   }
 
   @Post('categories')

@@ -26,6 +26,37 @@ export class ResourceCategoryService {
     });
   }
 
+  /**
+   * Public categories query: returns only enabled categories, ordered by
+   * sort_order ASC with id ASC as a stable tiebreaker.
+   *
+   * Uses createQueryBuilder so the visibility constraint is expressed as an
+   * explicit SQL clause rather than a TypeORM `where` object — harder to
+   * accidentally broaden, and mirrors the pattern other public-scope queries
+   * use when the filter must be obvious at a glance.
+   */
+  async getPublicCategories(): Promise<ResourceCategory[]> {
+    return this.categoryRepository
+      .createQueryBuilder('category')
+      .where('category.is_active = :isActive', { isActive: 1 })
+      .orderBy('category.sort_order', 'ASC')
+      .addOrderBy('category.id', 'ASC')
+      .getMany();
+  }
+
+  /**
+   * Admin categories query: returns every category (including disabled) for
+   * management UIs. Ordered by sort_order ASC with id ASC tiebreaker.
+   */
+  async getAllCategories(): Promise<ResourceCategory[]> {
+    return this.categoryRepository.find({
+      order: {
+        sort_order: 'ASC',
+        id: 'ASC',
+      },
+    });
+  }
+
   async initializeDefaultCategories(): Promise<void> {
     const defaults: Array<Partial<ResourceCategory>> = [
       { name: '插件', slug: 'plugin', description: 'Mindustry 插件/模组', icon: 'Puzzle', sort_order: 1, is_active: 1 },
