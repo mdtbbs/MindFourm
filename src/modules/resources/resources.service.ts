@@ -136,9 +136,11 @@ export class ResourcesService {
         if (!category || category.is_active !== 1) {
           return false;
         }
-      } catch {
-        // getById throws NotFoundException when the category is missing.
-        return false;
+      } catch (e) {
+        if (e instanceof NotFoundException) {
+          return false;
+        }
+        throw e;
       }
     }
 
@@ -147,16 +149,17 @@ export class ResourcesService {
 
   /**
    * List only resources that pass the public-visibility predicate, using a
-   * single query with an INNER JOIN on the category so inactive categories
-   * are excluded at the database level rather than in application code.
+   * single query with a LEFT JOIN on the category so inactive categories
+   * are excluded at the database level rather than in application code,
+   * while resources without a category are still included.
    */
   async getPublicResources(): Promise<Resource[]> {
     return this.resourceRepository
       .createQueryBuilder('resource')
-      .innerJoin('resource.category', 'category')
+      .leftJoin('resource.category', 'category')
       .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
-      .andWhere('category.is_active = :categoryActive', { categoryActive: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
       .orderBy('resource.created_at', 'DESC')
       .getMany();
   }

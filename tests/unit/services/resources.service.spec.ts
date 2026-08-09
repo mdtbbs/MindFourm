@@ -113,6 +113,7 @@ function createService(overrides: {
   const defaultQb = {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
@@ -268,9 +269,10 @@ describe('ResourcesService - Public Visibility', () => {
     });
 
     it('should return false when category is missing (deleted)', async () => {
+      const { NotFoundException } = require('@nestjs/common');
       const { service } = createService({
         categoryService: {
-          getById: jest.fn().mockRejectedValue(new Error('分类不存在')),
+          getById: jest.fn().mockRejectedValue(new NotFoundException('分类不存在')),
         },
       });
 
@@ -283,6 +285,23 @@ describe('ResourcesService - Public Visibility', () => {
 
       const result = await service.isResourcePubliclyAccessible(resource);
       expect(result).toBe(false);
+    });
+
+    it('should rethrow non-NotFoundException errors from category lookup', async () => {
+      const { service } = createService({
+        categoryService: {
+          getById: jest.fn().mockRejectedValue(new Error('数据库连接失败')),
+        },
+      });
+
+      const resource = {
+        id: 1,
+        status: 'approved',
+        is_public: 1,
+        category_id: 999,
+      };
+
+      await expect(service.isResourcePubliclyAccessible(resource)).rejects.toThrow('数据库连接失败');
     });
 
     it('should return true for resource without a category', async () => {
@@ -309,13 +328,13 @@ describe('ResourcesService - Public Visibility', () => {
       await service.getPublicResources();
 
       expect(resourceRepository.createQueryBuilder).toHaveBeenCalledWith('resource');
-      expect(defaultQb.innerJoin).toHaveBeenCalledWith('resource.category', 'category');
+      expect(defaultQb.leftJoin).toHaveBeenCalledWith('resource.category', 'category');
       expect(defaultQb.andWhere).toHaveBeenCalledWith(
         'resource.is_public = :isPublic',
         { isPublic: 1 },
       );
       expect(defaultQb.andWhere).toHaveBeenCalledWith(
-        'category.is_active = :categoryActive',
+        '(category.id IS NULL OR category.is_active = :categoryActive)',
         { categoryActive: 1 },
       );
     });
