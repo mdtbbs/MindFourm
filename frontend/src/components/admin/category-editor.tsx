@@ -5,12 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { ICON_WHITELIST } from '@/lib/resource-icons';
 import type { ResourceCategory } from '@/types';
-
-const ICON_OPTIONS = [
-  'Wrench', 'Map', 'FileText', 'Image', 'Video', 'Music',
-  'Code', 'Package', 'Box', 'Folder', 'Archive', 'Zap',
-];
 
 // Form-local type: all optional fields defaulted so the form always has values.
 type CategoryForm = Omit<ResourceCategory, 'id' | 'created_at'> & { id?: number };
@@ -72,7 +68,7 @@ export function CategoryEditor({ category, onSave, onCancel }: CategoryEditorPro
           onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
           className="w-full px-3 py-2 border border-surface-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors"
         >
-          {ICON_OPTIONS.map((icon) => (
+          {ICON_WHITELIST.map((icon) => (
             <option key={icon} value={icon}>
               {icon}
             </option>

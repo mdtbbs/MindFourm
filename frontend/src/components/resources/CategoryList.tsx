@@ -6,7 +6,7 @@ import { getIconComponent } from '@/lib/resource-icons';
 interface Category {
   id: number;
   name: string;
-  icon: string;
+  icon: string | null;
   slug: string;
 }
 
@@ -18,12 +18,12 @@ export function CategoryList({ categories }: CategoryListProps) {
   return (
     <ul className="space-y-2">
       {categories.map((category) => {
-        const IconComponent = getIconComponent(category.icon);
+        const IconComponent = getIconComponent(category.icon ?? 'Folder');
 
         return (
           <li key={category.id}>
             <Link
-              href={`/resources?category=${category.slug}`}
+              href={`/resources?category_id=${category.id}`}
               className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-accent transition-colors"
             >
               <IconComponent className="h-5 w-5 shrink-0" aria-hidden="true" />

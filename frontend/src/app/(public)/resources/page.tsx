@@ -4,7 +4,7 @@ import { FileText, AlertCircle } from 'lucide-react';
 import ErrorState from '@/components/ui/error-state';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
 import ResourceLoadMore from '@/components/forum/resource-load-more';
-import ResourceCategoryTree from '@/components/forum/resource-category-tree';
+import { CategoryList } from '@/components/resources/CategoryList';
 import ResourceCarousel from '@/components/forum/resource-carousel';
 import ResourceSidebar from '@/components/forum/resource-sidebar';
 import ResourceListItem from '@/components/forum/resource-list-item';
@@ -144,9 +144,8 @@ export default async function ResourcesPage({
         {/* Left sidebar - Category tree (desktop only) */}
         <aside className="hidden xl:block min-w-0">
           <div className="sticky top-4">
-            <ResourceCategoryTree
+            <CategoryList
               categories={resourceCategories}
-              currentCategoryId={params.category_id}
             />
           </div>
         </aside>
@@ -211,9 +210,8 @@ export default async function ResourcesPage({
 
       {/* Mobile/Tablet: Show categories below main content (hidden on desktop) */}
       <div className="mt-6 space-y-4 xl:hidden">
-        <ResourceCategoryTree
+        <CategoryList
           categories={resourceCategories}
-          currentCategoryId={params.category_id}
         />
       </div>
     </div>

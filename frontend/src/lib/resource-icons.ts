@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 
-const ICON_WHITELIST = [
+export const ICON_WHITELIST = [
   'Wrench', 'Map', 'FileText', 'Image', 'Video', 'Music',
   'Code', 'Package', 'Box', 'Folder', 'Archive', 'Zap',
   'Globe', 'Database', 'Cpu', 'Smartphone', 'Monitor',
