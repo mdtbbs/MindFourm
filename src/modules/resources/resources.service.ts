@@ -17,6 +17,7 @@ import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { MflClientService } from './mfl-client.service';
+import { ResourceCategoryService } from './resource-categories.service';
 import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
 
 export interface ResourceFileMeta {
@@ -56,6 +57,7 @@ export class ResourcesService {
     private adminNotificationsService: AdminNotificationsService,
     private notificationsService: NotificationsService,
     private mflClientService: MflClientService,
+    private categoryService: ResourceCategoryService,
   ) {}
 
   private normalizeResourceType(resourceType: string): string {
@@ -102,6 +104,78 @@ export class ResourcesService {
       category_icon: resource.category?.icon || null,
       versions: versions?.map((version) => this.normalizeVersion(version)),
     };
+  }
+
+  /**
+   * Unified public-visibility predicate for resources.
+   *
+   * A resource is publicly accessible when ALL of the following hold:
+   *   1. Its status is in PUBLIC_RESOURCE_STATUSES (approved / published).
+   *   2. It is marked public (is_public = 1).
+   *   3. Its category exists and is active — or it has no category at all.
+   *
+   * Centralising the check here keeps `assertResourceVisible`, list queries,
+   * and single-resource reads consistent: a disabled category hides every
+   * resource beneath it, not just some.
+   */
+  async isResourcePubliclyAccessible(resource: {
+    status?: string;
+    is_public?: number;
+    category_id?: number | null;
+  }): Promise<boolean> {
+    const isApproved = (PUBLIC_RESOURCE_STATUSES as readonly string[]).includes(
+      resource.status ?? '',
+    );
+    if (!isApproved || resource.is_public !== 1) {
+      return false;
+    }
+
+    if (resource.category_id) {
+      try {
+        const category = await this.categoryService.getById(resource.category_id);
+        if (!category || category.is_active !== 1) {
+          return false;
+        }
+      } catch {
+        // getById throws NotFoundException when the category is missing.
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * List only resources that pass the public-visibility predicate, using a
+   * single query with an INNER JOIN on the category so inactive categories
+   * are excluded at the database level rather than in application code.
+   */
+  async getPublicResources(): Promise<Resource[]> {
+    return this.resourceRepository
+      .createQueryBuilder('resource')
+      .innerJoin('resource.category', 'category')
+      .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('category.is_active = :categoryActive', { categoryActive: 1 })
+      .orderBy('resource.created_at', 'DESC')
+      .getMany();
+  }
+
+  /**
+   * Fetch a single resource by ID, returning null when it exists but is not
+   * publicly accessible (rather than throwing). Composes `getById` with the
+   * visibility predicate.
+   */
+  async getPublicResourceById(id: number): Promise<any | null> {
+    const resource = await this.resourceRepository.findOne({
+      where: { id },
+      relations: ['user', 'category'],
+    });
+
+    if (!resource) return null;
+
+    const isAccessible = await this.isResourcePubliclyAccessible(resource);
+    return isAccessible ? this.normalizeResource(resource) : null;
   }
 
   async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta, mflMeta?: MflFileMeta): Promise<any> {
@@ -327,21 +401,22 @@ export class ResourcesService {
    * id returned pending and rejected resources — and, via the download route,
    * served their files — which defeated the moderation queue entirely and turned
    * `external_url` into an open redirect that needed no approval.
+   *
+   * Delegates to `isResourcePubliclyAccessible` for the public path so the
+   * category-active check is applied uniformly.
    */
-  private assertResourceVisible(
-    resource: { status?: string; is_public?: number; user_id?: number },
+  private async assertResourceVisible(
+    resource: { status?: string; is_public?: number; user_id?: number; category_id?: number | null },
     viewer?: { id: number; role: string },
-  ): void {
+  ): Promise<void> {
     const isStaff = !!viewer && ['admin', 'moderator'].includes(viewer.role);
     const isOwner = !!viewer && resource.user_id === viewer.id;
     if (isStaff || isOwner) {
       return;
     }
 
-    const isApproved = (PUBLIC_RESOURCE_STATUSES as readonly string[]).includes(
-      resource.status ?? '',
-    );
-    if (!isApproved || resource.is_public !== 1) {
+    const accessible = await this.isResourcePubliclyAccessible(resource);
+    if (!accessible) {
       // 404 rather than 403 so unapproved submissions are not enumerable.
       throw new NotFoundException('资源不存在');
     }
@@ -357,7 +432,7 @@ export class ResourcesService {
       throw new NotFoundException('资源不存在');
     }
 
-    this.assertResourceVisible(resource, viewer);
+    await this.assertResourceVisible(resource, viewer);
 
     return this.normalizeResource(resource);
   }
@@ -372,7 +447,7 @@ export class ResourcesService {
       throw new NotFoundException('资源不存在');
     }
 
-    this.assertResourceVisible(resource, viewer);
+    await this.assertResourceVisible(resource, viewer);
 
     const versions = await this.versionRepository.find({
       where: { resource_id: id },
