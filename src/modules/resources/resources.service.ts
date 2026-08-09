@@ -156,6 +156,7 @@ export class ResourcesService {
   async getPublicResources(): Promise<Resource[]> {
     return this.resourceRepository
       .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.user', 'user')
       .leftJoin('resource.category', 'category')
       .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
@@ -335,6 +336,7 @@ export class ResourcesService {
       // resources without any category are still included.
       const qb = this.resourceRepository
         .createQueryBuilder('resource')
+        .leftJoinAndSelect('resource.user', 'user')
         .leftJoin('resource.category', 'category')
         .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
         .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
@@ -590,6 +592,7 @@ export class ResourcesService {
   ): Promise<any> {
     const qb = this.resourceRepository
       .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.user', 'user')
       .leftJoin('resource.category', 'category')
       .where('resource.user_id = :userId', { userId })
       .andWhere('resource.status = :status', { status: 'approved' })
@@ -1006,6 +1009,7 @@ export class ResourcesService {
   async getHotResources(limit: number = 10): Promise<any[]> {
     const resources = await this.resourceRepository
       .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.user', 'user')
       .leftJoin('resource.category', 'category')
       .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })

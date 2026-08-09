@@ -45,6 +45,7 @@ function createService(overrides: {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
