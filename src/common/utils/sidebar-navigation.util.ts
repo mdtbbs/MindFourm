@@ -78,17 +78,12 @@ export function validateSidebarNavigation(
       );
     }
 
-    // Check href security
-    if (item.href.startsWith('javascript:')) {
+    // Whitelist: only allow relative paths (starting with /) or https:// URLs
+    const isRelative = item.href.startsWith('/');
+    const isHttps = item.href.startsWith('https://');
+    if (!isRelative && !isHttps) {
       errors.push(
-        `Invalid href "${item.href}" for item "${item.id}": javascript: URLs not allowed`,
-      );
-    }
-
-    // Allow relative paths and whitelisted https:
-    if (item.href.startsWith('http:')) {
-      errors.push(
-        `Invalid href "${item.href}" for item "${item.id}": only https: external URLs allowed`,
+        `Invalid href "${item.href}" for item "${item.id}": must start with / (relative path) or https:// (external URL)`,
       );
     }
   });

@@ -116,6 +116,23 @@ describe('Sidebar Navigation Validation', () => {
       expect(result.errors.some((e) => e.includes('Invalid href'))).toBe(true);
     });
 
+    it('should reject data: URIs', () => {
+      const items: SidebarNavigationItem[] = [
+        {
+          id: 'home',
+          label: '首页',
+          href: 'data:text/html,<script>alert(1)</script>',
+          icon: 'Home',
+          enabled: true,
+          requiresAuth: false,
+        },
+      ];
+
+      const result = validateSidebarNavigation(items);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes('Invalid href'))).toBe(true);
+    });
+
     it('should accept relative paths', () => {
       const items: SidebarNavigationItem[] = [
         {
