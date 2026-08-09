@@ -46,7 +46,7 @@ export default function ContentDrawer({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] lg:hidden">
+    <div data-testid="mobile-drawer" className="fixed inset-0 z-[60] lg:hidden">
       <button
         type="button"
         aria-label="关闭导航菜单"
@@ -68,6 +68,7 @@ export default function ContentDrawer({
           </button>
         </div>
         <nav
+          data-testid="mobile-drawer-nav"
           onClick={(event) => {
             const target = event.target as HTMLElement | null;
             if (target?.closest('a')) onClose();
@@ -84,6 +85,7 @@ export default function ContentDrawer({
               <Link
                 key={item.id}
                 href={item.href}
+                data-testid={`drawer-nav-item-${item.id}`}
                 target={external ? '_blank' : undefined}
                 rel={external ? 'noreferrer noopener' : undefined}
                 prefetch={!external ? undefined : false}

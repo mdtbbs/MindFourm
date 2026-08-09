@@ -316,6 +316,7 @@ export function UnifiedHeader({
               <motion.button
                 variants={itemVariants}
                 onClick={onMobileMenuClick}
+                data-testid="mobile-menu-button"
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.95 }}
                 className="rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] lg:hidden"

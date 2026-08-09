@@ -104,6 +104,7 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
         return (
           <div
             key={item.id}
+            data-testid={`nav-item-${index}`}
             className={`border bg-white p-4 ${
               item.enabled ? 'border-surface-200' : 'border-surface-200 opacity-60'
             }`}
@@ -115,6 +116,7 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
                 </label>
                 <input
                   type="text"
+                  data-testid={`nav-item-label-${index}`}
                   className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400"
                   value={item.label}
                   onChange={(e) => updateItem(index, { label: e.target.value })}
@@ -128,6 +130,7 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
                 </label>
                 <input
                   type="text"
+                  data-testid={`nav-item-href-${index}`}
                   className="w-full px-3 py-2 border border-surface-200 rounded text-sm font-mono focus:outline-none focus:border-surface-400"
                   value={item.href}
                   onChange={(e) => updateItem(index, { href: e.target.value })}
@@ -211,11 +214,11 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
       })}
 
       <div className="flex justify-between pt-2">
-        <Button onClick={addItem} variant="outline">
+        <Button data-testid="add-nav-item-button" onClick={addItem} variant="outline">
           <Plus className="h-4 w-4 mr-1.5" />
           添加项目
         </Button>
-        <Button onClick={handleSave} disabled={saving}>
+        <Button data-testid="save-nav-button" onClick={handleSave} disabled={saving}>
           {saving ? '保存中...' : '保存'}
         </Button>
       </div>

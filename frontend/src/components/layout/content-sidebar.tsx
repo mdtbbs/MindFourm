@@ -39,7 +39,7 @@ export default function ContentSidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-72 shrink-0 border-r border-[var(--border)] bg-[var(--bg-card)] lg:flex lg:min-h-screen lg:flex-col lg:sticky lg:top-0">
+    <aside data-testid="content-sidebar" className="hidden w-72 shrink-0 border-r border-[var(--border)] bg-[var(--bg-card)] lg:flex lg:min-h-screen lg:flex-col lg:sticky lg:top-0">
       <div className="border-b border-[var(--border)] p-4">
         <Link href="/" className="flex items-center gap-3">
           {logoUrl ? (
@@ -56,7 +56,7 @@ export default function ContentSidebar({
         </Link>
       </div>
 
-      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
+      <nav data-testid="sidebar-nav" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
         {items.map((item) => {
           const IconComponent = resolveIcon(item.icon);
           const active = isActivePath(pathname, item.href);
@@ -67,6 +67,7 @@ export default function ContentSidebar({
             <Link
               key={item.id}
               href={item.href}
+              data-testid={`sidebar-nav-item-${item.id}`}
               target={external ? '_blank' : undefined}
               rel={external ? 'noreferrer noopener' : undefined}
               prefetch={!external ? undefined : false}
