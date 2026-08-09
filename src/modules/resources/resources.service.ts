@@ -329,16 +329,78 @@ export class ResourcesService {
     const scope = options.scope ?? 'public';
     const sort = validateResourceSort(query.sort);
 
+    if (scope === 'public') {
+      // Use createQueryBuilder with LEFT JOIN on category so resources whose
+      // category has been disabled are excluded at the database level, while
+      // resources without any category are still included.
+      const qb = this.resourceRepository
+        .createQueryBuilder('resource')
+        .leftJoin('resource.category', 'category')
+        .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+        .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+        .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
+
+      if (category_id) {
+        qb.andWhere('resource.category_id = :categoryId', { categoryId: category_id });
+      }
+
+      if (search) {
+        qb.andWhere('resource.title LIKE :search', { search: `%${escapeLike(search)}%` });
+      }
+
+      // Cursor-based pagination
+      if (cursor) {
+        try {
+          const decoded = decodeCursor(cursor);
+          const cursorValue =
+            sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
+          const idValue = parseInt(decoded[1]);
+
+          qb.andWhere(
+            `(resource.${sort} < :cursorValue OR (resource.${sort} = :cursorValue AND resource.id < :idValue))`,
+            { cursorValue, idValue },
+          );
+        } catch {
+          // Ignore invalid cursors.
+        }
+      }
+
+      qb.orderBy(`resource.${sort}`, 'DESC')
+        .addOrderBy('resource.id', 'DESC')
+        .take(Number(limit) + 1);
+
+      const resources = await qb.getMany();
+
+      const hasMore = resources.length > Number(limit);
+      if (hasMore) {
+        resources.pop();
+      }
+
+      let nextCursor: string | null = null;
+      if (hasMore && resources.length > 0) {
+        const lastResource = resources[resources.length - 1];
+        const cursorValue =
+          sort === 'created_at'
+            ? lastResource.created_at.getTime().toString()
+            : lastResource[sort].toString();
+        nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
+      }
+
+      return {
+        data: resources.map((resource) => this.normalizeResource(resource)),
+        next_cursor: nextCursor,
+        has_more: hasMore,
+      };
+    }
+
+    // Admin scope — use find() without category-active filter
     const where: any = {};
 
     if (category_id) {
       where.category_id = category_id;
     }
 
-    if (scope === 'public') {
-      where.status = In(PUBLIC_RESOURCE_STATUSES);
-      where.is_public = 1;
-    } else if (status) {
+    if (status) {
       where.status = status;
     }
 
@@ -526,39 +588,34 @@ export class ResourcesService {
     limit: number = 20,
     cursor?: string,
   ): Promise<any> {
-    const where: any = {
-      user_id: userId,
-      status: 'approved',
-      is_public: 1,
-    };
+    const qb = this.resourceRepository
+      .createQueryBuilder('resource')
+      .leftJoin('resource.category', 'category')
+      .where('resource.user_id = :userId', { userId })
+      .andWhere('resource.status = :status', { status: 'approved' })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
 
-    let cursorCondition: any = {};
     if (cursor) {
       try {
         const decoded = decodeCursor(cursor);
         const cursorValue = new Date(parseInt(decoded[0]));
         const idValue = parseInt(decoded[1]);
 
-        cursorCondition = [
-          { created_at: LessThan(cursorValue) },
-          { created_at: cursorValue, id: LessThan(idValue) },
-        ];
+        qb.andWhere(
+          `(resource.created_at < :cursorValue OR (resource.created_at = :cursorValue AND resource.id < :idValue))`,
+          { cursorValue, idValue },
+        );
       } catch {
         // Ignore invalid cursors.
       }
     }
 
-    const resources = await this.resourceRepository.find({
-      where: cursorCondition.length > 0
-        ? [{ ...where, ...cursorCondition[0] }, { ...where, ...cursorCondition[1] }]
-        : where,
-      relations: ['user', 'category'],
-      order: {
-        created_at: 'DESC',
-        id: 'DESC',
-      },
-      take: Number(limit) + 1,
-    });
+    qb.orderBy('resource.created_at', 'DESC')
+      .addOrderBy('resource.id', 'DESC')
+      .take(Number(limit) + 1);
+
+    const resources = await qb.getMany();
 
     const hasMore = resources.length > Number(limit);
     if (hasMore) {
@@ -947,17 +1004,15 @@ export class ResourcesService {
   }
 
   async getHotResources(limit: number = 10): Promise<any[]> {
-    const resources = await this.resourceRepository.find({
-      where: {
-        status: In(PUBLIC_RESOURCE_STATUSES),
-        is_public: 1,
-      },
-      relations: ['user', 'category'],
-      order: {
-        download_count: 'DESC',
-      },
-      take: limit,
-    });
+    const resources = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .leftJoin('resource.category', 'category')
+      .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
+      .orderBy('resource.download_count', 'DESC')
+      .take(limit)
+      .getMany();
 
     return resources.map((resource) => this.normalizeResource(resource));
   }

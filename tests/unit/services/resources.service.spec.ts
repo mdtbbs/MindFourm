@@ -75,6 +75,13 @@ jest.mock('@common/utils/safe-url.util', () => ({
   isSafeExternalUrl: jest.fn(() => true),
 }));
 
+jest.mock('@modules/resources/resource-rating.util', () => ({
+  validateResourceSort: jest.fn((v?: string) => v || 'created_at'),
+  isValidRating: jest.fn(() => true),
+  ratingAggregateDelta: jest.fn(() => ({ countDelta: 0, sumDelta: 0 })),
+  RESOURCE_SORT_ALLOWLIST: ['created_at', 'updated_at', 'download_count', 'rating_average', 'rating_count'],
+}));
+
 jest.mock('@modules/admin-notifications/admin-notifications.service', () => ({
   AdminNotificationsService: class AdminNotificationsService {
     publishModerationPending = jest.fn();
@@ -116,6 +123,8 @@ function createService(overrides: {
     leftJoin: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
   };
 
@@ -432,6 +441,162 @@ describe('ResourcesService - Public Visibility', () => {
 
       const result = await service.getPublicResourceById(1);
       expect(result).toBeNull();
+    });
+  });
+
+  describe('getList – public scope filters disabled categories', () => {
+    const baseQuery = { limit: 20 } as any;
+
+    it('uses createQueryBuilder with LEFT JOIN and category filter for public scope', async () => {
+      const { service, resourceRepository, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue([]);
+
+      await service.getList(baseQuery, { scope: 'public' });
+
+      expect(resourceRepository.createQueryBuilder).toHaveBeenCalledWith('resource');
+      expect(defaultQb.leftJoin).toHaveBeenCalledWith('resource.category', 'category');
+      expect(defaultQb.where).toHaveBeenCalledWith(
+        'resource.status IN (:...statuses)',
+        { statuses: ['approved', 'published'] },
+      );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        'resource.is_public = :isPublic',
+        { isPublic: 1 },
+      );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        '(category.id IS NULL OR category.is_active = :categoryActive)',
+        { categoryActive: 1 },
+      );
+    });
+
+    it('does NOT call createQueryBuilder for admin scope (uses find instead)', async () => {
+      const { service, resourceRepository, defaultQb } = createService();
+
+      await service.getList(baseQuery, { scope: 'admin' });
+
+      expect(resourceRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(resourceRepository.find).toHaveBeenCalled();
+      // The category-active filter should NOT appear for admin scope
+      expect(defaultQb.andWhere).not.toHaveBeenCalledWith(
+        '(category.id IS NULL OR category.is_active = :categoryActive)',
+        expect.anything(),
+      );
+    });
+
+    it('includes category_id filter in the query builder when provided', async () => {
+      const { service, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue([]);
+
+      await service.getList({ ...baseQuery, category_id: 5 } as any, { scope: 'public' });
+
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        'resource.category_id = :categoryId',
+        { categoryId: 5 },
+      );
+    });
+
+    it('includes search filter in the query builder when provided', async () => {
+      const { service, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue([]);
+
+      await service.getList({ ...baseQuery, search: 'plugin' } as any, { scope: 'public' });
+
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        'resource.title LIKE :search',
+        { search: '%plugin%' },
+      );
+    });
+
+    it('returns normalized resources from query builder results', async () => {
+      const fakeResources = [
+        {
+          id: 1, title: 'Test', status: 'approved', is_public: 1,
+          category: { id: 1, name: '插件', icon: 'X', is_active: 1 },
+          user: { username: 'u', avatar_url: null },
+          created_at: new Date('2026-01-01'),
+        },
+      ];
+      const { service, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue(fakeResources);
+
+      const result = await service.getList(baseQuery, { scope: 'public' });
+
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].id).toBe(1);
+      expect(result.has_more).toBe(false);
+      expect(result.next_cursor).toBeNull();
+    });
+  });
+
+  describe('getPublicByUserId – filters disabled categories', () => {
+    it('uses createQueryBuilder with LEFT JOIN and category filter', async () => {
+      const { service, resourceRepository, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue([]);
+
+      await service.getPublicByUserId(42);
+
+      expect(resourceRepository.createQueryBuilder).toHaveBeenCalledWith('resource');
+      expect(defaultQb.leftJoin).toHaveBeenCalledWith('resource.category', 'category');
+      expect(defaultQb.where).toHaveBeenCalledWith(
+        'resource.user_id = :userId',
+        { userId: 42 },
+      );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        'resource.status = :status',
+        { status: 'approved' },
+      );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        'resource.is_public = :isPublic',
+        { isPublic: 1 },
+      );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        '(category.id IS NULL OR category.is_active = :categoryActive)',
+        { categoryActive: 1 },
+      );
+    });
+
+    it('orders by created_at DESC and applies cursor pagination', async () => {
+      const { service, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue([]);
+
+      await service.getPublicByUserId(42);
+
+      expect(defaultQb.orderBy).toHaveBeenCalledWith('resource.created_at', 'DESC');
+      expect(defaultQb.addOrderBy).toHaveBeenCalledWith('resource.id', 'DESC');
+    });
+  });
+
+  describe('getHotResources – filters disabled categories', () => {
+    it('uses createQueryBuilder with LEFT JOIN and category filter', async () => {
+      const { service, resourceRepository, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue([]);
+
+      await service.getHotResources();
+
+      expect(resourceRepository.createQueryBuilder).toHaveBeenCalledWith('resource');
+      expect(defaultQb.leftJoin).toHaveBeenCalledWith('resource.category', 'category');
+      expect(defaultQb.where).toHaveBeenCalledWith(
+        'resource.status IN (:...statuses)',
+        { statuses: ['approved', 'published'] },
+      );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        'resource.is_public = :isPublic',
+        { isPublic: 1 },
+      );
+      expect(defaultQb.andWhere).toHaveBeenCalledWith(
+        '(category.id IS NULL OR category.is_active = :categoryActive)',
+        { categoryActive: 1 },
+      );
+    });
+
+    it('orders by download_count DESC and limits results', async () => {
+      const { service, defaultQb } = createService();
+      defaultQb.getMany.mockResolvedValue([]);
+
+      await service.getHotResources(5);
+
+      expect(defaultQb.orderBy).toHaveBeenCalledWith('resource.download_count', 'DESC');
+      expect(defaultQb.take).toHaveBeenCalledWith(5);
     });
   });
 });

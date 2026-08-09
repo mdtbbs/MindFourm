@@ -8,9 +8,12 @@
  *   4. Accessing a single resource in a disabled category returns 404.
  *   5. Download of a resource in a disabled category is denied.
  *
- * Because this project has no supertest dependency, the controller methods
- * are exercised directly with mocked services — the same pattern the
- * existing unit tests use.
+ * Controller-level tests below mock ResourcesService to isolate controller
+ * routing. The actual query-level filtering (LEFT JOIN + category.is_active
+ * predicate in getList / getPublicByUserId / getHotResources) is exercised
+ * by the service-level tests in:
+ *   tests/unit/services/resources.service.spec.ts
+ * ("getList – public scope filters disabled categories" etc.)
  */
 
 import 'reflect-metadata';
