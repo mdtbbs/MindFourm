@@ -5,7 +5,8 @@ const ICON_WHITELIST = [
   'Wrench', 'Map', 'FileText', 'Image', 'Video', 'Music',
   'Code', 'Package', 'Box', 'Folder', 'Archive', 'Zap',
   'Globe', 'Database', 'Cpu', 'Smartphone', 'Monitor',
-  'Gamepad', 'Book', 'GraduationCap', 'Palette', 'Music2',
+  'Gamepad', 'Book', 'BookOpen', 'GraduationCap', 'Palette', 'Music2',
+  'Puzzle', 'Server',
 ];
 
 export function getIconComponent(iconName: string): LucideIcon {
