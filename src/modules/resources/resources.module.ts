@@ -12,6 +12,7 @@ import { ResourceRating } from '@entities/resource-rating.entity';
 import { User } from '@entities/user.entity';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { RevalidationService } from '@common/services/revalidation.service';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     NotificationsModule,
     TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User]),
   ],
-  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService],
+  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService, RevalidationService],
   controllers: [ResourcesController],
   exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService],
 })

@@ -28,10 +28,20 @@ jest.mock('@entities/resource-category.entity', () => ({
   ResourceCategory: class ResourceCategory {},
 }));
 
+jest.mock('@database/redis.service', () => ({
+  RedisService: class RedisService {},
+}));
+
+jest.mock('@common/services/revalidation.service', () => ({
+  RevalidationService: class RevalidationService {},
+}));
+
 import { ResourceCategoryService } from '@modules/resources/resource-categories.service';
 
 function createService(overrides: {
   categoryRepository?: Record<string, jest.Mock>;
+  redisService?: Record<string, jest.Mock>;
+  revalidationService?: Record<string, jest.Mock>;
 } = {}) {
   const categoryRepository = {
     find: jest.fn().mockResolvedValue([]),
@@ -55,7 +65,27 @@ function createService(overrides: {
 
   const dataSource = {};
 
-  return new ResourceCategoryService(categoryRepository as any, dataSource as any);
+  const redisService = {
+    keys: jest.fn().mockResolvedValue([]),
+    del: jest.fn().mockResolvedValue(1),
+    ...overrides.redisService,
+  };
+
+  const revalidationService = {
+    triggerRevalidation: jest.fn().mockResolvedValue(undefined),
+    ...overrides.revalidationService,
+  };
+
+  return {
+    service: new ResourceCategoryService(
+      categoryRepository as any,
+      dataSource as any,
+      redisService as any,
+      revalidationService as any,
+    ),
+    redisService,
+    revalidationService,
+  };
 }
 
 describe('ResourceCategoryService - Public Visibility', () => {
@@ -74,7 +104,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
         getMany: jest.fn().mockResolvedValue([mockCategories[0], mockCategories[2]]),
       };
 
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           createQueryBuilder: jest.fn().mockReturnValue(qb),
         },
@@ -95,7 +125,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
         getMany: jest.fn().mockResolvedValue([]),
       };
 
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           createQueryBuilder: jest.fn().mockReturnValue(qb),
         },
@@ -115,7 +145,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
         { id: 2, name: 'Disabled', is_active: 0 },
       ];
 
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           find: jest.fn().mockResolvedValue(mockCategories),
         },
@@ -134,7 +164,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
       ];
 
       const findMock = jest.fn().mockResolvedValue(mockCategories);
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           find: findMock,
         },
@@ -154,7 +184,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
   describe('list', () => {
     it('should order by sort_order ASC, then by id ASC (stable sort)', async () => {
       const findMock = jest.fn().mockResolvedValue([]);
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           find: findMock,
         },
@@ -175,7 +205,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
       const createMock = jest.fn().mockImplementation((v: unknown) => v);
       const saveMock = jest.fn().mockImplementation(async (v: unknown) => v);
 
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           findOne: jest.fn().mockResolvedValue(null),
           createQueryBuilder: jest.fn().mockReturnValue({
@@ -201,7 +231,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
       const saveMock = jest.fn().mockImplementation(async (v: unknown) => v);
       const createQbMock = jest.fn();
 
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           findOne: jest.fn().mockResolvedValue(null),
           createQueryBuilder: createQbMock,
@@ -224,7 +254,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
       const createMock = jest.fn().mockImplementation((v: unknown) => v);
       const saveMock = jest.fn().mockImplementation(async (v: unknown) => v);
 
-      const service = createService({
+      const { service } = createService({
         categoryRepository: {
           findOne: jest.fn().mockResolvedValue(null),
           createQueryBuilder: jest.fn().mockReturnValue({
@@ -240,5 +270,110 @@ describe('ResourceCategoryService - Public Visibility', () => {
 
       expect(result.sort_order).toBe(1);
     });
+  });
+});
+
+describe('ResourceCategoryService - Cache Invalidation', () => {
+  it('should clear category cache on create', async () => {
+    const redisService = {
+      keys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
+      del: jest.fn().mockResolvedValue(1),
+    };
+    const revalidationService = {
+      triggerRevalidation: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const { service } = createService({
+      categoryRepository: {
+        findOne: jest.fn().mockResolvedValue(null),
+        createQueryBuilder: jest.fn().mockReturnValue({
+          select: jest.fn().mockReturnThis(),
+          getRawOne: jest.fn().mockResolvedValue({ max: 1 }),
+        }),
+      },
+      redisService,
+      revalidationService,
+    });
+
+    await service.create({ name: 'New', slug: 'new', is_active: 1 });
+
+    expect(redisService.keys).toHaveBeenCalledWith('cache:resources:categories:*');
+    expect(redisService.del).toHaveBeenCalledWith('cache:resources:categories:public');
+    expect(revalidationService.triggerRevalidation).toHaveBeenCalledWith('/resources');
+  });
+
+  it('should clear category cache on update', async () => {
+    const redisService = {
+      keys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
+      del: jest.fn().mockResolvedValue(1),
+    };
+    const revalidationService = {
+      triggerRevalidation: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const { service } = createService({
+      categoryRepository: {
+        findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Old', slug: 'old' }),
+        update: jest.fn(),
+      },
+      redisService,
+      revalidationService,
+    });
+
+    await service.update(1, { name: 'Updated' });
+
+    expect(redisService.keys).toHaveBeenCalledWith('cache:resources:categories:*');
+    expect(redisService.del).toHaveBeenCalledWith('cache:resources:categories:public');
+    expect(revalidationService.triggerRevalidation).toHaveBeenCalledWith('/resources');
+  });
+
+  it('should clear category cache on delete', async () => {
+    const redisService = {
+      keys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
+      del: jest.fn().mockResolvedValue(1),
+    };
+    const revalidationService = {
+      triggerRevalidation: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const { service } = createService({
+      categoryRepository: {
+        findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Old', slug: 'old' }),
+        delete: jest.fn(),
+        manager: { count: jest.fn().mockResolvedValue(0) },
+      },
+      redisService,
+      revalidationService,
+    });
+
+    await service.delete(1);
+
+    expect(redisService.keys).toHaveBeenCalledWith('cache:resources:categories:*');
+    expect(redisService.del).toHaveBeenCalledWith('cache:resources:categories:public');
+    expect(revalidationService.triggerRevalidation).toHaveBeenCalledWith('/resources');
+  });
+
+  it('should not throw when Redis keys lookup fails during invalidation', async () => {
+    const redisService = {
+      keys: jest.fn().mockRejectedValue(new Error('Redis down')),
+      del: jest.fn(),
+    };
+    const revalidationService = {
+      triggerRevalidation: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const { service } = createService({
+      categoryRepository: {
+        findOne: jest.fn().mockResolvedValue({ id: 1, name: 'Old', slug: 'old' }),
+        delete: jest.fn(),
+        manager: { count: jest.fn().mockResolvedValue(0) },
+      },
+      redisService,
+      revalidationService,
+    });
+
+    // Should not throw — invalidation errors are swallowed so the mutation
+    // itself still succeeds.
+    await expect(service.delete(1)).resolves.toBeUndefined();
   });
 });

@@ -2,6 +2,8 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { ResourceCategory } from '@entities/resource-category.entity';
+import { RedisService } from '@database/redis.service';
+import { RevalidationService } from '@common/services/revalidation.service';
 
 @Injectable()
 export class ResourceCategoryService {
@@ -9,7 +11,40 @@ export class ResourceCategoryService {
     @InjectRepository(ResourceCategory)
     private categoryRepository: Repository<ResourceCategory>,
     private dataSource: DataSource,
+    private readonly redisService: RedisService,
+    private readonly revalidationService: RevalidationService,
   ) {}
+
+  /**
+   * Clear both the Redis category cache and the Next.js ISR cache for
+   * resource pages. Called after every create/update/delete so public views
+   * never serve stale category data.
+   *
+   * Errors here are swallowed — the underlying mutation has already
+   * succeeded, and a stale cache is strictly preferable to a failed write.
+   */
+  private async invalidateCategoryCache(): Promise<void> {
+    try {
+      const keys = await this.redisService.keys('cache:resources:categories:*');
+      if (keys.length > 0) {
+        await Promise.all(keys.map((key) => this.redisService.del(key)));
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[ResourceCategoryService] Failed to clear Redis category cache: ${(error as Error).message}`,
+      );
+    }
+
+    try {
+      await this.revalidationService.triggerRevalidation('/resources');
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[ResourceCategoryService] Failed to trigger Next.js revalidation: ${(error as Error).message}`,
+      );
+    }
+  }
 
   /**
    * List all categories
@@ -117,7 +152,10 @@ export class ResourceCategoryService {
     }
 
     const category = this.categoryRepository.create(dto);
-    return this.categoryRepository.save(category);
+    const saved = await this.categoryRepository.save(category);
+
+    await this.invalidateCategoryCache();
+    return saved;
   }
 
   /**
@@ -138,7 +176,10 @@ export class ResourceCategoryService {
     }
 
     await this.categoryRepository.update(id, dto);
-    return this.categoryRepository.findOne({ where: { id } });
+    const updated = await this.categoryRepository.findOne({ where: { id } });
+
+    await this.invalidateCategoryCache();
+    return updated;
   }
 
   /**
@@ -163,5 +204,6 @@ export class ResourceCategoryService {
     }
 
     await this.categoryRepository.delete(id);
+    await this.invalidateCategoryCache();
   }
 }
