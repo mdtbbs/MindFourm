@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const tabs = [
+  { href: '/admin/settings/brand', label: '品牌设置' },
   { href: '/admin/settings/basic', label: '基本信息' },
   { href: '/admin/settings/navigation', label: '顶部导航' },
   { href: '/admin/settings/footer', label: '页脚设置' },

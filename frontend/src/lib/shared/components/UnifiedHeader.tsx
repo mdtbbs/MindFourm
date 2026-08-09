@@ -152,7 +152,7 @@ export function UnifiedHeader({
   showFriends = false,
   showServerCount = false,
   showMobileMenu = false,
-  siteName = 'Mindustry',
+  siteName = '',
   siteTagline,
   logoUrl,
   user,

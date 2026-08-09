@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
 import { Public } from '@common/decorators/public.decorator';
+import { UpdateBrandSettingsDto } from './dto/update-brand-settings.dto';
 
 @Controller('settings')
 export class SettingsController {
@@ -23,6 +24,18 @@ export class SettingsController {
   @Public()
   async getByCategory(@Param('category') category: string) {
     return this.settingsService.getPublicByCategory(category);
+  }
+
+  @Put('brand')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async updateBrandSettings(@Body() dto: UpdateBrandSettingsDto) {
+    const touchesPublicSettings = this.settingsService.hasPublicKeys(Object.keys(dto));
+    await this.settingsService.setBatch('brand', dto as Record<string, string>);
+    if (touchesPublicSettings) {
+      await this.settingsRevalidationService.revalidatePublicSettings();
+    }
+    return { message: 'Settings updated' };
   }
 
   @Put(':category')

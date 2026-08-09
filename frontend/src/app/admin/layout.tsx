@@ -26,6 +26,7 @@ const navGroups: SidebarGroup[] = [
     label: '站点',
     items: [
       { key: 'settings-basic', label: '基本信息', icon: <Settings size={16} />, href: '/admin/settings/basic', roles: ['admin'] },
+      { key: 'settings-brand', label: '品牌设置', icon: <Settings size={16} />, href: '/admin/settings/brand', roles: ['admin'] },
       { key: 'settings-navigation', label: '顶部导航', icon: <FolderTree size={16} />, href: '/admin/settings/navigation', roles: ['admin'] },
       { key: 'settings-announce', label: '公告管理', icon: <Megaphone size={16} />, href: '/admin/settings/announce', roles: ['admin'] },
       { key: 'settings-display', label: '显示设置', icon: <Palette size={16} />, href: '/admin/settings/display', roles: ['admin'] },

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import ForumContentLayout from '@/components/forum/forum-content-layout';
 import ServerSection from '@/components/forum/server-section';
 import LatestPostsList, { LatestPostsSettings } from '@/components/forum/latest-posts-list';
@@ -8,6 +9,8 @@ import ErrorState from '@/components/ui/error-state';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
+import { resolveBrand } from '@/lib/theme/brand';
+import { generatePageMetadata } from '@/lib/metadata';
 import { Category, PostListResponse, Tag } from '@/types';
 
 export const revalidate = 30;
@@ -90,6 +93,16 @@ function parseLatestPostsSettings(settings: Record<string, string>): LatestPosts
 
 function formatStatValue(value: number): string {
   return value.toLocaleString('zh-CN');
+}
+
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await fetchPublicSettings();
+  const brandInfo = resolveBrand(settings);
+
+  return generatePageMetadata({
+    title: '首页',
+    brandInfo,
+  });
 }
 
 export default async function HomePage({

@@ -32,6 +32,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { BulkPostsDto } from './dto/bulk-posts.dto';
 import { MergeTagsDto } from './dto/merge-tags.dto';
 import { CreateBanDto } from '../bans/dto/create-ban.dto';
+import { UpdateBrandSettingsDto } from '../settings/dto/update-brand-settings.dto';
 
 /** Safely parse a query param to int, falling back to a default when the
  *  global ValidationPipe turns a missing param into `undefined`/NaN. */
@@ -100,6 +101,20 @@ export class AdminController {
   }
 
   /**
+   * PUT /admin/settings/brand - Update brand settings with DTO validation (admin only)
+   */
+  @Put('settings/brand')
+  @Roles('admin')
+  async updateBrandSettings(@Body() dto: UpdateBrandSettingsDto) {
+    const touchesPublicSettings = this.settingsService.hasPublicKeys(Object.keys(dto));
+    await this.settingsService.setBatch('brand', dto as Record<string, string>);
+    if (touchesPublicSettings) {
+      await this.settingsRevalidationService.revalidatePublicSettings();
+    }
+    return { message: 'Settings updated' };
+  }
+
+  /**
    * PUT /admin/settings/:category - Batch update settings (admin only)
    */
   @Put('settings/:category')
@@ -117,9 +132,9 @@ export class AdminController {
   }
 
   /**
-   * POST /admin/settings/basic/site-logo - Upload and apply site logo (admin only)
+   * POST /admin/settings/brand/site-logo - Upload and apply site logo (admin only)
    */
-  @Post('settings/basic/site-logo')
+  @Post('settings/brand/site-logo')
   @Roles('admin')
   @UseInterceptors(publicImageUploadInterceptor)
   async uploadSiteLogo(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
@@ -129,10 +144,38 @@ export class AdminController {
 
     const uploaded = this.uploadsService.toPublicImageResult(file);
     try {
-      await this.settingsService.setBatch('basic', { site_logo_url: uploaded.url });
+      await this.settingsService.setBatch('brand', { site_logo_url: uploaded.url });
       await this.settingsRevalidationService.revalidatePublicSettings();
       await this.logOperation(req, 'settings.site_logo.upload', 'setting', undefined, {
         key: 'site_logo_url',
+        url: uploaded.url,
+        size: uploaded.size,
+        mime_type: uploaded.mime_type,
+      });
+      return uploaded;
+    } catch (error) {
+      await cleanupUploadedPublicImage(file);
+      throw error;
+    }
+  }
+
+  /**
+   * POST /admin/settings/brand/site-favicon - Upload and apply site favicon (admin only)
+   */
+  @Post('settings/brand/site-favicon')
+  @Roles('admin')
+  @UseInterceptors(publicImageUploadInterceptor)
+  async uploadSiteFavicon(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    if (!file) {
+      throw new BadRequestException('没有收到图片');
+    }
+
+    const uploaded = this.uploadsService.toPublicImageResult(file);
+    try {
+      await this.settingsService.setBatch('brand', { site_favicon_url: uploaded.url });
+      await this.settingsRevalidationService.revalidatePublicSettings();
+      await this.logOperation(req, 'settings.site_favicon.upload', 'setting', undefined, {
+        key: 'site_favicon_url',
         url: uploaded.url,
         size: uploaded.size,
         mime_type: uploaded.mime_type,

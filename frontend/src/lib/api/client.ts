@@ -579,7 +579,17 @@ export const adminApi = {
   uploadSiteLogo: (formData: FormData) => {
     clearCache();
     return request<{ url: string; filename: string; original_name: string; mime_type: string; size: number }>(
-      '/api/admin/settings/basic/site-logo',
+      '/api/admin/settings/brand/site-logo',
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
+  },
+  uploadSiteFavicon: (formData: FormData) => {
+    clearCache();
+    return request<{ url: string; filename: string; original_name: string; mime_type: string; size: number }>(
+      '/api/admin/settings/brand/site-favicon',
       {
         method: 'POST',
         body: formData,
