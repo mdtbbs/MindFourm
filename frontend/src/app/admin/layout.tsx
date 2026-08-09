@@ -3,7 +3,8 @@
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
-import { AdminSidebar as SharedAdminSidebar, SidebarItem, SidebarGroup } from '@/lib/shared';
+import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import { SidebarGroup } from '@/lib/shared';
 import { useSetting } from '@/store/settings-store';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
 import AdminHeader from '@/components/admin/admin-header';
+import '@/styles/admin-responsive.css';
 
 const navGroups: SidebarGroup[] = [
   {
@@ -136,8 +138,8 @@ export default function AdminLayout({
 
   return (
     <AdminGuard>
-      <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg)' }}>
-        <SharedAdminSidebar
+      <div className="admin-layout-root">
+        <AdminSidebar
           serviceName="MindForum"
           subtitle="管理后台"
           groups={visibleGroups}
@@ -148,14 +150,9 @@ export default function AdminLayout({
             </Link>
           }
         />
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          marginLeft: 'var(--sidebar-width)',
-        }}>
+        <div className="admin-content">
           <AdminHeader />
-          <main style={{ flex: 1, padding: 24 }}>{children}</main>
+          <main className="admin-main">{children}</main>
         </div>
       </div>
     </AdminGuard>
