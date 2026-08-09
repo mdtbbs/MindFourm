@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { X, Home, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
+import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import type { SidebarNavigationItem } from '@/lib/navigation/sidebar-navigation';
 
 function resolveIcon(name: string): LucideIcon {
@@ -21,16 +22,45 @@ function isActivePath(currentPathname: string | null, href: string): boolean {
   return currentPathname === href || currentPathname.startsWith(`${href}/`);
 }
 
+/**
+ * Layout class tokens for the mobile drawer.
+ *
+ * Mirrors the sidebar height model: the drawer panel uses a fixed viewport
+ * height (`h-screen`) with a flex-column layout where the header and user
+ * sections are `shrink-0` and the navigation region scrolls independently.
+ *
+ * Exported for testability — see `content-drawer.spec.ts`.
+ */
+export const DRAWER_LAYOUT_CLASSES = {
+  /** Drawer panel — fixed, viewport-height, overflow-clipped flex column. */
+  panel:
+    'absolute inset-y-0 left-0 flex w-[85vw] max-w-sm flex-col border-r border-[var(--border)] bg-[var(--bg-card)] shadow-xl',
+  /** Brand / logo header — must not shrink. */
+  brand: 'shrink-0 flex items-center justify-between border-b border-[var(--border)] p-4',
+  /** Navigation region — flex-grows to fill, scrolls vertically. */
+  nav: 'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4',
+  /** User panel footer — must not shrink. */
+  user: 'shrink-0',
+} as const;
+
 export default function ContentDrawer({
   open,
   items,
   onClose,
   siteName,
+  sidebarTitle,
+  logoUrl,
+  userName,
+  userMeta,
 }: {
   open: boolean;
   items: SidebarNavigationItem[];
   onClose: () => void;
   siteName: string;
+  sidebarTitle?: string;
+  logoUrl?: string;
+  userName?: string;
+  userMeta?: string;
 }) {
   const pathname = usePathname();
 
@@ -53,10 +83,23 @@ export default function ContentDrawer({
         className="absolute inset-0 bg-black/40"
         onClick={onClose}
       />
-      <div className="absolute inset-y-0 left-0 flex w-[85vw] max-w-sm flex-col border-r border-[var(--border)] bg-[var(--bg-card)] shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--border)] p-4">
-          <Link href="/" onClick={onClose} className="text-sm font-semibold text-[var(--text)]">
-            {siteName}
+      <div className={DRAWER_LAYOUT_CLASSES.panel}>
+        {/* Header — shrink-0 */}
+        <div data-testid="mobile-drawer-brand" className={DRAWER_LAYOUT_CLASSES.brand}>
+          <Link href="/" onClick={onClose} className="flex items-center gap-3 min-w-0">
+            {logoUrl ? (
+              <img src={logoUrl} alt={siteName} className="h-8 max-w-[140px] object-contain" />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white">
+                {siteName.slice(0, 1)}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div>
+              {sidebarTitle && (
+                <div className="text-xs text-[var(--text-muted)]">{sidebarTitle}</div>
+              )}
+            </div>
           </Link>
           <button
             type="button"
@@ -67,13 +110,15 @@ export default function ContentDrawer({
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {/* Navigation — scrollable */}
         <nav
           data-testid="mobile-drawer-nav"
           onClick={(event) => {
             const target = event.target as HTMLElement | null;
             if (target?.closest('a')) onClose();
           }}
-          className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4"
+          className={DRAWER_LAYOUT_CLASSES.nav}
         >
           {items.map((item) => {
             const IconComponent = resolveIcon(item.icon);
@@ -101,6 +146,11 @@ export default function ContentDrawer({
             );
           })}
         </nav>
+
+        {/* User section — shrink-0 */}
+        <div data-testid="mobile-drawer-user" className={DRAWER_LAYOUT_CLASSES.user}>
+          <SidebarUserPanel userName={userName} userMeta={userMeta} />
+        </div>
       </div>
     </div>
   );
