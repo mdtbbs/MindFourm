@@ -6,6 +6,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { SidebarIconName } from '@common/utils/sidebar-navigation.util';
 
 class SidebarNavigationItemDto {
   @IsString()
@@ -18,7 +19,7 @@ class SidebarNavigationItemDto {
   href: string;
 
   @IsString()
-  icon: string;
+  icon: SidebarIconName;
 
   @IsBoolean()
   enabled: boolean;
