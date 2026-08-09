@@ -13,6 +13,7 @@ import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
 import { Category, Resource, ResourceCategory, Tag } from '@/types';
+import '@/styles/resources-responsive.css';
 
 export const revalidate = 60;
 
@@ -120,25 +121,29 @@ export default async function ResourcesPage({
   const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, hotResources, featuredResources } = data;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-w-0 mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[var(--text)]">资源中心</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">三栏布局浏览社区资源，快速查看版本、简介和下载信息。</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">浏览社区资源，快速查看版本、简介和下载信息。</p>
         </div>
         <Link
           href="/resources/submit"
-          className="inline-flex items-center rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
+          className="inline-flex shrink-0 items-center rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
         >
           提交资源
         </Link>
       </div>
 
-      {/* Three-column layout */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[240px_1fr_260px]">
-        {/* Left sidebar - Category tree */}
-        <aside className="hidden xl:block">
+      {/* Three-column responsive layout
+       * - Mobile (<768px): single column, categories shown below main content
+       * - Tablet/Small desktop (768–1023px): single column, sidebars hidden
+       * - Desktop (≥1024px): three columns [240px | 1fr | 260px]
+       * Layout wrapper (layout.tsx) applies min-w-0 + overflow-x-hidden */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr_260px]">
+        {/* Left sidebar - Category tree (desktop only) */}
+        <aside className="hidden lg:block min-w-0">
           <div className="sticky top-4">
             <ResourceCategoryTree
               categories={resourceCategories}
@@ -148,7 +153,7 @@ export default async function ResourcesPage({
         </aside>
 
         {/* Main content */}
-        <main className="space-y-4">
+        <main className="min-w-0 space-y-4">
           {/* Featured carousel */}
           {featuredResources.length > 0 && (
             <ResourceCarousel resources={featuredResources} />
@@ -194,8 +199,8 @@ export default async function ResourcesPage({
           )}
         </main>
 
-        {/* Right sidebar */}
-        <aside className="hidden xl:block">
+        {/* Right sidebar (desktop only) */}
+        <aside className="hidden lg:block min-w-0">
           <div className="sticky top-4">
             <ResourceSidebar
               hotResources={hotResources}
@@ -205,8 +210,8 @@ export default async function ResourcesPage({
         </aside>
       </div>
 
-      {/* Mobile: Show filters and categories below */}
-      <div className="mt-6 space-y-4 xl:hidden">
+      {/* Mobile/Tablet: Show categories below main content (hidden on desktop) */}
+      <div className="mt-6 space-y-4 lg:hidden">
         <ResourceCategoryTree
           categories={resourceCategories}
           currentCategoryId={params.category_id}
