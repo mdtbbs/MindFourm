@@ -22,7 +22,7 @@ export class ResourceCategoryService {
 
     return this.categoryRepository.find({
       where,
-      order: { sort_order: 'ASC' },
+      order: { sort_order: 'ASC', id: 'ASC' },
     });
   }
 
@@ -104,6 +104,16 @@ export class ResourceCategoryService {
 
     if (existing) {
       throw new BadRequestException('Slug已存在');
+    }
+
+    // Set default sort_order to max + 1 if not provided
+    if (dto.sort_order === undefined || dto.sort_order === null) {
+      const maxSortOrder = await this.categoryRepository
+        .createQueryBuilder('category')
+        .select('MAX(category.sort_order)', 'max')
+        .getRawOne();
+
+      dto.sort_order = (maxSortOrder?.max || 0) + 1;
     }
 
     const category = this.categoryRepository.create(dto);

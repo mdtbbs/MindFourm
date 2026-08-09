@@ -125,5 +125,120 @@ describe('ResourceCategoryService - Public Visibility', () => {
 
       expect(result).toHaveLength(2);
     });
+
+    it('should order by sort_order ASC, then by id ASC', async () => {
+      const mockCategories = [
+        { id: 1, name: 'A', sort_order: 1 },
+        { id: 3, name: 'C', sort_order: 1 },
+        { id: 2, name: 'B', sort_order: 2 },
+      ];
+
+      const findMock = jest.fn().mockResolvedValue(mockCategories);
+      const service = createService({
+        categoryRepository: {
+          find: findMock,
+        },
+      });
+
+      const result = await service.getAllCategories();
+
+      expect(findMock).toHaveBeenCalledWith({
+        order: { sort_order: 'ASC', id: 'ASC' },
+      });
+      expect(result[0].id).toBe(1);
+      expect(result[1].id).toBe(3);
+      expect(result[2].id).toBe(2);
+    });
+  });
+
+  describe('list', () => {
+    it('should order by sort_order ASC, then by id ASC (stable sort)', async () => {
+      const findMock = jest.fn().mockResolvedValue([]);
+      const service = createService({
+        categoryRepository: {
+          find: findMock,
+        },
+      });
+
+      await service.list(false);
+
+      expect(findMock).toHaveBeenCalledWith({
+        where: { is_active: 1 },
+        order: { sort_order: 'ASC', id: 'ASC' },
+      });
+    });
+  });
+
+  describe('create - default sort_order', () => {
+    it('should set sort_order to max + 1 when not provided', async () => {
+      const getRawOneMock = jest.fn().mockResolvedValue({ max: 5 });
+      const createMock = jest.fn().mockImplementation((v: unknown) => v);
+      const saveMock = jest.fn().mockImplementation(async (v: unknown) => v);
+
+      const service = createService({
+        categoryRepository: {
+          findOne: jest.fn().mockResolvedValue(null),
+          createQueryBuilder: jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnThis(),
+            getRawOne: getRawOneMock,
+          }),
+          create: createMock,
+          save: saveMock,
+        },
+      });
+
+      const result = await service.create({ name: 'Test', slug: 'test' });
+
+      expect(getRawOneMock).toHaveBeenCalled();
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({ sort_order: 6 }),
+      );
+      expect(result.sort_order).toBe(6);
+    });
+
+    it('should use provided sort_order when given', async () => {
+      const createMock = jest.fn().mockImplementation((v: unknown) => v);
+      const saveMock = jest.fn().mockImplementation(async (v: unknown) => v);
+      const createQbMock = jest.fn();
+
+      const service = createService({
+        categoryRepository: {
+          findOne: jest.fn().mockResolvedValue(null),
+          createQueryBuilder: createQbMock,
+          create: createMock,
+          save: saveMock,
+        },
+      });
+
+      const result = await service.create({ name: 'Test', slug: 'test', sort_order: 10 });
+
+      expect(createQbMock).not.toHaveBeenCalled();
+      expect(createMock).toHaveBeenCalledWith(
+        expect.objectContaining({ sort_order: 10 }),
+      );
+      expect(result.sort_order).toBe(10);
+    });
+
+    it('should default to 1 when no categories exist', async () => {
+      const getRawOneMock = jest.fn().mockResolvedValue({ max: null });
+      const createMock = jest.fn().mockImplementation((v: unknown) => v);
+      const saveMock = jest.fn().mockImplementation(async (v: unknown) => v);
+
+      const service = createService({
+        categoryRepository: {
+          findOne: jest.fn().mockResolvedValue(null),
+          createQueryBuilder: jest.fn().mockReturnValue({
+            select: jest.fn().mockReturnThis(),
+            getRawOne: getRawOneMock,
+          }),
+          create: createMock,
+          save: saveMock,
+        },
+      });
+
+      const result = await service.create({ name: 'First', slug: 'first' });
+
+      expect(result.sort_order).toBe(1);
+    });
   });
 });
