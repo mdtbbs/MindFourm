@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
   Package, AlertCircle, FolderOpen, ToggleLeft, Mail, KeyRound, FileEdit,
-  UsersRound, Coins, Puzzle, TrendingUp, Award, ShoppingBag
+  UsersRound, Coins, Puzzle, TrendingUp, Award, ShoppingBag, PanelLeft
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
 import AdminHeader from '@/components/admin/admin-header';
@@ -28,6 +28,7 @@ const navGroups: SidebarGroup[] = [
       { key: 'settings-basic', label: '基本信息', icon: <Settings size={16} />, href: '/admin/settings/basic', roles: ['admin'] },
       { key: 'settings-brand', label: '品牌设置', icon: <Settings size={16} />, href: '/admin/settings/brand', roles: ['admin'] },
       { key: 'settings-navigation', label: '顶部导航', icon: <FolderTree size={16} />, href: '/admin/settings/navigation', roles: ['admin'] },
+      { key: 'settings-sidebar', label: '侧栏导航', icon: <PanelLeft size={16} />, href: '/admin/settings/sidebar', roles: ['admin'] },
       { key: 'settings-announce', label: '公告管理', icon: <Megaphone size={16} />, href: '/admin/settings/announce', roles: ['admin'] },
       { key: 'settings-display', label: '显示设置', icon: <Palette size={16} />, href: '/admin/settings/display', roles: ['admin'] },
       { key: 'settings-features', label: '功能管理', icon: <ToggleLeft size={16} />, href: '/admin/settings/features', roles: ['admin'] },

@@ -27,6 +27,7 @@ jest.mock('@entities/setting.entity', () => ({ Setting: class Setting {} }));
 
 import { SECRET_PLACEHOLDER, SettingsService } from './settings.service';
 import { UpdateBrandSettingsDto } from './dto/update-brand-settings.dto';
+import { getDefaultSidebarNavigation } from '@common/utils/sidebar-navigation-defaults';
 import { validate } from 'class-validator';
 
 type SettingRow = {
@@ -417,6 +418,187 @@ describe('SettingsService', () => {
       const errors = await validate(dto);
       expect(errors.length).toBeGreaterThan(0);
       expect(errors[0].property).toBe('site_name');
+    });
+  });
+
+  describe('getSidebarNavigation', () => {
+    it('returns sidebar_navigation_items when available', async () => {
+      const customItems = [
+        {
+          id: 'custom',
+          label: 'Custom',
+          href: '/custom',
+          icon: 'Star',
+          enabled: true,
+          requiresAuth: false,
+        },
+      ];
+      const { service } = createService([
+        {
+          key: 'sidebar_navigation_items',
+          value: JSON.stringify(customItems),
+          category: 'navigation',
+          description: 'Sidebar nav',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      const result = await service.getSidebarNavigation();
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('custom');
+    });
+
+    it('falls back to top_navigation_items when sidebar_navigation_items is empty', async () => {
+      const legacyItems = [
+        {
+          id: 'legacy',
+          label: 'Legacy',
+          href: '/legacy',
+          icon: 'Home',
+          enabled: true,
+          requiresAuth: false,
+        },
+      ];
+      const { service } = createService([
+        { key: 'sidebar_navigation_items', value: '', category: 'navigation', description: '', updated_at: new Date() },
+        {
+          key: 'top_navigation_items',
+          value: JSON.stringify(legacyItems),
+          category: 'navigation',
+          description: 'Legacy nav',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      const result = await service.getSidebarNavigation();
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('legacy');
+    });
+
+    it('falls back to defaults when both settings are empty', async () => {
+      const { service } = createService([
+        { key: 'sidebar_navigation_items', value: '', category: 'navigation', description: '', updated_at: new Date() },
+        { key: 'top_navigation_items', value: '', category: 'navigation', description: '', updated_at: new Date() },
+      ]);
+      await (service as any).loadSettings();
+
+      const result = await service.getSidebarNavigation();
+      const defaults = getDefaultSidebarNavigation();
+      expect(result.length).toBeGreaterThan(0);
+      expect(result).toEqual(defaults);
+    });
+
+    it('falls back to defaults when neither setting exists', async () => {
+      const { service } = createService([]);
+      await (service as any).loadSettings();
+
+      const result = await service.getSidebarNavigation();
+      expect(result).toEqual(getDefaultSidebarNavigation());
+    });
+
+    it('skips invalid JSON in sidebar_navigation_items and falls through', async () => {
+      const legacyItems = [
+        {
+          id: 'legacy',
+          label: 'Legacy',
+          href: '/legacy',
+          icon: 'Home',
+          enabled: true,
+          requiresAuth: false,
+        },
+      ];
+      const { service } = createService([
+        { key: 'sidebar_navigation_items', value: 'not json', category: 'navigation', description: '', updated_at: new Date() },
+        {
+          key: 'top_navigation_items',
+          value: JSON.stringify(legacyItems),
+          category: 'navigation',
+          description: '',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      const result = await service.getSidebarNavigation();
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('legacy');
+    });
+
+    it('skips top_navigation_items with incompatible shape and falls through to defaults', async () => {
+      // top_navigation_items uses a different schema (type/label/href) that lacks
+      // id/icon/enabled/requiresAuth — normalizeSidebarNavigation filters these
+      // out, so the result should fall through to the code defaults.
+      const legacyTopNav = [{ type: 'link', label: '资源中心', href: '/resources' }];
+      const { service } = createService([
+        { key: 'sidebar_navigation_items', value: '', category: 'navigation', description: '', updated_at: new Date() },
+        {
+          key: 'top_navigation_items',
+          value: JSON.stringify(legacyTopNav),
+          category: 'navigation',
+          description: '',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      const result = await service.getSidebarNavigation();
+      expect(result).toEqual(getDefaultSidebarNavigation());
+    });
+  });
+
+  describe('updateSetting', () => {
+    it('updates an existing setting', async () => {
+      const { service, query, rows } = createService([
+        {
+          key: 'sidebar_navigation_items',
+          value: '[]',
+          category: 'navigation',
+          description: 'Sidebar nav',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      await service.updateSetting('sidebar_navigation_items', '[{"id":"home"}]');
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO settings'),
+        ['sidebar_navigation_items', '[{"id":"home"}]', 'navigation', '[{"id":"home"}]', 'navigation'],
+      );
+      expect(rows.find((r) => r.key === 'sidebar_navigation_items')?.value).toBe('[{"id":"home"}]');
+    });
+
+    it('creates a new setting if it does not exist', async () => {
+      const { service, query, rows } = createService([]);
+      await (service as any).loadSettings();
+
+      await service.updateSetting('new_key', 'new_value');
+
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO settings'),
+        ['new_key', 'new_value', 'general', 'new_value', 'general'],
+      );
+      expect(rows.find((r) => r.key === 'new_key')?.value).toBe('new_value');
+    });
+
+    it('reloads the cache after updating', async () => {
+      const { service } = createService([
+        {
+          key: 'sidebar_navigation_items',
+          value: '[]',
+          category: 'navigation',
+          description: 'Sidebar nav',
+          updated_at: new Date(),
+        },
+      ]);
+      await (service as any).loadSettings();
+
+      await service.updateSetting('sidebar_navigation_items', '["updated"]');
+
+      const value = await service.get('sidebar_navigation_items');
+      expect(value).toBe('["updated"]');
     });
   });
 });

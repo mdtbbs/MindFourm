@@ -25,6 +25,7 @@ const navSections = [
       { href: '/admin/settings/brand', label: '品牌设置', icon: Settings, roles: ['admin'] },
       { href: '/admin/settings/announce', label: '公告管理', icon: Megaphone, roles: ['admin'] },
       { href: '/admin/settings/display', label: '显示设置', icon: Palette, roles: ['admin'] },
+      { href: '/admin/settings/sidebar', label: '侧栏导航', icon: FolderTree, roles: ['admin'] },
       { href: '/admin/settings/seo', label: 'SEO 设置', icon: Search, roles: ['admin'] },
     ],
   },

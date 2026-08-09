@@ -14,6 +14,11 @@ import {
   normalizeFooterFriendlyLinks,
 } from './footer-settings.util';
 import {
+  normalizeSidebarNavigation,
+  SidebarNavigationItem,
+} from '@common/utils/sidebar-navigation.util';
+import { getDefaultSidebarNavigation } from '@common/utils/sidebar-navigation-defaults';
+import {
   DEFAULT_WELCOME_NOTIFICATION_BODY,
   DEFAULT_WELCOME_NOTIFICATION_TITLE,
   EMAIL_TEMPLATE_DEFAULTS,
@@ -259,6 +264,7 @@ export class SettingsService implements OnModuleInit {
     'brand_primary',
     'brand_accent',
     'top_navigation_items',
+    'sidebar_navigation_items',
     'posts_per_page',
     'default_sort',
     'replies_per_page',
@@ -338,6 +344,7 @@ export class SettingsService implements OnModuleInit {
     ]),
     navigation: new Set([
       'top_navigation_items',
+      'sidebar_navigation_items',
     ]),
     footer: new Set([
       'footer_copyright',
@@ -443,6 +450,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'brand_primary', value: DEFAULT_BRAND_PRIMARY, category: 'basic', description: 'Global primary brand color' },
       { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
       { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
+      { key: 'sidebar_navigation_items', value: JSON.stringify(getDefaultSidebarNavigation()), category: 'navigation', description: 'Sidebar navigation items as JSON' },
       { key: 'site_url', value: process.env.FRONTEND_URL || 'http://localhost:3000', category: 'basic', description: '站点URL - 用于生成邮件链接、RSS订阅等，必须设置为实际运营域名' },
       { key: 'admin_email', value: 'admin@example.com', category: 'basic', description: 'Admin email' },
       { key: 'maintenance_mode', value: 'false', category: 'basic', description: 'Maintenance mode toggle' },
@@ -659,6 +667,55 @@ export class SettingsService implements OnModuleInit {
       }
     }
     return false;
+  }
+
+  /**
+   * Resolve the sidebar navigation items with a three-tier fallback:
+   *
+   * 1. `sidebar_navigation_items` setting (current)
+   * 2. `top_navigation_items` setting (legacy migration path — items that
+   *    don't match the SidebarNavigationItem shape are filtered out by
+   *    `normalizeSidebarNavigation`, so an incompatible legacy payload
+   *    naturally falls through to defaults)
+   * 3. Hard-coded defaults from `getDefaultSidebarNavigation()`
+   */
+  async getSidebarNavigation(): Promise<SidebarNavigationItem[]> {
+    // Priority 1: sidebar_navigation_items
+    const sidebarItems = await this.get('sidebar_navigation_items');
+    if (sidebarItems) {
+      const normalized = normalizeSidebarNavigation(sidebarItems);
+      if (normalized.length > 0) {
+        return normalized;
+      }
+    }
+
+    // Priority 2: top_navigation_items (legacy)
+    const topItems = await this.get('top_navigation_items');
+    if (topItems) {
+      const normalized = normalizeSidebarNavigation(topItems);
+      if (normalized.length > 0) {
+        return normalized;
+      }
+    }
+
+    // Priority 3: defaults
+    return getDefaultSidebarNavigation();
+  }
+
+  /**
+   * Upsert a single setting by key. The category is resolved from the existing
+   * row when present, or defaults to `'general'` for new rows.
+   */
+  async updateSetting(key: string, value: string): Promise<void> {
+    const existing = this.settingsCache.get(key);
+    const category = existing?.category || 'general';
+
+    await this.settingRepository.query(
+      'INSERT INTO settings (`key`, `value`, category, updated_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE `value` = ?, category = ?, updated_at = NOW()',
+      [key, value, category, value, category],
+    );
+
+    await this.loadSettings();
   }
 
   /**

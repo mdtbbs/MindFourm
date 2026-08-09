@@ -7,6 +7,7 @@ const tabs = [
   { href: '/admin/settings/brand', label: '品牌设置' },
   { href: '/admin/settings/basic', label: '基本信息' },
   { href: '/admin/settings/navigation', label: '顶部导航' },
+  { href: '/admin/settings/sidebar', label: '侧栏导航' },
   { href: '/admin/settings/footer', label: '页脚设置' },
   { href: '/admin/settings/announce', label: '公告管理' },
   { href: '/admin/settings/display', label: '显示设置' },

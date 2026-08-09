@@ -1,32 +1,45 @@
 'use client';
 
 import Link from 'next/link';
-import SidebarNavGroups from '@/components/layout/sidebar-nav-groups';
+import { usePathname } from 'next/navigation';
+import { Home, type LucideIcon } from 'lucide-react';
+import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
-import type { SiteNavigationModel } from '@/lib/navigation/site-navigation';
+import type { SidebarNavigationItem } from '@/lib/navigation/sidebar-navigation';
+
+function resolveIcon(name: string): LucideIcon {
+  const entry = (LucideIcons as Record<string, unknown>)[name];
+  if (typeof entry === 'function') {
+    return entry as LucideIcon;
+  }
+  return Home;
+}
+
+function isActivePath(currentPathname: string | null, href: string): boolean {
+  if (!currentPathname) return false;
+  if (href === '/') return currentPathname === '/';
+  return currentPathname === href || currentPathname.startsWith(`${href}/`);
+}
 
 export default function ContentSidebar({
-  navigation,
+  items,
   siteName,
   sidebarTitle,
   logoUrl,
   userName,
   userMeta,
-  onLogin,
-  onRegister,
 }: {
-  navigation: SiteNavigationModel;
-  currentPathname: string;
+  items: SidebarNavigationItem[];
   siteName: string;
   sidebarTitle?: string;
   logoUrl?: string;
   userName?: string;
   userMeta?: string;
-  onLogin: () => void;
-  onRegister: () => void;
 }) {
+  const pathname = usePathname();
+
   return (
-    <aside className="hidden w-72 shrink-0 border-r border-[var(--border)] bg-[var(--bg-card)] lg:flex lg:min-h-screen lg:flex-col lg:sticky lg:top-0">
+    <aside data-testid="content-sidebar" className="hidden w-72 shrink-0 border-r border-[var(--border)] bg-[var(--bg-card)] lg:flex lg:min-h-screen lg:flex-col lg:sticky lg:top-0">
       <div className="border-b border-[var(--border)] p-4">
         <Link href="/" className="flex items-center gap-3">
           {logoUrl ? (
@@ -43,19 +56,35 @@ export default function ContentSidebar({
         </Link>
       </div>
 
-      <SidebarNavGroups
-        primaryItems={navigation.primaryItems}
-        groups={navigation.groups}
-        personalItems={navigation.personalItems}
-        quickActions={navigation.quickActions}
-        onLogin={onLogin}
-        onRegister={onRegister}
-      />
+      <nav data-testid="sidebar-nav" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
+        {items.map((item) => {
+          const IconComponent = resolveIcon(item.icon);
+          const active = isActivePath(pathname, item.href);
+          const external =
+            item.href.startsWith('http://') || item.href.startsWith('https://');
 
-      <SidebarUserPanel
-        userName={userName}
-        userMeta={userMeta}
-      />
+          return (
+            <Link
+              key={item.id}
+              href={item.href}
+              data-testid={`sidebar-nav-item-${item.id}`}
+              target={external ? '_blank' : undefined}
+              rel={external ? 'noreferrer noopener' : undefined}
+              prefetch={!external ? undefined : false}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${
+                active
+                  ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+              }`}
+            >
+              <IconComponent className="h-4 w-4 shrink-0" />
+              <span className="truncate">{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <SidebarUserPanel userName={userName} userMeta={userMeta} />
     </aside>
   );
 }
