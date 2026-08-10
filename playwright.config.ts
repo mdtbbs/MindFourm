@@ -61,6 +61,8 @@ export default defineConfig({
   // Keep these URLs configurable so tests can target 127.0.0.1 to avoid
   // Windows localhost/IPv6 issues when needed.
 
+  globalTeardown: './tests/e2e/global-teardown.ts',
+
   // Test output directory
   outputDir: './test-results',
 });
