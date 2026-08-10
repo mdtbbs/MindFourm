@@ -69,18 +69,31 @@ export class SearchService {
         'category.name',
         'category.slug',
       ])
-      .where('p.status = :status', { status: 'published' })
-      .andWhere(
+      .where('p.status = :status', { status: 'published' });
+
+    // Use Full-Text search when available (ngram index handles CJK + Latin)
+    if (this.hasFullTextIndex('posts')) {
+      qb.andWhere(
+        'MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)',
+        { query },
+      );
+    } else {
+      qb.andWhere(
         '(p.title LIKE :query OR p.content LIKE :query)',
         { query: `%${escapeLike(query)}%` },
       );
+    }
 
     if (options.category) {
       qb.andWhere('category.slug = :category', { category: options.category });
     }
 
     if (options.sort === 'relevance') {
-      qb.orderBy('CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END', 'DESC');
+      if (this.hasFullTextIndex('posts')) {
+        qb.orderBy('MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)', 'DESC');
+      } else {
+        qb.orderBy('CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END', 'DESC');
+      }
       qb.addOrderBy('p.created_at', 'DESC');
     } else if (options.sort === 'oldest') {
       qb.orderBy('p.created_at', 'ASC');
@@ -118,29 +131,52 @@ export class SearchService {
   /**
    * Search resources by title and description.
    * Only returns approved and public resources.
+   * Uses Full-Text search when available (ngram index handles CJK + Latin).
    */
   async searchResources(query: string, limit: number = 20): Promise<any[]> {
-    const resources = await this.resourceRepository.find({
-      where: [
-        {
-          status: 'approved',
-          is_public: 1,
-          title: Like(`%${escapeLike(query)}%`),
+    let resources: Resource[];
+
+    if (this.hasFullTextIndex('resources')) {
+      // Full-Text search path
+      resources = await this.resourceRepository
+        .createQueryBuilder('r')
+        .leftJoinAndSelect('r.user', 'user')
+        .leftJoinAndSelect('r.category', 'category')
+        .where('r.status = :status', { status: 'approved' })
+        .andWhere('r.is_public = :isPublic', { isPublic: 1 })
+        .andWhere(
+          'MATCH(r.title, r.description) AGAINST(:query IN NATURAL LANGUAGE MODE)',
+          { query },
+        )
+        .orderBy('r.download_count', 'DESC')
+        .addOrderBy('r.rating_average', 'DESC')
+        .addOrderBy('r.created_at', 'DESC')
+        .take(limit)
+        .getMany();
+    } else {
+      // LIKE fallback
+      resources = await this.resourceRepository.find({
+        where: [
+          {
+            status: 'approved',
+            is_public: 1,
+            title: Like(`%${escapeLike(query)}%`),
+          },
+          {
+            status: 'approved',
+            is_public: 1,
+            description: Like(`%${escapeLike(query)}%`),
+          },
+        ],
+        relations: ['user', 'category'],
+        order: {
+          download_count: 'DESC',
+          rating_average: 'DESC',
+          created_at: 'DESC',
         },
-        {
-          status: 'approved',
-          is_public: 1,
-          description: Like(`%${escapeLike(query)}%`),
-        },
-      ],
-      relations: ['user', 'category'],
-      order: {
-        download_count: 'DESC',
-        rating_average: 'DESC',
-        created_at: 'DESC',
-      },
-      take: limit,
-    });
+        take: limit,
+      });
+    }
 
     return resources.map((resource) => ({
       id: resource.id,
@@ -157,6 +193,15 @@ export class SearchService {
       user_id: resource.user_id,
       created_at: resource.created_at,
     }));
+  }
+
+  /**
+   * Check if a table has a Full-Text index.
+   * Defaults to true for tables with known FTS indexes (posts, resources).
+   */
+  private hasFullTextIndex(table: string): boolean {
+    const tablesWithFTS = ['posts', 'resources'];
+    return tablesWithFTS.includes(table);
   }
 
   async recordSearch(userId: number | undefined, query: string, resultsCount: number): Promise<void> {

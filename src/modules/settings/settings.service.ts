@@ -500,8 +500,8 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_leaderboard_enabled', value: 'true', category: 'features', description: 'Enable points leaderboard' },
       { key: 'feature_shop_enabled', value: 'true', category: 'features', description: 'Enable points shop' },
       { key: 'feature_lanlink_enabled', value: 'false', category: 'features', description: 'Enable LanLink game integration' },
-      { key: 'feature_resources_v1_read_enabled', value: 'false', category: 'features', description: 'Enable V1 resource read APIs' },
-      { key: 'feature_resources_v1_detail_enabled', value: 'false', category: 'features', description: 'Enable the Web V1 resource detail UI' },
+      { key: 'feature_resources_v1_read_enabled', value: 'true', category: 'features', description: 'Enable V1 resource read APIs' },
+      { key: 'feature_resources_v1_detail_enabled', value: 'true', category: 'features', description: 'Enable the Web V1 resource detail UI' },
       // Terms & Conditions enforcement
       { key: 'terms_required', value: 'false', category: 'terms', description: 'Require users to accept Terms & Privacy before forum access' },
       { key: 'terms_updated_at', value: new Date().toISOString(), category: 'terms', description: 'Bump to force all users to re-accept terms' },

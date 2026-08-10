@@ -136,7 +136,7 @@ describe('SearchService', () => {
       'category.slug',
     ]);
     expect(queryBuilder.orderBy).toHaveBeenCalledWith(
-      'CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END',
+      'MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)',
       'DESC',
     );
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('p.created_at', 'DESC');
