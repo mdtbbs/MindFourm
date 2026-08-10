@@ -25,6 +25,7 @@ import { CreateGameVersions1720000030000 } from './1720000030000-CreateGameVersi
 import { CreateGameServers1720000031000 } from './1720000031000-CreateGameServers';
 import { CreateKnowledge1720000032000 } from './1720000032000-CreateKnowledge';
 import { AddCategoryParentId1720000033000 } from './1720000033000-AddCategoryParentId';
+import { CreateFeedbacks1720000034000 } from './1720000034000-CreateFeedbacks';
 
 /**
  * Migrations in run order.
@@ -61,4 +62,5 @@ export const migrations = [
   CreateGameServers1720000031000,
   CreateKnowledge1720000032000,
   AddCategoryParentId1720000033000,
+  CreateFeedbacks1720000034000,
 ];

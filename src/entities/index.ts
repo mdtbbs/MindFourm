@@ -99,6 +99,9 @@ import { GameServerSnapshot } from './game-server-snapshot.entity';
 import { KnowledgeArticle } from './knowledge-article.entity';
 import { KnowledgeRevision } from './knowledge-revision.entity';
 
+// Feedback
+import { Feedback } from './feedback.entity';
+
 export const entities = [
   User,
   Post,
@@ -188,6 +191,8 @@ export const entities = [
   // Phase 8C (refactor): Knowledge
   KnowledgeArticle,
   KnowledgeRevision,
+  // Feedback
+  Feedback,
 ];
 
 export {
@@ -247,4 +252,6 @@ export {
   GameServer, GameServerSnapshot,
   // Phase 8C (refactor): Knowledge
   KnowledgeArticle, KnowledgeRevision,
+  // Feedback
+  Feedback,
 };

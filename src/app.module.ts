@@ -57,6 +57,7 @@ import { GameServersModule } from './modules/game-servers/game-servers.module';
 import { KnowledgeModule } from './modules/knowledge/knowledge.module';
 import { DiscoverModule } from './modules/discover/discover.module';
 import { PortalModule } from './modules/portal/portal.module';
+import { FeedbackModule } from './modules/feedback/feedback.module';
 import { PhoneWriteGuard } from './common/guards/phone-write.guard';
 import { BanGuard } from './common/guards/ban.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -138,6 +139,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     KnowledgeModule,
     DiscoverModule,
     PortalModule,
+    FeedbackModule,
   ],
   controllers: [HealthController],
   // Global guards run in registration order, before any controller-scoped guard.
