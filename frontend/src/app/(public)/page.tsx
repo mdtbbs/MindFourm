@@ -11,7 +11,7 @@ import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
-import { Category, PostListResponse, Tag } from '@/types';
+import { Category, PostListResponse } from '@/types';
 
 export const revalidate = 30;
 
@@ -32,14 +32,6 @@ const emptyOverview: ForumOverviewStats = {
 async function fetchCategories(): Promise<Category[]> {
   return fetchApiData<Category[]>('/api/categories', {
     init: { next: { tags: ['categories'] } },
-    fallback: [],
-    throwOnError: true,
-  });
-}
-
-async function fetchTags(): Promise<Tag[]> {
-  return fetchApiData<Tag[]>('/api/tags', {
-    init: { next: { tags: ['tags'] } },
     fallback: [],
     throwOnError: true,
   });
@@ -119,13 +111,11 @@ export default async function HomePage({
   const latestPostsSettings = parseLatestPostsSettings(settings);
 
   let categories: Category[];
-  let tags: Tag[];
   let postsResult: PostListResponse;
   let forumOverview: ForumOverviewStats;
   try {
-    [categories, tags, postsResult, forumOverview] = await Promise.all([
+    [categories, postsResult, forumOverview] = await Promise.all([
       fetchCategories(),
-      fetchTags(),
       fetchPosts(page, postsPerPage, categoryId),
       fetchForumOverview(),
     ]);
@@ -185,7 +175,7 @@ export default async function HomePage({
         </div>
       </div>
 
-      <ForumContentLayout categories={categories} tags={tags} selectedCategory={categoryId}>
+      <ForumContentLayout>
         <div className="space-y-4">
           {parseBooleanSetting(settings.feature_servers_enabled, false) && <ServerSection />}
 

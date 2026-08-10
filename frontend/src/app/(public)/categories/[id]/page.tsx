@@ -5,7 +5,7 @@ import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
-import { Category, Tag, PostListResponse } from '@/types';
+import { Category, PostListResponse } from '@/types';
 import { notFound } from 'next/navigation';
 
 export const revalidate = 300;
@@ -21,13 +21,6 @@ async function fetchPosts(page: number, categoryId: number): Promise<PostListRes
 async function fetchCategories(): Promise<Category[]> {
   return fetchApiData<Category[]>('/api/categories', {
     init: { next: { tags: ['categories'] } },
-    fallback: [],
-  });
-}
-
-async function fetchTags(): Promise<Tag[]> {
-  return fetchApiData<Tag[]>('/api/tags', {
-    init: { next: { tags: ['tags'] } },
     fallback: [],
   });
 }
@@ -78,18 +71,16 @@ export default async function CategoryPage({
   const categoryId = parseInt(id);
   const page = parseInt(pageStr || '1');
 
-  const [category, postsResult, categories, tags] = await Promise.all([
+  const [category, postsResult] = await Promise.all([
     fetchCategory(categoryId),
     fetchPosts(page, categoryId),
-    fetchCategories(),
-    fetchTags(),
   ]);
 
   if (!category) return notFound();
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <ForumContentLayout categories={categories} tags={tags} selectedCategory={categoryId}>
+      <ForumContentLayout>
         <div className="space-y-4">
           <h1 className="text-2xl font-bold text-surface-900">{category.name}</h1>
           {postsResult.data.length === 0 ? (
