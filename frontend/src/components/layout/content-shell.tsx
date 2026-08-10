@@ -42,11 +42,19 @@ export default function ContentShell({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     let cancelled = false;
-    resourceApi.getCategories()
+    // Prefer the tree endpoint (nested children); fall back to the flat list
+    // if the backend has not been redeployed yet.
+    resourceApi.getCategoriesTree()
       .then((res) => {
         if (!cancelled) setResourceCategories(res);
       })
-      .catch(() => {});
+      .catch(() => {
+        resourceApi.getCategories()
+          .then((res) => {
+            if (!cancelled) setResourceCategories(res);
+          })
+          .catch(() => {});
+      });
     return () => {
       cancelled = true;
     };

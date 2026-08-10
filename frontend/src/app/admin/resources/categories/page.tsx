@@ -72,6 +72,7 @@ export default function CategoriesPage() {
                   description: '',
                   sort_order: 0,
                   is_active: true,
+                  parent_id: null,
                 })
               }
               className="mb-4"

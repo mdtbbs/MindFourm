@@ -440,6 +440,8 @@ export interface ResourceCategory {
   icon: string | null;
   sort_order: number;
   is_active: boolean;
+  parent_id: number | null;
+  children?: ResourceCategory[];
   created_at: string;
 }
 

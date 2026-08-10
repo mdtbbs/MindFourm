@@ -24,6 +24,77 @@ function isActivePath(currentPathname: string | null, href: string): boolean {
   return currentPathname === href || currentPathname.startsWith(`${href}/`);
 }
 
+function isCategoryActive(categoryId: number, currentPathname: string | null | undefined): boolean {
+  if (!currentPathname || !currentPathname.startsWith('/resources')) return false;
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('category_id') === String(categoryId);
+}
+
+function CategoryTree({
+  categories,
+  currentPathname,
+}: {
+  categories: ResourceCategory[];
+  currentPathname: string | null | undefined;
+}) {
+  return (
+    <ul className="space-y-0.5">
+      {categories.map((category) => (
+        <CategoryItem
+          key={category.id}
+          category={category}
+          currentPathname={currentPathname}
+          depth={0}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function CategoryItem({
+  category,
+  currentPathname,
+  depth,
+}: {
+  category: ResourceCategory;
+  currentPathname: string | null | undefined;
+  depth: number;
+}) {
+  const IconComponent = getIconComponent(category.icon ?? 'Folder');
+  const href = `/resources?category_id=${category.id}`;
+  const active = isCategoryActive(category.id, currentPathname);
+  const hasChildren = Array.isArray(category.children) && category.children.length > 0;
+
+  return (
+    <li>
+      <Link
+        href={href}
+        className={`flex items-center gap-2.5 rounded-lg py-1.5 pr-3 text-sm transition-colors ${
+          active
+            ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+        }`}
+        style={{ paddingLeft: `${depth * 12 + 12}px` }}
+      >
+        <IconComponent className="h-4 w-4 shrink-0" />
+        <span className="truncate">{category.name}</span>
+      </Link>
+      {hasChildren && (
+        <ul className="space-y-0.5">
+          {category.children!.map((child) => (
+            <CategoryItem
+              key={child.id}
+              category={child}
+              currentPathname={currentPathname}
+              depth={depth + 1}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
 /**
  * Layout class tokens for the mobile drawer.
  *
@@ -159,24 +230,7 @@ export default function ContentDrawer({
               <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 资源分类
               </div>
-              <ul className="space-y-0.5">
-                {resourceCategories.map((category) => {
-                  const IconComponent = getIconComponent(category.icon ?? 'Folder');
-                  const href = `/resources?category_id=${category.id}`;
-
-                  return (
-                    <li key={category.id}>
-                      <Link
-                        href={href}
-                        className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
-                      >
-                        <IconComponent className="h-4 w-4 shrink-0" />
-                        <span className="truncate">{category.name}</span>
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
+              <CategoryTree categories={resourceCategories} currentPathname={effectivePathname} />
             </div>
           )}
         </nav>

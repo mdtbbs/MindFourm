@@ -80,6 +80,38 @@ export class ResourceCategoryService {
   }
 
   /**
+   * Return active categories as a nested tree. Roots come first; children
+   * are attached under each parent. Used by the sidebar so it can render
+   * parent/child hierarchy without re-shaping the flat list on the client.
+   */
+  async getCategoriesTree(): Promise<any[]> {
+    const allCategories = await this.categoryRepository
+      .createQueryBuilder('category')
+      .where('category.is_active = :isActive', { isActive: 1 })
+      .orderBy('category.sort_order', 'ASC')
+      .addOrderBy('category.id', 'ASC')
+      .getMany();
+
+    const map = new Map<number, any>();
+    const roots: any[] = [];
+
+    for (const cat of allCategories) {
+      map.set(cat.id, { ...cat, children: [] });
+    }
+
+    for (const cat of allCategories) {
+      const node = map.get(cat.id);
+      if (cat.parent_id && map.has(cat.parent_id)) {
+        map.get(cat.parent_id).children.push(node);
+      } else {
+        roots.push(node);
+      }
+    }
+
+    return roots;
+  }
+
+  /**
    * Admin categories query: returns every category (including disabled) for
    * management UIs. Ordered by sort_order ASC with id ASC tiebreaker.
    */

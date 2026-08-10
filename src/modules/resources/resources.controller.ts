@@ -108,6 +108,9 @@ function normalizeCategoryBody(body: any) {
     icon: body.icon || null,
     sort_order: body.sort_order !== undefined ? Number(body.sort_order) : undefined,
     is_active: body.is_active === false || body.is_active === 'false' ? 0 : 1,
+    parent_id: body.parent_id !== undefined && body.parent_id !== null && body.parent_id !== ''
+      ? Number(body.parent_id)
+      : null,
   };
 }
 
@@ -153,6 +156,11 @@ export class ResourcesController {
   @Get('categories')
   async listCategories() {
     return this.categoryService.getPublicCategories();
+  }
+
+  @Get('categories/tree')
+  async listCategoriesTree() {
+    return this.categoryService.getCategoriesTree();
   }
 
   @Get('categories/admin')

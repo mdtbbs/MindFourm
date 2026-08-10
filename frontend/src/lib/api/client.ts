@@ -1114,6 +1114,8 @@ export const resourceApi = {
   },
   getCategories: () =>
     request<ResourceCategory[]>('/api/resources/categories'),
+  getCategoriesTree: () =>
+    request<ResourceCategory[]>('/api/resources/categories/tree'),
   getVersions: (id: number) =>
     request<ResourceVersion[]>(`/api/resources/${id}/versions`),
   addVersion: (id: number, formData: FormData) => {
