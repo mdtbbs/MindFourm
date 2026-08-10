@@ -4,9 +4,7 @@ import { FileText, AlertCircle } from 'lucide-react';
 import ErrorState from '@/components/ui/error-state';
 import ResourceFilters from '@/components/forum/resource-list-filters-client';
 import ResourceLoadMore from '@/components/forum/resource-load-more';
-import { CategoryList } from '@/components/resources/CategoryList';
 import ResourceCarousel from '@/components/forum/resource-carousel';
-import ResourceSidebar from '@/components/forum/resource-sidebar';
 import ResourceListItem from '@/components/forum/resource-list-item';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
@@ -37,7 +35,7 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
   if (params.search) qs.set('search', params.search);
   if (params.sort) qs.set('sort', params.sort);
 
-  const [resourcesResult, resourceCategories, forumCategories, tags, hotResources, featuredResources] = await Promise.all([
+  const [resourcesResult, resourceCategories, forumCategories, tags, featuredResources] = await Promise.all([
     fetchApiData<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
       `/api/resources?${qs.toString()}`,
       {
@@ -61,11 +59,6 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
       fallback: [],
       throwOnError: true,
     }),
-    fetchApiData<Resource[]>('/api/resources/hot', {
-      init: { next: { revalidate: 300 } },
-      fallback: [],
-      throwOnError: true,
-    }),
     // Featured resources - using hot resources as fallback if API doesn't exist yet
     fetchApiData<Resource[]>('/api/resources/featured', {
       init: { next: { revalidate: 300 } },
@@ -81,8 +74,7 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
     resourceCategories,
     forumCategories,
     tags,
-    hotResources,
-    featuredResources: featuredResources.length > 0 ? featuredResources : hotResources.slice(0, 4),
+    featuredResources: featuredResources.length > 0 ? featuredResources : [],
   };
 }
 
@@ -117,10 +109,10 @@ export default async function ResourcesPage({
     return <ErrorState title="资源加载失败" description="暂时无法获取资源列表，请稍后重试。" action={{ label: '重新加载', href: '/resources' }} />;
   }
 
-  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, hotResources, featuredResources } = data;
+  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, featuredResources } = data;
 
   return (
-    <div className="min-w-0 mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="min-w-0 mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div className="min-w-0">
@@ -135,85 +127,52 @@ export default async function ResourcesPage({
         </Link>
       </div>
 
-      {/* Three-column responsive layout
-       * - Mobile (<768px): single column, categories shown below main content
-       * - Tablet/Small desktop (768–1279px): single column, sidebars hidden
-       * - Desktop (≥1280px / xl): three columns [240px | 1fr | 260px]
-       * Layout wrapper (layout.tsx) applies min-w-0 + overflow-x-hidden */}
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[240px_1fr_260px]">
-        {/* Left sidebar - Category tree (desktop only) */}
-        <aside className="hidden xl:block min-w-0">
-          <div className="sticky top-4">
-            <CategoryList
-              categories={resourceCategories}
-            />
-          </div>
-        </aside>
+      {/* Main content */}
+      <main className="min-w-0 space-y-4">
+        {/* Featured carousel */}
+        {featuredResources.length > 0 && (
+          <ResourceCarousel resources={featuredResources} />
+        )}
 
-        {/* Main content */}
-        <main className="min-w-0 space-y-4">
-          {/* Featured carousel */}
-          {featuredResources.length > 0 && (
-            <ResourceCarousel resources={featuredResources} />
-          )}
-
-          {/* Filters */}
-          <ResourceFilters
-            categories={resourceCategories}
-            initialCategory={params.category_id}
-            initialSearch={params.search}
-            initialSort={params.sort}
-          />
-
-          {/* Resource list */}
-          {resources.length === 0 ? (
-            <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] py-12 text-center">
-              <FileText className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]" />
-              <p className="mb-4 text-[var(--text-muted)]">暂无资源</p>
-              <Link
-                href="/resources/submit"
-                className="inline-block rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"
-              >
-                提交第一个资源
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {resources.map((resource) => (
-                <ResourceListItem key={resource.id} resource={resource} />
-              ))}
-              {/* Load more */}
-              {hasMore && (
-                <ResourceLoadMore
-                  initialResources={[]}
-                  initialCursor={nextCursor}
-                  hasMore={hasMore}
-                  categoryId={params.category_id ? parseInt(params.category_id) : undefined}
-                  search={params.search}
-                  sort={params.sort}
-                />
-              )}
-            </div>
-          )}
-        </main>
-
-        {/* Right sidebar (desktop only) */}
-        <aside className="hidden xl:block min-w-0">
-          <div className="sticky top-4">
-            <ResourceSidebar
-              hotResources={hotResources}
-              totalResources={resources.length}
-            />
-          </div>
-        </aside>
-      </div>
-
-      {/* Mobile/Tablet: Show categories below main content (hidden on desktop) */}
-      <div className="mt-6 space-y-4 xl:hidden">
-        <CategoryList
+        {/* Filters */}
+        <ResourceFilters
           categories={resourceCategories}
+          initialCategory={params.category_id}
+          initialSearch={params.search}
+          initialSort={params.sort}
         />
-      </div>
+
+        {/* Resource list */}
+        {resources.length === 0 ? (
+          <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] py-12 text-center">
+            <FileText className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]" />
+            <p className="mb-4 text-[var(--text-muted)]">暂无资源</p>
+            <Link
+              href="/resources/submit"
+              className="inline-block rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"
+            >
+              提交第一个资源
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {resources.map((resource) => (
+              <ResourceListItem key={resource.id} resource={resource} />
+            ))}
+            {/* Load more */}
+            {hasMore && (
+              <ResourceLoadMore
+                initialResources={[]}
+                initialCursor={nextCursor}
+                hasMore={hasMore}
+                categoryId={params.category_id ? parseInt(params.category_id) : undefined}
+                search={params.search}
+                sort={params.sort}
+              />
+            )}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

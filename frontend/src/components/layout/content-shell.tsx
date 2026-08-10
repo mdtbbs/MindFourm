@@ -7,8 +7,8 @@ import { useAuth } from '@/lib/auth/context';
 import { useSettings } from '@/lib/settings/context';
 import { resolveBrand } from '@/lib/theme/brand';
 import { buildSidebarNavigation } from '@/lib/navigation/sidebar-navigation';
-import { messageApi, friendsApi } from '@/lib/api/client';
-import type { Notification } from '@/types';
+import { messageApi, friendsApi, resourceApi } from '@/lib/api/client';
+import type { Notification, ResourceCategory } from '@/types';
 import Footer from '@/components/forum/footer';
 import AnnouncementBanner from '@/components/forum/announcement-banner';
 import ContentSidebar from '@/components/layout/content-sidebar';
@@ -26,6 +26,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [unreadFriendRequestCount, setUnreadFriendRequestCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [resourceCategories, setResourceCategories] = useState<ResourceCategory[]>([]);
 
   const sidebarItems = useMemo(
     () => buildSidebarNavigation({
@@ -38,6 +39,18 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    let cancelled = false;
+    resourceApi.getCategories()
+      .then((res) => {
+        if (!cancelled) setResourceCategories(res);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -101,6 +114,8 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         logoUrl={settings.site_logo_url || undefined}
         userName={user?.username || undefined}
         userMeta={userMeta}
+        resourceCategories={resourceCategories}
+        currentPathname={pathname}
       />
 
       <ContentDrawer
@@ -112,6 +127,8 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         logoUrl={settings.site_logo_url || undefined}
         userName={user?.username || undefined}
         userMeta={userMeta}
+        resourceCategories={resourceCategories}
+        currentPathname={pathname}
       />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">

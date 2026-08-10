@@ -6,7 +6,9 @@ import { usePathname } from 'next/navigation';
 import { X, Home, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
+import { getIconComponent } from '@/lib/resource-icons';
 import type { SidebarNavigationItem } from '@/lib/navigation/sidebar-navigation';
+import type { ResourceCategory } from '@/types';
 
 function resolveIcon(name: string): LucideIcon {
   const entry = (LucideIcons as Record<string, unknown>)[name];
@@ -52,6 +54,8 @@ export default function ContentDrawer({
   logoUrl,
   userName,
   userMeta,
+  resourceCategories,
+  currentPathname,
 }: {
   open: boolean;
   items: SidebarNavigationItem[];
@@ -61,8 +65,12 @@ export default function ContentDrawer({
   logoUrl?: string;
   userName?: string;
   userMeta?: string;
+  resourceCategories?: ResourceCategory[];
+  currentPathname?: string | null;
 }) {
   const pathname = usePathname();
+  const effectivePathname = currentPathname ?? pathname;
+  const isOnResources = effectivePathname?.startsWith('/resources') ?? false;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -122,7 +130,7 @@ export default function ContentDrawer({
         >
           {items.map((item) => {
             const IconComponent = resolveIcon(item.icon);
-            const active = isActivePath(pathname, item.href);
+            const active = isActivePath(effectivePathname, item.href);
             const external =
               item.href.startsWith('http://') || item.href.startsWith('https://');
 
@@ -145,6 +153,32 @@ export default function ContentDrawer({
               </Link>
             );
           })}
+
+          {isOnResources && resourceCategories && resourceCategories.length > 0 && (
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                资源分类
+              </div>
+              <ul className="space-y-0.5">
+                {resourceCategories.map((category) => {
+                  const IconComponent = getIconComponent(category.icon ?? 'Folder');
+                  const href = `/resources?category_id=${category.id}`;
+
+                  return (
+                    <li key={category.id}>
+                      <Link
+                        href={href}
+                        className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]"
+                      >
+                        <IconComponent className="h-4 w-4 shrink-0" />
+                        <span className="truncate">{category.name}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
         </nav>
 
         {/* User section — shrink-0 */}

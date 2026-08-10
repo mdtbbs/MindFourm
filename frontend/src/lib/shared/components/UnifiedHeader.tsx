@@ -215,23 +215,8 @@ export function UnifiedHeader({
                     whileHover={{ scale: 1.04, rotate: 1.5 }}
                   />
                 ) : (
-                  <motion.div className="flex items-center gap-2" whileHover={{ scale: 1.01 }}>
-                    <motion.span
-                      className="text-xl font-bold text-[var(--primary)]"
-                      style={{
-                        background: 'linear-gradient(90deg, var(--primary), var(--primary-light), var(--primary))',
-                        backgroundSize: '200% auto',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                      }}
-                    >
-                      {siteName}
-                    </motion.span>
-                    {siteTagline && (
-                      <span className="hidden text-xs text-[var(--text-muted)] lg:inline">
-                        {siteTagline}
-                      </span>
-                    )}
+                  <motion.div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white" whileHover={{ scale: 1.01 }}>
+                    {siteName.slice(0, 1)}
                   </motion.div>
                 )}
               </Link>

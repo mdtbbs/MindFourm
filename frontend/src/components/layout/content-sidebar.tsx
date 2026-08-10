@@ -5,7 +5,9 @@ import { usePathname } from 'next/navigation';
 import { Home, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
+import { getIconComponent } from '@/lib/resource-icons';
 import type { SidebarNavigationItem } from '@/lib/navigation/sidebar-navigation';
+import type { ResourceCategory } from '@/types';
 
 function resolveIcon(name: string): LucideIcon {
   const entry = (LucideIcons as Record<string, unknown>)[name];
@@ -49,6 +51,8 @@ export default function ContentSidebar({
   logoUrl,
   userName,
   userMeta,
+  resourceCategories,
+  currentPathname,
 }: {
   items: SidebarNavigationItem[];
   siteName: string;
@@ -56,8 +60,12 @@ export default function ContentSidebar({
   logoUrl?: string;
   userName?: string;
   userMeta?: string;
+  resourceCategories?: ResourceCategory[];
+  currentPathname?: string | null;
 }) {
   const pathname = usePathname();
+  const effectivePathname = currentPathname ?? pathname;
+  const isOnResources = effectivePathname?.startsWith('/resources') ?? false;
 
   return (
     <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
@@ -80,7 +88,7 @@ export default function ContentSidebar({
       <nav data-testid="sidebar-nav" role="navigation" className={SIDEBAR_LAYOUT_CLASSES.nav}>
         {items.map((item) => {
           const IconComponent = resolveIcon(item.icon);
-          const active = isActivePath(pathname, item.href);
+          const active = isActivePath(effectivePathname, item.href);
           const external =
             item.href.startsWith('http://') || item.href.startsWith('https://');
 
@@ -103,6 +111,39 @@ export default function ContentSidebar({
             </Link>
           );
         })}
+
+        {isOnResources && resourceCategories && resourceCategories.length > 0 && (
+          <div className="mt-4 border-t border-[var(--border)] pt-4">
+            <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              资源分类
+            </div>
+            <ul className="space-y-0.5">
+              {resourceCategories.map((category) => {
+                const IconComponent = getIconComponent(category.icon ?? 'Folder');
+                const href = `/resources?category_id=${category.id}`;
+                const active = effectivePathname === '/resources' &&
+                  typeof window !== 'undefined' &&
+                  new URLSearchParams(window.location.search).get('category_id') === String(category.id);
+
+                return (
+                  <li key={category.id}>
+                    <Link
+                      href={href}
+                      className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                        active
+                          ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+                      }`}
+                    >
+                      <IconComponent className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{category.name}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </nav>
 
       <div data-testid="sidebar-user" className={SIDEBAR_LAYOUT_CLASSES.user}>
