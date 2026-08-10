@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { fetchApiData } from '@/lib/api/server-fetch';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: '标签',
   description: '浏览所有标签',
