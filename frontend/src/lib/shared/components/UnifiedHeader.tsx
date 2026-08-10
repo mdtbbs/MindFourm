@@ -205,23 +205,6 @@ export function UnifiedHeader({
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex min-h-16 items-center justify-between gap-3 py-2">
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-5">
-            <motion.div variants={itemVariants} className="shrink-0">
-              <Link href="/" className="flex items-center gap-2">
-                {logoUrl ? (
-                  <motion.img
-                    src={logoUrl}
-                    alt={siteName}
-                    className="h-8 object-contain"
-                    whileHover={{ scale: 1.04, rotate: 1.5 }}
-                  />
-                ) : (
-                  <motion.div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--primary)] text-sm font-bold text-white" whileHover={{ scale: 1.01 }}>
-                    {siteName.slice(0, 1)}
-                  </motion.div>
-                )}
-              </Link>
-            </motion.div>
-
             {topNavigationSlot && (
               <motion.div variants={itemVariants} className="min-w-0">
                 {topNavigationSlot}
