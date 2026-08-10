@@ -134,13 +134,26 @@ export default function PostForm() {
 
   if (!isAuthenticated) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-12">
-        <Alert type="warning" message="请先登录后再发帖" className="mb-4" />
-        <div className="text-center">
-          <a href={`/login?redirect=${encodeURIComponent(pathname || '/posts/new')}`}
-             className="text-primary-600 hover:text-primary-700 font-medium">
-            前往登录 →
-          </a>
+      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+        <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-8">
+          <h2 className="text-xl font-bold text-[var(--text)] mb-3">加入讨论</h2>
+          <p className="text-sm text-[var(--text-muted)] mb-6">
+            登录后你可以发帖、回复、收藏、关注感兴趣的内容
+          </p>
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <a
+              href={`/login?redirect=${encodeURIComponent(pathname || '/posts/new')}`}
+              className="inline-flex items-center px-6 py-3 rounded-lg bg-[var(--primary)] text-white font-medium hover:opacity-90 transition-opacity"
+            >
+              登录
+            </a>
+            <a
+              href="/"
+              className="inline-flex items-center px-6 py-3 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
+            >
+              返回论坛
+            </a>
+          </div>
         </div>
       </div>
     );
