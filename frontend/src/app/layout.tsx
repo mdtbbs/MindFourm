@@ -82,7 +82,7 @@ function buildWebSiteJsonLd(settings: Record<string, string>): Record<string, un
   const siteUrl = getSiteUrl();
   if (!siteUrl) return null;
 
-  const siteName = settings.site_name || 'MindForum';
+  const siteName = settings.site_name || '社区论坛';
 
   return {
     '@context': 'https://schema.org',

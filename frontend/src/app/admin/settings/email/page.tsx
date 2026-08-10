@@ -206,7 +206,7 @@ export default function EmailSettingsPage() {
                 value={values.smtp_from ?? ''}
                 onChange={(e) => update('smtp_from', e.target.value)}
                 className="w-full border border-surface-200 bg-white px-3 py-2 text-sm md:max-w-xl"
-                placeholder="MindFourm <noreply@example.com>"
+                placeholder="社区论坛 <noreply@example.com>"
               />
             </label>
 

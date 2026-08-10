@@ -111,6 +111,7 @@ export default function AdminLayout({
   const { user } = useAuth();
   const userRole = user?.role ?? '';
   const resourcesEnabled = useSetting('feature_resources_enabled', 'true');
+  const siteName = useSetting('site_name', '社区论坛');
 
   // Feature-aware group keys to hide when the corresponding feature is disabled
   const featureGroupMap: Record<string, string> = {
@@ -140,7 +141,7 @@ export default function AdminLayout({
     <AdminGuard>
       <div className="admin-layout-root">
         <AdminSidebar
-          serviceName="MindForum"
+          serviceName={siteName}
           subtitle="管理后台"
           groups={visibleGroups}
           activeKey={activeKey}

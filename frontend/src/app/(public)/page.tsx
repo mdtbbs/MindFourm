@@ -140,7 +140,7 @@ export default async function HomePage({
         <div className="grid gap-0 lg:grid-cols-[1.4fr_0.9fr]">
           <div className="border-b border-[var(--border)] p-6 lg:border-b-0 lg:border-r">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-              MindForum
+              {settings.site_name || '社区论坛'}
             </p>
             {/* An h1, not a div: the site's most important page had no top-level
                 heading at all. The Markdown renderer's own headings are flattened to

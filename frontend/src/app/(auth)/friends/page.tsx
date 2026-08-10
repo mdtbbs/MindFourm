@@ -4,7 +4,7 @@ import FriendSearch from '@/components/lanlink/FriendSearch';
 import FriendsList from '@/components/forum/friends-list';
 
 export const metadata: Metadata = {
-  title: '好友 - MindForum',
+  title: '好友',
   description: '管理你的好友，发送和接受好友请求',
 };
 

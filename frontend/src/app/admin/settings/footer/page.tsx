@@ -122,7 +122,7 @@ export default function FooterSettingsPage() {
             className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400"
             value={values.footer_copyright ?? ''}
             onChange={(e) => update('footer_copyright', e.target.value)}
-            placeholder="© 2026 MindFourm. All rights reserved."
+            placeholder="© 2026 社区论坛. All rights reserved."
           />
           <p className="text-xs text-surface-400 mt-1">留空时使用"基本信息"里的页脚版权信息，再留空则自动生成。</p>
         </div>

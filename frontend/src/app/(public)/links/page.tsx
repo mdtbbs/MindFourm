@@ -1,9 +1,14 @@
 import Link from 'next/link';
+import type { Metadata } from 'next';
 import { ExternalLink } from 'lucide-react';
 import { getFooterSettings, isExternalHref } from '@/lib/footer/footer-settings';
 import { fetchPublicSettings } from '@/lib/settings/server';
 
 export const revalidate = 60;
+
+export const metadata: Metadata = {
+  title: '友情链接',
+};
 
 export default async function LinksPage() {
   const settings = await fetchPublicSettings();

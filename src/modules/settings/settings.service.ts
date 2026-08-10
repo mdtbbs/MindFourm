@@ -432,7 +432,7 @@ export class SettingsService implements OnModuleInit {
    */
   async seedDefaults(): Promise<void> {
     const defaults = [
-      { key: 'site_name', value: 'MindFourm', category: 'brand', description: 'Site name' },
+      { key: 'site_name', value: 'MDTBBS', category: 'brand', description: 'Site name' },
       { key: 'site_tagline', value: '', category: 'brand', description: 'Site tagline' },
       { key: 'site_description', value: 'Mindustry community forum', category: 'brand', description: 'Site description' },
       { key: 'site_logo_url', value: '', category: 'brand', description: 'Site logo URL' },
@@ -471,7 +471,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'latest_posts_show_index', value: 'true', category: 'display', description: 'Show row index in latest posts list' },
       { key: 'announce_enabled', value: 'false', category: 'announce', description: 'Enable announcement banner' },
       { key: 'announce_content', value: '', category: 'announce', description: 'Announcement banner content' },
-      { key: 'seo_title_suffix', value: ' | MindForum', category: 'seo', description: 'SEO title suffix' },
+      { key: 'seo_title_suffix', value: ' | MDTBBS', category: 'seo', description: 'SEO title suffix' },
       { key: 'seo_default_description', value: 'A modern community forum', category: 'seo', description: 'Default SEO description' },
       { key: 'seo_og_image', value: '', category: 'seo', description: 'Default Open Graph image' },
       { key: 'seo_sitemap_enabled', value: 'true', category: 'seo', description: 'Enable sitemap.xml generation' },

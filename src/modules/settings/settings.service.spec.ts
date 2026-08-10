@@ -187,7 +187,7 @@ describe('SettingsService', () => {
     const sensitiveRows: SettingRow[] = [
       {
         key: 'site_name',
-        value: 'MindFourm',
+        value: 'MDTBBS',
         category: 'basic',
         description: 'Site name',
         updated_at: new Date(),
@@ -241,7 +241,7 @@ describe('SettingsService', () => {
       await (service as any).loadSettings();
 
       await expect(service.getPublicSettings()).resolves.toEqual({
-        site_name: 'MindFourm',
+        site_name: 'MDTBBS',
         site_tagline: '',
         site_description: '',
         site_logo_url: '',

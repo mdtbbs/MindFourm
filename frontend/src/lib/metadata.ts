@@ -31,8 +31,12 @@ export function generatePageMetadata({
   const favicon = brandInfo.faviconUrl || '/favicon.ico';
   const images = brandInfo.logoUrl ? [brandInfo.logoUrl] : [];
 
+  // NOTE: `title` is returned bare — the root layout's `title.template` appends
+  // the site-name suffix automatically. Passing `fullTitle` here produced
+  // "标题 | MindForum | MindForum" because the suffix was applied twice.
+  // OG/Twitter are not templated, so they still need the full title.
   return {
-    title: fullTitle,
+    title,
     description: finalDescription,
     alternates: {
       canonical: path,
