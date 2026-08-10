@@ -8,7 +8,7 @@ import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import { getIconComponent } from '@/lib/resource-icons';
 import type { SidebarNavigationItem } from '@/lib/navigation/sidebar-navigation';
-import type { ResourceCategory } from '@/types';
+import type { ResourceCategory, Category } from '@/types';
 
 function resolveIcon(name: string): LucideIcon {
   const entry = (LucideIcons as Record<string, unknown>)[name];
@@ -26,6 +26,13 @@ function isActivePath(currentPathname: string | null, href: string): boolean {
 
 function isCategoryActive(categoryId: number, currentPathname: string | null | undefined): boolean {
   if (!currentPathname || !currentPathname.startsWith('/resources')) return false;
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('category_id') === String(categoryId);
+}
+
+function isForumCategoryActive(categoryId: number, currentPathname: string | null | undefined): boolean {
+  if (!currentPathname) return false;
+  if (currentPathname !== '/') return false;
   if (typeof window === 'undefined') return false;
   return new URLSearchParams(window.location.search).get('category_id') === String(categoryId);
 }
@@ -95,6 +102,107 @@ function CategoryItem({
   );
 }
 
+function ForumBoardList({
+  categories,
+  currentPathname,
+}: {
+  categories: Category[];
+  currentPathname: string | null | undefined;
+}) {
+  return (
+    <ul className="space-y-0.5">
+      {categories.map((cat) => {
+        const href = `/?category_id=${cat.id}`;
+        const active = isForumCategoryActive(cat.id, currentPathname);
+        return (
+          <li key={cat.id}>
+            <Link
+              href={href}
+              className={`flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-[var(--primary-soft)] text-[var(--primary)] font-medium'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+              }`}
+            >
+              <span className="truncate">{cat.name}</span>
+              {cat.post_count !== undefined && (
+                <span className="shrink-0 text-xs opacity-60">{cat.post_count}</span>
+              )}
+            </Link>
+          </li>
+        );
+      })}
+      {categories.length === 0 && (
+        <li className="px-3 py-1.5 text-sm text-[var(--text-muted)]">暂无板块</li>
+      )}
+    </ul>
+  );
+}
+
+function DrawerNavItem({
+  item,
+  effectivePathname,
+  onClose,
+}: {
+  item: SidebarNavigationItem;
+  effectivePathname: string | null;
+  onClose: () => void;
+}) {
+  const IconComponent = resolveIcon(item.icon);
+  const active = isActivePath(effectivePathname, item.href);
+  const external = item.href.startsWith('http://') || item.href.startsWith('https://');
+
+  return (
+    <Link
+      href={item.href}
+      onClick={onClose}
+      data-testid={`drawer-nav-item-${item.id}`}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noreferrer noopener' : undefined}
+      prefetch={!external ? undefined : false}
+      className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${
+        active
+          ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+      }`}
+    >
+      <IconComponent className="h-4 w-4 shrink-0" />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
+}
+
+function DrawerForumBoard({
+  category,
+  currentPathname,
+  onClose,
+}: {
+  category: Category;
+  currentPathname: string | null | undefined;
+  onClose: () => void;
+}) {
+  const href = `/?category_id=${category.id}`;
+  const active = isForumCategoryActive(category.id, currentPathname);
+  return (
+    <li>
+      <Link
+        href={href}
+        onClick={onClose}
+        className={`flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+          active
+            ? 'bg-[var(--primary-soft)] text-[var(--primary)] font-medium'
+            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+        }`}
+      >
+        <span className="truncate">{category.name}</span>
+        {category.post_count !== undefined && (
+          <span className="shrink-0 text-xs opacity-60">{category.post_count}</span>
+        )}
+      </Link>
+    </li>
+  );
+}
+
 /**
  * Layout class tokens for the mobile drawer.
  *
@@ -126,6 +234,7 @@ export default function ContentDrawer({
   userName,
   userMeta,
   resourceCategories,
+  forumCategories,
   currentPathname,
 }: {
   open: boolean;
@@ -137,11 +246,17 @@ export default function ContentDrawer({
   userName?: string;
   userMeta?: string;
   resourceCategories?: ResourceCategory[];
+  forumCategories?: Category[];
   currentPathname?: string | null;
 }) {
   const pathname = usePathname();
   const effectivePathname = currentPathname ?? pathname;
   const isOnResources = effectivePathname?.startsWith('/resources') ?? false;
+
+  const primaryItems = items.filter((item) => item.id !== 'categories');
+  const homeItem = primaryItems.find((item) => item.id === 'home');
+  const restItems = primaryItems.filter((item) => item.id !== 'home');
+  const boards = forumCategories ?? [];
 
   useEffect(() => {
     if (!open) return undefined;
@@ -199,31 +314,31 @@ export default function ContentDrawer({
           }}
           className={DRAWER_LAYOUT_CLASSES.nav}
         >
-          {items.map((item) => {
-            const IconComponent = resolveIcon(item.icon);
-            const active = isActivePath(effectivePathname, item.href);
-            const external =
-              item.href.startsWith('http://') || item.href.startsWith('https://');
+          {homeItem && (
+            <DrawerNavItem item={homeItem} effectivePathname={effectivePathname} onClose={onClose} />
+          )}
 
-            return (
-              <Link
-                key={item.id}
-                href={item.href}
-                data-testid={`drawer-nav-item-${item.id}`}
-                target={external ? '_blank' : undefined}
-                rel={external ? 'noreferrer noopener' : undefined}
-                prefetch={!external ? undefined : false}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${
-                  active
-                    ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-                }`}
-              >
-                <IconComponent className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </Link>
-            );
-          })}
+          {boards.length > 0 && (
+            <div className="mt-3 border-t border-[var(--border)] pt-3">
+              <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                论坛板块
+              </div>
+              <ul className="space-y-0.5">
+                {boards.map((cat) => (
+                  <DrawerForumBoard
+                    key={cat.id}
+                    category={cat}
+                    currentPathname={effectivePathname}
+                    onClose={onClose}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {restItems.map((item) => (
+            <DrawerNavItem key={item.id} item={item} effectivePathname={effectivePathname} onClose={onClose} />
+          ))}
 
           {isOnResources && resourceCategories && resourceCategories.length > 0 && (
             <div className="mt-4 border-t border-[var(--border)] pt-4">

@@ -7,7 +7,7 @@ import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import { getIconComponent } from '@/lib/resource-icons';
 import type { SidebarNavigationItem } from '@/lib/navigation/sidebar-navigation';
-import type { ResourceCategory } from '@/types';
+import type { ResourceCategory, Category } from '@/types';
 
 function resolveIcon(name: string): LucideIcon {
   const entry = (LucideIcons as Record<string, unknown>)[name];
@@ -25,6 +25,13 @@ function isActivePath(currentPathname: string | null, href: string): boolean {
 
 function isCategoryActive(categoryId: number, currentPathname: string | null | undefined): boolean {
   if (!currentPathname || !currentPathname.startsWith('/resources')) return false;
+  if (typeof window === 'undefined') return false;
+  return new URLSearchParams(window.location.search).get('category_id') === String(categoryId);
+}
+
+function isForumCategoryActive(categoryId: number, currentPathname: string | null | undefined): boolean {
+  if (!currentPathname) return false;
+  if (currentPathname !== '/') return false;
   if (typeof window === 'undefined') return false;
   return new URLSearchParams(window.location.search).get('category_id') === String(categoryId);
 }
@@ -94,6 +101,43 @@ function CategoryItem({
   );
 }
 
+function ForumBoardList({
+  categories,
+  currentPathname,
+}: {
+  categories: Category[];
+  currentPathname: string | null | undefined;
+}) {
+  return (
+    <ul className="space-y-0.5">
+      {categories.map((cat) => {
+        const href = `/?category_id=${cat.id}`;
+        const active = isForumCategoryActive(cat.id, currentPathname);
+        return (
+          <li key={cat.id}>
+            <Link
+              href={href}
+              className={`flex items-center justify-between gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-[var(--primary-soft)] text-[var(--primary)] font-medium'
+                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+              }`}
+            >
+              <span className="truncate">{cat.name}</span>
+              {cat.post_count !== undefined && (
+                <span className="shrink-0 text-xs opacity-60">{cat.post_count}</span>
+              )}
+            </Link>
+          </li>
+        );
+      })}
+      {categories.length === 0 && (
+        <li className="px-3 py-1.5 text-sm text-[var(--text-muted)]">暂无板块</li>
+      )}
+    </ul>
+  );
+}
+
 /**
  * Layout class tokens for the desktop sidebar.
  *
@@ -115,6 +159,36 @@ export const SIDEBAR_LAYOUT_CLASSES = {
   user: 'shrink-0',
 } as const;
 
+function SidebarNavItem({
+  item,
+  effectivePathname,
+}: {
+  item: SidebarNavigationItem;
+  effectivePathname: string | null;
+}) {
+  const IconComponent = resolveIcon(item.icon);
+  const active = isActivePath(effectivePathname, item.href);
+  const external = item.href.startsWith('http://') || item.href.startsWith('https://');
+
+  return (
+    <Link
+      href={item.href}
+      data-testid={`sidebar-nav-item-${item.id}`}
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noreferrer noopener' : undefined}
+      prefetch={!external ? undefined : false}
+      className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${
+        active
+          ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
+      }`}
+    >
+      <IconComponent className="h-4 w-4 shrink-0" />
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
+}
+
 export default function ContentSidebar({
   items,
   siteName,
@@ -123,6 +197,7 @@ export default function ContentSidebar({
   userName,
   userMeta,
   resourceCategories,
+  forumCategories,
   currentPathname,
 }: {
   items: SidebarNavigationItem[];
@@ -132,11 +207,18 @@ export default function ContentSidebar({
   userName?: string;
   userMeta?: string;
   resourceCategories?: ResourceCategory[];
+  forumCategories?: Category[];
   currentPathname?: string | null;
 }) {
   const pathname = usePathname();
   const effectivePathname = currentPathname ?? pathname;
   const isOnResources = effectivePathname?.startsWith('/resources') ?? false;
+
+  // Replace the static "分类" link with dynamic forum boards
+  const primaryItems = items.filter((item) => item.id !== 'categories');
+  const homeItem = primaryItems.find((item) => item.id === 'home');
+  const restItems = primaryItems.filter((item) => item.id !== 'home');
+  const boards = forumCategories ?? [];
 
   return (
     <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
@@ -157,31 +239,22 @@ export default function ContentSidebar({
       </div>
 
       <nav data-testid="sidebar-nav" role="navigation" className={SIDEBAR_LAYOUT_CLASSES.nav}>
-        {items.map((item) => {
-          const IconComponent = resolveIcon(item.icon);
-          const active = isActivePath(effectivePathname, item.href);
-          const external =
-            item.href.startsWith('http://') || item.href.startsWith('https://');
+        {homeItem && (
+          <SidebarNavItem item={homeItem} effectivePathname={effectivePathname} />
+        )}
 
-          return (
-            <Link
-              key={item.id}
-              href={item.href}
-              data-testid={`sidebar-nav-item-${item.id}`}
-              target={external ? '_blank' : undefined}
-              rel={external ? 'noreferrer noopener' : undefined}
-              prefetch={!external ? undefined : false}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors ${
-                active
-                  ? 'bg-[var(--primary-soft)] text-[var(--primary)]'
-                  : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'
-              }`}
-            >
-              <IconComponent className="h-4 w-4 shrink-0" />
-              <span className="truncate">{item.label}</span>
-            </Link>
-          );
-        })}
+        {boards.length > 0 && (
+          <div className="mt-3 border-t border-[var(--border)] pt-3">
+            <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              论坛板块
+            </div>
+            <ForumBoardList categories={boards} currentPathname={effectivePathname} />
+          </div>
+        )}
+
+        {restItems.map((item) => (
+          <SidebarNavItem key={item.id} item={item} effectivePathname={effectivePathname} />
+        ))}
 
         {isOnResources && resourceCategories && resourceCategories.length > 0 && (
           <div className="mt-4 border-t border-[var(--border)] pt-4">

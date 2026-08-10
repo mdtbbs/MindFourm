@@ -7,8 +7,8 @@ import { useAuth } from '@/lib/auth/context';
 import { useSettings } from '@/lib/settings/context';
 import { resolveBrand } from '@/lib/theme/brand';
 import { buildSidebarNavigation } from '@/lib/navigation/sidebar-navigation';
-import { messageApi, friendsApi, resourceApi } from '@/lib/api/client';
-import type { Notification, ResourceCategory } from '@/types';
+import { messageApi, friendsApi, resourceApi, categoryApi } from '@/lib/api/client';
+import type { Notification, ResourceCategory, Category } from '@/types';
 import Footer from '@/components/forum/footer';
 import AnnouncementBanner from '@/components/forum/announcement-banner';
 import ContentSidebar from '@/components/layout/content-sidebar';
@@ -27,6 +27,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   const [unreadFriendRequestCount, setUnreadFriendRequestCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [resourceCategories, setResourceCategories] = useState<ResourceCategory[]>([]);
+  const [forumCategories, setForumCategories] = useState<Category[]>([]);
 
   const sidebarItems = useMemo(
     () => buildSidebarNavigation({
@@ -55,6 +56,18 @@ export default function ContentShell({ children }: { children: React.ReactNode }
           })
           .catch(() => {});
       });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    categoryApi.getList()
+      .then((res) => {
+        if (!cancelled) setForumCategories(Array.isArray(res) ? res : []);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -123,6 +136,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         userName={user?.username || undefined}
         userMeta={userMeta}
         resourceCategories={resourceCategories}
+        forumCategories={forumCategories}
         currentPathname={pathname}
       />
 
@@ -136,6 +150,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         userName={user?.username || undefined}
         userMeta={userMeta}
         resourceCategories={resourceCategories}
+        forumCategories={forumCategories}
         currentPathname={pathname}
       />
 
