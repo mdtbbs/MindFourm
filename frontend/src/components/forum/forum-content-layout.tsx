@@ -26,7 +26,6 @@ export default function ForumContentLayout({
     <div className="flex gap-8">
       <div className="hidden w-60 shrink-0 xl:block">
         <Sidebar
-          categories={categories}
           tags={tags}
           selectedCategory={selectedCategory}
           activeQuickLinkHref={activeQuickLinkHref}

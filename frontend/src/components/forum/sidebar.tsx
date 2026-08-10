@@ -1,12 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { Category, Tag } from '@/types';
+import { Tag } from '@/types';
 import { FolderOpen, Server, Users, Trophy, ShoppingBag } from 'lucide-react';
 import { useSetting } from '@/store/settings-store';
 
 interface SidebarProps {
-  categories: Category[];
   tags: Tag[];
   selectedCategory?: number;
   activeQuickLinkHref?: string;
@@ -22,7 +21,6 @@ const allQuickLinks = [
 ] as const;
 
 export default function Sidebar({
-  categories,
   tags,
   selectedCategory,
   activeQuickLinkHref,
@@ -48,44 +46,6 @@ export default function Sidebar({
 
   return (
     <aside className="space-y-4">
-      <section className="panel-surface p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-            分类
-          </h3>
-          <span className="text-[11px] text-[var(--muted-foreground)]">{categories.length}</span>
-        </div>
-        <nav className="space-y-1">
-          <Link
-            href="/"
-            className={`flex items-center justify-between border px-3 py-2 text-sm transition-colors ${
-              highlightAllPosts && !selectedCategory && !activeQuickLinkHref
-                ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
-                : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
-            }`}
-          >
-            <span>全部帖子</span>
-          </Link>
-          {categories
-            .filter((c) => c.is_active)
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map((category) => (
-              <Link
-                key={category.id}
-                href={`/categories/${category.id}`}
-                className={`flex items-center justify-between border px-3 py-2 text-sm transition-colors ${
-                  selectedCategory === category.id
-                    ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
-                    : 'border-[var(--border)] text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]'
-                }`}
-                title={category.name}
-              >
-                <span className="truncate">{category.name}</span>
-              </Link>
-            ))}
-        </nav>
-      </section>
-
       {tags.length > 0 && (
         <section className="panel-surface p-4">
           <div className="mb-3 flex items-center justify-between">
