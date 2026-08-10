@@ -17,17 +17,17 @@ export default async function LinksPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary)]">Links</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--text-muted)] opacity-60">Links</p>
         <h1 className="mt-3 text-3xl font-bold text-[var(--text)]">友情链接</h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
-          这里收录与 Mindustry、开源社区和论坛生态相关的站点。正式友链可在后台「页脚设置」中维护。
+          以下是我们推荐的友好站点，与 Mindustry、开源社区和论坛生态相关。
         </p>
       </div>
 
       {footer.friendlyLinks.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-card)] px-6 py-12 text-center">
-          <p className="text-sm text-[var(--text-secondary)]">暂无友情链接。</p>
-          <p className="mt-2 text-xs text-[var(--text-muted)]">管理员可以在后台「站点设置 → 页脚设置」添加友链。</p>
+          <p className="text-sm text-[var(--text-secondary)]">暂无友情链接</p>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">稍后再来看看吧。</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

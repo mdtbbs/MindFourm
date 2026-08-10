@@ -183,7 +183,7 @@ export default function PostContent({
       </div>
 
       {/* Actions */}
-      <div className="px-6 py-4 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] flex items-center gap-2 flex-wrap">
+      <div className="px-4 py-2.5 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] flex items-center gap-2 flex-wrap">
         {/* Moderation actions for pending posts */}
         {post.status === 'pending' && canModerate && (
           <div className="flex items-center gap-2 mr-auto">
