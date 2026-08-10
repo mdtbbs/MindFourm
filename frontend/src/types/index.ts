@@ -402,6 +402,8 @@ export interface Resource {
   title: string;
   description: string | null;
   resource_type: 'upload' | 'external';
+  resource_kind?: string | null;
+  integrity?: string | null;
   file_name: string | null;
   file_path: string | null;
   file_size: number;
