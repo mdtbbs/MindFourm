@@ -58,6 +58,24 @@ mirrorDir(
   path.join(STANDALONE, 'public')
 );
 
+// Load .env.local for runtime env vars (API_URL, etc.) — Next.js does not
+// auto-load .env files in standalone production mode.
+const dotenvPath = path.join(ROOT, '.env.local');
+if (fs.existsSync(dotenvPath)) {
+  const lines = fs.readFileSync(dotenvPath, 'utf8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx);
+    const val = trimmed.slice(eqIdx + 1);
+    if (!(key in process.env)) {
+      process.env[key] = val;
+    }
+  }
+}
+
 // Hand off to the Next.js standalone server. Spawn rather than `require` so
 // signals (SIGTERM from PM2 / 宝塔 / docker stop) reach the real process and
 // exit codes propagate correctly.
