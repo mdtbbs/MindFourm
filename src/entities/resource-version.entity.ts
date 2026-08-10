@@ -39,6 +39,41 @@ export class ResourceVersion {
   @CreateDateColumn()
   created_at: Date;
 
+  // --- V1 ResourceVersion aggregate fields (additive, all nullable) ---
+
+  @Column({ type: 'char', length: 36, nullable: true, unique: true })
+  public_id: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  release_channel: string | null; // stable | beta | alpha
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  status: string | null; // draft | pending_review | published | rejected | withdrawn | archived
+
+  @Column({ type: 'text', nullable: true })
+  release_notes_markdown: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  release_notes_html: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  published_at: Date | null;
+
+  @Column({ type: 'int', nullable: true })
+  created_by_user_id: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  reviewed_by_user_id: number | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  reviewed_at: Date | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  reject_reason: string | null;
+
+  @Column({ default: false })
+  is_legacy_root_release: boolean;
+
   // Declared so the foreign key and its index actually exist; versions are
   // meaningless once their resource is gone.
   @ManyToOne(() => Resource, { eager: false, onDelete: 'CASCADE' })

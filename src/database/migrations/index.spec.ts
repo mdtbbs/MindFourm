@@ -6,4 +6,10 @@ describe('migration registry', () => {
       'CreateResourceComments1720000025000',
     );
   });
+
+  it('includes the media and download delivery migration', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'CreateMediaAndDownloadDelivery1720000027000',
+    );
+  });
 });

@@ -15,6 +15,9 @@ import { SettingsService } from './modules/settings/settings.service';
 import { ResourceCategoryService } from './modules/resources/resource-categories.service';
 import { DataSource } from 'typeorm';
 import { csrfMiddleware } from './common/middleware/csrf.middleware';
+import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { SwaggerModule } from '@nestjs/swagger';
+import { createV1OpenApiDocument } from './openapi/v1-openapi';
 import { appConfig } from './config/app.config';
 import { validateConfig } from './config/validate';
 
@@ -90,6 +93,7 @@ async function bootstrap() {
     req.cookies = req.cookies || parseCookieHeader(req.headers?.cookie);
     next();
   });
+  app.use(requestIdMiddleware);
   app.use(csrfMiddleware);
 
   // Global pipes
@@ -145,6 +149,11 @@ async function bootstrap() {
   const port = process.env.PORT || 4000;
   await app.listen(port);
   console.log(`MindFourm NestJS running on http://localhost:${port}`);
+
+  if (process.env.OPENAPI_ENABLED === 'true') {
+    const document = createV1OpenApiDocument(app);
+    SwaggerModule.setup('api/docs/v1', app, document);
+  }
 }
 
 bootstrap();

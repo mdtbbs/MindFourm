@@ -1,0 +1,29 @@
+
+> mindforum@2.1.0 audit:resources
+> npm run build:backend && node dist/scripts/resource-migration-audit.js
+
+
+> mindforum@2.1.0 build:backend
+> nest build
+
+{
+  "generated_at": "2026-08-10T05:47:24.136Z",
+  "counts": {
+    "active_resources": 253,
+    "resource_versions": 0,
+    "external_resources": 209,
+    "mfl_resources": 36,
+    "pending_resources": 36,
+    "rejected_resources": 15,
+    "soft_deleted_resources": 0,
+    "disabled_category_resources": 0
+  },
+  "anomalies": {
+    "resources_without_version": 28,
+    "resources_without_local_file_path": 0,
+    "version_rows_with_blank_version": 0,
+    "version_rows_without_file_path": 0,
+    "blank_description_resources": 29
+  },
+  "legacy_download_baseline": 21629
+}

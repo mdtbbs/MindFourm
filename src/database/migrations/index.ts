@@ -17,6 +17,13 @@ import { AddResourceIndexes1720000016000 } from './1720000016000-AddResourceInde
 import { AddQQAuthTables1720000017000 } from './1720000017000-AddQQAuthTables';
 import { RemoveForumQQAuth1720000018000 } from './1720000018000-RemoveForumQQAuth';
 import { AddTermsAcceptedToUsers1720000021000 } from './1720000021000-AddTermsAcceptedToUsers';
+import { ExpandResourceAggregate1720000026000 } from './1720000026000-ExpandResourceAggregate';
+import { CreateMediaAndDownloadDelivery1720000027000 } from './1720000027000-CreateMediaAndDownloadDelivery';
+import { CreateOutboxEvents1720000028000 } from './1720000028000-CreateOutboxEvents';
+import { CreateResourceInteractions1720000029000 } from './1720000029000-CreateResourceInteractions';
+import { CreateGameVersions1720000030000 } from './1720000030000-CreateGameVersions';
+import { CreateGameServers1720000031000 } from './1720000031000-CreateGameServers';
+import { CreateKnowledge1720000032000 } from './1720000032000-CreateKnowledge';
 
 /**
  * Migrations in run order.
@@ -45,4 +52,11 @@ export const migrations = [
   RemoveForumQQAuth1720000018000,
   AddTermsAcceptedToUsers1720000021000,
   CreateResourceComments1720000025000,
+  ExpandResourceAggregate1720000026000,
+  CreateMediaAndDownloadDelivery1720000027000,
+  CreateOutboxEvents1720000028000,
+  CreateResourceInteractions1720000029000,
+  CreateGameVersions1720000030000,
+  CreateGameServers1720000031000,
+  CreateKnowledge1720000032000,
 ];

@@ -46,6 +46,17 @@ import { LanLinkModule } from './modules/lanlink/lanlink.module';
 import { FriendsModule } from './modules/friends/friends.module';
 import { PresenceModule } from './modules/presence/presence.module';
 import { ResourceCommentsModule } from './modules/resource-comments/resource-comments.module';
+import { CapabilitiesModule } from './modules/capabilities/capabilities.module';
+import { MediaModule } from './modules/media/media.module';
+import { DownloadsModule } from './modules/downloads/downloads.module';
+import { EventsModule } from './modules/events/events.module';
+import { ThreadsModule } from './modules/threads/threads.module';
+import { CreatorModule } from './modules/creator/creator.module';
+import { GameVersionsModule } from './modules/game-versions/game-versions.module';
+import { GameServersModule } from './modules/game-servers/game-servers.module';
+import { KnowledgeModule } from './modules/knowledge/knowledge.module';
+import { DiscoverModule } from './modules/discover/discover.module';
+import { PortalModule } from './modules/portal/portal.module';
 import { PhoneWriteGuard } from './common/guards/phone-write.guard';
 import { BanGuard } from './common/guards/ban.guard';
 import { RateLimitGuard } from './common/guards/rate-limit.guard';
@@ -97,6 +108,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     BansModule,
     StatsModule,
     SettingsModule,
+    CapabilitiesModule,
     LogsModule,
     PointsModule,
     LevelsModule,
@@ -116,6 +128,16 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
     FriendsModule,
     PresenceModule,
     ResourceCommentsModule,
+    MediaModule,
+    DownloadsModule,
+    EventsModule,
+    ThreadsModule,
+    CreatorModule,
+    GameVersionsModule,
+    GameServersModule,
+    KnowledgeModule,
+    DiscoverModule,
+    PortalModule,
   ],
   controllers: [HealthController],
   // Global guards run in registration order, before any controller-scoped guard.

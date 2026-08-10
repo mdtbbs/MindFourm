@@ -70,6 +70,35 @@ import { LanLinkQuickCode } from './lanlink-quick-code.entity';
 import { Friendship } from './friendship.entity';
 import { ResourceComment } from './resource-comment.entity';
 
+// P0-B: Resource aggregate
+import { ResourceAttribution } from './resource-attribution.entity';
+import { ResourceFile } from './resource-file.entity';
+import { ResourceVersionDependency } from './resource-version-dependency.entity';
+import { ResourceVersionCompatibility } from './resource-version-compatibility.entity';
+
+// Phase 4 (refactor): Media
+import { MediaAsset } from './media-asset.entity';
+import { ResourceMediaLink } from './resource-media-link.entity';
+
+// Phase 5 (refactor): Events
+import { OutboxEvent } from './outbox-event.entity';
+
+// Phase 7 (refactor): Community — Resource interactions
+import { ResourceFavorite } from './resource-favorite.entity';
+import { ResourceSubscription } from './resource-subscription.entity';
+
+// Phase 8A (refactor): Game Versions
+import { GameVersion } from './game-version.entity';
+import { GameVersionBuild } from './game-version-build.entity';
+
+// Phase 8B (refactor): Servers
+import { GameServer } from './game-server.entity';
+import { GameServerSnapshot } from './game-server-snapshot.entity';
+
+// Phase 8C (refactor): Knowledge
+import { KnowledgeArticle } from './knowledge-article.entity';
+import { KnowledgeRevision } from './knowledge-revision.entity';
+
 export const entities = [
   User,
   Post,
@@ -137,6 +166,28 @@ export const entities = [
   Friendship,
   // Resource Comments
   ResourceComment,
+  // P0-B: Resource aggregate
+  ResourceAttribution,
+  ResourceFile,
+  ResourceVersionDependency,
+  ResourceVersionCompatibility,
+  // Phase 4 (refactor): Media
+  MediaAsset,
+  ResourceMediaLink,
+  // Phase 5 (refactor): Events
+  OutboxEvent,
+  // Phase 7 (refactor): Community — Resource interactions
+  ResourceFavorite,
+  ResourceSubscription,
+  // Phase 8A (refactor): Game Versions
+  GameVersion,
+  GameVersionBuild,
+  // Phase 8B (refactor): Servers
+  GameServer,
+  GameServerSnapshot,
+  // Phase 8C (refactor): Knowledge
+  KnowledgeArticle,
+  KnowledgeRevision,
 ];
 
 export {
@@ -182,4 +233,18 @@ export {
   Friendship,
   // Resource Comments
   ResourceComment,
+  // P0-B: Resource aggregate
+  ResourceAttribution, ResourceFile, ResourceVersionDependency, ResourceVersionCompatibility,
+  // Phase 4 (refactor): Media
+  MediaAsset, ResourceMediaLink,
+  // Phase 5 (refactor): Events
+  OutboxEvent,
+  // Phase 7 (refactor): Community — Resource interactions
+  ResourceFavorite, ResourceSubscription,
+  // Phase 8A (refactor): Game Versions
+  GameVersion, GameVersionBuild,
+  // Phase 8B (refactor): Servers
+  GameServer, GameServerSnapshot,
+  // Phase 8C (refactor): Knowledge
+  KnowledgeArticle, KnowledgeRevision,
 };

@@ -95,6 +95,42 @@ export class Resource {
   @DeleteDateColumn()
   deleted_at: Date;
 
+  // --- V1 Resource aggregate fields (additive, all nullable) ---
+
+  @Column({ type: 'char', length: 36, nullable: true, unique: true })
+  public_id: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  summary: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  resource_kind: string | null; // mod | map | schematic | save | server_plugin | development_tool | texture_ui | other
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  visibility: string | null; // public | unlisted | private
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  homepage_url: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  source_url: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  license: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  latest_published_version_id: number | null;
+
+  @Column({ type: 'int', nullable: true })
+  discussion_thread_id: number | null;
+
+  @Column({ type: 'json', nullable: true })
+  metadata_json: any;
+
+  @ManyToOne(() => ResourceVersion, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'latest_published_version_id' })
+  latest_published_version: ResourceVersion;
+
   @ManyToOne(() => User, { eager: false })
   @JoinColumn({ name: 'user_id' })
   user: User;
