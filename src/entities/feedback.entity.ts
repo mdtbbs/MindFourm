@@ -21,10 +21,10 @@ export class Feedback {
   @Column({ type: 'text' })
   description: string;
 
-  @Column({ length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   contact_email: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   user_id: number | null;
 
   @Column({ length: 50, default: 'pending' })
