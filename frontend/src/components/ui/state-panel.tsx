@@ -1,10 +1,9 @@
 'use client';
 
-import type { ElementType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from './button';
-import { AlertTriangle, Info } from 'lucide-react';
 
 export type StateAction = {
   label: string;
@@ -13,7 +12,12 @@ export type StateAction = {
 };
 
 export type StatePanelProps = {
-  icon?: ElementType;
+  /**
+   * A rendered icon element (not a component function). Passing a component
+   * function would break when the parent is a Server Component, because React
+   * cannot serialize functions across the RSC boundary.
+   */
+  icon?: ReactNode;
   title: string;
   description?: string;
   action?: StateAction;
@@ -43,7 +47,7 @@ function Action({ action, secondary = false }: { action: StateAction; secondary?
 }
 
 export function StatePanel({
-  icon: Icon = Info,
+  icon,
   title,
   description,
   action,
@@ -61,7 +65,11 @@ export function StatePanel({
         className
       )}
     >
-      <Icon className="mb-3 h-10 w-10 text-[var(--text-muted)]" aria-hidden="true" />
+      {icon && (
+        <div className="mb-3 h-10 w-10 text-[var(--text-muted)] [&>svg]:h-10 [&>svg]:w-10" aria-hidden="true">
+          {icon}
+        </div>
+      )}
       <h2 className="text-base font-semibold text-[var(--text)]">{title}</h2>
       {description && <p className="mt-2 max-w-md text-sm text-[var(--text-secondary)]">{description}</p>}
       {children}
@@ -75,5 +83,4 @@ export function StatePanel({
   );
 }
 
-export { AlertTriangle };
 export default StatePanel;

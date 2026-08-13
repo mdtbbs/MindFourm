@@ -1,9 +1,11 @@
-import type { ElementType } from 'react';
+'use client';
+
+import type { ReactNode } from 'react';
 import StatePanel, { type StateAction } from './state-panel';
 import { AlertTriangle } from 'lucide-react';
 
 export type ErrorStateProps = {
-  icon?: ElementType;
+  icon?: ReactNode;
   title: string;
   description?: string;
   action?: StateAction;
@@ -18,7 +20,7 @@ export default function ErrorState({ onRetry, action, ...props }: ErrorStateProp
   return (
     <StatePanel
       {...props}
-      icon={props.icon ?? AlertTriangle}
+      icon={props.icon ?? <AlertTriangle className="h-10 w-10" />}
       role="alert"
       action={action ?? retryAction}
     />
