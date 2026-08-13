@@ -258,14 +258,17 @@ export async function addForeignKeyIfMissing(
   if (await foreignKeyOnColumnExists(queryRunner, table, column)) return;
 
   if (onDelete === 'SET NULL') {
+    // MySQL forbids an UPDATE whose subquery reads from the same target table.
+    // This is hit by the self-referencing resource_categories.parent_id FK.
+    // A joined update has the same orphan-cleanup semantics and is accepted for
+    // both self-referencing and ordinary foreign keys.
     await queryRunner.query(
       `UPDATE \`${table}\` child
+         LEFT JOIN \`${referencedTable}\` parent
+           ON parent.\`${referencedColumn}\` = child.\`${column}\`
           SET child.\`${column}\` = NULL
         WHERE child.\`${column}\` IS NOT NULL
-          AND NOT EXISTS (
-            SELECT 1 FROM \`${referencedTable}\` parent
-             WHERE parent.\`${referencedColumn}\` = child.\`${column}\`
-          )`,
+          AND parent.\`${referencedColumn}\` IS NULL`,
     );
   } else {
     const orphans = await queryRunner.query(
