@@ -43,19 +43,11 @@ export default function ContentShell({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     let cancelled = false;
-    // Prefer the tree endpoint (nested children); fall back to the flat list
-    // if the backend has not been redeployed yet.
-    resourceApi.getCategoriesTree()
+    resourceApi.getCategories()
       .then((res) => {
         if (!cancelled) setResourceCategories(res);
       })
-      .catch(() => {
-        resourceApi.getCategories()
-          .then((res) => {
-            if (!cancelled) setResourceCategories(res);
-          })
-          .catch(() => {});
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -127,12 +119,12 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   const userMeta = user?.role ? `角色：${user.role}` : (isAuthenticated ? '已登录' : '未登录');
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">
       <ContentSidebar
         items={sidebarItems}
         siteName={brand.siteName}
         sidebarTitle={brand.sidebarTitle}
-        logoUrl={settings.site_logo_url || undefined}
+        logoUrl={brand.logoUrl || undefined}
         userName={user?.username || undefined}
         userMeta={userMeta}
         resourceCategories={resourceCategories}
@@ -146,7 +138,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         onClose={() => setMobileMenuOpen(false)}
         siteName={brand.siteName}
         sidebarTitle={brand.sidebarTitle}
-        logoUrl={settings.site_logo_url || undefined}
+        logoUrl={brand.logoUrl || undefined}
         userName={user?.username || undefined}
         userMeta={userMeta}
         resourceCategories={resourceCategories}
@@ -157,7 +149,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <ContentToolbar
           siteName={brand.siteName}
-          logoUrl={settings.site_logo_url || undefined}
+          logoUrl={brand.logoUrl || undefined}
           user={user}
           isAuthenticated={isAuthenticated}
           unreadMessageCount={unreadMsgCount}
@@ -169,7 +161,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
           onOpenDrawer={() => setMobileMenuOpen(true)}
         />
         <AnnouncementBanner />
-        <main className="flex-1">{children}</main>
+        <main className="min-w-0 flex-1">{children}</main>
         <Footer />
       </div>
     </div>

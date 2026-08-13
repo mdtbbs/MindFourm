@@ -1062,7 +1062,11 @@ export const attachmentApi = {
     }),
   getByPost: (postId: number) =>
     request<Attachment[]>(`/api/attachments/post/${postId}`),
+  getByReply: (replyId: number) =>
+    request<Attachment[]>(`/api/attachments/reply/${replyId}`),
   download: (id: number) => `${API_BASE}/api/attachments/${id}/download`,
+  preview: (id: number) => `${API_BASE}/api/attachments/${id}/preview`,
+  renderStatus: (id: number) => request<Attachment>(`/api/attachments/${id}/render-status`),
 };
 
 // Message APIs
@@ -1094,6 +1098,8 @@ export const resourceApi = {
     ),
   getById: (id: number) =>
     request<Resource>(`/api/resources/${id}`),
+  getRelated: (id: number, limit = 6) =>
+    request<Resource[]>(`/api/resources/${id}/related?limit=${limit}`),
   download: (id: number, versionId?: number | null) =>
     `${API_BASE}/api/resources/${id}/download${versionId ? `?version_id=${versionId}` : ''}`,
   upload: (formData: FormData) =>
@@ -1114,6 +1120,7 @@ export const resourceApi = {
   },
   getCategories: () =>
     request<ResourceCategory[]>('/api/resources/categories'),
+  /** @deprecated Categories are flat; use getCategories(). */
   getCategoriesTree: () =>
     request<ResourceCategory[]>('/api/resources/categories/tree'),
   getVersions: (id: number) =>
@@ -1141,6 +1148,16 @@ export const resourceApi = {
   deleteRating: (id: number) => {
     clearCache();
     return request<void>(`/api/resources/${id}/rating`, { method: 'DELETE' });
+  },
+  getFavorite: (id: number) =>
+    request<{ is_favorited: boolean; favorite_count: number }>(`/api/resources/${id}/favorite`),
+  addFavorite: (id: number) => {
+    clearCache();
+    return request<{ is_favorited: boolean; favorite_count: number }>(`/api/resources/${id}/favorite`, { method: 'POST' });
+  },
+  removeFavorite: (id: number) => {
+    clearCache();
+    return request<{ is_favorited: boolean; favorite_count: number }>(`/api/resources/${id}/favorite`, { method: 'DELETE' });
   },
   getMyResources: (params?: { cursor?: string; limit?: number }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(

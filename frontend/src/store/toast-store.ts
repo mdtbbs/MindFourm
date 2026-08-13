@@ -86,7 +86,9 @@ export const useToastStore = create<ToastState>((set, get) => ({
         message,
         type,
         duration: 0,
-        dismissible: false,
+        // A persistent reminder may be closed. It is recreated after route
+        // navigation while the account remains unverified.
+        dismissible: true,
         createdAt: existing?.createdAt ?? Date.now(),
       };
 

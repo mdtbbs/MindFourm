@@ -32,6 +32,7 @@ import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
 import { ExternalActorResolverService } from './external-actor-resolver.service';
 import { ExternalApiAuditService } from './external-api-audit.service';
+import { getClientIp } from '@common/utils/client-context.util';
 import { hasExternalScope } from './external-api-scopes';
 import {
   ExternalCreatePostDto,
@@ -145,7 +146,7 @@ export class ExternalApiController {
       post_type: body.post_type,
       tags: body.tags,
       status: body.status as any,
-    }, actor.id);
+    }, actor.id, { ipAddress: this.getClientIp(req), locationLabel: req.clientRegion || null });
 
     await this.auditOperation(req, 'posts.create', 'posts:write', actor.id, 'post', post?.id ?? null, {
       status: post?.status,
@@ -218,7 +219,7 @@ export class ExternalApiController {
     const reply = await this.repliesService.createReplyForPost(id, {
       content: body.content,
       parent_reply_id: body.parent_reply_id,
-    }, actor.id);
+    }, actor.id, { ipAddress: this.getClientIp(req), locationLabel: req.clientRegion || null });
 
     await this.auditOperation(req, 'replies.create', 'replies:write', actor.id, 'reply', reply.id, {
       post_id: id,
@@ -453,6 +454,6 @@ export class ExternalApiController {
   }
 
   private getClientIp(req: any): string {
-    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    return getClientIp(req);
   }
 }

@@ -5,13 +5,28 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { Public } from '@common/decorators/public.decorator';
 import { PresenceService } from './presence.service';
 import { PresenceData } from './presence.data';
+import { StaffPresenceService } from './staff-presence.service';
 
 @Controller('presence')
 @UseGuards(JwtAuthGuard)
 export class PresenceController {
-  constructor(private readonly presenceService: PresenceService) {}
+  constructor(
+    private readonly presenceService: PresenceService,
+    private readonly staffPresenceService: StaffPresenceService,
+  ) {}
+
+  /** Public status only for accounts that can moderate the forum. */
+  @Get('staff')
+  @Public()
+  async getStaffPresence() {
+    // The global response interceptor provides the API envelope. Returning a
+    // second one here would make SSR clients receive an object instead of the
+    // advertised staff array.
+    return this.staffPresenceService.list();
+  }
 
   /**
    * GET /api/presence?user_ids=1,2,3

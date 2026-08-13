@@ -5,6 +5,17 @@ import { ResourceCategory } from '@entities/resource-category.entity';
 import { RedisService } from '@database/redis.service';
 import { RevalidationService } from '@common/services/revalidation.service';
 
+const RESOURCE_CATEGORY_ICON_WHITELIST = new Set([
+  'Folder',
+  'Puzzle',
+  'Map',
+  'Server',
+  'Palette',
+  'BookOpen',
+  'Wrench',
+  'FileText',
+]);
+
 @Injectable()
 export class ResourceCategoryService {
   constructor(
@@ -80,35 +91,11 @@ export class ResourceCategoryService {
   }
 
   /**
-   * Return active categories as a nested tree. Roots come first; children
-   * are attached under each parent. Used by the sidebar so it can render
-   * parent/child hierarchy without re-shaping the flat list on the client.
+   * Compatibility alias for clients that still call the old tree endpoint.
+   * The category model is flat; ordering is stable in the shared query.
    */
-  async getCategoriesTree(): Promise<any[]> {
-    const allCategories = await this.categoryRepository
-      .createQueryBuilder('category')
-      .where('category.is_active = :isActive', { isActive: 1 })
-      .orderBy('category.sort_order', 'ASC')
-      .addOrderBy('category.id', 'ASC')
-      .getMany();
-
-    const map = new Map<number, any>();
-    const roots: any[] = [];
-
-    for (const cat of allCategories) {
-      map.set(cat.id, { ...cat, children: [] });
-    }
-
-    for (const cat of allCategories) {
-      const node = map.get(cat.id);
-      if (cat.parent_id && map.has(cat.parent_id)) {
-        map.get(cat.parent_id).children.push(node);
-      } else {
-        roots.push(node);
-      }
-    }
-
-    return roots;
+  async getCategoriesTree(): Promise<ResourceCategory[]> {
+    return this.getPublicCategories();
   }
 
   /**
@@ -164,6 +151,7 @@ export class ResourceCategoryService {
    * Create a new category
    */
   async create(dto: Partial<ResourceCategory>): Promise<ResourceCategory> {
+    this.validateIcon(dto.icon);
     // Check slug uniqueness
     const existing = await this.categoryRepository.findOne({
       where: { slug: dto.slug },
@@ -183,7 +171,11 @@ export class ResourceCategoryService {
       dto.sort_order = (maxSortOrder?.max || 0) + 1;
     }
 
-    const category = this.categoryRepository.create(dto);
+    const category = this.categoryRepository.create({
+      ...dto,
+      is_active: dto.is_active === undefined ? 1 : dto.is_active,
+      icon: dto.icon || 'Folder',
+    });
     const saved = await this.categoryRepository.save(category);
 
     await this.invalidateCategoryCache();
@@ -196,6 +188,8 @@ export class ResourceCategoryService {
   async update(id: number, dto: Partial<ResourceCategory>): Promise<ResourceCategory | null> {
     const category = await this.getById(id);
     if (!category) return null;
+
+    this.validateIcon(dto.icon);
 
     // Check slug uniqueness if changing
     if (dto.slug && dto.slug !== category.slug) {
@@ -212,6 +206,12 @@ export class ResourceCategoryService {
 
     await this.invalidateCategoryCache();
     return updated;
+  }
+
+  private validateIcon(icon: string | null | undefined): void {
+    if (icon !== undefined && icon !== null && !RESOURCE_CATEGORY_ICON_WHITELIST.has(icon)) {
+      throw new BadRequestException('Invalid resource category icon');
+    }
   }
 
   /**

@@ -3,9 +3,6 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
-  ManyToOne,
-  OneToMany,
-  JoinColumn,
 } from 'typeorm';
 
 @Entity('resource_categories')
@@ -30,16 +27,6 @@ export class ResourceCategory {
 
   @Column({ default: 1 })
   is_active: number;
-
-  @Column({ nullable: true })
-  parent_id: number | null;
-
-  @ManyToOne(() => ResourceCategory, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'parent_id' })
-  parent: ResourceCategory | null;
-
-  @OneToMany(() => ResourceCategory, (category) => category.parent)
-  children: ResourceCategory[];
 
   @CreateDateColumn()
   created_at: Date;

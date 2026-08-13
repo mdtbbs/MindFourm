@@ -33,6 +33,8 @@ export const SIDEBAR_ICON_WHITELIST = [
 
 export type SidebarIconName = (typeof SIDEBAR_ICON_WHITELIST)[number];
 
+export const PROTECTED_SIDEBAR_ITEM_IDS = ['home'] as const;
+
 export interface SidebarNavigationItem {
   id: string;
   label: string;
@@ -87,6 +89,13 @@ export function validateSidebarNavigation(
       );
     }
   });
+
+  if (items.length > 0) {
+    for (const protectedId of PROTECTED_SIDEBAR_ITEM_IDS) {
+      const item = items.find((candidate) => candidate.id === protectedId);
+      if (item && !item.enabled) errors.push(`Protected item "${protectedId}" cannot be disabled`);
+    }
+  }
 
   return {
     valid: errors.length === 0,

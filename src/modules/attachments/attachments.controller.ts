@@ -22,6 +22,7 @@ import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AttachmentsService } from './attachments.service';
+import { ForgePreviewService } from './forge-preview.service';
 import { UploadAttachmentDto } from './dto/upload-attachment.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { Public } from '@common/decorators/public.decorator';
@@ -37,6 +38,7 @@ const ALLOWED_MIME_TYPES = [
   'application/zip', 'application/x-zip-compressed',
   'application/x-rar-compressed', 'application/x-7z-compressed',
   'application/gzip', 'application/x-tar',
+  'application/octet-stream',
 ];
 
 const ALLOWED_EXTENSIONS_BY_MIME = new Map<string, Set<string>>([
@@ -57,6 +59,7 @@ const ALLOWED_EXTENSIONS_BY_MIME = new Map<string, Set<string>>([
   ['application/x-7z-compressed', new Set(['.7z'])],
   ['application/gzip', new Set(['.gz'])],
   ['application/x-tar', new Set(['.tar'])],
+  ['application/octet-stream', new Set(['.msav', '.msch'])],
 ]);
 
 function fileFilter(_req: any, file: Express.Multer.File, callback: (error: Error | null, acceptFile: boolean) => void) {
@@ -74,7 +77,10 @@ function fileFilter(_req: any, file: Express.Multer.File, callback: (error: Erro
 export class AttachmentsController {
   private readonly logger = new Logger(AttachmentsController.name);
 
-  constructor(private readonly attachmentsService: AttachmentsService) {}
+  constructor(
+    private readonly attachmentsService: AttachmentsService,
+    private readonly forgePreviewService: ForgePreviewService,
+  ) {}
 
   @Post('upload')
   @UseGuards(JwtAuthGuard)
@@ -109,6 +115,12 @@ export class AttachmentsController {
     if (body.post_id) {
       await this.attachmentsService.assertCanAttachToPost(body.post_id, userId, isStaff);
     }
+    if (body.reply_id) {
+      await this.attachmentsService.assertCanAttachToReply(body.reply_id, userId, isStaff);
+    }
+    if (!body.post_id && !body.reply_id) {
+      throw new BadRequestException('附件必须关联到帖子或回复');
+    }
 
     const results: any[] = [];
     for (const file of files) {
@@ -121,6 +133,14 @@ export class AttachmentsController {
         file_size: file.size,
         mime_type: file.mimetype,
       });
+      if (this.forgePreviewService.supports(attachment)) {
+        void this.forgePreviewService.submit(attachment)
+          .then((state) => this.attachmentsService.updateRendererState(attachment.id, state))
+          .catch((error) => {
+            this.logger.warn(`Failed to request preview for attachment ${attachment.id}: ${error.message}`);
+            return this.attachmentsService.updateRendererState(attachment.id, { status: 'failed', errorCode: 'FORGE_SUBMIT_FAILED' });
+          });
+      }
       results.push(attachment);
     }
     return { message: 'Files uploaded successfully', attachments: results };
@@ -130,6 +150,12 @@ export class AttachmentsController {
   @Public()
   async getByPost(@Param('postId', ParseIntPipe) postId: number) {
     return this.attachmentsService.getByPostId(postId);
+  }
+
+  @Get('reply/:replyId')
+  @Public()
+  async getByReply(@Param('replyId', ParseIntPipe) replyId: number) {
+    return this.attachmentsService.getByReplyId(replyId);
   }
 
   @Get(':id/download')
@@ -162,6 +188,42 @@ export class AttachmentsController {
       }
     });
     stream.pipe(res);
+  }
+
+  @Get(':id/preview')
+  @Public()
+  async preview(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
+    const attachment = await this.attachmentsService.getForDownload(id);
+    if (!attachment.renderer_resource_id) throw new NotFoundException('Preview is not ready');
+
+    const state = await this.forgePreviewService.status(attachment.renderer_resource_id);
+    if (state?.status === 'ready') {
+      await this.attachmentsService.updateRendererState(id, { status: state.status, resourceId: state.id });
+    } else if (state?.status === 'failed') {
+      await this.attachmentsService.updateRendererState(id, { status: state.status, resourceId: state.id, errorCode: state.errorCode });
+    }
+    const preview = await this.forgePreviewService.preview(attachment.renderer_resource_id);
+    if (!preview) throw new NotFoundException('Preview is not ready');
+    res.setHeader('Content-Type', preview.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.send(preview.body);
+  }
+
+  @Get(':id/render-status')
+  @Public()
+  async renderStatus(@Param('id', ParseIntPipe) id: number) {
+    const attachment = await this.attachmentsService.getForDownload(id);
+    if (!attachment.renderer_resource_id) return attachment;
+    const state = await this.forgePreviewService.status(attachment.renderer_resource_id);
+    if (state) {
+      await this.attachmentsService.updateRendererState(id, {
+        status: state.status,
+        resourceId: state.id,
+        errorCode: state.errorCode,
+      });
+      return this.attachmentsService.getById(id);
+    }
+    return attachment;
   }
 
   @Delete(':id')

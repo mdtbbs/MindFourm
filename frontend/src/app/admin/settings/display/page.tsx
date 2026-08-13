@@ -194,6 +194,17 @@ export default function DisplaySettingsPage() {
             </label>
           ))}
         </div>
+
+        <div className="border-t border-surface-200 pt-6">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">首页广告位</label>
+          <p className="mb-2 text-xs text-surface-400">JSON 数组，每项含 title、description、href（可选）。只渲染站内或 http(s) 链接。</p>
+          <textarea
+            className="min-h-[150px] w-full rounded border border-surface-200 px-3 py-2 font-mono text-xs focus:outline-none focus:border-surface-400"
+            value={values.home_ad_slots ?? '[]'}
+            onChange={(e) => update('home_ad_slots', e.target.value)}
+            placeholder={'[\n  {"title":"活动招募", "description":"说明", "href":"/posts/1"}\n]'}
+          />
+        </div>
       </div>
 
       <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">

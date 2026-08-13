@@ -6,6 +6,8 @@ import { useAuth } from '@/lib/auth/context';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
 import { SidebarGroup } from '@/lib/shared';
 import { useSetting } from '@/store/settings-store';
+import { useSettings } from '@/lib/settings/context';
+import { resolveBrand } from '@/lib/theme/brand';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
@@ -111,7 +113,7 @@ export default function AdminLayout({
   const { user } = useAuth();
   const userRole = user?.role ?? '';
   const resourcesEnabled = useSetting('feature_resources_enabled', 'true');
-  const siteName = useSetting('site_name', '社区论坛');
+  const siteName = resolveBrand(useSettings()).siteName;
 
   // Feature-aware group keys to hide when the corresponding feature is disabled
   const featureGroupMap: Record<string, string> = {

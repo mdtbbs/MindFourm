@@ -40,4 +40,7 @@ export class UpdateResourceDto {
   @IsOptional()
   @IsNumber()
   is_public?: number;
+
+  @IsOptional()
+  metadata?: Record<string, unknown>;
 }

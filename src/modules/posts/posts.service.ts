@@ -82,7 +82,11 @@ export class PostsService {
   /**
    * Create a new post with tags in a transaction
    */
-  async create(dto: CreatePostDto, userId: number): Promise<Post | null> {
+  async create(
+    dto: CreatePostDto,
+    userId: number,
+    provenance: { ipAddress?: string; locationLabel?: string | null } = {},
+  ): Promise<Post | null> {
     // Execute "before" hook to allow plugins to modify input
     let modifiedDto = await this.eventBus.execute('post.create', { ...dto, userId });
     dto = modifiedDto;
@@ -128,6 +132,8 @@ export class PostsService {
         is_pinned: 0,
         view_count: 0,
         like_count: 0,
+        ip_address: provenance.ipAddress || null,
+        location_label: provenance.locationLabel || null,
       });
 
       const savedPost = await manager.save(newPost);

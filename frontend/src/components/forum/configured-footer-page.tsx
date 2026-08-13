@@ -14,7 +14,7 @@ export default async function ConfiguredFooterPage({
   settingKey,
   fallback,
 }: ConfiguredFooterPageProps) {
-  const settings = await fetchPublicSettings();
+  const settings = await fetchPublicSettings({ fresh: true });
   const content = settings[settingKey]?.trim();
 
   return (

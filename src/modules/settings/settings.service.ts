@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Setting } from '@entities/index';
+import { Setting } from '@entities/setting.entity';
 import {
   assertValidColorSetting,
   DEFAULT_BRAND_ACCENT,
@@ -278,6 +278,8 @@ export class SettingsService implements OnModuleInit {
     'latest_posts_show_index',
     'announce_enabled',
     'announce_content',
+    'notices_content',
+    'home_ad_slots',
     'seo_title_suffix',
     'seo_default_description',
     'seo_og_image',
@@ -320,6 +322,8 @@ export class SettingsService implements OnModuleInit {
       'site_footer',
       'brand_primary',
       'brand_accent',
+      'resource_upload_directory',
+      'home_ad_slots',
     ]),
     brand: new Set([
       'site_name',
@@ -341,6 +345,7 @@ export class SettingsService implements OnModuleInit {
       'latest_posts_show_tags',
       'latest_posts_show_stats',
       'latest_posts_show_index',
+      'home_ad_slots',
     ]),
     navigation: new Set([
       'top_navigation_items',
@@ -361,6 +366,7 @@ export class SettingsService implements OnModuleInit {
     announce: new Set([
       'announce_enabled',
       'announce_content',
+      'notices_content',
     ]),
     moderation: new Set([
       'require_approval',
@@ -439,6 +445,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'site_favicon_url', value: '', category: 'brand', description: 'Site favicon URL' },
       { key: 'sidebar_title', value: '', category: 'brand', description: 'Sidebar title' },
       { key: 'site_footer', value: '', category: 'basic', description: 'Footer text' },
+      { key: 'resource_upload_directory', value: 'resources', category: 'basic', description: 'Resource file storage directory, relative to RESOURCE_UPLOAD_ROOT or absolute' },
       { key: 'footer_copyright', value: '', category: 'footer', description: 'Footer copyright text' },
       { key: 'footer_icp_number', value: '', category: 'footer', description: 'ICP filing number' },
       { key: 'footer_icp_url', value: '', category: 'footer', description: 'ICP filing link URL' },
@@ -469,8 +476,10 @@ export class SettingsService implements OnModuleInit {
       { key: 'latest_posts_show_tags', value: 'true', category: 'display', description: 'Show tags in latest posts list' },
       { key: 'latest_posts_show_stats', value: 'true', category: 'display', description: 'Show stats in latest posts list' },
       { key: 'latest_posts_show_index', value: 'true', category: 'display', description: 'Show row index in latest posts list' },
+      { key: 'home_ad_slots', value: '[]', category: 'display', description: 'Homepage advertisement slots as JSON' },
       { key: 'announce_enabled', value: 'false', category: 'announce', description: 'Enable announcement banner' },
       { key: 'announce_content', value: '', category: 'announce', description: 'Announcement banner content' },
+      { key: 'notices_content', value: '[]', category: 'announce', description: 'Structured notices page JSON' },
       { key: 'seo_title_suffix', value: ' | MDTBBS', category: 'seo', description: 'SEO title suffix' },
       { key: 'seo_default_description', value: 'A modern community forum', category: 'seo', description: 'Default SEO description' },
       { key: 'seo_og_image', value: '', category: 'seo', description: 'Default Open Graph image' },
@@ -705,6 +714,7 @@ export class SettingsService implements OnModuleInit {
     // Priority 3: defaults
     return getDefaultSidebarNavigation();
   }
+
 
   /**
    * Upsert a single setting by key. The category is resolved from the existing

@@ -16,6 +16,7 @@ import { ResourceCategoryService } from './modules/resources/resource-categories
 import { DataSource } from 'typeorm';
 import { csrfMiddleware } from './common/middleware/csrf.middleware';
 import { requestIdMiddleware } from './common/middleware/request-id.middleware';
+import { clientContextMiddleware } from './common/middleware/client-context.middleware';
 import { SwaggerModule } from '@nestjs/swagger';
 import { createV1OpenApiDocument } from './openapi/v1-openapi';
 import { appConfig } from './config/app.config';
@@ -55,7 +56,10 @@ async function bootstrap() {
   // Behind nginx, X-Forwarded-For must be trusted or every request appears to come
   // from the loopback proxy — which would collapse rate limiting into one bucket,
   // make IP bans match all-or-nothing, and record 127.0.0.1 in every audit row.
-  app.set('trust proxy', 1);
+  // The production origin is reached through the CDN only.  Application code
+  // reads X-Forwarded-For directly as the client IP source, and Express must
+  // apply the same policy for its own request helpers.
+  app.set('trust proxy', true);
 
   // Global prefix
   app.setGlobalPrefix('api');
@@ -93,6 +97,7 @@ async function bootstrap() {
     req.cookies = req.cookies || parseCookieHeader(req.headers?.cookie);
     next();
   });
+  app.use(clientContextMiddleware);
   app.use(requestIdMiddleware);
   app.use(csrfMiddleware);
 
@@ -153,6 +158,7 @@ async function bootstrap() {
   if (process.env.OPENAPI_ENABLED === 'true') {
     const document = createV1OpenApiDocument(app);
     SwaggerModule.setup('api/docs/v1', app, document);
+    app.getHttpAdapter().get('/api/openapi/v1.json', (_req: unknown, res: any) => res.json(document));
   }
 }
 

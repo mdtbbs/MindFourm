@@ -4,6 +4,7 @@ import { CreateReplyDto } from './dto/create-reply.dto';
 import { UpdateReplyDto } from './dto/update-reply.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
+import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
 
 @Controller('posts/:postId/replies')
 export class RepliesController {
@@ -33,7 +34,10 @@ export class RepliesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    const reply = await this.repliesService.createReplyForPost(Number(postId), dto, userId);
+    const reply = await this.repliesService.createReplyForPost(Number(postId), dto, userId, {
+      ipAddress: getClientIp(req),
+      locationLabel: getClientRegion(req),
+    });
     await this.logOperation(req, 'reply.create', 'reply', reply.id, {
       post_id: Number(postId),
       status: reply.status,
@@ -54,7 +58,7 @@ export class RepliesController {
   }
 
   private getClientIp(req: any): string {
-    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    return getClientIp(req);
   }
 }
 
@@ -78,7 +82,7 @@ export class RepliesControllerMain {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    const reply = await this.repliesService.update(Number(id), dto.content, userId);
+    const reply = await this.repliesService.update(Number(id), dto.content, userId, req.user.role);
     await this.logOperation(req, 'reply.update', 'reply', Number(id), { post_id: reply.post_id });
     return reply;
   }
@@ -87,7 +91,7 @@ export class RepliesControllerMain {
   @Delete(':id')
   async deleteReply(@Param('id') id: number, @Req() req: any) {
     const userId = req.user.id;
-    await this.repliesService.softDelete(Number(id), userId);
+    await this.repliesService.softDelete(Number(id), userId, req.user.role);
     await this.logOperation(req, 'reply.delete', 'reply', Number(id));
     return { message: 'Reply deleted successfully' };
   }
@@ -105,6 +109,6 @@ export class RepliesControllerMain {
   }
 
   private getClientIp(req: any): string {
-    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    return getClientIp(req);
   }
 }

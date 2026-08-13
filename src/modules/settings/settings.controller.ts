@@ -8,6 +8,7 @@ import { Public } from '@common/decorators/public.decorator';
 import { UpdateBrandSettingsDto } from './dto/update-brand-settings.dto';
 import { UpdateSidebarNavigationDto } from './dto/update-sidebar-navigation.dto';
 import { validateSidebarNavigation } from '@common/utils/sidebar-navigation.util';
+import { getDefaultSidebarNavigation } from '@common/utils/sidebar-navigation-defaults';
 
 @Controller('settings')
 export class SettingsController {
@@ -38,9 +39,14 @@ export class SettingsController {
       throw new BadRequestException(validation.errors);
     }
 
+    const home = getDefaultSidebarNavigation().find((item) => item.id === 'home');
+    const items = home && !dto.items.some((item) => item.id === home.id)
+      ? [home, ...dto.items]
+      : dto.items.map((item) => item.id === home?.id ? { ...item, enabled: true } : item);
+
     await this.settingsService.updateSetting(
       'sidebar_navigation_items',
-      JSON.stringify(dto.items),
+      JSON.stringify(items),
     );
 
     await this.settingsRevalidationService.revalidatePublicSettings();

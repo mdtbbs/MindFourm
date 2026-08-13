@@ -24,6 +24,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { toPublicUser, toPublicUsers } from './public-user.util';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
+import { getClientIp } from '@common/utils/client-context.util';
 
 const AVATAR_UPLOAD_DIR = './uploads/avatars';
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
@@ -194,6 +195,6 @@ export class UsersController {
   }
 
   private getClientIp(req: any): string {
-    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    return getClientIp(req);
   }
 }

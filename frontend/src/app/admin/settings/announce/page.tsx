@@ -58,6 +58,11 @@ export default function AnnounceSettingsPage() {
           <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">Content</label>
           <textarea className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400 min-h-[120px]" value={values.announce_content ?? ''} onChange={(e) => update('announce_content', e.target.value)} placeholder="公告内容（支持 Markdown）" />
         </div>
+        <div className="rounded-lg border border-surface-200 bg-surface-50 p-4">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">公告中心</label>
+          <p className="mb-2 text-xs text-surface-500">侧边栏“公告”页面的多条公告。填写 JSON 数组，每项含 title、content（Markdown）、published_at（可选）和 pinned（可选）。</p>
+          <textarea className="w-full min-h-[180px] rounded border border-surface-200 px-3 py-2 font-mono text-xs focus:outline-none focus:border-surface-400" value={values.notices_content ?? '[]'} onChange={(e) => update('notices_content', e.target.value)} placeholder={'[\n  {"title":"维护通知","content":"内容", "published_at":"2026-08-14", "pinned":true}\n]'} />
+        </div>
       </div>
       <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
         <Button variant="ghost" onClick={fetchSettings}>Reset</Button>

@@ -27,7 +27,7 @@ const ALLOWED_TYPES = [
  */
 const ALLOWED_EXTENSIONS = [
   '.png', '.jpg', '.jpeg', '.gif', '.webp',
-  '.pdf', '.zip', '.rar', '.7z', '.txt', '.md',
+  '.pdf', '.zip', '.rar', '.7z', '.txt', '.md', '.msav', '.msch',
 ];
 
 /** Matches the server's multer limit; the label below advertises the same. */
@@ -105,7 +105,7 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
           ref={inputRef}
           type="file"
           multiple
-          accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.zip,.rar,.7z,.txt,.md"
+          accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.zip,.rar,.7z,.txt,.md,.msav,.msch"
           className="hidden"
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />

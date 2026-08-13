@@ -14,7 +14,7 @@ import AuthorLink from '@/components/forum/author-link';
 import { adminApi } from '@/lib/api/client';
 import { formatTime } from '@/lib/utils';
 import Link from 'next/link';
-import { Pin, Move, Trash2, Check, X, Pencil, Lock, Unlock } from 'lucide-react';
+import { Pin, Move, Trash2, Check, X, Pencil, Lock, Unlock, MapPin } from 'lucide-react';
 import { postApi } from '@/lib/api/client';
 
 interface PostContentProps {
@@ -134,6 +134,12 @@ export default function PostContent({
             <span>发布于 <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('zh-CN')}>{formatTime(post.created_at)}</time></span>
             <span className="text-[var(--text-muted)]">|</span>
             <span>{post.view_count} 浏览</span>
+            {post.location_label && (
+              <span className="inline-flex items-center gap-1 text-[var(--text-muted)]">
+                <MapPin className="h-3.5 w-3.5" />
+                {post.location_label}
+              </span>
+            )}
 
           {post.edited_at && (
             <>

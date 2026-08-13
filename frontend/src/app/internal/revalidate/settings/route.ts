@@ -13,6 +13,13 @@ export async function POST(request: Request) {
   }
 
   revalidateTag(SETTINGS_CACHE_TAG);
+  revalidatePath('/');
+  revalidatePath('/about');
+  revalidatePath('/terms');
+  revalidatePath('/privacy');
+  revalidatePath('/thanks');
+  revalidatePath('/links');
+  revalidatePath('/notices');
   revalidatePath('/robots.txt');
   revalidatePath('/sitemap.xml');
 

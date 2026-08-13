@@ -22,7 +22,7 @@ export class RevalidationService {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async triggerRevalidation(path: string): Promise<void> {
+  async triggerRevalidation(path: string, tag?: string): Promise<void> {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL');
     const revalidationSecret = this.configService.get<string>('REVALIDATION_SECRET');
 
@@ -32,9 +32,10 @@ export class RevalidationService {
     }
 
     try {
+      const resolvedTag = tag || (path === '/resources' ? 'resource-categories' : undefined);
       await axios.post(
         `${frontendUrl}/api/revalidate`,
-        { path },
+        { path, ...(resolvedTag ? { tag: resolvedTag } : {}) },
         {
           headers: {
             Authorization: `Bearer ${revalidationSecret}`,

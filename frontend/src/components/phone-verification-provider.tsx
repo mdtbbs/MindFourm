@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { ShieldCheck, X } from 'lucide-react';
 import Button from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ type SendCodeResult = {
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
 const PHONE_VERIFICATION_NOTICE_ID = 'phone-verification-required';
-const PHONE_VERIFICATION_NOTICE = '在验证手机号之前，您只能浏览';
+const PHONE_VERIFICATION_NOTICE = '请先验证手机号后再发布内容或使用互动功能。点击此提示即可开始验证。';
 
 export function PhoneVerificationProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -35,6 +36,17 @@ export function PhoneVerificationProvider({ children }: { children: React.ReactN
   const showSuccess = useToastStore((state) => state.showSuccess);
   const showPersistentToast = useToastStore((state) => state.showPersistentToast);
   const dismissToast = useToastStore((state) => state.dismissToast);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const onClick = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target || target.closest('[data-toast-dismiss]')) return;
+      if (target.closest(`[data-toast-id="${PHONE_VERIFICATION_NOTICE_ID}"]`)) setOpen(true);
+    };
+    document.addEventListener('click', onClick);
+    return () => document.removeEventListener('click', onClick);
+  }, []);
 
   useEffect(() => {
     registerPhoneVerificationHandler(() => {
@@ -60,7 +72,7 @@ export function PhoneVerificationProvider({ children }: { children: React.ReactN
     }
 
     dismissToast(PHONE_VERIFICATION_NOTICE_ID);
-  }, [dismissToast, showPersistentToast, user]);
+  }, [dismissToast, pathname, showPersistentToast, user]);
 
   const close = (verified = false) => {
     for (const pending of pendingRef.current) {

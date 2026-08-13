@@ -1,6 +1,7 @@
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import ReplyActions from '@/components/forum/reply-actions';
 import AuthorLink from '@/components/forum/author-link';
+import ReplyAttachmentList from '@/components/forum/reply-attachment-list';
 import { Check } from 'lucide-react';
 import { formatTime } from '@/lib/utils';
 import type { Reply } from '@/types';
@@ -80,6 +81,9 @@ export default function ReplyItem({
           >
             {formatTime(reply.created_at)}
           </time>
+          {reply.location_label && (
+            <span className="text-xs text-[var(--text-muted)]">{reply.location_label}</span>
+          )}
           {isBestReply && (
             <span className="inline-flex items-center gap-1 rounded bg-[var(--success)] px-2 py-0.5 text-xs font-medium text-white">
               <Check className="h-3 w-3" />
@@ -92,6 +96,7 @@ export default function ReplyItem({
       {/* Reply Content */}
       <div className={isNested ? 'px-3 py-3' : 'p-4'}>
         <MarkdownRenderer content={reply.content} />
+        <ReplyAttachmentList replyId={reply.id} />
       </div>
 
       <ReplyActions

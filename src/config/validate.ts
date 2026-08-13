@@ -68,8 +68,21 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   }
 
   // --- Integrations: only required when actually enabled ---
-  if (config.mfl.baseUrl) {
+  const forge = config.forge || { baseUrl: '', apiKey: '' };
+  if (forge.baseUrl) {
+    requireInProduction(forge.apiKey, 'MDT_FORGE_API_KEY', 'MDT_FORGE_URL is configured');
+  }
+  if (isProduction && forge.baseUrl && looksLocal(forge.baseUrl)) {
+    errors.push('MDT_FORGE_URL must not point to localhost in production');
+  }
+  // Legacy MFL configuration is no longer used for new uploads, but fail fast
+  // if an operator deliberately leaves the old integration enabled for historic
+  // resource delivery.
+  if (config.mfl?.baseUrl) {
     requireInProduction(config.mfl.apiKey, 'MFL_API_KEY', 'MFL_BASE_URL is configured');
+  }
+  if (isProduction && !process.env.FORUM_INTERNAL_API_KEY) {
+    warnings.push('FORUM_INTERNAL_API_KEY is not set — only loopback frontend-to-backend requests bypass user rate limits');
   }
   if (config.easymanager.enabled) {
     requireInProduction(config.easymanager.apiKey, 'EASYMANAGER_API_KEY', 'EASYMANAGER_ENABLED=true');

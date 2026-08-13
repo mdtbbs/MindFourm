@@ -56,7 +56,7 @@ export class UsersService {
     await fs.unlink(filePath).catch(() => undefined);
   }
 
-  async getById(id: number): Promise<User & { post_count?: number; reply_count?: number }> {
+  async getById(id: number): Promise<User & { post_count?: number; reply_count?: number; last_location_label?: string | null }> {
     const user = await this.userRepository.findOne({ where: { id } });
 
     if (!user) {
@@ -81,10 +81,34 @@ export class UsersService {
       .andWhere('post.status = :postStatus', { postStatus: POST_STATUS.published })
       .getRawOne();
 
+    // A profile may show a coarse province label, never the retained source IP.
+    // Prefer the user's latest public post and then their latest public reply.
+    const [postLocation, replyLocation] = await Promise.all([
+      this.postRepository
+        .createQueryBuilder('post')
+        .select('post.location_label', 'location_label')
+        .where('post.user_id = :userId', { userId: id })
+        .andWhere('post.status = :status', { status: POST_STATUS.published })
+        .andWhere('post.location_label IS NOT NULL')
+        .orderBy('post.created_at', 'DESC')
+        .getRawOne(),
+      this.replyRepository
+        .createQueryBuilder('reply')
+        .innerJoin('reply.post', 'post')
+        .select('reply.location_label', 'location_label')
+        .where('reply.user_id = :userId', { userId: id })
+        .andWhere('reply.status = :replyStatus', { replyStatus: REPLY_STATUS.published })
+        .andWhere('post.status = :postStatus', { postStatus: POST_STATUS.published })
+        .andWhere('reply.location_label IS NOT NULL')
+        .orderBy('reply.created_at', 'DESC')
+        .getRawOne(),
+    ]);
+
     return {
       ...user,
       post_count: parseInt(postCountResult.count, 10),
       reply_count: parseInt(replyCountResult.count, 10),
+      last_location_label: postLocation?.location_label || replyLocation?.location_label || null,
     };
   }
 

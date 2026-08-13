@@ -32,6 +32,7 @@ import { Roles } from '@common/decorators/roles.decorator';
 import { OptionalAuth } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { LogsService } from '../logs/logs.service';
+import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
 
 @Controller('posts')
 export class PostsController {
@@ -145,7 +146,10 @@ export class PostsController {
   @RateLimit({ max: 10, window: 60 })
   async create(@Body() dto: CreatePostDto, @Req() req: any) {
     const userId = req.user.id;
-    const post = await this.postsService.create(dto, userId);
+    const post = await this.postsService.create(dto, userId, {
+      ipAddress: getClientIp(req),
+      locationLabel: getClientRegion(req),
+    });
     await this.logOperation(req, 'post.create', 'post', post?.id, {
       status: post?.status,
       title: post?.title,
@@ -311,6 +315,6 @@ export class PostsController {
   }
 
   private getClientIp(req: any): string {
-    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    return getClientIp(req);
   }
 }

@@ -73,6 +73,7 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000, d
 
   return (
     <div
+      data-toast-id={id}
       className={[
         'pointer-events-auto flex w-80 items-start gap-3 rounded-lg border p-4 shadow-lg',
         'transform transition-all duration-300 ease-out',
@@ -84,10 +85,19 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000, d
     >
       {typeIcons[type]}
       <p className="flex-1 text-sm font-medium leading-5">{message}</p>
+      {id === 'phone-verification-required' && (
+        <button
+          type="button"
+          className="shrink-0 rounded-md bg-yellow-500 px-2 py-1 text-xs font-semibold text-yellow-950 transition-colors hover:bg-yellow-400"
+        >
+          去认证
+        </button>
+      )}
       {dismissible && (
         <button
           type="button"
           onClick={dismiss}
+          data-toast-dismiss
           className="ml-1 shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2"
           aria-label="Dismiss notification"
         >

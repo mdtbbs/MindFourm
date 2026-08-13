@@ -28,6 +28,7 @@ export interface PostDetailReply {
   author_role: string | null;
   author_name: string | null;
   author_avatar_url: string | null;
+  location_label: string | null;
 }
 
 export interface PostDetailDto {
@@ -57,6 +58,7 @@ export interface PostDetailDto {
   author_role: string | null;
   author_name: string | null;
   author_avatar_url: string | null;
+  location_label: string | null;
   prefix: { value: string; label: string; color: string } | null;
   tags: PostDetailTag[];
   replies?: PostDetailReply[];
@@ -111,6 +113,7 @@ export class PostDetailService {
       author_role: post.user?.role ?? null,
       author_name: post.user?.username ?? null,
       author_avatar_url: post.user?.avatar_url ?? null,
+      location_label: post.location_label ?? null,
       prefix: prefixMeta ? { value: prefixMeta.value, label: prefixMeta.label, color: prefixMeta.color } : null,
       tags,
     };
@@ -136,6 +139,7 @@ export class PostDetailService {
       author_role: reply.user?.role ?? null,
       author_name: reply.user?.username ?? null,
       author_avatar_url: reply.user?.avatar_url ?? null,
+      location_label: reply.location_label ?? null,
     }));
   }
 

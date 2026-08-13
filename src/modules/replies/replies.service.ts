@@ -31,7 +31,12 @@ export class RepliesService {
     private redisService: RedisService,
   ) {}
 
-  async createReplyForPost(postId: number, dto: CreateReplyDto, userId: number): Promise<Reply> {
+  async createReplyForPost(
+    postId: number,
+    dto: CreateReplyDto,
+    userId: number,
+    provenance: { ipAddress?: string; locationLabel?: string | null } = {},
+  ): Promise<Reply> {
     const { content, parent_reply_id } = dto;
 
     // Execute "before" hook
@@ -102,6 +107,8 @@ export class RepliesService {
       content_html: contentHtml,
       status: requiresApproval ? REPLY_STATUS.pending : REPLY_STATUS.published,
       like_count: 0,
+      ip_address: provenance.ipAddress || null,
+      location_label: provenance.locationLabel || null,
     });
 
     const savedReply = await this.replyRepository.save(newReply);

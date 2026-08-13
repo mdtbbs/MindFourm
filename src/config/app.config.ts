@@ -16,6 +16,7 @@ export const appConfig = () => ({
     env: process.env.NODE_ENV || 'development',
     frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
     apiUrl: resolveApiUrl(),
+    internalApiKey: process.env.FORUM_INTERNAL_API_KEY || '',
   },
   mysql: {
     host: process.env.MYSQL_HOST || 'localhost',
@@ -58,6 +59,10 @@ export const appConfig = () => ({
   lanlink: {
     enabled: process.env.LANLINK_ENABLED === 'true',
     baseUrl: process.env.LANLINK_URL || '',
+  },
+  forge: {
+    baseUrl: process.env.MDT_FORGE_URL || '',
+    apiKey: process.env.MDT_FORGE_API_KEY || '',
   },
   session: {
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days

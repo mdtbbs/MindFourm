@@ -12,6 +12,8 @@ export interface User {
   phone_verified?: boolean;
   phone_verified_at?: string | null;
   createdAt: string;
+  /** Coarse province label from the member's latest public content; no raw IP is exposed. */
+  last_location_label?: string | null;
 }
 
 export interface AuthCheckResponse {
@@ -30,6 +32,7 @@ export interface Category {
   slug: string;
   sort_order: number;
   is_active: boolean;
+  description?: string | null;
   created_at: string;
   post_count?: number;
 }
@@ -58,6 +61,7 @@ export interface PostSummary {
   view_count: number;
   reply_count: number;
   like_count: number;
+  location_label?: string | null;
   created_at: string;
   updated_at: string;
   category_name: string | null;
@@ -86,6 +90,7 @@ export interface Post {
   view_count: number;
   reply_count?: number;
   like_count: number;
+  location_label?: string | null;
   created_at: string;
   updated_at: string;
   category_name: string | null;
@@ -142,6 +147,7 @@ export interface Reply {
   post_title?: string | null;
   status: 'active' | 'published' | 'pending' | 'deleted';
   like_count: number;
+  location_label?: string | null;
   created_at: string;
   updated_at: string;
   author_mindauth_id: number | null;
@@ -276,6 +282,7 @@ export interface UserProfile {
   created_at: string;
   post_count: number;
   reply_count: number;
+  last_location_label?: string | null;
   // Points & Level
   total_points?: number;
   level?: { id: number; name: string; slug: string; color: string | null; icon: string | null; progress?: number };
@@ -371,6 +378,9 @@ export interface Attachment {
   file_size: number;
   mime_type: string;
   download_count: number;
+  renderer_status?: string | null;
+  renderer_resource_id?: string | null;
+  renderer_error_code?: string | null;
   created_at: string;
 }
 
@@ -430,7 +440,19 @@ export interface Resource {
   avatar_url: string | null;
   created_at: string;
   updated_at: string;
+  metadata?: ResourceDetailMetadata;
+  favorite_count?: number;
+  is_favorited?: boolean;
   versions?: ResourceVersion[];
+}
+
+export interface ResourceDetailMetadata {
+  cover_image_url: string | null;
+  gallery_images: string[];
+  tags: string[];
+  supported_versions: string[];
+  compatibility: string[];
+  changelog: string | null;
 }
 
 export interface ResourceCategory {
@@ -441,8 +463,6 @@ export interface ResourceCategory {
   icon: string | null;
   sort_order: number;
   is_active: boolean;
-  parent_id: number | null;
-  children?: ResourceCategory[];
   created_at: string;
 }
 
@@ -456,6 +476,10 @@ export interface ResourceVersion {
   mime_type: string | null;
   content: string | null;
   content_html: string | null;
+  checksum?: string | null;
+  release_notes?: string | null;
+  release_notes_markdown?: string | null;
+  published_at?: string | null;
   created_at: string;
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { lanlinkClient, type PublicRoom } from '@/lib/api/lanlinkClient';
 import Badge from '@/components/ui/badge';
 
@@ -48,7 +49,7 @@ export default function RoomList() {
 
   return (
     <div className="card p-4">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <h2 className="text-lg font-bold flex items-center gap-2">
           <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
           公开房间
@@ -56,7 +57,10 @@ export default function RoomList() {
             <Badge variant="success">{rooms.length}</Badge>
           )}
         </h2>
-        <span className="text-xs text-muted-foreground">每 15 秒自动刷新</span>
+        <div className="flex items-center gap-3 text-xs">
+          <Link href="/lanlink/quick-code" className="font-medium text-primary hover:underline">管理游戏快速码</Link>
+          <span className="text-muted-foreground">每 15 秒自动刷新</span>
+        </div>
       </div>
 
       {error && (

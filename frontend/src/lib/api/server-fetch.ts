@@ -121,7 +121,18 @@ async function buildHeaders(
   existingHeaders: HeadersInit | undefined,
   forwardCookies?: boolean,
 ): Promise<HeadersInit | undefined> {
-  if (!forwardCookies) return existingHeaders;
+  const headersObj: Record<string, string> = {};
+  if (existingHeaders instanceof Headers) {
+    existingHeaders.forEach((v, k) => { headersObj[k] = v; });
+  } else if (Array.isArray(existingHeaders)) {
+    for (const [k, v] of existingHeaders) { headersObj[k] = v; }
+  } else if (existingHeaders) {
+    Object.assign(headersObj, existingHeaders);
+  }
+
+  const internalKey = process.env.FORUM_INTERNAL_API_KEY;
+  if (internalKey) headersObj['X-Forum-Internal-Key'] = internalKey;
+  if (!forwardCookies) return Object.keys(headersObj).length ? headersObj : undefined;
 
   try {
     const cookieStore = await cookies();
@@ -130,14 +141,6 @@ async function buildHeaders(
 
     const cookieHeader = `forum_session=${sessionCookie.value}`;
     // Convert to a plain object and add the cookie
-    const headersObj: Record<string, string> = {};
-    if (existingHeaders instanceof Headers) {
-      existingHeaders.forEach((v, k) => { headersObj[k] = v; });
-    } else if (Array.isArray(existingHeaders)) {
-      for (const [k, v] of existingHeaders) { headersObj[k] = v; }
-    } else if (existingHeaders) {
-      Object.assign(headersObj, existingHeaders);
-    }
     headersObj['Cookie'] = cookieHeader;
     return headersObj;
   } catch {

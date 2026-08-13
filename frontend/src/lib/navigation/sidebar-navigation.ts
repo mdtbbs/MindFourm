@@ -73,7 +73,10 @@ export const DEFAULT_SIDEBAR_NAVIGATION: SidebarNavigationItem[] = [
   { id: 'categories', label: '分类', href: '/categories', icon: 'Folder', enabled: true, requiresAuth: false },
   { id: 'tags', label: '标签', href: '/tags', icon: 'Tag', enabled: true, requiresAuth: false },
   { id: 'resources', label: '资源中心', href: '/resources', icon: 'Book', enabled: true, requiresAuth: false },
+  { id: 'notices', label: '公告中心', href: '/notices', icon: 'Bell', enabled: true, requiresAuth: false },
 ];
+
+const PROTECTED_SIDEBAR_ITEM_IDS = new Set(['home']);
 
 const AUTH_ONLY_PREFIXES = ['/notifications', '/messages', '/friends', '/bookmarks', '/settings'];
 
@@ -135,7 +138,13 @@ function isFeatureEnabled(featureKey: string | undefined, settings: Record<strin
  */
 export function buildSidebarNavigation(context: SidebarNavigationContext): SidebarNavigationItem[] {
   const parsed = parseSidebarNavigationItems(context.settings.sidebar_navigation_items);
-  const items = parsed.length > 0 ? parsed : DEFAULT_SIDEBAR_NAVIGATION;
+  const configuredItems = parsed.length > 0 ? parsed : DEFAULT_SIDEBAR_NAVIGATION;
+  const requiredItems = DEFAULT_SIDEBAR_NAVIGATION.filter((item) => ['home', 'notices'].includes(item.id));
+  const missingRequired = requiredItems.filter((item) => !configuredItems.some((existing) => existing.id === item.id));
+  const items = [
+    ...missingRequired,
+    ...configuredItems.map((item) => item.id === 'home' ? { ...item, enabled: true } : item),
+  ];
 
   return items.filter((item) => {
     if (!item.enabled) return false;

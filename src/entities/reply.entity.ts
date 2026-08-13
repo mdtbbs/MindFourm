@@ -36,6 +36,12 @@ export class Reply {
   @Column({ default: 0 })
   like_count: number;
 
+  @Column({ type: 'varchar', length: 45, nullable: true })
+  ip_address: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  location_label: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 

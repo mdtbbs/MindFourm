@@ -13,6 +13,7 @@ import { randomUUID } from 'crypto';
 import { RedisService } from '../../database/redis.service';
 import { EXTERNAL_SCOPE_KEY } from '../decorators/external-scope.decorator';
 import { ipInRange, normalizeIp } from '../../modules/bans/bans.service';
+import { getClientIp } from '../utils/client-context.util';
 import { ExternalApiKeyService } from '../../modules/service-api/external-api-key.service';
 import { hasAnyExternalScope } from '../../modules/service-api/external-api-scopes';
 
@@ -114,7 +115,7 @@ export class ExternalApiKeyGuard implements CanActivate {
   }
 
   private getClientIp(request: any): string {
-    return normalizeIp(request.ip || request.socket?.remoteAddress || '');
+    return normalizeIp(request.clientIp || getClientIp(request));
   }
 
   private assertIpAllowed(allowedIps: string[], clientIp: string): void {

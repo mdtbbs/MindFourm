@@ -26,6 +26,9 @@ import { CreateGameServers1720000031000 } from './1720000031000-CreateGameServer
 import { CreateKnowledge1720000032000 } from './1720000032000-CreateKnowledge';
 import { AddCategoryParentId1720000033000 } from './1720000033000-AddCategoryParentId';
 import { CreateFeedbacks1720000034000 } from './1720000034000-CreateFeedbacks';
+import { FlattenResourceCategories1720000035000 } from './1720000035000-FlattenResourceCategories';
+import { AddContentProvenance1720000036000 } from './1720000036000-AddContentProvenance';
+import { AddAttachmentRenderState1720000037000 } from './1720000037000-AddAttachmentRenderState';
 
 /**
  * Migrations in run order.
@@ -63,4 +66,7 @@ export const migrations = [
   CreateKnowledge1720000032000,
   AddCategoryParentId1720000033000,
   CreateFeedbacks1720000034000,
+  FlattenResourceCategories1720000035000,
+  AddContentProvenance1720000036000,
+  AddAttachmentRenderState1720000037000,
 ];

@@ -1,5 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { BansService } from '../../modules/bans/bans.service';
+import { getClientIp } from '../utils/client-context.util';
 
 /**
  * Blocks banned IPs before any route runs.
@@ -20,7 +21,7 @@ export class BanGuard implements CanActivate {
     }
 
     const req = context.switchToHttp().getRequest();
-    const ip = req.ip || req.socket?.remoteAddress;
+    const ip = req.clientIp || getClientIp(req);
 
     if (ip && (await this.banService.checkIp(ip))) {
       throw new ForbiddenException('Your IP has been blocked');

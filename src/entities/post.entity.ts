@@ -102,6 +102,14 @@ export class Post {
   @Column({ default: 0 })
   like_count: number;
 
+  /** Private audit value; public responses expose only `location_label`. */
+  @Column({ type: 'varchar', length: 45, nullable: true })
+  ip_address: string | null;
+
+  /** CDN-provided province/region label safe to show beside a post. */
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  location_label: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 

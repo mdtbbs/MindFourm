@@ -19,6 +19,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { MflClientService } from './mfl-client.service';
 import { ResourceCategoryService } from './resource-categories.service';
 import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
+import { mergeResourceMetadata, normalizeResourceMetadata } from './resource-detail.util';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -27,7 +28,9 @@ export interface ResourceFileMeta {
   mime_type: string;
 }
 
-export interface MflFileMeta {
+// Only retained for migration/legacy-resource compatibility. New submissions
+// never call this flow and always store their payload in forum-managed storage.
+interface MflFileMeta {
   file_name: string;
   file_size: number;
   mime_type: string;
@@ -85,6 +88,8 @@ export class ResourcesService {
     return {
       ...version,
       file_size: version.file_size || 0,
+      checksum: (version as any).content_hash || null,
+      release_notes: (version as any).release_notes_markdown || version.content || null,
     };
   }
 
@@ -102,6 +107,7 @@ export class ResourcesService {
       avatar_url: resource.user?.avatar_url || null,
       category_name: resource.category?.name || null,
       category_icon: resource.category?.icon || null,
+      metadata: normalizeResourceMetadata(resource.metadata_json),
       versions: versions?.map((version) => this.normalizeVersion(version)),
     };
   }
@@ -182,10 +188,9 @@ export class ResourcesService {
     return isAccessible ? this.normalizeResource(resource) : null;
   }
 
-  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta, mflMeta?: MflFileMeta): Promise<any> {
+  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta): Promise<any> {
     const categoryId = this.toOptionalNumber((dto as any).category_id);
     const resourceType = this.normalizeResourceType(dto.resource_type);
-    const useMfl = !!dto.use_mfl;
 
     const category = categoryId
       ? await this.categoryRepository.findOne({ where: { id: categoryId } })
@@ -198,7 +203,7 @@ export class ResourcesService {
       throw new BadRequestException('无效的资源类型');
     }
 
-    if (resourceType === 'upload' && !file && !mflMeta) {
+    if (resourceType === 'upload' && !file) {
       throw new BadRequestException('文件类资源必须上传文件');
     }
 
@@ -213,10 +218,10 @@ export class ResourcesService {
       title: dto.title,
       description: dto.description,
       resource_type: resourceType,
-      file_name: useMfl && mflMeta ? mflMeta.file_name : file?.file_name,
-      file_path: useMfl && mflMeta ? undefined : file?.file_path,
-      file_size: useMfl && mflMeta ? mflMeta.file_size : file?.file_size,
-      mime_type: useMfl && mflMeta ? mflMeta.mime_type : file?.mime_type,
+      file_name: file?.file_name,
+      file_path: file?.file_path,
+      file_size: file?.file_size,
+      mime_type: file?.mime_type,
       external_url: resourceType === 'external' ? dto.external_url : undefined,
       version: dto.version,
       content: dto.content,
@@ -225,14 +230,11 @@ export class ResourcesService {
       is_public: this.toTinyInt((dto as any).is_public, 1),
       status: RESOURCE_STATUS_PENDING,
       download_count: 0,
-      use_mfl: useMfl && mflMeta ? 1 : 0,
+      use_mfl: 0,
+      metadata_json: (dto as any).metadata ? normalizeResourceMetadata((dto as any).metadata) : null,
     });
 
     const saved = await this.resourceRepository.save(newResource);
-
-    if (useMfl && mflMeta) {
-      await this.attachMflUpload(saved.id, mflMeta, category?.slug || 'uncategorized');
-    }
 
     const finalResult = await this.resourceRepository.findOne({
       where: { id: saved.id },
@@ -248,7 +250,7 @@ export class ResourcesService {
         item_type: 'resource',
         item_id: finalResult.id,
         title: finalResult.title,
-        content: dto.description || dto.content || dto.external_url || mflMeta?.file_name || file?.file_name || null,
+        content: dto.description || dto.content || dto.external_url || file?.file_name || null,
         author_username: finalResult.user?.username || `#${userId}`,
         action_url: '/admin/resources/moderation',
       }).catch((err) =>
@@ -524,6 +526,36 @@ export class ResourcesService {
     return this.normalizeResource(resource, versions);
   }
 
+  async getRelatedResources(id: number, limit = 6): Promise<any[]> {
+    const resource = await this.resourceRepository.findOne({
+      where: { id },
+      relations: ['category'],
+    });
+    if (!resource) throw new NotFoundException('资源不存在');
+
+    const qb = this.resourceRepository
+      .createQueryBuilder('resource')
+      .leftJoinAndSelect('resource.user', 'user')
+      .leftJoinAndSelect('resource.category', 'category')
+      .where('resource.id <> :id', { id })
+      .andWhere('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
+      .orderBy('resource.rating_average', 'DESC')
+      .addOrderBy('resource.download_count', 'DESC')
+      .addOrderBy('resource.created_at', 'DESC')
+      .take(Math.min(Math.max(Number(limit) || 6, 1), 12));
+
+    if (resource.category_id) {
+      qb.andWhere('resource.category_id = :categoryId', { categoryId: resource.category_id });
+    } else if (resource.resource_kind) {
+      qb.andWhere('resource.resource_kind = :resourceKind', { resourceKind: resource.resource_kind });
+    }
+
+    const related = await qb.getMany();
+    return related.map((item) => this.normalizeResource(item));
+  }
+
   async incrementDownload(id: number): Promise<void> {
     await this.resourceRepository.increment({ id }, 'download_count', 1);
   }
@@ -696,6 +728,9 @@ export class ResourcesService {
       if ((dto as any).category_id !== undefined) updateData.category_id = categoryId;
       if ((dto as any).is_public !== undefined) {
         updateData.is_public = this.toTinyInt((dto as any).is_public, resource.is_public);
+      }
+      if ((dto as any).metadata !== undefined) {
+        updateData.metadata_json = mergeResourceMetadata(resource.metadata_json, (dto as any).metadata);
       }
 
       // Changing what people actually download has to go back through moderation.

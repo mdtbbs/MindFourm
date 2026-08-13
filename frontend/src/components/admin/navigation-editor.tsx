@@ -54,6 +54,7 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
   }
 
   function removeItem(index: number) {
+    if (items[index]?.id === 'home') return;
     setItems(items.filter((_, i) => i !== index));
   }
 
@@ -163,7 +164,10 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
                   <input
                     type="checkbox"
                     checked={item.enabled}
-                    onChange={(e) => updateItem(index, { enabled: e.target.checked })}
+                    onChange={(e) => {
+                      if (item.id !== 'home') updateItem(index, { enabled: e.target.checked });
+                    }}
+                    disabled={item.id === 'home'}
                     className="h-4 w-4 accent-surface-900"
                   />
                   启用
@@ -204,6 +208,7 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
                 variant="destructive"
                 size="icon-sm"
                 onClick={() => removeItem(index)}
+                disabled={item.id === 'home'}
                 title="删除"
               >
                 <Trash2 className="h-4 w-4" />

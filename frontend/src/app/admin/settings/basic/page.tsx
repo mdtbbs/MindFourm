@@ -61,6 +61,17 @@ export default function BasicSettingsPage() {
           <input className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400" value={values.site_footer ?? ''} onChange={(e) => update('site_footer', e.target.value)} />
         </div>
 
+        <div className="rounded-lg border border-surface-200 bg-surface-50 p-4">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-700 mb-2">资源文件存储目录</label>
+          <input
+            className="w-full px-3 py-2 border border-surface-200 rounded text-sm font-mono focus:outline-none focus:border-surface-400"
+            value={values.resource_upload_directory ?? 'resources'}
+            onChange={(e) => update('resource_upload_directory', e.target.value)}
+            placeholder="resources 或 D:\\data\\mindforum-resources"
+          />
+          <p className="mt-2 text-xs leading-5 text-surface-500">新上传的资源和版本会保存在这里。相对路径位于服务器的 RESOURCE_UPLOAD_ROOT 下；生产环境建议填写挂载的数据卷绝对路径。</p>
+        </div>
+
         <div className="border-t border-surface-200 pt-6">
           <h3 className="text-sm font-semibold text-surface-800">全站品牌色</h3>
           <p className="mt-1 text-xs text-surface-400">

@@ -37,6 +37,5 @@ export class CreateResourceDto {
   is_public?: number;
 
   @IsOptional()
-  @IsString()
-  use_mfl?: string;
+  metadata?: Record<string, unknown>;
 }

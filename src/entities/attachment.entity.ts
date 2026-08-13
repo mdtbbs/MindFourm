@@ -34,6 +34,18 @@ export class Attachment {
   @Column({ default: 0 })
   download_count: number;
 
+  // MDT-Forge processing is asynchronous. The original attachment stays the
+  // source of truth while these fields let post and reply UIs show a safe,
+  // eventually-consistent preview without exposing Forge credentials.
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  renderer_status: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  renderer_resource_id: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  renderer_error_code: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 

@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
 import { isTestAuthEnabled } from './test-auth.util';
+import { getClientIp } from '../../common/utils/client-context.util';
 
 /**
  * Session shortcut for the Playwright suite, bypassing the MindAuth OAuth round
@@ -30,7 +31,7 @@ export class TestAuthController {
     }
 
     const sessionToken = this.authService.generateSessionToken();
-    const ip = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+    const ip = getClientIp(req);
 
     try {
       const user = await this.authService.getOrCreateTestUser(userType);

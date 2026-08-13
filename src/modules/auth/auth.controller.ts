@@ -10,6 +10,7 @@ import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verifi
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
 import { ExternalApiKeyGuard } from '../../common/guards/external-api-key.guard';
 import { ExternalScope } from '../../common/decorators/external-scope.decorator';
+import { getClientIp } from '../../common/utils/client-context.util';
 
 function getSafeRedirectPath(state?: string): string {
   if (!state) {
@@ -156,7 +157,7 @@ export class AuthController {
         await this.authService.storePendingTermsAcceptance(pendingToken, {
           userId: user.id,
           redirectPath: getSafeRedirectPath(state),
-          clientIp: (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, ''),
+          clientIp: getClientIp(req),
           oauthTokens: { accessToken, refreshToken },
         });
         const frontendUrl = this.authService['configService'].get<string>('FRONTEND_URL') || 'http://localhost:3000';
@@ -165,7 +166,7 @@ export class AuthController {
 
       // Generate session token and create session
       const sessionToken = this.authService.generateSessionToken();
-      const ip = (req.ip || req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+      const ip = getClientIp(req);
       await this.authService.createSession(user.id, sessionToken, ip, { accessToken, refreshToken });
 
       // Set HttpOnly cookie

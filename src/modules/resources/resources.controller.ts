@@ -23,9 +23,10 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { mkdirSync, createReadStream } from 'fs';
 import { Response } from 'express';
-import { ResourcesService, ResourceFileMeta } from './resources.service';
+import { ResourcesService } from './resources.service';
 import { ResourceCategoryService } from './resource-categories.service';
 import { ResourceVersionService } from './resource-versions.service';
+import { ResourceFavoritesService } from './resource-favorites.service';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { QueryResourcesDto } from './dto/query-resources.dto';
@@ -37,8 +38,11 @@ import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { assertSafeRedirectUrl } from '@common/utils/safe-url.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { ResourceStorageService } from './resource-storage.service';
+import { LogsService } from '../logs/logs.service';
+import { getClientIp } from '@common/utils/client-context.util';
 
-const RESOURCE_UPLOAD_DIR = './uploads/resources';
+const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_RESOURCE_EXTENSIONS = new Set([
   '.zip',
@@ -78,8 +82,8 @@ function resourceFileFilter(
 const resourceUploadInterceptor = FileInterceptor('file', {
   storage: diskStorage({
     destination: (_req, _file, callback) => {
-      mkdirSync(RESOURCE_UPLOAD_DIR, { recursive: true });
-      callback(null, RESOURCE_UPLOAD_DIR);
+      mkdirSync(RESOURCE_INCOMING_DIR, { recursive: true });
+      callback(null, RESOURCE_INCOMING_DIR);
     },
     filename: (_req, file, callback) => {
       const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
@@ -90,28 +94,20 @@ const resourceUploadInterceptor = FileInterceptor('file', {
   fileFilter: resourceFileFilter,
 });
 
-function toFileMeta(file?: Express.Multer.File): ResourceFileMeta | undefined {
-  if (!file) return undefined;
-  return {
-    file_name: file.originalname,
-    file_path: file.path,
-    file_size: file.size,
-    mime_type: file.mimetype,
-  };
-}
-
-function normalizeCategoryBody(body: any) {
-  return {
+function normalizeCategoryBody(body: any): any {
+  const normalized: Record<string, unknown> = {
     name: body.name,
     slug: body.slug,
     description: body.description || null,
     icon: body.icon || null,
     sort_order: body.sort_order !== undefined ? Number(body.sort_order) : undefined,
-    is_active: body.is_active === false || body.is_active === 'false' ? 0 : 1,
-    parent_id: body.parent_id !== undefined && body.parent_id !== null && body.parent_id !== ''
-      ? Number(body.parent_id)
-      : null,
   };
+
+  if (body.is_active !== undefined) {
+    normalized.is_active = body.is_active === false || body.is_active === 'false' ? 0 : 1;
+  }
+
+  return normalized;
 }
 
 async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
@@ -125,6 +121,9 @@ export class ResourcesController {
     private readonly resourcesService: ResourcesService,
     private readonly categoryService: ResourceCategoryService,
     private readonly versionService: ResourceVersionService,
+    private readonly favoritesService: ResourceFavoritesService,
+    private readonly resourceStorageService: ResourceStorageService,
+    private readonly logsService: LogsService,
   ) {}
 
   @Get()
@@ -160,6 +159,8 @@ export class ResourcesController {
 
   @Get('categories/tree')
   async listCategoriesTree() {
+    // Kept as a compatibility endpoint for older clients; categories are now
+    // intentionally flat and use the same response as the public endpoint.
     return this.categoryService.getCategoriesTree();
   }
 
@@ -213,6 +214,11 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard)
   async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.resourcesService.getByIdWithVersions(id, req?.user);
+  }
+
+  @Get(':id/related')
+  async getRelated(@Param('id', ParseIntPipe) id: number, @Query('limit') limit?: string) {
+    return this.resourcesService.getRelatedResources(id, Number(limit) || 6);
   }
 
   @Get(':id/download')
@@ -298,22 +304,11 @@ export class ResourcesController {
       transform: true,
     }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
     const userId = req.user.id;
-    const useMfl = body.use_mfl === '1' || body.use_mfl === 'true' || body.use_mfl === true;
-
     try {
-      if (useMfl && file) {
-        // MFL mode: read file buffer, upload to MFL, don't save locally
-        const fileBuffer = await fs.readFile(file.path);
-        const mflMeta = {
-          file_name: file.originalname,
-          file_size: file.size,
-          mime_type: file.mimetype,
-          file_buffer: fileBuffer,
-        };
-        await cleanupUploadedFile(file);
-        return await this.resourcesService.create(body, userId, undefined, mflMeta);
-      }
-      return await this.resourcesService.create(body, userId, toFileMeta(file));
+      const storedFile = await this.resourceStorageService.storeIncoming(file);
+      const resource = await this.resourcesService.create(body, userId, storedFile);
+      await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });
+      return resource;
     } catch (error) {
       await cleanupUploadedFile(file);
       throw error;
@@ -328,7 +323,9 @@ export class ResourcesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    return this.resourcesService.update(id, userId, dto, req.user.role);
+    const resource = await this.resourcesService.update(id, userId, dto, req.user.role);
+    await this.logOperation(req, 'resource.update', id, { fields: Object.keys(dto) });
+    return resource;
   }
 
   @Delete(':id')
@@ -336,6 +333,7 @@ export class ResourcesController {
   async delete(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const userId = req.user.id;
     await this.resourcesService.delete(id, userId, req.user.role);
+    await this.logOperation(req, 'resource.delete', id);
     return { message: 'Resource deleted successfully' };
   }
 
@@ -351,11 +349,14 @@ export class ResourcesController {
   ) {
     const userId = req.user.id;
     try {
-      return await this.versionService.create(
+      const storedFile = await this.resourceStorageService.storeIncoming(file);
+      const version = await this.versionService.create(
         { resource_id: id, version: body.version || '', content: body.content },
-        toFileMeta(file),
+        storedFile,
         userId,
       );
+      await this.logOperation(req, 'resource.version_create', id, { version_id: version.id, version: version.version });
+      return version;
     } catch (error) {
       await cleanupUploadedFile(file);
       throw error;
@@ -371,6 +372,7 @@ export class ResourcesController {
   ) {
     const userId = req.user.id;
     await this.versionService.delete(versionId, id, userId);
+    await this.logOperation(req, 'resource.version_delete', id, { version_id: versionId });
     return { message: 'Version deleted successfully' };
   }
 
@@ -383,17 +385,20 @@ export class ResourcesController {
     @Body('reject_reason') rejectReason: string | undefined,
     @Req() req: any,
   ) {
-    return this.resourcesService.updateStatus(id, status, {
+    const resource = await this.resourcesService.updateStatus(id, status, {
       actorUsername: req.user?.username,
       rejectReason,
     });
+    await this.logOperation(req, 'resource.moderate', id, { status, reject_reason: rejectReason || null });
+    return resource;
   }
 
   @Delete(':id/admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')
-  async adminDelete(@Param('id', ParseIntPipe) id: number) {
+  async adminDelete(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     await this.resourcesService.adminDelete(id);
+    await this.logOperation(req, 'resource.admin_delete', id);
     return { message: 'Resource deleted successfully' };
   }
 
@@ -406,7 +411,9 @@ export class ResourcesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    return this.resourcesService.upsertRating(id, userId, rating);
+    const result = await this.resourcesService.upsertRating(id, userId, rating);
+    await this.logOperation(req, 'resource.rate', id, { rating });
+    return result;
   }
 
   @Delete(':id/rating')
@@ -414,6 +421,7 @@ export class ResourcesController {
   async deleteRating(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const userId = req.user.id;
     await this.resourcesService.deleteRating(id, userId);
+    await this.logOperation(req, 'resource.unrate', id);
     return { message: 'Rating deleted successfully' };
   }
 
@@ -423,5 +431,39 @@ export class ResourcesController {
     const userId = req.user.id;
     const rating = await this.resourcesService.getUserRating(id, userId);
     return { rating };
+  }
+
+  @Get(':id/favorite')
+  @UseGuards(JwtAuthGuard)
+  async getFavorite(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.favoritesService.getStatus(id, req.user.id);
+  }
+
+  @Post(':id/favorite')
+  @UseGuards(JwtAuthGuard)
+  async addFavorite(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const result = await this.favoritesService.add(id, req.user.id);
+    await this.logOperation(req, 'resource.favorite', id);
+    return result;
+  }
+
+  @Delete(':id/favorite')
+  @UseGuards(JwtAuthGuard)
+  async removeFavorite(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const result = await this.favoritesService.remove(id, req.user.id);
+    await this.logOperation(req, 'resource.unfavorite', id);
+    return result;
+  }
+
+  private async logOperation(req: any, action: string, resourceId: number, details?: Record<string, unknown>): Promise<void> {
+    await this.logsService.log({
+      user_id: req.user?.id,
+      action,
+      target_type: 'resource',
+      target_id: resourceId,
+      details: details ? JSON.stringify(details) : undefined,
+      ip_address: getClientIp(req),
+      user_agent: req.headers?.['user-agent'],
+    }).catch((error) => console.warn('operation log failed:', error.message));
   }
 }

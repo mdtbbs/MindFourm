@@ -12,16 +12,17 @@ import { fetchPublicSettings } from '@/lib/settings/server';
 import { getMetadataBase, getSiteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
 import { cn } from '@/lib/utils';
-import { buildBrandCssVariables } from '@/lib/theme/brand';
+import { buildBrandCssVariables, resolveBrand, resolveTitleSuffix } from '@/lib/theme/brand';
 
 const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings();
-  const titleSuffix = settings.seo_title_suffix || ' | 社区论坛';
-  const siteName = settings.site_name || '社区论坛';
-  const description = settings.seo_default_description || '一个现代化的社区论坛';
+  const brand = resolveBrand(settings);
+  const titleSuffix = resolveTitleSuffix(settings);
+  const siteName = brand.siteName;
+  const description = brand.description;
 
   const meta: Metadata = {
     // Required for relative OG/Twitter images to resolve, and for `alternates.canonical`
@@ -59,7 +60,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
   };
 
-  const faviconUrl = settings.site_favicon_url?.trim() || '/favicon.ico';
+  const faviconUrl = brand.faviconUrl || '/favicon.ico';
   meta.icons = {
     icon: faviconUrl,
     shortcut: faviconUrl,
@@ -82,14 +83,14 @@ function buildWebSiteJsonLd(settings: Record<string, string>): Record<string, un
   const siteUrl = getSiteUrl();
   if (!siteUrl) return null;
 
-  const siteName = settings.site_name || '社区论坛';
+  const siteName = resolveBrand(settings).siteName;
 
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: siteName,
     url: siteUrl,
-    description: settings.seo_default_description || undefined,
+    description: resolveBrand(settings).description,
     potentialAction: {
       '@type': 'SearchAction',
       target: {

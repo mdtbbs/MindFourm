@@ -194,6 +194,12 @@ export default async function UserProfilePage({
         />
       </div>
 
+      {profile.last_location_label && (
+        <p className="-mt-5 mb-6 text-center text-xs text-[var(--text-muted)]">
+          最近内容所在地：{profile.last_location_label}
+        </p>
+      )}
+
       {/* Level, Points, Follow Stats */}
       <div className="flex justify-center gap-6 mb-6">
         {profile.level && (

@@ -9,7 +9,7 @@ import { PortalModule } from '../modules/portal/portal.module';
 export function createV1OpenApiDocument(app: INestApplication) {
   const config = new DocumentBuilder()
     .setTitle('MDTBBS First-party API')
-    .setDescription('Stable V1 contract for MDTBBS first-party clients')
+    .setDescription('Stable V1 contract for MDTBBS first-party clients. Clients must call /api/v1/capabilities first and must not infer unavailable features from undocumented endpoints.')
     .setVersion('1.0.0')
     .build();
 

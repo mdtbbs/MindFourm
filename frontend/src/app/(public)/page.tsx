@@ -12,6 +12,7 @@ import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
 import { Category, PostListResponse } from '@/types';
+import { parseFooterFriendlyLinks, isExternalHref, isSafeFooterHref } from '@/lib/footer/footer-settings';
 
 export const revalidate = 30;
 
@@ -87,6 +88,37 @@ function formatStatValue(value: number): string {
   return value.toLocaleString('zh-CN');
 }
 
+interface StaffPresence {
+  id: number;
+  username: string;
+  avatar_url: string | null;
+  role: string;
+  status: string;
+}
+
+type HomeAdSlot = { title: string; description?: string; href?: string };
+
+function parseAdSlots(raw: string | undefined): HomeAdSlot[] {
+  try {
+    const value = JSON.parse(raw || '[]');
+    if (!Array.isArray(value)) return [];
+    return value
+      .map((item): HomeAdSlot | null => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+        const candidate = item as Record<string, unknown>;
+        const title = typeof candidate.title === 'string' ? candidate.title.trim() : '';
+        const description = typeof candidate.description === 'string' ? candidate.description.trim() : '';
+        const href = typeof candidate.href === 'string' ? candidate.href.trim() : '';
+        if (!title || (href && !isSafeFooterHref(href))) return null;
+        return { title, ...(description ? { description } : {}), ...(href ? { href } : {}) };
+      })
+      .filter((item): item is HomeAdSlot => item !== null)
+      .slice(0, 4);
+  } catch {
+    return [];
+  }
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings();
   const brandInfo = resolveBrand(settings);
@@ -107,17 +139,24 @@ export default async function HomePage({
   const categoryId = params.category_id ? parseInt(params.category_id, 10) : undefined;
 
   const settings = await fetchPublicSettings();
+  const brand = resolveBrand(settings);
   const postsPerPage = parseInt(settings.posts_per_page || '20', 10);
   const latestPostsSettings = parseLatestPostsSettings(settings);
 
   let categories: Category[];
   let postsResult: PostListResponse;
   let forumOverview: ForumOverviewStats;
+  let staffPresence: StaffPresence[];
   try {
-    [categories, postsResult, forumOverview] = await Promise.all([
+    [categories, postsResult, forumOverview, staffPresence] = await Promise.all([
       fetchCategories(),
       fetchPosts(page, postsPerPage, categoryId),
       fetchForumOverview(),
+      fetchApiData<StaffPresence[]>('/api/presence/staff', {
+        init: { next: { revalidate: 30 } },
+        fallback: [],
+        throwOnError: false,
+      }),
     ]);
   } catch {
     return <ErrorState title="首页加载失败" description="暂时无法获取论坛内容，请稍后重试。" action={{ label: '重新加载', href: '/' }} />;
@@ -133,6 +172,8 @@ export default async function HomePage({
     { label: '主题', value: formatStatValue(forumOverview.total_posts) },
     { label: '资源', value: formatStatValue(forumOverview.total_resources) },
   ];
+  const friendlyLinks = parseFooterFriendlyLinks(settings.footer_friendly_links);
+  const adSlots = parseAdSlots(settings.home_ad_slots);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -140,7 +181,7 @@ export default async function HomePage({
         <div className="grid gap-0 lg:grid-cols-[1.4fr_0.9fr]">
           <div className="border-b border-[var(--border)] p-6 lg:border-b-0 lg:border-r">
             <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-              {settings.site_name || '社区论坛'}
+              {brand.siteName}
             </p>
             {/* An h1, not a div: the site's most important page had no top-level
                 heading at all. The Markdown renderer's own headings are flattened to
@@ -177,6 +218,60 @@ export default async function HomePage({
 
       <ForumContentLayout>
         <div className="space-y-4">
+          {categories.length > 0 && (
+            <section className="panel-surface overflow-hidden">
+              <div className="border-b border-[var(--border)] px-5 py-4">
+                <h2 className="text-base font-semibold text-[var(--foreground)]">论坛板块</h2>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">按主题进入讨论，查看每个板块的最新内容。</p>
+              </div>
+              <div className="grid divide-y divide-[var(--border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                {categories.map((category) => (
+                  <Link key={category.id} href={`/?category_id=${category.id}`} className="group px-5 py-4 transition-colors hover:bg-[var(--muted)]">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="font-medium text-[var(--foreground)] group-hover:text-[var(--primary)]">{category.name}</h3>
+                      <span className="text-xs text-[var(--muted-foreground)]">{category.post_count ?? 0} 主题</span>
+                    </div>
+                    {category.description && <p className="mt-1 line-clamp-2 text-sm text-[var(--muted-foreground)]">{category.description}</p>}
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="panel-surface p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-[var(--foreground)]">在线管理</h2>
+                <p className="mt-1 text-xs text-[var(--muted-foreground)]">当前可协助处理社区事务的管理成员</p>
+              </div>
+              <span className="text-xs text-[var(--muted-foreground)]">
+                {staffPresence.filter((staff) => staff.status !== 'offline').length} 在线
+              </span>
+            </div>
+            {staffPresence.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {staffPresence.map((staff) => (
+                  <Link key={staff.id} href={`/users/${staff.id}`} className="flex min-w-36 items-center gap-2 border border-[var(--border)] px-3 py-2 hover:border-[var(--primary)]">
+                    <span className={`h-2 w-2 rounded-full ${staff.status === 'offline' ? 'bg-[var(--muted-foreground)]' : 'bg-emerald-500'}`} aria-label={staff.status === 'offline' ? '离线' : '在线'} />
+                    {staff.avatar_url ? <img src={staff.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" /> : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--muted)] text-xs">{staff.username.slice(0, 1)}</span>}
+                    <span className="truncate text-sm text-[var(--foreground)]">{staff.username}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="mt-4 text-sm text-[var(--muted-foreground)]">暂无公开的管理成员状态。</p>}
+          </section>
+
+          {adSlots.length > 0 && (
+            <section className="grid gap-3 sm:grid-cols-2">
+              {adSlots.map((slot, index) => {
+                const content = <><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">推广位</p><h2 className="mt-2 text-base font-semibold text-[var(--foreground)]">{slot.title}</h2>{slot.description && <p className="mt-1 text-sm text-[var(--muted-foreground)]">{slot.description}</p>}</>;
+                return slot.href ? (
+                  <Link key={`${slot.title}-${index}`} href={slot.href} target={isExternalHref(slot.href) ? '_blank' : undefined} rel={isExternalHref(slot.href) ? 'noreferrer' : undefined} className="border border-[var(--border)] bg-[var(--bg-card)] p-5 transition-colors hover:border-[var(--primary)]">{content}</Link>
+                ) : <div key={`${slot.title}-${index}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-5">{content}</div>;
+              })}
+            </section>
+          )}
+
           {parseBooleanSetting(settings.feature_servers_enabled, false) && <ServerSection />}
 
           {postsResult.data.length === 0 ? (
@@ -199,6 +294,17 @@ export default async function HomePage({
             basePath="/"
             queryParams={categoryId ? { category_id: String(categoryId) } : {}}
           />
+
+          {friendlyLinks.length > 0 && (
+            <section className="panel-surface p-5">
+              <h2 className="text-base font-semibold text-[var(--foreground)]">友情链接</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {friendlyLinks.map((link) => (
+                  <Link key={`${link.label}-${link.href}`} href={link.href} target={isExternalHref(link.href) ? '_blank' : undefined} rel={isExternalHref(link.href) ? 'noreferrer' : undefined} className="rounded border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]" title={link.description}>{link.label}</Link>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </ForumContentLayout>
     </div>

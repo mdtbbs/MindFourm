@@ -1,8 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Attachment } from '@/types';
 import { attachmentApi } from '@/lib/api/client';
-import { FileImage, FileText, Archive, Download } from 'lucide-react';
+import { FileImage, FileText, Archive, Download, Loader2, Map } from 'lucide-react';
 
 interface AttachmentListProps {
   attachments: Attachment[];
@@ -21,10 +22,30 @@ function formatSize(bytes: number): string {
 }
 
 export default function AttachmentList({ attachments }: AttachmentListProps) {
-  if (attachments.length === 0) return null;
+  const [visibleAttachments, setVisibleAttachments] = useState(attachments);
 
-  const images = attachments.filter((a) => a.mime_type.startsWith('image/'));
-  const files = attachments.filter((a) => !a.mime_type.startsWith('image/'));
+  useEffect(() => {
+    setVisibleAttachments(attachments);
+  }, [attachments]);
+
+  useEffect(() => {
+    const pending = visibleAttachments.filter((file) => /\.(msav|msch)$/i.test(file.file_name) && file.renderer_resource_id && !['ready', 'failed'].includes(file.renderer_status || ''));
+    if (pending.length === 0) return;
+    let disposed = false;
+    const refresh = async () => {
+      const updates = await Promise.all(pending.map((file) => attachmentApi.renderStatus(file.id).catch(() => file)));
+      if (!disposed) setVisibleAttachments((current) => current.map((file) => updates.find((update) => update.id === file.id) || file));
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    return () => { disposed = true; window.clearInterval(timer); };
+  }, [visibleAttachments]);
+
+  if (visibleAttachments.length === 0) return null;
+
+  const images = visibleAttachments.filter((a) => a.mime_type.startsWith('image/'));
+  const files = visibleAttachments.filter((a) => !a.mime_type.startsWith('image/'));
+  const rendered = files.filter((file) => /\.(msav|msch)$/i.test(file.file_name));
 
   return (
     <div className="mt-4 space-y-3">
@@ -45,6 +66,28 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
                 className="w-full h-full object-cover"
               />
             </a>
+          ))}
+        </div>
+      )}
+
+      {rendered.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {rendered.map((file) => (
+            <div key={`preview-${file.id}`} className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]">
+              {file.renderer_status === 'ready' ? (
+                <a href={attachmentApi.download(file.id)} target="_blank" rel="noopener noreferrer" className="block aspect-video bg-black/10">
+                  <img src={attachmentApi.preview(file.id)} alt={`${file.file_name} 预览`} className="h-full w-full object-cover" />
+                </a>
+              ) : (
+                <div className="flex aspect-video flex-col items-center justify-center gap-2 px-4 text-center text-sm text-[var(--text-muted)]">
+                  {file.renderer_status === 'failed' ? <Map className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
+                  <span>{file.renderer_status === 'failed' ? '地图/蓝图预览生成失败' : '正在生成地图/蓝图预览…'}</span>
+                </div>
+              )}
+              <a href={attachmentApi.download(file.id)} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--primary)]">
+                <Map className="h-3.5 w-3.5" /> {file.file_name}
+              </a>
+            </div>
           ))}
         </div>
       )}

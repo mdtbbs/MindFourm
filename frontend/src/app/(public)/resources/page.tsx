@@ -45,7 +45,7 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
       },
     ),
     fetchApiData<ResourceCategory[]>('/api/resources/categories', {
-      init: { next: { tags: ['resource-categories'] } },
+      init: { next: { tags: ['resource-categories'], revalidate: 300 } },
       fallback: [],
       throwOnError: true,
     }),

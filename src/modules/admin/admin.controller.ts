@@ -19,6 +19,7 @@ import { StatsService } from '../stats/stats.service';
 import { SettingsService } from '../settings/settings.service';
 import { SettingsRevalidationService } from '../settings/settings-revalidation.service';
 import { LogsService } from '../logs/logs.service';
+import { getClientIp } from '@common/utils/client-context.util';
 import { BansService } from '../bans/bans.service';
 import { CategoriesService } from '../categories/categories.service';
 import { TagsService } from '../tags/tags.service';
@@ -556,7 +557,7 @@ export class AdminController {
   }
 
   private getClientIp(req: any): string {
-    return (req.ip || req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+    return getClientIp(req);
   }
 
   private async publishModerationResult(

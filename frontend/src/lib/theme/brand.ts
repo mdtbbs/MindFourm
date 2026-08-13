@@ -1,5 +1,6 @@
 export const DEFAULT_BRAND_PRIMARY = '#2f80ed';
 export const DEFAULT_BRAND_ACCENT = '#dcecff';
+export const DEFAULT_BRAND_DESCRIPTION = 'A modern community forum';
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -32,7 +33,7 @@ const NEUTRAL_DEFAULTS = {
 export function resolveBrand(settings: Record<string, string>): BrandInfo {
   const siteName = settings.site_name?.trim() || NEUTRAL_DEFAULTS.siteName;
   const tagline = settings.site_tagline?.trim() || '';
-  const description = settings.site_description?.trim() || '';
+  const description = settings.site_description?.trim() || settings.seo_default_description?.trim() || DEFAULT_BRAND_DESCRIPTION;
   const logoUrl = settings.site_logo_url?.trim() || '';
   const faviconUrl = settings.site_favicon_url?.trim() || '';
 
@@ -49,6 +50,11 @@ export function resolveBrand(settings: Record<string, string>): BrandInfo {
     faviconUrl,
     sidebarTitle,
   };
+}
+
+export function resolveTitleSuffix(settings: Record<string, string>): string {
+  const configured = settings.seo_title_suffix?.trim();
+  return configured || ` | ${resolveBrand(settings).siteName}`;
 }
 
 export function buildBrandCssVariables(settings?: Record<string, string> | null): Record<string, string> {

@@ -34,5 +34,13 @@ export function getDefaultSidebarNavigation(): SidebarNavigationItem[] {
       enabled: true,
       requiresAuth: false,
     },
+    {
+      id: 'notices',
+      label: '公告中心',
+      href: '/notices',
+      icon: 'Bell',
+      enabled: true,
+      requiresAuth: false,
+    },
   ];
 }

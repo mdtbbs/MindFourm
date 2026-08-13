@@ -7,6 +7,7 @@ import RoomList from '@/components/lanlink/RoomList';
 import FriendsPanel from '@/components/lanlink/FriendsPanel';
 import FriendSearch from '@/components/lanlink/FriendSearch';
 import FriendRequests from '@/components/lanlink/FriendRequests';
+import Link from 'next/link';
 
 export default function LanLinkPage() {
   const [user, setUser] = useState<LanLinkUser | null>(null);
@@ -75,6 +76,20 @@ export default function LanLinkPage() {
       </div>
 
       {/* Room list */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Link href="/lanlink/quick-code" className="card p-4 transition-colors hover:border-primary/50">
+          <p className="text-sm font-semibold">游戏快速码</p>
+          <p className="mt-1 text-xs text-muted-foreground">在论坛管理一次性快速码，供 LanLink Mod 安全登录。</p>
+        </Link>
+        <Link href="/resources?category_id=1" className="card p-4 transition-colors hover:border-primary/50">
+          <p className="text-sm font-semibold">联机资源</p>
+          <p className="mt-1 text-xs text-muted-foreground">浏览服务器、地图、蓝图与联机相关资源。</p>
+        </Link>
+        <Link href="/posts/new" className="card p-4 transition-colors hover:border-primary/50">
+          <p className="text-sm font-semibold">发布联机帖</p>
+          <p className="mt-1 text-xs text-muted-foreground">分享房间、招募队友或发布联机说明。</p>
+        </Link>
+      </div>
       <RoomList />
 
       {/* Friend requests (only shown when there are pending) */}
