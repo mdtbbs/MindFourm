@@ -29,6 +29,7 @@ import { CreateFeedbacks1720000034000 } from './1720000034000-CreateFeedbacks';
 import { FlattenResourceCategories1720000035000 } from './1720000035000-FlattenResourceCategories';
 import { AddContentProvenance1720000036000 } from './1720000036000-AddContentProvenance';
 import { AddAttachmentRenderState1720000037000 } from './1720000037000-AddAttachmentRenderState';
+import { CreateLegalAcceptances1720000038000 } from './1720000038000-CreateLegalAcceptances';
 
 /**
  * Migrations in run order.
@@ -69,4 +70,5 @@ export const migrations = [
   FlattenResourceCategories1720000035000,
   AddContentProvenance1720000036000,
   AddAttachmentRenderState1720000037000,
+  CreateLegalAcceptances1720000038000,
 ];

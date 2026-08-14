@@ -2,6 +2,7 @@ import { Module, Global } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '@entities/user.entity';
 import { SessionAudit } from '@entities/session-audit.entity';
+import { LegalAcceptance } from '@entities/legal-acceptance.entity';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { TestAuthController } from './test-auth.controller';
@@ -14,7 +15,7 @@ import { SettingsModule } from '../settings/settings.module';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, SessionAudit]),
+    TypeOrmModule.forFeature([User, SessionAudit, LegalAcceptance]),
     PointsModule,
     NotificationsModule,
     ServiceApiModule,

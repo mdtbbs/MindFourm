@@ -9,16 +9,21 @@ describe('AuthService phone status sync', () => {
     const redisService = {
       hgetall: jest.fn(),
     };
+    const legalAcceptanceRepository = {
+      findOne: jest.fn(),
+    };
     const service = new AuthService(
       usersRepository as any,
       {} as any,
+      legalAcceptanceRepository as any,
       redisService as any,
+      {} as any,
       {} as any,
       {} as any,
       {} as any,
     );
 
-    return { service, usersRepository, redisService };
+    return { service, usersRepository, redisService, legalAcceptanceRepository };
   };
 
   it('force-refreshes the forum user from MindAuth session tokens', async () => {

@@ -17,6 +17,7 @@ import { Follow } from './follow.entity';
 import { UserBadge } from './user-badge.entity';
 import { GroupMember } from './group-member.entity';
 import { Purchase } from './purchase.entity';
+import { LegalAcceptance } from './legal-acceptance.entity';
 
 @Entity('users')
 export class User {
@@ -121,6 +122,9 @@ export class User {
 
   @OneToMany('OperationLog', 'user')
   operationLogs: OperationLog[];
+
+  @OneToMany(() => LegalAcceptance, 'user')
+  legalAcceptances: LegalAcceptance[];
 
   @OneToMany('PointLog', 'user')
   pointLogs: PointLog[];

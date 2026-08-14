@@ -12,4 +12,10 @@ describe('migration registry', () => {
       'CreateMediaAndDownloadDelivery1720000027000',
     );
   });
+
+  it('includes the immutable legal acceptance audit migration', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'CreateLegalAcceptances1720000038000',
+    );
+  });
 });

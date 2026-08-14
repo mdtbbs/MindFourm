@@ -287,7 +287,10 @@ export class AuthController {
         return res.json({ redirectPath: '/' });
       }
 
-      await this.authService.recordTermsAcceptance(pending.userId);
+      await this.authService.recordTermsAcceptance(pending.userId, {
+        clientIp: getClientIp(req),
+        userAgent: req.headers?.['user-agent'],
+      });
 
       const sessionToken = this.authService.generateSessionToken();
       await this.authService.createSession(
@@ -332,7 +335,10 @@ export class AuthController {
     }
 
     // User accepted terms — update their record
-    await this.authService.recordTermsAcceptance(user.id);
+    await this.authService.recordTermsAcceptance(user.id, {
+      clientIp: getClientIp(req),
+      userAgent: req.headers?.['user-agent'],
+    });
     return res.json({ redirectPath: '/' });
   }
 }

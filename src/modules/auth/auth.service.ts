@@ -16,6 +16,7 @@ import { extname } from 'path';
 import { mkdirSync } from 'fs';
 import { User } from '@entities/user.entity';
 import { SessionAudit } from '@entities/session-audit.entity';
+import { LegalAcceptance } from '@entities/legal-acceptance.entity';
 import { RedisService } from '@database/redis.service';
 import { PointsService } from '../points/points.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -57,6 +58,11 @@ type PendingTermsPayload = {
   };
 };
 
+type LegalAcceptanceContext = {
+  clientIp?: string | null;
+  userAgent?: string | null;
+};
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -67,6 +73,8 @@ export class AuthService {
     private usersRepository: Repository<User>,
     @InjectRepository(SessionAudit)
     private sessionAuditRepository: Repository<SessionAudit>,
+    @InjectRepository(LegalAcceptance)
+    private legalAcceptanceRepository: Repository<LegalAcceptance>,
     private redisService: RedisService,
     private configService: ConfigService,
     private pointsService: PointsService,
@@ -686,20 +694,24 @@ export class AuthService {
    * Decide whether a user must accept (or re-accept) the forum Terms / Privacy
    * before being allowed to use the forum.
    *
-   * Returns true when the admin has enabled `terms_required` AND the user's
-   * `terms_accepted_at` is missing or older than the admin-maintained
-   * `terms_updated_at` timestamp.
+   * Returns true when the admin has enabled `terms_required` and the user has
+   * not accepted the exact current pair of legal documents. Versions are derived
+   * from their SHA-256 content hashes, so editing either page automatically asks
+   * for a fresh acceptance without a second manual version setting.
    */
   async checkNeedsTermsAcceptance(user: User): Promise<boolean> {
     const required = await this.settingsService.getBoolean('terms_required', false);
     if (!required) return false;
 
-    const updatedAtRaw = await this.settingsService.get('terms_updated_at');
-    const updatedAt = updatedAtRaw ? new Date(updatedAtRaw) : null;
-    if (!updatedAt || Number.isNaN(updatedAt.getTime())) return false;
+    const latest = await this.legalAcceptanceRepository.findOne({
+      where: { user_id: user.id },
+      order: { accepted_at: 'DESC' },
+    });
+    if (!latest) return true;
 
-    if (!user.terms_accepted_at) return true;
-    return user.terms_accepted_at < updatedAt;
+    const snapshot = await this.getLegalDocumentSnapshot();
+    return latest.terms_content_hash !== snapshot.termsHash
+      || latest.privacy_content_hash !== snapshot.privacyHash;
   }
 
   /**
@@ -776,7 +788,36 @@ export class AuthService {
   /**
    * Record that the user has accepted the current Terms/Privacy revision.
    */
-  async recordTermsAcceptance(userId: number): Promise<void> {
-    await this.usersRepository.update(userId, { terms_accepted_at: new Date() });
+  private async getLegalDocumentSnapshot(): Promise<{
+    termsHash: string;
+    privacyHash: string;
+  }> {
+    const [termsContent, privacyContent] = await Promise.all([
+      this.settingsService.get('footer_terms_content'),
+      this.settingsService.get('footer_privacy_content'),
+    ]);
+    return {
+      termsHash: crypto.createHash('sha256').update(termsContent || '').digest('hex'),
+      privacyHash: crypto.createHash('sha256').update(privacyContent || '').digest('hex'),
+    };
+  }
+
+  async recordTermsAcceptance(userId: number, context: LegalAcceptanceContext = {}): Promise<void> {
+    const { termsHash, privacyHash } = await this.getLegalDocumentSnapshot();
+    const acceptedAt = new Date();
+
+    await this.legalAcceptanceRepository.manager.transaction(async (manager) => {
+      await manager.getRepository(LegalAcceptance).insert({
+        user_id: userId,
+        terms_version: `sha256:${termsHash}`,
+        terms_content_hash: termsHash,
+        privacy_version: `sha256:${privacyHash}`,
+        privacy_content_hash: privacyHash,
+        ip_address: context.clientIp || null,
+        user_agent: context.userAgent || null,
+        accepted_at: acceptedAt,
+      });
+      await manager.getRepository(User).update(userId, { terms_accepted_at: acceptedAt });
+    });
   }
 }

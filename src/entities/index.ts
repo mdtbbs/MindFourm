@@ -69,6 +69,7 @@ import { ExternalApiAuditLog } from './external-api-audit-log.entity';
 import { LanLinkQuickCode } from './lanlink-quick-code.entity';
 import { Friendship } from './friendship.entity';
 import { ResourceComment } from './resource-comment.entity';
+import { LegalAcceptance } from './legal-acceptance.entity';
 
 // P0-B: Resource aggregate
 import { ResourceAttribution } from './resource-attribution.entity';
@@ -169,6 +170,7 @@ export const entities = [
   Friendship,
   // Resource Comments
   ResourceComment,
+  LegalAcceptance,
   // P0-B: Resource aggregate
   ResourceAttribution,
   ResourceFile,
@@ -238,6 +240,7 @@ export {
   Friendship,
   // Resource Comments
   ResourceComment,
+  LegalAcceptance,
   // P0-B: Resource aggregate
   ResourceAttribution, ResourceFile, ResourceVersionDependency, ResourceVersionCompatibility,
   // Phase 4 (refactor): Media
