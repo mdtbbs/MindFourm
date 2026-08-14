@@ -1,4 +1,4 @@
-import { MigrationInterface, QueryRunner, Table, TableForeignKey, TableIndex } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableColumn, TableForeignKey, TableIndex } from 'typeorm';
 
 export class CreateLegalAcceptances1720000038000 implements MigrationInterface {
   name = 'CreateLegalAcceptances1720000038000';
@@ -9,7 +9,9 @@ export class CreateLegalAcceptances1720000038000 implements MigrationInterface {
         name: 'legal_acceptances',
         columns: [
           { name: 'id', type: 'int', unsigned: true, isPrimary: true, isGenerated: true, generationStrategy: 'increment' },
-          { name: 'user_id', type: 'int', unsigned: true, isNullable: true },
+          // Must match the existing signed `users.id` column. A mismatched
+          // unsigned child key makes MySQL reject the foreign key constraint.
+          { name: 'user_id', type: 'int', isNullable: true },
           { name: 'terms_version', type: 'varchar', length: '71' },
           { name: 'terms_content_hash', type: 'char', length: '64' },
           { name: 'privacy_version', type: 'varchar', length: '71' },
@@ -23,6 +25,18 @@ export class CreateLegalAcceptances1720000038000 implements MigrationInterface {
 
     const table = await queryRunner.getTable('legal_acceptances');
     if (!table) return;
+
+    // A pre-release of this migration created `user_id` as unsigned before the
+    // foreign-key step failed. Repair that harmless empty-table partial state so
+    // the next boot can complete the migration instead of failing forever.
+    const userId = table.findColumnByName('user_id');
+    if (userId?.unsigned) {
+      await queryRunner.changeColumn('legal_acceptances', 'user_id', new TableColumn({
+        name: 'user_id',
+        type: 'int',
+        isNullable: true,
+      }));
+    }
 
     if (!table.indices.some((index) => index.name === 'idx_legal_acceptances_user_accepted')) {
       await queryRunner.createIndex('legal_acceptances', new TableIndex({
