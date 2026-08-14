@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import Alert from '@/components/ui/alert';
 import { Loader2, ShieldCheck } from 'lucide-react';
 
+const AUTH_CHECK_TIMEOUT_MS = 8_000;
+
 function readCsrfToken(): string | undefined {
   const pair = document.cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith('csrf_token='));
   return pair ? decodeURIComponent(pair.slice('csrf_token='.length)) : undefined;
@@ -65,16 +67,34 @@ export default function AcceptTermsPage() {
   useEffect(() => {
     // Session flow (no token): verify the user is logged in before showing the form.
     if (token) return;
-    fetch('/api/auth/check', { credentials: 'include' })
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), AUTH_CHECK_TIMEOUT_MS);
+
+    fetch('/api/auth/check', { credentials: 'include', signal: controller.signal })
       .then((res) => res.json())
       .then((data) => {
-        setIsAuthenticated(!!data?.authenticated);
+        const authenticated = !!data?.authenticated;
+        setIsAuthenticated(authenticated);
         setAuthChecked(true);
+
+        // Terms enforcement may be disabled while an older bookmark, browser
+        // redirect or a stale client still points here. Do not leave the user on
+        // an obsolete consent screen in that case.
+        if (authenticated && !data?.needs_terms_acceptance) {
+          window.location.replace('/');
+        }
       })
       .catch(() => {
         setIsAuthenticated(false);
         setAuthChecked(true);
-      });
+        setError('登录状态检查超时或暂时不可用，请返回首页后重试。');
+      })
+      .finally(() => window.clearTimeout(timeout));
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, [token]);
 
   const handleSubmit = useCallback(

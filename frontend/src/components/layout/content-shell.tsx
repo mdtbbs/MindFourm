@@ -11,6 +11,7 @@ import { messageApi, friendsApi, resourceApi, categoryApi } from '@/lib/api/clie
 import type { Notification, ResourceCategory, Category } from '@/types';
 import Footer from '@/components/forum/footer';
 import AnnouncementBanner from '@/components/forum/announcement-banner';
+import PrivacyNotice from '@/components/legal/privacy-notice';
 import ContentSidebar from '@/components/layout/content-sidebar';
 import ContentDrawer from '@/components/layout/content-drawer';
 import ContentToolbar from '@/components/layout/content-toolbar';
@@ -161,6 +162,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
           onOpenDrawer={() => setMobileMenuOpen(true)}
         />
         <AnnouncementBanner />
+        <PrivacyNotice />
         <main className="min-w-0 flex-1">{children}</main>
         <Footer />
       </div>
