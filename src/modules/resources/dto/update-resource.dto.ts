@@ -1,4 +1,5 @@
 import { IsString, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdateResourceDto {
   @IsOptional()
@@ -34,10 +35,12 @@ export class UpdateResourceDto {
   content?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   category_id?: number;
 
   @IsOptional()
+  @Type(() => Number)
   @IsNumber()
   is_public?: number;
 

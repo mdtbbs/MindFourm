@@ -174,6 +174,7 @@ export default async function HomePage({
   ];
   const friendlyLinks = parseFooterFriendlyLinks(settings.footer_friendly_links);
   const adSlots = parseAdSlots(settings.home_ad_slots);
+  const onlineStaff = staffPresence.filter((staff) => staff.status !== 'offline');
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
@@ -238,29 +239,6 @@ export default async function HomePage({
             </section>
           )}
 
-          <section className="panel-surface p-5">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-base font-semibold text-[var(--foreground)]">在线管理</h2>
-                <p className="mt-1 text-xs text-[var(--muted-foreground)]">当前可协助处理社区事务的管理成员</p>
-              </div>
-              <span className="text-xs text-[var(--muted-foreground)]">
-                {staffPresence.filter((staff) => staff.status !== 'offline').length} 在线
-              </span>
-            </div>
-            {staffPresence.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-3">
-                {staffPresence.map((staff) => (
-                  <Link key={staff.id} href={`/users/${staff.id}`} className="flex min-w-36 items-center gap-2 border border-[var(--border)] px-3 py-2 hover:border-[var(--primary)]">
-                    <span className={`h-2 w-2 rounded-full ${staff.status === 'offline' ? 'bg-[var(--muted-foreground)]' : 'bg-emerald-500'}`} aria-label={staff.status === 'offline' ? '离线' : '在线'} />
-                    {staff.avatar_url ? <img src={staff.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" /> : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--muted)] text-xs">{staff.username.slice(0, 1)}</span>}
-                    <span className="truncate text-sm text-[var(--foreground)]">{staff.username}</span>
-                  </Link>
-                ))}
-              </div>
-            ) : <p className="mt-4 text-sm text-[var(--muted-foreground)]">暂无公开的管理成员状态。</p>}
-          </section>
-
           {adSlots.length > 0 && (
             <section className="grid gap-3 sm:grid-cols-2">
               {adSlots.map((slot, index) => {
@@ -301,6 +279,27 @@ export default async function HomePage({
               <div className="mt-3 flex flex-wrap gap-2">
                 {friendlyLinks.map((link) => (
                   <Link key={`${link.label}-${link.href}`} href={link.href} target={isExternalHref(link.href) ? '_blank' : undefined} rel={isExternalHref(link.href) ? 'noreferrer' : undefined} className="rounded border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]" title={link.description}>{link.label}</Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {onlineStaff.length > 0 && (
+            <section className="panel-surface p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-[var(--foreground)]">在线管理</h2>
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">当前可协助处理社区事务的管理成员</p>
+                </div>
+                <span className="text-xs text-[var(--muted-foreground)]">{onlineStaff.length} 在线</span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                {onlineStaff.map((staff) => (
+                  <Link key={staff.id} href={`/users/${staff.id}`} className="flex min-w-36 items-center gap-2 border border-[var(--border)] px-3 py-2 hover:border-[var(--primary)]">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500" aria-label="在线" />
+                    {staff.avatar_url ? <img src={staff.avatar_url} alt="" className="h-6 w-6 rounded-full object-cover" /> : <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--muted)] text-xs">{staff.username.slice(0, 1)}</span>}
+                    <span className="truncate text-sm text-[var(--foreground)]">{staff.username}</span>
+                  </Link>
                 ))}
               </div>
             </section>

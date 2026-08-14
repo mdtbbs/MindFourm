@@ -1,5 +1,6 @@
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { fetchPublicSettings } from '@/lib/settings/server';
+import { unstable_noStore as noStore } from 'next/cache';
 
 interface ConfiguredFooterPageProps {
   eyebrow: string;
@@ -14,6 +15,10 @@ export default async function ConfiguredFooterPage({
   settingKey,
   fallback,
 }: ConfiguredFooterPageProps) {
+  // At build time the loopback API is intentionally skipped, which used to
+  // bake the fallback text into these otherwise static routes. These pages
+  // are admin-authored, so always resolve their current setting at request time.
+  noStore();
   const settings = await fetchPublicSettings({ fresh: true });
   const content = settings[settingKey]?.trim();
 

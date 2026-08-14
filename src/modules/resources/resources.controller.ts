@@ -35,6 +35,7 @@ import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
 import { OptionalAuth } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
+import { RawHttpResponse } from '@common/decorators/api-v1.decorator';
 import { assertSafeRedirectUrl } from '@common/utils/safe-url.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -222,6 +223,7 @@ export class ResourcesController {
   }
 
   @Get(':id/download')
+  @RawHttpResponse()
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
   @RateLimit({ max: 60, window: 60 })
@@ -298,13 +300,13 @@ export class ResourcesController {
     @UploadedFile() file: Express.Multer.File | undefined,
     @Req() req: any,
   ) {
-    const body = await new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
     const userId = req.user.id;
     try {
+      const body = await new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
       const storedFile = await this.resourceStorageService.storeIncoming(file);
       const resource = await this.resourcesService.create(body, userId, storedFile);
       await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });

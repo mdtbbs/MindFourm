@@ -53,6 +53,21 @@ authTest.describe('Resource Submission Flow', () => {
 
     await authenticatedPage.waitForURL(/\/resources\/\d+$/, { timeout: 30000 });
     await authExpect(authenticatedPage.locator('h1')).toContainText(title);
-    await authExpect(authenticatedPage.locator('a[href*="/api/resources/"][href*="/download"]')).toBeVisible();
+    const downloadLink = authenticatedPage.locator('a[href*="/api/resources/"][href*="/download"]');
+    await authExpect(downloadLink).toBeVisible();
+
+    const [download] = await Promise.all([
+      authenticatedPage.waitForEvent('download'),
+      downloadLink.click(),
+    ]);
+    expect(download.suggestedFilename()).toBe('playwright-resource.txt');
+    const stream = await download.createReadStream();
+    expect(stream).not.toBeNull();
+
+    let downloadedContent = '';
+    for await (const chunk of stream!) {
+      downloadedContent += chunk.toString();
+    }
+    expect(downloadedContent).toBe('resource upload fixture created by Playwright');
   });
 });

@@ -21,10 +21,7 @@
 import 'dotenv/config';
 import mysql from 'mysql2/promise';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * Resolve `.env` manually because Playwright's ts-node runner does not go
