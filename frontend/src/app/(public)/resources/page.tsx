@@ -28,12 +28,16 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-async function fetchData(params: { category_id?: string; search?: string; sort?: string }) {
+async function fetchData(params: { category_id?: string; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string }) {
   const qs = new URLSearchParams();
   qs.set('limit', '30');
   if (params.category_id) qs.set('category_id', params.category_id);
   if (params.search) qs.set('search', params.search);
   if (params.sort) qs.set('sort', params.sort);
+  if (params.tag) qs.set('tag', params.tag);
+  if (params.supported_version) qs.set('supported_version', params.supported_version);
+  if (params.compatibility) qs.set('compatibility', params.compatibility);
+  if (params.resource_kind) qs.set('resource_kind', params.resource_kind);
 
   const [resourcesResult, resourceCategories, forumCategories, tags, featuredResources] = await Promise.all([
     fetchApiData<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
@@ -81,7 +85,7 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
 export default async function ResourcesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category_id?: string; search?: string; sort?: string }>;
+  searchParams: Promise<{ category_id?: string; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string }>;
 }) {
   const params = await searchParams;
   const settings = await fetchPublicSettings();
@@ -140,6 +144,10 @@ export default async function ResourcesPage({
           initialCategory={params.category_id}
           initialSearch={params.search}
           initialSort={params.sort}
+          initialTag={params.tag}
+          initialSupportedVersion={params.supported_version}
+          initialCompatibility={params.compatibility}
+          initialResourceKind={params.resource_kind}
         />
 
         {/* Resource list */}
@@ -156,20 +164,23 @@ export default async function ResourcesPage({
           </div>
         ) : (
           <div className="space-y-3">
-            {resources.map((resource) => (
-              <ResourceListItem key={resource.id} resource={resource} />
-            ))}
-            {/* Load more */}
             {hasMore && (
               <ResourceLoadMore
-                initialResources={[]}
+                initialResources={resources}
                 initialCursor={nextCursor}
                 hasMore={hasMore}
                 categoryId={params.category_id ? parseInt(params.category_id) : undefined}
                 search={params.search}
                 sort={params.sort}
+                tag={params.tag}
+                supportedVersion={params.supported_version}
+                compatibility={params.compatibility}
+                resourceKind={params.resource_kind}
               />
             )}
+            {!hasMore && resources.map((resource) => (
+              <ResourceListItem key={resource.id} resource={resource} />
+            ))}
           </div>
         )}
       </main>

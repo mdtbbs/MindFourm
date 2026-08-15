@@ -1127,9 +1127,9 @@ export const messageApi = {
 
 // Resource APIs
 export const resourceApi = {
-  list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string }) =>
+  list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort })}`
+      `/api/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort, tag: params?.tag, supported_version: params?.supported_version, compatibility: params?.compatibility, resource_kind: params?.resource_kind })}`
     ),
   getById: (id: number) =>
     request<Resource>(`/api/resources/${id}`),

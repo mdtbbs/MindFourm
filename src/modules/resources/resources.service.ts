@@ -374,6 +374,10 @@ export class ResourcesService {
       search,
       status,
       cursor,
+      tag,
+      supported_version,
+      compatibility,
+      resource_kind,
     } = query;
     const scope = options.scope ?? 'public';
     const sort = validateResourceSort(query.sort);
@@ -396,6 +400,27 @@ export class ResourcesService {
 
       if (search) {
         qb.andWhere('resource.title LIKE :search', { search: `%${escapeLike(search)}%` });
+      }
+
+      if (resource_kind?.trim()) {
+        qb.andWhere('resource.resource_kind = :resourceKind', { resourceKind: resource_kind.trim() });
+      }
+
+      // These fields are normalised arrays in metadata_json. JSON_CONTAINS
+      // deliberately returns no match for NULL metadata, which is the public
+      // contract for an explicit filter. Parameterise every value so a tag can
+      // never alter the JSON path or the surrounding query.
+      const metadataFilters: Array<[string | undefined, string, string]> = [
+        [tag, 'tags', 'resourceTag'],
+        [supported_version, 'supported_versions', 'supportedVersion'],
+        [compatibility, 'compatibility', 'resourceCompatibility'],
+      ];
+      for (const [value, field, parameter] of metadataFilters) {
+        if (!value?.trim()) continue;
+        qb.andWhere(
+          `JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:${parameter}), '$.${field}')`,
+          { [parameter]: value.trim() },
+        );
       }
 
       // Cursor-based pagination

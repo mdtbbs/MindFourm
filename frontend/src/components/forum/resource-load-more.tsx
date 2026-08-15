@@ -14,6 +14,10 @@ interface ResourceLoadMoreProps {
   categoryId?: number;
   search?: string;
   sort?: string;
+  tag?: string;
+  supportedVersion?: string;
+  compatibility?: string;
+  resourceKind?: string;
 }
 
 export default function ResourceLoadMore({
@@ -23,6 +27,10 @@ export default function ResourceLoadMore({
   categoryId,
   search,
   sort,
+  tag,
+  supportedVersion,
+  compatibility,
+  resourceKind,
 }: ResourceLoadMoreProps) {
   const [resources, setResources] = useState<Resource[]>(initialResources);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
@@ -41,6 +49,10 @@ export default function ResourceLoadMore({
         category_id: categoryId,
         search,
         sort,
+        tag,
+        supported_version: supportedVersion,
+        compatibility,
+        resource_kind: resourceKind,
       });
       setResources((prev) => [...prev, ...result.data]);
       setCursor(result.next_cursor);

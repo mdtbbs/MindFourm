@@ -150,6 +150,35 @@ describe('ResourcesService', () => {
     );
   });
 
+  it('filters public resources by safe metadata fields when requested', async () => {
+    const { service, defaultQb } = createService();
+
+    await service.getList({
+      limit: 20,
+      resource_kind: 'map',
+      tag: 'campaign',
+      supported_version: 'v8',
+      compatibility: 'desktop',
+    }, { scope: 'public' });
+
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      'resource.resource_kind = :resourceKind',
+      { resourceKind: 'map' },
+    );
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:resourceTag), '$.tags')",
+      { resourceTag: 'campaign' },
+    );
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions')",
+      { supportedVersion: 'v8' },
+    );
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:resourceCompatibility), '$.compatibility')",
+      { resourceCompatibility: 'desktop' },
+    );
+  });
+
   it('does not force a default status filter for the admin list', async () => {
     const { service, resourceRepository } = createService();
 
