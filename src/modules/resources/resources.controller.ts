@@ -42,6 +42,7 @@ import * as path from 'path';
 import { ResourceStorageService } from './resource-storage.service';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp } from '@common/utils/client-context.util';
+import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -307,6 +308,7 @@ export class ResourcesController {
         forbidNonWhitelisted: true,
         transform: true,
       }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
+      if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
       const storedFile = await this.resourceStorageService.storeIncoming(file);
       const resource = await this.resourcesService.create(body, userId, storedFile);
       await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });
@@ -351,6 +353,7 @@ export class ResourcesController {
   ) {
     const userId = req.user.id;
     try {
+      if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
       const storedFile = await this.resourceStorageService.storeIncoming(file);
       const version = await this.versionService.create(
         { resource_id: id, version: body.version || '', content: body.content },

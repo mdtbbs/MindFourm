@@ -181,6 +181,27 @@ function isWriteMethod(method: string): boolean {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase());
 }
 
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+async function fetchWithReadRetry(url: string, options: RequestInit, method: string): Promise<Response> {
+  // Never transparently repeat a mutation: an interrupted upload/post may already
+  // have reached the origin. Idempotent reads get two short, cancellable retries.
+  const attempts = isWriteMethod(method) ? 1 : 3;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) return response;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts - 1 || (error instanceof Error && error.name === 'AbortError')) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Network error');
+}
+
 async function ensureClientCsrfToken(method: string): Promise<void> {
   if (!isWriteMethod(method) || typeof document === 'undefined' || readCookieValue('csrf_token')) {
     return;
@@ -239,11 +260,11 @@ async function request<T>(
     const requestHeaders = isFormData
       ? { 'X-API-Version': '1', ...(fetchOptions.headers as Record<string, string> | undefined) }
       : { 'Content-Type': 'application/json', 'X-API-Version': '1', ...(fetchOptions.headers as Record<string, string> | undefined) };
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetchWithReadRetry(`${API_BASE}${path}`, {
       ...fetchOptions,
       headers: withCsrfHeader(requestHeaders, String(method)),
       credentials: 'include',
-    });
+    }, String(method));
   } catch (err) {
     throw new Error(err instanceof Error ? err.message : 'Network error');
   }

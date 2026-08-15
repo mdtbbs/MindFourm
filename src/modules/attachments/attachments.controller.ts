@@ -27,6 +27,7 @@ import { UploadAttachmentDto } from './dto/upload-attachment.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { Public } from '@common/decorators/public.decorator';
 import type { Request, Response } from 'express';
+import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -120,6 +121,13 @@ export class AttachmentsController {
     }
     if (!body.post_id && !body.reply_id) {
       throw new BadRequestException('附件必须关联到帖子或回复');
+    }
+
+    try {
+      await Promise.all(files.map((file) => assertSafeUploadedFile(file, 10 * 1024 * 1024)));
+    } catch (error) {
+      await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => undefined)));
+      throw error;
     }
 
     const results: any[] = [];
