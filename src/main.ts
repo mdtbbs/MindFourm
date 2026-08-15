@@ -164,10 +164,6 @@ async function bootstrap() {
   const pluginManager = app.get(PluginManagerService);
   await pluginManager.loadPlugins();
 
-  const port = process.env.PORT || 4000;
-  await app.listen(port);
-  console.log(`MindFourm NestJS running on http://localhost:${port}`);
-
   // The contract is intentionally public and contains only explicitly included
   // V1 modules. Keep it on by default so a missing deployment flag cannot make
   // the supported Mod API undocumented; restricted installations may opt out.
@@ -176,6 +172,10 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs/v1', app, document);
     app.getHttpAdapter().get('/api/openapi/v1.json', (_req: unknown, res: any) => res.json(document));
   }
+
+  const port = process.env.PORT || 4000;
+  await app.listen(port);
+  console.log(`MindFourm NestJS running on http://localhost:${port}`);
 }
 
 bootstrap();
