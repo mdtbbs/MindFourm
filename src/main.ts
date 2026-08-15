@@ -168,9 +168,10 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`MindFourm NestJS running on http://localhost:${port}`);
 
-  // Read through ConfigService rather than process.env: deployment runners can
-  // provide a dotenv file after the Node parent process has been created.
-  if (app.get(ConfigService).get<string>('OPENAPI_ENABLED') === 'true') {
+  // The contract is intentionally public and contains only explicitly included
+  // V1 modules. Keep it on by default so a missing deployment flag cannot make
+  // the supported Mod API undocumented; restricted installations may opt out.
+  if (app.get(ConfigService).get<string>('OPENAPI_ENABLED') !== 'false') {
     const document = createV1OpenApiDocument(app);
     SwaggerModule.setup('api/docs/v1', app, document);
     app.getHttpAdapter().get('/api/openapi/v1.json', (_req: unknown, res: any) => res.json(document));
