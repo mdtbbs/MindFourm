@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -163,7 +164,9 @@ async function bootstrap() {
   await app.listen(port);
   console.log(`MindFourm NestJS running on http://localhost:${port}`);
 
-  if (process.env.OPENAPI_ENABLED === 'true') {
+  // Read through ConfigService rather than process.env: deployment runners can
+  // provide a dotenv file after the Node parent process has been created.
+  if (app.get(ConfigService).get<string>('OPENAPI_ENABLED') === 'true') {
     const document = createV1OpenApiDocument(app);
     SwaggerModule.setup('api/docs/v1', app, document);
     app.getHttpAdapter().get('/api/openapi/v1.json', (_req: unknown, res: any) => res.json(document));
