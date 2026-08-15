@@ -18,6 +18,12 @@ export class ResourceStorageService {
     return path.resolve(process.env.RESOURCE_UPLOAD_ROOT || './uploads');
   }
 
+  private async getQuarantineDirectory(): Promise<string> {
+    const target = path.join(this.uploadRoot, '.quarantine', 'resources');
+    await fs.mkdir(target, { recursive: true });
+    return target;
+  }
+
   async getResourceDirectory(): Promise<string> {
     const configured = (await this.settingsService.get('resource_upload_directory'))?.trim() || 'resources';
     const target = path.isAbsolute(configured) ? path.resolve(configured) : path.resolve(this.uploadRoot, configured);
@@ -31,9 +37,13 @@ export class ResourceStorageService {
     return target;
   }
 
+  /**
+   * New resource payloads remain in a non-public quarantine directory until a
+   * moderator approves the resource. The controller never serves this path.
+   */
   async storeIncoming(file: Express.Multer.File | undefined): Promise<StoredResourceFile | undefined> {
     if (!file) return undefined;
-    const storedPath = path.join(await this.getResourceDirectory(), path.basename(file.filename));
+    const storedPath = path.join(await this.getQuarantineDirectory(), path.basename(file.filename));
     try {
       await fs.rename(file.path, storedPath);
     } catch (error: any) {
@@ -42,5 +52,27 @@ export class ResourceStorageService {
       await fs.unlink(file.path);
     }
     return { file_name: file.originalname, file_path: storedPath, file_size: file.size, mime_type: file.mimetype };
+  }
+
+  private async move(source: string, target: string): Promise<void> {
+    try {
+      await fs.rename(source, target);
+    } catch (error: any) {
+      if (error?.code !== 'EXDEV') throw error;
+      await fs.copyFile(source, target);
+      await fs.unlink(source);
+    }
+  }
+
+  /** Promote a single quarantined file, retaining legacy final paths unchanged. */
+  async promote(filePath: string | null | undefined): Promise<string | null | undefined> {
+    if (!filePath) return filePath;
+    const quarantine = await this.getQuarantineDirectory();
+    const source = path.resolve(filePath);
+    const prefix = `${quarantine}${path.sep}`;
+    if (!source.startsWith(prefix)) return filePath;
+    const target = path.join(await this.getResourceDirectory(), path.basename(source));
+    await this.move(source, target);
+    return target;
   }
 }

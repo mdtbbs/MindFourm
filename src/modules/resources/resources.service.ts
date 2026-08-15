@@ -20,6 +20,7 @@ import { MflClientService } from './mfl-client.service';
 import { ResourceCategoryService } from './resource-categories.service';
 import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
 import { mergeResourceMetadata, normalizeResourceMetadata } from './resource-detail.util';
+import { ResourceStorageService } from './resource-storage.service';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -61,6 +62,7 @@ export class ResourcesService {
     private notificationsService: NotificationsService,
     private mflClientService: MflClientService,
     private categoryService: ResourceCategoryService,
+    private resourceStorageService?: ResourceStorageService,
   ) {}
 
   private normalizeResourceType(resourceType: string): string {
@@ -840,6 +842,20 @@ export class ResourcesService {
     }
 
     if (existingResource.status !== status) {
+      if (status === RESOURCE_STATUS_APPROVED && this.resourceStorageService) {
+        const promotedResourcePath = await this.resourceStorageService.promote(existingResource.file_path);
+        if (typeof promotedResourcePath === 'string' && promotedResourcePath !== existingResource.file_path) {
+          await this.resourceRepository.update(id, { file_path: promotedResourcePath });
+          existingResource.file_path = promotedResourcePath;
+        }
+        const versions = await this.versionRepository.find({ where: { resource_id: id } });
+        for (const version of versions) {
+          const promotedVersionPath = await this.resourceStorageService.promote(version.file_path);
+          if (typeof promotedVersionPath === 'string' && promotedVersionPath !== version.file_path) {
+            await this.versionRepository.update(version.id, { file_path: promotedVersionPath });
+          }
+        }
+      }
       const updateData: Partial<Resource> = { status };
       if (status === RESOURCE_STATUS_REJECTED) {
         updateData.reject_reason = options.rejectReason || null;

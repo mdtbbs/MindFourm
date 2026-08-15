@@ -302,6 +302,7 @@ export class ResourcesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
+    let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
     try {
       const body = await new ValidationPipe({
         whitelist: true,
@@ -309,12 +310,13 @@ export class ResourcesController {
         transform: true,
       }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
-      const storedFile = await this.resourceStorageService.storeIncoming(file);
+      storedFile = await this.resourceStorageService.storeIncoming(file);
       const resource = await this.resourcesService.create(body, userId, storedFile);
       await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });
       return resource;
     } catch (error) {
       await cleanupUploadedFile(file);
+      if (storedFile?.file_path) await fs.unlink(storedFile.file_path).catch(() => undefined);
       throw error;
     }
   }
@@ -352,9 +354,10 @@ export class ResourcesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
+    let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
     try {
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
-      const storedFile = await this.resourceStorageService.storeIncoming(file);
+      storedFile = await this.resourceStorageService.storeIncoming(file);
       const version = await this.versionService.create(
         { resource_id: id, version: body.version || '', content: body.content },
         storedFile,
@@ -364,6 +367,7 @@ export class ResourcesController {
       return version;
     } catch (error) {
       await cleanupUploadedFile(file);
+      if (storedFile?.file_path) await fs.unlink(storedFile.file_path).catch(() => undefined);
       throw error;
     }
   }

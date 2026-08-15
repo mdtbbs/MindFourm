@@ -95,7 +95,13 @@ export class ResourceVersionService {
       content_html: content ? parseMarkdown(content) : undefined,
     });
 
-    return this.normalizeVersion(await this.versionRepository.save(version));
+    const saved = await this.versionRepository.save(version);
+    // Any new binary changes the reviewed release surface. Keep the whole
+    // resource unavailable until staff approves this version again.
+    if (resource.status === 'approved') {
+      await this.resourceRepository.update(resource.id, { status: 'pending' });
+    }
+    return this.normalizeVersion(saved);
   }
 
   async getDownloadTarget(resourceId: number, versionId: number): Promise<ResourceVersion> {
