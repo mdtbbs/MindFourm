@@ -22,7 +22,12 @@ export default function CategoriesPage() {
   async function loadCategories() {
     try {
       const data = await resourceCategoryApi.list();
-      setCategories(data as ResourceCategory[]);
+      // MySQL exposes the tinyint-backed flag as 0/1.  Normalise at the
+      // boundary so Switch receives a real boolean and keeps valid ARIA state.
+      setCategories((data as ResourceCategory[]).map((category) => ({
+        ...category,
+        is_active: Boolean(category.is_active),
+      })));
     } catch (error) {
       console.error('Failed to load categories:', error);
     } finally {
@@ -32,7 +37,18 @@ export default function CategoriesPage() {
 
   async function handleSave(category: CategoryForm) {
     if (category.id) {
-      await resourceCategoryApi.update(category.id, category);
+      // `category` originates from the API and carries immutable `id` and
+      // `created_at` fields.  Sending them back is rejected by the backend's
+      // strict DTO validation and left the editor appearing to save forever.
+      const { id, name, slug, description, icon, sort_order, is_active } = category;
+      await resourceCategoryApi.update(id, {
+        name,
+        slug,
+        description,
+        icon,
+        sort_order,
+        is_active,
+      });
     } else {
       await resourceCategoryApi.create(category);
     }

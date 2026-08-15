@@ -30,6 +30,8 @@ import { ResourceFavoritesService } from './resource-favorites.service';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { QueryResourcesDto } from './dto/query-resources.dto';
+import { CreateResourceCategoryDto } from './dto/create-resource-category.dto';
+import { UpdateResourceCategoryDto } from './dto/update-resource-category.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
@@ -180,7 +182,7 @@ export class ResourcesController {
   @Post('categories')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
-  async createCategory(@Body() body: any) {
+  async createCategory(@Body() body: CreateResourceCategoryDto) {
     return this.categoryService.create(normalizeCategoryBody(body));
   }
 
@@ -189,7 +191,7 @@ export class ResourcesController {
   @Roles('admin')
   async updateCategory(
     @Param('categoryId', ParseIntPipe) categoryId: number,
-    @Body() body: any,
+    @Body() body: UpdateResourceCategoryDto,
   ) {
     return this.categoryService.update(categoryId, normalizeCategoryBody(body));
   }

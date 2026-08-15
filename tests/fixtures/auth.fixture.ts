@@ -27,6 +27,21 @@ type AuthFixtures = {
   testUserType: TestUserType;
 };
 
+async function routeBrowserApiToTestServer(context: BrowserContext): Promise<void> {
+  const target = new URL(API_URL);
+  await context.route('**/api/**', async (route) => {
+    const requested = new URL(route.request().url());
+    if (requested.origin === target.origin) {
+      await route.continue();
+      return;
+    }
+
+    requested.protocol = target.protocol;
+    requested.host = target.host;
+    await route.continue({ url: requested.toString() });
+  });
+}
+
 /**
  * Create an authenticated session by calling the test-login endpoint
  */
@@ -71,7 +86,10 @@ async function createTestSession(
 }
 
 export const test = base.extend<AuthFixtures>({
-  testUserType: 'user',
+  // Mark as an option so suites can explicitly request an admin/moderator
+  // session with `test.use(...)`; ordinary fixtures are not overrideable this
+  // way and silently retained the default user role.
+  testUserType: ['user', { option: true }],
 
   authenticatedPage: async ({ browser, testUserType }, use) => {
     // Create a new browser context for this test
@@ -79,6 +97,7 @@ export const test = base.extend<AuthFixtures>({
     const page = await context.newPage();
 
     try {
+      await routeBrowserApiToTestServer(context);
       // Create authenticated session
       await createTestSession(context, testUserType);
 
@@ -94,6 +113,24 @@ export const test = base.extend<AuthFixtures>({
 
     // Cleanup
     await context.close().catch(() => {});
+  },
+});
+
+// A dedicated staff fixture creates its own session rather than overriding an
+// already-resolved dependent fixture. This keeps administrative E2E cases from
+// silently falling back to a normal user session.
+export const adminTest = base.extend<{ authenticatedPage: Page }>({
+  authenticatedPage: async ({ browser }, use) => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      await routeBrowserApiToTestServer(context);
+      await createTestSession(context, 'admin');
+      await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await use(page);
+    } finally {
+      await context.close().catch(() => {});
+    }
   },
 });
 

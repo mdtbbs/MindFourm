@@ -5,6 +5,12 @@ function uniqueResourceName(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+async function waitForResourceFormReady(page: import('@playwright/test').Page): Promise<void> {
+  // The rich-text editor is client-only.  Waiting for it ensures React has
+  // hydrated the form before changing the hidden resource-type radio.
+  await page.getByTestId('resource-description-input').waitFor({ state: 'visible' });
+}
+
 test.describe('Resource Public Routes', () => {
   test('should redirect legacy upload route to unified submit page', async ({ page }) => {
     await page.goto('/resources/upload', { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -16,7 +22,8 @@ authTest.describe('Resource Submission Flow', () => {
   authTest('restores an unfinished resource draft after reload', async ({ authenticatedPage }) => {
     const title = uniqueResourceName('E2E Resource Draft');
     await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await authenticatedPage.getByTestId('resource-type-external').click();
+    await waitForResourceFormReady(authenticatedPage);
+    await authenticatedPage.getByTestId('resource-type-external').locator('input').check({ force: true });
     await authenticatedPage.getByTestId('resource-title-input').fill(title);
     await authenticatedPage.getByTestId('resource-version-input').fill('draft-1');
 
@@ -36,8 +43,9 @@ authTest.describe('Resource Submission Flow', () => {
     const externalUrl = `https://example.com/resources/${Date.now()}`;
 
     await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await waitForResourceFormReady(authenticatedPage);
 
-    await authenticatedPage.getByTestId('resource-type-external').click();
+    await authenticatedPage.getByTestId('resource-type-external').locator('input').check({ force: true });
     await authenticatedPage.getByTestId('resource-title-input').fill(title);
     await authenticatedPage.getByTestId('resource-version-input').fill('1.0.0');
     await authenticatedPage.getByTestId('resource-description-input').fill('External resource submitted by Playwright.');
@@ -55,8 +63,9 @@ authTest.describe('Resource Submission Flow', () => {
     const title = uniqueResourceName('E2E Uploaded Resource');
 
     await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await waitForResourceFormReady(authenticatedPage);
 
-    await authenticatedPage.getByTestId('resource-type-upload').click();
+    await authenticatedPage.getByTestId('resource-type-upload').locator('input').check({ force: true });
     await authenticatedPage.getByTestId('resource-title-input').fill(title);
     await authenticatedPage.getByTestId('resource-version-input').fill('2.0.0');
     await authenticatedPage.getByTestId('resource-description-input').fill('Uploaded resource submitted by Playwright.');

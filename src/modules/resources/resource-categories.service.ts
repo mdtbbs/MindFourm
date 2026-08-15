@@ -4,17 +4,9 @@ import { Repository, DataSource } from 'typeorm';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { RedisService } from '@database/redis.service';
 import { RevalidationService } from '@common/services/revalidation.service';
+import { RESOURCE_CATEGORY_ICONS } from './resource-category-icons';
 
-const RESOURCE_CATEGORY_ICON_WHITELIST = new Set([
-  'Folder',
-  'Puzzle',
-  'Map',
-  'Server',
-  'Palette',
-  'BookOpen',
-  'Wrench',
-  'FileText',
-]);
+const RESOURCE_CATEGORY_ICON_WHITELIST = new Set<string>(RESOURCE_CATEGORY_ICONS);
 
 @Injectable()
 export class ResourceCategoryService {

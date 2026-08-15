@@ -10,7 +10,7 @@
  * Uses authTest fixture for admin authentication.
  */
 
-import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
+import { adminTest as authTest, expect as authExpect } from '../fixtures/auth.fixture';
 
 /**
  * Helper: generate a unique category name to avoid collisions between test runs.
@@ -20,6 +20,7 @@ function uniqueCategoryName(prefix: string): string {
 }
 
 authTest.describe('Resource Categories - Admin Management', () => {
+
   authTest('admin can see all categories including disabled on admin page', async ({ authenticatedPage }) => {
     // Navigate to admin categories page (authTest provides admin auth)
     await authenticatedPage.goto('/admin/resources/categories', {
@@ -95,8 +96,8 @@ authTest.describe('Resource Categories - Admin Management', () => {
     // Switch component uses a button role with aria-checked
     const switchControl = authenticatedPage.locator('[role="switch"]#is_active, button#is_active, [id="is_active"]');
     // If it's currently checked/active, click to disable
-    const isChecked = await switchControl.getAttribute('data-state').catch(() => 'checked');
-    if (isChecked === 'checked') {
+    const isChecked = await switchControl.getAttribute('aria-checked');
+    if (isChecked !== 'false') {
       await switchControl.click();
     }
 
@@ -105,7 +106,7 @@ authTest.describe('Resource Categories - Admin Management', () => {
 
     // Wait for the table to reload and verify the category shows as disabled
     const updatedRow = authenticatedPage.locator('tr', { hasText: categoryName });
-    await authExpect(updatedRow.locator('text=禁用')).toBeVisible({ timeout: 15000 });
+    await authExpect(updatedRow.getByRole('cell', { name: '禁用', exact: true })).toBeVisible({ timeout: 15000 });
   });
 
   authTest('category changes trigger immediate cache invalidation', async ({ authenticatedPage }) => {
@@ -176,8 +177,8 @@ authTest.describe('Resource Categories - Admin Management', () => {
     await categoryRow.locator('button:has-text("编辑")').click();
 
     const switchControl = authenticatedPage.locator('[role="switch"]#is_active, button#is_active, [id="is_active"]');
-    const isChecked = await switchControl.getAttribute('data-state').catch(() => 'checked');
-    if (isChecked === 'checked') {
+    const isChecked = await switchControl.getAttribute('aria-checked');
+    if (isChecked !== 'false') {
       await switchControl.click();
     }
 
@@ -185,7 +186,7 @@ authTest.describe('Resource Categories - Admin Management', () => {
 
     // Wait for the category to show as disabled
     const updatedRow = authenticatedPage.locator('tr', { hasText: categoryName });
-    await authExpect(updatedRow.locator('text=禁用')).toBeVisible({ timeout: 15000 });
+    await authExpect(updatedRow.getByRole('cell', { name: '禁用', exact: true })).toBeVisible({ timeout: 15000 });
 
     // Navigate to the public resources page
     await authenticatedPage.goto('/resources', {
