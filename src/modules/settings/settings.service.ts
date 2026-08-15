@@ -490,6 +490,8 @@ export class SettingsService implements OnModuleInit {
       { key: 'require_reply_approval', value: 'true', category: 'moderation', description: 'Require reply approval before publishing' },
       { key: 'require_avatar_approval', value: 'true', category: 'moderation', description: 'Require avatar approval before applying' },
       { key: 'auto_approve_trusted', value: 'false', category: 'moderation', description: 'Auto-approve trusted users' },
+      { key: 'content_safety_keywords', value: '', category: 'moderation', description: 'Additional high-risk terms, comma or newline separated' },
+      { key: 'content_safety_review_threshold', value: '3', category: 'moderation', description: 'Risk score that always requires moderation' },
       { key: 'admin_notifications_enabled', value: 'true', category: 'notifications', description: 'Enable admin notification inbox' },
       { key: 'admin_notifications_realtime_enabled', value: 'true', category: 'notifications', description: 'Enable real-time admin notification delivery' },
       { key: 'admin_notifications_recipient_roles', value: 'moderator,admin', category: 'notifications', description: 'Roles that receive admin notifications' },

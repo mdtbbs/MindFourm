@@ -64,6 +64,7 @@ import { RateLimitGuard } from './common/guards/rate-limit.guard';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { PrivacyModule } from './modules/privacy/privacy.module';
 import { SecurityModule } from './modules/security/security.module';
+import { ContentSafetyModule } from './modules/content-safety/content-safety.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { SecurityModule } from './modules/security/security.module';
     RateLimitModule,
     PrivacyModule,
     SecurityModule,
+    ContentSafetyModule,
     // Avatars are public by nature, so serving them statically is fine.
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'uploads', 'avatars'),

@@ -13,6 +13,7 @@ import { PointsService } from '../points/points.service';
 import { SettingsService } from '../settings/settings.service';
 import { RedisService } from '../../database/redis.service';
 import { REPLY_STATUS } from '../../common/utils/constants';
+import { ContentSafetyService } from '../content-safety/content-safety.service';
 
 @Injectable()
 export class RepliesService {
@@ -29,6 +30,7 @@ export class RepliesService {
     private pointsService: PointsService,
     private settingsService: SettingsService,
     private redisService: RedisService,
+    private contentSafety?: ContentSafetyService,
   ) {}
 
   async createReplyForPost(
@@ -96,7 +98,10 @@ export class RepliesService {
       throw new NotFoundException('User not found');
     }
 
-    const requiresApproval = await this.settingsService.getBoolean('require_reply_approval', true);
+    const risk = this.contentSafety
+      ? await this.contentSafety.assess(content)
+      : { score: 0, rules: [], mustReview: false };
+    const requiresApproval = risk.mustReview || await this.settingsService.getBoolean('require_reply_approval', true);
 
     // Create reply
     const newReply = this.replyRepository.create({
@@ -112,6 +117,9 @@ export class RepliesService {
     });
 
     const savedReply = await this.replyRepository.save(newReply);
+    if (this.contentSafety) {
+      await this.contentSafety.recordFlag({ userId, targetType: 'reply', targetId: savedReply.id, risk, ipAddress: provenance.ipAddress }).catch(() => undefined);
+    }
     await this.invalidatePostCache(postId);
 
     // Create notification for post author (if not the same user)

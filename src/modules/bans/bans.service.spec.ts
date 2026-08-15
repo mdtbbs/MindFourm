@@ -51,6 +51,21 @@ describe('ipv4ToNum', () => {
   });
 });
 
+describe('IPv6 normalization and CIDR matching', () => {
+  it('canonicalizes equivalent IPv6 forms', () => {
+    expect(normalizeIp('2001:db8::1')).toBe(normalizeIp('2001:0db8:0:0:0:0:0:1'));
+    expect(normalizeIp('::ffff:203.0.113.7')).toBe('203.0.113.7');
+  });
+
+  it('validates and matches IPv6 CIDR blocks without matching IPv4', () => {
+    expect(isValidCidr('2001:db8::/32')).toBe(true);
+    expect(isValidCidr('2001:db8::/129')).toBe(false);
+    expect(ipInRange('2001:db8:1::42', '2001:db8::/32')).toBe(true);
+    expect(ipInRange('2001:db9::1', '2001:db8::/32')).toBe(false);
+    expect(ipInRange('203.0.113.7', '2001:db8::/32')).toBe(false);
+  });
+});
+
 describe('ipInRange', () => {
   it('matches addresses inside the block', () => {
     expect(ipInRange('10.1.2.3', '10.0.0.0/8')).toBe(true);

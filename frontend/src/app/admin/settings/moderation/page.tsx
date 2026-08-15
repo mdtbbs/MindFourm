@@ -121,6 +121,15 @@ export default function ModerationSettingsPage() {
             );
           })}
         </div>
+
+        <section className="border border-surface-200 p-4">
+          <h3 className="text-sm font-semibold text-surface-800">高风险内容强制审核</h3>
+          <p className="mt-1 text-xs leading-5 text-surface-500">即使上方关闭帖子或回帖审核，命中关键词、异常链接数量或重复灌水规则的内容仍会进入审核队列，并保留规则命中审计。</p>
+          <label className="mt-4 block text-xs font-medium text-surface-600" htmlFor="content-safety-keywords">额外高风险关键词（逗号或换行分隔）</label>
+          <textarea id="content-safety-keywords" className="mt-1 min-h-24 w-full border border-surface-200 p-2 text-sm" value={values.content_safety_keywords ?? ''} onChange={(e) => setValues((prev) => ({ ...prev, content_safety_keywords: e.target.value }))} />
+          <label className="mt-3 block text-xs font-medium text-surface-600" htmlFor="content-safety-threshold">强制审核风险阈值</label>
+          <input id="content-safety-threshold" type="number" min="1" max="100" className="mt-1 w-28 border border-surface-200 px-2 py-1 text-sm" value={values.content_safety_review_threshold ?? '3'} onChange={(e) => setValues((prev) => ({ ...prev, content_safety_review_threshold: e.target.value }))} />
+        </section>
       </div>
 
       <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">

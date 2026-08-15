@@ -46,6 +46,7 @@ import {
 } from '@common/utils/constants';
 import { generateSlug, makeUniqueSlug } from '@common/utils/url-slug.util';
 import { PostActor, isStaffActor } from './post-actor.util';
+import { ContentSafetyService } from '../content-safety/content-safety.service';
 
 @Injectable()
 export class PostsService {
@@ -77,6 +78,7 @@ export class PostsService {
     private settingsService: SettingsService,
     private postSummaryService: PostSummaryService,
     private postDetailService: PostDetailService,
+    private contentSafety?: ContentSafetyService,
   ) {}
 
   /**
@@ -98,8 +100,11 @@ export class PostsService {
     // different repository and contributes nothing to the write below, so it has no
     // business holding the write transaction open.
     const requestedStatus = dto.status || 'published';
+    const risk = this.contentSafety
+      ? await this.contentSafety.assess(`${dto.title}\n${dto.content}`)
+      : { score: 0, rules: [], mustReview: false };
     const requiresApproval = requestedStatus === 'published'
-      && await this.settingsService.getBoolean('require_post_approval', true);
+      && (risk.mustReview || await this.settingsService.getBoolean('require_post_approval', true));
 
     // Only `manager`-bound work belongs in here. Everything with an effect outside
     // this connection — point awards (which open their own transaction), Redis
@@ -162,6 +167,9 @@ export class PostsService {
     // Invalidating the cache before the commit let a concurrent reader repopulate
     // it from pre-commit state, where it then survived the full 5-minute TTL.
     await this.invalidatePostCache(post.id);
+    if (this.contentSafety) {
+      await this.contentSafety.recordFlag({ userId, targetType: 'post', targetId: post.id, risk, ipAddress: provenance.ipAddress }).catch(() => undefined);
+    }
 
     // Award points for creating post
     if (post.status === 'published') {
