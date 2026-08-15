@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { appConfig } from './config/app.config';
@@ -73,6 +74,7 @@ import { PerformanceTelemetryModule } from './common/performance/performance-tel
       isGlobal: true,
       load: [appConfig],
     }),
+    ScheduleModule.forRoot(),
     DatabaseModule,
     RateLimitModule,
     PrivacyModule,

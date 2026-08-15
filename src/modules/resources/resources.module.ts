@@ -25,6 +25,7 @@ import { CapabilitiesModule } from '../capabilities/capabilities.module';
 import { SettingsModule } from '../settings/settings.module';
 import { ResourceStorageService } from './resource-storage.service';
 import { LogsModule } from '../logs/logs.module';
+import { ResourceLifecycleService } from './resource-lifecycle.service';
 
 @Module({
   imports: [
@@ -35,7 +36,7 @@ import { LogsModule } from '../logs/logs.module';
     LogsModule,
     TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite]),
   ],
-  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, MflClientService, ResourceStorageService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, MflClientService, ResourceStorageService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
   controllers: [ResourcesController, ResourcesV1Controller],
   exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
 })

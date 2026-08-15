@@ -75,4 +75,35 @@ export class ResourceStorageService {
     await this.move(source, target);
     return target;
   }
+
+  private isInside(candidate: string, root: string): boolean {
+    return candidate.startsWith(`${root}${path.sep}`);
+  }
+
+  /** Delete a known managed file only; never follow a database path outside storage. */
+  async removeManaged(filePath: string | null | undefined): Promise<boolean> {
+    if (!filePath) return false;
+    const candidate = path.resolve(filePath);
+    const roots = [await this.getQuarantineDirectory(), await this.getResourceDirectory()];
+    if (!roots.some((root) => this.isInside(candidate, root))) return false;
+    try { await fs.unlink(candidate); return true; } catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
+  }
+
+  /** Remove old unreferenced files left by interrupted uploads, never active references. */
+  async cleanupOrphanedQuarantine(before: Date, referenced: ReadonlySet<string>): Promise<number> {
+    const root = await this.getQuarantineDirectory();
+    let removed = 0;
+    const visit = async (directory: string): Promise<void> => {
+      const entries = await fs.readdir(directory, { withFileTypes: true });
+      for (const entry of entries) {
+        const candidate = path.join(directory, entry.name);
+        if (entry.isDirectory()) { await visit(candidate); continue; }
+        if (!entry.isFile() || referenced.has(path.resolve(candidate))) continue;
+        const stat = await fs.stat(candidate);
+        if (stat.mtime < before && await this.removeManaged(candidate)) removed += 1;
+      }
+    };
+    await visit(root);
+    return removed;
+  }
 }

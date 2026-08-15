@@ -43,6 +43,7 @@ import { ResourceStorageService } from './resource-storage.service';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp } from '@common/utils/client-context.util';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
+import { ResourceLifecycleService } from './resource-lifecycle.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -126,6 +127,7 @@ export class ResourcesController {
     private readonly favoritesService: ResourceFavoritesService,
     private readonly resourceStorageService: ResourceStorageService,
     private readonly logsService: LogsService,
+    private readonly resourceLifecycleService: ResourceLifecycleService,
   ) {}
 
   @Get()
@@ -411,6 +413,15 @@ export class ResourcesController {
     return { message: 'Resource deleted successfully' };
   }
 
+  @Post('admin/cleanup-storage')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async cleanupStorage(@Req() req: any) {
+    const result = await this.resourceLifecycleService.cleanup();
+    await this.logOperation(req, 'resource.storage_cleanup', undefined, { ...result });
+    return result;
+  }
+
   @Post(':id/rating')
   @UseGuards(JwtAuthGuard)
   @RateLimit({ max: 30, window: 60 })
@@ -464,7 +475,7 @@ export class ResourcesController {
     return result;
   }
 
-  private async logOperation(req: any, action: string, resourceId: number, details?: Record<string, unknown>): Promise<void> {
+  private async logOperation(req: any, action: string, resourceId?: number, details?: Record<string, unknown>): Promise<void> {
     await this.logsService.log({
       user_id: req.user?.id,
       action,
