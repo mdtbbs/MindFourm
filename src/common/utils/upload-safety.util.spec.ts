@@ -40,4 +40,14 @@ describe('assertSafeUploadedFile', () => {
     await expect(assertSafeUploadedFile(file, 1024 * 1024)).rejects.toThrow('ZIP 包含不安全路径');
     await fs.rm(dir, { recursive: true, force: true });
   });
+
+  it('rejects oversized image dimensions before decoding the image', async () => {
+    const png = Buffer.alloc(24);
+    png.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    png.writeUInt32BE(20_000, 16);
+    png.writeUInt32BE(20_000, 20);
+    const { dir, file } = await fixture('oversized.png', png);
+    await expect(assertSafeUploadedFile(file, 1024)).rejects.toThrow('图片尺寸超出安全限制');
+    await fs.rm(dir, { recursive: true, force: true });
+  });
 });

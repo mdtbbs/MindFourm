@@ -6,6 +6,8 @@ const ZIP_EXTENSIONS = new Set(['.zip', '.jar', '.docx', '.xlsx']);
 const MAX_ARCHIVE_ENTRIES = 5_000;
 const MAX_ARCHIVE_UNCOMPRESSED_BYTES = 500 * 1024 * 1024;
 const MAX_ARCHIVE_RATIO = 100;
+const MAX_IMAGE_DIMENSION = 16_384;
+const MAX_IMAGE_PIXELS = 80_000_000;
 
 export async function assertSafeUploadedFile(file: Pick<Express.Multer.File, 'path' | 'originalname' | 'size'>, maxBytes: number): Promise<void> {
   const stat = await fs.stat(file.path);
@@ -13,12 +15,73 @@ export async function assertSafeUploadedFile(file: Pick<Express.Multer.File, 'pa
     throw new BadRequestException('上传文件大小无效');
   }
   const extension = path.extname(file.originalname).toLowerCase();
-  const probe = await readPrefix(file.path, 1024);
+  // Dimensions in JPEG metadata are allowed to appear after EXIF/XMP blocks.
+  // A bounded prefix catches those files without ever decoding attacker data.
+  const probe = await readPrefix(file.path, 256 * 1024);
   assertExpectedSignature(extension, probe);
+  assertSafeImageDimensions(extension, probe);
   if (ZIP_EXTENSIONS.has(extension)) await inspectZip(file.path);
   if (['.json', '.hjson', '.txt', '.md', '.csv'].includes(extension) && probe.includes(0)) {
     throw new BadRequestException('文本文件包含二进制内容');
   }
+}
+
+function assertSafeImageDimensions(extension: string, source: Buffer): void {
+  const dimensions = getImageDimensions(extension, source);
+  if (!dimensions) return;
+  const { width, height } = dimensions;
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0
+    || width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION || width * height > MAX_IMAGE_PIXELS) {
+    throw new BadRequestException('图片尺寸超出安全限制');
+  }
+}
+
+function getImageDimensions(extension: string, source: Buffer): { width: number; height: number } | null {
+  if (extension === '.png' && source.length >= 24) {
+    return { width: source.readUInt32BE(16), height: source.readUInt32BE(20) };
+  }
+  if (extension === '.gif' && source.length >= 10) {
+    return { width: source.readUInt16LE(6), height: source.readUInt16LE(8) };
+  }
+  if (extension === '.webp') return getWebpDimensions(source);
+  if (extension === '.jpg' || extension === '.jpeg') return getJpegDimensions(source);
+  return null;
+}
+
+function getWebpDimensions(source: Buffer): { width: number; height: number } | null {
+  if (source.length < 30) return null;
+  const chunkType = source.subarray(12, 16).toString('ascii');
+  // VP8X holds the canvas size as little-endian 24-bit values, minus one.
+  if (chunkType === 'VP8X') {
+    return {
+      width: source.readUIntLE(24, 3) + 1,
+      height: source.readUIntLE(27, 3) + 1,
+    };
+  }
+  return null;
+}
+
+function getJpegDimensions(source: Buffer): { width: number; height: number } | null {
+  if (source.length < 4) return null;
+  let offset = 2;
+  while (offset + 9 <= source.length) {
+    if (source[offset] !== 0xff) return null;
+    while (source[offset] === 0xff) offset += 1;
+    const marker = source[offset++];
+    // Markers without a length (SOI/EOI/restart) cannot contain dimensions.
+    if (marker === 0xd8 || marker === 0xd9 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+    if (offset + 2 > source.length) return null;
+    const length = source.readUInt16BE(offset);
+    if (length < 2 || offset + length > source.length) return null;
+    // SOF markers describe the frame. Exclude entropy tables and differential
+    // markers that do not carry width/height at these offsets.
+    const isStartOfFrame = marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker);
+    if (isStartOfFrame && length >= 7) {
+      return { height: source.readUInt16BE(offset + 3), width: source.readUInt16BE(offset + 5) };
+    }
+    offset += length;
+  }
+  return null;
 }
 
 function assertExpectedSignature(extension: string, prefix: Buffer): void {
