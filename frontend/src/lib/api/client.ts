@@ -592,6 +592,12 @@ export const adminApi = {
       identities: Record<string, number>;
       ip_sources: Record<string, number>;
     }>('/api/admin/system/rate-limit-observability'),
+  getPerformanceTelemetry: (hours = 24) =>
+    request<{
+      from: string; to: string; requests: number; average_ms: number; max_ms: number;
+      histogram: Record<string, number>; estimated_p50_ms: number; estimated_p95_ms: number; estimated_p99_ms: number; slow_requests: number;
+      routes: Array<{ route: string; requests: number; average_ms: number; max_ms: number; slow_requests: number }>;
+    }>(`/api/admin/system/performance${buildQueryString({ hours })}`),
   getBadgeCounts: () =>
     request<{ moderation_pending: number; announce_active: number }>('/api/admin/badge-counts'),
   getSettings: (category?: string) =>

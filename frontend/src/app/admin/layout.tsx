@@ -12,7 +12,7 @@ import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
   Package, AlertCircle, FolderOpen, ToggleLeft, Mail, KeyRound, FileEdit,
-  UsersRound, Coins, Puzzle, TrendingUp, Award, ShoppingBag, PanelLeft
+  UsersRound, Coins, Puzzle, TrendingUp, Award, ShoppingBag, PanelLeft, Gauge
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
 import AdminHeader from '@/components/admin/admin-header';
@@ -58,6 +58,7 @@ const navGroups: SidebarGroup[] = [
     items: [
       { key: 'system-rules', label: '发帖规则', icon: <FileCheck size={16} />, href: '/admin/system/rules', roles: ['admin'] },
       { key: 'system-rate-limits', label: '限流设置', icon: <Clock size={16} />, href: '/admin/system/rate-limits', roles: ['admin'] },
+      { key: 'system-performance', label: '性能监控', icon: <Gauge size={16} />, href: '/admin/system/performance', roles: ['admin'] },
       { key: 'system-bans', label: '封禁管理', icon: <Ban size={16} />, href: '/admin/system/bans', roles: ['admin'] },
       { key: 'system-cleanup', label: '数据清理', icon: <Trash2 size={16} />, href: '/admin/system/cleanup', roles: ['admin'] },
     ],
