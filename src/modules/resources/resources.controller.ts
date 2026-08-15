@@ -313,7 +313,9 @@ export class ResourcesController {
       }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
       storedFile = await this.resourceStorageService.storeIncoming(file);
-      const resource = await this.resourcesService.create(body, userId, storedFile);
+      const resource = await this.resourcesService.create(body, userId, storedFile, {
+        ipAddress: getClientIp(req),
+      });
       await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });
       return resource;
     } catch (error) {
@@ -331,7 +333,9 @@ export class ResourcesController {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    const resource = await this.resourcesService.update(id, userId, dto, req.user.role);
+    const resource = await this.resourcesService.update(id, userId, dto, req.user.role, {
+      ipAddress: getClientIp(req),
+    });
     await this.logOperation(req, 'resource.update', id, { fields: Object.keys(dto) });
     return resource;
   }

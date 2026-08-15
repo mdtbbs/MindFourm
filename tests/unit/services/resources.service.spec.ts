@@ -110,12 +110,20 @@ jest.mock('@modules/resources/resource-categories.service', () => ({
   },
 }));
 
+jest.mock('@modules/content-safety/content-safety.service', () => ({
+  ContentSafetyService: class ContentSafetyService {
+    assess = jest.fn();
+    recordFlag = jest.fn();
+  },
+}));
+
 import { ResourcesService } from '@modules/resources/resources.service';
 import { ResourceCategoryService } from '@modules/resources/resource-categories.service';
 
 function createService(overrides: {
   resourceRepository?: Record<string, jest.Mock>;
   categoryService?: Partial<Record<keyof ResourceCategoryService, jest.Mock>>;
+  contentSafety?: { assess: jest.Mock; recordFlag: jest.Mock };
 } = {}) {
   const defaultQb = {
     where: jest.fn().mockReturnThis(),
@@ -147,6 +155,7 @@ function createService(overrides: {
     getById: jest.fn().mockResolvedValue(null),
     ...overrides.categoryService,
   };
+  const contentSafety = overrides.contentSafety;
 
   return {
     service: new ResourcesService(
@@ -156,18 +165,67 @@ function createService(overrides: {
       {} as any, // versionRepository
       {} as any, // ratingRepository
       {} as any, // dataSource
-      { publishModerationPending: jest.fn(), publishModerationResult: jest.fn() } as any,
+      { publishModerationPending: jest.fn().mockResolvedValue(undefined), publishModerationResult: jest.fn().mockResolvedValue(undefined) } as any,
       { create: jest.fn() } as any,
       { uploadFile: jest.fn(), getDownloadUrl: jest.fn(), blockDownloads: jest.fn(), updateApprovalStatus: jest.fn() } as any,
       categoryService as any,
+      undefined,
+      contentSafety as any,
     ),
     resourceRepository,
     categoryService,
+    contentSafety,
     defaultQb,
   };
 }
 
 describe('ResourcesService - Public Visibility', () => {
+  it('records high-risk resource submissions for moderation audit', async () => {
+    const risk = { score: 3, rules: ['keyword:木马'], mustReview: true };
+    const contentSafety = {
+      assess: jest.fn().mockResolvedValue(risk),
+      recordFlag: jest.fn().mockResolvedValue(undefined),
+    };
+    const saved = {
+      id: 19,
+      user_id: 7,
+      title: '工具下载',
+      description: '包含木马的描述',
+      resource_type: 'external',
+      external_url: 'https://example.com/tool',
+      status: 'pending',
+      is_public: 1,
+      use_mfl: 0,
+      user: { username: 'author' },
+      category: null,
+    };
+    const { service, resourceRepository } = createService({
+      contentSafety,
+      resourceRepository: {
+        save: jest.fn().mockResolvedValue(saved),
+        findOne: jest.fn().mockResolvedValue(saved),
+      },
+    });
+
+    const result = await service.create({
+      title: '工具下载',
+      description: '包含木马的描述',
+      resource_type: 'external',
+      external_url: 'https://example.com/tool',
+    } as any, 7, undefined, { ipAddress: '203.0.113.7' });
+
+    expect(result.status).toBe('pending');
+    expect(contentSafety.assess).toHaveBeenCalledWith(expect.stringContaining('木马'));
+    expect(contentSafety.recordFlag).toHaveBeenCalledWith({
+      userId: 7,
+      targetType: 'resource',
+      targetId: 19,
+      risk,
+      ipAddress: '203.0.113.7',
+    });
+    expect(resourceRepository.create).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending' }));
+  });
+
   describe('isResourcePubliclyAccessible', () => {
     it('should return true for approved resource in active category', async () => {
       const { service, categoryService } = createService({

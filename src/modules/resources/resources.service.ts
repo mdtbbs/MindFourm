@@ -21,6 +21,7 @@ import { ResourceCategoryService } from './resource-categories.service';
 import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
 import { mergeResourceMetadata, normalizeResourceMetadata } from './resource-detail.util';
 import { ResourceStorageService } from './resource-storage.service';
+import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -63,7 +64,24 @@ export class ResourcesService {
     private mflClientService: MflClientService,
     private categoryService: ResourceCategoryService,
     private resourceStorageService?: ResourceStorageService,
+    private contentSafety?: ContentSafetyService,
   ) {}
+
+  private emptyContentRisk(): ContentRisk {
+    return { score: 0, rules: [], mustReview: false };
+  }
+
+  private resourceSafetyText(input: {
+    title?: string | null;
+    description?: string | null;
+    content?: string | null;
+    externalUrl?: string | null;
+    fileName?: string | null;
+  }): string {
+    return [input.title, input.description, input.content, input.externalUrl, input.fileName]
+      .filter((value): value is string => Boolean(value))
+      .join('\n');
+  }
 
   private normalizeResourceType(resourceType: string): string {
     return resourceType === 'file' ? 'upload' : resourceType;
@@ -190,7 +208,12 @@ export class ResourcesService {
     return isAccessible ? this.normalizeResource(resource) : null;
   }
 
-  async create(dto: CreateResourceDto, userId: number, file?: ResourceFileMeta): Promise<any> {
+  async create(
+    dto: CreateResourceDto,
+    userId: number,
+    file?: ResourceFileMeta,
+    provenance: { ipAddress?: string } = {},
+  ): Promise<any> {
     const categoryId = this.toOptionalNumber((dto as any).category_id);
     const resourceType = this.normalizeResourceType(dto.resource_type);
 
@@ -214,6 +237,15 @@ export class ResourcesService {
     }
 
     const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
+    const risk = this.contentSafety
+      ? await this.contentSafety.assess(this.resourceSafetyText({
+        title: dto.title,
+        description: dto.description,
+        content: dto.content,
+        externalUrl: dto.external_url,
+        fileName: file?.file_name,
+      }))
+      : this.emptyContentRisk();
 
     const newResource = this.resourceRepository.create({
       user_id: userId,
@@ -245,6 +277,16 @@ export class ResourcesService {
 
     if (!finalResult) {
       throw new NotFoundException('资源不存在');
+    }
+
+    if (this.contentSafety) {
+      await this.contentSafety.recordFlag({
+        userId,
+        targetType: 'resource',
+        targetId: finalResult.id,
+        risk,
+        ipAddress: provenance.ipAddress,
+      }).catch(() => undefined);
     }
 
     if (finalResult.status === RESOURCE_STATUS_PENDING) {
@@ -678,8 +720,9 @@ export class ResourcesService {
     userId: number,
     dto: UpdateResourceDto,
     userRole?: string,
+    provenance: { ipAddress?: string } = {},
   ): Promise<any> {
-    return this.dataSource.transaction(async (manager) => {
+    const updateResult = await this.dataSource.transaction(async (manager) => {
       const resource = await manager.findOne(Resource, {
         where: { id },
         relations: ['user'],
@@ -735,6 +778,19 @@ export class ResourcesService {
         updateData.metadata_json = mergeResourceMetadata(resource.metadata_json, (dto as any).metadata);
       }
 
+      const contentChanged = ['title', 'description', 'content', 'external_url'].some(
+        (field) => Object.prototype.hasOwnProperty.call(dto, field),
+      );
+      const risk = contentChanged && this.contentSafety
+        ? await this.contentSafety.assess(this.resourceSafetyText({
+          title: dto.title ?? resource.title,
+          description: dto.description ?? resource.description,
+          content: dto.content ?? resource.content,
+          externalUrl: dto.external_url ?? resource.external_url,
+          fileName: resource.file_name,
+        }))
+        : this.emptyContentRisk();
+
       // Changing what people actually download has to go back through moderation.
       // Otherwise an owner could get a benign resource approved and then swap
       // `external_url` for a malware link while keeping the approved badge.
@@ -744,7 +800,9 @@ export class ResourcesService {
           updateData.resource_type !== undefined &&
           updateData.resource_type !== resource.resource_type);
 
-      if (payloadChanged && !isStaff && PUBLIC_RESOURCE_STATUSES.includes(resource.status as any)) {
+      const requiresSafetyReview = risk.mustReview;
+      const wasPublic = PUBLIC_RESOURCE_STATUSES.includes(resource.status as any);
+      if ((requiresSafetyReview || (payloadChanged && !isStaff)) && wasPublic) {
         updateData.status = 'pending';
       }
 
@@ -759,8 +817,35 @@ export class ResourcesService {
         throw new NotFoundException('资源不存在');
       }
 
-      return this.normalizeResource(result);
+      return {
+        resource: result,
+        risk,
+        needsModerationNotice: updateData.status === RESOURCE_STATUS_PENDING && resource.status !== RESOURCE_STATUS_PENDING,
+      };
     });
+
+    if (this.contentSafety) {
+      await this.contentSafety.recordFlag({
+        userId,
+        targetType: 'resource',
+        targetId: updateResult.resource.id,
+        risk: updateResult.risk,
+        ipAddress: provenance.ipAddress,
+      }).catch(() => undefined);
+    }
+
+    if (updateResult.needsModerationNotice) {
+      this.adminNotificationsService.publishModerationPending({
+        item_type: 'resource',
+        item_id: updateResult.resource.id,
+        title: updateResult.resource.title,
+        content: updateResult.resource.description || updateResult.resource.content || updateResult.resource.external_url || updateResult.resource.file_name || null,
+        author_username: updateResult.resource.user?.username || `#${userId}`,
+        action_url: '/admin/resources/moderation',
+      }).catch((err) => console.error('Admin resource moderation notification error:', err));
+    }
+
+    return this.normalizeResource(updateResult.resource);
   }
 
   async delete(id: number, userId: number, userRole?: string): Promise<void> {
