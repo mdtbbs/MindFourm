@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Attachment } from '@entities/attachment.entity';
 import { Post } from '@entities/post.entity';
 import { Reply } from '@entities/reply.entity';
-import { unlink } from 'fs/promises';
+import { mkdir, rename } from 'fs/promises';
 import * as path from 'path';
 
 @Injectable()
@@ -83,7 +83,7 @@ export class AttachmentsService {
   async getByPostId(postId: number): Promise<Attachment[]> {
     await this.assertPublicPost(postId);
     return await this.attachmentRepository.find({
-      where: { post_id: postId },
+      where: { post_id: postId, deleted_at: IsNull() },
       order: { created_at: 'ASC' },
     });
   }
@@ -91,7 +91,7 @@ export class AttachmentsService {
   async getByReplyId(replyId: number): Promise<Attachment[]> {
     await this.assertPublicReply(replyId);
     return await this.attachmentRepository.find({
-      where: { reply_id: replyId },
+      where: { reply_id: replyId, deleted_at: IsNull() },
       order: { created_at: 'ASC' },
     });
   }
@@ -113,7 +113,7 @@ export class AttachmentsService {
 
   async getById(id: number): Promise<Attachment> {
     const attachment = await this.attachmentRepository.findOne({
-      where: { id },
+      where: { id, deleted_at: IsNull() },
     });
     if (!attachment) {
       throw new NotFoundException('Attachment not found');
@@ -129,17 +129,23 @@ export class AttachmentsService {
       throw new ForbiddenException('You do not have permission to delete this attachment');
     }
 
-    // Delete file from disk
+    // Do not destroy user data synchronously.  A short retention window lets
+    // staff recover accidental removals and prevents a failed unlink from
+    // leaving an untracked file behind.
+    let retiredPath = attachment.file_path;
     try {
       const filePath = path.resolve(attachment.file_path);
-      await unlink(filePath);
+      const attachmentsRoot = path.resolve('./uploads/attachments');
+      if (!filePath.startsWith(`${attachmentsRoot}${path.sep}`)) throw new Error('attachment path is outside managed storage');
+      const quarantineRoot = path.resolve('./uploads/.quarantine/attachments');
+      await mkdir(quarantineRoot, { recursive: true });
+      retiredPath = path.join(quarantineRoot, path.basename(filePath));
+      await rename(filePath, retiredPath);
     } catch (error) {
-      console.error(`Failed to delete file from disk: ${attachment.file_path}`, error);
-      // Continue with DB deletion even if file deletion fails
+      console.error(`Failed to quarantine attachment: ${attachment.file_path}`, error);
+      throw error;
     }
-
-    // Delete from database
-    await this.attachmentRepository.remove(attachment);
+    await this.attachmentRepository.update(id, { file_path: retiredPath, deleted_at: new Date() });
   }
 
   private async assertPublicAttachmentParent(attachment: Attachment): Promise<void> {

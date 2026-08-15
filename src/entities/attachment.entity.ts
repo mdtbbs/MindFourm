@@ -49,6 +49,12 @@ export class Attachment {
   @CreateDateColumn()
   created_at: Date;
 
+  // Attachments are retired into a non-public quarantine first.  Keeping this
+  // timestamp makes accidental deletion recoverable and gives the lifecycle
+  // worker an auditable retention boundary.
+  @Column({ type: 'datetime', nullable: true })
+  deleted_at: Date | null;
+
   @ManyToOne(() => Post, { eager: false, nullable: true, onDelete: 'CASCADE' })
   @JoinColumn({ name: 'post_id' })
   post: Post;
