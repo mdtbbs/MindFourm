@@ -22,6 +22,7 @@ import { isValidRating, ratingAggregateDelta, validateResourceSort } from './res
 import { mergeResourceMetadata, normalizeResourceMetadata } from './resource-detail.util';
 import { ResourceStorageService } from './resource-storage.service';
 import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
+import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -65,6 +66,7 @@ export class ResourcesService {
     private categoryService: ResourceCategoryService,
     private resourceStorageService?: ResourceStorageService,
     private contentSafety?: ContentSafetyService,
+    private resourceSubscriptionsService?: ResourceSubscriptionsService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -1004,6 +1006,11 @@ export class ResourcesService {
       }).catch((err) =>
         console.error('Resource author notification error:', err),
       );
+
+      if (status === RESOURCE_STATUS_APPROVED) {
+        this.resourceSubscriptionsService?.notifyResourceUpdate(resource)
+          .catch((err) => console.error('Resource subscriber notification error:', err));
+      }
     }
 
     return this.normalizeResource(resource);

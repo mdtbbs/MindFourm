@@ -117,6 +117,12 @@ jest.mock('@modules/content-safety/content-safety.service', () => ({
   },
 }));
 
+jest.mock('@modules/resources/resource-subscriptions.service', () => ({
+  ResourceSubscriptionsService: class ResourceSubscriptionsService {
+    notifyResourceUpdate = jest.fn();
+  },
+}));
+
 import { ResourcesService } from '@modules/resources/resources.service';
 import { ResourceCategoryService } from '@modules/resources/resource-categories.service';
 

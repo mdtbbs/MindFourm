@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   ArrowDownToLine, Calendar, Check, ChevronLeft, ChevronRight, Clipboard,
-  Download, ExternalLink, FileArchive, Flag, Heart, Image as ImageIcon,
+  Bell, Download, ExternalLink, FileArchive, Flag, Heart, Image as ImageIcon,
   Link2, MessageSquare, Package, Share2, ShieldCheck, Star, Tag, User,
 } from 'lucide-react';
 import { Resource } from '@/types';
@@ -44,6 +44,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const [related, setRelated] = useState<Resource[]>([]);
   const [favorite, setFavorite] = useState(Boolean(resource.is_favorited));
   const [favoriteCount, setFavoriteCount] = useState(resource.favorite_count || 0);
+  const [subscribed, setSubscribed] = useState(Boolean(resource.is_subscribed));
   const [userRating, setUserRating] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -64,6 +65,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         setFavoriteCount(result.favorite_count);
       }).catch(() => undefined);
       resourceApi.getUserRating(resource.id).then((result) => setUserRating(result.rating)).catch(() => undefined);
+      resourceApi.getSubscription(resource.id).then((result) => setSubscribed(result.is_subscribed)).catch(() => undefined);
     }
   }, [resource.id, isAuthenticated]);
 
@@ -75,6 +77,17 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       setFavorite(result.is_favorited);
       setFavoriteCount(result.favorite_count);
     } catch (error) { showSuccess(error instanceof Error ? error.message : '收藏操作失败'); }
+    setBusy(false);
+  };
+
+  const toggleSubscription = async () => {
+    if (!isAuthenticated) { showSuccess('请先登录后订阅资源更新'); return; }
+    setBusy(true);
+    try {
+      const result = subscribed ? await resourceApi.unsubscribe(resource.id) : await resourceApi.subscribe(resource.id);
+      setSubscribed(result.is_subscribed);
+      showSuccess(result.is_subscribed ? '已订阅资源更新' : '已取消订阅');
+    } catch (error) { showSuccess(error instanceof Error ? error.message : '订阅操作失败'); }
     setBusy(false);
   };
 
@@ -140,6 +153,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
               <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />下载资源</a>
             )}
             <button type="button" disabled={busy} onClick={toggleFavorite} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${favorite ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />{favorite ? '已收藏' : '收藏'} <span className="text-xs">{favoriteCount}</span></button>
+            <button type="button" disabled={busy} onClick={toggleSubscription} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${subscribed ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)]'}`}><Bell className={`h-5 w-5 ${subscribed ? 'fill-current' : ''}`} />{subscribed ? '已订阅' : '订阅更新'}</button>
             <button type="button" onClick={share} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 font-medium text-[var(--text-secondary)] hover:text-[var(--primary)]"><Share2 className="h-5 w-5" />{copied ? '链接已复制' : '分享'}</button>
             <ReportDialog targetType="resource" targetId={resource.id} label="举报" />
           </div>

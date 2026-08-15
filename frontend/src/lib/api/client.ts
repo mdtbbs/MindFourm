@@ -1194,6 +1194,9 @@ export const resourceApi = {
     clearCache();
     return request<{ is_favorited: boolean; favorite_count: number }>(`/api/resources/${id}/favorite`, { method: 'DELETE' });
   },
+  getSubscription: (id: number) => request<{ is_subscribed: boolean }>(`/api/resources/${id}/subscription`),
+  subscribe: (id: number) => request<{ is_subscribed: boolean }>(`/api/resources/${id}/subscription`, { method: 'POST' }),
+  unsubscribe: (id: number) => request<{ is_subscribed: boolean }>(`/api/resources/${id}/subscription`, { method: 'DELETE' }),
   getMyResources: (params?: { cursor?: string; limit?: number }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
       `/api/resources/my${buildQueryString({ cursor: params?.cursor, limit: params?.limit })}`

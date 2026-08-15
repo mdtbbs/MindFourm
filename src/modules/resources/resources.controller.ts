@@ -44,6 +44,7 @@ import { LogsService } from '../logs/logs.service';
 import { getClientIp } from '@common/utils/client-context.util';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
+import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -128,6 +129,7 @@ export class ResourcesController {
     private readonly resourceStorageService: ResourceStorageService,
     private readonly logsService: LogsService,
     private readonly resourceLifecycleService: ResourceLifecycleService,
+    private readonly subscriptionsService: ResourceSubscriptionsService,
   ) {}
 
   @Get()
@@ -476,6 +478,31 @@ export class ResourcesController {
   async removeFavorite(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const result = await this.favoritesService.remove(id, req.user.id);
     await this.logOperation(req, 'resource.unfavorite', id);
+    return result;
+  }
+
+  @Get(':id/subscription')
+  @UseGuards(JwtAuthGuard)
+  async getSubscription(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    await this.resourcesService.getById(id, req.user);
+    return this.subscriptionsService.getStatus(id, req.user.id);
+  }
+
+  @Post(':id/subscription')
+  @UseGuards(JwtAuthGuard)
+  async subscribe(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    await this.resourcesService.getById(id, req.user);
+    const result = await this.subscriptionsService.subscribe(id, req.user.id);
+    await this.logOperation(req, 'resource.subscribe', id);
+    return result;
+  }
+
+  @Delete(':id/subscription')
+  @UseGuards(JwtAuthGuard)
+  async unsubscribe(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    await this.resourcesService.getById(id, req.user);
+    const result = await this.subscriptionsService.unsubscribe(id, req.user.id);
+    await this.logOperation(req, 'resource.unsubscribe', id);
     return result;
   }
 

@@ -443,6 +443,7 @@ export interface Resource {
   metadata?: ResourceDetailMetadata;
   favorite_count?: number;
   is_favorited?: boolean;
+  is_subscribed?: boolean;
   versions?: ResourceVersion[];
 }
 

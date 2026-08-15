@@ -13,6 +13,7 @@ import { User } from '@entities/user.entity';
 import { ResourceAttribution } from '@entities/resource-attribution.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceFavorite } from '@entities/resource-favorite.entity';
+import { ResourceSubscription } from '@entities/resource-subscription.entity';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RevalidationService } from '@common/services/revalidation.service';
@@ -26,6 +27,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { ResourceStorageService } from './resource-storage.service';
 import { LogsModule } from '../logs/logs.module';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
+import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 
 @Module({
   imports: [
@@ -34,9 +36,9 @@ import { ResourceLifecycleService } from './resource-lifecycle.service';
     CapabilitiesModule,
     SettingsModule,
     LogsModule,
-    TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite]),
+    TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceSubscription]),
   ],
-  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, MflClientService, ResourceStorageService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
   controllers: [ResourcesController, ResourcesV1Controller],
   exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
 })
