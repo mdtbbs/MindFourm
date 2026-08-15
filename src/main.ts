@@ -27,6 +27,7 @@ import { SwaggerModule } from '@nestjs/swagger';
 import { createV1OpenApiDocument } from './openapi/v1-openapi';
 import { appConfig } from './config/app.config';
 import { validateConfig } from './config/validate';
+import { PerformanceTelemetryService } from './common/performance/performance-telemetry.service';
 
 function parseCookieHeader(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -66,6 +67,16 @@ async function bootstrap() {
   // reads X-Forwarded-For directly as the client IP source, and Express must
   // apply the same policy for its own request helpers.
   app.set('trust proxy', true);
+
+  const performanceTelemetry = app.get(PerformanceTelemetryService);
+  app.use((req, res, next) => {
+    const startedAt = process.hrtime.bigint();
+    res.once('finish', () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+      void performanceTelemetry.record(req.path, res.statusCode, durationMs);
+    });
+    next();
+  });
 
   // Global prefix
   app.setGlobalPrefix('api');

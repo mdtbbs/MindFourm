@@ -35,6 +35,7 @@ import { MergeTagsDto } from './dto/merge-tags.dto';
 import { CreateBanDto } from '../bans/dto/create-ban.dto';
 import { UpdateBrandSettingsDto } from '../settings/dto/update-brand-settings.dto';
 import { RateLimitTelemetryService } from '../../common/rate-limit/rate-limit-telemetry.service';
+import { PerformanceTelemetryService } from '../../common/performance/performance-telemetry.service';
 
 /** Safely parse a query param to int, falling back to a default when the
  *  global ValidationPipe turns a missing param into `undefined`/NaN. */
@@ -65,7 +66,14 @@ export class AdminController {
     private readonly adminNotificationsService: AdminNotificationsService,
     private readonly uploadsService: UploadsService,
     private readonly rateLimitTelemetry: RateLimitTelemetryService,
+    private readonly performanceTelemetry: PerformanceTelemetryService,
   ) {}
+
+  @Get('system/performance')
+  @Roles('admin')
+  async performance(@Query('hours') hours?: string) {
+    return this.performanceTelemetry.summary(toInt(hours, 24));
+  }
 
   /**
    * GET /admin/stats - Dashboard statistics (moderator+)
