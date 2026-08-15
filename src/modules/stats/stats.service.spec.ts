@@ -38,9 +38,15 @@ describe('StatsService', () => {
           total_posts: '12',
           total_replies: '34',
           total_users: '56',
+          total_resources: '7',
           today_posts: '2',
           today_replies: '3',
           today_users: '4',
+          today_resources: '1',
+          pending_resources: '2',
+          pending_reports: '3',
+          average_report_resolution_hours: '4.24',
+          zero_result_searches_7d: '5',
         }])
         .mockResolvedValueOnce([
           { date: '2026-06-29', count: '5' },
@@ -50,6 +56,10 @@ describe('StatsService', () => {
           { date: '2026-07-03', count: '34' },
           { date: '2026-07-04', count: '55' },
           { date: '2026-07-05', count: '89' },
+        ])
+        .mockResolvedValueOnce([
+          { type: 'map', count: '4' },
+          { type: 'mod', count: '3' },
         ]),
     };
     const redisService = {
@@ -68,14 +78,21 @@ describe('StatsService', () => {
       total_posts: 12,
       total_replies: 34,
       total_users: 56,
+      total_resources: 7,
       active_24h: 2,
       today_posts: 2,
       today_replies: 3,
       today_users: 4,
+      today_resources: 1,
+      pending_resources: 2,
+      pending_reports: 3,
+      average_report_resolution_hours: 4.2,
+      zero_result_searches_7d: 5,
       activity_7d: [5, 8, 13, 21, 34, 55, 89],
+      resource_type_breakdown: [{ type: 'map', count: 4 }, { type: 'mod', count: 3 }],
     });
 
-    expect(postRepository.query).toHaveBeenCalledTimes(2);
+    expect(postRepository.query).toHaveBeenCalledTimes(3);
     expect(redisService.countKeys).toHaveBeenCalledWith('session:*');
   });
 

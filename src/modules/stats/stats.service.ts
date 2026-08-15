@@ -9,11 +9,18 @@ export interface DashboardStats {
   total_posts: number;
   total_replies: number;
   total_users: number;
+  total_resources: number;
   active_24h: number;
   today_posts: number;
   today_replies: number;
   today_users: number;
+  today_resources: number;
+  pending_resources: number;
+  pending_reports: number;
+  average_report_resolution_hours: number | null;
+  zero_result_searches_7d: number;
   activity_7d: number[];
+  resource_type_breakdown: Array<{ type: string; count: number }>;
 }
 
 export interface ForumOverviewStats {
@@ -48,20 +55,27 @@ export class StatsService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [statsRows, sessionCount, activity7d] = await Promise.all([
+    const [statsRows, sessionCount, activity7d, resourceTypeBreakdown] = await Promise.all([
       this.postRepository.query(`
         SELECT
           (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'published') as total_replies,
           (SELECT COUNT(*) FROM users) as total_users,
+          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL) as total_resources,
           (SELECT COUNT(*) FROM posts WHERE status = 'published' AND created_at >= ?) as today_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'published' AND created_at >= ?) as today_replies,
-          (SELECT COUNT(*) FROM users WHERE created_at >= ?) as today_users
-      `, [today, today, today]),
+          (SELECT COUNT(*) FROM users WHERE created_at >= ?) as today_users,
+          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND created_at >= ?) as today_resources,
+          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND status = 'pending') as pending_resources,
+          (SELECT COUNT(*) FROM reports WHERE status = 'pending') as pending_reports,
+          (SELECT AVG(TIMESTAMPDIFF(SECOND, created_at, handled_at)) / 3600 FROM reports WHERE status IN ('resolved', 'dismissed') AND handled_at IS NOT NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as average_report_resolution_hours,
+          (SELECT COUNT(*) FROM search_history WHERE results_count = 0 AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as zero_result_searches_7d
+      `, [today, today, today, today]),
       // SCAN rather than KEYS: this is served on request paths, and KEYS blocks the
       // whole Redis instance for the duration of the scan.
       this.redisService.countKeys('session:*'),
       this.get7DayActivity(),
+      this.getResourceTypeBreakdown(),
     ]);
     const [stats] = statsRows;
 
@@ -69,12 +83,21 @@ export class StatsService {
       total_posts: this.parseCount(stats?.total_posts),
       total_replies: this.parseCount(stats?.total_replies),
       total_users: this.parseCount(stats?.total_users),
+      total_resources: this.parseCount(stats?.total_resources),
       // Counts every live session (7-day TTL), not strictly 24-hour activity.
       active_24h: sessionCount,
       today_posts: this.parseCount(stats?.today_posts),
       today_replies: this.parseCount(stats?.today_replies),
       today_users: this.parseCount(stats?.today_users),
+      today_resources: this.parseCount(stats?.today_resources),
+      pending_resources: this.parseCount(stats?.pending_resources),
+      pending_reports: this.parseCount(stats?.pending_reports),
+      average_report_resolution_hours: stats?.average_report_resolution_hours === null || stats?.average_report_resolution_hours === undefined
+        ? null
+        : Math.round(Number(stats.average_report_resolution_hours) * 10) / 10,
+      zero_result_searches_7d: this.parseCount(stats?.zero_result_searches_7d),
       activity_7d: activity7d.map((row) => row.count),
+      resource_type_breakdown: resourceTypeBreakdown,
     };
   }
 
@@ -130,6 +153,23 @@ export class StatsService {
     return result.map((row: any) => ({
       date: row.date,
       count: parseInt(row.count, 10),
+    }));
+  }
+
+  /** Aggregated by resource type only; no user or IP-level data is exposed. */
+  private async getResourceTypeBreakdown(): Promise<Array<{ type: string; count: number }>> {
+    const rows = await this.postRepository.query(`
+      SELECT COALESCE(NULLIF(resource_kind, ''), resource_type, 'other') AS type, COUNT(*) AS count
+      FROM resources
+      WHERE deleted_at IS NULL
+      GROUP BY COALESCE(NULLIF(resource_kind, ''), resource_type, 'other')
+      ORDER BY count DESC, type ASC
+      LIMIT 8
+    `);
+
+    return rows.map((row: any) => ({
+      type: String(row.type || 'other'),
+      count: this.parseCount(row.count),
     }));
   }
 }

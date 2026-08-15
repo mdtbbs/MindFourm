@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { adminApi } from '@/lib/api/client';
 import type { AdminStats } from '@/types';
-import { Settings, FileText, AlertTriangle, Ban, FolderTree, ScrollText } from 'lucide-react';
+import { Settings, FileText, AlertTriangle, Ban, FolderTree, ScrollText, Package, Flag, SearchX } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { StatsGrid } from '@/lib/shared';
 
@@ -35,6 +35,7 @@ export default function Dashboard() {
     { label: '回复', value: stats?.total_replies ?? '--' },
     { label: '用户', value: stats?.total_users ?? '--' },
     { label: '24小时活跃', value: stats?.active_24h ?? '--' },
+    { label: '资源', value: stats?.total_resources ?? '--' },
   ];
 
   const activity7d = stats?.activity_7d ?? [];
@@ -81,6 +82,33 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[var(--text)]"><Package className="h-4 w-4" />资源与审核</div>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">今日发布资源</dt><dd>{stats?.today_resources ?? '--'}</dd></div>
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">待审核资源</dt><dd>{stats?.pending_resources ?? '--'}</dd></div>
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">待处理举报</dt><dd>{stats?.pending_reports ?? '--'}</dd></div>
+          </dl>
+        </section>
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[var(--text)]"><Flag className="h-4 w-4" />处理效率</div>
+          <dl className="space-y-3 text-sm">
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">举报平均处理（30 天）</dt><dd>{stats?.average_report_resolution_hours == null ? '暂无数据' : `${stats.average_report_resolution_hours} 小时`}</dd></div>
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">今日发帖</dt><dd>{stats?.today_posts ?? '--'}</dd></div>
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">今日回帖</dt><dd>{stats?.today_replies ?? '--'}</dd></div>
+          </dl>
+        </section>
+        <section className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5">
+          <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[var(--text)]"><SearchX className="h-4 w-4" />内容发现</div>
+          <p className="mb-3 text-sm text-[var(--text-secondary)]">近 7 天无结果搜索：<span className="font-medium text-[var(--text)]">{stats?.zero_result_searches_7d ?? '--'}</span></p>
+          <div className="flex flex-wrap gap-2">
+            {(stats?.resource_type_breakdown ?? []).map((item) => <span key={item.type} className="rounded bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[var(--text-secondary)]">{item.type} · {item.count}</span>)}
+            {stats && stats.resource_type_breakdown.length === 0 ? <span className="text-sm text-[var(--text-muted)]">暂无资源数据</span> : null}
+          </div>
+        </section>
       </div>
     </div>
   );

@@ -208,11 +208,18 @@ export interface AdminStats {
   total_posts: number;
   total_replies: number;
   total_users: number;
+  total_resources: number;
   active_24h: number;
   today_posts: number;
   today_replies: number;
   today_users: number;
+  today_resources: number;
+  pending_resources: number;
+  pending_reports: number;
+  average_report_resolution_hours: number | null;
+  zero_result_searches_7d: number;
   activity_7d: number[];
+  resource_type_breakdown: Array<{ type: string; count: number }>;
 }
 
 export interface AdminBan {
