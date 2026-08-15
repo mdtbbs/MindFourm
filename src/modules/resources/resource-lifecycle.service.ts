@@ -1,5 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -16,8 +15,9 @@ export interface ResourceStorageCleanupResult {
 
 /** Delayed, auditable cleanup for resources that cannot be served any more. */
 @Injectable()
-export class ResourceLifecycleService {
+export class ResourceLifecycleService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ResourceLifecycleService.name);
+  private timer?: NodeJS.Timeout;
 
   constructor(
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
@@ -31,6 +31,16 @@ export class ResourceLifecycleService {
     const configured = await this.settings.getNumber('resource_file_retention_days');
     return Math.max(1, Math.min(3650, configured || 30));
   }
+
+  onModuleInit(): void {
+    // Keep the task inside the existing single-instance forum process. The timer
+    // is deliberately not started under Jest, where it would retain open handles.
+    if (process.env.NODE_ENV === 'test') return;
+    this.timer = setInterval(() => void this.scheduledCleanup(), 24 * 60 * 60 * 1000);
+    this.timer.unref();
+  }
+
+  onModuleDestroy(): void { if (this.timer) clearInterval(this.timer); }
 
   async cleanup(now = new Date()): Promise<ResourceStorageCleanupResult> {
     const cutoff = new Date(now.getTime() - await this.retentionDays() * 24 * 60 * 60 * 1000);
@@ -64,7 +74,6 @@ export class ResourceLifecycleService {
     return { quarantined_orphans: quarantinedOrphans, retired_resource_files: retiredResourceFiles, retired_version_files: retiredVersionFiles };
   }
 
-  @Cron('17 3 * * *', { timeZone: 'Asia/Shanghai' })
   async scheduledCleanup(): Promise<void> {
     try {
       const result = await this.cleanup();
