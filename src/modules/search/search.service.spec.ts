@@ -44,6 +44,18 @@ function createQueryBuilder(posts: any[], total: number) {
   };
 }
 
+function createResourceQueryBuilder(resources: any[]) {
+  return {
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue(resources),
+  };
+}
+
 function createService(overrides: {
   postRepository?: Record<string, jest.Mock>;
   postSummaryService?: Record<string, jest.Mock>;
@@ -73,7 +85,7 @@ function createService(overrides: {
   };
 
   const resourceRepository = {
-    find: jest.fn().mockResolvedValue([]),
+    createQueryBuilder: jest.fn().mockReturnValue(createResourceQueryBuilder([])),
   };
   const redisService = {
     get: jest.fn(),
@@ -97,6 +109,7 @@ function createService(overrides: {
     postRepository,
     postSummaryService,
     queryBuilder,
+    resourceRepository,
   };
 }
 
@@ -160,5 +173,22 @@ describe('SearchService', () => {
         totalPages: 2,
       },
     });
+  });
+
+  it('does not expose resources in a disabled category through search', async () => {
+    const { service, resourceRepository } = createService();
+
+    await service.searchResources('guide');
+
+    const queryBuilder = resourceRepository.createQueryBuilder.mock.results[0].value;
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(category.id IS NULL OR category.is_active = :categoryActive)',
+      { categoryActive: 1 },
+    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'MATCH(r.title, r.description) AGAINST(:query IN NATURAL LANGUAGE MODE)',
+      { query: 'guide' },
+    );
   });
 });

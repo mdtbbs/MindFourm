@@ -27,7 +27,14 @@ export class SearchController {
       this.searchService.searchResources(dto.q, 20),
     ]);
 
-    await this.searchService.recordSearch(req?.user?.id, dto.q, postsResult.pagination.total);
+    // A global search is useful when it finds either a forum post or a resource.
+    // Recording only the post total made an otherwise useful resource-only query
+    // look like a zero-result search in user history and admin analytics.
+    await this.searchService.recordSearch(
+      req?.user?.id,
+      dto.q,
+      postsResult.pagination.total + resources.length,
+    );
 
     return {
       ...postsResult,

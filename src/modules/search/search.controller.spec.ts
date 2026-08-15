@@ -75,6 +75,22 @@ describe('SearchController', () => {
     expect(result).not.toHaveProperty('success');
   });
 
+  it('counts a resource-only match as a successful global search', async () => {
+    const { controller, searchService } = createController({
+      searchService: {
+        searchPosts: jest.fn().mockResolvedValue({
+          data: [],
+          pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
+        }),
+        searchResources: jest.fn().mockResolvedValue([{ id: 9, title: 'Resource match' }]),
+      },
+    });
+
+    await controller.search({ q: 'resource', page: 1, limit: 20 } as any);
+
+    expect(searchService.recordSearch).toHaveBeenCalledWith(undefined, 'resource', 1);
+  });
+
   it('returns raw history and popular arrays without extra wrapping', async () => {
     const { controller, searchService } = createController();
 

@@ -134,49 +134,34 @@ export class SearchService {
    * Uses Full-Text search when available (ngram index handles CJK + Latin).
    */
   async searchResources(query: string, limit: number = 20): Promise<any[]> {
-    let resources: Resource[];
+    // Keep search on the same public-visibility contract as the resource list.
+    // In particular, disabled categories must not be discoverable through a
+    // separate endpoint while their list/detail/download routes are hidden.
+    const qb = this.resourceRepository
+      .createQueryBuilder('r')
+      .leftJoinAndSelect('r.user', 'user')
+      .leftJoinAndSelect('r.category', 'category')
+      .where('r.status = :status', { status: 'approved' })
+      .andWhere('r.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
 
     if (this.hasFullTextIndex('resources')) {
-      // Full-Text search path
-      resources = await this.resourceRepository
-        .createQueryBuilder('r')
-        .leftJoinAndSelect('r.user', 'user')
-        .leftJoinAndSelect('r.category', 'category')
-        .where('r.status = :status', { status: 'approved' })
-        .andWhere('r.is_public = :isPublic', { isPublic: 1 })
-        .andWhere(
-          'MATCH(r.title, r.description) AGAINST(:query IN NATURAL LANGUAGE MODE)',
-          { query },
-        )
-        .orderBy('r.download_count', 'DESC')
-        .addOrderBy('r.rating_average', 'DESC')
-        .addOrderBy('r.created_at', 'DESC')
-        .take(limit)
-        .getMany();
+      qb.andWhere(
+        'MATCH(r.title, r.description) AGAINST(:query IN NATURAL LANGUAGE MODE)',
+        { query },
+      );
     } else {
-      // LIKE fallback
-      resources = await this.resourceRepository.find({
-        where: [
-          {
-            status: 'approved',
-            is_public: 1,
-            title: Like(`%${escapeLike(query)}%`),
-          },
-          {
-            status: 'approved',
-            is_public: 1,
-            description: Like(`%${escapeLike(query)}%`),
-          },
-        ],
-        relations: ['user', 'category'],
-        order: {
-          download_count: 'DESC',
-          rating_average: 'DESC',
-          created_at: 'DESC',
-        },
-        take: limit,
+      qb.andWhere('(r.title LIKE :query OR r.description LIKE :query)', {
+        query: `%${escapeLike(query)}%`,
       });
     }
+
+    const resources = await qb
+      .orderBy('r.download_count', 'DESC')
+      .addOrderBy('r.rating_average', 'DESC')
+      .addOrderBy('r.created_at', 'DESC')
+      .take(limit)
+      .getMany();
 
     return resources.map((resource) => ({
       id: resource.id,
