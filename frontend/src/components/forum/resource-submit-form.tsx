@@ -8,6 +8,7 @@ import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { ResourceCategory } from '@/types';
 import { useToastStore } from '@/store/toast-store';
+import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 
 type ResourceType = 'upload' | 'external';
 
@@ -36,10 +37,41 @@ export default function ResourceSubmitForm() {
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [restoredDraft, setRestoredDraft] = useState(false);
+  const draft = useDraft('resource');
+  const draftValues = { resourceType, title, version, description, categoryId, isPublic, content, externalUrl };
+  const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl);
+  useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
   useEffect(() => {
     resourceApi.getCategories().then(setCategories).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const saved = draft.load();
+    if (!saved) return;
+    if (saved.resourceType === 'upload' || saved.resourceType === 'external') setResourceType(saved.resourceType);
+    if (typeof saved.title === 'string') setTitle(saved.title);
+    if (typeof saved.version === 'string') setVersion(saved.version);
+    if (typeof saved.description === 'string') setDescription(saved.description);
+    if (typeof saved.categoryId === 'number') setCategoryId(saved.categoryId);
+    if (typeof saved.isPublic === 'boolean') setIsPublic(saved.isPublic);
+    if (typeof saved.content === 'string') setContent(saved.content);
+    if (typeof saved.externalUrl === 'string') setExternalUrl(saved.externalUrl);
+    setRestoredDraft(true);
+  // A draft is restored exactly once when this new-resource form mounts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const warnBeforeLeave = (event: BeforeUnloadEvent) => {
+      if (!hasDraftContent || isSubmitting) return;
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeLeave);
+    return () => window.removeEventListener('beforeunload', warnBeforeLeave);
+  }, [hasDraftContent, isSubmitting]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,6 +117,7 @@ export default function ResourceSubmitForm() {
       }
 
       const resource = await resourceApi.upload(formData);
+      draft.clear();
       showSuccess('资源提交成功！');
       router.push(`/resources/${resource.id}`);
     } catch (err) {
@@ -99,6 +132,12 @@ export default function ResourceSubmitForm() {
       onSubmit={handleSubmit}
       className="space-y-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-6"
     >
+      {restoredDraft && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-700 dark:text-blue-300">
+          <span>已恢复上次未提交的资源草稿。文件需要重新选择。</span>
+          <button type="button" onClick={() => { draft.clear(); setRestoredDraft(false); }} className="font-medium underline">丢弃草稿</button>
+        </div>
+      )}
       {error && (
         <div className="rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
           {error}
@@ -277,7 +316,7 @@ export default function ResourceSubmitForm() {
       <div className="flex justify-end gap-3 border-t border-[var(--border)] pt-4">
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => { if (hasDraftContent) draft.save(draftValues); router.back(); }}
           className="rounded-[var(--radius)] bg-[var(--bg-elevated)] px-4 py-2 text-sm hover:bg-[var(--bg-card)]"
         >
           取消

@@ -13,6 +13,24 @@ test.describe('Resource Public Routes', () => {
 });
 
 authTest.describe('Resource Submission Flow', () => {
+  authTest('restores an unfinished resource draft after reload', async ({ authenticatedPage }) => {
+    const title = uniqueResourceName('E2E Resource Draft');
+    await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await authenticatedPage.getByTestId('resource-type-external').click();
+    await authenticatedPage.getByTestId('resource-title-input').fill(title);
+    await authenticatedPage.getByTestId('resource-version-input').fill('draft-1');
+
+    // Draft persistence is debounced so ordinary typing does not synchronously
+    // write on every keystroke.
+    await authenticatedPage.waitForTimeout(2300);
+    await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
+
+    await authExpect(authenticatedPage.getByTestId('resource-title-input')).toHaveValue(title);
+    await authExpect(authenticatedPage.getByTestId('resource-version-input')).toHaveValue('draft-1');
+    await authExpect(authenticatedPage.getByText('已恢复上次未提交的资源草稿')).toBeVisible();
+    await authenticatedPage.getByRole('button', { name: '丢弃草稿' }).click();
+  });
+
   authTest('should submit an external resource', async ({ authenticatedPage }) => {
     const title = uniqueResourceName('E2E External Resource');
     const externalUrl = `https://example.com/resources/${Date.now()}`;
