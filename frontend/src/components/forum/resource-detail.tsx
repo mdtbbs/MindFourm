@@ -134,7 +134,11 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             </div>
           </div>
           <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-5">
-            <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />下载资源</a>
+            {resource.resource_type === 'external' && resource.external_url ? (
+              <a href={resource.external_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><ExternalLink className="h-5 w-5" />访问资源</a>
+            ) : (
+              <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />下载资源</a>
+            )}
             <button type="button" disabled={busy} onClick={toggleFavorite} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${favorite ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />{favorite ? '已收藏' : '收藏'} <span className="text-xs">{favoriteCount}</span></button>
             <button type="button" onClick={share} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 font-medium text-[var(--text-secondary)] hover:text-[var(--primary)]"><Share2 className="h-5 w-5" />{copied ? '链接已复制' : '分享'}</button>
             <ReportDialog targetType="resource" targetId={resource.id} label="举报" />
