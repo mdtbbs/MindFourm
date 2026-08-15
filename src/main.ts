@@ -1,3 +1,7 @@
+// Keep process.env deterministic for bootstrap-only switches. ConfigModule also
+// consumes this file, but routes registered during bootstrap must not depend on
+// a deployment runner's inherited environment.
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
