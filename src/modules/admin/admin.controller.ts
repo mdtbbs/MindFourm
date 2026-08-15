@@ -34,6 +34,7 @@ import { BulkPostsDto } from './dto/bulk-posts.dto';
 import { MergeTagsDto } from './dto/merge-tags.dto';
 import { CreateBanDto } from '../bans/dto/create-ban.dto';
 import { UpdateBrandSettingsDto } from '../settings/dto/update-brand-settings.dto';
+import { RateLimitTelemetryService } from '../../common/rate-limit/rate-limit-telemetry.service';
 
 /** Safely parse a query param to int, falling back to a default when the
  *  global ValidationPipe turns a missing param into `undefined`/NaN. */
@@ -63,6 +64,7 @@ export class AdminController {
     private readonly usersService: UsersService,
     private readonly adminNotificationsService: AdminNotificationsService,
     private readonly uploadsService: UploadsService,
+    private readonly rateLimitTelemetry: RateLimitTelemetryService,
   ) {}
 
   /**
@@ -558,6 +560,13 @@ export class AdminController {
 
   private getClientIp(req: any): string {
     return getClientIp(req);
+  }
+
+  /** Last-24-hour 429 summary. It intentionally exposes only route aggregates, never IP values. */
+  @Get('system/rate-limit-observability')
+  @Roles('admin')
+  async getRateLimitObservability() {
+    return this.rateLimitTelemetry.getLast24Hours();
   }
 
   private async publishModerationResult(

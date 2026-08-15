@@ -18,9 +18,23 @@ export default function RateLimitsPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [telemetry, setTelemetry] = useState<{
+    total: number;
+    hours: Array<{ at: string; blocked: number }>;
+    routes: Array<{ route: string; blocked: number }>;
+    identities: Record<string, number>;
+    ip_sources: Record<string, number>;
+  } | null>(null);
 
   const fetchSettings = useCallback(async () => {
-    try { setValues(await adminApi.getSettings('rate_limit')); }
+    try {
+      const [settings, metrics] = await Promise.all([
+        adminApi.getSettings('rate_limit'),
+        adminApi.getRateLimitObservability(),
+      ]);
+      setValues(settings);
+      setTelemetry(metrics);
+    }
     catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
     finally { setLoading(false); }
   }, []);
@@ -47,6 +61,38 @@ export default function RateLimitsPage() {
 
       {message && <Alert type="success" message={message} />}
       {error && <Alert type="error" message={error} />}
+
+      <section className="border border-surface-200 bg-surface-50 p-5">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-surface-900">过去 24 小时限流命中</h2>
+            <p className="mt-1 text-sm text-surface-500">仅汇总路由和可信 CDN 地址来源；不会显示原始 IP。</p>
+          </div>
+          <strong className="text-2xl tabular-nums text-surface-900">{telemetry?.total ?? '—'}</strong>
+        </div>
+        {telemetry && (
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500">高频路由</h3>
+              <ul className="mt-2 space-y-1 text-sm text-surface-700">
+                {telemetry.routes.length ? telemetry.routes.map((item) => <li key={item.route} className="flex justify-between gap-3"><code className="truncate">{item.route}</code><span>{item.blocked}</span></li>) : <li>暂无命中</li>}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500">限流身份</h3>
+              <ul className="mt-2 space-y-1 text-sm text-surface-700">
+                {Object.entries(telemetry.identities).length ? Object.entries(telemetry.identities).map(([key, value]) => <li key={key} className="flex justify-between"><span>{key}</span><span>{value}</span></li>) : <li>暂无命中</li>}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500">客户端地址来源</h3>
+              <ul className="mt-2 space-y-1 text-sm text-surface-700">
+                {Object.entries(telemetry.ip_sources).length ? Object.entries(telemetry.ip_sources).map(([key, value]) => <li key={key} className="flex justify-between"><span>{key}</span><span>{value}</span></li>) : <li>暂无命中</li>}
+              </ul>
+            </div>
+          </div>
+        )}
+      </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {groups.map((group) => (

@@ -563,6 +563,14 @@ export const adminApi = {
     ),
   getStats: () =>
     request<AdminStats>('/api/admin/stats'),
+  getRateLimitObservability: () =>
+    request<{
+      total: number;
+      hours: Array<{ at: string; blocked: number }>;
+      routes: Array<{ route: string; blocked: number }>;
+      identities: Record<string, number>;
+      ip_sources: Record<string, number>;
+    }>('/api/admin/system/rate-limit-observability'),
   getBadgeCounts: () =>
     request<{ moderation_pending: number; announce_active: number }>('/api/admin/badge-counts'),
   getSettings: (category?: string) =>

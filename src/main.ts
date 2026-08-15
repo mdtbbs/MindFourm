@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
+import * as express from 'express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -63,6 +64,13 @@ async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api');
+
+  // CSP reports use application/csp-report or application/reports+json rather
+  // than ordinary application/json, so register a narrow parser before routes.
+  app.use('/api/security/csp-reports', express.json({
+    type: ['application/csp-report', 'application/reports+json', 'application/json'],
+    limit: '32kb',
+  }));
 
   app.use(
     helmet({

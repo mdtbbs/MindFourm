@@ -11,6 +11,7 @@ import { RedisService } from '../../database/redis.service';
 import { ConfigService } from '@nestjs/config';
 import { secretsMatch } from '../utils/secret-compare.util';
 import { getClientIp, isLoopbackIp } from '../utils/client-context.util';
+import { RateLimitTelemetryService } from '../rate-limit/rate-limit-telemetry.service';
 import { createHash } from 'crypto';
 import {
   RATE_LIMIT_KEY,
@@ -42,6 +43,7 @@ export class RateLimitGuard implements CanActivate {
     private redis: RedisService,
     private reflector: Reflector,
     private config: ConfigService,
+    private telemetry: RateLimitTelemetryService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -89,6 +91,13 @@ export class RateLimitGuard implements CanActivate {
       response?.setHeader?.('Retry-After', String(limit.window));
       response?.setHeader?.('X-RateLimit-Limit', String(limit.max));
       response?.setHeader?.('X-RateLimit-Remaining', '0');
+      void this.telemetry.recordBlocked({
+        route: this.routeKey(context, req),
+        identity: this.identityType(req),
+        limit: limit.max,
+        remaining: 0,
+        ipSource: req.clientIpSource || 'connection',
+      });
       throw new HttpException('请求过于频繁，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);
     }
 
@@ -115,6 +124,11 @@ export class RateLimitGuard implements CanActivate {
       return `s:${createHash('sha256').update(sessionToken).digest('hex').slice(0, 24)}`;
     }
     return `ip:${req.clientIp || getClientIp(req) || 'unknown'}`;
+  }
+
+  private identityType(req: any): 'user' | 'session' | 'ip' {
+    if (req.user?.id) return 'user';
+    return this.readSessionToken(req) ? 'session' : 'ip';
   }
 
   private readSessionToken(req: any): string | null {

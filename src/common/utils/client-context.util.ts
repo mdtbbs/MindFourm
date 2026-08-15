@@ -4,6 +4,7 @@ declare module 'express-serve-static-core' {
   interface Request {
     clientIp?: string;
     clientRegion?: string | null;
+    clientIpSource?: string;
   }
 }
 
@@ -26,6 +27,15 @@ export function getClientIp(request: Pick<Request, 'headers' | 'ip' | 'socket'> 
   const realIp = firstHeaderValue(headers['x-real-ip']);
   const fallback = request?.ip || request?.socket?.remoteAddress || '';
   return normalizeClientIp(forwarded || esaIp || realIp || fallback);
+}
+
+/** Records which trusted edge header supplied the address without persisting the address itself. */
+export function getClientIpSource(request: Pick<Request, 'headers'> | any): string {
+  const headers = request?.headers || {};
+  if (firstHeaderValue(headers['x-forwarded-for'])) return 'x-forwarded-for';
+  if (firstHeaderValue(headers['ali-real-client-ip'])) return 'ali-real-client-ip';
+  if (firstHeaderValue(headers['x-real-ip'])) return 'x-real-ip';
+  return 'connection';
 }
 
 /** Province/region is supplied by the CDN; never inferred from a browser claim. */

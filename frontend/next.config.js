@@ -84,6 +84,24 @@ const nextConfig = {
 
   // Security headers
   async headers() {
+    // Report-only first: Next.js and a few editor/OAuth integrations currently
+    // rely on inline bootstrap code. Reports let us tighten this without making
+    // a production navigation fail closed during the transition.
+    const cspReportOnly = [
+      "default-src 'self'",
+      "base-uri 'self'",
+      "object-src 'none'",
+      "frame-ancestors 'none'",
+      "form-action 'self'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data: https:",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "connect-src 'self' https: wss:",
+      "media-src 'self' blob: https:",
+      "worker-src 'self' blob:",
+      "report-uri /api/security/csp-reports",
+    ].join('; ');
     return [
       {
         source: '/(.*)',
@@ -92,7 +110,11 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-XSS-Protection', value: '1; mode=block' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' },
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
+          { key: 'Content-Security-Policy-Report-Only', value: cspReportOnly },
         ],
       },
       {

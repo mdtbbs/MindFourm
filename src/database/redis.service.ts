@@ -243,6 +243,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  async hIncrBy(key: string, field: string, increment = 1): Promise<number> {
+    return this.withFallback(
+      () => this.client.hincrby(key, field, increment),
+      () => {
+        const current = Number(this.fallback.hget(key, field) || '0');
+        const value = current + increment;
+        this.fallback.hset(key, field, String(value));
+        return value;
+      },
+    );
+  }
+
   async hgetall(key: string): Promise<Record<string, string>> {
     return this.withFallback(
       () => this.client.hgetall(key),

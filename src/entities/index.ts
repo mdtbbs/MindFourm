@@ -70,6 +70,7 @@ import { LanLinkQuickCode } from './lanlink-quick-code.entity';
 import { Friendship } from './friendship.entity';
 import { ResourceComment } from './resource-comment.entity';
 import { LegalAcceptance } from './legal-acceptance.entity';
+import { UserDataDeletionRequest } from './user-data-deletion-request.entity';
 
 // P0-B: Resource aggregate
 import { ResourceAttribution } from './resource-attribution.entity';
@@ -171,6 +172,7 @@ export const entities = [
   // Resource Comments
   ResourceComment,
   LegalAcceptance,
+  UserDataDeletionRequest,
   // P0-B: Resource aggregate
   ResourceAttribution,
   ResourceFile,
@@ -241,6 +243,7 @@ export {
   // Resource Comments
   ResourceComment,
   LegalAcceptance,
+  UserDataDeletionRequest,
   // P0-B: Resource aggregate
   ResourceAttribution, ResourceFile, ResourceVersionDependency, ResourceVersionCompatibility,
   // Phase 4 (refactor): Media
