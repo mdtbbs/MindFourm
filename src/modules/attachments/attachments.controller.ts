@@ -25,6 +25,8 @@ import { AttachmentsService } from './attachments.service';
 import { ForgePreviewService } from './forge-preview.service';
 import { UploadAttachmentDto } from './dto/upload-attachment.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { Roles } from '@common/decorators/roles.decorator';
 import { Public } from '@common/decorators/public.decorator';
 import type { Request, Response } from 'express';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
@@ -88,7 +90,7 @@ export class AttachmentsController {
   @UseInterceptors(
     FilesInterceptor('files', 5, {
       storage: diskStorage({
-        destination: './uploads/attachments',
+        destination: './uploads/.quarantine/attachments/pending',
         filename: (_req, file, callback) => {
           const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
           callback(null, `${uniqueSuffix}${extname(file.originalname).toLowerCase()}`);
@@ -141,17 +143,26 @@ export class AttachmentsController {
         file_size: file.size,
         mime_type: file.mimetype,
       });
-      if (this.forgePreviewService.supports(attachment)) {
-        void this.forgePreviewService.submit(attachment)
-          .then((state) => this.attachmentsService.updateRendererState(attachment.id, state))
-          .catch((error) => {
-            this.logger.warn(`Failed to request preview for attachment ${attachment.id}: ${error.message}`);
-            return this.attachmentsService.updateRendererState(attachment.id, { status: 'failed', errorCode: 'FORGE_SUBMIT_FAILED' });
-          });
-      }
       results.push(attachment);
     }
-    return { message: 'Files uploaded successfully', attachments: results };
+    return { message: 'Files uploaded and awaiting moderation', attachments: results };
+  }
+
+  @Post(':id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async approve(@Param('id', ParseIntPipe) id: number) {
+    const attachment = await this.attachmentsService.approve(id);
+    this.enqueueForgePreview(attachment);
+    return attachment;
+  }
+
+  @Post(':id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async reject(@Param('id', ParseIntPipe) id: number) {
+    await this.attachmentsService.reject(id);
+    return { message: 'Attachment rejected' };
   }
 
   @Get('post/:postId')
@@ -245,5 +256,15 @@ export class AttachmentsController {
     const isAdmin = role === 'admin' || role === 'moderator';
     await this.attachmentsService.delete(id, userId, isAdmin);
     return { message: 'Attachment deleted successfully' };
+  }
+
+  private enqueueForgePreview(attachment: Awaited<ReturnType<AttachmentsService['approve']>>): void {
+    if (!this.forgePreviewService.supports(attachment)) return;
+    void this.forgePreviewService.submit(attachment)
+      .then((state) => this.attachmentsService.updateRendererState(attachment.id, state))
+      .catch((error) => {
+        this.logger.warn(`Failed to request preview for attachment ${attachment.id}: ${error.message}`);
+        return this.attachmentsService.updateRendererState(attachment.id, { status: 'failed', errorCode: 'FORGE_SUBMIT_FAILED' });
+      });
   }
 }

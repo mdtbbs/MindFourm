@@ -34,6 +34,11 @@ export class Attachment {
   @Column({ default: 0 })
   download_count: number;
 
+  // New uploads remain in the non-public quarantine until a moderator accepts
+  // them. Legacy rows are backfilled as approved by the migration.
+  @Column({ type: 'varchar', length: 20, default: 'pending' })
+  status: 'pending' | 'approved' | 'rejected';
+
   // MDT-Forge processing is asynchronous. The original attachment stays the
   // source of truth while these fields let post and reply UIs show a safe,
   // eventually-consistent preview without exposing Forge credentials.

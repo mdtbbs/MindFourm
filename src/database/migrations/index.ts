@@ -32,6 +32,7 @@ import { AddAttachmentRenderState1720000037000 } from './1720000037000-AddAttach
 import { CreateLegalAcceptances1720000038000 } from './1720000038000-CreateLegalAcceptances';
 import { CreateUserDataDeletionRequests1720000039000 } from './1720000039000-CreateUserDataDeletionRequests';
 import { AddAttachmentLifecycle1720000040000 } from './1720000040000-AddAttachmentLifecycle';
+import { AddAttachmentModeration1720000041000 } from './1720000041000-AddAttachmentModeration';
 
 /**
  * Migrations in run order.
@@ -75,4 +76,5 @@ export const migrations = [
   CreateLegalAcceptances1720000038000,
   CreateUserDataDeletionRequests1720000039000,
   AddAttachmentLifecycle1720000040000,
+  AddAttachmentModeration1720000041000,
 ];

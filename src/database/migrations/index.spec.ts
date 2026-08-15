@@ -18,4 +18,10 @@ describe('migration registry', () => {
       'CreateLegalAcceptances1720000038000',
     );
   });
+
+  it('includes attachment moderation before new uploads are exposed', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'AddAttachmentModeration1720000041000',
+    );
+  });
 });
