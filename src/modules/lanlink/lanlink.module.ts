@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { LanLinkQuickCode } from '@entities/lanlink-quick-code.entity';
+import { User } from '@entities/user.entity';
 import { ExternalApiKeyGuard } from '@common/guards/external-api-key.guard';
 import { AuthModule } from '../auth/auth.module';
 import { ServiceApiModule } from '../service-api/service-api.module';
@@ -12,7 +13,7 @@ import { LanLinkQuickCodeService } from './lanlink-quick-code.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([LanLinkQuickCode]),
+    TypeOrmModule.forFeature([LanLinkQuickCode, User]),
     AuthModule,
     ServiceApiModule,
   ],

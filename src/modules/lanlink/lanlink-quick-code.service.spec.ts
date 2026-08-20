@@ -47,9 +47,18 @@ function createRepositoryMock() {
 }
 
 describe('LanLinkQuickCodeService', () => {
+  const createService = () => {
+    const codeRepository = createRepositoryMock();
+    const userRepository = { findOne: jest.fn() };
+    return {
+      codeRepository,
+      userRepository,
+      service: new LanLinkQuickCodeService(codeRepository as any, userRepository as any),
+    };
+  };
+
   it('generates a distinct LL login code and stores only its hash metadata', async () => {
-    const repo = createRepositoryMock();
-    const service = new LanLinkQuickCodeService(repo as any);
+    const { codeRepository: repo, service } = createService();
 
     const result = await service.generateForUser(7);
 
@@ -66,8 +75,7 @@ describe('LanLinkQuickCodeService', () => {
   });
 
   it('validates normalized codes and bumps usage metadata', async () => {
-    const repo = createRepositoryMock();
-    const service = new LanLinkQuickCodeService(repo as any);
+    const { service } = createService();
     const generated = await service.generateForUser(3);
 
     const result = await service.validate(generated.code.toLowerCase().replace(/-/g, ' '));
@@ -81,8 +89,7 @@ describe('LanLinkQuickCodeService', () => {
   });
 
   it('rotates forgotten codes and invalidates disabled codes', async () => {
-    const repo = createRepositoryMock();
-    const service = new LanLinkQuickCodeService(repo as any);
+    const { service } = createService();
     const first = await service.generateForUser(5);
     const second = await service.generateForUser(5);
 
@@ -92,5 +99,13 @@ describe('LanLinkQuickCodeService', () => {
 
     await service.disableForUser(5);
     expect(await service.validate(second.code)).toEqual({ valid: false });
+  });
+
+  it('reads the latest forum phone verification status for token refresh', async () => {
+    const { service, userRepository } = createService();
+    userRepository.findOne.mockResolvedValue({ id: 9, username: 'user-9', phone_verified: true });
+
+    await expect(service.getUserStatus(9)).resolves.toMatchObject({ id: 9, phone_verified: true });
+    expect(userRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 9 } }));
   });
 });

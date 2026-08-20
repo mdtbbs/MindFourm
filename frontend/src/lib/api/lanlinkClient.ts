@@ -27,10 +27,30 @@ export interface LanLinkAuthResult {
 export interface PublicRoom {
   code: string;
   name: string;
+  motd?: string;
   display_name: string;
   public: boolean;
-  owner: { type: string; id?: string; username?: string; display_name?: string; avatar_url?: string };
+  owner: {
+    type?: string;
+    id?: string | number;
+    forum_user_id?: string | number;
+    username?: string;
+    forum_username?: string;
+    display_name?: string;
+    forum_display_name?: string;
+    avatar_url?: string;
+    game_name?: string;
+    game_player_id?: string;
+    player_id?: string;
+  };
   node: { id: string; name: string; addr: string; room_port: number };
+  node_name?: string;
+  game_name?: string;
+  game_player_id?: string;
+  player_id?: string;
+  players?: number;
+  max_players?: number;
+  updated_at?: string | number;
   direct?: { mode: string; addr: string; port: number };
   direct_candidates?: Array<{ mode: string; addr: string; port: number }>;
 }
@@ -105,6 +125,22 @@ async function lanlinkFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   return res.json();
 }
 
+async function lanlinkPublicFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+  const res = await fetch(`${LANLINK_API}${path}`, {
+    ...opts,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(opts?.headers || {}),
+    },
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || `请求失败: ${res.status}`);
+  }
+  return res.json();
+}
+
 export const lanlinkClient = {
   /** 用户名密码登录，返回 token + 用户信息 */
   async login(username: string, password: string): Promise<LanLinkAuthResult> {
@@ -123,7 +159,7 @@ export const lanlinkClient = {
 
   /** 获取公开房间列表 */
   getPublicRooms(): Promise<{ rooms: PublicRoom[] }> {
-    return lanlinkFetch('/api/rooms/public');
+    return lanlinkPublicFetch('/api/rooms/public');
   },
 
   /** 获取好友列表（含 LanLink 状态） */

@@ -29,7 +29,24 @@ export class LanLinkQuickCodeService {
   constructor(
     @InjectRepository(LanLinkQuickCode)
     private codeRepository: Repository<LanLinkQuickCode>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
+
+  async getUserStatus(userId: number): Promise<User | null> {
+    return this.userRepository.findOne({
+      where: { id: userId },
+      select: {
+        id: true,
+        mindauth_id: true,
+        username: true,
+        avatar_url: true,
+        role: true,
+        phone_verified: true,
+        phone_verified_at: true,
+      },
+    });
+  }
 
   async statusForUser(userId: number): Promise<LanLinkQuickCodeStatus | null> {
     const record = await this.codeRepository.findOne({ where: { user_id: userId } });

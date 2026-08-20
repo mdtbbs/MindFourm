@@ -3,6 +3,9 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
+  Param,
+  ParseIntPipe,
   Post,
   Req,
   UnauthorizedException,
@@ -98,6 +101,24 @@ export class ExternalLanLinkQuickCodeController {
         token_version: code.token_version,
         last_used_at: code.last_used_at,
         use_count: code.use_count,
+      },
+    };
+  }
+
+  @Get('users/:id')
+  @ExternalScope('lanlink:auth')
+  async userStatus(@Param('id', ParseIntPipe) id: number) {
+    const user = await this.quickCodeService.getUserStatus(id);
+    if (!user) throw new NotFoundException('用户不存在');
+    return {
+      user: {
+        id: user.id,
+        mindauth_id: user.mindauth_id,
+        username: user.username,
+        avatar_url: user.avatar_url,
+        role: user.role,
+        phone_verified: user.phone_verified,
+        phone_verified_at: user.phone_verified_at,
       },
     };
   }

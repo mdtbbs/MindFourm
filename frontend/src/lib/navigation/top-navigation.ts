@@ -28,7 +28,7 @@ export const DEFAULT_TOP_NAVIGATION_ITEMS: TopNavigationItem[] = [
       { label: '积分商店', href: '/shop' },
     ],
   },
-  { type: 'link', label: 'LanLink', href: '/lanlink' },
+  { type: 'link', label: '在线房间', href: '/lanlink' },
 ];
 
 const FEATURE_SETTING_BY_HREF: Record<string, { key: string; defaultEnabled: boolean }> = {
