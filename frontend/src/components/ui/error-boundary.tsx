@@ -7,6 +7,8 @@
 
 'use client';
 
+import Link from 'next/link';
+
 interface ErrorBoundaryProps {
   error: Error & { digest?: string };
   reset: () => void;
@@ -63,12 +65,12 @@ export function ErrorBoundary({
         </button>
 
         {/* Home link */}
-        <a
+        <Link
           href="/"
           className="mt-2 block text-[var(--primary)] hover:underline text-sm"
         >
           返回首页
-        </a>
+        </Link>
       </div>
     </div>
   );

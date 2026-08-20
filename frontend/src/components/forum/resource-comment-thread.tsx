@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { resourceCommentApi } from '@/lib/api/client';
 import type { ResourceComment } from '@/types';
 import { MessageSquare, Heart, Reply as ReplyIcon, Edit, Trash2, Send } from 'lucide-react';
@@ -43,11 +43,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId }: Res
   const [replyTo, setReplyTo] = useState<{ id: number; username: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    loadComments();
-  }, [resourceId]);
-
-  const loadComments = async () => {
+  const loadComments = useCallback(async () => {
     try {
       const res = await resourceCommentApi.getByResource(resourceId, { limit: 100 });
       setComments(res.data || []);
@@ -56,7 +52,11 @@ export default function ResourceCommentThread({ resourceId, currentUserId }: Res
     } finally {
       setLoading(false);
     }
-  };
+  }, [resourceId]);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
 
   const handleSubmit = async () => {
     if (!newComment.trim() || submitting) return;

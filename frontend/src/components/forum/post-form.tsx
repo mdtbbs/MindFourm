@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth/context';
 import { postApi, categoryApi, tagApi } from '@/lib/api/client';
@@ -141,18 +142,18 @@ export default function PostForm() {
             登录后你可以发帖、回复、收藏、关注感兴趣的内容
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
-            <a
+            <Link
               href={`/login?redirect=${encodeURIComponent(pathname || '/posts/new')}`}
               className="inline-flex items-center px-6 py-3 rounded-lg bg-[var(--primary)] text-white font-medium hover:opacity-90 transition-opacity"
             >
               登录
-            </a>
-            <a
+            </Link>
+            <Link
               href="/"
               className="inline-flex items-center px-6 py-3 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
             >
               返回论坛
-            </a>
+            </Link>
           </div>
         </div>
       </div>

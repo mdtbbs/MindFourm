@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
@@ -170,7 +171,7 @@ export default function FooterSettingsPage() {
           <div className="bg-blue-50 border border-blue-200 rounded p-4">
             <p className="text-sm text-blue-900">
               <span className="font-semibold">页面内容管理</span>已移至独立的管理页面。
-              请访问 <a href="/admin/content/pages" className="text-blue-700 hover:underline font-medium">内容 → 页面管理</a> 来编辑"关于我们"、"鸣谢"、"服务条款"和"隐私政策"页面的内容。
+              请访问 <Link href="/admin/content/pages" className="text-blue-700 hover:underline font-medium">内容 → 页面管理</Link> 来编辑&quot;关于我们&quot;、&quot;鸣谢&quot;、&quot;服务条款&quot;和&quot;隐私政策&quot;页面的内容。
             </p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { notificationApi } from '@/lib/api/client';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Notification } from '@/types';
@@ -18,11 +18,7 @@ export default function NotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadNotifications(1);
-  }, [filter]);
-
-  const loadNotifications = async (page: number) => {
+  const loadNotifications = useCallback(async (page: number) => {
     setLoading(true);
     setError(null);
     try {
@@ -36,7 +32,11 @@ export default function NotificationsPage() {
       setError('通知加载失败,请稍后重试');
     }
     setLoading(false);
-  };
+  }, [filter]);
+
+  useEffect(() => {
+    loadNotifications(1);
+  }, [filter, loadNotifications]);
 
   // Under a read/unread filter the server decides membership, so a row that just
   // changed state has to be re-fetched out of (or into) the list rather than mutated in

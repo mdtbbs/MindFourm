@@ -45,13 +45,14 @@ export default function ReplyEditor({
 
   const replyId = quoteReply?.id ?? replyToReply?.id;
   const draft = useDraft('reply', replyId ? `r-${replyId}` : `p-${postId}`);
+  const loadDraft = draft.load;
   useDraftAutoSave({ content }, draft.save, !!content);
 
   // Restore the draft when the editor mounts or switches target (quote/reply-to).
   useEffect(() => {
-    const saved = draft.load();
+    const saved = loadDraft();
     if (saved?.content) setContent(saved.content as string);
-  }, [draft.load]);
+  }, [loadDraft]);
 
   // The composer sits below a paginated reply list, so bring it into view when a
   // quote/reply target is picked — otherwise the buttons look like they did nothing.

@@ -442,7 +442,7 @@ function EditorToolbar({
           onClick={onTriggerImagePicker}
           disabled={uploading}
           title={uploading ? '上传中…' : '上传图片'}>
-          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
+          {uploading ? <Loader2 className="w-4 h-4" aria-hidden="true" /> : <Image className="w-4 h-4" aria-hidden="true" />}
         </TBtn>
       )}
       {!compact && (

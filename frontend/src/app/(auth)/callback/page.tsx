@@ -66,7 +66,7 @@ export default function CallbackPage() {
         setError('登录失败：无法验证会话');
         setTimeout(() => router.push('/'), 3000);
       });
-  }, []);
+  }, [router, searchParams]);
 
   if (error) {
     return (

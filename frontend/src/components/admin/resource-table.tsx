@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { resourceAdminApi, resourceApi } from '@/lib/api/client';
 import { Resource, ResourceCategory } from '@/types';
 import { ExternalLink, Download, Trash2 } from 'lucide-react';
@@ -24,7 +24,7 @@ export default function ResourceTable() {
   // indistinguishable from genuinely having none.
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setLoading(true);
     setError(null);
     Promise.all([
@@ -36,9 +36,9 @@ export default function ResourceTable() {
     }).catch((err) => {
       setError(err instanceof Error ? err.message : '加载资源失败');
     }).finally(() => setLoading(false));
-  };
+  }, [search, status]);
 
-  useEffect(() => { loadData(); }, [status, search]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除此资源？')) return;

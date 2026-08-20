@@ -41,7 +41,7 @@ export default function GroupsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => { fetchGroups(); }, [fetchGroups]);
 
