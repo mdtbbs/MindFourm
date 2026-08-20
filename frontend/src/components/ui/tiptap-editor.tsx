@@ -24,7 +24,7 @@ import {
   Heading1, Heading2, Heading3, Type,
   Quote, Code, Code2,
   List, ListOrdered,
-  Link2, Image, Table as TableIcon, Minus,
+  Link2, Image as ImageIcon, Table as TableIcon, Minus,
   AlignLeft, AlignCenter, AlignRight,
   Undo2, Redo2,
   CodeXml, Eye,
@@ -442,7 +442,7 @@ function EditorToolbar({
           onClick={onTriggerImagePicker}
           disabled={uploading}
           title={uploading ? '上传中…' : '上传图片'}>
-          {uploading ? <Loader2 className="w-4 h-4" aria-hidden="true" /> : <Image className="w-4 h-4" aria-hidden="true" />}
+          {uploading ? <Loader2 className="w-4 h-4" aria-hidden="true" /> : <ImageIcon className="w-4 h-4" aria-hidden="true" />}
         </TBtn>
       )}
       {!compact && (
