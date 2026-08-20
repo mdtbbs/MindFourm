@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import type { CSSProperties } from 'react';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/lib/toast/context';
 import { AuthProvider } from '@/lib/auth/context';
@@ -11,11 +10,7 @@ import { PhoneVerificationProvider } from '@/components/phone-verification-provi
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { getMetadataBase, getSiteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
-import { cn } from '@/lib/utils';
 import { buildBrandCssVariables, resolveBrand, resolveTitleSuffix } from '@/lib/theme/brand';
-
-const jetbrainsMono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings();
@@ -120,7 +115,6 @@ export default async function RootLayout({
       lang="zh-CN"
       data-theme="light"
       suppressHydrationWarning
-      className={cn(inter.variable, jetbrainsMono.variable)}
       style={brandStyle}
     >
       <head>
@@ -144,7 +138,7 @@ export default async function RootLayout({
         />
         {webSiteJsonLd && <JsonLd data={webSiteJsonLd} />}
       </head>
-      <body className={inter.className}>
+      <body>
         <ThemeProvider>
           <SettingsProvider initialSettings={settings}>
             <AuthProvider>
