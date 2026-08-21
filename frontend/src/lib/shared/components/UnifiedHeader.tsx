@@ -446,25 +446,20 @@ export function UnifiedHeader({
             ) : (
               <motion.div variants={containerVariants} initial="hidden" animate="visible" className="flex items-center gap-3">
                 {onRegister && (
-                  <motion.button
-                    variants={buttonVariants}
-                    onClick={onRegister}
-                    whileHover="hover"
-                    whileTap="tap"
+                  <Link
+                    href="/register"
                     className="bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
                   >
                     注册
-                  </motion.button>
+                  </Link>
                 )}
                 {onLogin && (
-                  <motion.button
-                    variants={itemVariants}
-                    onClick={onLogin}
-                    whileHover={{ scale: 1.04 }}
+                  <Link
+                    href="/login"
                     className="text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
                   >
                     登录
-                  </motion.button>
+                  </Link>
                 )}
               </motion.div>
             )}

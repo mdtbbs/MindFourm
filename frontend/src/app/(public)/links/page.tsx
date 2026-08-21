@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Globe2 } from 'lucide-react';
 import { getFooterSettings, isExternalHref } from '@/lib/footer/footer-settings';
 import { fetchPublicSettings } from '@/lib/settings/server';
 
@@ -33,16 +33,19 @@ export default async function LinksPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {footer.friendlyLinks.map((link) => {
             const external = isExternalHref(link.href);
+            let hostname = '';
+            try { hostname = new URL(link.href).hostname.replace(/^www\./, ''); } catch { /* internal link */ }
             const content = (
-              <div className="h-full rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 transition-colors hover:border-[var(--primary)]">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="truncate text-base font-semibold text-[var(--text)]">{link.label}</h2>
+              <div className="h-full rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5 transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Globe2 className="h-5 w-5" /></span>
                   {external && <ExternalLink className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />}
                 </div>
+                <h2 className="mt-4 truncate text-base font-semibold text-[var(--text)]">{link.label}</h2>
                 {link.description && (
                   <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{link.description}</p>
                 )}
-                <p className="mt-4 truncate text-xs text-[var(--text-muted)]">{link.href}</p>
+                {hostname && <p className="mt-5 truncate text-xs text-[var(--text-muted)]">{hostname}</p>}
               </div>
             );
 

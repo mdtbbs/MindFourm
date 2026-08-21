@@ -1,8 +1,9 @@
 import { Metadata } from 'next';
-import Link from 'next/link';
 import ForumContentLayout from '@/components/forum/forum-content-layout';
 import PostCard from '@/components/forum/post-card';
 import Pagination from '@/components/ui/pagination';
+import EmptyState from '@/components/ui/empty-state';
+import { MessageCircle } from 'lucide-react';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import { Category, PostListResponse } from '@/types';
@@ -84,12 +85,12 @@ export default async function CategoryPage({
         <div className="space-y-4">
           <h1 className="text-2xl font-bold text-surface-900">{category.name}</h1>
           {postsResult.data.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-surface-500 mb-4">该分类下暂无帖子</p>
-              <Link href="/posts/new" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-                发布第一篇帖子 &rarr;
-              </Link>
-            </div>
+            <EmptyState
+              icon={<MessageCircle className="h-10 w-10" />}
+              title="这里还没有主题"
+              description="有什么想讨论的吗？成为第一个发布内容的人。"
+              action={{ label: '发布主题', href: '/posts/new' }}
+            />
           ) : (
             <div className="space-y-3">
               {postsResult.data.map((post) => (

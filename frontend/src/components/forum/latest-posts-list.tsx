@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Eye, MessageSquare, Pin, ThumbsUp, Clock } from 'lucide-react';
+import { Eye, MessageSquare, Pin, ThumbsUp, Clock, Plus } from 'lucide-react';
 import { PostSummary } from '@/types';
 import { cn, formatTime } from '@/lib/utils';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
@@ -41,19 +41,11 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                 className="[&_p]:m-0 [&_p]:text-inherit [&_p]:font-inherit [&_h1]:m-0 [&_h1]:text-inherit [&_h1]:font-inherit [&_h2]:m-0 [&_h2]:text-inherit [&_h2]:font-inherit [&_h3]:m-0 [&_h3]:text-inherit [&_h3]:font-inherit"
               />
             </div>
-            {settings.description && (
-              <MarkdownRenderer
-                content={settings.description}
-                className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)] [&_p]:my-0 [&_p+p]:mt-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0"
-              />
-            )}
           </div>
-          <Link
-            href="/posts/new"
-            className="border border-[var(--latest-accent)] bg-[var(--latest-accent)] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:opacity-90"
-          >
-            发帖
-          </Link>
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-3 text-xs text-[var(--muted-foreground)] sm:flex"><span className="font-medium text-[var(--foreground)]">最新发布</span><span>最新回复</span><span>热门</span></div>
+            <Link href="/posts/new" className="inline-flex items-center gap-1.5 border border-[var(--latest-accent)] bg-[var(--latest-accent)] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:opacity-90"><Plus className="h-4 w-4" />发布主题</Link>
+          </div>
         </div>
       </div>
 
@@ -123,7 +115,7 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                   <p
                     className={cn(
                       'mt-1 text-sm leading-6 text-[var(--muted-foreground)]',
-                      comfortable ? 'line-clamp-2' : 'line-clamp-1',
+                      'line-clamp-2',
                     )}
                   >
                     {excerpt}
@@ -143,6 +135,9 @@ export default function LatestPostsList({ posts, settings }: LatestPostsListProp
                     ))}
                   </div>
                 )}
+                <div className="mt-2 text-xs text-[var(--muted-foreground)]">
+                  {post.author_name || '匿名用户'} · {post.category_name || '未分类'} · <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('zh-CN')}>{formatTime(post.created_at)}</time>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--muted-foreground)] sm:block sm:text-right">

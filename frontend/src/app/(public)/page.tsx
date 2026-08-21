@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { ArrowRight, FileText, Plus, Search } from 'lucide-react';
 import ForumContentLayout from '@/components/forum/forum-content-layout';
 import ServerSection from '@/components/forum/server-section';
 import LatestPostsList, { LatestPostsSettings } from '@/components/forum/latest-posts-list';
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import Pagination from '@/components/ui/pagination';
 import ErrorState from '@/components/ui/error-state';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
@@ -73,8 +73,8 @@ function parseLatestPostsSettings(settings: Record<string, string>): LatestPosts
     : '#2f80ed';
 
   return {
-    title: settings.latest_posts_title || '最新帖子',
-    description: settings.latest_posts_description || '浅蓝、直角、低噪音的论坛界面，重点放在帖子层级和浏览效率。',
+    title: settings.latest_posts_title || '最新主题',
+    description: settings.latest_posts_description || '',
     density,
     accentColor,
     showExcerpt: parseBooleanSetting(settings.latest_posts_show_excerpt, true),
@@ -162,10 +162,6 @@ export default async function HomePage({
     return <ErrorState title="首页加载失败" description="暂时无法获取论坛内容，请稍后重试。" action={{ label: '重新加载', href: '/' }} />;
   }
 
-  const activeCategoryName = categoryId
-    ? categories.find((category) => category.id === categoryId)?.name || '分类'
-    : latestPostsSettings.title;
-  const heroDescription = latestPostsSettings.description;
   const statCards = [
     { label: '用户', value: formatStatValue(forumOverview.total_users) },
     { label: '回复', value: formatStatValue(forumOverview.total_replies) },
@@ -178,44 +174,20 @@ export default async function HomePage({
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-6 overflow-hidden panel-surface">
-        <div className="grid gap-0 lg:grid-cols-[1.4fr_0.9fr]">
-          <div className="border-b border-[var(--border)] p-6 lg:border-b-0 lg:border-r">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-              {brand.siteName}
-            </p>
-            {/* An h1, not a div: the site's most important page had no top-level
-                heading at all. The Markdown renderer's own headings are flattened to
-                inherit, so the outer element carries the semantics. */}
-            <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
-              <MarkdownRenderer
-                content={activeCategoryName}
-                className="[&_p]:m-0 [&_p]:text-inherit [&_p]:font-inherit [&_h1]:m-0 [&_h1]:text-inherit [&_h1]:font-inherit [&_h2]:m-0 [&_h2]:text-inherit [&_h2]:font-inherit [&_h3]:m-0 [&_h3]:text-inherit [&_h3]:font-inherit"
-              />
-            </h1>
-            <MarkdownRenderer
-              content={heroDescription}
-              className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)] [&_p]:my-0 [&_p+p]:mt-2 [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0"
-            />
+      <section className="mb-6 overflow-hidden panel-surface">
+        <div className="p-6 sm:p-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{brand.siteName}</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--foreground)]">Mindustry 中文社区</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">交流、分享并沉淀值得长期保存的内容。</p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href="/search" className="inline-flex items-center gap-2 border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-sm font-medium text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]"><Search className="h-4 w-4" />搜索帖子 / 资源</Link>
+            <Link href="/posts/new" className="inline-flex items-center gap-2 bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"><Plus className="h-4 w-4" />发布主题</Link>
           </div>
-
-          <div className="grid gap-3 p-6 sm:grid-cols-2">
-            {statCards.map((item) => (
-              <div
-                key={item.label}
-                className="border border-[var(--border)] bg-[var(--muted)] p-3"
-              >
-                <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                  {item.label}
-                </div>
-                <div className="mt-2 truncate text-lg font-semibold text-[var(--foreground)]">
-                  {item.value}
-                </div>
-              </div>
-            ))}
+          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-[var(--border)] pt-4 text-sm text-[var(--muted-foreground)]">
+            {statCards.map((item) => <span key={item.label}><strong className="font-semibold text-[var(--foreground)]">{item.value}</strong> {item.label}</span>)}
           </div>
         </div>
-      </div>
+      </section>
 
       <ForumContentLayout>
         <div className="space-y-4">
@@ -227,12 +199,18 @@ export default async function HomePage({
               </div>
               <div className="grid divide-y divide-[var(--border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
                 {categories.map((category) => (
-                  <Link key={category.id} href={`/categories/${category.id}`} className="group px-5 py-4 transition-colors hover:bg-[var(--muted)]">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="font-medium text-[var(--foreground)] group-hover:text-[var(--primary)]">{category.name}</h3>
-                      <span className="text-xs text-[var(--muted-foreground)]">{category.post_count ?? 0} 主题</span>
+                  <Link key={category.id} href={`/categories/${category.id}`} className="group px-5 py-5 transition-colors hover:bg-[var(--muted)]">
+                    <div className="flex gap-3">
+                      <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><FileText className="h-4 w-4" /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="font-medium text-[var(--foreground)] group-hover:text-[var(--primary)]">{category.name}</h3>
+                          <span className="text-xs text-[var(--muted-foreground)]">{category.post_count ?? 0} 个主题</span>
+                        </div>
+                        {category.description && <p className="mt-1 line-clamp-2 text-sm text-[var(--muted-foreground)]">{category.description}</p>}
+                        <span className="mt-3 inline-flex items-center gap-1 text-xs text-[var(--primary)]">进入板块 <ArrowRight className="h-3.5 w-3.5" /></span>
+                      </div>
                     </div>
-                    {category.description && <p className="mt-1 line-clamp-2 text-sm text-[var(--muted-foreground)]">{category.description}</p>}
                   </Link>
                 ))}
               </div>

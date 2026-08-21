@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ResourceCategory } from '@/types';
-import { Search } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 
 interface ResourceFiltersProps {
   categories: ResourceCategory[];
@@ -71,9 +71,13 @@ export default function ResourceFilters({ categories, initialCategory, initialSe
   const commitMetadataFilter = (key: 'tag' | 'supported_version' | 'compatibility', value: string, current: string) => {
     if (value !== current) updateFilters({ [key]: value || null });
   };
+  const hasFilters = Boolean(selectedCategory || urlSearch || tag || supportedVersion || compatibility || resourceKind || sort !== 'created_at');
+  const kinds = [
+    ['mod', 'Mod'], ['map', '地图'], ['schematic', '蓝图'], ['development_tool', '工具'], ['other', '其他'],
+  ] as const;
 
   return (
-    <div className="mb-6 space-y-3">
+    <div className="mb-6 space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 sm:p-4">
       <div className="flex flex-col gap-3 sm:flex-row">
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--text-muted)]" />
@@ -109,8 +113,14 @@ export default function ResourceFilters({ categories, initialCategory, initialSe
         <option value="rating_count">评分最多</option>
       </select>
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="mr-1 text-xs font-medium text-[var(--text-muted)]">类型</span>
+        <button type="button" onClick={() => updateFilters({ resource_kind: null })} className={`rounded-full px-3 py-1 text-xs ${!resourceKind ? 'bg-[var(--primary)] text-white' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)]'}`}>全部</button>
+        {kinds.map(([value, label]) => <button key={value} type="button" onClick={() => updateFilters({ resource_kind: value })} className={`rounded-full px-3 py-1 text-xs ${resourceKind === value ? 'bg-[var(--primary)] text-white' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--primary)]'}`}>{label}</button>)}
+        {hasFilters && <button type="button" onClick={() => router.push('/resources')} className="ml-auto inline-flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--primary)]"><X className="h-3.5 w-3.5" />清除筛选</button>}
+      </div>
       <details className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-sm">
-        <summary className="cursor-pointer select-none text-[var(--text-secondary)]">更多筛选</summary>
+        <summary className="flex cursor-pointer list-none items-center gap-2 select-none text-[var(--text-secondary)]"><SlidersHorizontal className="h-4 w-4" />高级筛选</summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <input value={localTag} onChange={(e) => setLocalTag(e.target.value)} onBlur={() => commitMetadataFilter('tag', localTag, tag)} onKeyDown={(e) => e.key === 'Enter' && commitMetadataFilter('tag', localTag, tag)} placeholder="标签（完全匹配）" className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]" />
           <input value={localSupportedVersion} onChange={(e) => setLocalSupportedVersion(e.target.value)} onBlur={() => commitMetadataFilter('supported_version', localSupportedVersion, supportedVersion)} onKeyDown={(e) => e.key === 'Enter' && commitMetadataFilter('supported_version', localSupportedVersion, supportedVersion)} placeholder="支持版本，如 v8" className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]" />

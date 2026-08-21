@@ -13,8 +13,7 @@ import Link from 'next/link';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import ProfileEditLink from '@/components/forum/profile-edit-link';
-import { UserCard } from '@/lib/shared';
-import { Medal, Title } from '@/lib/shared';
+import { Medal } from '@/lib/shared';
 import FollowButton from '@/components/forum/follow-button';
 import BlockUserButton from '@/components/user/block-user-button';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
@@ -178,18 +177,22 @@ export default async function UserProfilePage({
         }}
       />
 
-      {/* User Info Card - 使用shared UserCard */}
-      <div className="flex justify-center mb-8">
-        <UserCard
-          username={displayName}
-          avatarUrl={profile.avatar_url || undefined}
-          stats={{
-            posts: profile.post_count,
-            replies: profile.reply_count,
-          }}
-          showStats={true}
-        />
-      </div>
+      <section className="mb-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-center">
+        <div className="px-5 py-8 sm:px-8">
+          <span className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-2xl font-semibold text-[var(--primary)]">
+            {profile.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
+          </span>
+          <h1 className="mt-4 text-2xl font-bold text-[var(--text)]">{displayName}</h1>
+          <Badge variant={roleVariant} className="mt-2">{roleLabel(profile.role)}</Badge>
+          {profile.bio && <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[var(--text-secondary)]">{profile.bio}</p>}
+          <div className="mx-auto mt-6 grid max-w-md grid-cols-3 divide-x divide-[var(--border)] border-y border-[var(--border)] py-3">
+            <div><strong className="block text-lg text-[var(--text)]">{profile.post_count}</strong><span className="text-xs text-[var(--text-muted)]">主题</span></div>
+            <div><strong className="block text-lg text-[var(--text)]">{profile.reply_count}</strong><span className="text-xs text-[var(--text-muted)]">回复</span></div>
+            <div><strong className="block text-lg text-[var(--text)]">{profile.total_points ?? 0}</strong><span className="text-xs text-[var(--text-muted)]">积分</span></div>
+          </div>
+          {profile.created_at && <p className="mt-4 text-sm text-[var(--text-muted)]">加入于 {formatDate(profile.created_at)}</p>}
+        </div>
+      </section>
 
       {/* Level, Points, Follow Stats */}
       <div className="flex justify-center gap-6 mb-6">
@@ -244,17 +247,9 @@ export default async function UserProfilePage({
         </div>
       )}
 
-      {/* Bio */}
-      {profile.bio && (
-        <div className="max-w-md mx-auto text-center mb-8">
-          <p className="text-sm text-[var(--text-secondary)]">{profile.bio}</p>
-        </div>
-      )}
-
       {/* Role badge, Follow button and edit link */}
       <div className="max-w-md mx-auto flex flex-wrap justify-center gap-3 mb-8">
         <FollowButton targetUserId={userId} />
-        <Badge variant={roleVariant}>{roleLabel(profile.role)}</Badge>
         {/* This page already has the role, so the button can decide for itself not to
             offer blocking staff — the API refuses it either way. */}
         {viewer && viewer.id !== profile.id && (
@@ -267,15 +262,6 @@ export default async function UserProfilePage({
         <ProfileEditLink userId={profile.id} />
       </div>
 
-      {/* Registration time */}
-      {profile.created_at && (
-        <div className="max-w-md mx-auto text-center mb-8">
-          <div className="flex items-center justify-center gap-2 text-sm text-[var(--text-secondary)]">
-            <Calendar className="w-4 h-4" />
-            <span>注册于 {formatDate(profile.created_at)}</span>
-          </div>
-        </div>
-      )}
 
       {/* Tabs */}
       <div className="border-b border-[var(--border)] mb-6">
