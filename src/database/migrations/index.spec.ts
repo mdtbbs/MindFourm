@@ -24,4 +24,16 @@ describe('migration registry', () => {
       'AddAttachmentModeration1720000041000',
     );
   });
+
+  it('includes SHA-256 storage for resource files', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'AddResourceSha2561720000042000',
+    );
+  });
+
+  it('includes the legacy footer branding correction', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'FixLegacyFooterBrand1720000043000',
+    );
+  });
 });

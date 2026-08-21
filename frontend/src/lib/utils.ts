@@ -27,5 +27,23 @@ export function formatTime(dateStr: string): string {
   if (diffMins < 60) return `${diffMins} 分钟前`;
   if (diffHours < 24) return `${diffHours} 小时前`;
   if (diffDays < 7) return `${diffDays} 天前`;
-  return date.toLocaleDateString('zh-CN');
+  return formatDate(dateStr);
+}
+
+export function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function formatDateTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '';
+  const time = [date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':');
+  return `${formatDate(dateStr)} ${time}`;
 }

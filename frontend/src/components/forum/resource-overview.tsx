@@ -15,9 +15,7 @@ export default function ResourceOverview({ resource }: ResourceOverviewProps) {
       {resource.description && (
         <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-6">
           <h2 className="text-xl font-bold text-[var(--text)] mb-4">简介</h2>
-          <p className="text-[var(--text-secondary)] leading-relaxed">
-            {resource.description}
-          </p>
+          <MarkdownRenderer content={resource.description} className="text-[var(--text-secondary)] leading-relaxed" />
         </div>
       )}
 

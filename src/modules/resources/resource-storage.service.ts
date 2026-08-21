@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { createReadStream } from 'fs';
+import { createHash } from 'crypto';
 import { SettingsService } from '../settings/settings.service';
 
 export type StoredResourceFile = {
@@ -8,6 +10,7 @@ export type StoredResourceFile = {
   file_path: string;
   file_size: number;
   mime_type: string;
+  content_hash: string;
 };
 
 @Injectable()
@@ -51,7 +54,14 @@ export class ResourceStorageService {
       await fs.copyFile(file.path, storedPath);
       await fs.unlink(file.path);
     }
-    return { file_name: file.originalname, file_path: storedPath, file_size: file.size, mime_type: file.mimetype };
+    const contentHash = await new Promise<string>((resolve, reject) => {
+      const hash = createHash('sha256');
+      const stream = createReadStream(storedPath);
+      stream.on('error', reject);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
+    });
+    return { file_name: file.originalname, file_path: storedPath, file_size: file.size, mime_type: file.mimetype, content_hash: contentHash };
   }
 
   private async move(source: string, target: string): Promise<void> {

@@ -227,7 +227,7 @@ export default async function HomePage({
               </div>
               <div className="grid divide-y divide-[var(--border)] sm:grid-cols-2 sm:divide-x sm:divide-y-0">
                 {categories.map((category) => (
-                  <Link key={category.id} href={`/?category_id=${category.id}`} className="group px-5 py-4 transition-colors hover:bg-[var(--muted)]">
+                  <Link key={category.id} href={`/categories/${category.id}`} className="group px-5 py-4 transition-colors hover:bg-[var(--muted)]">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="font-medium text-[var(--foreground)] group-hover:text-[var(--primary)]">{category.name}</h3>
                       <span className="text-xs text-[var(--muted-foreground)]">{category.post_count ?? 0} 主题</span>

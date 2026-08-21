@@ -31,10 +31,7 @@ function isCategoryActive(categoryId: number, currentPathname: string | null | u
 }
 
 function isForumCategoryActive(categoryId: number, currentPathname: string | null | undefined): boolean {
-  if (!currentPathname) return false;
-  if (currentPathname !== '/') return false;
-  if (typeof window === 'undefined') return false;
-  return new URLSearchParams(window.location.search).get('category_id') === String(categoryId);
+  return currentPathname === `/categories/${categoryId}`;
 }
 
 function ResourceCategoryList({
@@ -69,6 +66,9 @@ function ResourceCategoryList({
           </li>
         );
       })}
+      {categories.length === 0 && (
+        <li className="px-3 py-1.5 text-sm text-[var(--text-muted)]">暂无分类</li>
+      )}
     </ul>
   );
 }
@@ -83,7 +83,7 @@ function ForumBoardList({
   return (
     <ul className="space-y-0.5">
       {categories.map((cat) => {
-        const href = `/?category_id=${cat.id}`;
+        const href = `/categories/${cat.id}`;
         const active = isForumCategoryActive(cat.id, currentPathname);
         return (
           <li key={cat.id}>
@@ -152,7 +152,7 @@ function DrawerForumBoard({
   currentPathname: string | null | undefined;
   onClose: () => void;
 }) {
-  const href = `/?category_id=${category.id}`;
+  const href = `/categories/${category.id}`;
   const active = isForumCategoryActive(category.id, currentPathname);
   return (
     <li>
@@ -222,7 +222,6 @@ export default function ContentDrawer({
 }) {
   const pathname = usePathname();
   const effectivePathname = currentPathname ?? pathname;
-  const isOnResources = effectivePathname?.startsWith('/resources') ?? false;
 
   const primaryItems = items.filter((item) => item.id !== 'categories');
   const homeItem = primaryItems.find((item) => item.id === 'home');
@@ -311,7 +310,7 @@ export default function ContentDrawer({
             <DrawerNavItem key={item.id} item={item} effectivePathname={effectivePathname} onClose={onClose} />
           ))}
 
-          {isOnResources && resourceCategories && resourceCategories.length > 0 && (
+          {resourceCategories && (
             <div className="mt-4 border-t border-[var(--border)] pt-4">
               <div className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 资源分类

@@ -124,7 +124,6 @@ export default function PostContent({
             name={post.author_name}
             avatarUrl={post.author_avatar_url}
             role={post.author_role}
-            mindauthId={post.author_mindauth_id}
             size="lg"
             layout="stacked"
             className="max-w-full"

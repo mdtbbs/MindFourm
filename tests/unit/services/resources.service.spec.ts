@@ -139,8 +139,10 @@ function createService(overrides: {
     innerJoin: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
+    getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
   };
 
   const resourceRepository = {
@@ -607,8 +609,8 @@ describe('ResourcesService - Public Visibility', () => {
         { userId: 42 },
       );
       expect(defaultQb.andWhere).toHaveBeenCalledWith(
-        'resource.status = :status',
-        { status: 'approved' },
+        'resource.status IN (:...statuses)',
+        { statuses: ['approved', 'published'] },
       );
       expect(defaultQb.andWhere).toHaveBeenCalledWith(
         'resource.is_public = :isPublic',
@@ -628,6 +630,24 @@ describe('ResourcesService - Public Visibility', () => {
 
       expect(defaultQb.orderBy).toHaveBeenCalledWith('resource.created_at', 'DESC');
       expect(defaultQb.addOrderBy).toHaveBeenCalledWith('resource.id', 'DESC');
+    });
+
+    it('returns offset pagination for profile page requests', async () => {
+      const { service, defaultQb } = createService();
+      defaultQb.getManyAndCount.mockResolvedValue([[{
+        id: 2,
+        title: 'LanLink',
+        status: 'published',
+        is_public: 1,
+        created_at: new Date('2026-08-01'),
+      }], 21]);
+
+      const result = await service.getPublicByUserId(4, 20, undefined, 2);
+
+      expect(defaultQb.skip).toHaveBeenCalledWith(20);
+      expect(defaultQb.take).toHaveBeenCalledWith(20);
+      expect(result.data).toHaveLength(1);
+      expect(result.pagination).toEqual({ page: 2, limit: 20, total: 21, totalPages: 2 });
     });
   });
 

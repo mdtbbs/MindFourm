@@ -1,8 +1,4 @@
-const IMAGE_MARKDOWN_PATTERN = /!\[[^\]]*\]\([^)]*\)/g;
-const HTML_TAG_PATTERN = /<[^>]+>/g;
-const MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\([^)]*\)/g;
-const MARKDOWN_SYNTAX_PATTERN = /[`*_~>#|\-=]+/g;
-const WHITESPACE_PATTERN = /\s+/g;
+import { toContentExcerpt } from '@/lib/content/normalize-content';
 
 /**
  * Convert a Markdown-ish field into a compact plain-text excerpt for list cards.
@@ -15,13 +11,7 @@ export function markdownToPlainExcerpt(
 ): string {
   if (!value) return fallback;
 
-  const text = value
-    .replace(IMAGE_MARKDOWN_PATTERN, '')
-    .replace(MARKDOWN_LINK_PATTERN, '$1')
-    .replace(HTML_TAG_PATTERN, '')
-    .replace(MARKDOWN_SYNTAX_PATTERN, ' ')
-    .replace(WHITESPACE_PATTERN, ' ')
-    .trim();
+  const text = toContentExcerpt(value);
 
   return text || fallback;
 }

@@ -45,19 +45,20 @@ export default async function TagPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const { slug } = await params;
+  const decodedSlug = decodeURIComponent(slug);
   const { page: pageStr } = await searchParams;
   const page = parseInt(pageStr || '1');
 
-  const postsResult = await fetchPosts(page, slug);
+  const postsResult = await fetchPosts(page, decodedSlug);
 
   const tagName = postsResult.data.length > 0 && postsResult.data[0].tags
-    ? postsResult.data[0].tags.find((t) => t.slug === slug)?.name
+    ? postsResult.data[0].tags.find((t) => t.slug === decodedSlug)?.name
     : null;
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-surface-900 mb-6">
-        标签: {tagName || slug}
+        标签: {tagName || decodedSlug}
       </h1>
       {postsResult.data.length === 0 ? (
         <div className="text-center py-12 text-surface-500">该标签下暂无帖子</div>
@@ -71,7 +72,7 @@ export default async function TagPage({
       <Pagination
         currentPage={postsResult.pagination.page}
         totalPages={postsResult.pagination.totalPages}
-        basePath={`/tags/${slug}`}
+        basePath={`/tags/${encodeURIComponent(decodedSlug)}`}
       />
     </div>
   );

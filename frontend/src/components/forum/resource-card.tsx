@@ -4,14 +4,8 @@ import Link from 'next/link';
 import { Resource } from '@/types';
 import { Star } from 'lucide-react';
 import { markdownToPlainExcerpt } from '@/lib/markdown/excerpt';
-
-function formatDate(value: string): string {
-  return new Date(value).toLocaleDateString('zh-CN');
-}
-
-function resourceTypeLabel(resourceType: Resource['resource_type']): string {
-  return resourceType === 'external' ? '外链' : '文件';
-}
+import { resourceTypeLabel } from '@/lib/display-labels';
+import { formatDate } from '@/lib/utils';
 
 export default function ResourceCard({ resource }: { resource: Resource }) {
   const rating = resource.rating_average ?? 0;

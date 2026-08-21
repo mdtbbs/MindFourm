@@ -17,7 +17,7 @@ export interface PublicSettings {
 }
 
 const NEUTRAL_DEFAULTS = {
-  siteName: '社区论坛',
+  siteName: 'MDTBBS',
   sidebarTitle: '内容导航中心',
 };
 

@@ -157,6 +157,7 @@ export class ResourcesController {
       userId,
       query.limit,
       query.cursor,
+      query.page,
     );
   }
 

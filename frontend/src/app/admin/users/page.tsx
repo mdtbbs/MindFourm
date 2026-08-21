@@ -10,6 +10,7 @@ import Alert from '@/components/ui/alert';
 import Pagination from '@/components/ui/pagination';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
+import { roleLabel } from '@/lib/display-labels';
 
 const PAGE_SIZE = 20;
 
@@ -144,7 +145,7 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 font-medium text-surface-900">{user.username}</td>
                   <td className="px-4 py-3 text-surface-600">{user.email}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={roleVariant[user.role]}>{user.role}</Badge>
+                    <Badge variant={roleVariant[user.role]}>{roleLabel(user.role)}</Badge>
                   </td>
                   <td className="px-4 py-3 text-surface-500">{user.mindauthId}</td>
                   <td className="px-4 py-3 text-surface-500">

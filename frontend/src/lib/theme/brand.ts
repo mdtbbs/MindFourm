@@ -26,7 +26,7 @@ export interface BrandInfo {
 }
 
 const NEUTRAL_DEFAULTS = {
-  siteName: '社区论坛',
+  siteName: 'MDTBBS',
   sidebarTitle: '内容导航中心',
 };
 

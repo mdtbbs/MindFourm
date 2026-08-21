@@ -91,6 +91,7 @@ export class ResourceVersionService {
       file_name: file.file_name,
       file_size: file.file_size,
       mime_type: file.mime_type,
+      content_hash: file.content_hash,
       content,
       content_html: content ? parseMarkdown(content) : undefined,
     });

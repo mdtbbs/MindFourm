@@ -30,6 +30,9 @@ export class ResourceVersion {
   @Column({ length: 100, nullable: true })
   mime_type: string;
 
+  @Column({ type: 'char', length: 64, nullable: true })
+  content_hash: string | null;
+
   @Column({ type: 'text', nullable: true })
   content: string;
 

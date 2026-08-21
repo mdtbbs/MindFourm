@@ -17,6 +17,9 @@ import { UserCard } from '@/lib/shared';
 import { Medal, Title } from '@/lib/shared';
 import FollowButton from '@/components/forum/follow-button';
 import BlockUserButton from '@/components/user/block-user-button';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import { roleLabel } from '@/lib/display-labels';
+import { formatDate, formatDateTime } from '@/lib/utils';
 
 async function fetchUserProfile(userId: number): Promise<UserProfile | null> {
   return fetchApiData<UserProfile | null>(`/api/users/${userId}`, {
@@ -158,12 +161,6 @@ export default async function UserProfilePage({
   const displayName = profile.username || `User #${profile.id}`;
   const roleVariant = profile.role === 'admin' ? 'warning' : profile.role === 'moderator' ? 'success' : 'default' as const;
 
-  // 格式化注册时间
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-  };
-
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <JsonLd
@@ -193,12 +190,6 @@ export default async function UserProfilePage({
           showStats={true}
         />
       </div>
-
-      {profile.last_location_label && (
-        <p className="-mt-5 mb-6 text-center text-xs text-[var(--text-muted)]">
-          最近内容所在地：{profile.last_location_label}
-        </p>
-      )}
 
       {/* Level, Points, Follow Stats */}
       <div className="flex justify-center gap-6 mb-6">
@@ -263,7 +254,7 @@ export default async function UserProfilePage({
       {/* Role badge, Follow button and edit link */}
       <div className="max-w-md mx-auto flex flex-wrap justify-center gap-3 mb-8">
         <FollowButton targetUserId={userId} />
-        <Badge variant={roleVariant}>{profile.role}</Badge>
+        <Badge variant={roleVariant}>{roleLabel(profile.role)}</Badge>
         {/* This page already has the role, so the button can decide for itself not to
             offer blocking staff — the API refuses it either way. */}
         {viewer && viewer.id !== profile.id && (
@@ -383,9 +374,9 @@ export default async function UserProfilePage({
                       {reply.post_title || '帖子'}
                     </Link>
                     <span>·</span>
-                    <span>{new Date(reply.created_at).toLocaleString('zh-CN')}</span>
+                    <span>{formatDateTime(reply.created_at)}</span>
                   </div>
-                  <p className="text-sm text-[var(--text)] line-clamp-3">{reply.content}</p>
+                  <MarkdownRenderer content={reply.content} mode="excerpt" className="line-clamp-3 text-sm text-[var(--text)]" />
                 </div>
               ))}
             </div>
@@ -430,7 +421,7 @@ export default async function UserProfilePage({
                       {bookmark.title}
                     </Link>
                     <span className="text-sm text-[var(--text-secondary)]">
-                      {new Date(bookmark.created_at).toLocaleDateString('zh-CN')}
+                      {formatDate(bookmark.created_at)}
                     </span>
                   </div>
                   {bookmark.category_name && (
@@ -465,7 +456,7 @@ export default async function UserProfilePage({
                       {like.title}
                     </Link>
                     <span className="text-sm text-[var(--text-secondary)]">
-                      {new Date(like.created_at).toLocaleDateString('zh-CN')}
+                      {formatDate(like.created_at)}
                     </span>
                   </div>
                   {like.category_name && (

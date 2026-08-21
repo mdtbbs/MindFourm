@@ -14,6 +14,8 @@ import { useToastStore } from '@/store/toast-store';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import ReportDialog from './report-dialog';
 import ResourceReviews from './resource-reviews';
+import { formatDate } from '@/lib/utils';
+import { resourceTypeLabel } from '@/lib/display-labels';
 
 interface ResourceDetailProps { resource: Resource; }
 type TabType = 'overview' | 'updates' | 'versions' | 'reviews';
@@ -56,6 +58,27 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   }, [metadata]);
   const downloadUrl = resourceApi.download(resource.id);
   const primaryVersion = resource.versions?.[0];
+  const primaryChecksum = primaryVersion?.checksum || resource.content_hash;
+  const displayedSupportedVersions = useMemo(() => {
+    if (metadata?.supported_versions?.length) return metadata.supported_versions;
+    const version = resource.version || primaryVersion?.version;
+    if (!version) return [];
+    const major = resource.title.match(/\bv(\d+)\b/i)?.[1];
+    return [major ? `v${major} / Build ${version}` : `Build ${version}`];
+  }, [metadata?.supported_versions, primaryVersion?.version, resource.title, resource.version]);
+  const displayedCompatibility = useMemo(() => {
+    if (metadata?.compatibility?.length) return metadata.compatibility;
+    const source = `${resource.title}\n${resource.description || ''}`.toLowerCase();
+    return [
+      ['Windows', 'windows'], ['Linux', 'linux'], ['macOS', 'macos'],
+      ['Android', 'android'], ['iOS', 'ios'],
+    ].filter(([, needle]) => source.includes(needle)).map(([label]) => label);
+  }, [metadata?.compatibility, resource.description, resource.title]);
+
+  const copyChecksum = async (checksum: string) => {
+    await navigator.clipboard.writeText(checksum);
+    showSuccess('SHA-256 已复制');
+  };
 
   useEffect(() => {
     resourceApi.getRelated(resource.id).then(setRelated).catch(() => undefined);
@@ -140,7 +163,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
               <p className="mt-3 max-w-3xl text-base leading-7 text-[var(--text-secondary)]">{resource.description || '暂无简短介绍，查看下方完整资源说明。'}</p>
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
                 <Link href={`/users/${resource.user_id}`} className="inline-flex items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-secondary)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span>{resource.username || '未知作者'}</Link>
-                <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{new Date(resource.updated_at || resource.created_at).toLocaleDateString('zh-CN')} 更新</span>
+                <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(resource.updated_at || resource.created_at)} 更新</span>
                 <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{resource.download_count || 0} 次下载</span>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">{(metadata?.tags || []).map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-secondary)]"><Tag className="h-3.5 w-3.5" />{tag}</span>)}</div>
@@ -162,7 +185,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">作者信息</h2>
           <Link href={`/users/${resource.user_id}`} className="mt-4 flex items-center gap-3 rounded-xl p-2 transition hover:bg-[var(--bg-card)]"><span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-6 w-6" />}</span><span className="min-w-0"><span className="block truncate font-semibold text-[var(--text)]">{resource.username || '未知作者'}</span><span className="text-sm text-[var(--text-muted)]">查看作者主页</span></span><ExternalLink className="ml-auto h-4 w-4 text-[var(--text-muted)]" /></Link>
           <div className="mt-5 grid grid-cols-2 gap-3 text-center"><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{resource.download_count || 0}</div><div className="mt-1 text-xs text-[var(--text-muted)]">下载</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{favoriteCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">收藏</div></div></div>
-          <div className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><span className="text-[var(--text-muted)]">当前版本</span><span className="font-medium text-[var(--text)]">{resource.version || primaryVersion?.version || '未标注'}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">文件类型</span><span className="font-medium text-[var(--text)]">{resource.mime_type || resource.resource_type}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">更新时间</span><span className="font-medium text-[var(--text)]">{new Date(resource.updated_at).toLocaleDateString('zh-CN')}</span></div></div>
+          <div className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><span className="text-[var(--text-muted)]">当前版本</span><span className="font-medium text-[var(--text)]">{resource.version || primaryVersion?.version || '未标注'}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">文件类型</span><span className="font-medium text-[var(--text)]">{resource.mime_type || resourceTypeLabel(resource.resource_type)}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">更新时间</span><span className="font-medium text-[var(--text)]">{formatDate(resource.updated_at)}</span></div></div>
         </aside>
       </div>
     </section>
@@ -176,9 +199,9 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         {activeTab === 'reviews' && <ResourceReviews resource={resource} />}
       </main>
       <aside className="space-y-5">
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><ShieldCheck className="h-4 w-4 text-emerald-600" />支持与兼容性</h2><div className="mt-4 space-y-4 text-sm"><div><div className="mb-2 text-[var(--text-muted)]">支持版本</div><div className="flex flex-wrap gap-2">{metadata?.supported_versions?.length ? metadata.supported_versions.map((item) => <span key={item} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-[var(--text-secondary)]">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div><div><div className="mb-2 text-[var(--text-muted)]">兼容性</div><div className="flex flex-wrap gap-2">{metadata?.compatibility?.length ? metadata.compatibility.map((item) => <span key={item} className="rounded-md bg-emerald-500/10 px-2.5 py-1 text-emerald-700">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div></div></section>
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><ShieldCheck className="h-4 w-4 text-emerald-600" />支持与兼容性</h2><div className="mt-4 space-y-4 text-sm"><div><div className="mb-2 text-[var(--text-muted)]">支持版本</div><div className="flex flex-wrap gap-2">{displayedSupportedVersions.length ? displayedSupportedVersions.map((item) => <span key={item} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-[var(--text-secondary)]">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div><div><div className="mb-2 text-[var(--text-muted)]">兼容性</div><div className="flex flex-wrap gap-2">{displayedCompatibility.length ? displayedCompatibility.map((item) => <span key={item} className="rounded-md bg-emerald-500/10 px-2.5 py-1 text-emerald-700">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div></div></section>
         <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><Star className="h-4 w-4 text-amber-400" />社区评分</h2><div className="mt-4 flex items-center gap-3"><span className="text-3xl font-bold text-[var(--text)]">{(resource.rating_average || 0).toFixed(1)}</span><div><Stars value={resource.rating_average || 0} /><p className="mt-1 text-xs text-[var(--text-muted)]">{resource.rating_count || 0} 人评分</p></div></div>{isAuthenticated && <div className="mt-4 border-t border-[var(--border)] pt-4"><p className="mb-2 text-sm text-[var(--text-muted)]">给这个资源评分</p><Stars value={userRating || 0} interactive onChange={rate} /></div>}</section>
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><Clipboard className="h-4 w-4" />资源信息</h2><dl className="mt-4 space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">创建时间</dt><dd className="text-right text-[var(--text)]">{new Date(resource.created_at).toLocaleDateString('zh-CN')}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">文件数量</dt><dd className="text-right text-[var(--text)]">{resource.versions?.length || 1}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">最新文件</dt><dd className="max-w-[150px] truncate text-right text-[var(--text)]">{primaryVersion?.file_name || resource.file_name || '外部链接'}</dd></div></dl></section>
+        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><Clipboard className="h-4 w-4" />资源信息</h2><dl className="mt-4 space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">创建时间</dt><dd className="text-right text-[var(--text)]">{formatDate(resource.created_at)}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">文件数量</dt><dd className="text-right text-[var(--text)]">{resource.versions?.length || 1}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">最新文件</dt><dd className="max-w-[150px] truncate text-right text-[var(--text)]">{primaryVersion?.file_name || resource.file_name || '外部链接'}</dd></div>{primaryChecksum && <div className="space-y-1"><dt className="text-[var(--text-muted)]">SHA-256</dt><dd><button type="button" onClick={() => copyChecksum(primaryChecksum)} className="block w-full break-all rounded bg-[var(--bg-secondary)] p-2 text-left font-mono text-[11px] text-[var(--text)] hover:text-[var(--primary)]" title="点击复制 SHA-256">{primaryChecksum}</button></dd></div>}</dl></section>
       </aside>
     </div>
 

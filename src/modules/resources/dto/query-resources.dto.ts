@@ -6,6 +6,12 @@ export class QueryResourcesDto {
   @Type(() => Number)
   @IsNumber()
   @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
   @Max(50)
   limit?: number = 20;
 

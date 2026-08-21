@@ -65,7 +65,6 @@ export default function ReplyItem({
             name={reply.author_name}
             avatarUrl={reply.author_avatar_url}
             role={reply.author_role}
-            mindauthId={reply.author_mindauth_id}
             size={isNested ? 'sm' : 'md'}
             showMeta={!isNested}
             className="min-w-0"

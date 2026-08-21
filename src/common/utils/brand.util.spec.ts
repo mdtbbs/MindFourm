@@ -13,7 +13,7 @@ describe('resolveBrand', () => {
   it('should return neutral defaults for empty settings', () => {
     const brand = resolveBrand(defaultSettings);
 
-    expect(brand.siteName).toBe('社区论坛');
+    expect(brand.siteName).toBe('MDTBBS');
     expect(brand.tagline).toBe('');
     expect(brand.description).toBe('');
     expect(brand.logoUrl).toBe('');

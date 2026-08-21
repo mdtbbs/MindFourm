@@ -29,6 +29,7 @@ export interface ResourceFileMeta {
   file_path: string;
   file_size: number;
   mime_type: string;
+  content_hash: string;
 }
 
 // Only retained for migration/legacy-resource compatibility. New submissions
@@ -258,6 +259,7 @@ export class ResourcesService {
       file_path: file?.file_path,
       file_size: file?.file_size,
       mime_type: file?.mime_type,
+      content_hash: file?.content_hash,
       external_url: resourceType === 'external' ? dto.external_url : undefined,
       version: dto.version,
       content: dto.content,
@@ -692,13 +694,14 @@ export class ResourcesService {
     userId: number,
     limit: number = 20,
     cursor?: string,
+    page?: number,
   ): Promise<any> {
     const qb = this.resourceRepository
       .createQueryBuilder('resource')
       .leftJoinAndSelect('resource.user', 'user')
       .leftJoin('resource.category', 'category')
       .where('resource.user_id = :userId', { userId })
-      .andWhere('resource.status = :status', { status: 'approved' })
+      .andWhere('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
       .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
 
@@ -718,8 +721,28 @@ export class ResourcesService {
     }
 
     qb.orderBy('resource.created_at', 'DESC')
-      .addOrderBy('resource.id', 'DESC')
-      .take(Number(limit) + 1);
+      .addOrderBy('resource.id', 'DESC');
+
+    if (page !== undefined && !cursor) {
+      const safePage = Math.max(1, Number(page));
+      const safeLimit = Number(limit);
+      const [resources, total] = await qb
+        .skip((safePage - 1) * safeLimit)
+        .take(safeLimit)
+        .getManyAndCount();
+
+      return {
+        data: resources.map((resource) => this.normalizeResource(resource)),
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total,
+          totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+        },
+      };
+    }
+
+    qb.take(Number(limit) + 1);
 
     const resources = await qb.getMany();
 

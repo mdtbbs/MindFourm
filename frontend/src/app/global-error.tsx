@@ -6,6 +6,10 @@ import Link from 'next/link';
 export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
     <html lang="zh-CN">
+      <head>
+        <meta name="robots" content="noindex, nofollow, noarchive" />
+        <title>页面暂时不可用 | MDTBBS</title>
+      </head>
       <body style={{ margin: 0, fontFamily: 'system-ui, sans-serif', color: '#172033', background: '#f7f8fa' }}>
         <main style={{ maxWidth: 560, margin: '18vh auto', padding: 24 }}>
           <p style={{ color: '#667085', fontWeight: 700, letterSpacing: 2 }}>MDTBBS · 服务恢复中</p>

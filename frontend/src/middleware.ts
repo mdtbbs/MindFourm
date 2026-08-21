@@ -26,6 +26,16 @@ export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const sessionToken = request.cookies.get('forum_session');
 
+  // The legacy home-page category filter duplicates the canonical category
+  // route. Preserve old links, but keep one indexable URL with a real 301.
+  const legacyCategoryId = pathname === '/' ? request.nextUrl.searchParams.get('category_id') : null;
+  if (legacyCategoryId && /^\d+$/.test(legacyCategoryId)) {
+    const categoryUrl = request.nextUrl.clone();
+    categoryUrl.pathname = `/categories/${legacyCategoryId}`;
+    categoryUrl.searchParams.delete('category_id');
+    return NextResponse.redirect(categoryUrl, 301);
+  }
+
   // Check if route requires authentication
   const requiresAuth = AUTH_REQUIRED_ROUTES.some((route) =>
     pathname.startsWith(route)
@@ -49,6 +59,7 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
+    '/',
     // Admin routes
     '/admin/:path*',
     // Auth-required routes

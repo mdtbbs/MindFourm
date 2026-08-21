@@ -33,6 +33,8 @@ import { CreateLegalAcceptances1720000038000 } from './1720000038000-CreateLegal
 import { CreateUserDataDeletionRequests1720000039000 } from './1720000039000-CreateUserDataDeletionRequests';
 import { AddAttachmentLifecycle1720000040000 } from './1720000040000-AddAttachmentLifecycle';
 import { AddAttachmentModeration1720000041000 } from './1720000041000-AddAttachmentModeration';
+import { AddResourceSha2561720000042000 } from './1720000042000-AddResourceSha256';
+import { FixLegacyFooterBrand1720000043000 } from './1720000043000-FixLegacyFooterBrand';
 
 /**
  * Migrations in run order.
@@ -77,4 +79,6 @@ export const migrations = [
   CreateUserDataDeletionRequests1720000039000,
   AddAttachmentLifecycle1720000040000,
   AddAttachmentModeration1720000041000,
+  AddResourceSha2561720000042000,
+  FixLegacyFooterBrand1720000043000,
 ];

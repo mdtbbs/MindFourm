@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import { Star, Download, Calendar } from 'lucide-react';
 import { Resource } from '@/types';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import { formatDate } from '@/lib/utils';
 
 interface ResourceListItemProps {
   resource: Resource;
@@ -62,7 +64,7 @@ export default function ResourceListItem({ resource }: ResourceListItemProps) {
             </span>
             <span className="flex items-center gap-1">
               <Calendar className="w-3 h-3" />
-              {new Date(resource.created_at).toLocaleDateString()}
+              {formatDate(resource.created_at)}
             </span>
             {resource.category_name && (
               <span className="px-1.5 py-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-secondary)]">
@@ -72,9 +74,7 @@ export default function ResourceListItem({ resource }: ResourceListItemProps) {
           </div>
 
           {resource.description && (
-            <p className="text-xs text-[var(--text-secondary)] line-clamp-1">
-              {resource.description}
-            </p>
+            <MarkdownRenderer content={resource.description} mode="excerpt" className="line-clamp-1 text-xs text-[var(--text-secondary)]" />
           )}
         </div>
 

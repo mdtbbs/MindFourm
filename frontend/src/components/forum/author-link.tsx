@@ -12,7 +12,6 @@ interface AuthorLinkProps {
   name?: string | null;
   avatarUrl?: string | null;
   role?: UserRole | string | null;
-  mindauthId?: number | null;
   size?: AuthorLinkSize;
   layout?: AuthorLinkLayout;
   showMeta?: boolean;
@@ -72,7 +71,6 @@ export default function AuthorLink({
   name,
   avatarUrl,
   role,
-  mindauthId,
   size = 'md',
   layout = 'inline',
   showMeta = true,
@@ -82,7 +80,7 @@ export default function AuthorLink({
   const initial = displayName.trim().charAt(0).toUpperCase() || '#';
   const roleLabel = getRoleLabel(role);
   const classes = sizeClasses[size];
-  const meta = mindauthId ? `UID ${userId} · MindAuth ${mindauthId}` : `UID ${userId}`;
+  const meta = `UID ${userId}`;
 
   return (
     <Link

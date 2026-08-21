@@ -28,7 +28,7 @@ export default async function ConfiguredFooterPage({
         <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--text-muted)] opacity-60">{eyebrow}</p>
         <h1 className="mt-3 text-3xl font-bold text-[var(--text)]">{title}</h1>
         <div className="mt-6 text-sm leading-7 text-[var(--text-secondary)]">
-          {content ? <MarkdownRenderer content={content} /> : fallback}
+          {content ? <MarkdownRenderer content={content.replace(/^#\s+/gm, '## ')} /> : fallback}
         </div>
       </div>
     </div>

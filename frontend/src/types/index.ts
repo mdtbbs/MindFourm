@@ -426,6 +426,7 @@ export interface Resource {
   file_path: string | null;
   file_size: number;
   mime_type: string | null;
+  content_hash?: string | null;
   external_url: string | null;
   version: string | null;
   content: string | null;

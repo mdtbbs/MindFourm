@@ -15,6 +15,7 @@ import PrivacyNotice from '@/components/legal/privacy-notice';
 import ContentSidebar from '@/components/layout/content-sidebar';
 import ContentDrawer from '@/components/layout/content-drawer';
 import ContentToolbar from '@/components/layout/content-toolbar';
+import { roleLabel } from '@/lib/display-labels';
 
 export default function ContentShell({ children }: { children: React.ReactNode }) {
   const { user, isAuthenticated, logout } = useAuth();
@@ -117,7 +118,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
     }
   };
 
-  const userMeta = user?.role ? `角色：${user.role}` : (isAuthenticated ? '已登录' : '未登录');
+  const userMeta = user?.role ? `角色：${roleLabel(user.role)}` : (isAuthenticated ? '已登录' : '未登录');
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">

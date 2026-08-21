@@ -20,6 +20,7 @@ describe('ResourceStorageService', () => {
     const stored = await service.storeIncoming({ path: incoming, filename: 'stored.zip', originalname: 'original.zip', size: 7, mimetype: 'application/zip' } as any);
 
     expect(stored!.file_path).toContain(`${path.sep}.quarantine${path.sep}resources${path.sep}`);
+    expect(stored!.content_hash).toBe('ed7002b439e9ac845f22357d822bac1444730fbdb6016d3ec9432297b9ec9f73');
     await expect(fs.access(stored!.file_path)).resolves.toBeUndefined();
     const promoted = await service.promote(stored!.file_path);
     expect(promoted).toBe(path.join(root, 'resources', 'stored.zip'));

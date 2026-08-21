@@ -33,7 +33,7 @@ export default async function CategoriesPage() {
         {activeCategories.map((cat) => (
           <Link
             key={cat.id}
-            href={`/?category_id=${cat.id}`}
+            href={`/categories/${cat.id}`}
             className="block bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-5 hover:border-[var(--primary)] transition-colors"
           >
             <div className="flex items-center justify-between">

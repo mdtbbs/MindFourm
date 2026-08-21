@@ -5,6 +5,7 @@ import { useSettings } from '@/lib/settings/context';
 import { resolveBrand } from '@/lib/theme/brand';
 import { LogOut } from 'lucide-react';
 import AdminNotificationBell from '@/components/admin/admin-notification-bell';
+import { roleLabel } from '@/lib/display-labels';
 
 export default function AdminHeader() {
   const { user, logout } = useAuth();
@@ -21,7 +22,7 @@ export default function AdminHeader() {
       <div className="flex items-center gap-4">
         <AdminNotificationBell />
         <span className="text-sm text-[var(--text-secondary)]">
-          {user?.username} ({user?.role})
+          {user?.username} ({roleLabel(user?.role)})
         </span>
         <button
           onClick={handleLogout}

@@ -26,8 +26,9 @@ export default function ThanksPage() {
       settingKey="footer_thanks_content"
       fallback={(
         <div className="space-y-4">
-          <p>感谢 Mindustry 原作者、开源生态维护者、社区资源作者、服务器运营者，以及每一位参与讨论和反馈的玩家。</p>
-          <p>本页面当前为占位说明。正式鸣谢内容可在后台「页面管理」中编辑。</p>
+          <p>感谢 Anuken 与 Mindustry 开源项目贡献者，为玩家和创作者建立了持续发展的游戏与模组生态。</p>
+          <p>感谢社区中的模组作者、地图作者、教程作者、服务器运营者，以及每一位认真讨论、测试资源和提交反馈的玩家。</p>
+          <p>也感谢所有为 MDTBBS、MindAuth、MindFileList 与 LanLink 提供设计、开发、测试和运行支持的参与者。</p>
         </div>
       )}
     />

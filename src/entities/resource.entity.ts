@@ -35,6 +35,9 @@ export class Resource {
   @Column({ length: 100, nullable: true })
   mime_type: string;
 
+  @Column({ type: 'char', length: 64, nullable: true })
+  content_hash: string | null;
+
   @Column({ length: 500, nullable: true })
   external_url: string;
 
