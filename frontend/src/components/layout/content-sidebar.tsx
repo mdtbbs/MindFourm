@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { BookOpen, FolderOpen, Home, Plus, Radio, Star, UserRound, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpen, FolderOpen, Home, Mail, Plus, Radio, Settings, Star, UserRound, Users, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import { getIconComponent } from '@/lib/resource-icons';
@@ -66,7 +66,17 @@ function ForumBoardLink({ category, nested = false }: { category: Category; nest
   );
 }
 
-function ForumSidebar({ categories, userId }: { categories: Category[]; userId?: number }) {
+function ForumSidebar({
+  categories,
+  userId,
+  isAuthenticated,
+  showResourceLink = true,
+}: {
+  categories: Category[];
+  userId?: number;
+  isAuthenticated: boolean;
+  showResourceLink?: boolean;
+}) {
   const pathname = usePathname();
   const groups = groupForumCategories(categories);
   const navItemClass = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`;
@@ -78,7 +88,7 @@ function ForumSidebar({ categories, userId }: { categories: Category[]; userId?:
       </Link>
       <div className="space-y-1">
         <Link href="/threads" className={navItemClass(isPathActive(pathname, '/threads') || pathname === '/')}><Home className="h-4 w-4" />全部讨论</Link>
-        <Link href="/bookmarks" className={navItemClass(isPathActive(pathname, '/bookmarks'))}><Star className="h-4 w-4" />我的收藏</Link>
+        {isAuthenticated && <Link href="/bookmarks" className={navItemClass(isPathActive(pathname, '/bookmarks'))}><Star className="h-4 w-4" />我的收藏</Link>}
         {userId && <Link href={`/users/${userId}`} className={navItemClass(isPathActive(pathname, `/users/${userId}`))}><UserRound className="h-4 w-4" />我的帖子</Link>}
       </div>
 
@@ -98,9 +108,17 @@ function ForumSidebar({ categories, userId }: { categories: Category[]; userId?:
 
       <div className="mt-4 border-t border-[var(--border)] pt-4">
         <Link href="/tags" className={navItemClass(isPathActive(pathname, '/tags'))}><BookOpen className="h-4 w-4" />全部标签</Link>
-        <Link href="/resources" className={navItemClass(isPathActive(pathname, '/resources'))}><FolderOpen className="h-4 w-4" />资源中心</Link>
+        {showResourceLink && <Link href="/resources" className={navItemClass(isPathActive(pathname, '/resources'))}><FolderOpen className="h-4 w-4" />资源中心</Link>}
         <Link href="/lanlink" className={navItemClass(isPathActive(pathname, '/lanlink'))}><Radio className="h-4 w-4" />联机</Link>
+        <Link href="/notices" className={navItemClass(isPathActive(pathname, '/notices'))}><Bell className="h-4 w-4" />公告</Link>
       </div>
+      {isAuthenticated && <section className="mt-4 border-t border-[var(--border)] pt-4">
+        <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">我的</h2>
+        <Link href="/messages" className={navItemClass(isPathActive(pathname, '/messages'))}><Mail className="h-4 w-4" />私信</Link>
+        <Link href="/notifications" className={navItemClass(isPathActive(pathname, '/notifications'))}><Bell className="h-4 w-4" />通知</Link>
+        <Link href="/friends" className={navItemClass(isPathActive(pathname, '/friends'))}><Users className="h-4 w-4" />好友</Link>
+        <Link href="/settings" className={navItemClass(isPathActive(pathname, '/settings'))}><Settings className="h-4 w-4" />设置</Link>
+      </section>}
     </>
   );
 }
@@ -137,6 +155,7 @@ export default function ContentSidebar({
   logoUrl,
   userName,
   userId,
+  isAuthenticated,
   userMeta,
   resourceCategories = [],
   forumCategories = [],
@@ -147,6 +166,7 @@ export default function ContentSidebar({
   logoUrl?: string;
   userName?: string;
   userId?: number;
+  isAuthenticated: boolean;
   userMeta?: string;
   resourceCategories?: ResourceCategory[];
   forumCategories?: Category[];
@@ -155,8 +175,10 @@ export default function ContentSidebar({
   return (
     <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
       <SidebarBrand siteName={siteName} subtitle={subtitle} logoUrl={logoUrl} />
-      <nav data-testid="sidebar-nav" aria-label={mode === 'forum' ? '论坛导航' : '资源导航'} className={SIDEBAR_LAYOUT_CLASSES.nav}>
-        {mode === 'forum' ? <ForumSidebar categories={forumCategories} userId={userId} /> : <ResourceSidebar categories={resourceCategories} />}
+      <nav data-testid="sidebar-nav" aria-label="站点导航" className={SIDEBAR_LAYOUT_CLASSES.nav}>
+        {mode === 'resources' && <ResourceSidebar categories={resourceCategories} />}
+        {mode === 'resources' && <div className="mt-5 border-t border-[var(--border)] pt-4"><h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">论坛</h2></div>}
+        <ForumSidebar categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} showResourceLink={mode !== 'resources'} />
       </nav>
       <div data-testid="sidebar-user" className={SIDEBAR_LAYOUT_CLASSES.user}><SidebarUserPanel userName={userName} userMeta={userMeta} /></div>
     </aside>

@@ -3,12 +3,11 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { BookOpen, FolderOpen, Home, Plus, Radio, Star, UserRound, X, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpen, FolderOpen, Home, Mail, Plus, Radio, Settings, Star, UserRound, Users, X, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import { getIconComponent } from '@/lib/resource-icons';
 import { getForumCategoryColor, groupForumCategories } from '@/lib/navigation/forum-categories';
-import { PUBLIC_NAVIGATION } from '@/lib/navigation/public-navigation';
 import type { Category, ResourceCategory } from '@/types';
 import type { ContentSidebarMode } from './content-sidebar';
 
@@ -40,13 +39,25 @@ function DrawerBoardLink({ category, nested, onClose }: { category: Category; ne
   </Link>;
 }
 
-function ForumDrawer({ categories, userId, onClose }: { categories: Category[]; userId?: number; onClose: () => void }) {
+function ForumDrawer({
+  categories,
+  userId,
+  isAuthenticated,
+  onClose,
+  showResourceLink = true,
+}: {
+  categories: Category[];
+  userId?: number;
+  isAuthenticated: boolean;
+  onClose: () => void;
+  showResourceLink?: boolean;
+}) {
   const pathname = usePathname();
   const linkClass = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`;
   return <>
     <Link href="/posts/new" onClick={onClose} className="mb-2 flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" />发布主题</Link>
     <Link href="/threads" onClick={onClose} className={linkClass(isPathActive(pathname, '/threads') || pathname === '/')}><Home className="h-4 w-4" />全部讨论</Link>
-    <Link href="/bookmarks" onClick={onClose} className={linkClass(isPathActive(pathname, '/bookmarks'))}><Star className="h-4 w-4" />我的收藏</Link>
+    {isAuthenticated && <Link href="/bookmarks" onClick={onClose} className={linkClass(isPathActive(pathname, '/bookmarks'))}><Star className="h-4 w-4" />我的收藏</Link>}
     {userId && <Link href={`/users/${userId}`} onClick={onClose} className={linkClass(isPathActive(pathname, `/users/${userId}`))}><UserRound className="h-4 w-4" />我的帖子</Link>}
     {groupForumCategories(categories).map((group) => <section key={group.key} className="mt-4 border-t border-[var(--border)] pt-4">
       <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{group.label}</h2>
@@ -54,9 +65,17 @@ function ForumDrawer({ categories, userId, onClose }: { categories: Category[]; 
     </section>)}
     <section className="mt-4 border-t border-[var(--border)] pt-4">
       <Link href="/tags" onClick={onClose} className={linkClass(isPathActive(pathname, '/tags'))}><BookOpen className="h-4 w-4" />全部标签</Link>
-      <Link href="/resources" onClick={onClose} className={linkClass(isPathActive(pathname, '/resources'))}><FolderOpen className="h-4 w-4" />资源中心</Link>
+      {showResourceLink && <Link href="/resources" onClick={onClose} className={linkClass(isPathActive(pathname, '/resources'))}><FolderOpen className="h-4 w-4" />资源中心</Link>}
       <Link href="/lanlink" onClick={onClose} className={linkClass(isPathActive(pathname, '/lanlink'))}><Radio className="h-4 w-4" />联机</Link>
+      <Link href="/notices" onClick={onClose} className={linkClass(isPathActive(pathname, '/notices'))}><Bell className="h-4 w-4" />公告</Link>
     </section>
+    {isAuthenticated && <section className="mt-4 border-t border-[var(--border)] pt-4">
+      <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">我的</h2>
+      <Link href="/messages" onClick={onClose} className={linkClass(isPathActive(pathname, '/messages'))}><Mail className="h-4 w-4" />私信</Link>
+      <Link href="/notifications" onClick={onClose} className={linkClass(isPathActive(pathname, '/notifications'))}><Bell className="h-4 w-4" />通知</Link>
+      <Link href="/friends" onClick={onClose} className={linkClass(isPathActive(pathname, '/friends'))}><Users className="h-4 w-4" />好友</Link>
+      <Link href="/settings" onClick={onClose} className={linkClass(isPathActive(pathname, '/settings'))}><Settings className="h-4 w-4" />设置</Link>
+    </section>}
   </>;
 }
 
@@ -76,16 +95,6 @@ function ResourceDrawer({ categories, onClose }: { categories: ResourceCategory[
   </>;
 }
 
-function PublicDrawer({ onClose }: { onClose: () => void }) {
-  const pathname = usePathname();
-  const params = useSearchParams();
-  return <>{PUBLIC_NAVIGATION.map((group) => <section key={group.id} className="mb-3"><h2 className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{group.label}</h2>{group.children.map((item) => {
-    const [hrefPath, hrefSearch] = item.href.split('?');
-    const active = isPathActive(pathname, hrefPath) && (!hrefSearch || params.toString() === hrefSearch);
-    return <Link key={item.href} href={item.href} onClick={onClose} className={`block rounded-md px-3 py-2 text-sm ${active ? 'bg-[var(--primary-soft)] text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`}>{item.label}</Link>;
-  })}</section>)}</>;
-}
-
 export default function ContentDrawer({
   open,
   mode,
@@ -95,18 +104,20 @@ export default function ContentDrawer({
   logoUrl,
   userName,
   userId,
+  isAuthenticated,
   userMeta,
   resourceCategories = [],
   forumCategories = [],
 }: {
   open: boolean;
-  mode?: ContentSidebarMode;
+  mode: ContentSidebarMode;
   onClose: () => void;
   siteName: string;
   sidebarTitle?: string;
   logoUrl?: string;
   userName?: string;
   userId?: number;
+  isAuthenticated: boolean;
   userMeta?: string;
   resourceCategories?: ResourceCategory[];
   forumCategories?: Category[];
@@ -132,7 +143,9 @@ export default function ContentDrawer({
         <button type="button" aria-label="关闭" className="rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]" onClick={onClose}><X className="h-5 w-5" /></button>
       </div>
       <nav data-testid="mobile-drawer-nav" className={DRAWER_LAYOUT_CLASSES.nav}>
-        {mode === 'forum' ? <ForumDrawer categories={forumCategories} userId={userId} onClose={onClose} /> : mode === 'resources' ? <ResourceDrawer categories={resourceCategories} onClose={onClose} /> : <PublicDrawer onClose={onClose} />}
+        {mode === 'resources' && <ResourceDrawer categories={resourceCategories} onClose={onClose} />}
+        {mode === 'resources' && <section className="mt-5 border-t border-[var(--border)] pt-4"><h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">论坛</h2></section>}
+        <ForumDrawer categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} onClose={onClose} showResourceLink={mode !== 'resources'} />
       </nav>
       <div data-testid="mobile-drawer-user" className={DRAWER_LAYOUT_CLASSES.user}><SidebarUserPanel userName={userName} userMeta={userMeta} /></div>
     </div>

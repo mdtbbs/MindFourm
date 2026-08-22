@@ -31,12 +31,10 @@ export default function ContentShell({
   const brand = resolveBrand(settings);
   const router = useRouter();
   const pathname = usePathname();
-  const isManagement = pathname.startsWith("/admin") || pathname.startsWith("/settings");
   const isResources = pathname.startsWith('/resources');
-  const isForum = pathname === '/' || [
-    '/threads', '/categories', '/posts', '/tags', '/search', '/bookmarks',
-  ].some((prefix) => pathname.startsWith(prefix));
-  const sidebarMode = isResources ? 'resources' : isForum ? 'forum' : undefined;
+  // ContentShell is mounted only from UserSiteShell: every route here is a
+  // user-facing product page and therefore shares the persistent sidebar.
+  const sidebarMode = isResources ? 'resources' : 'forum';
   const mindauthUrl =
     process.env.NEXT_PUBLIC_MINDAUTH_URL || "http://localhost:4001";
 
@@ -70,10 +68,6 @@ export default function ContentShell({
   }, [sidebarMode]);
 
   useEffect(() => {
-    if (sidebarMode !== 'forum') {
-      setForumCategories([]);
-      return undefined;
-    }
     let cancelled = false;
     categoryApi
       .getList()
@@ -84,7 +78,7 @@ export default function ContentShell({
     return () => {
       cancelled = true;
     };
-  }, [sidebarMode]);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -151,21 +145,22 @@ export default function ContentShell({
     : isAuthenticated
       ? "已登录"
       : "未登录";
-  // The admin layout owns its own management navigation. Forum and resources
-  // deliberately receive different navigation data and never share sections.
-  const showDesktopSidebar = Boolean(sidebarMode);
+  // Admin lives in its own route layout. Every UserSiteShell page keeps this
+  // sidebar, with resource pages merely changing which section is emphasised.
+  const showDesktopSidebar = true;
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">
       {showDesktopSidebar && (
         <Suspense fallback={null}>
           <ContentSidebar
-            mode={sidebarMode!}
+            mode={sidebarMode}
             siteName={brand.siteName}
             sidebarTitle={brand.sidebarTitle}
             logoUrl={brand.logoUrl || undefined}
             userName={user?.username || undefined}
             userId={user?.id}
+            isAuthenticated={isAuthenticated}
             userMeta={userMeta}
             resourceCategories={resourceCategories}
             forumCategories={forumCategories}
@@ -183,6 +178,7 @@ export default function ContentShell({
           logoUrl={brand.logoUrl || undefined}
           userName={user?.username || undefined}
           userId={user?.id}
+          isAuthenticated={isAuthenticated}
           userMeta={userMeta}
           resourceCategories={resourceCategories}
           forumCategories={forumCategories}
@@ -207,7 +203,7 @@ export default function ContentShell({
           onSearch={handleSearch}
           onOpenDrawer={() => setMobileMenuOpen(true)}
           navigationMode={sidebarMode}
-          showPublicNavigation={!sidebarMode && !isManagement}
+          showPublicNavigation={false}
         />
         <AnnouncementBanner />
         <PrivacyNotice />
