@@ -18,8 +18,10 @@ interface PageLoaderProps {
 export default function PageLoader({
   variant = 'hexagon',
   size = 'xl',
-  text = 'Loading',
-  showText = true,
+  text = '加载中',
+  // Route-level fallbacks can be included in streamed HTML. Keep them visual-only
+  // by default so crawlers never index a loading sentence as page content.
+  showText = false,
   className,
 }: PageLoaderProps) {
   return (
@@ -43,7 +45,7 @@ export default function PageLoader({
         />
 
         {/* Spinner */}
-        <LoadingSpinner variant={variant} size={size} label={text} />
+        <LoadingSpinner variant={variant} size={size} label={showText ? text : undefined} />
       </div>
 
       {/* Loading text */}

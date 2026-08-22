@@ -14,7 +14,10 @@ import { generatePageMetadata } from '@/lib/metadata';
 import { Category, PostListResponse } from '@/types';
 import { parseFooterFriendlyLinks, isExternalHref, isSafeFooterHref } from '@/lib/footer/footer-settings';
 
-export const revalidate = 30;
+// This route is the activity feed. Do not serve an ISR/CDN snapshot that can
+// make a recently active forum look abandoned.
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 interface ForumOverviewStats {
   total_posts: number;
@@ -32,7 +35,7 @@ const emptyOverview: ForumOverviewStats = {
 
 async function fetchCategories(): Promise<Category[]> {
   return fetchApiData<Category[]>('/api/categories', {
-    init: { next: { tags: ['categories'] } },
+    init: { cache: 'no-store' },
     fallback: [],
     throwOnError: true,
   });
@@ -40,7 +43,7 @@ async function fetchCategories(): Promise<Category[]> {
 
 async function fetchForumOverview(): Promise<ForumOverviewStats> {
   const overview = await fetchApiData<ForumOverviewStats>('/api/stats/overview', {
-    init: { next: { revalidate: 30 } },
+    init: { cache: 'no-store' },
     fallback: emptyOverview,
     throwOnError: true,
   });
@@ -177,7 +180,7 @@ export default async function HomePage({
       <section className="mb-6 overflow-hidden panel-surface">
         <div className="p-6 sm:p-8">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{brand.siteName}</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--foreground)]">Mindustry 中文社区</h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--foreground)]">像素工厂中文论坛</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)]">交流、分享并沉淀值得长期保存的内容。</p>
           <div className="mt-5 flex flex-wrap gap-3">
             <Link href="/search" className="inline-flex items-center gap-2 border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-sm font-medium text-[var(--foreground)] hover:border-[var(--primary)] hover:text-[var(--primary)]"><Search className="h-4 w-4" />搜索帖子 / 资源</Link>

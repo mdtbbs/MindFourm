@@ -31,7 +31,11 @@ const NEUTRAL_DEFAULTS = {
 };
 
 export function resolveBrand(settings: Record<string, string>): BrandInfo {
-  const siteName = settings.site_name?.trim() || NEUTRAL_DEFAULTS.siteName;
+  const configuredSiteName = settings.site_name?.trim();
+  // Legacy fresh-install values must not leak into metadata or the public header.
+  const siteName = configuredSiteName && !/^(社区论坛|mindforum)$/i.test(configuredSiteName)
+    ? configuredSiteName
+    : NEUTRAL_DEFAULTS.siteName;
   const tagline = settings.site_tagline?.trim() || '';
   const description = settings.site_description?.trim() || settings.seo_default_description?.trim() || DEFAULT_BRAND_DESCRIPTION;
   const logoUrl = settings.site_logo_url?.trim() || '';
@@ -54,7 +58,10 @@ export function resolveBrand(settings: Record<string, string>): BrandInfo {
 
 export function resolveTitleSuffix(settings: Record<string, string>): string {
   const configured = settings.seo_title_suffix?.trim();
-  return configured || ` | ${resolveBrand(settings).siteName}`;
+  // Older installations kept the scaffold name in this setting. Never let it
+  // reappear in public metadata after the site brand has changed.
+  if (configured && !/社区论坛|mindforum/i.test(configured)) return configured;
+  return ` | ${resolveBrand(settings).siteName}`;
 }
 
 export function buildBrandCssVariables(settings?: Record<string, string> | null): Record<string, string> {

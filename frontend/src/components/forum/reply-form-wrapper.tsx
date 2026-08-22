@@ -11,8 +11,9 @@ export default function ReplyFormWrapper({ postId }: { postId: number }) {
 
   if (authLoading) {
     return (
-      <div className="mt-8 flex items-center justify-center py-8">
-        <div className="text-[var(--text-muted)] text-sm">加载中...</div>
+      <div className="mt-8 space-y-3 py-8" aria-busy="true" aria-label="正在初始化回复表单">
+        <div className="h-10 animate-pulse rounded-lg bg-[var(--bg-elevated)]" />
+        <div className="h-24 animate-pulse rounded-lg bg-[var(--bg-elevated)]" />
       </div>
     );
   }

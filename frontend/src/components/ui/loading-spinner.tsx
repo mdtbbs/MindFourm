@@ -156,20 +156,18 @@ export default function LoadingSpinner({
   variant = 'hexagon',
   size = 'md',
   className,
-  label = 'Loading',
+  label,
 }: LoadingSpinnerProps) {
   return (
     <div
       className={cn('flex items-center justify-center', className)}
-      role="status"
-      aria-label={label}
-      aria-live="polite"
+      {...(label ? { role: 'status', 'aria-label': label, 'aria-live': 'polite' as const } : { 'aria-hidden': true })}
     >
       {variant === 'hexagon' && <HexagonSpinner size={size} />}
       {variant === 'blocks' && <BlocksSpinner size={size} />}
       {variant === 'orbital' && <OrbitalSpinner size={size} />}
       {variant === 'simple' && <SimpleSpinner size={size} />}
-      <span className="sr-only">{label}...</span>
+      {label && <span className="sr-only">{label}...</span>}
     </div>
   );
 }
