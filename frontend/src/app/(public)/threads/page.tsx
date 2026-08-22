@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import TopicRow from "@/components/forum/topic-row";
+import ThreadList from "@/components/forum/thread-list";
 import ErrorState from "@/components/ui/error-state";
 import { createEmptyPaginatedResult } from "@/lib/api/response";
 import { fetchApiPaginated } from "@/lib/api/server-fetch";
@@ -51,11 +51,7 @@ export default async function ThreadsPage({
       </div>
       {threads.data.length > 0 ? (
         <>
-          <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">
-            {threads.data.map((post) => (
-              <TopicRow key={post.id} post={post} />
-            ))}
-          </div>
+          <ThreadList posts={threads.data} />
           <Pagination
             currentPage={threads.pagination.page}
             totalPages={threads.pagination.totalPages}

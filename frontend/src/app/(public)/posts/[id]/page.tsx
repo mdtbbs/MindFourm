@@ -205,7 +205,7 @@ export default async function PostDetailPage({
         <span className="mx-2">/</span>
         {post.category_name ? (
           <>
-            <Link href={`/categories/${post.category_id}`} className="hover:text-[var(--primary)]">
+            <Link href={`/categories/${post.category_id}`} className="font-medium hover:opacity-80" style={{ color: post.category_color || 'var(--primary)' }}>
               {post.category_name}
             </Link>
             <span className="mx-2">/</span>

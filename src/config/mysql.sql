@@ -27,10 +27,18 @@ CREATE TABLE IF NOT EXISTS categories (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255) NOT NULL UNIQUE,
     slug VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT NULL,
+    color VARCHAR(7) NULL,
+    icon VARCHAR(50) NULL,
+    group_key VARCHAR(50) NULL,
+    parent_id INT NULL,
     sort_order INT DEFAULT 0,
     is_active TINYINT DEFAULT 1,
+    show_in_sidebar TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_categories_slug (slug)
+    INDEX idx_categories_slug (slug),
+    INDEX idx_categories_sidebar_order (show_in_sidebar, group_key, sort_order),
+    FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 
 -- posts

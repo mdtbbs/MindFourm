@@ -33,6 +33,11 @@ export interface Category {
   sort_order: number;
   is_active: boolean;
   description?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  group_key?: 'community' | 'creation' | 'game' | 'meta' | null;
+  parent_id?: number | null;
+  show_in_sidebar?: boolean;
   created_at: string;
   post_count?: number;
 }
@@ -67,6 +72,8 @@ export interface PostSummary {
   last_activity_at?: string;
   category_name: string | null;
   category_slug: string | null;
+  category_color?: string | null;
+  category_icon?: string | null;
   author_mindauth_id: number | null;
   author_role: UserRole | null;
   author_name?: string | null;
@@ -96,6 +103,8 @@ export interface Post {
   updated_at: string;
   category_name: string | null;
   category_slug: string | null;
+  category_color?: string | null;
+  category_icon?: string | null;
   author_mindauth_id: number | null;
   author_role: UserRole | null;
   author_name?: string | null;

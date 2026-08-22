@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
-import LatestPostsList from "@/components/forum/latest-posts-list";
+import ThreadList from "@/components/forum/thread-list";
 import ErrorState from "@/components/ui/error-state";
 import { createEmptyPaginatedResult } from "@/lib/api/response";
 import { fetchApiPaginated } from "@/lib/api/server-fetch";
@@ -76,7 +76,7 @@ export default async function HomePage() {
             </Link>
           </div>
           {postsResult.data.length > 0 ? (
-            <LatestPostsList posts={postsResult.data} />
+            <ThreadList posts={postsResult.data} />
           ) : (
             <div className="border border-[var(--border)] p-8 text-center text-sm text-[var(--text-muted)]">
               暂时没有讨论

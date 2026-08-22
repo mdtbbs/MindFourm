@@ -227,12 +227,12 @@ export function UnifiedHeader({
                     <Link
                       href="/posts/new"
                       onClick={onPostCreate}
-                      className="hidden items-center gap-1 bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] sm:inline-flex"
+                      className="inline-flex items-center gap-1 bg-[var(--primary)] px-2.5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] sm:px-4"
                     >
                       <span>
                         <Plus className="h-4 w-4" />
                       </span>
-                      发帖
+                      <span className="hidden sm:inline">发帖</span>
                     </Link>
                   </div>
                 )}

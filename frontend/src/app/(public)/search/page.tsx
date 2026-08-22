@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import PostCard from '@/components/forum/post-card';
+import ThreadList from '@/components/forum/thread-list';
 import ResourceCard from '@/components/forum/resource-card';
 import Pagination from '@/components/ui/pagination';
 import SearchEnhancements from '@/components/forum/search-enhancements';
@@ -127,11 +127,7 @@ export default async function SearchPage({
               <h2 className="text-lg font-semibold text-surface-900 mb-3">
                 帖子 ({postsResult.pagination.total})
               </h2>
-              <div className="space-y-3">
-                {postsResult.data.map((post) => (
-                  <PostCard key={post.id} post={post} />
-                ))}
-              </div>
+              <ThreadList posts={postsResult.data} />
             </div>
           )}
         </div>

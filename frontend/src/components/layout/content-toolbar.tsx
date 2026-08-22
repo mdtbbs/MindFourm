@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { BookOpen, Boxes, ChevronDown, Compass } from "lucide-react";
+import { BookOpen, Boxes, ChevronDown, Compass, Radio } from "lucide-react";
 import { UnifiedHeader } from "@/lib/shared";
 import type { User } from "@/types";
 import NotificationDropdown from "@/components/forum/notification-dropdown";
@@ -13,6 +13,27 @@ const NAV_ICONS = {
   resources: Boxes,
   discover: Compass,
 } as const;
+
+function ForumProductNavigation({
+  siteName,
+  logoUrl,
+}: {
+  siteName: string;
+  logoUrl?: string;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold text-[var(--text)] lg:hidden">
+        {logoUrl ? <img src={logoUrl} alt="" className="h-7 w-7 rounded object-cover" /> : <span className="flex h-7 w-7 items-center justify-center rounded bg-[var(--primary)] text-xs font-bold text-white">M</span>}
+        <span className="max-w-28 truncate text-sm">{siteName}</span>
+      </Link>
+      <nav aria-label="产品导航" className="hidden items-center gap-1 lg:flex">
+        <Link href="/resources" className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"><Boxes className="h-4 w-4" />资源</Link>
+        <Link href="/lanlink" className="flex items-center gap-1.5 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"><Radio className="h-4 w-4" />联机</Link>
+      </nav>
+    </div>
+  );
+}
 
 function DesktopNavigation({
   siteName,
@@ -112,6 +133,7 @@ export default function ContentToolbar(props: {
   onSearch: (query: string) => void;
   onOpenDrawer: () => void;
   showPublicNavigation: boolean;
+  navigationMode?: 'forum' | 'resources';
 }) {
   return (
     <UnifiedHeader
@@ -132,7 +154,9 @@ export default function ContentToolbar(props: {
       onMobileMenuClick={props.onOpenDrawer}
       notificationDropdownSlot={<NotificationDropdown />}
       topNavigationSlot={
-        props.showPublicNavigation ? (
+        props.navigationMode ? (
+          <ForumProductNavigation siteName={props.siteName} logoUrl={props.logoUrl} />
+        ) : props.showPublicNavigation ? (
           <DesktopNavigation
             siteName={props.siteName}
             logoUrl={props.logoUrl}

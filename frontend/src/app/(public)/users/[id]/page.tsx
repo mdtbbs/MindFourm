@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import PostCard from '@/components/forum/post-card';
+import ThreadList from '@/components/forum/thread-list';
 import ResourceCard from '@/components/forum/resource-card';
 import Pagination from '@/components/ui/pagination';
 import JsonLd from '@/components/seo/json-ld';
@@ -334,9 +334,7 @@ export default async function UserProfilePage({
             <div className="text-center py-12 text-[var(--text-secondary)]">暂无帖子</div>
           ) : (
             <div className="space-y-3">
-              {postsResult.data.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
+              <ThreadList posts={postsResult.data} />
             </div>
           )}
           <Pagination

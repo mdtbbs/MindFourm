@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { categoryApi, adminApi } from '@/lib/api/client';
+import { adminApi } from '@/lib/api/client';
 import type { Category } from '@/types';
 import CategoryForm from '@/components/admin/category-form';
 import Button from '@/components/ui/button';
@@ -21,7 +21,7 @@ export default function CategoriesPage() {
     setIsLoading(true);
     try {
       setError(null);
-      const data = await categoryApi.getList();
+      const data = await adminApi.getCategories();
       setCategories(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载分类列表失败');
@@ -64,6 +64,7 @@ export default function CategoriesPage() {
 
       <CategoryForm
         category={editingCategory}
+        categories={categories}
         onSuccess={handleFormSuccess}
       />
 
@@ -82,6 +83,8 @@ export default function CategoriesPage() {
                   <th className="text-left px-4 py-3 font-medium text-surface-600">名称</th>
                   <th className="text-left px-4 py-3 font-medium text-surface-600">Slug</th>
                   <th className="text-left px-4 py-3 font-medium text-surface-600">排序</th>
+                  <th className="text-left px-4 py-3 font-medium text-surface-600">分组</th>
+                  <th className="text-left px-4 py-3 font-medium text-surface-600">展示</th>
                   <th className="text-left px-4 py-3 font-medium text-surface-600">状态</th>
                   <th className="text-left px-4 py-3 font-medium text-surface-600">操作</th>
                 </tr>
@@ -92,6 +95,8 @@ export default function CategoriesPage() {
                     <td className="px-4 py-3 font-medium text-surface-900">{cat.name}</td>
                     <td className="px-4 py-3 text-surface-600 font-mono text-xs">{cat.slug}</td>
                     <td className="px-4 py-3 text-surface-600">{cat.sort_order}</td>
+                    <td className="px-4 py-3 text-surface-600">{cat.group_key || '未分组'}</td>
+                    <td className="px-4 py-3 text-surface-600">{cat.show_in_sidebar === false ? '隐藏' : '侧栏'}</td>
                     <td className="px-4 py-3">
                       <Badge variant={cat.is_active ? 'success' : 'danger'}>
                         {cat.is_active ? '启用' : '禁用'}

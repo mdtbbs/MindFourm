@@ -1,12 +1,11 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSse } from "@/hooks/use-sse";
 import { useAuth } from "@/lib/auth/context";
 import { useSettings } from "@/lib/settings/context";
 import { resolveBrand } from "@/lib/theme/brand";
-import { buildSidebarNavigation } from "@/lib/navigation/sidebar-navigation";
 import {
   messageApi,
   friendsApi,
@@ -32,8 +31,12 @@ export default function ContentShell({
   const brand = resolveBrand(settings);
   const router = useRouter();
   const pathname = usePathname();
-  const showManagementNavigation =
-    pathname.startsWith("/admin") || pathname.startsWith("/settings");
+  const isManagement = pathname.startsWith("/admin") || pathname.startsWith("/settings");
+  const isResources = pathname.startsWith('/resources');
+  const isForum = pathname === '/' || [
+    '/threads', '/categories', '/posts', '/tags', '/search', '/bookmarks',
+  ].some((prefix) => pathname.startsWith(prefix));
+  const sidebarMode = isResources ? 'resources' : isForum ? 'forum' : undefined;
   const mindauthUrl =
     process.env.NEXT_PUBLIC_MINDAUTH_URL || "http://localhost:4001";
 
@@ -45,21 +48,15 @@ export default function ContentShell({
   >([]);
   const [forumCategories, setForumCategories] = useState<Category[]>([]);
 
-  const sidebarItems = useMemo(
-    () =>
-      buildSidebarNavigation({
-        settings,
-        isAuthenticated,
-      }),
-    [settings, isAuthenticated],
-  );
-
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (!showManagementNavigation) return undefined;
+    if (sidebarMode !== 'resources') {
+      setResourceCategories([]);
+      return undefined;
+    }
     let cancelled = false;
     resourceApi
       .getCategories()
@@ -70,10 +67,13 @@ export default function ContentShell({
     return () => {
       cancelled = true;
     };
-  }, [showManagementNavigation]);
+  }, [sidebarMode]);
 
   useEffect(() => {
-    if (showManagementNavigation) return undefined;
+    if (sidebarMode !== 'forum') {
+      setForumCategories([]);
+      return undefined;
+    }
     let cancelled = false;
     categoryApi
       .getList()
@@ -84,7 +84,7 @@ export default function ContentShell({
     return () => {
       cancelled = true;
     };
-  }, [showManagementNavigation]);
+  }, [sidebarMode]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -151,15 +151,33 @@ export default function ContentShell({
     : isAuthenticated
       ? "已登录"
       : "未登录";
-  // Public forum pages use the same board shell as category and post pages.
-  // Resources/admin keep their own navigation and remain separate products.
-  const showDesktopSidebar = showManagementNavigation || (!pathname.startsWith('/resources') && !pathname.startsWith('/admin'));
+  // The admin layout owns its own management navigation. Forum and resources
+  // deliberately receive different navigation data and never share sections.
+  const showDesktopSidebar = Boolean(sidebarMode);
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">
       {showDesktopSidebar && (
-        <ContentSidebar
-          items={sidebarItems}
+        <Suspense fallback={null}>
+          <ContentSidebar
+            mode={sidebarMode!}
+            siteName={brand.siteName}
+            sidebarTitle={brand.sidebarTitle}
+            logoUrl={brand.logoUrl || undefined}
+            userName={user?.username || undefined}
+            userId={user?.id}
+            userMeta={userMeta}
+            resourceCategories={resourceCategories}
+            forumCategories={forumCategories}
+          />
+        </Suspense>
+      )}
+
+      <Suspense fallback={null}>
+        <ContentDrawer
+          open={mobileMenuOpen}
+          mode={sidebarMode}
+          onClose={() => setMobileMenuOpen(false)}
           siteName={brand.siteName}
           sidebarTitle={brand.sidebarTitle}
           logoUrl={brand.logoUrl || undefined}
@@ -168,24 +186,6 @@ export default function ContentShell({
           userMeta={userMeta}
           resourceCategories={resourceCategories}
           forumCategories={forumCategories}
-          currentPathname={pathname}
-        />
-      )}
-
-      <Suspense fallback={null}>
-        <ContentDrawer
-          open={mobileMenuOpen}
-          items={sidebarItems}
-          onClose={() => setMobileMenuOpen(false)}
-          siteName={brand.siteName}
-          sidebarTitle={brand.sidebarTitle}
-          logoUrl={brand.logoUrl || undefined}
-          userName={user?.username || undefined}
-          userMeta={userMeta}
-          resourceCategories={resourceCategories}
-          forumCategories={forumCategories}
-          currentPathname={pathname}
-          publicNavigation={!showDesktopSidebar}
         />
       </Suspense>
 
@@ -206,7 +206,8 @@ export default function ContentShell({
           onLogout={logout}
           onSearch={handleSearch}
           onOpenDrawer={() => setMobileMenuOpen(true)}
-          showPublicNavigation={!showManagementNavigation}
+          navigationMode={sidebarMode}
+          showPublicNavigation={!sidebarMode && !isManagement}
         />
         <AnnouncementBanner />
         <PrivacyNotice />

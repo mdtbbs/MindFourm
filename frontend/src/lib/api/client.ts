@@ -537,14 +537,15 @@ export const adminApi = {
         category_id: params?.category_id,
       })}`
     ),
-  createCategory: (data: { name: string; slug: string; sort_order?: number }) => {
+  getCategories: () => request<Category[]>('/api/admin/categories'),
+  createCategory: (data: Partial<Pick<Category, 'name' | 'slug' | 'description' | 'color' | 'icon' | 'group_key' | 'parent_id' | 'sort_order' | 'is_active' | 'show_in_sidebar'>>) => {
     clearCache();
     return request<Category>('/api/admin/categories', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
-  updateCategory: (id: number, data: { name: string; slug: string; sort_order?: number }) => {
+  updateCategory: (id: number, data: Partial<Pick<Category, 'name' | 'slug' | 'description' | 'color' | 'icon' | 'group_key' | 'parent_id' | 'sort_order' | 'is_active' | 'show_in_sidebar'>>) => {
     clearCache();
     return request<Category>(`/api/admin/categories/${id}`, {
       method: 'PUT',

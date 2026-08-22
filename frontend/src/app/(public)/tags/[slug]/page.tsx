@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import PostCard from '@/components/forum/post-card';
+import ThreadList from '@/components/forum/thread-list';
 import Pagination from '@/components/ui/pagination';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
 import { fetchApiPaginated } from '@/lib/api/server-fetch';
@@ -63,11 +63,7 @@ export default async function TagPage({
       {postsResult.data.length === 0 ? (
         <div className="text-center py-12 text-surface-500">该标签下暂无帖子</div>
       ) : (
-        <div className="space-y-3">
-          {postsResult.data.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
-        </div>
+        <ThreadList posts={postsResult.data} />
       )}
       <Pagination
         currentPage={postsResult.pagination.page}
