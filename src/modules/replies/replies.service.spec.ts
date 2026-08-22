@@ -86,6 +86,10 @@ function createService(overrides: { post?: unknown; requiresApproval?: boolean }
   const redisService = {
     del: jest.fn().mockResolvedValue(0),
   };
+  const postActivityService = {
+    markPostActive: jest.fn().mockResolvedValue(undefined),
+    recalculatePostActivity: jest.fn().mockResolvedValue(undefined),
+  };
 
   const service = new RepliesService(
     replyRepository as any,
@@ -97,6 +101,7 @@ function createService(overrides: { post?: unknown; requiresApproval?: boolean }
     pointsService as any,
     settingsService as any,
     redisService as any,
+    postActivityService as any,
   );
 
   return {
@@ -107,6 +112,7 @@ function createService(overrides: { post?: unknown; requiresApproval?: boolean }
     pointsService,
     settingsService,
     redisService,
+    postActivityService,
   };
 }
 
@@ -150,12 +156,13 @@ describe('RepliesService.createReplyForPost', () => {
   });
 
   it('writes the reply when the post is unlocked', async () => {
-    const { service, replyRepository, redisService } = createService();
+    const { service, replyRepository, redisService, postActivityService } = createService();
 
     const reply = await service.createReplyForPost(88, { content: 'hello' }, REPLIER_ID);
 
     expect(replyRepository.save).toHaveBeenCalledTimes(1);
     expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
+    expect(postActivityService.markPostActive).toHaveBeenCalledWith(88, expect.any(Date));
     expect(reply).toMatchObject({ post_id: 88, user_id: REPLIER_ID, status: 'published' });
   });
 
@@ -167,6 +174,20 @@ describe('RepliesService.createReplyForPost', () => {
     expect(notificationsService.create).toHaveBeenCalledWith(
       expect.objectContaining({ user_id: POST_AUTHOR_ID, type: 'reply', post_id: 88 }),
     );
+  });
+
+  it('recalculates activity only when a visible reply is deleted', async () => {
+    const { service, replyRepository, postActivityService } = createService();
+    replyRepository.findOne.mockResolvedValue({
+      id: 501,
+      post_id: 88,
+      user_id: REPLIER_ID,
+      status: 'published',
+    });
+
+    await service.softDelete(501, REPLIER_ID);
+
+    expect(postActivityService.recalculatePostActivity).toHaveBeenCalledWith(88);
   });
 
   it('still refuses a reply to an unpublished post', async () => {

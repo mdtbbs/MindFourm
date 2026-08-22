@@ -11,6 +11,7 @@ import { PointsModule } from '../points/points.module';
 import { SettingsModule } from '../settings/settings.module';
 import { LogsModule } from '../logs/logs.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
+import { PostsModule } from '../posts/posts.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { AdminNotificationsModule } from '../admin-notifications/admin-notificat
     SettingsModule,
     LogsModule,
     AdminNotificationsModule,
+    PostsModule,
   ],
   providers: [RepliesService],
   controllers: [RepliesController, RepliesControllerMain],

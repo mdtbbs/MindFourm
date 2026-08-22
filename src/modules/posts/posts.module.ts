@@ -20,6 +20,7 @@ import { LogsModule } from '../logs/logs.module';
 import { PostSummaryService } from './post-summary.service';
 import { PostDetailService } from './post-detail.service';
 import { PostRevisionsService } from './post-revisions.service';
+import { PostActivityService } from './post-activity.service';
 
 @Module({
   imports: [
@@ -33,8 +34,8 @@ import { PostRevisionsService } from './post-revisions.service';
     LogsModule,
     TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision]),
   ],
-  providers: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService],
+  providers: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService, PostActivityService],
   controllers: [PostsController],
-  exports: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService],
+  exports: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService, PostActivityService],
 })
 export class PostsModule {}

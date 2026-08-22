@@ -76,6 +76,10 @@ function createService(overrides: {
   const redisService = {
     del: jest.fn().mockResolvedValue(0),
   };
+  const postActivityService = {
+    markPostActive: jest.fn().mockResolvedValue(undefined),
+    recalculatePostActivity: jest.fn().mockResolvedValue(undefined),
+  };
 
   // Positional, so the placeholder count must track the constructor exactly —
   // inserting a dependency shifts every later argument into the wrong slot, and the
@@ -101,6 +105,7 @@ function createService(overrides: {
     {} as any, // tagsService
     pointsService as any,
     redisService as any,
+    postActivityService as any,
   );
 
   return {
@@ -111,6 +116,7 @@ function createService(overrides: {
     settingsService,
     pointsService,
     redisService,
+    postActivityService,
   };
 }
 
@@ -149,7 +155,7 @@ describe('AdminService', () => {
   });
 
   it('routes moderation actions by item type', async () => {
-    const { service, replyRepository, userRepository, pointsService, redisService } = createService({
+    const { service, replyRepository, userRepository, pointsService, redisService, postActivityService } = createService({
       replyRepository: {
         findOne: jest.fn().mockResolvedValue({ id: 9, post_id: 88, user_id: 7, status: 'pending' }),
       },
@@ -167,12 +173,25 @@ describe('AdminService', () => {
     await service.rejectModerationItem('avatar', 5);
 
     expect(replyRepository.update).toHaveBeenCalledWith(9, { status: 'published' });
+    expect(postActivityService.markPostActive).toHaveBeenCalledWith(88);
     expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
     expect(pointsService.awardPoints).toHaveBeenCalledWith(7, 'create_reply', 'reply', 9);
     expect(userRepository.update).toHaveBeenCalledWith(5, {
       pending_avatar_url: null,
       avatar_status: 'rejected',
     });
+  });
+
+  it('recalculates topic activity when rejecting a published reply', async () => {
+    const { service, postActivityService } = createService({
+      replyRepository: {
+        findOne: jest.fn().mockResolvedValue({ id: 9, post_id: 88, status: 'published' }),
+      },
+    });
+
+    await service.rejectReply(9);
+
+    expect(postActivityService.recalculatePostActivity).toHaveBeenCalledWith(88);
   });
 
   it('normalizes boolean pin values before updating posts', async () => {

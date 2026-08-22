@@ -14,6 +14,7 @@ import { SettingsService } from '../settings/settings.service';
 import { RedisService } from '../../database/redis.service';
 import { REPLY_STATUS } from '../../common/utils/constants';
 import { ContentSafetyService } from '../content-safety/content-safety.service';
+import { PostActivityService } from '../posts/post-activity.service';
 
 @Injectable()
 export class RepliesService {
@@ -30,6 +31,7 @@ export class RepliesService {
     private pointsService: PointsService,
     private settingsService: SettingsService,
     private redisService: RedisService,
+    private postActivityService: PostActivityService,
     private contentSafety?: ContentSafetyService,
   ) {}
 
@@ -117,6 +119,9 @@ export class RepliesService {
     });
 
     const savedReply = await this.replyRepository.save(newReply);
+    if (savedReply.status === REPLY_STATUS.published) {
+      await this.postActivityService.markPostActive(postId, savedReply.created_at || new Date());
+    }
     if (this.contentSafety) {
       await this.contentSafety.recordFlag({ userId, targetType: 'reply', targetId: savedReply.id, risk, ipAddress: provenance.ipAddress }).catch(() => undefined);
     }
@@ -255,11 +260,15 @@ export class RepliesService {
       throw new ForbiddenException('You can only delete your own replies');
     }
 
+    const wasPublished = reply.status === REPLY_STATUS.published;
     // Soft delete
     reply.status = REPLY_STATUS.deleted;
     reply.deleted_at = new Date();
 
     await this.replyRepository.save(reply);
+    if (wasPublished) {
+      await this.postActivityService.recalculatePostActivity(reply.post_id);
+    }
     await this.invalidatePostCache(reply.post_id);
   }
 

@@ -36,4 +36,10 @@ describe('migration registry', () => {
       'FixLegacyFooterBrand1720000043000',
     );
   });
+
+  it('includes persisted post activity before discussion lists use it', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'AddPostLastActivity1720000045000',
+    );
+  });
 });

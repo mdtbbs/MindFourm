@@ -7,6 +7,7 @@ import { Resource } from '@entities/resource.entity';
 import { User } from '@entities/user.entity';
 import { SettingsModule } from '../settings/settings.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
+import { PostsModule } from '../posts/posts.module';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 import { ReportsAdminController } from './reports-admin.controller';
@@ -16,6 +17,7 @@ import { ReportsAdminController } from './reports-admin.controller';
     TypeOrmModule.forFeature([Report, Post, Reply, Resource, User]),
     SettingsModule,
     AdminNotificationsModule,
+    PostsModule,
   ],
   providers: [ReportsService],
   controllers: [ReportsController, ReportsAdminController],

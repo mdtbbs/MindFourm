@@ -36,6 +36,7 @@ import { AddAttachmentModeration1720000041000 } from './1720000041000-AddAttachm
 import { AddResourceSha2561720000042000 } from './1720000042000-AddResourceSha256';
 import { FixLegacyFooterBrand1720000043000 } from './1720000043000-FixLegacyFooterBrand';
 import { AddForumCategoryPresentation1720000044000 } from './1720000044000-AddForumCategoryPresentation';
+import { AddPostLastActivity1720000045000 } from './1720000045000-AddPostLastActivity';
 
 /**
  * Migrations in run order.
@@ -83,4 +84,5 @@ export const migrations = [
   AddResourceSha2561720000042000,
   FixLegacyFooterBrand1720000043000,
   AddForumCategoryPresentation1720000044000,
+  AddPostLastActivity1720000045000,
 ];

@@ -16,6 +16,7 @@ import { SettingsService } from '../settings/settings.service';
 import { toPublicUser } from '../users/public-user.util';
 import { CreateReportDto } from './dto/create-report.dto';
 import { ResolveReportDto } from './dto/resolve-report.dto';
+import { PostActivityService } from '../posts/post-activity.service';
 
 /** Settings key holding the number of open reports that hides content automatically. */
 export const REPORT_AUTO_HIDE_THRESHOLD_KEY = 'report_auto_hide_threshold';
@@ -55,6 +56,7 @@ interface ReportTarget {
   owner_id: number;
   /** Moderation status of the target, or null for target types that have none. */
   status: string | null;
+  post_id?: number;
 }
 
 @Injectable()
@@ -74,6 +76,7 @@ export class ReportsService {
     private userRepository: Repository<User>,
     private readonly settingsService: SettingsService,
     private readonly adminNotificationsService: AdminNotificationsService,
+    private readonly postActivityService: PostActivityService,
   ) {}
 
   async create(reporterId: number, dto: CreateReportDto): Promise<Report> {
@@ -111,7 +114,7 @@ export class ReportsService {
     });
     const saved = await this.reportRepository.save(report);
 
-    await this.maybeEscalate(dto.target_type, dto.target_id, target.status);
+    await this.maybeEscalate(dto.target_type, dto.target_id, target.status, target.post_id);
 
     return saved;
   }
@@ -225,12 +228,12 @@ export class ReportsService {
       case 'reply': {
         const reply = await this.replyRepository.findOne({
           where: { id: targetId, deleted_at: IsNull() },
-          select: { id: true, user_id: true, status: true },
+          select: { id: true, user_id: true, status: true, post_id: true },
         });
         if (!reply) {
           throw new NotFoundException('举报的回复不存在');
         }
-        return { owner_id: reply.user_id, status: reply.status };
+        return { owner_id: reply.user_id, status: reply.status, post_id: reply.post_id };
       }
       case 'resource': {
         const resource = await this.resourceRepository.findOne({
@@ -269,6 +272,7 @@ export class ReportsService {
     targetType: ReportTargetType,
     targetId: number,
     targetStatus: string | null,
+    postId?: number,
   ): Promise<void> {
     try {
       const threshold = await this.resolveAutoHideThreshold();
@@ -281,7 +285,7 @@ export class ReportsService {
         return;
       }
 
-      const hidden = await this.hideTarget(targetType, targetId, targetStatus);
+      const hidden = await this.hideTarget(targetType, targetId, targetStatus, postId);
 
       // Users cannot be hidden, and content already awaiting review does not change
       // state — but moderators still need to hear about the report that crossed the
@@ -318,6 +322,7 @@ export class ReportsService {
     targetType: ReportTargetType,
     targetId: number,
     targetStatus: string | null,
+    postId?: number,
   ): Promise<boolean> {
     switch (targetType) {
       case 'post':
@@ -327,6 +332,9 @@ export class ReportsService {
       case 'reply':
         if (targetStatus === REPLY_STATUS.pending) return false;
         await this.replyRepository.update({ id: targetId }, { status: REPLY_STATUS.pending });
+        if (targetStatus === REPLY_STATUS.published && postId) {
+          await this.postActivityService.recalculatePostActivity(postId);
+        }
         return true;
       case 'resource':
         if (targetStatus === RESOURCE_STATUS.pending) return false;

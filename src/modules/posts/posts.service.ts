@@ -136,6 +136,7 @@ export class PostsService {
         is_pinned: 0,
         view_count: 0,
         like_count: 0,
+        last_activity_at: new Date(),
         ip_address: provenance.ipAddress || null,
         location_label: provenance.locationLabel || null,
       });
@@ -372,10 +373,7 @@ export class PostsService {
 
     const sortDirection = order === 'ASC' ? 'ASC' : 'DESC';
     if (sort === 'last_activity_at') {
-      qb.orderBy(
-        `COALESCE((SELECT MAX(activity_reply.created_at) FROM replies activity_reply WHERE activity_reply.post_id = post.id AND activity_reply.deleted_at IS NULL AND activity_reply.status IN ('published')), post.created_at)`,
-        sortDirection,
-      );
+      qb.orderBy('post.last_activity_at', sortDirection);
     } else {
       const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
       qb.orderBy(`post.${sortField}`, sortDirection);

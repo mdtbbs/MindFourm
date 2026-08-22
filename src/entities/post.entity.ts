@@ -16,6 +16,7 @@ import { Group } from './group.entity';
 // (is_pinned, created_at); one composite index covers that whole clause instead of
 // scanning the table and sorting in memory.
 @Index('idx_posts_deleted_status_pinned_created', ['deleted_at', 'status', 'is_pinned', 'created_at'])
+@Index('idx_posts_deleted_status_last_activity', ['deleted_at', 'status', 'last_activity_at'])
 @Index('idx_posts_status', ['status'])
 @Index('idx_posts_slug', ['slug'])
 @Index('idx_posts_post_type', ['post_type'])
@@ -101,6 +102,13 @@ export class Post {
 
   @Column({ default: 0 })
   like_count: number;
+
+  /**
+   * The latest visible activity in this topic: its creation or its latest
+   * published reply. Persisting it keeps discussion-list pagination indexable.
+   */
+  @Column({ type: 'datetime' })
+  last_activity_at: Date;
 
   /** Private audit value; public responses expose only `location_label`. */
   @Column({ type: 'varchar', length: 45, nullable: true })

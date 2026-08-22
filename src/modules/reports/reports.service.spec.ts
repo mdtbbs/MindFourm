@@ -60,6 +60,7 @@ interface Overrides {
   userRepository?: RepositoryMock;
   settingsService?: RepositoryMock;
   adminNotificationsService?: RepositoryMock;
+  postActivityService?: RepositoryMock;
 }
 
 function createService(overrides: Overrides = {}) {
@@ -101,6 +102,11 @@ function createService(overrides: Overrides = {}) {
     publish: jest.fn().mockResolvedValue([]),
     ...overrides.adminNotificationsService,
   };
+  const postActivityService: RepositoryMock = {
+    markPostActive: jest.fn().mockResolvedValue(undefined),
+    recalculatePostActivity: jest.fn().mockResolvedValue(undefined),
+    ...overrides.postActivityService,
+  };
 
   const service = new ReportsService(
     reportRepository as unknown as Repository<Report>,
@@ -110,6 +116,7 @@ function createService(overrides: Overrides = {}) {
     userRepository as unknown as Repository<User>,
     settingsService as unknown as SettingsService,
     adminNotificationsService as unknown as AdminNotificationsService,
+    postActivityService as any,
   );
 
   return {
@@ -121,6 +128,7 @@ function createService(overrides: Overrides = {}) {
     userRepository,
     settingsService,
     adminNotificationsService,
+    postActivityService,
   };
 }
 
@@ -234,6 +242,21 @@ describe('ReportsService.create', () => {
         metadata: expect.objectContaining({ target_id: 42, pending_count: 3, auto_hidden: true }),
       }),
     );
+  });
+
+  it('recalculates activity when reports hide a published reply', async () => {
+    const { service, replyRepository, postActivityService } = createService({
+      replyRepository: {
+        findOne: jest.fn().mockResolvedValue({ id: 9, post_id: 42, user_id: 2, status: 'published' }),
+      },
+      reportRepository: { count: jest.fn().mockResolvedValue(3) },
+      settingsService: { getNumber: jest.fn().mockResolvedValue(3) },
+    });
+
+    await service.create(1, postReportDto({ target_type: 'reply', target_id: 9 }));
+
+    expect(replyRepository.update).toHaveBeenCalledWith({ id: 9 }, { status: 'pending' });
+    expect(postActivityService.recalculatePostActivity).toHaveBeenCalledWith(42);
   });
 
   it('leaves the target published while pending reports are below the threshold', async () => {

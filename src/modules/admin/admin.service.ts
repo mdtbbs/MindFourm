@@ -12,6 +12,7 @@ import { PointsService } from '../points/points.service';
 import { RedisService } from '../../database/redis.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { PostActivityService } from '../posts/post-activity.service';
 
 @Injectable()
 export class AdminService {
@@ -45,6 +46,7 @@ export class AdminService {
     private tagsService: TagsService,
     private pointsService: PointsService,
     private redisService: RedisService,
+    private postActivityService: PostActivityService,
   ) {}
 
   private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
@@ -379,6 +381,7 @@ export class AdminService {
       throw new NotFoundException('Reply not found');
     }
     await this.replyRepository.update(id, { status: 'published' });
+    await this.postActivityService.markPostActive(reply.post_id);
     await this.invalidatePostCache(reply.post_id);
     if (reply.status !== 'published') {
       await this.pointsService.awardPoints(reply.user_id, 'create_reply', 'reply', reply.id);
@@ -389,6 +392,9 @@ export class AdminService {
     const reply = await this.replyRepository.findOne({ where: { id } });
     await this.replyRepository.update(id, { status: 'deleted', deleted_at: new Date() });
     if (reply) {
+      if (reply.status === 'published') {
+        await this.postActivityService.recalculatePostActivity(reply.post_id);
+      }
       await this.invalidatePostCache(reply.post_id);
     }
   }

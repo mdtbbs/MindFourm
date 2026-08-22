@@ -98,6 +98,7 @@ describe('PostSummaryService', () => {
         view_count: 18,
         like_count: 5,
         created_at: new Date('2026-07-09T08:00:00.000Z'),
+        last_activity_at: new Date('2026-07-10T08:00:00.000Z'),
         updated_at: new Date('2026-07-09T08:30:00.000Z'),
         user: {
           id: 7,
@@ -126,6 +127,7 @@ describe('PostSummaryService', () => {
       excerpt: 'Alpha This is content with link',
       is_pinned: true,
       reply_count: 2,
+      last_activity_at: new Date('2026-07-10T08:00:00.000Z'),
       category_name: 'Announcements',
       category_slug: 'announcements',
       author_mindauth_id: 9001,
@@ -142,6 +144,8 @@ describe('PostSummaryService', () => {
     });
     expect(result[0]).not.toHaveProperty('content');
     expect(result[0]).not.toHaveProperty('content_html');
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith('COUNT(reply.id)', 'count');
+    expect(queryBuilder.addSelect).not.toHaveBeenCalledWith('MAX(reply.created_at)', 'last_activity_at');
   });
 
   it('returns an empty list without querying related repositories', async () => {
