@@ -1,35 +1,52 @@
-'use client';
+"use client";
 
-import { useRef, useEffect, useState, useCallback } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import { Markdown } from 'tiptap-markdown';
-import ImageExt from '@tiptap/extension-image';
-import Placeholder from '@tiptap/extension-placeholder';
-import Underline from '@tiptap/extension-underline';
-import LinkExt from '@tiptap/extension-link';
-import TextAlign from '@tiptap/extension-text-align';
-import CharacterCount from '@tiptap/extension-character-count';
-import { Table as TableExtension } from '@tiptap/extension-table';
-import TableRow from '@tiptap/extension-table-row';
-import TableCell from '@tiptap/extension-table-cell';
-import TableHeader from '@tiptap/extension-table-header';
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { common, createLowlight } from 'lowlight';
-import type { Editor } from '@tiptap/react';
-import { uploadImage, isUploadableImage } from '@/lib/tiptap/upload-image';
-import { useToastStore } from '@/store/toast-store';
+import { useRef, useEffect, useState, useCallback } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { Markdown } from "tiptap-markdown";
+import ImageExt from "@tiptap/extension-image";
+import Placeholder from "@tiptap/extension-placeholder";
+import Underline from "@tiptap/extension-underline";
+import LinkExt from "@tiptap/extension-link";
+import TextAlign from "@tiptap/extension-text-align";
+import CharacterCount from "@tiptap/extension-character-count";
+import { Table as TableExtension } from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
+import type { Editor } from "@tiptap/react";
+import { uploadImage, isUploadableImage } from "@/lib/tiptap/upload-image";
+import { useToastStore } from "@/store/toast-store";
+import { normalizeEditorContent } from "@/lib/editor-content";
 import {
-  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-  Heading1, Heading2, Heading3, Type,
-  Quote, Code, Code2,
-  List, ListOrdered,
-  Link2, Image as ImageIcon, Table as TableIcon, Minus,
-  AlignLeft, AlignCenter, AlignRight,
-  Undo2, Redo2,
-  CodeXml, Eye,
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  Strikethrough,
+  Heading1,
+  Heading2,
+  Heading3,
+  Type,
+  Quote,
+  Code,
+  Code2,
+  List,
+  ListOrdered,
+  Link2,
+  Image as ImageIcon,
+  Table as TableIcon,
+  Minus,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Undo2,
+  Redo2,
+  CodeXml,
+  Eye,
   Loader2,
-} from 'lucide-react';
+} from "lucide-react";
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -55,12 +72,12 @@ interface TiptapEditorProps {
 export default function TiptapEditor({
   value,
   onChange,
-  placeholder = '使用 Markdown 格式编写内容…',
-  minHeight = '200px',
+  placeholder = "使用 Markdown 格式编写内容…",
+  minHeight = "200px",
   compact = false,
   imageUpload = false,
   testId,
-  className = '',
+  className = "",
 }: TiptapEditorProps) {
   const [uploading, setUploading] = useState(false);
   const [sourceMode, setSourceMode] = useState(false);
@@ -94,9 +111,9 @@ export default function TiptapEditor({
       Underline,
       LinkExt.configure({
         openOnClick: false,
-        HTMLAttributes: { class: 'editor-link' },
+        HTMLAttributes: { class: "editor-link" },
       }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
       CharacterCount,
       TableExtension.configure({ resizable: true }),
       TableRow,
@@ -104,17 +121,21 @@ export default function TiptapEditor({
       TableHeader,
       CodeBlockLowlight.configure({ lowlight: createLowlight(common) }),
     ],
-    content: value || '<p></p>',
+    content: normalizeEditorContent(value),
     onUpdate({ editor: e }) {
       internalUpdateRef.current = true;
-      const md = (e.storage as any).markdown?.getMarkdown() ?? '';
+      const md = normalizeEditorContent(
+        (e.storage as any).markdown?.getMarkdown() ?? "",
+      );
       onChange(md);
       setSourceValue(md);
       // Reset on next tick so external changes can be detected again
-      queueMicrotask(() => { internalUpdateRef.current = false; });
+      queueMicrotask(() => {
+        internalUpdateRef.current = false;
+      });
     },
     editorProps: {
-      attributes: testId ? { 'data-testid': testId } : {},
+      attributes: testId ? { "data-testid": testId } : {},
       handlePaste(_view, event) {
         if (!imageUpload) return false;
         const files = event.clipboardData?.files;
@@ -141,34 +162,48 @@ export default function TiptapEditor({
   /* Sync external value changes (draft restore, edit-form initial load) */
   useEffect(() => {
     if (!editor || internalUpdateRef.current) return;
+    const normalizedValue = normalizeEditorContent(value);
+    if (value !== normalizedValue) {
+      onChange(normalizedValue);
+      setSourceValue(normalizedValue);
+      lastExternalValueRef.current = normalizedValue;
+      return;
+    }
     if (value === lastExternalValueRef.current) return;
     lastExternalValueRef.current = value;
-    const currentMd = (editor.storage as any).markdown?.getMarkdown() ?? '';
+    const currentMd = (editor.storage as any).markdown?.getMarkdown() ?? "";
     if (value !== currentMd) {
-      editor.commands.setContent(value || '<p></p>');
-      setSourceValue(value);
+      editor.commands.setContent(normalizedValue);
+      setSourceValue(normalizedValue);
     }
-  }, [value, editor]);
+  }, [value, editor, onChange]);
 
   /* ── Image upload ────────────────────────────────────── */
 
-  const handleImageUploads = useCallback(async (files: File[]) => {
-    if (!editor) return;
-    setUploading(true);
-    try {
-      for (const file of files) {
-        try {
-          const result = await uploadImage(file);
-          editor.chain().focus().setImage({ src: result.url, alt: result.alt }).run();
-        } catch (err) {
-          showError(err instanceof Error ? err.message : '图片上传失败');
+  const handleImageUploads = useCallback(
+    async (files: File[]) => {
+      if (!editor) return;
+      setUploading(true);
+      try {
+        for (const file of files) {
+          try {
+            const result = await uploadImage(file);
+            editor
+              .chain()
+              .focus()
+              .setImage({ src: result.url, alt: result.alt })
+              .run();
+          } catch (err) {
+            showError(err instanceof Error ? err.message : "图片上传失败");
+          }
         }
+      } finally {
+        setUploading(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  }, [editor, showError]);
+    },
+    [editor, showError],
+  );
 
   // Keep the ref in sync so editorProps paste/drop handlers always call the latest version
   imageUploadFnRef.current = handleImageUploads;
@@ -183,13 +218,15 @@ export default function TiptapEditor({
     if (!editor) return;
     if (sourceMode) {
       // Switching back to WYSIWYG: push source text into the editor
-      editor.commands.setContent(sourceValue || '<p></p>');
-      const md = (editor.storage as any).markdown?.getMarkdown() ?? '';
+      editor.commands.setContent(normalizeEditorContent(sourceValue));
+      const md = normalizeEditorContent(
+        (editor.storage as any).markdown?.getMarkdown() ?? "",
+      );
       onChange(md);
       lastExternalValueRef.current = md;
     } else {
       // Switching to source: grab current markdown
-      const md = (editor.storage as any).markdown?.getMarkdown() ?? '';
+      const md = (editor.storage as any).markdown?.getMarkdown() ?? "";
       setSourceValue(md);
     }
     setSourceMode((v) => !v);
@@ -198,11 +235,11 @@ export default function TiptapEditor({
   /* ── Link dialog ─────────────────────────────────────── */
 
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [linkUrl, setLinkUrl] = useState('');
+  const [linkUrl, setLinkUrl] = useState("");
 
   const openLinkDialog = useCallback(() => {
     if (!editor) return;
-    const prevUrl = editor.getAttributes('link').href || '';
+    const prevUrl = editor.getAttributes("link").href || "";
     setLinkUrl(prevUrl);
     setLinkDialogOpen(true);
   }, [editor]);
@@ -213,7 +250,12 @@ export default function TiptapEditor({
     if (!url) {
       editor.chain().focus().unsetLink().run();
     } else {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+      editor
+        .chain()
+        .focus()
+        .extendMarkRange("link")
+        .setLink({ href: url })
+        .run();
     }
     setLinkDialogOpen(false);
   }, [editor, linkUrl]);
@@ -221,7 +263,9 @@ export default function TiptapEditor({
   /* ── Cleanup ─────────────────────────────────────────── */
 
   useEffect(() => {
-    return () => { editor?.destroy(); };
+    return () => {
+      editor?.destroy();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -241,7 +285,7 @@ export default function TiptapEditor({
         onChange={(e) => {
           const files = Array.from(e.target.files || []);
           if (files.length) handleImageUploads(files);
-          if (e.target) e.target.value = '';
+          if (e.target) e.target.value = "";
         }}
       />
 
@@ -319,32 +363,48 @@ interface ToolbarProps {
 }
 
 function EditorToolbar({
-  editor, compact, uploading, imageUpload, sourceMode,
-  onTriggerImagePicker, onOpenLinkDialog, onToggleSourceMode,
+  editor,
+  compact,
+  uploading,
+  imageUpload,
+  sourceMode,
+  onTriggerImagePicker,
+  onOpenLinkDialog,
+  onToggleSourceMode,
 }: ToolbarProps) {
   if (sourceMode) {
     return (
       <div className="tiptap-toolbar">
-        <TBtn active={false} onClick={onToggleSourceMode} title="返回可视化编辑">
+        <TBtn
+          active={false}
+          onClick={onToggleSourceMode}
+          title="返回可视化编辑"
+        >
           <Eye className="w-4 h-4" /> 预览
         </TBtn>
       </div>
     );
   }
 
-  const isLinkActive = editor.isActive('link');
+  const isLinkActive = editor.isActive("link");
 
   return (
     <div className="tiptap-toolbar">
       {/* Undo / Redo */}
       {!compact && (
         <>
-          <TBtn onClick={() => editor.chain().focus().undo().run()}
-            disabled={!editor.can().undo()} title="撤销 (Ctrl+Z)">
+          <TBtn
+            onClick={() => editor.chain().focus().undo().run()}
+            disabled={!editor.can().undo()}
+            title="撤销 (Ctrl+Z)"
+          >
             <Undo2 className="w-4 h-4" />
           </TBtn>
-          <TBtn onClick={() => editor.chain().focus().redo().run()}
-            disabled={!editor.can().redo()} title="重做 (Ctrl+Y)">
+          <TBtn
+            onClick={() => editor.chain().focus().redo().run()}
+            disabled={!editor.can().redo()}
+            title="重做 (Ctrl+Y)"
+          >
             <Redo2 className="w-4 h-4" />
           </TBtn>
           <Divider />
@@ -352,22 +412,34 @@ function EditorToolbar({
       )}
 
       {/* Text formatting */}
-      <TBtn active={editor.isActive('bold')}
-        onClick={() => editor.chain().focus().toggleBold().run()} title="粗体 (Ctrl+B)">
+      <TBtn
+        active={editor.isActive("bold")}
+        onClick={() => editor.chain().focus().toggleBold().run()}
+        title="粗体 (Ctrl+B)"
+      >
         <Bold className="w-4 h-4" />
       </TBtn>
-      <TBtn active={editor.isActive('italic')}
-        onClick={() => editor.chain().focus().toggleItalic().run()} title="斜体 (Ctrl+I)">
+      <TBtn
+        active={editor.isActive("italic")}
+        onClick={() => editor.chain().focus().toggleItalic().run()}
+        title="斜体 (Ctrl+I)"
+      >
         <Italic className="w-4 h-4" />
       </TBtn>
       {!compact && (
-        <TBtn active={editor.isActive('underline')}
-          onClick={() => editor.chain().focus().toggleUnderline().run()} title="下划线 (Ctrl+U)">
+        <TBtn
+          active={editor.isActive("underline")}
+          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          title="下划线 (Ctrl+U)"
+        >
           <UnderlineIcon className="w-4 h-4" />
         </TBtn>
       )}
-      <TBtn active={editor.isActive('strike')}
-        onClick={() => editor.chain().focus().toggleStrike().run()} title="删除线">
+      <TBtn
+        active={editor.isActive("strike")}
+        onClick={() => editor.chain().focus().toggleStrike().run()}
+        title="删除线"
+      >
         <Strikethrough className="w-4 h-4" />
       </TBtn>
 
@@ -375,26 +447,49 @@ function EditorToolbar({
 
       {/* Headings */}
       {compact ? (
-        <TBtn active={editor.isActive('heading', { level: 2 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="标题">
+        <TBtn
+          active={editor.isActive("heading", { level: 2 })}
+          onClick={() =>
+            editor.chain().focus().toggleHeading({ level: 2 }).run()
+          }
+          title="标题"
+        >
           <Heading2 className="w-4 h-4" />
         </TBtn>
       ) : (
         <>
-          <TBtn active={editor.isActive('heading', { level: 1 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="标题 1">
+          <TBtn
+            active={editor.isActive("heading", { level: 1 })}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 1 }).run()
+            }
+            title="标题 1"
+          >
             <Heading1 className="w-4 h-4" />
           </TBtn>
-          <TBtn active={editor.isActive('heading', { level: 2 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="标题 2">
+          <TBtn
+            active={editor.isActive("heading", { level: 2 })}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 2 }).run()
+            }
+            title="标题 2"
+          >
             <Heading2 className="w-4 h-4" />
           </TBtn>
-          <TBtn active={editor.isActive('heading', { level: 3 })}
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="标题 3">
+          <TBtn
+            active={editor.isActive("heading", { level: 3 })}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 3 }).run()
+            }
+            title="标题 3"
+          >
             <Heading3 className="w-4 h-4" />
           </TBtn>
-          <TBtn active={!editor.isActive('heading') && editor.isActive('paragraph')}
-            onClick={() => editor.chain().focus().setParagraph().run()} title="正文">
+          <TBtn
+            active={!editor.isActive("heading") && editor.isActive("paragraph")}
+            onClick={() => editor.chain().focus().setParagraph().run()}
+            title="正文"
+          >
             <Type className="w-4 h-4" />
           </TBtn>
         </>
@@ -403,17 +498,26 @@ function EditorToolbar({
       <Divider />
 
       {/* Block elements */}
-      <TBtn active={editor.isActive('blockquote')}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()} title="引用">
+      <TBtn
+        active={editor.isActive("blockquote")}
+        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        title="引用"
+      >
         <Quote className="w-4 h-4" />
       </TBtn>
-      <TBtn active={editor.isActive('code')}
-        onClick={() => editor.chain().focus().toggleCode().run()} title="行内代码">
+      <TBtn
+        active={editor.isActive("code")}
+        onClick={() => editor.chain().focus().toggleCode().run()}
+        title="行内代码"
+      >
         <Code className="w-4 h-4" />
       </TBtn>
       {!compact && (
-        <TBtn active={editor.isActive('codeBlock')}
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()} title="代码块">
+        <TBtn
+          active={editor.isActive("codeBlock")}
+          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+          title="代码块"
+        >
           <Code2 className="w-4 h-4" />
         </TBtn>
       )}
@@ -421,34 +525,57 @@ function EditorToolbar({
       <Divider />
 
       {/* Lists */}
-      <TBtn active={editor.isActive('bulletList')}
-        onClick={() => editor.chain().focus().toggleBulletList().run()} title="无序列表">
+      <TBtn
+        active={editor.isActive("bulletList")}
+        onClick={() => editor.chain().focus().toggleBulletList().run()}
+        title="无序列表"
+      >
         <List className="w-4 h-4" />
       </TBtn>
-      <TBtn active={editor.isActive('orderedList')}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()} title="有序列表">
+      <TBtn
+        active={editor.isActive("orderedList")}
+        onClick={() => editor.chain().focus().toggleOrderedList().run()}
+        title="有序列表"
+      >
         <ListOrdered className="w-4 h-4" />
       </TBtn>
 
       <Divider />
 
       {/* Insert */}
-      <TBtn active={isLinkActive}
-        onClick={onOpenLinkDialog} title="链接 (Ctrl+K)">
+      <TBtn
+        active={isLinkActive}
+        onClick={onOpenLinkDialog}
+        title="链接 (Ctrl+K)"
+      >
         <Link2 className="w-4 h-4" />
       </TBtn>
       {imageUpload && (
-        <TBtn active={false}
+        <TBtn
+          active={false}
           onClick={onTriggerImagePicker}
           disabled={uploading}
-          title={uploading ? '上传中…' : '上传图片'}>
-          {uploading ? <Loader2 className="w-4 h-4" aria-hidden="true" /> : <ImageIcon className="w-4 h-4" aria-hidden="true" />}
+          title={uploading ? "上传中…" : "上传图片"}
+        >
+          {uploading ? (
+            <Loader2 className="w-4 h-4" aria-hidden="true" />
+          ) : (
+            <ImageIcon className="w-4 h-4" aria-hidden="true" />
+          )}
         </TBtn>
       )}
       {!compact && (
-        <TBtn active={editor.isActive('table')}
-          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
-          title="表格">
+        <TBtn
+          active={editor.isActive("table")}
+          onClick={() =>
+            editor
+              .chain()
+              .focus()
+              .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+              .run()
+          }
+          title="表格"
+        >
           <TableIcon className="w-4 h-4" />
         </TBtn>
       )}
@@ -457,21 +584,33 @@ function EditorToolbar({
         <>
           <Divider />
           {/* Text align */}
-          <TBtn active={editor.isActive({ textAlign: 'left' })}
-            onClick={() => editor.chain().focus().setTextAlign('left').run()} title="左对齐">
+          <TBtn
+            active={editor.isActive({ textAlign: "left" })}
+            onClick={() => editor.chain().focus().setTextAlign("left").run()}
+            title="左对齐"
+          >
             <AlignLeft className="w-4 h-4" />
           </TBtn>
-          <TBtn active={editor.isActive({ textAlign: 'center' })}
-            onClick={() => editor.chain().focus().setTextAlign('center').run()} title="居中">
+          <TBtn
+            active={editor.isActive({ textAlign: "center" })}
+            onClick={() => editor.chain().focus().setTextAlign("center").run()}
+            title="居中"
+          >
             <AlignCenter className="w-4 h-4" />
           </TBtn>
-          <TBtn active={editor.isActive({ textAlign: 'right' })}
-            onClick={() => editor.chain().focus().setTextAlign('right').run()} title="右对齐">
+          <TBtn
+            active={editor.isActive({ textAlign: "right" })}
+            onClick={() => editor.chain().focus().setTextAlign("right").run()}
+            title="右对齐"
+          >
             <AlignRight className="w-4 h-4" />
           </TBtn>
           <Divider />
-          <TBtn active={false}
-            onClick={() => editor.chain().focus().setHorizontalRule().run()} title="分割线">
+          <TBtn
+            active={false}
+            onClick={() => editor.chain().focus().setHorizontalRule().run()}
+            title="分割线"
+          >
             <Minus className="w-4 h-4" />
           </TBtn>
         </>
@@ -479,7 +618,11 @@ function EditorToolbar({
 
       {/* Spacer + source toggle */}
       <div className="flex-1" />
-      <TBtn active={sourceMode} onClick={onToggleSourceMode} title="Markdown 源码">
+      <TBtn
+        active={sourceMode}
+        onClick={onToggleSourceMode}
+        title="Markdown 源码"
+      >
         <CodeXml className="w-4 h-4" />
       </TBtn>
     </div>
@@ -488,7 +631,13 @@ function EditorToolbar({
 
 /* ─── Toolbar button ──────────────────────────────────── */
 
-function TBtn({ children, active, onClick, disabled, title }: {
+function TBtn({
+  children,
+  active,
+  onClick,
+  disabled,
+  title,
+}: {
   children: React.ReactNode;
   active?: boolean;
   onClick: () => void;
@@ -501,7 +650,7 @@ function TBtn({ children, active, onClick, disabled, title }: {
       title={title}
       onClick={onClick}
       disabled={disabled}
-      className={`tiptap-btn ${active ? 'tiptap-btn-active' : ''}`}
+      className={`tiptap-btn ${active ? "tiptap-btn-active" : ""}`}
     >
       {children}
     </button>
@@ -514,7 +663,12 @@ function Divider() {
 
 /* ─── Link dialog ─────────────────────────────────────── */
 
-function LinkDialog({ url, onUrlChange, onApply, onClose }: {
+function LinkDialog({
+  url,
+  onUrlChange,
+  onApply,
+  onClose,
+}: {
   url: string;
   onUrlChange: (v: string) => void;
   onApply: () => void;
@@ -525,11 +679,14 @@ function LinkDialog({ url, onUrlChange, onApply, onClose }: {
   useEffect(() => {
     inputRef.current?.focus();
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') { e.preventDefault(); onApply(); }
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Enter") {
+        e.preventDefault();
+        onApply();
+      }
+      if (e.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [onApply, onClose]);
 
   return (
