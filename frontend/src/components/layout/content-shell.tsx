@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSse } from "@/hooks/use-sse";
 import { useAuth } from "@/lib/auth/context";
@@ -169,20 +169,22 @@ export default function ContentShell({
         />
       )}
 
-      <ContentDrawer
-        open={mobileMenuOpen}
-        items={sidebarItems}
-        onClose={() => setMobileMenuOpen(false)}
-        siteName={brand.siteName}
-        sidebarTitle={brand.sidebarTitle}
-        logoUrl={brand.logoUrl || undefined}
-        userName={user?.username || undefined}
-        userMeta={userMeta}
-        resourceCategories={resourceCategories}
-        forumCategories={forumCategories}
-        currentPathname={pathname}
-        publicNavigation={!showDesktopSidebar}
-      />
+      <Suspense fallback={null}>
+        <ContentDrawer
+          open={mobileMenuOpen}
+          items={sidebarItems}
+          onClose={() => setMobileMenuOpen(false)}
+          siteName={brand.siteName}
+          sidebarTitle={brand.sidebarTitle}
+          logoUrl={brand.logoUrl || undefined}
+          userName={user?.username || undefined}
+          userMeta={userMeta}
+          resourceCategories={resourceCategories}
+          forumCategories={forumCategories}
+          currentPathname={pathname}
+          publicNavigation={!showDesktopSidebar}
+        />
+      </Suspense>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <ContentToolbar

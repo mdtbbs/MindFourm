@@ -1,11 +1,11 @@
 "use client";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import PhoneVerificationForm from "@/components/auth/phone-verification-form";
 import { useAuth } from "@/lib/auth/context";
 import { getSafePhoneVerificationRedirect } from "@/lib/phone-verification/redirect";
-export default function VerifyPhonePage() {
+function VerifyPhoneContent() {
   const router = useRouter(),
     params = useSearchParams(),
     { user, isAuthenticated, isLoading } = useAuth();
@@ -47,5 +47,13 @@ export default function VerifyPhonePage() {
         </div>
       </section>
     </main>
+  );
+}
+
+export default function VerifyPhonePage() {
+  return (
+    <Suspense fallback={null}>
+      <VerifyPhoneContent />
+    </Suspense>
   );
 }

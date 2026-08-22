@@ -1,19 +1,21 @@
-'use client';
+"use client";
 
-import { useSearchParams } from 'next/navigation';
-import { useAuth } from '@/lib/auth/context';
-import ServerSidebar from '@/components/forum/server-sidebar';
-import MyServersList from '@/components/forum/my-servers-list';
-import ServerApplyForm from '@/components/forum/server-apply-form';
-import PublicServerGrid from '@/components/forum/public-server-grid';
-import FeatureGate from '@/components/forum/feature-gate';
-import { Lock } from 'lucide-react';
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/auth/context";
+import ServerSidebar from "@/components/forum/server-sidebar";
+import MyServersList from "@/components/forum/my-servers-list";
+import ServerApplyForm from "@/components/forum/server-apply-form";
+import PublicServerGrid from "@/components/forum/public-server-grid";
+import FeatureGate from "@/components/forum/feature-gate";
+import { Lock } from "lucide-react";
 
 function AuthRequiredSection() {
   // 获取当前页面路径作为登录后的跳转目标
-  const currentPath = typeof window !== 'undefined'
-    ? window.location.pathname + window.location.search
-    : '/';
+  const currentPath =
+    typeof window !== "undefined"
+      ? window.location.pathname + window.location.search
+      : "/";
 
   return (
     <div className="text-center py-16 bg-[var(--bg-card)] rounded-[var(--radius-card)] border border-[var(--border)]">
@@ -29,36 +31,53 @@ function AuthRequiredSection() {
   );
 }
 
-function SectionContent({ section, isAuthenticated }: { section: string; isAuthenticated: boolean }) {
+function SectionContent({
+  section,
+  isAuthenticated,
+}: {
+  section: string;
+  isAuthenticated: boolean;
+}) {
   switch (section) {
-    case 'my':
+    case "my":
       return isAuthenticated ? <MyServersList /> : <AuthRequiredSection />;
-    case 'apply':
+    case "apply":
       return isAuthenticated ? <ServerApplyForm /> : <AuthRequiredSection />;
-    case 'public':
+    case "public":
       return <PublicServerGrid />;
     default:
       return isAuthenticated ? <MyServersList /> : <PublicServerGrid />;
   }
 }
 
-export default function ServersPage() {
+function ServersContent() {
   const searchParams = useSearchParams();
   const { isAuthenticated } = useAuth();
-  const section = searchParams?.get('section') || '';
+  const section = searchParams?.get("section") || "";
 
-  const currentSection = section || (isAuthenticated ? 'my' : 'public');
+  const currentSection = section || (isAuthenticated ? "my" : "public");
 
   return (
     <FeatureGate settingKey="feature_servers_enabled" label="游戏服务器">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex gap-8">
-        <ServerSidebar />
-        <div className="flex-1 min-w-0">
-          <SectionContent section={currentSection} isAuthenticated={isAuthenticated} />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex gap-8">
+          <ServerSidebar />
+          <div className="flex-1 min-w-0">
+            <SectionContent
+              section={currentSection}
+              isAuthenticated={isAuthenticated}
+            />
+          </div>
         </div>
       </div>
-    </div>
     </FeatureGate>
+  );
+}
+
+export default function ServersPage() {
+  return (
+    <Suspense fallback={null}>
+      <ServersContent />
+    </Suspense>
   );
 }
