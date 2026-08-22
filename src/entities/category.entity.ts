@@ -29,14 +29,14 @@ export class Category {
   color: string | null;
 
   /** Restricted Lucide icon name selected in the category admin form. */
-  @Column({ length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
   icon: string | null;
 
   /** Presentation group: community, creation, game or meta. */
-  @Column({ length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
   group_key: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'int', nullable: true })
   parent_id: number | null;
 
   @ManyToOne(() => Category, (category) => category.children, { nullable: true, onDelete: 'SET NULL' })
