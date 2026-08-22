@@ -25,7 +25,7 @@ export class Category {
   description: string | null;
 
   /** Hex colour used consistently by the forum sidebar, badges and headers. */
-  @Column({ length: 7, nullable: true })
+  @Column({ type: 'varchar', length: 7, nullable: true })
   color: string | null;
 
   /** Restricted Lucide icon name selected in the category admin form. */
