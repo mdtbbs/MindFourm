@@ -28,15 +28,15 @@
   /* ===== 圆角 ===== */
   --radius-sm: 4px;
   --radius: 6px;
-  --radius-lg: 8px;
-  --radius-card: 8px;
-  --radius-badge: 6px;
+  --radius-lg: 6px;
+  --radius-card: 6px;
+  --radius-badge: 999px;
 
   /* ===== 阴影 (浅色主题) ===== */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.10);
-  --shadow-modal: 0 8px 24px rgba(0,0,0,0.12);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.12);
 
   /* ===== 布局尺寸 ===== */
   --header-height: 56px;
@@ -72,46 +72,19 @@
 /* ===== 主题切换动画 ===== */
 .theme-transitioning,
 .theme-transitioning * {
-  transition: background-color 0.3s ease,
-              color 0.3s ease,
-              border-color 0.3s ease,
-              box-shadow 0.3s ease !important;
-}
-
-/* ===== 深色主题 ===== */
-[data-theme="dark"],
-.dark {
-  --bg: #121212;
-  --bg-card: #1e1e1e;
-  --bg-elevated: #2a2a2a;
-  --bg-hover: #333333;
-  --text: #ffffff;
-  --text-secondary: #b0b0b0;
-  --text-muted: #707070;
-  --border: #333333;
-  --border-light: #2a2a2a;
-
-  /* 深色主题阴影 */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.24);
-  --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.32);
-  --shadow-modal: 0 8px 24px rgba(0,0,0,0.40);
-
-  /* 勋章等级颜色 - 深色主题 */
-  --badge-lv1: #424242;
-  --badge-lv2-start: #1976d2;
-  --badge-lv2-end: #2196f3;
-  --badge-lv3-start: #ffb347;
-  --badge-lv3-end: #ffd700;
-  --badge-lv4-start: #ff8c5a;
-  --badge-lv4-end: #ff6b35;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease !important;
 }
 
 /* ===== 字体 ===== */
 :root {
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont,
-    'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Geist Mono', 'JetBrains Mono', 'Consolas', monospace;
+  --font-family:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", "Consolas", monospace;
 }
 
 [data-theme="dark"],
@@ -129,4 +102,15 @@
   --primary-dark: #5f9cff;
   --primary-light: #9fc2ff;
   --accent: #173153;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.24);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.32);
+  --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --badge-lv1: #424242;
+  --badge-lv2-start: #1976d2;
+  --badge-lv2-end: #2196f3;
+  --badge-lv3-start: #ffb347;
+  --badge-lv3-end: #ffd700;
+  --badge-lv4-start: #ff8c5a;
+  --badge-lv4-end: #ff6b35;
 }

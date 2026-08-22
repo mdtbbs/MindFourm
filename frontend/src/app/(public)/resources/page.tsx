@@ -8,12 +8,15 @@ import { fetchApiData } from "@/lib/api/server-fetch";
 import { fetchPublicSettings } from "@/lib/settings/server";
 import { resolveBrand } from "@/lib/theme/brand";
 import { generatePageMetadata } from "@/lib/metadata";
-import { Category, Resource, ResourceCategory, Tag } from "@/types";
+import { Resource, ResourceCategory } from "@/types";
 
 export const revalidate = 60;
 
 const RESOURCES_DESCRIPTION = "浏览和下载社区贡献的资源、模组和工具";
-type ResourceFilterOptions = { supported_versions: string[]; compatibility: string[] };
+type ResourceFilterOptions = {
+  supported_versions: string[];
+  compatibility: string[];
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings();
@@ -47,51 +50,34 @@ async function fetchData(params: {
   if (params.compatibility) qs.set("compatibility", params.compatibility);
   if (params.resource_kind) qs.set("resource_kind", params.resource_kind);
 
-  const [
-    resourcesResult,
-    resourceCategories,
-    forumCategories,
-    tags,
-    filterOptions,
-  ] = await Promise.all([
-    fetchApiData<{
-      data: Resource[];
-      next_cursor: string | null;
-      has_more: boolean;
-    }>(`/api/resources?${qs.toString()}`, {
-      init: { next: { revalidate: 60 } },
-      fallback: { data: [], next_cursor: null, has_more: false },
-      throwOnError: true,
-    }),
-    fetchApiData<ResourceCategory[]>("/api/resources/categories", {
-      init: { next: { tags: ["resource-categories"], revalidate: 300 } },
-      fallback: [],
-      throwOnError: true,
-    }),
-    fetchApiData<Category[]>("/api/categories", {
-      init: { next: { tags: ["categories"] } },
-      fallback: [],
-      throwOnError: true,
-    }),
-    fetchApiData<Tag[]>("/api/tags", {
-      init: { next: { tags: ["tags"] } },
-      fallback: [],
-      throwOnError: true,
-    }),
-    fetchApiData<ResourceFilterOptions>("/api/resources/filter-options", {
-      init: { next: { revalidate: 300 } },
-      fallback: { supported_versions: [], compatibility: [] },
-      throwOnError: false,
-    }),
-  ]);
+  const [resourcesResult, resourceCategories, filterOptions] =
+    await Promise.all([
+      fetchApiData<{
+        data: Resource[];
+        next_cursor: string | null;
+        has_more: boolean;
+      }>(`/api/resources?${qs.toString()}`, {
+        init: { next: { revalidate: 60 } },
+        fallback: { data: [], next_cursor: null, has_more: false },
+        throwOnError: true,
+      }),
+      fetchApiData<ResourceCategory[]>("/api/resources/categories", {
+        init: { next: { tags: ["resource-categories"], revalidate: 300 } },
+        fallback: [],
+        throwOnError: true,
+      }),
+      fetchApiData<ResourceFilterOptions>("/api/resources/filter-options", {
+        init: { next: { revalidate: 300 } },
+        fallback: { supported_versions: [], compatibility: [] },
+        throwOnError: false,
+      }),
+    ]);
 
   return {
     resources: resourcesResult.data,
     nextCursor: resourcesResult.next_cursor,
     hasMore: resourcesResult.has_more,
     resourceCategories,
-    forumCategories,
-    tags,
     filterOptions,
   };
 }
@@ -143,15 +129,8 @@ export default async function ResourcesPage({
     );
   }
 
-  const {
-    resources,
-    nextCursor,
-    hasMore,
-    resourceCategories,
-    forumCategories,
-    tags,
-    filterOptions,
-  } = data;
+  const { resources, nextCursor, hasMore, resourceCategories, filterOptions } =
+    data;
 
   return (
     <div className="min-w-0 mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -201,20 +180,21 @@ export default async function ResourcesPage({
           </div>
         ) : (
           <div>
-              <ResourceLoadMore
-                initialResources={resources}
-                initialCursor={nextCursor}
-                hasMore={hasMore}
-                categoryId={
-                  params.category_id ? parseInt(params.category_id) : undefined
-                }
-                search={params.search}
-                sort={params.sort}
-                tag={params.tag}
-                supportedVersion={params.supported_version}
-                compatibility={params.compatibility}
-                resourceKind={params.resource_kind}
-              />
+            <ResourceLoadMore
+              key={JSON.stringify(params)}
+              initialResources={resources}
+              initialCursor={nextCursor}
+              hasMore={hasMore}
+              categoryId={
+                params.category_id ? parseInt(params.category_id) : undefined
+              }
+              search={params.search}
+              sort={params.sort}
+              tag={params.tag}
+              supportedVersion={params.supported_version}
+              compatibility={params.compatibility}
+              resourceKind={params.resource_kind}
+            />
           </div>
         )}
       </main>

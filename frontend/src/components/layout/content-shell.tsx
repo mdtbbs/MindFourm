@@ -1,41 +1,56 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { useSse } from '@/hooks/use-sse';
-import { useAuth } from '@/lib/auth/context';
-import { useSettings } from '@/lib/settings/context';
-import { resolveBrand } from '@/lib/theme/brand';
-import { buildSidebarNavigation } from '@/lib/navigation/sidebar-navigation';
-import { messageApi, friendsApi, resourceApi, categoryApi } from '@/lib/api/client';
-import type { Notification, ResourceCategory, Category } from '@/types';
-import Footer from '@/components/forum/footer';
-import AnnouncementBanner from '@/components/forum/announcement-banner';
-import PrivacyNotice from '@/components/legal/privacy-notice';
-import ContentSidebar from '@/components/layout/content-sidebar';
-import ContentDrawer from '@/components/layout/content-drawer';
-import ContentToolbar from '@/components/layout/content-toolbar';
-import { roleLabel } from '@/lib/display-labels';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useSse } from "@/hooks/use-sse";
+import { useAuth } from "@/lib/auth/context";
+import { useSettings } from "@/lib/settings/context";
+import { resolveBrand } from "@/lib/theme/brand";
+import { buildSidebarNavigation } from "@/lib/navigation/sidebar-navigation";
+import {
+  messageApi,
+  friendsApi,
+  resourceApi,
+  categoryApi,
+} from "@/lib/api/client";
+import type { Notification, ResourceCategory, Category } from "@/types";
+import Footer from "@/components/forum/footer";
+import AnnouncementBanner from "@/components/forum/announcement-banner";
+import PrivacyNotice from "@/components/legal/privacy-notice";
+import ContentSidebar from "@/components/layout/content-sidebar";
+import ContentDrawer from "@/components/layout/content-drawer";
+import ContentToolbar from "@/components/layout/content-toolbar";
+import { roleLabel } from "@/lib/display-labels";
 
-export default function ContentShell({ children }: { children: React.ReactNode }) {
+export default function ContentShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { user, isAuthenticated, logout } = useAuth();
   const settings = useSettings();
   const brand = resolveBrand(settings);
   const router = useRouter();
   const pathname = usePathname();
-  const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
+  const showManagementNavigation =
+    pathname.startsWith("/admin") || pathname.startsWith("/settings");
+  const mindauthUrl =
+    process.env.NEXT_PUBLIC_MINDAUTH_URL || "http://localhost:4001";
 
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [unreadFriendRequestCount, setUnreadFriendRequestCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [resourceCategories, setResourceCategories] = useState<ResourceCategory[]>([]);
+  const [resourceCategories, setResourceCategories] = useState<
+    ResourceCategory[]
+  >([]);
   const [forumCategories, setForumCategories] = useState<Category[]>([]);
 
   const sidebarItems = useMemo(
-    () => buildSidebarNavigation({
-      settings,
-      isAuthenticated,
-    }),
+    () =>
+      buildSidebarNavigation({
+        settings,
+        isAuthenticated,
+      }),
     [settings, isAuthenticated],
   );
 
@@ -44,8 +59,10 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   }, [pathname]);
 
   useEffect(() => {
+    if (!showManagementNavigation) return undefined;
     let cancelled = false;
-    resourceApi.getCategories()
+    resourceApi
+      .getCategories()
       .then((res) => {
         if (!cancelled) setResourceCategories(res);
       })
@@ -53,11 +70,13 @@ export default function ContentShell({ children }: { children: React.ReactNode }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showManagementNavigation]);
 
   useEffect(() => {
+    if (!showManagementNavigation) return undefined;
     let cancelled = false;
-    categoryApi.getList()
+    categoryApi
+      .getList()
       .then((res) => {
         if (!cancelled) setForumCategories(Array.isArray(res) ? res : []);
       })
@@ -65,7 +84,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showManagementNavigation]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -75,13 +94,15 @@ export default function ContentShell({ children }: { children: React.ReactNode }
     }
 
     let cancelled = false;
-    messageApi.unreadCount()
+    messageApi
+      .unreadCount()
       .then((res) => {
         if (!cancelled) setUnreadMsgCount(res.count);
       })
       .catch(() => {});
 
-    friendsApi.getRequests(1, 1)
+    friendsApi
+      .getRequests(1, 1)
       .then((res) => {
         if (!cancelled) setUnreadFriendRequestCount(res.total || 0);
       })
@@ -93,22 +114,29 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   }, [isAuthenticated]);
 
   const handleMessageEvent = useCallback((notification: Notification) => {
-    if (notification.type === 'message') {
-      messageApi.unreadCount().then((res) => setUnreadMsgCount(res.count)).catch(() => {});
+    if (notification.type === "message") {
+      messageApi
+        .unreadCount()
+        .then((res) => setUnreadMsgCount(res.count))
+        .catch(() => {});
     }
 
-    if (notification.type === 'friend_request') {
-      friendsApi.getRequests(1, 1).then((res) => setUnreadFriendRequestCount(res.total || 0)).catch(() => {});
+    if (notification.type === "friend_request") {
+      friendsApi
+        .getRequests(1, 1)
+        .then((res) => setUnreadFriendRequestCount(res.total || 0))
+        .catch(() => {});
     }
   }, []);
 
-  useSse('notification', handleMessageEvent, { enabled: isAuthenticated });
+  useSse("notification", handleMessageEvent, { enabled: isAuthenticated });
 
-  const buildAuthUrl = (endpoint: 'login' | 'register') => {
+  const buildAuthUrl = (endpoint: "login" | "register") => {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
     const redirectUrl = encodeURIComponent(`${siteUrl}/api/auth/callback`);
-    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || 'forum';
-    const redirectPath = `${window.location.pathname}${window.location.search}` || '/';
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || "forum";
+    const redirectPath =
+      `${window.location.pathname}${window.location.search}` || "/";
     return `${mindauthUrl}/${endpoint}?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(redirectPath)}`;
   };
 
@@ -118,8 +146,12 @@ export default function ContentShell({ children }: { children: React.ReactNode }
     }
   };
 
-  const userMeta = user?.role ? `角色：${roleLabel(user.role)}` : (isAuthenticated ? '已登录' : '未登录');
-  const showDesktopSidebar = pathname.startsWith('/admin') || pathname.startsWith('/settings');
+  const userMeta = user?.role
+    ? `角色：${roleLabel(user.role)}`
+    : isAuthenticated
+      ? "已登录"
+      : "未登录";
+  const showDesktopSidebar = showManagementNavigation;
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">
@@ -160,11 +192,16 @@ export default function ContentShell({ children }: { children: React.ReactNode }
           isAuthenticated={isAuthenticated}
           unreadMessageCount={unreadMsgCount}
           unreadFriendRequestCount={unreadFriendRequestCount}
-          onLogin={() => { window.location.href = buildAuthUrl('login'); }}
-          onRegister={() => { window.location.href = buildAuthUrl('register'); }}
+          onLogin={() => {
+            window.location.href = buildAuthUrl("login");
+          }}
+          onRegister={() => {
+            window.location.href = buildAuthUrl("register");
+          }}
           onLogout={logout}
           onSearch={handleSearch}
           onOpenDrawer={() => setMobileMenuOpen(true)}
+          showPublicNavigation={!showManagementNavigation}
         />
         <AnnouncementBanner />
         <PrivacyNotice />
