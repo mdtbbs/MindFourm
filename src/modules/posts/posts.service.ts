@@ -50,10 +50,9 @@ import { ContentSafetyService } from '../content-safety/content-safety.service';
 
 @Injectable()
 export class PostsService {
-  // v4: the cached payload gained author display fields (`author_name` /
-  // `author_avatar_url`) for posts and replies. Reusing v3 would serve ID-only
-  // author data until the old 5-minute entries expired.
-  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v4:';
+  // v5: category presentation metadata joined the detail payload. Reusing v4
+  // would leave breadcrumbs without the board colour until cache expiry.
+  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v5:';
 
   constructor(
     @InjectRepository(Post)
@@ -258,6 +257,8 @@ export class PostsService {
           id: true,
           name: true,
           slug: true,
+          color: true,
+          icon: true,
         },
       },
     });
@@ -1114,6 +1115,8 @@ export class PostsService {
           id: true,
           name: true,
           slug: true,
+          color: true,
+          icon: true,
         },
       },
       take: limit,
@@ -1167,6 +1170,8 @@ export class PostsService {
           id: true,
           name: true,
           slug: true,
+          color: true,
+          icon: true,
         },
       },
       order: { created_at: 'DESC' },
@@ -1224,6 +1229,8 @@ export class PostsService {
           id: true,
           name: true,
           slug: true,
+          color: true,
+          icon: true,
         },
       },
       order: { view_count: 'DESC' },
@@ -1271,6 +1278,8 @@ export class PostsService {
           id: true,
           name: true,
           slug: true,
+          color: true,
+          icon: true,
         },
       },
       order: { created_at: 'DESC' },

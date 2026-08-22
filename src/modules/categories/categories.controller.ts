@@ -7,7 +7,7 @@ export class CategoriesController {
 
   @Get()
   async getAll() {
-    return this.categoriesService.getAll();
+    return this.categoriesService.getAll(false);
   }
 
   @Get(':id')

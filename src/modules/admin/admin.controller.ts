@@ -36,6 +36,8 @@ import { CreateBanDto } from '../bans/dto/create-ban.dto';
 import { UpdateBrandSettingsDto } from '../settings/dto/update-brand-settings.dto';
 import { RateLimitTelemetryService } from '../../common/rate-limit/rate-limit-telemetry.service';
 import { PerformanceTelemetryService } from '../../common/performance/performance-telemetry.service';
+import { CreateCategoryDto } from '../categories/dto/create-category.dto';
+import { UpdateCategoryDto } from '../categories/dto/update-category.dto';
 
 /** Safely parse a query param to int, falling back to a default when the
  *  global ValidationPipe turns a missing param into `undefined`/NaN. */
@@ -306,11 +308,20 @@ export class AdminController {
   }
 
   /**
+   * GET /admin/categories - Full board list including disabled boards (admin only)
+   */
+  @Get('categories')
+  @Roles('admin')
+  async getCategories() {
+    return this.categoriesService.getAll(true);
+  }
+
+  /**
    * POST /admin/categories - Create category (admin only)
    */
   @Post('categories')
   @Roles('admin')
-  async createCategory(@Body() dto: any) {
+  async createCategory(@Body() dto: CreateCategoryDto) {
     return this.categoriesService.create(dto);
   }
 
@@ -321,7 +332,7 @@ export class AdminController {
   @Roles('admin')
   async updateCategory(
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: any,
+    @Body() dto: UpdateCategoryDto,
   ) {
     return this.categoriesService.update(id, dto);
   }

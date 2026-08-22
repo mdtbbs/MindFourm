@@ -54,6 +54,8 @@ export interface PostDetailDto {
   updated_at: Date;
   category_name: string | null;
   category_slug: string | null;
+  category_color: string | null;
+  category_icon: string | null;
   author_mindauth_id: number | null;
   author_role: string | null;
   author_name: string | null;
@@ -109,6 +111,8 @@ export class PostDetailService {
       updated_at: post.updated_at,
       category_name: post.category?.name || null,
       category_slug: post.category?.slug || null,
+      category_color: post.category?.color || null,
+      category_icon: post.category?.icon || null,
       author_mindauth_id: post.user?.mindauth_id ?? null,
       author_role: post.user?.role ?? null,
       author_name: post.user?.username ?? null,

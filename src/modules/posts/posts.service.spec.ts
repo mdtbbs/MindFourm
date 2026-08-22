@@ -256,9 +256,9 @@ describe('PostsService', () => {
       expect.objectContaining({ id: 88 }),
     );
     expect(redisService.set).toHaveBeenCalledWith(
-      // v4: the cached shape gained author display fields, so entries written by
+      // v5: the cached shape gained category presentation metadata, so entries written by
       // the previous deploy must not be read back as if they had them.
-      'post:detail:v4:88',
+      'post:detail:v5:88',
       JSON.stringify({
         id: 88,
         title: 'Detailed post',
@@ -499,7 +499,7 @@ describe('PostsService.setLocked', () => {
     const result = await service.setLocked(88, true, STAFF);
 
     expect(postRepository.update).toHaveBeenCalledWith(88, { is_locked: 1 });
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v5:88');
     // Just the flag: `pin` and `move` return the reloaded entity joined to `user`, which
     // carries the author's email out with it.
     expect(result).toEqual({ id: 88, is_locked: true });
@@ -572,7 +572,7 @@ describe('PostsService.setBestReply', () => {
         reply_id: 5,
       }),
     );
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v5:88');
   });
 
   it('lets a moderator mark a reply on someone else s post', async () => {
