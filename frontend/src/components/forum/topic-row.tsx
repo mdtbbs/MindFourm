@@ -4,9 +4,13 @@ import type { PostSummary } from "@/types";
 import { formatTime } from "@/lib/utils";
 
 export default function TopicRow({ post }: { post: PostSummary }) {
+  const categoryColor = /求助|问答/.test(post.category_name || '') ? '#f59e0b' : /mod|工具/i.test(post.category_name || '') ? '#8b5cf6' : /地图/.test(post.category_name || '') ? '#22c55e' : /蓝图/.test(post.category_name || '') ? '#3b82f6' : '#64748b';
   return (
     <article className="border-b border-[var(--border)] px-4 py-4 transition-colors last:border-b-0 hover:bg-[var(--bg-elevated)] sm:px-5">
       <div className="flex min-w-0 items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary-soft)] text-xs font-semibold text-[var(--primary)]">
+          {post.author_avatar_url ? <img src={post.author_avatar_url} alt="" className="h-full w-full object-cover" /> : (post.author_name || "匿").slice(0, 1).toUpperCase()}
+        </div>
         {post.is_pinned && (
           <Pin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" />
         )}
@@ -25,6 +29,7 @@ export default function TopicRow({ post }: { post: PostSummary }) {
               {post.title}
             </Link>
           </div>
+          {post.category_name && <div className="mt-1 flex items-center gap-1.5 text-xs" style={{ color: categoryColor }}><i aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: categoryColor }} />{post.category_name}</div>}
           {post.tags && post.tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {post.tags.slice(0, 3).map((tag, index) => (
@@ -39,7 +44,7 @@ export default function TopicRow({ post }: { post: PostSummary }) {
             </div>
           )}
           <div className="mt-2 text-xs text-[var(--text-muted)]">
-            {post.author_name || "匿名用户"}{post.category_name && <> · <Link href={`/categories/${post.category_id}`} className="hover:text-[var(--primary)]">{post.category_name}</Link></>} ·{" "}
+            {post.author_name || "匿名用户"} ·{" "}
             <time dateTime={post.last_activity_at || post.created_at}>
               {formatTime(post.last_activity_at || post.created_at)}
             </time>

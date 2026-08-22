@@ -73,7 +73,7 @@ export default function ContentShell({
   }, [showManagementNavigation]);
 
   useEffect(() => {
-    if (!showManagementNavigation) return undefined;
+    if (showManagementNavigation) return undefined;
     let cancelled = false;
     categoryApi
       .getList()
@@ -151,7 +151,9 @@ export default function ContentShell({
     : isAuthenticated
       ? "已登录"
       : "未登录";
-  const showDesktopSidebar = showManagementNavigation;
+  // Public forum pages use the same board shell as category and post pages.
+  // Resources/admin keep their own navigation and remain separate products.
+  const showDesktopSidebar = showManagementNavigation || (!pathname.startsWith('/resources') && !pathname.startsWith('/admin'));
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">
@@ -162,6 +164,7 @@ export default function ContentShell({
           sidebarTitle={brand.sidebarTitle}
           logoUrl={brand.logoUrl || undefined}
           userName={user?.username || undefined}
+          userId={user?.id}
           userMeta={userMeta}
           resourceCategories={resourceCategories}
           forumCategories={forumCategories}

@@ -1,6 +1,6 @@
 import { Metadata } from 'next';
 import ForumContentLayout from '@/components/forum/forum-content-layout';
-import PostCard from '@/components/forum/post-card';
+import TopicRow from '@/components/forum/topic-row';
 import Pagination from '@/components/ui/pagination';
 import EmptyState from '@/components/ui/empty-state';
 import { MessageCircle } from 'lucide-react';
@@ -80,10 +80,14 @@ export default async function CategoryPage({
   if (!category) return notFound();
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <ForumContentLayout>
         <div className="space-y-4">
-          <h1 className="text-2xl font-bold text-surface-900">{category.name}</h1>
+          <div className="border-b border-[var(--border)] pb-4">
+            <h1 className="text-2xl font-bold text-[var(--text)]">{category.name}</h1>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">{category.description || '浏览这个板块中的全部主题。'}</p>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">{category.post_count || 0} 个主题</p>
+          </div>
           {postsResult.data.length === 0 ? (
             <EmptyState
               icon={<MessageCircle className="h-10 w-10" />}
@@ -92,10 +96,8 @@ export default async function CategoryPage({
               action={{ label: '发布主题', href: '/posts/new' }}
             />
           ) : (
-            <div className="space-y-3">
-              {postsResult.data.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
+            <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">
+              {postsResult.data.map((post) => <TopicRow key={post.id} post={post} />)}
             </div>
           )}
           <Pagination
