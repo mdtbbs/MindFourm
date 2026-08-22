@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ResourceCategory } from "@/types";
 import { Search, SlidersHorizontal, X } from "lucide-react";
+import { RESOURCE_KINDS } from "@/lib/display-labels";
 
 interface ResourceFiltersProps {
   categories: ResourceCategory[];
@@ -96,16 +97,6 @@ export default function ResourceFilters({
     resourceKind ||
     sort !== "created_at",
   );
-  const kinds = [
-    ["mod", "Mod"],
-    ["map", "地图"],
-    ["schematic", "蓝图"],
-    ["save", "存档"],
-    ["server_plugin", "服务器插件"],
-    ["development_tool", "工具"],
-    ["texture_ui", "材质与界面"],
-    ["other", "其他"],
-  ] as const;
 
   return (
     <div className="mb-6 space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-3 sm:p-4">
@@ -161,7 +152,7 @@ export default function ResourceFilters({
         >
           全部
         </button>
-        {kinds.map(([value, label]) => (
+        {RESOURCE_KINDS.map(({ value, label }) => (
           <button
             key={value}
             type="button"

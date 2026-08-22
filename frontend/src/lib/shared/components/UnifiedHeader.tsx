@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { motion, type Variants } from "framer-motion";
 import {
   Search,
   User as UserIcon,
@@ -50,8 +49,6 @@ export interface UnifiedHeaderProps {
   mobileMenuSlot?: React.ReactNode;
 }
 
-const staticVariants: Variants = { hidden: {}, visible: {} };
-
 export function UnifiedHeader({
   showSearch = false,
   showPostButton = false,
@@ -88,8 +85,7 @@ export function UnifiedHeader({
   };
 
   return (
-    <motion.header
-      variants={staticVariants}
+    <header
       className="sticky top-0 z-50 border-b border-[var(--border)] bg-[var(--bg)] backdrop-blur-sm"
       style={{ background: "var(--bg)" }}
     >
@@ -97,17 +93,12 @@ export function UnifiedHeader({
         <div className="flex min-h-16 items-center justify-between gap-3 py-2">
           <div className="flex min-w-0 flex-1 items-center gap-3 lg:gap-5">
             {topNavigationSlot && (
-              <motion.div variants={staticVariants} className="min-w-0">
-                {topNavigationSlot}
-              </motion.div>
+              <div className="min-w-0">{topNavigationSlot}</div>
             )}
           </div>
 
           {showSearch && (
-            <motion.div
-              variants={staticVariants}
-              className="hidden min-w-0 flex-1 lg:block lg:max-w-lg"
-            >
+            <div className="hidden min-w-0 flex-1 lg:block lg:max-w-lg">
               <div className="relative">
                 <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
                   <Search className="h-4 w-4" />
@@ -120,15 +111,11 @@ export function UnifiedHeader({
                   onKeyDown={handleSearchKeyDown}
                 />
               </div>
-            </motion.div>
+            </div>
           )}
 
-          <motion.div
-            variants={staticVariants}
-            className="flex shrink-0 items-center space-x-1 sm:space-x-2"
-          >
-            <motion.button
-              variants={staticVariants}
+          <div className="flex shrink-0 items-center space-x-1 sm:space-x-2">
+            <button
               onClick={toggleTheme}
               className="relative rounded-full p-2.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]"
               title={theme === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
@@ -141,18 +128,17 @@ export function UnifiedHeader({
                   <Moon className="h-5 w-5" />
                 )}
               </div>
-            </motion.button>
+            </button>
 
             {showMobileMenu && onMobileMenuClick && (
-              <motion.button
-                variants={staticVariants}
+              <button
                 onClick={onMobileMenuClick}
                 data-testid="mobile-menu-button"
                 className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] lg:hidden"
                 aria-label="菜单"
               >
                 <Menu className="h-6 w-6" />
-              </motion.button>
+              </button>
             )}
 
             {showSearch && (
@@ -168,7 +154,7 @@ export function UnifiedHeader({
             {isAuthenticated && user ? (
               <>
                 {showNotifications && (
-                  <motion.div variants={staticVariants}>
+                  <div>
                     {notificationDropdownSlot || (
                       <Link
                         href="/notifications"
@@ -187,11 +173,11 @@ export function UnifiedHeader({
                         )}
                       </Link>
                     )}
-                  </motion.div>
+                  </div>
                 )}
 
                 {showMessages && (
-                  <motion.div variants={staticVariants}>
+                  <div>
                     <Link
                       href="/messages"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
@@ -206,11 +192,11 @@ export function UnifiedHeader({
                         </span>
                       )}
                     </Link>
-                  </motion.div>
+                  </div>
                 )}
 
                 {showFriends && (
-                  <motion.div variants={staticVariants}>
+                  <div>
                     <Link
                       href="/friends"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
@@ -227,20 +213,17 @@ export function UnifiedHeader({
                         </span>
                       )}
                     </Link>
-                  </motion.div>
+                  </div>
                 )}
 
                 {showServerCount && (
-                  <motion.div
-                    variants={staticVariants}
-                    className="hidden text-sm text-[var(--text-muted)] md:block"
-                  >
+                  <div className="hidden text-sm text-[var(--text-muted)] md:block">
                     服务器: <span>{serverCount}</span>
-                  </motion.div>
+                  </div>
                 )}
 
                 {showPostButton && (
-                  <motion.div variants={staticVariants}>
+                  <div>
                     <Link
                       href="/posts/new"
                       onClick={onPostCreate}
@@ -251,10 +234,10 @@ export function UnifiedHeader({
                       </span>
                       发帖
                     </Link>
-                  </motion.div>
+                  </div>
                 )}
 
-                <motion.div variants={staticVariants}>
+                <div>
                   <details className="group relative">
                     <summary className="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]">
                       <UserIcon className="h-4 w-4" />
@@ -311,13 +294,10 @@ export function UnifiedHeader({
                       )}
                     </div>
                   </details>
-                </motion.div>
+                </div>
               </>
             ) : (
-              <motion.div
-                variants={staticVariants}
-                className="flex items-center gap-3"
-              >
+              <div className="flex items-center gap-3">
                 {onRegister && (
                   <Link
                     href="/register"
@@ -334,13 +314,13 @@ export function UnifiedHeader({
                     登录
                   </Link>
                 )}
-              </motion.div>
+              </div>
             )}
-          </motion.div>
+          </div>
         </div>
       </div>
 
       {mobileMenuSlot}
-    </motion.header>
+    </header>
   );
 }

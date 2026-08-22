@@ -31,8 +31,19 @@ function isActivePath(
     currentPathname === hrefPath || currentPathname.startsWith(`${hrefPath}/`)
   ))
     return false;
-  if (!hrefQuery) return true;
   const currentParams = new URLSearchParams(currentSearch);
+  if (!hrefQuery) {
+    if (hrefPath !== "/resources") return true;
+    return ![
+      "category_id",
+      "search",
+      "sort",
+      "tag",
+      "supported_version",
+      "compatibility",
+      "resource_kind",
+    ].some((key) => currentParams.has(key));
+  }
   const expectedParams = new URLSearchParams(hrefQuery);
   return Array.from(expectedParams.entries()).every(
     ([key, value]) => currentParams.get(key) === value,
