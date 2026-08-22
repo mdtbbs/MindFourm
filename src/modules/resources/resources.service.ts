@@ -536,6 +536,30 @@ export class ResourcesService {
     };
   }
 
+  async getFilterOptions(): Promise<{ supported_versions: string[]; compatibility: string[] }> {
+    const rows = await this.resourceRepository
+      .createQueryBuilder('resource')
+      .leftJoin('resource.category', 'category')
+      .select('resource.metadata_json', 'metadata_json')
+      .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
+      .getRawMany<{ metadata_json: unknown }>();
+
+    const supportedVersions = new Set<string>();
+    const compatibility = new Set<string>();
+    for (const row of rows) {
+      const metadata = normalizeResourceMetadata(row.metadata_json);
+      metadata.supported_versions.forEach((value) => supportedVersions.add(value));
+      metadata.compatibility.forEach((value) => compatibility.add(value));
+    }
+
+    return {
+      supported_versions: Array.from(supportedVersions).sort((a, b) => a.localeCompare(b, 'zh-CN')),
+      compatibility: Array.from(compatibility).sort((a, b) => a.localeCompare(b, 'zh-CN')),
+    };
+  }
+
   /**
    * Authorize a single-resource read.
    *

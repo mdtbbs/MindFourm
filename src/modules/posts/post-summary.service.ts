@@ -29,6 +29,7 @@ export interface PostSummaryDto {
   like_count: number;
   created_at: Date;
   updated_at: Date;
+  last_activity_at: Date;
   category_name: string | null;
   category_slug: string | null;
   author_mindauth_id: number | null;
@@ -53,9 +54,10 @@ export class PostSummaryService {
     }
 
     const postIds = posts.map((post) => post.id);
-    const [tagsByPostId, replyCounts] = await Promise.all([
+    const [tagsByPostId, replyCounts, lastActivityByPostId] = await Promise.all([
       this.loadTagsByPostId(postIds),
       this.loadReplyCounts(postIds),
+      this.loadLastActivityByPostId(postIds),
     ]);
 
     return posts.map((post) =>
@@ -63,10 +65,11 @@ export class PostSummaryService {
         post,
         tagsByPostId.get(post.id) || [],
         replyCounts.get(post.id) || 0,
+        lastActivityByPostId.get(post.id) || post.created_at,
       ));
   }
 
-  toSummary(post: Post, tags: PostSummaryTag[], replyCount: number): PostSummaryDto {
+  toSummary(post: Post, tags: PostSummaryTag[], replyCount: number, lastActivityAt: Date = post.created_at): PostSummaryDto {
     return {
       id: post.id,
       user_id: post.user_id,
@@ -83,6 +86,7 @@ export class PostSummaryService {
       like_count: post.like_count,
       created_at: post.created_at,
       updated_at: post.updated_at,
+      last_activity_at: lastActivityAt,
       category_name: post.category?.name || null,
       category_slug: post.category?.slug || null,
       author_mindauth_id: post.user?.mindauth_id ?? null,
@@ -111,6 +115,20 @@ export class PostSummaryService {
       .replace(/[#>*_~\-]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  private async loadLastActivityByPostId(postIds: number[]): Promise<Map<number, Date>> {
+    const rows = await this.replyRepository
+      .createQueryBuilder('reply')
+      .select('reply.post_id', 'post_id')
+      .addSelect('MAX(reply.created_at)', 'last_activity_at')
+      .where('reply.post_id IN (:...postIds)', { postIds })
+      .andWhere('reply.status IN (:...statuses)', { statuses: VISIBLE_REPLY_STATUSES })
+      .andWhere('reply.deleted_at IS NULL')
+      .groupBy('reply.post_id')
+      .getRawMany<{ post_id: string; last_activity_at: Date | string }>();
+
+    return new Map(rows.map((row) => [Number(row.post_id), new Date(row.last_activity_at)]));
   }
 
   private async loadTagsByPostId(postIds: number[]): Promise<Map<number, PostSummaryTag[]>> {

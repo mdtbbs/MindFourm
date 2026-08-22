@@ -1,69 +1,23 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import { listThreads } from '@/lib/api/v1/threads';
-import { Eye, MessageSquare, Pin } from 'lucide-react';
+import TopicRow from '@/components/forum/topic-row';
+import ErrorState from '@/components/ui/error-state';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiPaginated } from '@/lib/api/server-fetch';
+import type { PostListResponse } from '@/types';
 
-export const metadata: Metadata = {
-  title: '讨论',
-  description: 'Mindustry 社区讨论区',
-};
+export const metadata: Metadata = { title: '讨论', description: 'Mindustry 社区讨论区' };
 
 export default async function ThreadsPage() {
-  let threads;
+  let threads: PostListResponse;
   try {
-    threads = await listThreads({ limit: 30 });
+    threads = await fetchApiPaginated<PostListResponse['data'][number]>('/api/posts?page=1&limit=30&sort=last_activity_at', {
+      init: { cache: 'no-store' },
+      fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(30),
+      throwOnError: true,
+    });
   } catch {
-    threads = null;
+    return <ErrorState title="讨论列表加载失败" description="请稍后再试。" action={{ label: '重新加载', href: '/threads' }} />;
   }
 
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-3xl font-bold mb-8">讨论</h1>
-
-      {threads ? (
-        <div className="space-y-2">
-          {threads.map(thread => (
-            <Link
-              key={thread.id}
-              href={`/posts/${thread.id}`}
-              className="block bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4 hover:border-[var(--primary)] transition-colors"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    {thread.is_pinned && (
-                      <Pin className="w-3.5 h-3.5 text-[var(--primary)] flex-shrink-0" />
-                    )}
-                    <h2 className="text-base font-medium truncate">
-                      {thread.title}
-                    </h2>
-                  </div>
-                  <div className="mt-1 flex items-center gap-4 text-xs text-[var(--text-muted)]">
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-3 h-3" />
-                      {thread.view_count}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <MessageSquare className="w-3 h-3" />
-                      {thread.reply_count}
-                    </span>
-                    <span>{new Date(thread.created_at).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          ))}
-          {threads.length === 0 && (
-            <div className="text-center text-[var(--text-muted)] py-12">
-              暂无讨论
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="text-[var(--text-muted)]">
-          讨论列表暂时不可用，请稍后再试。
-        </div>
-      )}
-    </div>
-  );
+  return <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"><div className="mb-6 border-b border-[var(--border)] pb-4"><h1 className="text-3xl font-semibold text-[var(--text)]">讨论</h1><p className="mt-2 text-sm text-[var(--text-secondary)]">按最后活跃时间浏览社区讨论。</p></div>{threads.data.length > 0 ? <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">{threads.data.map((post) => <TopicRow key={post.id} post={post} />)}</div> : <div className="border border-[var(--border)] p-8 text-center text-[var(--text-muted)]">暂时没有讨论</div>}</div>;
 }

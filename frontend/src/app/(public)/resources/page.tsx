@@ -1,73 +1,87 @@
-import Link from 'next/link';
-import { Metadata } from 'next';
-import { FileText, AlertCircle } from 'lucide-react';
-import ErrorState from '@/components/ui/error-state';
-import ResourceFilters from '@/components/forum/resource-list-filters-client';
-import ResourceLoadMore from '@/components/forum/resource-load-more';
-import ResourceCarousel from '@/components/forum/resource-carousel';
-import ResourceListItem from '@/components/forum/resource-list-item';
-import { fetchApiData } from '@/lib/api/server-fetch';
-import { fetchPublicSettings } from '@/lib/settings/server';
-import { resolveBrand } from '@/lib/theme/brand';
-import { generatePageMetadata } from '@/lib/metadata';
-import { Category, Resource, ResourceCategory, Tag } from '@/types';
+import Link from "next/link";
+import { Metadata } from "next";
+import { FileText, AlertCircle } from "lucide-react";
+import ErrorState from "@/components/ui/error-state";
+import ResourceFilters from "@/components/forum/resource-list-filters-client";
+import ResourceLoadMore from "@/components/forum/resource-load-more";
+import { fetchApiData } from "@/lib/api/server-fetch";
+import { fetchPublicSettings } from "@/lib/settings/server";
+import { resolveBrand } from "@/lib/theme/brand";
+import { generatePageMetadata } from "@/lib/metadata";
+import { Category, Resource, ResourceCategory, Tag } from "@/types";
 
 export const revalidate = 60;
 
-const RESOURCES_DESCRIPTION = '浏览和下载社区贡献的资源、模组和工具';
+const RESOURCES_DESCRIPTION = "浏览和下载社区贡献的资源、模组和工具";
+type ResourceFilterOptions = { supported_versions: string[]; compatibility: string[] };
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings();
   const brandInfo = resolveBrand(settings);
 
   return generatePageMetadata({
-    title: '资源中心',
+    title: "资源中心",
     description: RESOURCES_DESCRIPTION,
-    path: '/resources',
+    path: "/resources",
     brandInfo,
   });
 }
 
-async function fetchData(params: { category_id?: string; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string }) {
+async function fetchData(params: {
+  category_id?: string;
+  search?: string;
+  sort?: string;
+  tag?: string;
+  supported_version?: string;
+  compatibility?: string;
+  resource_kind?: string;
+}) {
   const qs = new URLSearchParams();
-  qs.set('limit', '30');
-  if (params.category_id) qs.set('category_id', params.category_id);
-  if (params.search) qs.set('search', params.search);
-  if (params.sort) qs.set('sort', params.sort);
-  if (params.tag) qs.set('tag', params.tag);
-  if (params.supported_version) qs.set('supported_version', params.supported_version);
-  if (params.compatibility) qs.set('compatibility', params.compatibility);
-  if (params.resource_kind) qs.set('resource_kind', params.resource_kind);
+  qs.set("limit", "30");
+  if (params.category_id) qs.set("category_id", params.category_id);
+  if (params.search) qs.set("search", params.search);
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.tag) qs.set("tag", params.tag);
+  if (params.supported_version)
+    qs.set("supported_version", params.supported_version);
+  if (params.compatibility) qs.set("compatibility", params.compatibility);
+  if (params.resource_kind) qs.set("resource_kind", params.resource_kind);
 
-  const [resourcesResult, resourceCategories, forumCategories, tags, featuredResources] = await Promise.all([
-    fetchApiData<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/resources?${qs.toString()}`,
-      {
-        init: { next: { revalidate: 60 } },
-        fallback: { data: [], next_cursor: null, has_more: false },
-        throwOnError: true,
-      },
-    ),
-    fetchApiData<ResourceCategory[]>('/api/resources/categories', {
-      init: { next: { tags: ['resource-categories'], revalidate: 300 } },
+  const [
+    resourcesResult,
+    resourceCategories,
+    forumCategories,
+    tags,
+    filterOptions,
+  ] = await Promise.all([
+    fetchApiData<{
+      data: Resource[];
+      next_cursor: string | null;
+      has_more: boolean;
+    }>(`/api/resources?${qs.toString()}`, {
+      init: { next: { revalidate: 60 } },
+      fallback: { data: [], next_cursor: null, has_more: false },
+      throwOnError: true,
+    }),
+    fetchApiData<ResourceCategory[]>("/api/resources/categories", {
+      init: { next: { tags: ["resource-categories"], revalidate: 300 } },
       fallback: [],
       throwOnError: true,
     }),
-    fetchApiData<Category[]>('/api/categories', {
-      init: { next: { tags: ['categories'] } },
+    fetchApiData<Category[]>("/api/categories", {
+      init: { next: { tags: ["categories"] } },
       fallback: [],
       throwOnError: true,
     }),
-    fetchApiData<Tag[]>('/api/tags', {
-      init: { next: { tags: ['tags'] } },
+    fetchApiData<Tag[]>("/api/tags", {
+      init: { next: { tags: ["tags"] } },
       fallback: [],
       throwOnError: true,
     }),
-    // Featured resources - using hot resources as fallback if API doesn't exist yet
-    fetchApiData<Resource[]>('/api/resources/featured', {
+    fetchApiData<ResourceFilterOptions>("/api/resources/filter-options", {
       init: { next: { revalidate: 300 } },
-      fallback: [],
-      throwOnError: false, // Don't throw if endpoint doesn't exist yet
+      fallback: { supported_versions: [], compatibility: [] },
+      throwOnError: false,
     }),
   ]);
 
@@ -78,26 +92,36 @@ async function fetchData(params: { category_id?: string; search?: string; sort?:
     resourceCategories,
     forumCategories,
     tags,
-    featuredResources: featuredResources.length > 0 ? featuredResources : [],
+    filterOptions,
   };
 }
 
 export default async function ResourcesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category_id?: string; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string }>;
+  searchParams: Promise<{
+    category_id?: string;
+    search?: string;
+    sort?: string;
+    tag?: string;
+    supported_version?: string;
+    compatibility?: string;
+    resource_kind?: string;
+  }>;
 }) {
   const params = await searchParams;
   const settings = await fetchPublicSettings();
 
-  const resourcesEnabled = settings.feature_resources_enabled !== 'false';
+  const resourcesEnabled = settings.feature_resources_enabled !== "false";
 
   if (!resourcesEnabled) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-20 text-center">
         <div className="panel-surface inline-block px-8 py-10">
           <AlertCircle className="mx-auto mb-4 h-10 w-10 text-[var(--muted-foreground)]" />
-          <h2 className="mb-2 text-lg font-semibold text-[var(--foreground)]">资源中心已关闭</h2>
+          <h2 className="mb-2 text-lg font-semibold text-[var(--foreground)]">
+            资源中心已关闭
+          </h2>
           <p className="text-sm leading-6 text-[var(--muted-foreground)]">
             管理员已关闭此功能，如需开启请联系管理员。
           </p>
@@ -110,10 +134,24 @@ export default async function ResourcesPage({
   try {
     data = await fetchData(params);
   } catch {
-    return <ErrorState title="资源加载失败" description="暂时无法获取资源列表，请稍后重试。" action={{ label: '重新加载', href: '/resources' }} />;
+    return (
+      <ErrorState
+        title="资源加载失败"
+        description="暂时无法获取资源列表，请稍后重试。"
+        action={{ label: "重新加载", href: "/resources" }}
+      />
+    );
   }
 
-  const { resources, nextCursor, hasMore, resourceCategories, forumCategories, tags, featuredResources } = data;
+  const {
+    resources,
+    nextCursor,
+    hasMore,
+    resourceCategories,
+    forumCategories,
+    tags,
+    filterOptions,
+  } = data;
 
   return (
     <div className="min-w-0 mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -121,7 +159,9 @@ export default async function ResourcesPage({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[var(--text)]">资源中心</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">浏览社区资源，快速查看版本、简介和下载信息。</p>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">
+            浏览社区资源，快速查看版本、简介和下载信息。
+          </p>
         </div>
         <Link
           href="/resources/submit"
@@ -133,11 +173,6 @@ export default async function ResourcesPage({
 
       {/* Main content */}
       <main className="min-w-0 space-y-4">
-        {/* Featured carousel */}
-        {featuredResources.length > 0 && (
-          <ResourceCarousel resources={featuredResources} />
-        )}
-
         {/* Filters */}
         <ResourceFilters
           categories={resourceCategories}
@@ -148,6 +183,8 @@ export default async function ResourcesPage({
           initialSupportedVersion={params.supported_version}
           initialCompatibility={params.compatibility}
           initialResourceKind={params.resource_kind}
+          supportedVersions={filterOptions.supported_versions}
+          compatibilityOptions={filterOptions.compatibility}
         />
 
         {/* Resource list */}
@@ -163,13 +200,14 @@ export default async function ResourcesPage({
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
-            {hasMore && (
+          <div>
               <ResourceLoadMore
                 initialResources={resources}
                 initialCursor={nextCursor}
                 hasMore={hasMore}
-                categoryId={params.category_id ? parseInt(params.category_id) : undefined}
+                categoryId={
+                  params.category_id ? parseInt(params.category_id) : undefined
+                }
                 search={params.search}
                 sort={params.sort}
                 tag={params.tag}
@@ -177,10 +215,6 @@ export default async function ResourcesPage({
                 compatibility={params.compatibility}
                 resourceKind={params.resource_kind}
               />
-            )}
-            {!hasMore && resources.map((resource) => (
-              <ResourceListItem key={resource.id} resource={resource} />
-            ))}
           </div>
         )}
       </main>

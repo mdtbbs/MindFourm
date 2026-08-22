@@ -144,6 +144,11 @@ export class ResourcesController {
     return this.resourcesService.getHotResources();
   }
 
+  @Get('filter-options')
+  async getFilterOptions() {
+    return this.resourcesService.getFilterOptions();
+  }
+
   @Get('user/:userId')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)

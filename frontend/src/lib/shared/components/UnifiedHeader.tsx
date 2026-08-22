@@ -2,13 +2,11 @@
 
 import Link from 'next/link';
 import { motion, type Easing, type Variants } from 'framer-motion';
-import { Search, User as UserIcon, LogOut, Shield, Moon, Sun, Mail, Bell, Plus, Menu, Users } from 'lucide-react';
+import { Search, User as UserIcon, LogOut, Moon, Sun, Mail, Bell, Plus, Menu, Users } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import { User } from '../types';
 
 const easeInOut: Easing = 'easeInOut';
-const brandGlow = '0 0 20px color-mix(in srgb, var(--primary) 30%, transparent)';
-const brandGlowStrong = '0 0 25px color-mix(in srgb, var(--primary) 40%, transparent)';
 const brandFocusGlow = '0 0 8px color-mix(in srgb, var(--primary) 22%, transparent)';
 
 export interface UnifiedHeaderProps {
@@ -81,20 +79,18 @@ const itemVariants: Variants = {
 
 const themeIconVariants: Variants = {
   sun: {
-    rotate: [0, 180, 360],
-    scale: [1, 1.2, 1],
-    opacity: [1, 0.85, 1],
+    rotate: [0, 90],
+    opacity: [0.7, 1],
     transition: {
-      duration: 0.6,
+      duration: 0.18,
       ease: easeInOut,
     },
   },
   moon: {
-    rotate: [0, -180, -360],
-    scale: [1, 1.2, 1],
-    opacity: [1, 0.85, 1],
+    rotate: [0, -90],
+    opacity: [0.7, 1],
     transition: {
-      duration: 0.6,
+      duration: 0.18,
       ease: easeInOut,
     },
   },
@@ -106,7 +102,6 @@ const badgePulseVariants: Variants = {
     opacity: [1, 0.8, 1],
     transition: {
       duration: 1,
-      repeat: Infinity,
       ease: easeInOut,
     },
   },
@@ -121,24 +116,6 @@ const searchVariants: Variants = {
     boxShadow: brandFocusGlow,
     transition: {
       duration: 0.2,
-      ease: easeInOut,
-    },
-  },
-};
-
-const buttonVariants: Variants = {
-  hover: {
-    scale: 1.03,
-    y: -1,
-    transition: {
-      duration: 0.15,
-      ease: easeInOut,
-    },
-  },
-  tap: {
-    scale: 0.96,
-    transition: {
-      duration: 0.1,
       ease: easeInOut,
     },
   },
@@ -215,7 +192,7 @@ export function UnifiedHeader({
           {showSearch && (
             <motion.div
               variants={itemVariants}
-              className="hidden min-w-0 flex-1 md:block md:max-w-md lg:max-w-lg"
+              className="hidden min-w-0 flex-1 lg:block lg:max-w-lg"
             >
               <motion.div className="relative" variants={searchVariants} initial="idle" whileFocus="focus">
                 <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
@@ -242,26 +219,10 @@ export function UnifiedHeader({
             <motion.button
               variants={itemVariants}
               onClick={toggleTheme}
-              whileHover={{
-                scale: 1.12,
-                rotate: theme === 'dark' ? -20 : 20,
-                boxShadow: brandGlowStrong,
-              }}
-              whileTap={{ scale: 0.88 }}
-              className="relative overflow-visible rounded-full p-2.5 text-[var(--text-secondary)] transition-all hover:text-[var(--primary)]"
+              className="relative rounded-full p-2.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]"
               title={theme === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
               aria-label="切换主题"
             >
-              <motion.div
-                className="absolute inset-0 rounded-full bg-[var(--primary)]"
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 0, opacity: 0 }}
-                whileTap={{
-                  scale: 2.5,
-                  opacity: [0.4, 0],
-                  transition: { duration: 0.4 },
-                }}
-              />
               <motion.div variants={themeIconVariants} animate={theme === 'dark' ? 'sun' : 'moon'} className="relative z-10">
                 {theme === 'dark' ? (
                   <Sun className="h-5 w-5 text-[var(--accent)]" />
@@ -269,15 +230,6 @@ export function UnifiedHeader({
                   <Moon className="h-5 w-5" />
                 )}
               </motion.div>
-              <motion.div
-                className="absolute inset-0 rounded-full"
-                initial={{ opacity: 0 }}
-                whileHover={{
-                  opacity: 0.15,
-                  background: 'radial-gradient(circle, var(--primary), transparent)',
-                  scale: 1.5,
-                }}
-              />
             </motion.button>
 
             {showMobileMenu && onMobileMenuClick && (
@@ -287,7 +239,7 @@ export function UnifiedHeader({
                 data-testid="mobile-menu-button"
                 whileHover={{ scale: 1.04 }}
                 whileTap={{ scale: 0.95 }}
-                className="rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] lg:hidden"
+                className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] lg:hidden"
                 aria-label="菜单"
               >
                 <Menu className="h-6 w-6" />
@@ -382,66 +334,34 @@ export function UnifiedHeader({
                 )}
 
                 {showPostButton && (
-                  <motion.div variants={itemVariants} whileHover="hover" whileTap="tap">
+                  <motion.div variants={itemVariants}>
                     <Link
                       href="/posts/new"
                       onClick={onPostCreate}
                       className="hidden items-center gap-1 bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] sm:inline-flex"
                     >
-                      <motion.span animate={{ rotate: [0, 90, 0] }} transition={{ duration: 0.3 }}>
+                      <span>
                         <Plus className="h-4 w-4" />
-                      </motion.span>
+                      </span>
                       发帖
                     </Link>
                   </motion.div>
                 )}
 
-                {user.role === 'admin' && (
-                  <motion.div variants={itemVariants}>
-                    <Link
-                      href="/admin"
-                      className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                      title="管理后台"
-                    >
-                      <motion.div
-                        whileHover={{ scale: 1.08, rotate: 8, boxShadow: brandGlow }}
-                        animate={{
-                          color: ['var(--text-secondary)', 'var(--primary)', 'var(--text-secondary)'],
-                          transition: { duration: 3, repeat: Infinity },
-                        }}
-                      >
-                        <Shield className="h-5 w-5" />
-                      </motion.div>
-                    </Link>
-                  </motion.div>
-                )}
-
                 <motion.div variants={itemVariants}>
-                  <Link
-                    href={`/users/${user.id}`}
-                    className="flex items-center space-x-2 px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                  >
-                    <motion.div whileHover={{ scale: 1.08 }}>
-                      <UserIcon className="h-4 w-4" />
-                    </motion.div>
-                    <span className="hidden sm:inline">{user.username}</span>
-                  </Link>
+                  <details className="group relative">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"><UserIcon className="h-4 w-4" /><span className="hidden sm:inline">{user.username}</span></summary>
+                    <div className="absolute right-0 top-full z-20 mt-2 min-w-40 border border-[var(--border)] bg-[var(--bg-card)] p-1 shadow-lg">
+                      <Link href={`/users/${user.id}`} className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]">个人主页</Link>
+                      <Link href="/messages" className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]">私信</Link>
+                      <Link href="/friends" className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]">好友</Link>
+                      <Link href="/bookmarks" className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]">收藏</Link>
+                      {user.role === 'admin' && <Link href="/admin" className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]">管理后台</Link>}
+                      <Link href="/settings" className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]">设置</Link>
+                      {onLogout && <button type="button" onClick={onLogout} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-[var(--bg-hover)]"><LogOut className="h-4 w-4" />退出登录</button>}
+                    </div>
+                  </details>
                 </motion.div>
-
-                {onLogout && (
-                  <motion.div variants={itemVariants}>
-                    <motion.button
-                      onClick={onLogout}
-                      whileHover={{ scale: 1.08, color: '#ef4444' }}
-                      whileTap={{ scale: 0.92 }}
-                      className="p-2 text-[var(--text-secondary)] transition-colors hover:text-red-600"
-                      title="退出登录"
-                      aria-label="退出登录"
-                    >
-                      <LogOut className="h-5 w-5" />
-                    </motion.button>
-                  </motion.div>
-                )}
               </>
             ) : (
               <motion.div variants={containerVariants} initial="hidden" animate="visible" className="flex items-center gap-3">

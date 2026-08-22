@@ -8,6 +8,7 @@ import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import { getIconComponent } from '@/lib/resource-icons';
 import type { SidebarNavigationItem } from '@/lib/navigation/sidebar-navigation';
+import { PUBLIC_NAVIGATION } from '@/lib/navigation/public-navigation';
 import type { ResourceCategory, Category } from '@/types';
 
 function resolveIcon(name: string): LucideIcon {
@@ -207,6 +208,7 @@ export default function ContentDrawer({
   resourceCategories,
   forumCategories,
   currentPathname,
+  publicNavigation = false,
 }: {
   open: boolean;
   items: SidebarNavigationItem[];
@@ -219,6 +221,7 @@ export default function ContentDrawer({
   resourceCategories?: ResourceCategory[];
   forumCategories?: Category[];
   currentPathname?: string | null;
+  publicNavigation?: boolean;
 }) {
   const pathname = usePathname();
   const effectivePathname = currentPathname ?? pathname;
@@ -284,6 +287,14 @@ export default function ContentDrawer({
           }}
           className={DRAWER_LAYOUT_CLASSES.nav}
         >
+          {publicNavigation ? PUBLIC_NAVIGATION.map((group) => (
+            <section key={group.id} className="mb-3">
+              <h2 className="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">{group.label}</h2>
+              <div className="space-y-0.5">
+                {group.children.map((item) => <Link key={item.href} href={item.href} onClick={onClose} className={`block rounded-lg px-3 py-2 text-sm transition-colors ${isActivePath(effectivePathname, item.href) ? 'bg-[var(--primary-soft)] text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`}>{item.label}</Link>)}
+              </div>
+            </section>
+          )) : <>
           {homeItem && (
             <DrawerNavItem item={homeItem} effectivePathname={effectivePathname} onClose={onClose} />
           )}
@@ -318,6 +329,7 @@ export default function ContentDrawer({
               <ResourceCategoryList categories={resourceCategories} currentPathname={effectivePathname} onClose={onClose} />
             </div>
           )}
+          </>}
         </nav>
 
         {/* User section — shrink-0 */}

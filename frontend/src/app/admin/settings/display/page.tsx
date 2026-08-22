@@ -7,13 +7,6 @@ import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 import MarkdownEditor from '@/components/ui/markdown-editor';
 
-const latestPostToggles = [
-  ['latest_posts_show_index', '显示序号'],
-  ['latest_posts_show_excerpt', '显示摘要'],
-  ['latest_posts_show_tags', '显示标签'],
-  ['latest_posts_show_stats', '显示回复/浏览/点赞'],
-] as const;
-
 export default function DisplaySettingsPage() {
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
@@ -53,10 +46,6 @@ export default function DisplaySettingsPage() {
 
   const update = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const toggle = (key: string, checked: boolean) => {
-    update(key, checked ? 'true' : 'false');
   };
 
   if (loading) {
@@ -119,11 +108,11 @@ export default function DisplaySettingsPage() {
         <div className="border-t border-surface-200 pt-6">
           <h3 className="text-sm font-semibold text-surface-800">最新帖子</h3>
           <p className="mt-1 text-xs text-surface-400">
-            这里的标题和说明会同时显示在首页顶部和“最新帖子”模块，支持 Markdown 预览；这里的颜色只影响该模块，不会覆盖全站品牌色。
+            标题和说明会显示在首页的最新讨论模块。
           </p>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2">
+        <div>
           <div>
             <MarkdownEditor
               label="标题"
@@ -134,24 +123,6 @@ export default function DisplaySettingsPage() {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">
-              模块强调色
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                className="h-9 w-12 border border-surface-200 bg-white p-1"
-                value={values.latest_posts_accent_color ?? '#2f80ed'}
-                onChange={(e) => update('latest_posts_accent_color', e.target.value)}
-              />
-              <input
-                className="w-32 px-3 py-2 border border-surface-200 rounded text-sm font-mono focus:outline-none focus:border-surface-400"
-                value={values.latest_posts_accent_color ?? '#2f80ed'}
-                onChange={(e) => update('latest_posts_accent_color', e.target.value)}
-              />
-            </div>
-          </div>
         </div>
 
         <div>
@@ -164,47 +135,6 @@ export default function DisplaySettingsPage() {
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">
-            浏览密度
-          </label>
-          <select
-            className="px-3 py-2 border border-surface-200 rounded text-sm"
-            value={values.latest_posts_density ?? 'compact'}
-            onChange={(e) => update('latest_posts_density', e.target.value)}
-          >
-            <option value="compact">紧凑</option>
-            <option value="comfortable">舒展</option>
-          </select>
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          {latestPostToggles.map(([key, label]) => (
-            <label
-              key={key}
-              className="flex items-center gap-2 border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-700"
-            >
-              <input
-                type="checkbox"
-                checked={(values[key] ?? 'true') === 'true'}
-                onChange={(e) => toggle(key, e.target.checked)}
-                className="h-4 w-4 accent-surface-900"
-              />
-              {label}
-            </label>
-          ))}
-        </div>
-
-        <div className="border-t border-surface-200 pt-6">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">首页广告位</label>
-          <p className="mb-2 text-xs text-surface-400">JSON 数组，每项含 title、description、href（可选）。只渲染站内或 http(s) 链接。</p>
-          <textarea
-            className="min-h-[150px] w-full rounded border border-surface-200 px-3 py-2 font-mono text-xs focus:outline-none focus:border-surface-400"
-            value={values.home_ad_slots ?? '[]'}
-            onChange={(e) => update('home_ad_slots', e.target.value)}
-            placeholder={'[\n  {"title":"活动招募", "description":"说明", "href":"/posts/1"}\n]'}
-          />
-        </div>
       </div>
 
       <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">

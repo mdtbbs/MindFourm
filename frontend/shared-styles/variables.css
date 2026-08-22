@@ -2,22 +2,22 @@
 /* 现代极简风格 */
 
 :root {
-  /* ===== 品牌色 (Mindustry 橙色系) ===== */
-  --primary: #ff6b35;
-  --primary-dark: #e55a2b;
-  --primary-light: #ff8c5a;
-  --accent: #ffc107;
+  /* ===== 品牌色（运行时可由站点设置覆盖） ===== */
+  --primary: #2f80ed;
+  --primary-dark: #2563eb;
+  --primary-light: #5ba0ff;
+  --accent: #dcecff;
 
   /* ===== 浅色主题 (默认) - 现代极简 ===== */
-  --bg: #fafafa;
+  --bg: #f5f9ff;
   --bg-card: #ffffff;
-  --bg-elevated: #f5f5f5;
-  --bg-hover: #f0f0f0;
-  --text: #333333;
-  --text-secondary: #888888;
-  --text-muted: #a0a0a0;
-  --border: #e5e5e5;
-  --border-light: #f0f0f0;
+  --bg-elevated: #eef4fb;
+  --bg-hover: #eaf2ff;
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border: #d8e2f0;
+  --border-light: #e8eef6;
 
   /* ===== 功能色 ===== */
   --success: #4caf50;
@@ -25,7 +25,7 @@
   --error: #f44336;
   --info: #2196f3;
 
-  /* ===== 圆角 (适当圆角+直角搭配) ===== */
+  /* ===== 圆角 ===== */
   --radius-sm: 4px;
   --radius: 6px;
   --radius-lg: 8px;
@@ -112,28 +112,6 @@
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont,
     'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'Geist Mono', 'JetBrains Mono', 'Consolas', monospace;
-}
-
-/* Clean blue override */
-:root {
-  --primary: #2f80ed;
-  --primary-dark: #2563eb;
-  --primary-light: #5ba0ff;
-  --accent: #dcecff;
-  --bg: #f5f9ff;
-  --bg-card: #ffffff;
-  --bg-elevated: #eef4fb;
-  --bg-hover: #eaf2ff;
-  --text: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --border: #d8e2f0;
-  --border-light: #e8eef6;
-  --radius-sm: 0px;
-  --radius: 0px;
-  --radius-lg: 0px;
-  --radius-card: 0px;
-  --radius-badge: 0px;
 }
 
 [data-theme="dark"],

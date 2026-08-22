@@ -14,9 +14,11 @@ interface ResourceFiltersProps {
   initialSupportedVersion?: string;
   initialCompatibility?: string;
   initialResourceKind?: string;
+  supportedVersions: string[];
+  compatibilityOptions: string[];
 }
 
-export default function ResourceFilters({ categories, initialCategory, initialSearch, initialSort, initialTag, initialSupportedVersion, initialCompatibility, initialResourceKind }: ResourceFiltersProps) {
+export default function ResourceFilters({ categories, initialCategory, initialSearch, initialSort, initialTag, initialSupportedVersion, initialCompatibility, initialResourceKind, supportedVersions, compatibilityOptions }: ResourceFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedCategory = searchParams?.get('category_id') || initialCategory || '';
@@ -30,8 +32,6 @@ export default function ResourceFilters({ categories, initialCategory, initialSe
   // Local search state: only pushes to URL after 300ms debounce or on Enter/blur.
   const [localSearch, setLocalSearch] = useState(urlSearch);
   const [localTag, setLocalTag] = useState(tag);
-  const [localSupportedVersion, setLocalSupportedVersion] = useState(supportedVersion);
-  const [localCompatibility, setLocalCompatibility] = useState(compatibility);
 
   useEffect(() => {
     setLocalSearch(urlSearch);
@@ -39,9 +39,7 @@ export default function ResourceFilters({ categories, initialCategory, initialSe
 
   useEffect(() => {
     setLocalTag(tag);
-    setLocalSupportedVersion(supportedVersion);
-    setLocalCompatibility(compatibility);
-  }, [tag, supportedVersion, compatibility]);
+  }, [tag]);
 
   const updateFilters = useCallback((updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams?.toString() || '');
@@ -68,7 +66,7 @@ export default function ResourceFilters({ categories, initialCategory, initialSe
     }
   };
 
-  const commitMetadataFilter = (key: 'tag' | 'supported_version' | 'compatibility', value: string, current: string) => {
+  const commitMetadataFilter = (key: 'tag', value: string, current: string) => {
     if (value !== current) updateFilters({ [key]: value || null });
   };
   const hasFilters = Boolean(selectedCategory || urlSearch || tag || supportedVersion || compatibility || resourceKind || sort !== 'created_at');
@@ -120,11 +118,11 @@ export default function ResourceFilters({ categories, initialCategory, initialSe
         {hasFilters && <button type="button" onClick={() => router.push('/resources')} className="ml-auto inline-flex items-center gap-1 text-xs text-[var(--text-muted)] hover:text-[var(--primary)]"><X className="h-3.5 w-3.5" />清除筛选</button>}
       </div>
       <details className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-sm">
-        <summary className="flex cursor-pointer list-none items-center gap-2 select-none text-[var(--text-secondary)]"><SlidersHorizontal className="h-4 w-4" />高级筛选</summary>
+        <summary className="flex cursor-pointer list-none items-center gap-2 select-none text-[var(--text-secondary)]"><SlidersHorizontal className="h-4 w-4" />筛选</summary>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <input value={localTag} onChange={(e) => setLocalTag(e.target.value)} onBlur={() => commitMetadataFilter('tag', localTag, tag)} onKeyDown={(e) => e.key === 'Enter' && commitMetadataFilter('tag', localTag, tag)} placeholder="标签（完全匹配）" className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]" />
-          <input value={localSupportedVersion} onChange={(e) => setLocalSupportedVersion(e.target.value)} onBlur={() => commitMetadataFilter('supported_version', localSupportedVersion, supportedVersion)} onKeyDown={(e) => e.key === 'Enter' && commitMetadataFilter('supported_version', localSupportedVersion, supportedVersion)} placeholder="支持版本，如 v8" className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]" />
-          <input value={localCompatibility} onChange={(e) => setLocalCompatibility(e.target.value)} onBlur={() => commitMetadataFilter('compatibility', localCompatibility, compatibility)} onKeyDown={(e) => e.key === 'Enter' && commitMetadataFilter('compatibility', localCompatibility, compatibility)} placeholder="兼容性" className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]" />
+          <select value={supportedVersion} onChange={(e) => updateFilters({ supported_version: e.target.value || null })} className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]"><option value="">全部游戏版本</option>{supportedVersions.map((value) => <option key={value} value={value}>{value}</option>)}</select>
+          <select value={compatibility} onChange={(e) => updateFilters({ compatibility: e.target.value || null })} className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]"><option value="">全部平台</option>{compatibilityOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select>
         </div>
       </details>
     </div>

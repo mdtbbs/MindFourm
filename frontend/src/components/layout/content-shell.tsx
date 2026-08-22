@@ -149,6 +149,7 @@ export default function ContentShell({ children }: { children: React.ReactNode }
         resourceCategories={resourceCategories}
         forumCategories={forumCategories}
         currentPathname={pathname}
+        publicNavigation={!showDesktopSidebar}
       />
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">

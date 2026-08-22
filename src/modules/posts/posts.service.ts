@@ -369,8 +369,16 @@ export class PostsService {
       qb.andWhere('post.status = :status', { status: 'published' });
     }
 
-    const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
-    qb.orderBy(`post.${sortField}`, order === 'ASC' ? 'ASC' : 'DESC');
+    const sortDirection = order === 'ASC' ? 'ASC' : 'DESC';
+    if (sort === 'last_activity_at') {
+      qb.orderBy(
+        `(SELECT COALESCE(MAX(activity_reply.created_at), post.created_at) FROM replies activity_reply WHERE activity_reply.post_id = post.id AND activity_reply.deleted_at IS NULL AND activity_reply.status IN ('published'))`,
+        sortDirection,
+      );
+    } else {
+      const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
+      qb.orderBy(`post.${sortField}`, sortDirection);
+    }
     qb.skip(skip).take(limit);
 
     const [posts, total] = await qb.getManyAndCount();

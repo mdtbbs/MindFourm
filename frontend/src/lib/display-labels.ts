@@ -23,3 +23,13 @@ export function resourceTypeLabel(type?: string | null): string {
   if (!type) return '未知';
   return RESOURCE_TYPE_LABELS[type] || type;
 }
+
+export const RESOURCE_KIND_LABELS: Record<string, string> = {
+  mod: 'Mod', map: '地图', schematic: '蓝图', development_tool: '工具',
+  game_version: '游戏版本', server_plugin: '服务器插件', texture_ui: '材质与界面', other: '其他',
+};
+
+export function resourceKindLabel(kind?: string | null): string {
+  if (!kind) return '资源';
+  return RESOURCE_KIND_LABELS[kind] || kind;
+}

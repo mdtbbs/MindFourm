@@ -6,12 +6,6 @@ import TopicRow from './topic-row';
 interface LatestPostsSettings {
   title: string;
   description: string;
-  density: 'compact' | 'comfortable';
-  accentColor: string;
-  showExcerpt: boolean;
-  showTags: boolean;
-  showStats: boolean;
-  showIndex: boolean;
 }
 
 export default function LatestPostsList({ posts, settings }: { posts: PostSummary[]; settings: LatestPostsSettings }) {

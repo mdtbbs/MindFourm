@@ -64,6 +64,7 @@ export interface PostSummary {
   location_label?: string | null;
   created_at: string;
   updated_at: string;
+  last_activity_at?: string;
   category_name: string | null;
   category_slug: string | null;
   author_mindauth_id: number | null;
