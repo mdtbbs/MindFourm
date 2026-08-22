@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Resource } from '@/types';
-import ResourceCard from './resource-card';
+import ResourceRow from './resource-row';
 import { resourceApi } from '@/lib/api/client';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
@@ -69,7 +69,7 @@ export default function ResourceLoadMore({
     <>
       <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] divide-y divide-[var(--border)]">
         {resources.map((resource) => (
-          <ResourceCard key={resource.id} resource={resource} />
+          <ResourceRow key={resource.id} resource={resource} />
         ))}
       </div>
 

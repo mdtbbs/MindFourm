@@ -119,20 +119,23 @@ export default function ContentShell({ children }: { children: React.ReactNode }
   };
 
   const userMeta = user?.role ? `角色：${roleLabel(user.role)}` : (isAuthenticated ? '已登录' : '未登录');
+  const showDesktopSidebar = pathname.startsWith('/admin') || pathname.startsWith('/settings');
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">
-      <ContentSidebar
-        items={sidebarItems}
-        siteName={brand.siteName}
-        sidebarTitle={brand.sidebarTitle}
-        logoUrl={brand.logoUrl || undefined}
-        userName={user?.username || undefined}
-        userMeta={userMeta}
-        resourceCategories={resourceCategories}
-        forumCategories={forumCategories}
-        currentPathname={pathname}
-      />
+      {showDesktopSidebar && (
+        <ContentSidebar
+          items={sidebarItems}
+          siteName={brand.siteName}
+          sidebarTitle={brand.sidebarTitle}
+          logoUrl={brand.logoUrl || undefined}
+          userName={user?.username || undefined}
+          userMeta={userMeta}
+          resourceCategories={resourceCategories}
+          forumCategories={forumCategories}
+          currentPathname={pathname}
+        />
+      )}
 
       <ContentDrawer
         open={mobileMenuOpen}

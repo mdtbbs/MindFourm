@@ -43,6 +43,8 @@
  *    组件级圆角请继续用 --radius / --radius-card / --radius-badge。
  */
 :root {
+  --bg-secondary: var(--bg-elevated);
+  --bg-tertiary: var(--bg-hover);
   --background: var(--bg);
   --foreground: var(--text);
   --card: var(--bg-card);

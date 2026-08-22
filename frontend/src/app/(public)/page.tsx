@@ -12,7 +12,7 @@ import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
 import { Category, PostListResponse } from '@/types';
-import { parseFooterFriendlyLinks, isExternalHref, isSafeFooterHref } from '@/lib/footer/footer-settings';
+import { isExternalHref, isSafeFooterHref } from '@/lib/footer/footer-settings';
 
 // This route is the activity feed. Do not serve an ISR/CDN snapshot that can
 // make a recently active forum look abandoned.
@@ -171,7 +171,6 @@ export default async function HomePage({
     { label: '主题', value: formatStatValue(forumOverview.total_posts) },
     { label: '资源', value: formatStatValue(forumOverview.total_resources) },
   ];
-  const friendlyLinks = parseFooterFriendlyLinks(settings.footer_friendly_links);
   const adSlots = parseAdSlots(settings.home_ad_slots);
   const onlineStaff = staffPresence.filter((staff) => staff.status !== 'offline');
 
@@ -253,17 +252,6 @@ export default async function HomePage({
             basePath="/"
             queryParams={categoryId ? { category_id: String(categoryId) } : {}}
           />
-
-          {friendlyLinks.length > 0 && (
-            <section className="panel-surface p-5">
-              <h2 className="text-base font-semibold text-[var(--foreground)]">友情链接</h2>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {friendlyLinks.map((link) => (
-                  <Link key={`${link.label}-${link.href}`} href={link.href} target={isExternalHref(link.href) ? '_blank' : undefined} rel={isExternalHref(link.href) ? 'noreferrer' : undefined} className="rounded border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]" title={link.description}>{link.label}</Link>
-                ))}
-              </div>
-            </section>
-          )}
 
           {onlineStaff.length > 0 && (
             <section className="panel-surface p-5">

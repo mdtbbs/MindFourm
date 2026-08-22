@@ -1,101 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowRight, Radio, Server, Bell, Users } from 'lucide-react';
 import { getDiscoverSummary } from '@/lib/api/v1/discover';
 
-export const metadata: Metadata = {
-  title: '发现',
-  description: '探索 Mindustry 社区的资源、讨论和服务器',
-};
+export const metadata: Metadata = { title: '发现', description: '探索 Mindustry 社区的联机、服务器、公告和玩家' };
 
 export default async function DiscoverPage() {
   let summary;
-  try {
-    summary = await getDiscoverSummary();
-  } catch {
-    summary = null;
-  }
-
-  return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="text-3xl font-bold mb-8">发现</h1>
-
-      {summary ? (
-        <div className="grid gap-6 md:grid-cols-3">
-          {/* Stats */}
-          <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-6">
-            <h2 className="text-sm font-semibold text-[var(--text-muted)] mb-4">社区概览</h2>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">资源</span>
-                <span className="font-semibold">{summary.total_resources}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">讨论</span>
-                <span className="font-semibold">{summary.total_threads}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-[var(--text-muted)]">服务器</span>
-                <span className="font-semibold">{summary.total_servers}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Resources */}
-          <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-6">
-            <h2 className="text-sm font-semibold text-[var(--text-muted)] mb-4">最新资源</h2>
-            <ul className="space-y-2">
-              {summary.recent_resources.map(r => (
-                <li key={r.id}>
-                  <Link href={`/resources/${r.id}`} className="text-sm hover:text-[var(--primary)] truncate block">
-                    {r.title}
-                  </Link>
-                </li>
-              ))}
-              {summary.recent_resources.length === 0 && (
-                <li className="text-sm text-[var(--text-muted)]">暂无资源</li>
-              )}
-            </ul>
-          </div>
-
-          {/* Recent Threads */}
-          <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-6">
-            <h2 className="text-sm font-semibold text-[var(--text-muted)] mb-4">最新讨论</h2>
-            <ul className="space-y-2">
-              {summary.recent_threads.map(t => (
-                <li key={t.id}>
-                  <Link href={`/posts/${t.id}`} className="text-sm hover:text-[var(--primary)] truncate block">
-                    {t.title}
-                  </Link>
-                </li>
-              ))}
-              {summary.recent_threads.length === 0 && (
-                <li className="text-sm text-[var(--text-muted)]">暂无讨论</li>
-              )}
-            </ul>
-          </div>
-        </div>
-      ) : (
-        <div className="text-[var(--text-muted)]">
-          发现服务暂时不可用，请稍后再试。
-        </div>
-      )}
-
-      {/* Active Servers */}
-      {summary && summary.active_servers.length > 0 && (
-        <div className="mt-6 bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-6">
-          <h2 className="text-sm font-semibold text-[var(--text-muted)] mb-4">活跃服务器</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {summary.active_servers.map(s => (
-              <div key={s.id} className="flex items-center justify-between p-3 bg-[var(--bg-secondary)] rounded">
-                <div>
-                  <div className="font-medium text-sm">{s.name}</div>
-                  <div className="text-xs text-[var(--text-muted)]">{s.hostname}:{s.port}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  try { summary = await getDiscoverSummary(); } catch { summary = null; }
+  const entries = [
+    { href: '/game-servers', icon: Radio, title: '联机', description: '寻找可以加入的 Mindustry 服务器' },
+    { href: '/game-servers', icon: Server, title: '服务器', description: '浏览社区服务器列表' },
+    { href: '/notices', icon: Bell, title: '社区公告', description: '查看最新公告和活动' },
+    { href: '/users', icon: Users, title: '活跃玩家', description: '看看最近活跃的社区成员' },
+  ];
+  return <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"><div className="mb-8"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">Mindustry 社区</p><h1 className="mt-2 text-3xl font-semibold text-[var(--text)]">发现</h1><p className="mt-2 text-sm text-[var(--text-secondary)]">从联机、资源到社区动态，找到下一件值得参与的事。</p></div><div className="grid gap-3 sm:grid-cols-2">{entries.map(({ href, icon: Icon, title, description }) => <Link key={title} href={href} className="group flex items-center justify-between border border-[var(--border)] bg-[var(--bg-card)] p-5 transition hover:border-[var(--primary)]"><span className="flex items-center gap-4"><span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--primary)]/10 text-[var(--primary)]"><Icon className="h-5 w-5" /></span><span><span className="block font-semibold text-[var(--text)]">{title}</span><span className="mt-1 block text-sm text-[var(--text-secondary)]">{description}</span></span></span><ArrowRight className="h-4 w-4 text-[var(--text-muted)] transition group-hover:translate-x-1 group-hover:text-[var(--primary)]" /></Link>)}</div>{summary && <div className="mt-8 grid gap-4 sm:grid-cols-3"><div className="border border-[var(--border)] p-4"><span className="text-xs text-[var(--text-muted)]">资源</span><strong className="mt-1 block text-xl text-[var(--text)]">{summary.total_resources}</strong></div><div className="border border-[var(--border)] p-4"><span className="text-xs text-[var(--text-muted)]">讨论</span><strong className="mt-1 block text-xl text-[var(--text)]">{summary.total_threads}</strong></div><div className="border border-[var(--border)] p-4"><span className="text-xs text-[var(--text-muted)]">服务器</span><strong className="mt-1 block text-xl text-[var(--text)]">{summary.total_servers}</strong></div></div>}</div>;
 }

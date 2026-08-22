@@ -381,7 +381,7 @@ export function UnifiedHeader({
                   </motion.div>
                 )}
 
-                {showPostButton && onPostCreate && (
+                {showPostButton && (
                   <motion.div variants={itemVariants} whileHover="hover" whileTap="tap">
                     <Link
                       href="/posts/new"
