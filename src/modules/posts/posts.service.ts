@@ -373,7 +373,7 @@ export class PostsService {
     const sortDirection = order === 'ASC' ? 'ASC' : 'DESC';
     if (sort === 'last_activity_at') {
       qb.orderBy(
-        `(SELECT COALESCE(MAX(activity_reply.created_at), post.created_at) FROM replies activity_reply WHERE activity_reply.post_id = post.id AND activity_reply.deleted_at IS NULL AND activity_reply.status IN ('published'))`,
+        `COALESCE((SELECT MAX(activity_reply.created_at) FROM replies activity_reply WHERE activity_reply.post_id = post.id AND activity_reply.deleted_at IS NULL AND activity_reply.status IN ('published')), post.created_at)`,
         sortDirection,
       );
     } else {

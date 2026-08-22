@@ -224,6 +224,17 @@ describe('PostsService', () => {
     });
   });
 
+  it('orders discussion lists by a non-aggregated activity fallback', async () => {
+    const { service, listQueryBuilder } = createService();
+
+    await service.findAll({ page: 1, limit: 30, sort: 'last_activity_at' });
+
+    expect(listQueryBuilder.orderBy).toHaveBeenCalledWith(
+      "COALESCE((SELECT MAX(activity_reply.created_at) FROM replies activity_reply WHERE activity_reply.post_id = post.id AND activity_reply.deleted_at IS NULL AND activity_reply.status IN ('published')), post.created_at)",
+      'DESC',
+    );
+  });
+
   it('maps a post detail DTO and caches the mapped response', async () => {
     const { service, postRepository, postDetailService, redisService } = createService({
       postRepository: {
