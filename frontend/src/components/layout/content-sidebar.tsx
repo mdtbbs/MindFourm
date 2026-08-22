@@ -35,12 +35,12 @@ function SidebarBrand({ siteName, subtitle, logoUrl, sidebarLogoUrl }: { siteNam
 
   return (
     <div data-testid="sidebar-brand" className={SIDEBAR_LAYOUT_CLASSES.brand}>
-      <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity">
+      <Link href="/" className="flex items-center gap-3 hover:opacity-80 transition-opacity w-full">
         {displayLogoUrl ? (
-          <img src={displayLogoUrl} alt={siteName} className="h-8 max-w-[160px] object-contain" />
+          <img src={displayLogoUrl} alt={siteName} className="h-8 w-auto max-w-full object-contain" />
         ) : (
           <>
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div>
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div>
               {subtitle && <div className="text-xs text-[var(--text-muted)]">{subtitle}</div>}

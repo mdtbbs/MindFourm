@@ -139,9 +139,18 @@ export default function ContentDrawer({
     <button type="button" aria-label="关闭导航菜单" className="absolute inset-0 bg-black/40" onClick={onClose} />
     <div className={DRAWER_LAYOUT_CLASSES.panel}>
       <div data-testid="mobile-drawer-brand" className={DRAWER_LAYOUT_CLASSES.brand}>
-        <Link href="/" onClick={onClose} className="flex min-w-0 items-center gap-3">
-          {displayLogoUrl ? <img src={displayLogoUrl} alt={siteName} className="h-8 max-w-[160px] object-contain" /> : <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div>}
-          {!displayLogoUrl && <div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div>{subtitle && <div className="text-xs text-[var(--text-muted)]">{subtitle}</div>}</div>}
+        <Link href="/" onClick={onClose} className="flex min-w-0 flex-1 items-center gap-3">
+          {displayLogoUrl ? (
+            <img src={displayLogoUrl} alt={siteName} className="h-8 w-auto max-w-full object-contain" />
+          ) : (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div>
+          )}
+          {!displayLogoUrl && (
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div>
+              {subtitle && <div className="text-xs text-[var(--text-muted)]">{subtitle}</div>}
+            </div>
+          )}
         </Link>
         <button type="button" aria-label="关闭" className="rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]" onClick={onClose}><X className="h-5 w-5" /></button>
       </div>
