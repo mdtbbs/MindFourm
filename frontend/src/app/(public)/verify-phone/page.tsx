@@ -4,18 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import PhoneVerificationForm from "@/components/auth/phone-verification-form";
 import { useAuth } from "@/lib/auth/context";
-const safe = (value: string | null) =>
-  value &&
-  value.startsWith("/") &&
-  !value.startsWith("//") &&
-  !value.includes("\\")
-    ? value
-    : "/";
+import { getSafePhoneVerificationRedirect } from "@/lib/phone-verification/redirect";
 export default function VerifyPhonePage() {
   const router = useRouter(),
     params = useSearchParams(),
     { user, isAuthenticated, isLoading } = useAuth();
-  const redirect = safe(params.get("redirect"));
+  const redirect = getSafePhoneVerificationRedirect(params.get("redirect"));
   useEffect(() => {
     if (!isLoading && !isAuthenticated)
       router.replace(
