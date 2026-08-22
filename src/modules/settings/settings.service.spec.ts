@@ -247,6 +247,7 @@ describe('SettingsService', () => {
         site_logo_url: '',
         site_favicon_url: '',
         sidebar_title: '',
+        sidebar_logo_url: '',
       });
     });
 
@@ -270,6 +271,7 @@ describe('SettingsService', () => {
       expect(result.site_logo_url).toBe('');
       expect(result.site_favicon_url).toBe('');
       expect(result.sidebar_title).toBe('');
+      expect(result.sidebar_logo_url).toBe('');
     });
 
     it('includes site_favicon_url and sidebar_title when present in the database', async () => {

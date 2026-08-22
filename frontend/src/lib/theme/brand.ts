@@ -23,6 +23,7 @@ export interface BrandInfo {
   logoUrl: string;
   faviconUrl: string;
   sidebarTitle: string;
+  sidebarLogoUrl: string;
 }
 
 const NEUTRAL_DEFAULTS = {
@@ -46,6 +47,8 @@ export function resolveBrand(settings: Record<string, string>): BrandInfo {
     settings.site_tagline?.trim() ||
     NEUTRAL_DEFAULTS.sidebarTitle;
 
+  const sidebarLogoUrl = settings.sidebar_logo_url?.trim() || '';
+
   return {
     siteName,
     tagline,
@@ -53,6 +56,7 @@ export function resolveBrand(settings: Record<string, string>): BrandInfo {
     logoUrl,
     faviconUrl,
     sidebarTitle,
+    sidebarLogoUrl,
   };
 }
 

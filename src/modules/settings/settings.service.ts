@@ -294,6 +294,7 @@ export class SettingsService implements OnModuleInit {
     'terms_summary',
     'site_favicon_url',
     'sidebar_title',
+    'sidebar_logo_url',
   ]);
 
   /**
@@ -308,6 +309,7 @@ export class SettingsService implements OnModuleInit {
     'site_logo_url',
     'site_favicon_url',
     'sidebar_title',
+    'sidebar_logo_url',
   ]);
 
   /** Never leaves the server in cleartext, not even to an authenticated admin. */
@@ -332,6 +334,7 @@ export class SettingsService implements OnModuleInit {
       'site_logo_url',
       'site_favicon_url',
       'sidebar_title',
+      'sidebar_logo_url',
     ]),
     display: new Set([
       'posts_per_page',
@@ -444,6 +447,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'site_logo_url', value: '', category: 'brand', description: 'Site logo URL' },
       { key: 'site_favicon_url', value: '', category: 'brand', description: 'Site favicon URL' },
       { key: 'sidebar_title', value: '', category: 'brand', description: 'Sidebar title' },
+      { key: 'sidebar_logo_url', value: '', category: 'brand', description: 'Sidebar logo URL - dedicated logo for the sidebar brand area' },
       { key: 'site_footer', value: '', category: 'basic', description: 'Footer text' },
       { key: 'resource_upload_directory', value: 'resources', category: 'basic', description: 'Resource file storage directory, relative to RESOURCE_UPLOAD_ROOT or absolute' },
       { key: 'footer_copyright', value: '', category: 'footer', description: 'Footer copyright text' },

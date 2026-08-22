@@ -632,6 +632,16 @@ export const adminApi = {
       },
     );
   },
+  uploadSidebarLogo: (formData: FormData) => {
+    clearCache();
+    return request<{ url: string; filename: string; original_name: string; mime_type: string; size: number }>(
+      '/api/admin/settings/brand/sidebar-logo',
+      {
+        method: 'POST',
+        body: formData,
+      },
+    );
+  },
   getTags: (params?: { page?: number; limit?: number }) =>
     request<{ data: Tag[]; pagination: PostListResponse['pagination'] }>('/api/admin/tags' + buildQueryString(params || {})),
   createTag: (data: { name: string; slug?: string }) => {

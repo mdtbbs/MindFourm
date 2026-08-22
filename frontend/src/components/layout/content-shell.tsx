@@ -158,6 +158,7 @@ export default function ContentShell({
             siteName={brand.siteName}
             sidebarTitle={brand.sidebarTitle}
             logoUrl={brand.logoUrl || undefined}
+            sidebarLogoUrl={brand.sidebarLogoUrl || undefined}
             userName={user?.username || undefined}
             userId={user?.id}
             isAuthenticated={isAuthenticated}
@@ -176,6 +177,7 @@ export default function ContentShell({
           siteName={brand.siteName}
           sidebarTitle={brand.sidebarTitle}
           logoUrl={brand.logoUrl || undefined}
+          sidebarLogoUrl={brand.sidebarLogoUrl || undefined}
           userName={user?.username || undefined}
           userId={user?.id}
           isAuthenticated={isAuthenticated}

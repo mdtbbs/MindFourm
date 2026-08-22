@@ -201,6 +201,34 @@ export class AdminController {
   }
 
   /**
+   * POST /admin/settings/brand/sidebar-logo - Upload and apply sidebar logo (admin only)
+   */
+  @Post('settings/brand/sidebar-logo')
+  @Roles('admin')
+  @UseInterceptors(publicImageUploadInterceptor)
+  async uploadSidebarLogo(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    if (!file) {
+      throw new BadRequestException('没有收到图片');
+    }
+
+    const uploaded = this.uploadsService.toPublicImageResult(file);
+    try {
+      await this.settingsService.setBatch('brand', { sidebar_logo_url: uploaded.url });
+      await this.settingsRevalidationService.revalidatePublicSettings();
+      await this.logOperation(req, 'settings.sidebar_logo.upload', 'setting', undefined, {
+        key: 'sidebar_logo_url',
+        url: uploaded.url,
+        size: uploaded.size,
+        mime_type: uploaded.mime_type,
+      });
+      return uploaded;
+    } catch (error) {
+      await cleanupUploadedPublicImage(file);
+      throw error;
+    }
+  }
+
+  /**
    * GET /admin/users - User list (admin only)
    */
   @Get('users')
