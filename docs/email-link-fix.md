@@ -39,7 +39,7 @@
 
 ```sql
 -- 连接到MySQL数据库
-mysql -u root -p mindforum
+mysql -u root -p mindfourm
 
 -- 修改 site_url
 UPDATE settings 

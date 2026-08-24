@@ -1,6 +1,8 @@
 # MindFourm
 
-Mindustry 社区论坛系统，集成 MindAuth OAuth SSO 认证和 MindFileList 资源文件托管。EasyManager 服务器管理代码保留但当前暂停，服务器功能默认关闭。
+Mindustry 社区论坛系统，集成 MindAuth OAuth SSO 认证和 MindFileList 资源文件托管。
+
+当前状态：核心论坛、资源中心、社交、积分和管理后台已经可用；EasyManager 服务器管理默认暂停。下载事件持久化、资源 V1 正式启用、投票和群聊 UI 仍属于后续工作。
 
 ## 功能
 
@@ -19,6 +21,32 @@ Mindustry 社区论坛系统，集成 MindAuth OAuth SSO 认证和 MindFileList 
 - 管理面板（仪表盘、内容审核、用户管理、操作日志）
 - 封禁管理（用户/IP/CIDR）
 - 限流保护（Redis 原子操作）
+- 好友、关注、用户屏蔽、群组
+- 反应表情、积分、等级、徽章、积分商店和排行榜
+- RSS 订阅、搜索历史、热门搜索
+- LanLink 房间发现与游戏/论坛身份信息展示
+- 外部服务 API（API Key、权限范围、模拟用户和审计日志）
+- 插件生命周期、配置、权限和事件 Hook
+- 隐私设置、法律条款确认、反馈和内容安全基础能力
+
+### 当前未完成或暂未启用
+
+- **投票**：尚未实现。
+- **群聊 UI**：已有群组相关能力，但没有群聊页面和完整聊天体验。
+- **下载统计持久化**：下载事件和去重记录目前在内存中，服务重启会丢失；数据库表、统计报表和后台展示待补齐。
+- **资源 V1 公开接口**：代码已存在，但受 `feature_resources_v1_read_enabled` 控制，默认关闭；目前主要使用整数资源 ID，`public_id` 公开解析仍待完成。
+- **插件主题/模板注入**：插件目前只能使用后端生命周期和事件 Hook，不能注入前端主题或页面模板。
+- **插件热加载**：插件变更后需要重启服务。
+- **IPv6 CIDR 封禁**：当前 IP 段匹配仅支持 IPv4。
+- **EasyManager**：相关服务列表、申请和自动公告能力保留但默认关闭，见下文。
+
+### 推荐后续顺序
+
+1. 完成下载事件数据库化和后台统计。
+2. 补齐登录、发帖、回复、资源上传/下载、审核和权限的真实 E2E 测试。
+3. 做一次生产环境验收：数据库迁移、备份恢复、Redis、MindAuth、MFL、SSE、上传下载和健康检查。
+4. 正式启用资源 V1 并完成 `public_id` 回填与解析。
+5. 再考虑群聊 UI、投票、IPv6 封禁和插件前端扩展。
 
 ## 快速开始
 
@@ -62,7 +90,7 @@ cp .env.example .env
 
 ### 数据库
 
-MySQL 数据库 `mindfourm`，首次启动自动建表。
+MySQL 数据库 `mindfourm`，首次启动自动建表。生产环境应使用显式迁移并在迁移前完成备份。
 
 主要表：`users`, `posts`, `replies`, `categories`, `tags`, `notifications`, `messages`, `attachments`, `resources`, `settings`, `bans`
 
@@ -142,6 +170,16 @@ x-api-key: <FORUM_API_KEY>
 npx playwright test
 npx playwright test --ui
 ```
+
+当前单元测试覆盖较广，但 E2E 仍应以真实 MindAuth、数据库、Redis 和文件服务联调结果为准；不能把未运行或被环境阻塞的 E2E 视为通过。
+
+## 生产部署检查
+
+- 确认 `NODE_ENV=production`、`FRONTEND_URL`、MindAuth、MySQL、Redis 和 MFL 配置正确。
+- 先执行数据库备份，再执行迁移和构建。
+- 检查服务用户、文件权限、磁盘空间、systemd/Docker 健康状态。
+- 验证 `/health`、登录、SSE、资源上传、资源下载和后台审核链路。
+- 通过反向代理部署时确认 HTTPS、CORS、Cookie、`X-Forwarded-For` 和 SSE 长连接配置。
 
 ## 技术栈
 

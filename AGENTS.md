@@ -314,11 +314,18 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 - CIDR matching: IPv4 only currently (planned: IPv6 with `ipaddr.js`)
 - In-memory Map cache with 10-second TTL for fast ban checks
 
-### CSP (Recommended, NOT yet implemented)
+### CSP
+
+Backend responses already receive restrictive CSP/security headers through Helmet, and CSP violation reports are accepted by the security module. The Next.js frontend still needs a separate production policy review because it has different script, style, image, font, and API requirements.
+
+The backend policy is:
+
 ```
 default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';
 img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';
 ```
+
+The exact backend runtime policy is stricter than this illustrative frontend-compatible policy (`default-src 'none'`, no scripts/styles); treat `src/main.ts` as authoritative.
 
 ### Error Handling
 - Unhandled exceptions return generic `{ success: false, message: '服务器内部错误' }`

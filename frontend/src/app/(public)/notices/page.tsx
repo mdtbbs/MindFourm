@@ -4,21 +4,7 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
-
-type Notice = { title: string; content: string; published_at?: string; pinned?: boolean };
-
-function parseNotices(raw: string | undefined): Notice[] {
-  try {
-    const value = JSON.parse(raw || '[]');
-    if (!Array.isArray(value)) return [];
-    return value
-      .filter((item): item is Notice => typeof item?.title === 'string' && typeof item?.content === 'string')
-      .slice(0, 50)
-      .sort((a, b) => Number(Boolean(b.pinned)) - Number(Boolean(a.pinned)) || String(b.published_at || '').localeCompare(String(a.published_at || '')));
-  } catch {
-    return [];
-  }
-}
+import { parseNotices, type Notice } from '@/lib/notices/parse-notices';
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings({ fresh: true });
@@ -42,7 +28,10 @@ export default async function NoticesPage() {
             <div className="flex flex-wrap items-center gap-2">
               {notice.pinned && <span className="rounded bg-[var(--primary)]/10 px-2 py-0.5 text-xs font-semibold text-[var(--primary)]">置顶</span>}
               <h2 className="text-xl font-semibold text-[var(--text)]">{notice.title}</h2>
-              {notice.published_at && <time className="ml-auto text-xs text-[var(--text-muted)]">{notice.published_at}</time>}
+              {/* Defensive check: only render time if published_at is a string */}
+              {typeof notice.published_at === 'string' && notice.published_at && (
+                <time className="ml-auto text-xs text-[var(--text-muted)]">{notice.published_at}</time>
+              )}
             </div>
             <MarkdownRenderer content={notice.content} className="mt-4 text-sm leading-7 text-[var(--text-secondary)]" />
           </article>

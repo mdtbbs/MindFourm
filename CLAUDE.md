@@ -20,6 +20,10 @@ Features include:
 
 **NOT implemented**: polls, group chat UI (entity exists, no chat screen).
 
+**Current follow-up work**: download event persistence and admin analytics, enabling
+the Resource V1 public-read surface and `public_id` resolution, frontend plugin
+theme/template injection, plugin hot reload, and IPv6 CIDR matching.
+
 ## Commands
 
 ```bash
@@ -314,7 +318,12 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 - CIDR matching: IPv4 only currently (planned: IPv6 with `ipaddr.js`)
 - In-memory Map cache with 10-second TTL for fast ban checks
 
-### CSP (Recommended, NOT yet implemented)
+### CSP
+
+Backend CSP/security headers are enabled through Helmet and CSP reports are
+accepted by the security module. The Next.js frontend still requires its own
+production policy review. `src/main.ts` is authoritative for the backend runtime
+policy; it is stricter than the illustrative policy below.
 ```
 default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';
 img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none';

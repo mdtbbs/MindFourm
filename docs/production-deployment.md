@@ -2,6 +2,8 @@
 
 本文面向生产环境部署当前 MindFourm 版本。生产环境由 NestJS 后端、Next.js 前端、MySQL 8 和 Redis 7 组成；MindAuth 和 MindFileList 为外部依赖。
 
+当前发布注意事项：EasyManager 默认关闭；资源 V1 默认关闭；下载事件统计目前仍是内存实现，不能作为持久化审计数据。投票和群聊 UI 尚未实现。
+
 ## 1. 发布前检查
 
 在仓库根目录执行：
@@ -12,8 +14,9 @@ cd frontend && npm ci
 cd ..
 npm test
 npm run build
-cd frontend && npm run build
 ```
+
+`npm run build` 已经包含后端和前端构建，不需要重复执行前端构建。
 
 必须确认：
 
@@ -55,6 +58,8 @@ cp frontend/.env.local.example frontend/.env.production
 | `LANLINK_ENABLED` / `LANLINK_URL` | LanLink 集成开关和控制面地址 |
 | `EASYMANAGER_ENABLED` | 当前默认 `false`，除非已恢复 EasyManager |
 
+下载统计目前只在进程内去重和聚合；服务重启、扩容或多实例部署时不能依赖其累计值。正式上线前应完成 `download_events` 持久化。
+
 生产环境不要使用 `.env.example` 中的 `change-me` 值。
 
 ### 前端
@@ -87,6 +92,9 @@ npm run migration:run
 - `friendships`
 - `users` presence 相关字段（如当前迁移版本需要）
 - `resources`、`resource_versions`、`resource_ratings`
+
+资源 V1 相关开关 `feature_resources_v1_read_enabled` 默认关闭。启用前应完成
+`public_id` 回填、公开 ID 解析验证和兼容性测试；旧版 `/api/resources` 仍是默认资源接口。
 
 不要在生产环境使用 TypeORM `synchronize` 替代迁移。
 

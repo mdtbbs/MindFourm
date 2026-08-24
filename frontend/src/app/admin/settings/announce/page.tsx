@@ -7,6 +7,7 @@ import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { parseNotices, type Notice } from '@/lib/notices/parse-notices';
 
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
@@ -17,13 +18,6 @@ const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
     </div>
   ),
 });
-
-interface Notice {
-  title: string;
-  content: string;
-  published_at?: string;
-  pinned?: boolean;
-}
 
 function getLocalDate(): string {
   const now = new Date();
@@ -37,23 +31,6 @@ const emptyNotice = (): Notice => ({
   published_at: getLocalDate(),
   pinned: false,
 });
-
-function parseNotices(raw: string | undefined): Notice[] {
-  if (!raw?.trim()) return [];
-  const parsed: unknown = JSON.parse(raw);
-  if (!Array.isArray(parsed)) throw new Error('公告数据不是列表格式');
-
-  return parsed
-    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
-    .filter((item) => typeof item.title === 'string' && typeof item.content === 'string')
-    .slice(0, 50)
-    .map((item) => ({
-      title: String(item.title),
-      content: String(item.content),
-      published_at: typeof item.published_at === 'string' ? item.published_at : undefined,
-      pinned: item.pinned === true,
-    }));
-}
 
 export default function AnnounceSettingsPage() {
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
@@ -315,7 +292,10 @@ export default function AnnounceSettingsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       {notice.pinned && <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"><Pin className="h-3 w-3" />置顶</span>}
                       <h4 className="truncate font-semibold text-surface-900">{notice.title}</h4>
-                      {notice.published_at && <time className="text-xs text-surface-400">{notice.published_at}</time>}
+                      {/* Defensive check: only render time if published_at is a string */}
+                      {typeof notice.published_at === 'string' && notice.published_at && (
+                        <time className="text-xs text-surface-400">{notice.published_at}</time>
+                      )}
                     </div>
                     <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-sm text-surface-500">{notice.content}</p>
                   </div>
