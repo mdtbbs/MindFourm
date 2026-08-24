@@ -6,6 +6,9 @@ import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
 import { parseNotices, type Notice } from '@/lib/notices/parse-notices';
 
+// Force dynamic rendering to ensure fresh data
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings({ fresh: true });
   return generatePageMetadata({ title: '公告中心', brandInfo: resolveBrand(settings) });
