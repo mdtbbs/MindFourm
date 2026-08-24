@@ -103,6 +103,8 @@ import { KnowledgeRevision } from './knowledge-revision.entity';
 
 // Feedback
 import { Feedback } from './feedback.entity';
+import { Notice } from './notice.entity';
+import { NoticeRevision } from './notice-revision.entity';
 
 export const entities = [
   User,
@@ -197,6 +199,8 @@ export const entities = [
   KnowledgeRevision,
   // Feedback
   Feedback,
+  Notice,
+  NoticeRevision,
 ];
 
 export {

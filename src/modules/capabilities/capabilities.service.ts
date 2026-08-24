@@ -7,6 +7,7 @@ export type ClientCapabilities = {
   download_grants: boolean;
   device_auth: boolean;
   notifications_v1: boolean;
+  notices_v1: boolean;
   forge_preview: boolean;
   minimum_supported_client_version: string | null;
   recommended_client_version: string | null;
@@ -23,6 +24,7 @@ export class CapabilitiesService {
       download_grants: false,
       device_auth: false,
       notifications_v1: false,
+      notices_v1: true,
       forge_preview: Boolean(process.env.MDT_FORGE_URL && process.env.MDT_FORGE_API_KEY),
       minimum_supported_client_version: null,
       recommended_client_version: null,

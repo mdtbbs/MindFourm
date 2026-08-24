@@ -5,6 +5,7 @@ import { ResourcesModule } from '../modules/resources/resources.module';
 import { ThreadsModule } from '../modules/threads/threads.module';
 import { DiscoverModule } from '../modules/discover/discover.module';
 import { PortalModule } from '../modules/portal/portal.module';
+import { NoticesModule } from '../modules/notices/notices.module';
 
 export function createV1OpenApiDocument(app: INestApplication) {
   const config = new DocumentBuilder()
@@ -20,6 +21,7 @@ export function createV1OpenApiDocument(app: INestApplication) {
       ThreadsModule,
       DiscoverModule,
       PortalModule,
+      NoticesModule,
     ],
   });
 }

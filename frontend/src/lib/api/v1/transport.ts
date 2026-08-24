@@ -69,6 +69,7 @@ export interface FetchV1Options {
    * user's session. Client-side calls rely on `credentials: 'include'`.
    */
   cookies?: string;
+  init?: RequestInit;
 }
 
 /**
@@ -96,8 +97,9 @@ export async function fetchV1<T>(
   // endpoints, but no CSRF/phone-verification retry is wired up because
   // none of the current V1 endpoints require it.
   const response = await fetch(url, {
-    method: 'GET',
-    headers,
+    method: options?.init?.method || 'GET',
+    ...options?.init,
+    headers: { ...headers, ...(options?.init?.headers as Record<string, string> | undefined) },
     signal: options?.signal,
     cache: 'no-store',
     credentials: options?.cookies ? undefined : 'include',
@@ -134,4 +136,28 @@ export async function fetchV1<T>(
 
   const body = (await response.json()) as V1Response<T>;
   return body.data;
+}
+
+/** V1 mutation helper. Browser callers send cookies and the CSRF token already issued by the forum. */
+export async function requestV1<T>(path: string, init: RequestInit): Promise<T> {
+  let csrf = typeof document === 'undefined'
+    ? undefined
+    : document.cookie.split('; ').find((item) => item.startsWith('csrf_token='))?.slice('csrf_token='.length);
+  // A direct visit to an admin page may be the first same-origin API contact in
+  // this browser session. Ask the established auth endpoint to issue the token
+  // before attempting a V1 mutation, matching the legacy client behaviour.
+  if (!csrf && typeof document !== 'undefined') {
+    await fetch(buildPublicApiUrl('/api/auth/check'), { credentials: 'include' }).catch(() => undefined);
+    csrf = document.cookie.split('; ').find((item) => item.startsWith('csrf_token='))?.slice('csrf_token='.length);
+  }
+  return fetchV1<T>(path, {
+    init: {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    },
+  });
 }

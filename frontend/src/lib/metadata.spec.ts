@@ -39,6 +39,7 @@ const brandInfo: BrandInfo = {
   logoUrl: 'https://example.com/logo.png',
   faviconUrl: 'https://example.com/favicon.ico',
   sidebarTitle: 'Navigation',
+  sidebarLogoUrl: '',
 };
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -42,4 +42,10 @@ describe('migration registry', () => {
       'AddPostLastActivity1720000045000',
     );
   });
+
+  it('includes the first-class notices migration', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'CreateNotices1720000046000',
+    );
+  });
 });

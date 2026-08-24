@@ -66,6 +66,7 @@ import { PrivacyModule } from './modules/privacy/privacy.module';
 import { SecurityModule } from './modules/security/security.module';
 import { ContentSafetyModule } from './modules/content-safety/content-safety.module';
 import { PerformanceTelemetryModule } from './common/performance/performance-telemetry.module';
+import { NoticesModule } from './modules/notices/notices.module';
 
 @Module({
   imports: [
@@ -150,6 +151,7 @@ import { PerformanceTelemetryModule } from './common/performance/performance-tel
     DiscoverModule,
     PortalModule,
     FeedbackModule,
+    NoticesModule,
   ],
   controllers: [HealthController],
   // Global guards run in registration order, before any controller-scoped guard.

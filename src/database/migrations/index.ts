@@ -37,6 +37,7 @@ import { AddResourceSha2561720000042000 } from './1720000042000-AddResourceSha25
 import { FixLegacyFooterBrand1720000043000 } from './1720000043000-FixLegacyFooterBrand';
 import { AddForumCategoryPresentation1720000044000 } from './1720000044000-AddForumCategoryPresentation';
 import { AddPostLastActivity1720000045000 } from './1720000045000-AddPostLastActivity';
+import { CreateNotices1720000046000 } from './1720000046000-CreateNotices';
 
 /**
  * Migrations in run order.
@@ -85,4 +86,5 @@ export const migrations = [
   FixLegacyFooterBrand1720000043000,
   AddForumCategoryPresentation1720000044000,
   AddPostLastActivity1720000045000,
+  CreateNotices1720000046000,
 ];
