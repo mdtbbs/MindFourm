@@ -17,6 +17,7 @@ describe('CapabilitiesService', () => {
       download_grants: false,
       device_auth: false,
       notifications_v1: false,
+      notices_v1: true,
       forge_preview: false,
       minimum_supported_client_version: null,
       recommended_client_version: null,
