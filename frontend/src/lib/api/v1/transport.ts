@@ -13,6 +13,19 @@
 
 import { buildPublicApiUrl } from '../client';
 
+/**
+ * Browser calls intentionally stay on the public API base so Next rewrites and
+ * cross-origin deployments continue to work. Server Components run in Node,
+ * where fetch rejects relative URLs, so they must call the backend directly.
+ */
+function buildV1ApiUrl(path: string): string {
+  if (typeof window !== 'undefined') {
+    return buildPublicApiUrl(`/api/v1${path}`);
+  }
+  const apiBase = (process.env.API_URL || 'http://127.0.0.1:4000').replace(/\/+$/, '');
+  return `${apiBase}/api/v1${path}`;
+}
+
 export type V1Meta = {
   request_id: string;
 };
@@ -75,16 +88,14 @@ export interface FetchV1Options {
 /**
  * Fetch a V1 endpoint and unwrap the data payload.
  *
- * The URL is built via `buildPublicApiUrl` so the `NEXT_PUBLIC_API_URL`
- * override used everywhere else in the frontend is honoured — in
- * production the backend lives on a different origin and a hardcoded
- * `/api/v1/...` path would 404 against the Next.js server.
+ * Browser calls use `NEXT_PUBLIC_API_URL`/the Next rewrite. Server Components
+ * use `API_URL` because Node's fetch cannot resolve a relative `/api/...` URL.
  */
 export async function fetchV1<T>(
   path: string,
   options?: FetchV1Options,
 ): Promise<T> {
-  const url = buildPublicApiUrl(`/api/v1${path}`);
+  const url = buildV1ApiUrl(path);
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
