@@ -1,18 +1,13 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { friendsApi } from '@/lib/api/client';
-
-interface SearchResult {
-  id: number;
-  username: string;
-  avatar_url: string;
-}
+import { friendsApi, type FriendSearchResult } from '@/lib/api/client';
 
 export default function FriendSearch() {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
+  const [results, setResults] = useState<FriendSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const [sentRequests, setSentRequests] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
 
@@ -20,10 +15,11 @@ export default function FriendSearch() {
     const q = query.trim();
     if (!q) return;
     setSearching(true);
+    setHasSearched(true);
     setError(null);
     try {
-      const res = await friendsApi.search(q, 10);
-      setResults(res.data || []);
+      const users = await friendsApi.search(q, 10);
+      setResults(users ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '搜索失败');
     } finally {
@@ -86,6 +82,10 @@ export default function FriendSearch() {
             </div>
           ))}
         </div>
+      )}
+
+      {hasSearched && !searching && !error && results.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">未找到符合条件的用户</p>
       )}
     </div>
   );

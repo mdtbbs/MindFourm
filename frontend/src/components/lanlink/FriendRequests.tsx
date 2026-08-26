@@ -1,16 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { friendsApi } from '@/lib/api/client';
-
-interface PendingRequest {
-  id: number;
-  requester: { id: number; username: string; avatar_url: string };
-  created_at: string;
-}
+import { friendsApi, type FriendRequestItem } from '@/lib/api/client';
 
 export default function FriendRequests() {
-  const [requests, setRequests] = useState<PendingRequest[]>([]);
+  const [requests, setRequests] = useState<FriendRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<Set<number>>(new Set());
 

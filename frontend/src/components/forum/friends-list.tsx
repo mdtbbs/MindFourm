@@ -1,19 +1,12 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { friendsApi } from '@/lib/api/client';
+import { friendsApi, type FriendListItem } from '@/lib/api/client';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import Link from 'next/link';
 
-interface Friend {
-  id: number;
-  username: string;
-  avatar_url: string;
-  friendship_since: string;
-}
-
 export default function FriendsList() {
-  const [friends, setFriends] = useState<Friend[]>([]);
+  const [friends, setFriends] = useState<FriendListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState<Set<number>>(new Set());
 

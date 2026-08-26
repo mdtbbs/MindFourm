@@ -104,6 +104,7 @@ const UNCACHEABLE_PREFIXES = [
   '/api/messages',
   '/api/likes',
   '/api/follows',
+  '/api/friends',
   '/api/points/me',
 ];
 
@@ -1335,22 +1336,38 @@ export const lanlinkApi = {
 };
 
 // 好友管理 API（论坛内部）
+export interface FriendSearchResult {
+  id: number;
+  username: string;
+  avatar_url: string | null;
+}
+
+export interface FriendListItem extends FriendSearchResult {
+  friendship_since: string;
+}
+
+export interface FriendRequestItem {
+  id: number;
+  requester: FriendSearchResult;
+  created_at: string;
+}
+
 export const friendsApi = {
   /** 搜索非好友用户 */
   search: (q: string, limit = 10) =>
-    request<{ data: Array<{ id: number; username: string; avatar_url: string }> }>(
+    request<FriendSearchResult[]>(
       `/api/friends/search?q=${encodeURIComponent(q)}&limit=${limit}`
     ),
 
   /** 获取好友列表 */
   getList: (page = 1, limit = 50) =>
-    request<{ friends: Array<{ id: number; username: string; avatar_url: string; friendship_since: string }>; total: number }>(
+    request<{ friends: FriendListItem[]; total: number; page: number; limit: number; totalPages: number }>(
       `/api/friends?page=${page}&limit=${limit}`
     ),
 
   /** 获取待处理好友请求 */
   getRequests: (page = 1, limit = 20) =>
-    request<{ requests: Array<{ id: number; requester: { id: number; username: string; avatar_url: string }; created_at: string }>; total: number }>(
+    request<{ requests: FriendRequestItem[]; total: number; page: number; limit: number; totalPages: number }>(
       `/api/friends/requests?page=${page}&limit=${limit}`
     ),
 

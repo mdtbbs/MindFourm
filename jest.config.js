@@ -40,6 +40,7 @@ module.exports = {
     `node_modules[\\\\/](?!(${ESM_ONLY_DEPS.join('|')})[\\\\/])`,
   ],
   moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/frontend/src/$1',
     '^@entities/(.*)$': '<rootDir>/src/entities/$1',
     '^@common/(.*)$': '<rootDir>/src/common/$1',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
