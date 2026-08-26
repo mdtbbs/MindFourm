@@ -22,13 +22,13 @@ export default function TopicRow({
         aria-label={`查看帖子：${post.title}`}
         className="absolute inset-0 z-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
       />
-      <div className="relative z-10 flex min-w-0 items-start gap-3">
-        <Link href={`/users/${post.user_id}`} aria-label={`查看 ${post.author_name || '匿名用户'} 的主页`} className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-xs font-semibold text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
+      <div className="pointer-events-none relative z-10 flex min-w-0 items-start gap-3">
+        <Link href={`/users/${post.user_id}`} aria-label={`查看 ${post.author_name || '匿名用户'} 的主页`} className="pointer-events-auto flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-xs font-semibold text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
           {post.author_avatar_url ? <img src={post.author_avatar_url} alt="" className="h-full w-full object-cover" /> : (post.author_name || '匿').slice(0, 1).toUpperCase()}
         </Link>
         <div className="min-w-0 flex-1">
           {showCategory && post.category_name && (
-            <Link href={`/categories/${post.category_id}`} className="mb-1 inline-flex items-center gap-1 text-xs font-medium" style={{ color: categoryColor }}>
+            <Link href={`/categories/${post.category_id}`} className="pointer-events-auto mb-1 inline-flex items-center gap-1 text-xs font-medium" style={{ color: categoryColor }}>
               <Circle className="h-2.5 w-2.5 fill-current" />{post.category_name}
             </Link>
           )}
@@ -39,10 +39,10 @@ export default function TopicRow({
           </div>
           {post.excerpt && <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">{post.excerpt}</p>}
           {post.tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">
-            {post.tags.slice(0, 3).map((tag, index) => <Link key={tag.id} href={`/tags/${tag.slug}`} className={`rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--primary)] ${index > 1 ? 'hidden sm:inline-flex' : ''}`}>#{tag.name}</Link>)}
+            {post.tags.slice(0, 3).map((tag, index) => <Link key={tag.id} href={`/tags/${tag.slug}`} className={`pointer-events-auto rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--primary)] ${index > 1 ? 'hidden sm:inline-flex' : ''}`}>#{tag.name}</Link>)}
           </div>}
           <div className="mt-1.5 text-xs text-[var(--text-muted)]">
-            <Link href={`/users/${post.user_id}`} className="relative z-20 hover:text-[var(--primary)]">{post.author_name || '匿名用户'}</Link> · <time dateTime={activityAt}>{formatTime(activityAt)}</time>
+            <Link href={`/users/${post.user_id}`} className="pointer-events-auto relative z-20 hover:text-[var(--primary)]">{post.author_name || '匿名用户'}</Link> · <time dateTime={activityAt}>{formatTime(activityAt)}</time>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-3 pt-0.5 text-xs text-[var(--text-muted)]">
