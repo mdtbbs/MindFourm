@@ -26,8 +26,8 @@ async function fetchCategory(id: number): Promise<Category | null> {
   });
 }
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params;
+export async function generateMetadata({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ page?: string }> }): Promise<Metadata> {
+  const [{ id }, { page: pageParam }] = await Promise.all([params, searchParams]);
   const category = await fetchCategory(parseInt(id));
   if (!category) {
     // Not in the page body: `loading.tsx` flushes a 200 shell before the body runs, and
@@ -38,10 +38,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   // Bare title — the root layout's `title.template` appends the site suffix. Hardcoding
   // it here produced "分类名 | MindForum | MindForum".
   const description = `${category.name} 分类下的全部帖子`;
-  const canonical = `/categories/${category.id}`;
+  const page = Number.parseInt(pageParam || '1', 10);
+  const isPaginated = Number.isFinite(page) && page > 1;
+  const canonical = isPaginated ? `/categories/${category.id}?page=${page}` : `/categories/${category.id}`;
 
   return {
-    title: category.name,
+    title: isPaginated ? `${category.name} - 第 ${page} 页` : category.name,
     description,
     alternates: { canonical },
     openGraph: {

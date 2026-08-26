@@ -20,19 +20,26 @@ async function fetchPosts(page: number, slug: string): Promise<PostListResponse>
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
+  const [{ slug }, { page: pageParam }] = await Promise.all([params, searchParams]);
   const label = decodeURIComponent(slug);
-  const title = `#${label}`;
-  const description = `标签 ${label} 下的全部帖子`;
+  const page = Number.parseInt(pageParam || '1', 10);
+  const isPaginated = Number.isFinite(page) && page > 1;
+  const result = await fetchPosts(1, label);
+  const postCount = result.pagination.total;
+  const title = isPaginated ? `#${label} - 第 ${page} 页` : `#${label}`;
+  const description = `浏览 MDTBBS 中与 ${label} 相关的讨论和资源。`;
+  const canonical = isPaginated ? `/tags/${encodeURIComponent(label)}?page=${page}` : `/tags/${encodeURIComponent(label)}`;
 
   return {
     title,
     description,
-    // Paginated variants fold onto page one rather than competing with it.
-    alternates: { canonical: `/tags/${slug}` },
+    alternates: { canonical },
+    robots: { index: postCount >= 3, follow: true },
     openGraph: { title, description, type: 'website', url: `/tags/${slug}` },
   };
 }

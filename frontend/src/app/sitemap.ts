@@ -96,8 +96,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [];
   }
 
-  const now = new Date().toISOString();
-
   const [posts, categories, tags, resources] = await Promise.all([
     fetchSitemapPosts(),
     fetchSitemapCategories(),
@@ -106,30 +104,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
 
   const staticUrls: MetadataRoute.Sitemap = [
-    { url: baseUrl, lastModified: now, changeFrequency: 'hourly', priority: 1 },
-    { url: `${baseUrl}/resources`, lastModified: now, changeFrequency: 'daily', priority: 0.8 },
-    { url: `${baseUrl}/leaderboard`, lastModified: now, changeFrequency: 'daily', priority: 0.5 },
-    { url: `${baseUrl}/groups`, lastModified: now, changeFrequency: 'weekly', priority: 0.5 },
-    { url: `${baseUrl}/about`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
-    { url: `${baseUrl}/thanks`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
-    { url: `${baseUrl}/terms`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
-    { url: `${baseUrl}/privacy`, lastModified: now, changeFrequency: 'yearly', priority: 0.2 },
+    { url: baseUrl, changeFrequency: 'hourly', priority: 1 },
+    { url: `${baseUrl}/resources`, changeFrequency: 'daily', priority: 0.8 },
+    { url: `${baseUrl}/notices`, changeFrequency: 'weekly', priority: 0.5 },
+    { url: `${baseUrl}/categories`, changeFrequency: 'weekly', priority: 0.5 },
+    { url: `${baseUrl}/about`, changeFrequency: 'monthly', priority: 0.3 },
+    { url: `${baseUrl}/thanks`, changeFrequency: 'monthly', priority: 0.3 },
+    { url: `${baseUrl}/terms`, changeFrequency: 'yearly', priority: 0.2 },
+    { url: `${baseUrl}/privacy`, changeFrequency: 'yearly', priority: 0.2 },
   ];
 
   // Always the numeric id: there is no `/categories/[slug]` route, so emitting
   // `category.slug` published URLs that 404.
   const categoryUrls: MetadataRoute.Sitemap = categories.map((category) => ({
     url: `${baseUrl}/categories/${category.id}`,
-    lastModified: now,
     changeFrequency: 'daily',
     priority: 0.7,
   }));
 
   const tagUrls: MetadataRoute.Sitemap = tags
-    .filter((tag) => !!tag.slug)
+    .filter((tag) => !!tag.slug && (tag.post_count ?? 0) >= 3)
     .map((tag) => ({
       url: `${baseUrl}/tags/${tag.slug}`,
-      lastModified: now,
       changeFrequency: 'weekly',
       priority: 0.4,
     }));

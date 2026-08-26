@@ -147,6 +147,7 @@ export default async function PostDetailPage({
       articleBody: toMetaDescription(post.content, 5000),
       datePublished: post.created_at,
       dateModified: post.updated_at || post.created_at,
+      commentCount: pagination.total,
       author: {
         '@type': 'Person',
         name: post.author_name || `用户 #${post.user_id}`,
@@ -170,6 +171,24 @@ export default async function PostDetailPage({
           userInteractionCount: post.view_count ?? 0,
         },
       ],
+      ...(replies.length > 0
+        ? {
+            comment: replies
+              .filter((reply) => reply.status !== 'deleted')
+              .map((reply) => ({
+                '@type': 'Comment',
+                text: toMetaDescription(reply.content, 5000),
+                datePublished: reply.created_at,
+                dateModified: reply.updated_at || reply.created_at,
+                author: {
+                  '@type': 'Person',
+                  name: reply.author_name || `用户 #${reply.user_id}`,
+                  url: absoluteUrl(`/users/${reply.user_id}`),
+                  ...(reply.author_avatar_url ? { image: absoluteUrl(reply.author_avatar_url) } : {}),
+                },
+              })),
+          }
+        : {}),
     },
     {
       '@context': 'https://schema.org',

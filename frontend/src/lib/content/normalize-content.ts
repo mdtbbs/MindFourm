@@ -1,6 +1,7 @@
 const LEGACY_HTML_PATTERN = /(?:<|&lt;)\/?(?:p|div|br|h[1-6]|ul|ol|li|blockquote|strong|b|em|i|code|pre|a|img)(?:\s|\/?>|&gt;)/i;
 
-function decodeHtmlEntities(value: string): string {
+/** Decode the entity forms that occur in legacy rich-editor content. */
+export function decodeHtmlEntities(value: string): string {
   const named: Record<string, string> = {
     amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
   };

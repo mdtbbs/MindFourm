@@ -18,16 +18,27 @@ type ResourceFilterOptions = {
   compatibility: string[];
 };
 
-export async function generateMetadata(): Promise<Metadata> {
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}): Promise<Metadata> {
   const settings = await fetchPublicSettings();
   const brandInfo = resolveBrand(settings);
+  const params = await searchParams;
+  const hasFilter = Object.values(params).some((value) => Boolean(value));
 
-  return generatePageMetadata({
-    title: "资源中心",
-    description: RESOURCES_DESCRIPTION,
+  const metadata = generatePageMetadata({
+    title: "Mindustry 资源中心 - Mod、地图、蓝图、存档与版本下载",
+    description: "MDTBBS Mindustry 资源中心，浏览 Mod、地图、蓝图、存档、游戏版本与实用工具。",
     path: "/resources",
     brandInfo,
   });
+
+  // Filter, sort, tag, cursor and search combinations are useful to visitors but
+  // produce an unbounded duplicate-content surface. The unfiltered hub remains the
+  // canonical crawl target; individual resources keep their own canonical pages.
+  return hasFilter ? { ...metadata, robots: { index: false, follow: true } } : metadata;
 }
 
 async function fetchData(params: {

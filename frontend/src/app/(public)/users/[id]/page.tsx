@@ -102,7 +102,7 @@ export async function generateMetadata({
     : `${displayName} 的个人主页、帖子与回复`;
 
   return {
-    title: displayName,
+    title: `${displayName} 的主页`,
     description,
     // Tab and pagination params fold onto the profile's single canonical URL.
     alternates: { canonical: `/users/${profile.id}` },
@@ -171,8 +171,13 @@ export default async function UserProfilePage({
             name: displayName,
             identifier: String(profile.id),
             url: absoluteUrl(`/users/${profile.id}`),
-            image: profile.avatar_url || undefined,
-            description: profile.bio || undefined,
+            ...(profile.avatar_url ? { image: absoluteUrl(profile.avatar_url) } : {}),
+            ...(profile.bio ? { description: toMetaDescription(profile.bio) } : {}),
+            ...(profile.created_at ? { dateCreated: profile.created_at } : {}),
+            interactionStatistic: [
+              { '@type': 'InteractionCounter', interactionType: 'https://schema.org/WriteAction', userInteractionCount: profile.post_count || 0 },
+              { '@type': 'InteractionCounter', interactionType: 'https://schema.org/ReplyAction', userInteractionCount: profile.reply_count || 0 },
+            ],
           },
         }}
       />
@@ -180,7 +185,7 @@ export default async function UserProfilePage({
       <section className="mb-5 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)]">
         <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 md:flex-row md:items-start">
           <span className="flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-2xl font-semibold text-[var(--primary)] md:h-24 md:w-24">
-            {profile.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
+            {profile.avatar_url ? <img src={profile.avatar_url} alt={`${displayName} 的头像`} className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-3">

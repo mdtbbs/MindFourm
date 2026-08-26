@@ -1,3 +1,5 @@
+import { decodeHtmlEntities } from '@/lib/content/normalize-content';
+
 const MAX_DESCRIPTION_LENGTH = 160;
 
 /**
@@ -13,7 +15,10 @@ export function toMetaDescription(
 ): string {
   if (!markdown) return '';
 
-  const text = markdown
+  // Some legacy resource descriptions are stored as escaped rich-editor HTML
+  // (`&lt;p&gt;...`). Decode before stripping tags so neither tags nor entities leak
+  // into snippets, cards, Open Graph, or schema text.
+  const text = decodeHtmlEntities(markdown)
     // Fenced and inline code: keep the words, drop the fences.
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`([^`]*)`/g, '$1')
