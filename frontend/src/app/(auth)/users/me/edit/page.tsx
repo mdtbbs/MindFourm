@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { userApi } from '@/lib/api/client';
 import { UserProfile } from '@/types';
@@ -20,7 +20,8 @@ export default function ProfileEditPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
+    setError(null);
     userApi.getMyProfile()
       .then((data) => {
         setProfile(data);
@@ -29,6 +30,10 @@ export default function ProfileEditPage() {
       })
       .catch((err) => setError(err instanceof Error ? err.message : '加载失败'));
   }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const handleSave = async () => {
     const trimmed = username.trim();
@@ -78,7 +83,7 @@ export default function ProfileEditPage() {
         <Alert type="error" message={error} />
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={loadProfile}
           className="text-sm text-[var(--primary)] underline"
         >
           重试

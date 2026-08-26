@@ -54,7 +54,7 @@ export default async function HomePage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-7 border-b border-[var(--border)] pb-5">
+      <section className="mb-5 border-b border-[var(--border)] pb-5">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
           {brand.siteName}
         </p>
@@ -62,12 +62,9 @@ export default async function HomePage() {
         <p className="mt-1 text-sm text-[var(--text-secondary)]">讨论、创作、分享属于玩家自己的内容。</p>
       </section>
 
-      <div className="space-y-8">
+      <div>
         <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-[var(--text)]">
-              最新讨论
-            </h2>
+          <div className="-mt-[3.15rem] mb-3 flex items-center justify-end">
             <Link
               href="/threads"
               className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline"

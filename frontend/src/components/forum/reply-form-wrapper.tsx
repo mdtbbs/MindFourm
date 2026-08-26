@@ -1,13 +1,31 @@
 'use client';
 
 import ReplyForm from '@/components/forum/reply-form';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth/context';
+import type { Reply } from '@/types';
 
-export default function ReplyFormWrapper({ postId }: { postId: number }) {
-  const router = useRouter();
+export default function ReplyFormWrapper({
+  postId,
+  initialLocked = false,
+  onReplyCreated,
+}: {
+  postId: number;
+  initialLocked?: boolean;
+  onReplyCreated?: (reply: Reply) => void;
+}) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isLocked, setIsLocked] = useState(initialLocked);
+
+  useEffect(() => {
+    const handleLockChange = (event: Event) => {
+      const detail = (event as CustomEvent<{ postId: number; isLocked: boolean }>).detail;
+      if (detail?.postId === postId) setIsLocked(detail.isLocked);
+    };
+    window.addEventListener('mdtbbs:post-lock-change', handleLockChange);
+    return () => window.removeEventListener('mdtbbs:post-lock-change', handleLockChange);
+  }, [postId]);
 
   if (authLoading) {
     return (
@@ -45,14 +63,14 @@ export default function ReplyFormWrapper({ postId }: { postId: number }) {
     );
   }
 
+  if (isLocked) {
+    return <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">该帖子已被锁定，不再接受新回复。</p>;
+  }
+
   return (
     <ReplyForm
       postId={postId}
-      onReplyCreated={(reply) => {
-        if (reply.status === 'published') {
-          router.refresh();
-        }
-      }}
+      onReplyCreated={onReplyCreated}
     />
   );
 }

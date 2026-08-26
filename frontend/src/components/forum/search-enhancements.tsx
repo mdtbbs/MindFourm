@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { searchApi } from '@/lib/api/client';
 import { Clock, TrendingUp } from 'lucide-react';
 import { SearchHistoryEntry } from '@/types';
 
 export default function SearchEnhancements() {
+  const router = useRouter();
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const [popular, setPopular] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,7 +33,7 @@ export default function SearchEnhancements() {
   };
 
   const handleClick = (query: string) => {
-    window.location.href = `/search?q=${encodeURIComponent(query)}`;
+    router.push(`/search?q=${encodeURIComponent(query)}`);
   };
 
   if (loading) return null;

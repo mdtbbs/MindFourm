@@ -1,3 +1,5 @@
+'use client';
+
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import ReplyActions from '@/components/forum/reply-actions';
 import AuthorLink from '@/components/forum/author-link';
@@ -22,6 +24,8 @@ interface ReplyItemProps {
   canAcceptAnswer?: boolean;
   /** True when this reply is the accepted answer. */
   isBestReply?: boolean;
+  /** Shows the original poster marker on their own replies. */
+  isOriginalPoster?: boolean;
 }
 
 /**
@@ -36,6 +40,7 @@ export default function ReplyItem({
   isNested = false,
   canAcceptAnswer = false,
   isBestReply = false,
+  isOriginalPoster = false,
 }: ReplyItemProps) {
   return (
     <div
@@ -50,8 +55,8 @@ export default function ReplyItem({
     >
       {/* Reply Header */}
       <div
-        className={`bg-[var(--bg-elevated)] border-b border-[var(--border)] flex items-center justify-between ${
-          isNested ? 'px-3 py-2' : 'px-4 py-3'
+        className={`border-b border-[var(--border)] bg-[var(--bg-card)] flex items-center justify-between ${
+          isNested ? 'px-3 py-2' : 'px-4 py-2.5'
         }`}
       >
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-2 text-sm">
@@ -69,6 +74,7 @@ export default function ReplyItem({
             showMeta={!isNested}
             className="min-w-0"
           />
+          {isOriginalPoster && <span className="rounded bg-[var(--primary)]/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--primary)]">楼主</span>}
           <span className="text-[var(--text-muted)]">|</span>
           <time
             dateTime={reply.created_at}
@@ -93,8 +99,8 @@ export default function ReplyItem({
       </div>
 
       {/* Reply Content */}
-      <div className={isNested ? 'px-3 py-3' : 'p-4'}>
-        <MarkdownRenderer content={reply.content} />
+      <div className={isNested ? 'px-3 py-3' : 'px-4 py-5'}>
+        <MarkdownRenderer content={reply.content} className="text-[var(--text)]" />
         <ReplyAttachmentList replyId={reply.id} />
       </div>
 

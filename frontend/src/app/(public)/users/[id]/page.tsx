@@ -7,7 +7,7 @@ import { toMetaDescription } from '@/lib/seo/description';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import Badge from '@/components/ui/badge';
 import { UserProfile, PostListResponse, Reply, BookmarkListResponse, LikedPost, Resource } from '@/types';
-import { Bookmark, Calendar, Heart, Star, Users, Package } from 'lucide-react';
+import { Bookmark, Heart, Star, Users, Package } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
@@ -177,94 +177,44 @@ export default async function UserProfilePage({
         }}
       />
 
-      <section className="mb-6 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-center">
-        <div className="px-5 py-8 sm:px-8">
-          <span className="mx-auto flex h-20 w-20 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-2xl font-semibold text-[var(--primary)]">
+      <section className="mb-5 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)]">
+        <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 md:flex-row md:items-start">
+          <span className="flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-2xl font-semibold text-[var(--primary)] md:h-24 md:w-24">
             {profile.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
           </span>
-          <h1 className="mt-4 text-2xl font-bold text-[var(--text)]">{displayName}</h1>
-          <Badge variant={roleVariant} className="mt-2">{roleLabel(profile.role)}</Badge>
-          {profile.bio && <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-[var(--text-secondary)]">{profile.bio}</p>}
-          <div className="mx-auto mt-6 grid max-w-md grid-cols-3 divide-x divide-[var(--border)] border-y border-[var(--border)] py-3">
-            <div><strong className="block text-lg text-[var(--text)]">{profile.post_count}</strong><span className="text-xs text-[var(--text-muted)]">主题</span></div>
-            <div><strong className="block text-lg text-[var(--text)]">{profile.reply_count}</strong><span className="text-xs text-[var(--text-muted)]">回复</span></div>
-            <div><strong className="block text-lg text-[var(--text)]">{profile.total_points ?? 0}</strong><span className="text-xs text-[var(--text-muted)]">积分</span></div>
-          </div>
-          {profile.created_at && <p className="mt-4 text-sm text-[var(--text-muted)]">加入于 {formatDate(profile.created_at)}</p>}
-        </div>
-      </section>
-
-      {/* Level, Points, Follow Stats */}
-      <div className="flex justify-center gap-6 mb-6">
-        {profile.level && (
-          <div className="flex items-center gap-2 card px-4 py-2">
-            {profile.level.icon ? (
-              <img src={profile.level.icon} alt={profile.level.name} className="w-6 h-6" />
-            ) : (
-              <Star className="w-5 h-5" style={{ color: profile.level.color || 'var(--primary)' }} />
-            )}
-            <span className="text-sm font-medium">{profile.level.name}</span>
-            {profile.level.progress !== undefined && (
-              <div className="w-16 h-2 bg-surface-100 rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${profile.level.progress}%`, backgroundColor: profile.level.color || 'var(--primary)' }} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--text)]">{displayName}</h1>
+                  <Badge variant={roleVariant}>{roleLabel(profile.role)}</Badge>
+                </div>
+                {profile.bio && <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{profile.bio}</p>}
+                <p className="mt-2 text-xs text-[var(--text-muted)]">UID {profile.id}{profile.created_at ? ` · 加入于 ${formatDate(profile.created_at)}` : ''}</p>
+                {profile.level && <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+                  {profile.level.icon ? <img src={profile.level.icon} alt="" className="h-4 w-4" /> : <Star className="h-3.5 w-3.5" style={{ color: profile.level.color || 'var(--primary)' }} />}
+                  <span>{profile.level.name}</span>
+                </div>}
               </div>
-            )}
-          </div>
-        )}
-        {profile.total_points !== undefined && (
-          <div className="flex items-center gap-2 card px-4 py-2">
-            <Star className="w-5 h-5 text-yellow-500" />
-            <span className="text-sm font-medium">{profile.total_points} 积分</span>
-          </div>
-        )}
-        {(profile.follower_count !== undefined || profile.following_count !== undefined) && (
-          <div className="flex items-center gap-4 card px-4 py-2">
-            <span className="text-sm text-muted-foreground flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              <strong>{profile.following_count || 0}</strong> 关注
-            </span>
-            <span className="text-sm text-muted-foreground flex items-center gap-1">
-              <Users className="w-3 h-3" />
-              <strong>{profile.follower_count || 0}</strong> 粉丝
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Badges */}
-      {profile.badges && profile.badges.length > 0 && (
-        <div className="flex justify-center gap-2 mb-6 flex-wrap">
-          {profile.badges.map((badge) => (
-            <div key={badge.id} className="flex items-center gap-1.5 card px-3 py-1.5">
-              {badge.icon ? (
-                <img src={badge.icon} alt={badge.name} className="w-4 h-4" />
-              ) : (
-                <Medal level={badge.level as any} />
-              )}
-              <span className="text-xs font-medium">{badge.name}</span>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <FollowButton targetUserId={userId} />
+                {viewer && viewer.id !== profile.id && <BlockUserButton userId={profile.id} username={profile.username} targetRole={profile.role} />}
+                <ProfileEditLink userId={profile.id} />
+              </div>
             </div>
-          ))}
+            <div className="mt-5 grid grid-cols-3 divide-x divide-[var(--border)] border-y border-[var(--border)] sm:grid-cols-5">
+              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.post_count}</strong><span className="text-xs text-[var(--text-muted)]">主题</span></div>
+              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.reply_count}</strong><span className="text-xs text-[var(--text-muted)]">回复</span></div>
+              {profile.follower_count !== undefined && <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.follower_count}</strong><span className="text-xs text-[var(--text-muted)]">粉丝</span></div>}
+              {profile.following_count !== undefined && <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.following_count}</strong><span className="text-xs text-[var(--text-muted)]">关注</span></div>}
+              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.total_points ?? 0}</strong><span className="text-xs text-[var(--text-muted)]">积分</span></div>
+            </div>
+          </div>
         </div>
-      )}
-
-      {/* Role badge, Follow button and edit link */}
-      <div className="max-w-md mx-auto flex flex-wrap justify-center gap-3 mb-8">
-        <FollowButton targetUserId={userId} />
-        {/* This page already has the role, so the button can decide for itself not to
-            offer blocking staff — the API refuses it either way. */}
-        {viewer && viewer.id !== profile.id && (
-          <BlockUserButton
-            userId={profile.id}
-            username={profile.username}
-            targetRole={profile.role}
-          />
-        )}
-        <ProfileEditLink userId={profile.id} />
-      </div>
-
-
-      {/* Tabs */}
-      <div className="border-b border-[var(--border)] mb-6">
+        {profile.badges && profile.badges.length > 0 && <div className="flex flex-wrap gap-2 border-t border-[var(--border)] px-5 py-2.5 sm:px-6">
+          {profile.badges.map((badge) => <span key={badge.id} className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">{badge.icon ? <img src={badge.icon} alt="" className="h-4 w-4" /> : <Medal level={badge.level as any} />} {badge.name}</span>)}
+        </div>}
+        <div className="border-t border-[var(--border)] px-2 sm:px-4">
         <nav className="flex gap-4">
           <Link
             href={`/users/${userId}?tab=posts`}
@@ -325,7 +275,8 @@ export default async function UserProfilePage({
             </>
           )}
         </nav>
-      </div>
+        </div>
+      </section>
 
       {/* Content */}
       {tabValue === 'posts' && (

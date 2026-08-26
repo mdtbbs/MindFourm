@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/button';
 import { LikeButton } from '@/components/forum/like-button';
 import ReportDialog from '@/components/forum/report-dialog';
@@ -41,7 +40,6 @@ export default function ReplyActions({
   canAcceptAnswer = false,
   isBestReply = false,
 }: ReplyActionsProps) {
-  const router = useRouter();
   const quote = useReplyComposeStore((state) => state.quote);
   const replyTo = useReplyComposeStore((state) => state.replyTo);
   const { user } = useAuth();
@@ -65,12 +63,10 @@ export default function ReplyActions({
 
     setBusy(true);
     try {
-      await replyApi.update(reply.id, trimmed);
+      const updatedReply = await replyApi.update(reply.id, trimmed);
       showSuccess('回复已更新');
       setEditing(false);
-      // The reply body is server-rendered, so the new content only appears after the
-      // route re-renders — a local state update would leave the two out of step.
-      router.refresh();
+      window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'update', reply: updatedReply } }));
     } catch (err) {
       showError(err instanceof Error ? err.message : '更新失败，请稍后重试');
     }
@@ -83,7 +79,7 @@ export default function ReplyActions({
       // Passing null clears the mark; the API treats it as "no accepted answer".
       await postApi.setBestReply(postId, isBestReply ? null : reply.id);
       showSuccess(isBestReply ? '已取消采纳' : '已采纳为答案');
-      router.refresh();
+      window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'best', replyId: isBestReply ? null : reply.id } }));
     } catch (err) {
       showError(err instanceof Error ? err.message : '操作失败，请稍后重试');
     }
@@ -97,7 +93,7 @@ export default function ReplyActions({
     try {
       await replyApi.delete(reply.id);
       showSuccess('回复已删除');
-      router.refresh();
+      window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'delete', replyId: reply.id } }));
     } catch (err) {
       showError(err instanceof Error ? err.message : '删除失败，请稍后重试');
     }

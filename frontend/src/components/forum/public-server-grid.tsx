@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { serverApi } from '@/lib/api/client';
 import { Server } from '@/types';
@@ -11,14 +11,20 @@ export default function PublicServerGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadServers = useCallback(() => {
+    setLoading(true);
+    setError(null);
     serverApi.getPublicServers()
       .then(res => {
         setServers(res.servers || []);
-        setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => setError('暂时无法加载服务器列表'))
+      .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadServers();
+  }, [loadServers]);
 
   if (loading) {
     return (
@@ -34,7 +40,7 @@ export default function PublicServerGrid() {
       <div className="text-center py-8">
         <p className="text-[var(--error)] mb-3">加载失败</p>
         <button
-          onClick={() => window.location.reload()}
+          onClick={loadServers}
           className="px-4 py-2 bg-[var(--primary)] text-white text-sm rounded-[var(--radius)]"
         >
           刷新

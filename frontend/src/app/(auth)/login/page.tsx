@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 
 export default function LoginPage() {
-  useEffect(() => {
+  const startLogin = useCallback(() => {
     const mindauthUrl =
       process.env.NEXT_PUBLIC_MINDAUTH_URL || "http://localhost:4001";
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -15,6 +15,10 @@ export default function LoginPage() {
     window.location.href = `${mindauthUrl}/authorize?redirect=${redirectUrl}&client_id=${clientId}&response_type=code&state=${encodeURIComponent(returnUrl)}`;
   }, []);
 
+  useEffect(() => {
+    startLogin();
+  }, [startLogin]);
+
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="text-center">
@@ -24,7 +28,7 @@ export default function LoginPage() {
           如果没有自动跳转，
           <a
             href="#"
-            onClick={() => window.location.reload()}
+            onClick={startLogin}
             className="text-[var(--primary)] hover:underline"
           >
             点击这里

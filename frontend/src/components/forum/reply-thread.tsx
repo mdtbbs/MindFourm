@@ -1,3 +1,5 @@
+'use client';
+
 import ReplyItem from '@/components/forum/reply-item';
 import type { Reply } from '@/types';
 
@@ -50,6 +52,7 @@ interface ReplyThreadProps {
   canAcceptAnswer?: boolean;
   /** The reply currently accepted as the answer, if any. */
   bestReplyId?: number | null;
+  postOwnerId?: number;
   depth?: number;
 }
 
@@ -66,6 +69,7 @@ export default function ReplyThread({
   postId,
   canAcceptAnswer = false,
   bestReplyId = null,
+  postOwnerId,
   depth = 0,
 }: ReplyThreadProps) {
   if (nodes.length === 0) return null;
@@ -81,6 +85,7 @@ export default function ReplyThread({
             isNested={depth > 0}
             canAcceptAnswer={canAcceptAnswer}
             isBestReply={bestReplyId === node.reply.id}
+            isOriginalPoster={node.reply.user_id === postOwnerId}
           />
           {node.children.length > 0 && (
             // Indentation stops growing past a few levels so deep threads stay readable
@@ -95,6 +100,7 @@ export default function ReplyThread({
                 postId={postId}
                 canAcceptAnswer={canAcceptAnswer}
                 bestReplyId={bestReplyId}
+                postOwnerId={postOwnerId}
                 depth={depth + 1}
               />
             </div>

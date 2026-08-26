@@ -51,10 +51,6 @@ export default function ContentShell({
   }, [pathname]);
 
   useEffect(() => {
-    if (sidebarMode !== 'resources') {
-      setResourceCategories([]);
-      return undefined;
-    }
     let cancelled = false;
     resourceApi
       .getCategories()
@@ -65,7 +61,7 @@ export default function ContentShell({
     return () => {
       cancelled = true;
     };
-  }, [sidebarMode]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

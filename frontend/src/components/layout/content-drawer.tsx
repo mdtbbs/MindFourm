@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Bell, BookOpen, FolderOpen, Home, Mail, Plus, Radio, Settings, Star, UserRound, Users, X, type LucideIcon } from 'lucide-react';
+import { Bell, BookOpen, ChevronDown, FolderOpen, Home, Mail, Plus, Radio, Settings, Star, UserRound, Users, X, type LucideIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import { getIconComponent } from '@/lib/resource-icons';
@@ -44,37 +44,46 @@ function ForumDrawer({
   userId,
   isAuthenticated,
   onClose,
+  resourceCategories = [],
   showResourceLink = true,
 }: {
   categories: Category[];
   userId?: number;
   isAuthenticated: boolean;
   onClose: () => void;
+  resourceCategories?: ResourceCategory[];
   showResourceLink?: boolean;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [boardsOpen, setBoardsOpen] = useState(true);
+  const [resourcesOpen, setResourcesOpen] = useState(true);
+  const [accountOpen, setAccountOpen] = useState(true);
   const linkClass = (active: boolean) => `flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`;
+  const groupButtonClass = 'flex w-full items-center justify-between rounded-md px-3 py-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-secondary)]';
   return <>
-    <Link href="/posts/new" onClick={onClose} className="mb-2 flex items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" />发布主题</Link>
-    <Link href="/threads" onClick={onClose} className={linkClass(isPathActive(pathname, '/threads') || pathname === '/')}><Home className="h-4 w-4" />全部讨论</Link>
-    {isAuthenticated && <Link href="/bookmarks" onClick={onClose} className={linkClass(isPathActive(pathname, '/bookmarks'))}><Star className="h-4 w-4" />我的收藏</Link>}
-    {userId && <Link href={`/users/${userId}`} onClick={onClose} className={linkClass(isPathActive(pathname, `/users/${userId}`))}><UserRound className="h-4 w-4" />我的帖子</Link>}
-    {groupForumCategories(categories).map((group) => <section key={group.key} className="mt-4 border-t border-[var(--border)] pt-4">
-      <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{group.label}</h2>
-      {group.boards.map(({ category, children }) => <div key={category.id}><DrawerBoardLink category={category} onClose={onClose} />{children.map((child) => <DrawerBoardLink key={child.id} category={child} nested onClose={onClose} />)}</div>)}
-    </section>)}
+    <Link data-testid="mobile-drawer-nav-item-home" href="/" onClick={onClose} className={linkClass(isPathActive(pathname, '/threads') || pathname === '/')}><Home className="h-4 w-4" />全部讨论</Link>
+    <section className="mt-4 border-t border-[var(--border)] pt-3">
+      <button type="button" className={groupButtonClass} onClick={() => setBoardsOpen((open) => !open)} aria-expanded={boardsOpen}><span>讨论板块</span><ChevronDown className={`h-3.5 w-3.5 transition-transform ${boardsOpen ? '' : '-rotate-90'}`} /></button>
+      {boardsOpen && <div className="mt-1">{groupForumCategories(categories).length > 0 ? groupForumCategories(categories).map((group) => <section key={group.key} className="mb-4 last:mb-0"><h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{group.label}</h2>{group.boards.map(({ category, children }) => <div key={category.id}><DrawerBoardLink category={category} onClose={onClose} />{children.map((child) => <DrawerBoardLink key={child.id} category={child} nested onClose={onClose} />)}</div>)}</section>) : <p className="px-3 py-2 text-xs text-[var(--text-muted)]">暂无讨论板块</p>}</div>}
+    </section>
     <section className="mt-4 border-t border-[var(--border)] pt-4">
+      <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">发现</h2>
       <Link href="/tags" onClick={onClose} className={linkClass(isPathActive(pathname, '/tags'))}><BookOpen className="h-4 w-4" />全部标签</Link>
-      {showResourceLink && <Link href="/resources" onClick={onClose} className={linkClass(isPathActive(pathname, '/resources'))}><FolderOpen className="h-4 w-4" />资源中心</Link>}
       <Link href="/lanlink" onClick={onClose} className={linkClass(isPathActive(pathname, '/lanlink'))}><Radio className="h-4 w-4" />联机</Link>
       <Link href="/notices" onClick={onClose} className={linkClass(isPathActive(pathname, '/notices'))}><Bell className="h-4 w-4" />公告</Link>
     </section>
-    {isAuthenticated && <section className="mt-4 border-t border-[var(--border)] pt-4">
-      <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">我的</h2>
-      <Link href="/messages" onClick={onClose} className={linkClass(isPathActive(pathname, '/messages'))}><Mail className="h-4 w-4" />私信</Link>
-      <Link href="/notifications" onClick={onClose} className={linkClass(isPathActive(pathname, '/notifications'))}><Bell className="h-4 w-4" />通知</Link>
-      <Link href="/friends" onClick={onClose} className={linkClass(isPathActive(pathname, '/friends'))}><Users className="h-4 w-4" />好友</Link>
-      <Link href="/settings" onClick={onClose} className={linkClass(isPathActive(pathname, '/settings'))}><Settings className="h-4 w-4" />设置</Link>
+    {showResourceLink && <section className="mt-4 border-t border-[var(--border)] pt-3">
+      <button type="button" className={groupButtonClass} onClick={() => setResourcesOpen((open) => !open)} aria-expanded={resourcesOpen}><span>资源中心</span><ChevronDown className={`h-3.5 w-3.5 transition-transform ${resourcesOpen ? '' : '-rotate-90'}`} /></button>
+      {resourcesOpen && <div className="mt-1 space-y-0.5"><Link href="/resources" onClick={onClose} className={linkClass(pathname === '/resources' && !searchParams.get('category_id'))}><FolderOpen className="h-4 w-4" />全部资源</Link>{resourceCategories.length > 0 ? resourceCategories.map((category) => {
+        const Icon = getIconComponent(category.icon || 'Folder');
+        const active = pathname === '/resources' && searchParams.get('category_id') === String(category.id);
+        return <Link key={category.id} href={`/resources?category_id=${category.id}`} onClick={onClose} className={linkClass(active)}><Icon className="h-4 w-4" />{category.name}</Link>;
+      }) : <p className="px-3 py-2 text-xs text-[var(--text-muted)]">暂无资源分类</p>}</div>}
+    </section>}
+    {isAuthenticated && <section className="mt-4 border-t border-[var(--border)] pt-3">
+      <button type="button" className={groupButtonClass} onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen}><span>我的</span><ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountOpen ? '' : '-rotate-90'}`} /></button>
+      {accountOpen && <div className="mt-1 space-y-0.5">{userId && <Link href={`/users/${userId}`} onClick={onClose} className={linkClass(isPathActive(pathname, `/users/${userId}`))}><UserRound className="h-4 w-4" />我的帖子</Link>}<Link href="/bookmarks" onClick={onClose} className={linkClass(isPathActive(pathname, '/bookmarks'))}><Star className="h-4 w-4" />我的收藏</Link><Link href="/messages" onClick={onClose} className={linkClass(isPathActive(pathname, '/messages'))}><Mail className="h-4 w-4" />私信</Link><Link href="/notifications" onClick={onClose} className={linkClass(isPathActive(pathname, '/notifications'))}><Bell className="h-4 w-4" />通知</Link><Link href="/friends" onClick={onClose} className={linkClass(isPathActive(pathname, '/friends'))}><Users className="h-4 w-4" />好友</Link><Link href="/settings" onClick={onClose} className={linkClass(isPathActive(pathname, '/settings'))}><Settings className="h-4 w-4" />设置</Link></div>}
     </section>}
   </>;
 }
@@ -157,8 +166,9 @@ export default function ContentDrawer({
       <nav data-testid="mobile-drawer-nav" className={DRAWER_LAYOUT_CLASSES.nav}>
         {mode === 'resources' && <ResourceDrawer categories={resourceCategories} onClose={onClose} />}
         {mode === 'resources' && <section className="mt-5 border-t border-[var(--border)] pt-4"><h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">论坛</h2></section>}
-        <ForumDrawer categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} onClose={onClose} showResourceLink={mode !== 'resources'} />
+        <ForumDrawer categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} onClose={onClose} resourceCategories={resourceCategories} showResourceLink={mode !== 'resources'} />
       </nav>
+      <Link href="/posts/new" onClick={onClose} className="mx-3 mb-3 flex shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" />发布主题</Link>
       <div data-testid="mobile-drawer-user" className={DRAWER_LAYOUT_CLASSES.user}><SidebarUserPanel userName={userName} userMeta={userMeta} /></div>
     </div>
   </div>;

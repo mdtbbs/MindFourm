@@ -2,9 +2,7 @@ import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { Metadata } from 'next';
 import PostContent from '@/components/forum/post-content';
-import ReplyThread, { buildReplyTree } from '@/components/forum/reply-thread';
-import ReplyFormWrapper from '@/components/forum/reply-form-wrapper';
-import Pagination from '@/components/ui/pagination';
+import PostReplySection from '@/components/forum/post-reply-section';
 import AttachmentList from '@/components/forum/attachment-list';
 import Link from 'next/link';
 import { fetchApiData } from '@/lib/api/server-fetch';
@@ -242,51 +240,16 @@ export default async function PostDetailPage({
       />
       <AttachmentList attachments={attachments} />
 
-      {/* Replies */}
-      <div className="mt-8 space-y-4">
-        <h2 className="text-lg font-semibold text-[var(--text)]">
-          回复 ({pagination.total})
-        </h2>
-
-        {replies.length === 0 ? (
-          <div className="text-center py-8 text-[var(--text-secondary)]">暂无回复，快来抢沙发吧</div>
-        ) : (
-          // Floors are numbered from the root replies on this page. The API paginates
-          // roots and returns their descendants alongside them, so the tree is always
-          // complete for whatever page is being shown.
-          <ReplyThread
-            nodes={buildReplyTree(replies, (page - 1) * repliesPerPage)}
-            postId={postId}
-            // Accepting an answer is the author's call, with staff able to step in. The
-            // API re-checks this; passing it here only decides whether to show the button.
-            canAcceptAnswer={
-              (post.is_owner ?? false)
-              || post.current_user_role === 'admin'
-              || post.current_user_role === 'moderator'
-            }
-            bestReplyId={post.best_reply_id ?? null}
-          />
-        )}
-
-        <Pagination
-          currentPage={pagination.page}
-          totalPages={pagination.totalPages}
-          basePath={`/posts/${postId}`}
-        />
-      </div>
-
-      {/* Reply Form */}
-      <div className="mt-8">
-        {post.is_locked ? (
-          // Cosmetic only — `RepliesService` refuses the write regardless. Saying so is
-          // better than presenting a composer whose submit is guaranteed to fail.
-          <p className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-6 text-center text-sm text-[var(--text-secondary)]">
-            该帖子已被锁定，不再接受新回复。
-          </p>
-        ) : (
-          <ReplyFormWrapper postId={postId} />
-        )}
-      </div>
+      <PostReplySection
+        postId={postId}
+        postPath={postPath}
+        replies={replies}
+        pagination={pagination}
+        canAcceptAnswer={(post.is_owner ?? false) || post.current_user_role === 'admin' || post.current_user_role === 'moderator'}
+        bestReplyId={post.best_reply_id ?? null}
+        postOwnerId={post.user_id}
+        initialLocked={post.is_locked ?? false}
+      />
     </div>
   );
 }

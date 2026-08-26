@@ -43,17 +43,17 @@ export default function PostContent({
   // The API authorises the write either way; this only decides whether to offer the link.
   const canEdit = isOwner || canModerate;
   const [lockPending, setLockPending] = useState(false);
+  const [isLocked, setIsLocked] = useState(Boolean(post.is_locked));
 
   const handleToggleLock = async () => {
     if (!postId) return;
     setLockPending(true);
     try {
-      const next = !post.is_locked;
+      const next = !isLocked;
       await postApi.setLocked(postId, next);
+      setIsLocked(next);
+      window.dispatchEvent(new CustomEvent('mdtbbs:post-lock-change', { detail: { postId, isLocked: next } }));
       showSuccess(next ? '帖子已锁定，不再接受新回复' : '帖子已解锁');
-      // The lock badge and the composer both come from the server render, so the route
-      // has to re-render rather than this component patching its own copy of the post.
-      router.refresh();
     } catch (err) {
       showError(err instanceof Error ? err.message : '操作失败，请稍后重试');
     }
@@ -80,9 +80,7 @@ export default function PostContent({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
-  // `router.refresh()` re-runs the server components and keeps scroll position and
-  // client state; `window.location.reload()` threw both away on every moderation
-  // action. Failures now surface as a toast instead of only reaching the console.
+  // Moderation failures surface as a toast rather than relying on a browser reload.
   const handleApprove = async () => {
     if (!postId || modAction) return;
     setModAction('approving');
@@ -115,22 +113,23 @@ export default function PostContent({
   return (
     <article className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] overflow-hidden">
       {/* Header */}
-      <div className="p-6 border-b border-[var(--border)]">
-        <h1 className="text-2xl font-bold text-[var(--text)] mb-3">{post.title}</h1>
-
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div className="px-5 pt-5 sm:px-6">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--text)]">{post.title}</h1>
+      </div>
+      <div className="mx-5 mt-4 border-t border-[var(--border)] py-3 sm:mx-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <AuthorLink
             userId={post.user_id}
             name={post.author_name}
             avatarUrl={post.author_avatar_url}
             role={post.author_role}
-            size="lg"
-            layout="stacked"
+            size="md"
             showMeta={false}
             className="max-w-full"
           />
 
-          <div className="flex flex-wrap items-center gap-3 text-sm text-[var(--text-secondary)] sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)] sm:justify-end">
+            <Badge variant="primary">楼主</Badge>
             <span>发布于 <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('zh-CN')}>{formatTime(post.created_at)}</time></span>
             <span className="text-[var(--text-muted)]">|</span>
             <span>{post.view_count} 浏览</span>
@@ -153,7 +152,7 @@ export default function PostContent({
             </>
           )}
 
-          {post.is_locked ? (
+          {isLocked ? (
             <>
               <span className="text-[var(--text-muted)]">|</span>
               <Badge variant="warning">已锁定</Badge>
@@ -177,12 +176,12 @@ export default function PostContent({
       </div>
 
       {/* Content */}
-      <div className="p-6" data-testid="post-content">
-        <MarkdownRenderer content={post.content} />
+      <div className="min-h-[100px] px-5 py-6 text-[16px] leading-8 sm:px-6" data-testid="post-content">
+        <MarkdownRenderer content={post.content} className="text-[var(--text)]" />
       </div>
 
       {/* Actions */}
-      <div className="px-4 py-2.5 bg-[var(--bg-elevated)] dark:bg-gray-800 border-t border-[var(--border)] flex items-center gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2 border-t border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2.5">
         {/* Moderation actions for pending posts */}
         {post.status === 'pending' && canModerate && (
           <div className="flex items-center gap-2 mr-auto">
@@ -234,7 +233,7 @@ export default function PostContent({
             className="text-[var(--text-secondary)]"
             data-testid="post-lock-toggle"
           >
-            {post.is_locked ? (
+            {isLocked ? (
               <>
                 <Unlock className="w-4 h-4 mr-1" />
                 解锁
