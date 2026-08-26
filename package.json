@@ -14,6 +14,7 @@
     "start:prod": "node dist/main",
     "test": "jest",
     "test:watch": "jest --watch",
+    "review:claude": "node scripts/claude-review.mjs",
     "resanitize": "node scripts/resanitize-content-html.cjs",
     "migration:run": "npm run build:backend && typeorm migration:run -d dist/database/data-source.js",
     "migration:revert": "npm run build:backend && typeorm migration:revert -d dist/database/data-source.js",
