@@ -447,6 +447,9 @@ export class PostsService {
     if (cursor) {
       try {
         const decoded = decodeCursor(cursor);
+        if (decoded.length !== 2 || !/^\d+$/.test(decoded[0]) || !/^\d+$/.test(decoded[1])) {
+          throw new BadRequestException('无效分页游标');
+        }
         const cursorValue =
           sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
         const idValue = parseInt(decoded[1]);
@@ -464,7 +467,8 @@ export class PostsService {
           );
         }
       } catch (e) {
-        // Invalid cursor, ignore
+        if (e instanceof BadRequestException) throw e;
+        throw new BadRequestException('无效分页游标');
       }
     }
 

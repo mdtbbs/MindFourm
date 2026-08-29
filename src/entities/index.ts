@@ -105,6 +105,8 @@ import { KnowledgeRevision } from './knowledge-revision.entity';
 import { Feedback } from './feedback.entity';
 import { Notice } from './notice.entity';
 import { NoticeRevision } from './notice-revision.entity';
+import { MobileSession } from './mobile-session.entity';
+import { MobileRefreshToken } from './mobile-refresh-token.entity';
 
 export const entities = [
   User,
@@ -201,6 +203,8 @@ export const entities = [
   Feedback,
   Notice,
   NoticeRevision,
+  MobileSession,
+  MobileRefreshToken,
 ];
 
 export {
@@ -264,4 +268,5 @@ export {
   KnowledgeArticle, KnowledgeRevision,
   // Feedback
   Feedback,
+  MobileSession, MobileRefreshToken,
 };

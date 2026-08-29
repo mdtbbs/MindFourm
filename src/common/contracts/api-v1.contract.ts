@@ -1,4 +1,4 @@
-export type ApiV1Meta = { request_id: string };
+export type ApiV1Meta = { request_id: string; pagination?: { page: number; limit: number; total: number; total_pages: number } };
 
 export type ApiV1Success<T> = {
   data: T;
@@ -16,6 +16,11 @@ export type ApiV1Error = {
 };
 
 export function apiV1Success<T>(data: T, requestId: string): ApiV1Success<T> {
+  const value = data as any;
+  if (value?.__v1Pagination) {
+    const { __v1Pagination, ...payload } = value;
+    return { data: payload as T, meta: { request_id: requestId, pagination: __v1Pagination } };
+  }
   return { data, meta: { request_id: requestId } };
 }
 

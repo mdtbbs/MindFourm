@@ -9,6 +9,11 @@ Thumbs.db
 # Build output
 dist/
 
+# Android local and generated build state
+android/.gradle/
+android/.kotlin/
+android/app/build/
+
 # Uploads (keep directory structure with .gitkeep)
 uploads/attachments/
 uploads/resources/

@@ -51,12 +51,11 @@ export class PhoneWriteGuard implements CanActivate {
   }
 
   private async resolveUser(request: any) {
-    const sessionToken = request.cookies?.forum_session || this.extractTokenFromHeader(request);
-    if (!sessionToken) {
+    if (!request.cookies?.forum_session && !request.headers.authorization) {
       throw new UnauthorizedException('未登录');
     }
 
-    const user = await this.authService.verifySession(sessionToken);
+    const user = await this.authService.resolveRequestUser(request);
     if (!user) {
       throw new UnauthorizedException('会话已过期');
     }
@@ -64,8 +63,4 @@ export class PhoneWriteGuard implements CanActivate {
     return user;
   }
 
-  private extractTokenFromHeader(request: any): string | undefined {
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    return type === 'Bearer' ? token : undefined;
-  }
 }

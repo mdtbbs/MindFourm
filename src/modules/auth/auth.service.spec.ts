@@ -129,3 +129,27 @@ describe('AuthService phone status sync', () => {
     }
   });
 });
+
+describe('AuthService mobile refresh concurrency contract', () => {
+  it('allows exactly one concurrent rotation and revokes the family on reuse', async () => {
+    const session: any = { id: 'session-a', revoked_at: null, user: { id: 7 } };
+    const token: any = { id: 'r0', token_hash: 'h0', family_id: 'family-a', session_id: 'session-a', expires_at: new Date(Date.now() + 60_000), revoked_at: null, session };
+    let consumeAttempts = 0;
+    const refreshRepo: any = {
+      findOne: jest.fn().mockResolvedValue({ ...token, session }),
+      update: jest.fn(async (where: any) => where.id === 'r0' && ++consumeAttempts === 1 ? { affected: 1 } : { affected: 0 }),
+      create: jest.fn((v) => v), save: jest.fn(),
+    };
+    const sessionRepo: any = { update: jest.fn(), findOne: jest.fn() };
+    const service = new AuthService({} as any, { create: (v: any) => v, save: jest.fn() } as any, {} as any, {} as any, { get: jest.fn() } as any, {} as any, {} as any, {} as any, sessionRepo, refreshRepo, { signAsync: jest.fn() } as any);
+    jest.spyOn(service as any, 'hashMobileRefreshToken').mockReturnValue('h0');
+    jest.spyOn(service as any, 'issueMobileRefreshToken').mockResolvedValue({ id: 'r1', raw: 'R1' });
+    jest.spyOn(service as any, 'mobileTokenResponse').mockResolvedValue({ refresh_token: 'R1' });
+
+    const results = await Promise.allSettled([service.refreshMobileSession('R0', '127.0.0.1'), service.refreshMobileSession('R0', '127.0.0.1')]);
+    expect(results.filter((item) => item.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((item) => item.status === 'rejected')).toHaveLength(1);
+    expect(refreshRepo.update).toHaveBeenCalledWith(expect.objectContaining({ family_id: 'family-a' }), expect.objectContaining({ revoked_at: expect.any(Date) }));
+    expect(sessionRepo.update).toHaveBeenCalledWith('session-a', expect.objectContaining({ revoked_at: expect.any(Date) }));
+  });
+});

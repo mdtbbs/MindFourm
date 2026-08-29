@@ -67,4 +67,9 @@ export const appConfig = () => ({
   session: {
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
   },
+  mobileAuth: {
+    issuer: process.env.MOBILE_AUTH_ISSUER || resolveApiUrl(), audience: 'android',
+    jwtSecret: process.env.MOBILE_AUTH_JWT_SECRET || '',
+    refreshHmacSecret: process.env.MOBILE_AUTH_REFRESH_HMAC_SECRET || '',
+  },
 });

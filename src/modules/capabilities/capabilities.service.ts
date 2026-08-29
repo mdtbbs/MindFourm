@@ -30,4 +30,16 @@ export class CapabilitiesService {
       recommended_client_version: null,
     };
   }
+
+  async getAndroidClientConfig(platform?: string, _versionCode?: number) {
+    const minimum = Number(await this.settingsService.get('android_minimum_version_code') || 100);
+    const latest = Number(await this.settingsService.get('android_latest_version_code') || minimum);
+    return {
+      platform: platform === 'android' ? 'android' : 'unknown',
+      minimum_version_code: minimum, latest_version_code: latest,
+      force_update: await this.settingsService.getBoolean('android_force_update', false),
+      maintenance: await this.settingsService.getBoolean('android_maintenance', false),
+      features: { posting: false, image_upload: false, notifications_sse: false },
+    };
+  }
 }

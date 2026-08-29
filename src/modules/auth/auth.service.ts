@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
@@ -17,6 +18,8 @@ import { mkdirSync } from 'fs';
 import { User } from '@entities/user.entity';
 import { SessionAudit } from '@entities/session-audit.entity';
 import { LegalAcceptance } from '@entities/legal-acceptance.entity';
+import { MobileSession } from '@entities/mobile-session.entity';
+import { MobileRefreshToken } from '@entities/mobile-refresh-token.entity';
 import { RedisService } from '@database/redis.service';
 import { PointsService } from '../points/points.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -44,6 +47,10 @@ const mindAuthHttp = axios.create({ timeout: MINDAUTH_TIMEOUT_MS });
  */
 function hashSessionToken(sessionToken: string): string {
   return crypto.createHash('sha256').update(sessionToken).digest('hex');
+}
+
+function toMobileAuthUser(user: User) {
+  return { id: user.id, username: user.username, email: user.email, avatar_url: user.avatar_url, role: user.role, phone_verified: user.phone_verified };
 }
 
 const AVATAR_UPLOAD_DIR = './uploads/avatars';
@@ -80,6 +87,11 @@ export class AuthService {
     private pointsService: PointsService,
     private notificationsService: NotificationsService,
     private settingsService: SettingsService,
+    @InjectRepository(MobileSession)
+    private mobileSessionRepository: Repository<MobileSession>,
+    @InjectRepository(MobileRefreshToken)
+    private mobileRefreshTokenRepository: Repository<MobileRefreshToken>,
+    private jwtService: JwtService,
   ) {}
 
   /**
@@ -190,6 +202,96 @@ export class AuthService {
       throw new UnauthorizedException('Failed to exchange code for token');
     }
   }
+
+  async exchangeMobileCode(code: string, codeVerifier: string, redirectUri: string, deviceName: string, ip: string, userAgent?: string): Promise<any> {
+    if (!code || !codeVerifier || !redirectUri) throw new UnauthorizedException('Invalid mobile authorization exchange');
+    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
+    const clientId = this.configService.get<string>('MINDAUTH_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('MINDAUTH_CLIENT_SECRET');
+    try {
+      const response = await mindAuthHttp.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
+        grant_type: 'authorization_code', code, code_verifier: codeVerifier, redirect_uri: redirectUri,
+        client_id: clientId, client_secret: clientSecret,
+      });
+      const user = await this.getOrCreateUser(await this.getUserInfo(response.data.access_token));
+      if (await this.checkNeedsTermsAcceptance(user)) throw new UnauthorizedException({ code: 'TERMS_ACCEPTANCE_REQUIRED', message: '请先接受社区条款' });
+      return this.createMobileSession(user, deviceName, ip, userAgent);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error;
+      throw new UnauthorizedException('Failed to exchange mobile authorization code');
+    }
+  }
+
+  async createMobileSession(user: User, deviceName: string, ip: string, userAgent?: string): Promise<any> {
+    const session = await this.mobileSessionRepository.save(this.mobileSessionRepository.create({
+      id: crypto.randomUUID(), user_id: user.id, device_name: deviceName.trim().slice(0, 128) || 'Android',
+      ip_address: ip || null, user_agent: userAgent?.slice(0, 4096) || null, last_seen_at: new Date(), revoked_at: null,
+    }));
+    const refresh = await this.issueMobileRefreshToken(session.id, crypto.randomUUID());
+    await this.writeMobileAudit(user.id, session.id, 'mobile_login', ip);
+    return this.mobileTokenResponse(user, session, refresh.raw);
+  }
+
+  async refreshMobileSession(rawRefreshToken: string, ip: string, userAgent?: string): Promise<any> {
+    const tokenHash = this.hashMobileRefreshToken(rawRefreshToken);
+    const token = await this.mobileRefreshTokenRepository.findOne({ where: { token_hash: tokenHash }, relations: { session: { user: true } } });
+    if (!token || token.expires_at <= new Date()) throw new UnauthorizedException({ code: 'REFRESH_TOKEN_INVALID', message: '登录已过期' });
+    if (token.revoked_at) {
+      await this.mobileRefreshTokenRepository.update({ family_id: token.family_id, revoked_at: IsNull() }, { revoked_at: new Date() });
+      await this.mobileSessionRepository.update(token.session_id, { revoked_at: new Date() });
+      throw new UnauthorizedException({ code: 'REFRESH_TOKEN_REUSED', message: '登录凭证已失效，请重新登录' });
+    }
+    if (token.session.revoked_at) throw new UnauthorizedException({ code: 'SESSION_REVOKED', message: '设备会话已被撤销' });
+    // Consume first with a conditional update. This is the concurrency boundary:
+    // exactly one contender can change revoked_at from NULL, before any successor
+    // token is minted. A loser is a reuse attempt, never a second successful refresh.
+    const consumed = await this.mobileRefreshTokenRepository.update(
+      { id: token.id, revoked_at: IsNull() },
+      { revoked_at: new Date() },
+    );
+    if (!consumed.affected) {
+      await this.mobileRefreshTokenRepository.update({ family_id: token.family_id, revoked_at: IsNull() }, { revoked_at: new Date() });
+      await this.mobileSessionRepository.update(token.session_id, { revoked_at: new Date() });
+      throw new UnauthorizedException({ code: 'REFRESH_TOKEN_REUSED', message: '登录凭证已失效，请重新登录' });
+    }
+    const replacement = await this.issueMobileRefreshToken(token.session_id, token.family_id);
+    await this.mobileRefreshTokenRepository.update(token.id, { replaced_by_id: replacement.id });
+    await this.mobileSessionRepository.update(token.session_id, { last_seen_at: new Date(), ip_address: ip || token.session.ip_address, user_agent: userAgent?.slice(0, 4096) || token.session.user_agent });
+    return this.mobileTokenResponse(token.session.user, token.session, replacement.raw);
+  }
+
+  async verifyMobileAccessToken(accessToken: string): Promise<User | null> {
+    try {
+      const payload = await this.jwtService.verifyAsync<{ sub: number; sid: string; aud: string; iss: string }>(accessToken, {
+        secret: this.configService.get<string>('mobileAuth.jwtSecret') || 'development-only-mobile-auth-secret',
+        audience: this.configService.get<string>('mobileAuth.audience') || 'android', issuer: this.configService.get<string>('mobileAuth.issuer'),
+      });
+      const session = await this.mobileSessionRepository.findOne({ where: { id: payload.sid, user_id: payload.sub, revoked_at: IsNull() }, relations: { user: true } });
+      if (!session) return null;
+      void this.mobileSessionRepository.update(session.id, { last_seen_at: new Date() });
+      return session.user;
+    } catch { return null; }
+  }
+
+  async resolveRequestUser(request: any): Promise<User | null> {
+    const token = request.cookies?.forum_session || this.extractBearerToken(request);
+    if (!token) return null;
+    return token.includes('.') ? this.verifyMobileAccessToken(token) : this.verifySession(token);
+  }
+
+  async listMobileSessions(userId: number) { return this.mobileSessionRepository.find({ where: { user_id: userId }, order: { created_at: 'DESC' }, select: ['id', 'device_name', 'ip_address', 'last_seen_at', 'created_at', 'revoked_at'] }); }
+  async revokeMobileSession(userId: number, sessionId: string): Promise<void> { const result = await this.mobileSessionRepository.update({ id: sessionId, user_id: userId, revoked_at: IsNull() }, { revoked_at: new Date() }); if (!result.affected) throw new UnauthorizedException({ code: 'SESSION_NOT_FOUND', message: '设备会话不存在或已撤销' }); await this.mobileRefreshTokenRepository.update({ session_id: sessionId, revoked_at: IsNull() }, { revoked_at: new Date() }); }
+  async logoutMobileSession(userId: number, sessionId: string): Promise<void> { await this.revokeMobileSession(userId, sessionId); await this.writeMobileAudit(userId, sessionId, 'mobile_logout'); }
+
+  private async issueMobileRefreshToken(sessionId: string, familyId: string): Promise<{ id: string; raw: string }> {
+    const raw = crypto.randomBytes(48).toString('base64url'); const id = crypto.randomUUID();
+    await this.mobileRefreshTokenRepository.save(this.mobileRefreshTokenRepository.create({ id, session_id: sessionId, family_id: familyId, token_hash: this.hashMobileRefreshToken(raw), replaced_by_id: null, revoked_at: null, expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000) }));
+    return { id, raw };
+  }
+  private hashMobileRefreshToken(token: string): string { return crypto.createHmac('sha256', this.configService.get<string>('mobileAuth.refreshHmacSecret') || 'development-only-mobile-refresh-secret').update(token).digest('hex'); }
+  private async mobileTokenResponse(user: User, session: MobileSession, refreshToken: string) { const accessToken = await this.jwtService.signAsync({ sub: user.id, sid: session.id }, { secret: this.configService.get<string>('mobileAuth.jwtSecret') || 'development-only-mobile-auth-secret', audience: this.configService.get<string>('mobileAuth.audience') || 'android', issuer: this.configService.get<string>('mobileAuth.issuer'), expiresIn: '30m', jwtid: crypto.randomUUID() }); return { access_token: accessToken, access_token_expires_in: 1800, refresh_token: refreshToken, refresh_token_expires_in: 7776000, token_type: 'Bearer', session: { id: session.id, device_name: session.device_name, created_at: session.created_at }, user: toMobileAuthUser(user) }; }
+  private extractBearerToken(request: any): string | undefined { const [type, token] = request.headers.authorization?.split(' ') ?? []; return type === 'Bearer' ? token : undefined; }
+  private async writeMobileAudit(userId: number, sessionId: string, action: string, ip?: string) { await this.sessionAuditRepository.save(this.sessionAuditRepository.create({ user_id: userId, session_token: hashSessionToken(sessionId), action, ...(ip ? { ip_address: ip } : {}) })); }
 
   /**
    * Get user info from MindAuth using access token

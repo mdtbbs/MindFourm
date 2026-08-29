@@ -38,6 +38,7 @@ import { FixLegacyFooterBrand1720000043000 } from './1720000043000-FixLegacyFoot
 import { AddForumCategoryPresentation1720000044000 } from './1720000044000-AddForumCategoryPresentation';
 import { AddPostLastActivity1720000045000 } from './1720000045000-AddPostLastActivity';
 import { CreateNotices1720000046000 } from './1720000046000-CreateNotices';
+import { CreateMobileAuth1720000047000 } from './1720000047000-CreateMobileAuth';
 
 /**
  * Migrations in run order.
@@ -87,4 +88,5 @@ export const migrations = [
   AddForumCategoryPresentation1720000044000,
   AddPostLastActivity1720000045000,
   CreateNotices1720000046000,
+  CreateMobileAuth1720000047000,
 ];

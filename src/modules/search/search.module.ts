@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SearchController } from './search.controller';
+import { SearchV1Controller } from './v1-search.controller';
 import { SearchService } from './search.service';
 import { Post } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
@@ -15,7 +16,7 @@ import { PostSummaryService } from '../posts/post-summary.service';
   imports: [
     TypeOrmModule.forFeature([Post, User, SearchHistory, PopularSearch, PostTag, Reply, Resource]),
   ],
-  controllers: [SearchController],
+  controllers: [SearchController, SearchV1Controller],
   providers: [SearchService, PostSummaryService],
   exports: [SearchService],
 })

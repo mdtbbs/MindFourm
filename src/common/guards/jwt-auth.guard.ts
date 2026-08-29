@@ -23,22 +23,18 @@ export class JwtAuthGuard implements CanActivate {
     if (isPublic) return true;
 
     const request = context.switchToHttp().getRequest();
-    const sessionToken = request.cookies?.forum_session || this.extractTokenFromHeader(request);
 
     const isOptional = this.reflector.getAllAndOverride<boolean>(IS_OPTIONAL_AUTH_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    if (!sessionToken) {
-      if (isOptional) return true;
-      throw new UnauthorizedException('未登录');
-    }
-
-    const user = await this.authService.verifySession(sessionToken);
+    const user = this.authService.resolveRequestUser
+      ? await this.authService.resolveRequestUser(request)
+      : await this.authService.verifySession(request.cookies?.forum_session || request.headers.authorization?.split(' ')[1]);
     if (!user) {
       if (isOptional) return true;
-      throw new UnauthorizedException('会话已过期');
+      throw new UnauthorizedException('未登录');
     }
 
     // Enforced here rather than in the global BanGuard, which runs before any user
@@ -65,8 +61,4 @@ export class JwtAuthGuard implements CanActivate {
     }
   }
 
-  private extractTokenFromHeader(request: any): string | undefined {
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
-    return type === 'Bearer' ? token : undefined;
-  }
 }
