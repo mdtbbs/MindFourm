@@ -31,6 +31,10 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
   const isProduction = config.app.env === 'production';
+  // Older test fixtures and external bootstrap callers predate Mobile Auth.
+  // Treat an absent namespace as an empty configuration so validation reports
+  // actionable missing-secret errors instead of throwing before it can report.
+  const mobileAuth = config.mobileAuth || { jwtSecret: '', refreshHmacSecret: '' };
 
   const requireInProduction = (value: string | undefined, name: string, hint?: string) => {
     if (value) return;
@@ -50,8 +54,8 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   if (isProduction && looksLocal(config.mindauth.callbackUrl)) {
     errors.push('MINDAUTH_CALLBACK_URL must not point to localhost in production');
   }
-  requireInProduction(config.mobileAuth.jwtSecret, 'MOBILE_AUTH_JWT_SECRET');
-  requireInProduction(config.mobileAuth.refreshHmacSecret, 'MOBILE_AUTH_REFRESH_HMAC_SECRET');
+  requireInProduction(mobileAuth.jwtSecret, 'MOBILE_AUTH_JWT_SECRET');
+  requireInProduction(mobileAuth.refreshHmacSecret, 'MOBILE_AUTH_REFRESH_HMAC_SECRET');
 
   // --- Public URLs: wrong values silently corrupt emails, sitemaps and redirects ---
   if (isProduction && looksLocal(config.app.frontendUrl)) {

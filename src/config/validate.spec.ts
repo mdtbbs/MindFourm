@@ -28,6 +28,7 @@ function makeConfig(overrides: Record<string, any> = {}): Config {
     mfl: { baseUrl: '', apiKey: '' },
     automation: { apiKey: 'forum-api-key' },
     session: { maxAge: 1 },
+    mobileAuth: { issuer: 'https://forum.example.com', audience: 'android', jwtSecret: 'jwt-secret', refreshHmacSecret: 'hmac-secret' },
   };
 
   // Shallow-merge each namespace so tests can override one field at a time.
@@ -49,6 +50,16 @@ describe('collectConfigIssues', () => {
   it('accepts a fully configured production setup', () => {
     const { errors } = collectConfigIssues(makeConfig());
     expect(errors).toEqual([]);
+  });
+
+  it('reports missing Mobile Auth secrets when legacy callers omit that namespace', () => {
+    const config: any = makeConfig();
+    delete config.mobileAuth;
+    const { errors } = collectConfigIssues(config);
+    expect(errors).toEqual(expect.arrayContaining([
+      'MOBILE_AUTH_JWT_SECRET is required in production',
+      'MOBILE_AUTH_REFRESH_HMAC_SECRET is required in production',
+    ]));
   });
 
   it('rejects a missing OAuth client secret in production', () => {
