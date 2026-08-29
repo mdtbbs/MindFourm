@@ -7,7 +7,8 @@ export class MobileSession {
   @PrimaryColumn({ type: 'char', length: 36 }) id: string;
   @Column() user_id: number;
   @Column({ length: 128 }) device_name: string;
-  @Column({ length: 45, nullable: true }) ip_address: string | null;
+  // Union types reflect as Object at runtime; MySQL needs an explicit column type.
+  @Column({ type: 'varchar', length: 45, nullable: true }) ip_address: string | null;
   @Column({ type: 'text', nullable: true }) user_agent: string | null;
   @Column({ type: 'datetime', nullable: true }) last_seen_at: Date | null;
   @Column({ type: 'datetime', nullable: true }) revoked_at: Date | null;
