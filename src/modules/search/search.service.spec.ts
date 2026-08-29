@@ -148,8 +148,12 @@ describe('SearchService', () => {
       'category.name',
       'category.slug',
     ]);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(p.title LIKE :query OR p.content LIKE :query)',
+      { query: '%guide%' },
+    );
     expect(queryBuilder.orderBy).toHaveBeenCalledWith(
-      'MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)',
+      'CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END',
       'DESC',
     );
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('p.created_at', 'DESC');
@@ -172,6 +176,38 @@ describe('SearchService', () => {
         total: 11,
         totalPages: 2,
       },
+    });
+  });
+
+  it('returns a stable empty page when a page is beyond the last result', async () => {
+    const { service, postRepository, postSummaryService } = createService({
+      postRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(createQueryBuilder([], 1)),
+      },
+      postSummaryService: { toSummaryList: jest.fn().mockResolvedValue([]) },
+    });
+
+    await expect(service.searchPosts('missing', { page: 2, limit: 1 })).resolves.toEqual({
+      data: [],
+      pagination: { page: 2, limit: 1, total: 1, totalPages: 1 },
+    });
+    const queryBuilder = postRepository.createQueryBuilder.mock.results[0].value;
+    expect(queryBuilder.skip).toHaveBeenCalledWith(1);
+    expect(postSummaryService.toSummaryList).toHaveBeenCalledWith([]);
+  });
+
+  it('returns totalPages zero for no matches', async () => {
+    const { service } = createService({
+      postRepository: {
+        createQueryBuilder: jest.fn().mockReturnValue(createQueryBuilder([], 0)),
+      },
+      postSummaryService: { toSummaryList: jest.fn().mockResolvedValue([]) },
+    });
+
+    const result = await service.searchPosts('none', { page: 1, limit: 20 });
+    expect(result).toEqual({
+      data: [],
+      pagination: { page: 1, limit: 20, total: 0, totalPages: 0 },
     });
   });
 

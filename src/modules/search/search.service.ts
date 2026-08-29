@@ -71,8 +71,13 @@ export class SearchService {
       ])
       .where('p.status = :status', { status: 'published' });
 
-    // Use Full-Text search when available (ngram index handles CJK + Latin)
-    if (this.hasFullTextIndex('posts')) {
+    // `posts` has no schema migration that guarantees a matching FULLTEXT
+    // index in every deployed database. Running MATCH() optimistically makes
+    // the public V1 reader fail with ER_FT_MATCHING_KEY_NOT_FOUND instead of
+    // returning a normal search response. Keep the established LIKE path as
+    // the contract-safe baseline until an index migration is introduced.
+    const usePostFullText = false;
+    if (usePostFullText) {
       qb.andWhere(
         'MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)',
         { query },
@@ -89,7 +94,7 @@ export class SearchService {
     }
 
     if (options.sort === 'relevance') {
-      if (this.hasFullTextIndex('posts')) {
+      if (usePostFullText) {
         qb.orderBy('MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)', 'DESC');
       } else {
         qb.orderBy('CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END', 'DESC');
