@@ -30,6 +30,7 @@ describe('PhoneWriteGuard', () => {
   function createGuard(user: any, skipPhoneVerification = false) {
     const authService = {
       verifySession: jest.fn().mockResolvedValue(user),
+      resolveRequestUser: jest.fn().mockResolvedValue(user),
     } as unknown as jest.Mocked<AuthService>;
     const reflector = {
       getAllAndOverride: jest.fn().mockReturnValue(skipPhoneVerification),
@@ -50,7 +51,7 @@ describe('PhoneWriteGuard', () => {
     const { context } = createContext('GET');
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(authService.verifySession).not.toHaveBeenCalled();
+    expect(authService.resolveRequestUser).not.toHaveBeenCalled();
   });
 
   it('allows explicitly skipped write routes without checking session', async () => {
@@ -58,7 +59,7 @@ describe('PhoneWriteGuard', () => {
     const { context } = createContext('POST');
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(authService.verifySession).not.toHaveBeenCalled();
+    expect(authService.resolveRequestUser).not.toHaveBeenCalled();
   });
 
   it('rejects write requests without a session', async () => {

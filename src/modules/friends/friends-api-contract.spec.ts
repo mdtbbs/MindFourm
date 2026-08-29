@@ -1,3 +1,10 @@
+// This backend Jest project deliberately does not install frontend React runtime
+// dependencies. The API client only reaches the store for phone-verification
+// failures, so provide its narrow non-React contract for these fetch tests.
+jest.mock('../../../frontend/src/store/toast-store', () => ({
+  useToastStore: { getState: () => ({ showWarning: jest.fn() }) },
+}));
+
 import { friendsApi, resetApiCache } from '../../../frontend/src/lib/api/client';
 
 const mockFetch = jest.fn() as jest.MockedFunction<typeof fetch>;
