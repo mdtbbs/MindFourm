@@ -1,0 +1,5090 @@
+{
+  "title": "MindFourm API Endpoints",
+  "version": "1.0.0",
+  "base_url": "/api",
+  "generated_at": "2026-08-30T13:05:32.102Z",
+  "summary": {
+    "total": 340,
+    "public": 13,
+    "auth": 201,
+    "role": 86,
+    "bot": 38,
+    "service": 2
+  },
+  "bot_and_service_endpoints": {
+    "description": "给机器人/第三方服务设计的端点",
+    "external_api": [
+      "/api/auth/validate-credentials",
+      "/api/external/v1/friends",
+      "/api/external/v1/friends/requests",
+      "/api/external/v1/users/search",
+      "/api/external/v1/lanlink/quick-code/validate",
+      "/api/external/v1/lanlink/quick-code/users/:id",
+      "/api/external/v1/notifications",
+      "/api/external/v1/presence",
+      "/api/external/v1/presence/:userId",
+      "/api/external/v1/presence/:userId",
+      "/api/external/v1/me",
+      "/api/external/v1/images",
+      "/api/external/v1/users/:id",
+      "/api/external/v1/categories",
+      "/api/external/v1/tags",
+      "/api/external/v1/posts",
+      "/api/external/v1/posts/activity",
+      "/api/external/v1/posts",
+      "/api/external/v1/posts/:id",
+      "/api/external/v1/posts/:id",
+      "/api/external/v1/posts/:id",
+      "/api/external/v1/posts/:id/replies",
+      "/api/external/v1/posts/:id/replies",
+      "/api/external/v1/replies/:id",
+      "/api/external/v1/replies/:id",
+      "/api/external/v1/replies/:id",
+      "/api/external/v1/posts/:id/moderation",
+      "/api/external/v1/replies/:id/moderation",
+      "/api/external/v1/resources",
+      "/api/external/v1/resources/filter-options",
+      "/api/external/v1/resources",
+      "/api/external/v1/resources/categories",
+      "/api/external/v1/resources/:id",
+      "/api/external/v1/resources/:id",
+      "/api/external/v1/resources/:id",
+      "/api/external/v1/resources/:id/moderation"
+    ],
+    "forum_api_key": [
+      "/api/service-api/posts",
+      "/api/service-api/posts/:postId/replies"
+    ],
+    "service_x_key": [
+      "/api/auto-post/server-approved",
+      "/api/post-servers/forum-posts/:serverId"
+    ]
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/admin/system/performance",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "performance",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/stats",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getStats",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/badge-counts",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getBadgeCounts",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/settings",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getAllSettings",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/settings/:category",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getCategorySettings",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/settings/brand",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "updateBrandSettings",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/settings/:category",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "updateSettings",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/settings/brand/site-logo",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "uploadSiteLogo",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/settings/brand/site-favicon",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "uploadSiteFavicon",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/settings/brand/sidebar-logo",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "uploadSidebarLogo",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getUsers",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/users/:id/role",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "updateUserRole",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/posts",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getPosts",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/posts",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "bulkDeletePosts",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/posts/pin",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "bulkPinPosts",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/posts/move",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "bulkMovePosts",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/posts/:id/pin",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "pinPost",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/posts/:id/move",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "movePost",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/categories",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getCategories",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/categories",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "createCategory",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/categories/:id",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "updateCategory",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/categories/:id",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "deleteCategory",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/tags",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getTags",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/tags",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "createTag",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/tags/:id",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "updateTag",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/tags/:id",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "deleteTag",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/tags/merge",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "mergeTags",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/moderation",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getModerationQueue",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/moderation/:id/approve",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "approveItem",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/moderation/:id/reject",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "rejectItem",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/bans",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getBans",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/bans",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "createBan",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/bans/:id",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "updateBan",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/bans/:id",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "deactivateBan",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/cleanup/sessions",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "cleanupSessions",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/cleanup/logs",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "cleanupLogs",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/cleanup/soft-deleted",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "cleanupSoftDeleted",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/logs",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getLogs",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/system/rate-limit-observability",
+      "module": "admin",
+      "controller": "admin/admin.controller.ts",
+      "handler": "getRateLimitObservability",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/notifications",
+      "module": "admin-notifications",
+      "controller": "admin-notifications/admin-notifications.controller.ts",
+      "handler": "getNotifications",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/notifications/unread-count",
+      "module": "admin-notifications",
+      "controller": "admin-notifications/admin-notifications.controller.ts",
+      "handler": "getUnreadCount",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/notifications/:id/read",
+      "module": "admin-notifications",
+      "controller": "admin-notifications/admin-notifications.controller.ts",
+      "handler": "markAsRead",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/notifications/read-all",
+      "module": "admin-notifications",
+      "controller": "admin-notifications/admin-notifications.controller.ts",
+      "handler": "markAllAsRead",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/attachments/upload",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "FilesInterceptor",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/attachments/:id/approve",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "approve",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/attachments/:id/reject",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "reject",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/attachments/post/:postId",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "getByPost",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/attachments/reply/:replyId",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "getByReply",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/attachments/:id/download",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "download",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/attachments/:id/preview",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "preview",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/attachments/:id/render-status",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "renderStatus",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/attachments/:id",
+      "module": "attachments",
+      "controller": "attachments/attachments.controller.ts",
+      "handler": "delete",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/check",
+      "module": "auth",
+      "controller": "auth/auth.controller.ts",
+      "handler": "check",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/sync-phone-status",
+      "module": "auth",
+      "controller": "auth/auth.controller.ts",
+      "handler": "syncPhoneStatus",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/validate-credentials",
+      "module": "auth",
+      "controller": "auth/auth.controller.ts",
+      "handler": "validateCredentials",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "lanlink:auth",
+          "backupsave:auth"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/callback",
+      "module": "auth",
+      "controller": "auth/auth.controller.ts",
+      "handler": "callback",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/verify",
+      "module": "auth",
+      "controller": "auth/auth.controller.ts",
+      "handler": "verifySession",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "module": "auth",
+      "controller": "auth/auth.controller.ts",
+      "handler": "logout",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/accept-terms",
+      "module": "auth",
+      "controller": "auth/auth.controller.ts",
+      "handler": "acceptTerms",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mobile/exchange",
+      "module": "auth",
+      "controller": "auth/mobile-auth.controller.ts",
+      "handler": "exchange",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mobile/refresh",
+      "module": "auth",
+      "controller": "auth/mobile-auth.controller.ts",
+      "handler": "refresh",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/auth/mobile/logout",
+      "module": "auth",
+      "controller": "auth/mobile-auth.controller.ts",
+      "handler": "logout",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/auth/mobile/sessions",
+      "module": "auth",
+      "controller": "auth/mobile-auth.controller.ts",
+      "handler": "sessions",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/auth/mobile/sessions/:id",
+      "module": "auth",
+      "controller": "auth/mobile-auth.controller.ts",
+      "handler": "revoke",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/test-login",
+      "module": "auth",
+      "controller": "auth/test-auth.controller.ts",
+      "handler": "testLogin",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auto-post/server-approved",
+      "module": "auto-post",
+      "controller": "auto-post/auto-post.controller.ts",
+      "handler": "handleServerApproved",
+      "auth": {
+        "type": "service",
+        "key": "X-Service-Key",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/badges",
+      "module": "badges",
+      "controller": "badges/badges.controller.ts",
+      "handler": "getAllBadges",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/badges/user/:userId",
+      "module": "badges",
+      "controller": "badges/badges.controller.ts",
+      "handler": "getUserBadges",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/badges/admin",
+      "module": "badges",
+      "controller": "badges/badges.controller.ts",
+      "handler": "adminGetAllBadges",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/badges/admin",
+      "module": "badges",
+      "controller": "badges/badges.controller.ts",
+      "handler": "adminCreateBadge",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/badges/admin/:id",
+      "module": "badges",
+      "controller": "badges/badges.controller.ts",
+      "handler": "adminUpdateBadge",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/badges/admin/:id",
+      "module": "badges",
+      "controller": "badges/badges.controller.ts",
+      "handler": "adminDeleteBadge",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/badges/admin/award",
+      "module": "badges",
+      "controller": "badges/badges.controller.ts",
+      "handler": "awardBadge",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/bans",
+      "module": "bans",
+      "controller": "bans/bans.controller.ts",
+      "handler": "getList",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/bans",
+      "module": "bans",
+      "controller": "bans/bans.controller.ts",
+      "handler": "create",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/bans/:id",
+      "module": "bans",
+      "controller": "bans/bans.controller.ts",
+      "handler": "update",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/bans/:id",
+      "module": "bans",
+      "controller": "bans/bans.controller.ts",
+      "handler": "deactivate",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookmarks",
+      "module": "bookmarks",
+      "controller": "bookmarks/bookmarks.controller.ts",
+      "handler": "getBookmarks",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/bookmarks/check/:postId",
+      "module": "bookmarks",
+      "controller": "bookmarks/bookmarks.controller.ts",
+      "handler": "checkBookmark",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/bookmarks/:postId",
+      "module": "bookmarks",
+      "controller": "bookmarks/bookmarks.controller.ts",
+      "handler": "addBookmark",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/bookmarks/:postId",
+      "module": "bookmarks",
+      "controller": "bookmarks/bookmarks.controller.ts",
+      "handler": "removeBookmark",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/capabilities",
+      "module": "capabilities",
+      "controller": "capabilities/capabilities.controller.ts",
+      "handler": "getCapabilities",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/client/config",
+      "module": "capabilities",
+      "controller": "capabilities/client-config-v1.controller.ts",
+      "handler": "",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories",
+      "module": "categories",
+      "controller": "categories/categories.controller.ts",
+      "handler": "getAll",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/categories/:id",
+      "module": "categories",
+      "controller": "categories/categories.controller.ts",
+      "handler": "getById",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/categories",
+      "module": "categories",
+      "controller": "categories/v1-categories.controller.ts",
+      "handler": "",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/discover",
+      "module": "discover",
+      "controller": "discover/v1/discover-v1.controller.ts",
+      "handler": "getSummary",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/feedback",
+      "module": "feedback",
+      "controller": "feedback/feedback.controller.ts",
+      "handler": "submit",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/follows/:userId",
+      "module": "follows",
+      "controller": "follows/follows.controller.ts",
+      "handler": "followUser",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/follows/:userId",
+      "module": "follows",
+      "controller": "follows/follows.controller.ts",
+      "handler": "unfollowUser",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/follows/check/:userId",
+      "module": "follows",
+      "controller": "follows/follows.controller.ts",
+      "handler": "checkFollowStatus",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/follows/user/:userId/followers",
+      "module": "follows",
+      "controller": "follows/follows.controller.ts",
+      "handler": "getFollowers",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/follows/user/:userId/following",
+      "module": "follows",
+      "controller": "follows/follows.controller.ts",
+      "handler": "getFollowing",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/follows/user/:userId/stats",
+      "module": "follows",
+      "controller": "follows/follows.controller.ts",
+      "handler": "getFollowCounts",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/friends",
+      "module": "friends",
+      "controller": "friends/external-friends.controller.ts",
+      "handler": "getFriends",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "friends:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/friends/requests",
+      "module": "friends",
+      "controller": "friends/external-friends.controller.ts",
+      "handler": "getPendingRequests",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "friends:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/users/search",
+      "module": "friends",
+      "controller": "friends/external-friends.controller.ts",
+      "handler": "searchUsers",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "friends:read"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/friends/request/:userId",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "sendRequest",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/friends/accept/:userId",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "acceptRequest",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/friends/reject/:userId",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "rejectRequest",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/friends/cancel/:userId",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "cancelRequest",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/friends/:userId",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "removeFriend",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/friends/requests",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "getPendingRequests",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/friends/search",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "searchNonFriends",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/friends/check/:userId",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "checkStatus",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/friends",
+      "module": "friends",
+      "controller": "friends/friends.controller.ts",
+      "handler": "getFriendsList",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/groups",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "getAllGroups",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/groups/my",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "getMyGroups",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/groups/admin",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "adminGetAllGroups",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/groups/admin",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "adminCreateGroup",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/groups/admin/:id",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "adminUpdateGroup",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/groups/admin/:id",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "adminDeleteGroup",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/groups/admin/:id/members",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "adminAddMember",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/groups/admin/:id/members/:userId",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "adminRemoveMember",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/groups/:id/join",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "joinGroup",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/groups/:id/leave",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "leaveGroup",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/groups/:slug",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "getGroupBySlug",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/groups/:slug/members",
+      "module": "groups",
+      "controller": "groups/groups.controller.ts",
+      "handler": "getGroupMembers",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/lanlink/quick-code",
+      "module": "lanlink",
+      "controller": "lanlink/lanlink-quick-code.controller.ts",
+      "handler": "status",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/lanlink/quick-code",
+      "module": "lanlink",
+      "controller": "lanlink/lanlink-quick-code.controller.ts",
+      "handler": "generate",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/lanlink/quick-code",
+      "module": "lanlink",
+      "controller": "lanlink/lanlink-quick-code.controller.ts",
+      "handler": "disable",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/lanlink/quick-code/validate",
+      "module": "lanlink",
+      "controller": "lanlink/lanlink-quick-code.controller.ts",
+      "handler": "validate",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "lanlink:auth"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/lanlink/quick-code/users/:id",
+      "module": "lanlink",
+      "controller": "lanlink/lanlink-quick-code.controller.ts",
+      "handler": "userStatus",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "lanlink:auth"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/levels",
+      "module": "levels",
+      "controller": "levels/levels.controller.ts",
+      "handler": "getAllLevels",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/levels/user/:userId",
+      "module": "levels",
+      "controller": "levels/levels.controller.ts",
+      "handler": "getUserLevel",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/levels/admin",
+      "module": "levels",
+      "controller": "levels/levels.controller.ts",
+      "handler": "getAdminLevels",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/levels/admin",
+      "module": "levels",
+      "controller": "levels/levels.controller.ts",
+      "handler": "createLevel",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/levels/admin/:id",
+      "module": "levels",
+      "controller": "levels/levels.controller.ts",
+      "handler": "updateLevel",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/levels/admin/:id",
+      "module": "levels",
+      "controller": "levels/levels.controller.ts",
+      "handler": "deleteLevel",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/likes/posts/:postId",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "likePost",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/likes/posts/:postId",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "unlikePost",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/likes/posts/:postId",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "checkPostLike",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/likes/posts",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "getUserLikedPosts",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/likes/replies/:replyId",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "likeReply",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/likes/replies/:replyId",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "unlikeReply",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/likes/replies/:replyId",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "checkReplyLike",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/likes/users/:userId/count",
+      "module": "likes",
+      "controller": "likes/likes.controller.ts",
+      "handler": "getUserReceivedLikeCount",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/messages",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "send",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "getConversations",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages/unread-count",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "unreadCount",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/messages/:userId",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "getConversation",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/messages/:id",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "deleteMessage",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/group-chats",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "createGroupChat",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/group-chats",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "getMyGroupChats",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/group-chats/:id",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "getGroupChat",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/group-chats/:id/messages",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "getGroupMessages",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/group-chats/:id/messages",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "sendGroupMessage",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/group-chats/:id/members",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "addGroupMember",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/group-chats/:id/members/:userId",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "removeGroupMember",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/group-chats/:id/leave",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "leaveGroupChat",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/group-chats/:id",
+      "module": "messages",
+      "controller": "messages/messages.controller.ts",
+      "handler": "updateGroupChat",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notices",
+      "module": "notices",
+      "controller": "notices/notices.controller.ts",
+      "handler": "list",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/notices/:id",
+      "module": "notices",
+      "controller": "notices/notices.controller.ts",
+      "handler": "detail",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/notices",
+      "module": "notices",
+      "controller": "notices/notices.controller.ts",
+      "handler": "",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/notices",
+      "module": "notices",
+      "controller": "notices/notices.controller.ts",
+      "handler": "",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/notices/:id",
+      "module": "notices",
+      "controller": "notices/notices.controller.ts",
+      "handler": "",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/admin/notices/:id",
+      "module": "notices",
+      "controller": "notices/notices.controller.ts",
+      "handler": "",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "module": "notifications",
+      "controller": "notifications/notifications.controller.ts",
+      "handler": "getNotifications",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications/cursor",
+      "module": "notifications",
+      "controller": "notifications/notifications.controller.ts",
+      "handler": "getNotificationsCursor",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications/unread-count",
+      "module": "notifications",
+      "controller": "notifications/notifications.controller.ts",
+      "handler": "getUnreadCount",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notifications/:id/read",
+      "module": "notifications",
+      "controller": "notifications/notifications.controller.ts",
+      "handler": "markAsRead",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notifications/read-all",
+      "module": "notifications",
+      "controller": "notifications/notifications.controller.ts",
+      "handler": "markAllAsRead",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications/email-preference",
+      "module": "notifications",
+      "controller": "notifications/notifications.controller.ts",
+      "handler": "getEmailPreference",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notifications/email-preference",
+      "module": "notifications",
+      "controller": "notifications/notifications.controller.ts",
+      "handler": "updateEmailPreference",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/plugins",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "getPlugins",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/plugins/:slug",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "getPlugin",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/plugins/install",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "installPlugin",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/plugins/:slug",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "uninstallPlugin",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/plugins/:slug/enable",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "enablePlugin",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/plugins/:slug/disable",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "disablePlugin",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/plugins/:slug/config",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "getConfig",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/plugins/:slug/config",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "updateConfig",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/plugins/:slug/hooks",
+      "module": "plugins",
+      "controller": "plugins/plugins.controller.ts",
+      "handler": "getPluginHooks",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/points/me",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "getMyPoints",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/points/me/history",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "getMyHistory",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/points/leaderboard",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "getLeaderboard",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/points/rules",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "getRules",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/points/admin/rules",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "getAdminRules",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/points/admin/rules",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "createRule",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/points/admin/rules/:id",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "updateRule",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/points/admin/rules/:id",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "deleteRule",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/points/admin/award",
+      "module": "points",
+      "controller": "points/points.controller.ts",
+      "handler": "awardPoints",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/portal",
+      "module": "portal",
+      "controller": "portal/v1/portal-v1.controller.ts",
+      "handler": "getPortalData",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/post-servers/by-server/:serverId",
+      "module": "post-servers",
+      "controller": "post-servers/post-servers.controller.ts",
+      "handler": "getByServer",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/post-servers/forum-posts/:serverId",
+      "module": "post-servers",
+      "controller": "post-servers/post-servers.controller.ts",
+      "handler": "getForumPosts",
+      "auth": {
+        "type": "service",
+        "key": "X-Service-Key",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/post-servers/link",
+      "module": "post-servers",
+      "controller": "post-servers/post-servers.controller.ts",
+      "handler": "linkPost",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/post-servers/:postId/server",
+      "module": "post-servers",
+      "controller": "post-servers/post-servers.controller.ts",
+      "handler": "unlinkPost",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "findAll",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/cursor",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "findAllCursor",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/trending",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "getTrending",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/pinned",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "getPinned",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/search",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "search",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/:id",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "findOne",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "create",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/posts/:id",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "update",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/posts/:id",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "delete",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/posts/:id/pin",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "pin",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/posts/:id/lock",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "lock",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/posts/:id/best-reply",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "setBestReply",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/:id/revisions",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "listRevisions",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/:id/revisions/:revisionId",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "getRevision",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/posts/:id/move",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "move",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/user/:userId",
+      "module": "posts",
+      "controller": "posts/posts.controller.ts",
+      "handler": "findByUser",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/notifications",
+      "module": "presence",
+      "controller": "presence/external-notifications.controller.ts",
+      "handler": "sendNotification",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "notifications:write"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/presence",
+      "module": "presence",
+      "controller": "presence/external-presence.controller.ts",
+      "handler": "getPresences",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "presence:read"
+        ]
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/external/v1/presence/:userId",
+      "module": "presence",
+      "controller": "presence/external-presence.controller.ts",
+      "handler": "setPresence",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "presence:write"
+        ]
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/external/v1/presence/:userId",
+      "module": "presence",
+      "controller": "presence/external-presence.controller.ts",
+      "handler": "deletePresence",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "presence:write"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/presence/staff",
+      "module": "presence",
+      "controller": "presence/presence.controller.ts",
+      "handler": "getStaffPresence",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/presence",
+      "module": "presence",
+      "controller": "presence/presence.controller.ts",
+      "handler": "getPresences",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/privacy/deletion-requests",
+      "module": "privacy",
+      "controller": "privacy/admin-privacy.controller.ts",
+      "handler": "list",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/privacy/deletion-requests/:id",
+      "module": "privacy",
+      "controller": "privacy/admin-privacy.controller.ts",
+      "handler": "review",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/privacy/retention-sweep",
+      "module": "privacy",
+      "controller": "privacy/admin-privacy.controller.ts",
+      "handler": "retentionSweep",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/privacy/deletion-requests",
+      "module": "privacy",
+      "controller": "privacy/privacy.controller.ts",
+      "handler": "create",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/privacy/deletion-requests/me",
+      "module": "privacy",
+      "controller": "privacy/privacy.controller.ts",
+      "handler": "mine",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/reactions/emojis",
+      "module": "reactions",
+      "controller": "reactions/reactions.controller.ts",
+      "handler": "getEmojis",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/reactions/:targetType/:targetId",
+      "module": "reactions",
+      "controller": "reactions/reactions.controller.ts",
+      "handler": "toggle",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/reactions/:targetType/:targetId",
+      "module": "reactions",
+      "controller": "reactions/reactions.controller.ts",
+      "handler": "getForTarget",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/posts/:postId/replies",
+      "module": "replies",
+      "controller": "replies/replies.controller.ts",
+      "handler": "getRepliesByPost",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/posts/:postId/replies",
+      "module": "replies",
+      "controller": "replies/replies.controller.ts",
+      "handler": "createReply",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/replies/:id",
+      "module": "replies",
+      "controller": "replies/replies.controller.ts",
+      "handler": "getReplyById",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/replies/:id",
+      "module": "replies",
+      "controller": "replies/replies.controller.ts",
+      "handler": "updateReply",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/replies/:id",
+      "module": "replies",
+      "controller": "replies/replies.controller.ts",
+      "handler": "deleteReply",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/reports",
+      "module": "reports",
+      "controller": "reports/reports-admin.controller.ts",
+      "handler": "list",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/reports/:id",
+      "module": "reports",
+      "controller": "reports/reports-admin.controller.ts",
+      "handler": "resolve",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(moderator/admin)",
+        "roles": [
+          "moderator",
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/reports",
+      "module": "reports",
+      "controller": "reports/reports.controller.ts",
+      "handler": "create",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports/mine",
+      "module": "reports",
+      "controller": "reports/reports.controller.ts",
+      "handler": "getMine",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getList",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/hot",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getHotResources",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/filter-options",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getFilterOptions",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/user/:userId",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getUserResources",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/categories",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "listCategories",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/categories/tree",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "listCategoriesTree",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/categories/admin",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "listAdminCategories",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/resources/categories",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "createCategory",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/resources/categories/:categoryId",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "updateCategory",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/resources/categories/:categoryId",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "deleteCategory",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/admin",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getAdminList",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/my",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getMyResources",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/:id",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getById",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/:id/related",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getRelated",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/:id/download",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "download",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/:id/versions",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getVersions",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/resources",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "create",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/resources/:id",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "update",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/resources/:id",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "delete",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/resources/:id/versions",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "addVersion",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/resources/:id/versions/:versionId",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "deleteVersion",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/resources/:id/status",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "updateStatus",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/resources/:id/admin",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "adminDelete",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin/moderator)",
+        "roles": [
+          "admin",
+          "moderator"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/resources/admin/cleanup-storage",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "cleanupStorage",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/resources/:id/rating",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "upsertRating",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/resources/:id/rating",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "deleteRating",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/:id/rating",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getUserRating",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/:id/favorite",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getFavorite",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/resources/:id/favorite",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "addFavorite",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/resources/:id/favorite",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "removeFavorite",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/resources/:id/subscription",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "getSubscription",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/resources/:id/subscription",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "subscribe",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/resources/:id/subscription",
+      "module": "resources",
+      "controller": "resources/resources.controller.ts",
+      "handler": "unsubscribe",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/resources/:id",
+      "module": "resources",
+      "controller": "resources/v1/resources-v1.controller.ts",
+      "handler": "getResource",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/rss/posts.xml",
+      "module": "rss",
+      "controller": "rss/rss.controller.ts",
+      "handler": "getPostsRss",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/rss/categories/:slug.xml",
+      "module": "rss",
+      "controller": "rss/rss.controller.ts",
+      "handler": "getCategoryRss",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/search",
+      "module": "search",
+      "controller": "search/search.controller.ts",
+      "handler": "search",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/history",
+      "module": "search",
+      "controller": "search/search.controller.ts",
+      "handler": "getHistory",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/search/history",
+      "module": "search",
+      "controller": "search/search.controller.ts",
+      "handler": "clearHistory",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/search/popular",
+      "module": "search",
+      "controller": "search/search.controller.ts",
+      "handler": "getPopular",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/search/posts",
+      "module": "search",
+      "controller": "search/v1-search.controller.ts",
+      "handler": "posts",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/security/csp-reports",
+      "module": "security",
+      "controller": "security/security.controller.ts",
+      "handler": "cspReport",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/servers/public",
+      "module": "servers",
+      "controller": "servers/servers.controller.ts",
+      "handler": "getPublicServers",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/servers/versions",
+      "module": "servers",
+      "controller": "servers/servers.controller.ts",
+      "handler": "getAvailableVersions",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/servers/templates",
+      "module": "servers",
+      "controller": "servers/servers.controller.ts",
+      "handler": "getTemplates",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/servers/:id/basic",
+      "module": "servers",
+      "controller": "servers/servers.controller.ts",
+      "handler": "getServerBasic",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/servers/my",
+      "module": "servers",
+      "controller": "servers/servers.controller.ts",
+      "handler": "getUserServers",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/servers/apply",
+      "module": "servers",
+      "controller": "servers/servers.controller.ts",
+      "handler": "applyServer",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/external-api/keys",
+      "module": "service-api",
+      "controller": "service-api/admin-external-api.controller.ts",
+      "handler": "listKeys",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/external-api/keys",
+      "module": "service-api",
+      "controller": "service-api/admin-external-api.controller.ts",
+      "handler": "createKey",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/external-api/keys/:id",
+      "module": "service-api",
+      "controller": "service-api/admin-external-api.controller.ts",
+      "handler": "updateKey",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/external-api/keys/:id/rotate",
+      "module": "service-api",
+      "controller": "service-api/admin-external-api.controller.ts",
+      "handler": "rotateKey",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/external-api/keys/:id/enable",
+      "module": "service-api",
+      "controller": "service-api/admin-external-api.controller.ts",
+      "handler": "enableKey",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/external-api/keys/:id/disable",
+      "module": "service-api",
+      "controller": "service-api/admin-external-api.controller.ts",
+      "handler": "disableKey",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/external-api/audit-logs",
+      "module": "service-api",
+      "controller": "service-api/admin-external-api.controller.ts",
+      "handler": "listAuditLogs",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/me",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "me",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/images",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "uploadImage",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "images:write"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/users/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "getUser",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "users:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/categories",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "getCategories",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "categories:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/tags",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "getTags",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "tags:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/posts",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "listPosts",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "posts:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/posts/activity",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "listPostsByActivity",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "posts:read"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/posts",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "createPost",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "posts:write"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/posts/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "getPost",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "posts:read"
+        ]
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/external/v1/posts/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "updatePost",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "posts:write"
+        ]
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/external/v1/posts/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "deletePost",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "posts:delete"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/posts/:id/replies",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "listReplies",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "replies:read"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/posts/:id/replies",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "createReply",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "replies:write"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/replies/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "getReply",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "replies:read"
+        ]
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/external/v1/replies/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "updateReply",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "replies:write"
+        ]
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/external/v1/replies/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "deleteReply",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "replies:delete"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/posts/:id/moderation",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "moderatePost",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "posts:moderate"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/replies/:id/moderation",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "moderateReply",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "replies:delete",
+          "posts:moderate"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/resources",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "listResources",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/resources/filter-options",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "getResourceFilterOptions",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:read"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/resources",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "createResource",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:write"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/resources/categories",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "listResourceCategories",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:read"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/external/v1/resources/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "getResource",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:read"
+        ]
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/external/v1/resources/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "updateResource",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:write"
+        ]
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/external/v1/resources/:id",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "deleteResource",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:delete"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/external/v1/resources/:id/moderation",
+      "module": "service-api",
+      "controller": "service-api/external-api.controller.ts",
+      "handler": "moderateResource",
+      "auth": {
+        "type": "bot",
+        "key": "External API Key (Bearer)",
+        "roles": [],
+        "public": false,
+        "scopes": [
+          "resources:moderate"
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/service-api/posts",
+      "module": "service-api",
+      "controller": "service-api/service-api.controller.ts",
+      "handler": "createPost",
+      "auth": {
+        "type": "bot",
+        "key": "Forum API Key",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/service-api/posts/:postId/replies",
+      "module": "service-api",
+      "controller": "service-api/service-api.controller.ts",
+      "handler": "createReply",
+      "auth": {
+        "type": "bot",
+        "key": "Forum API Key",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings",
+      "module": "settings",
+      "controller": "settings/settings.controller.ts",
+      "handler": "getAll",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/admin/sidebar-navigation",
+      "module": "settings",
+      "controller": "settings/settings.controller.ts",
+      "handler": "getSidebarNavigation",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/settings/admin/sidebar-navigation",
+      "module": "settings",
+      "controller": "settings/settings.controller.ts",
+      "handler": "updateSidebarNavigation",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/:category",
+      "module": "settings",
+      "controller": "settings/settings.controller.ts",
+      "handler": "getByCategory",
+      "auth": {
+        "type": "public",
+        "key": "none",
+        "roles": [],
+        "public": true,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/settings/brand",
+      "module": "settings",
+      "controller": "settings/settings.controller.ts",
+      "handler": "updateBrandSettings",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/settings/:category",
+      "module": "settings",
+      "controller": "settings/settings.controller.ts",
+      "handler": "updateSettings",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/shop/items",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "getShopItems",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/shop/items/:id",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "getItemById",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/shop/purchase/:itemId",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "purchase",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/shop/me/purchases",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "getMyPurchases",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/shop/admin/items",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "adminGetItems",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/shop/admin/items",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "adminCreateItem",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/shop/admin/items/:id",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "adminUpdateItem",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/shop/admin/items/:id",
+      "module": "shop",
+      "controller": "shop/shop.controller.ts",
+      "handler": "adminDeleteItem",
+      "auth": {
+        "type": "role",
+        "key": "JWT + role(admin)",
+        "roles": [
+          "admin"
+        ],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/overview",
+      "module": "stats",
+      "controller": "stats/stats.controller.ts",
+      "handler": "getOverview",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/tags",
+      "module": "tags",
+      "controller": "tags/tags.controller.ts",
+      "handler": "getAll",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/tags/:slug/posts",
+      "module": "tags",
+      "controller": "tags/tags.controller.ts",
+      "handler": "getPostsByTagSlug",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/tags",
+      "module": "tags",
+      "controller": "tags/v1-tags.controller.ts",
+      "handler": "",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads",
+      "module": "threads",
+      "controller": "threads/v1/threads-v1.controller.ts",
+      "handler": "listThreads",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/threads/:id",
+      "module": "threads",
+      "controller": "threads/v1/threads-v1.controller.ts",
+      "handler": "getThread",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/user-blocks",
+      "module": "user-blocks",
+      "controller": "user-blocks/user-blocks.controller.ts",
+      "handler": "block",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/user-blocks/:blockedId",
+      "module": "user-blocks",
+      "controller": "user-blocks/user-blocks.controller.ts",
+      "handler": "unblock",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/user-blocks",
+      "module": "user-blocks",
+      "controller": "user-blocks/user-blocks.controller.ts",
+      "handler": "list",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/me",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "getCurrentUser",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/me/profile",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "updateProfile",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/me/avatar",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "uploadAvatar",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/users/me/avatar",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "removeAvatar",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/me/replies",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "getCurrentUserReplies",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/search",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "searchUsers",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "getUserById",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id/replies",
+      "module": "users",
+      "controller": "users/users.controller.ts",
+      "handler": "getUserReplies",
+      "auth": {
+        "type": "auth",
+        "key": "JWT (forum_session)",
+        "roles": [],
+        "public": false,
+        "scopes": []
+      }
+    }
+  ]
+}
