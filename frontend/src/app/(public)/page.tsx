@@ -13,9 +13,24 @@ import type { Category, PostListResponse, ResourceCategory } from "@/types";
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-async function fetchPosts(): Promise<PostListResponse> {
+function parseFeaturedCategoryIds(value: string | undefined): number[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.filter((id): id is number => Number.isInteger(id) && id > 0))]
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchPosts(categoryId?: number, excludedCategoryIds: number[] = []): Promise<PostListResponse> {
+  const params = new URLSearchParams({ page: '1', limit: '6', sort: 'last_activity_at' });
+  if (categoryId) params.set('category_id', String(categoryId));
+  if (excludedCategoryIds.length) params.set('exclude_category_ids', excludedCategoryIds.join(','));
   return fetchApiPaginated<PostListResponse["data"][number]>(
-    "/api/posts?page=1&limit=6",
+    `/api/posts?${params.toString()}`,
     {
       init: { cache: "no-store" },
       fallback: createEmptyPaginatedResult<PostListResponse["data"][number]>(6),
@@ -47,12 +62,23 @@ export default async function HomePage() {
   const brand = resolveBrand(settings);
   let postsResult: PostListResponse;
   let navigation: Awaited<ReturnType<typeof fetchPublicNavigation>>;
+  let featuredCategorySections: Array<{ category: Category; posts: PostListResponse }> = [];
 
   try {
-    [postsResult, navigation] = await Promise.all([
-      fetchPosts(),
-      fetchPublicNavigation(),
+    navigation = await fetchPublicNavigation();
+    const featuredCategoryIds = parseFeaturedCategoryIds(settings.home_featured_category_ids);
+    const featuredCategories = featuredCategoryIds
+      .map((id) => navigation.categories.find((category) => category.id === id))
+      .filter((category): category is Category => Boolean(category));
+    const [latestPosts, ...featuredPosts] = await Promise.all([
+      fetchPosts(undefined, featuredCategories.map((category) => category.id)),
+      ...featuredCategories.map((category) => fetchPosts(category.id)),
     ]);
+    postsResult = latestPosts;
+    featuredCategorySections = featuredCategories.map((category, index) => ({
+      category,
+      posts: featuredPosts[index],
+    }));
   } catch {
     return (
       <ErrorState
@@ -92,6 +118,24 @@ export default async function HomePage() {
             </div>
           )}
         </section>
+
+        {featuredCategorySections.map(({ category, posts }) => (
+          <section key={category.id} className="mt-8">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-[var(--text)]">{category.name}</h2>
+              <Link href={`/categories/${category.id}`} className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline">
+                查看板块 <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            {posts.data.length > 0 ? (
+              <ThreadList posts={posts.data} />
+            ) : (
+              <div className="border border-[var(--border)] p-8 text-center text-sm text-[var(--text-muted)]">
+                该板块暂时没有讨论
+              </div>
+            )}
+          </section>
+        ))}
 
         {(navigation.categories.length > 0 || navigation.resourceCategories.length > 0) && (
           <nav aria-label="论坛与资源分类" className="mt-8 grid gap-6 border-t border-[var(--border)] pt-6 sm:grid-cols-2">

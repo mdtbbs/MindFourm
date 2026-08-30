@@ -327,6 +327,7 @@ export class PostsService {
       page = 1,
       limit = 20,
       category_id,
+      exclude_category_ids,
       status,
       user_id,
       search,
@@ -343,6 +344,14 @@ export class PostsService {
 
     if (category_id) {
       qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
+    }
+
+    if (exclude_category_ids?.length) {
+      // Keep uncategorised posts in the stream: SQL `NULL NOT IN (...)` is not true.
+      qb.andWhere(
+        '(post.category_id IS NULL OR post.category_id NOT IN (:...excludedCategoryIds))',
+        { excludedCategoryIds: exclude_category_ids },
+      );
     }
 
     if (user_id) {
@@ -405,6 +414,7 @@ export class PostsService {
     const {
       limit = 20,
       category_id,
+      exclude_category_ids,
       status,
       user_id,
       server_id,
@@ -419,6 +429,13 @@ export class PostsService {
 
     if (category_id) {
       qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
+    }
+
+    if (exclude_category_ids?.length) {
+      qb.andWhere(
+        '(post.category_id IS NULL OR post.category_id NOT IN (:...excludedCategoryIds))',
+        { excludedCategoryIds: exclude_category_ids },
+      );
     }
 
     if (user_id) {

@@ -1,15 +1,29 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { adminApi } from '@/lib/api/client';
+import { adminApi, categoryApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
 import MarkdownEditor from '@/components/ui/markdown-editor';
+import type { Category } from '@/types';
+
+function parseFeaturedCategoryIds(value: string | undefined): number[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.filter((id): id is number => Number.isInteger(id) && id > 0))]
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 export default function DisplaySettingsPage() {
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -17,7 +31,12 @@ export default function DisplaySettingsPage() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      setValues(await adminApi.getSettings('display'));
+      const [settings, categoryList] = await Promise.all([
+        adminApi.getSettings('display'),
+        categoryApi.getList(),
+      ]);
+      setValues(settings);
+      setCategories(categoryList);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed');
     } finally {
@@ -46,6 +65,14 @@ export default function DisplaySettingsPage() {
 
   const update = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const toggleFeaturedCategory = (categoryId: number) => {
+    const selected = parseFeaturedCategoryIds(values.home_featured_category_ids);
+    const next = selected.includes(categoryId)
+      ? selected.filter((id) => id !== categoryId)
+      : [...selected, categoryId];
+    update('home_featured_category_ids', JSON.stringify(next));
   };
 
   if (loading) {
@@ -133,6 +160,32 @@ export default function DisplaySettingsPage() {
             placeholder="支持 **加粗**、列表、链接"
             rows={5}
           />
+        </div>
+
+        <div className="border-t border-surface-200 pt-6">
+          <h3 className="text-sm font-semibold text-surface-800">首页板块分区</h3>
+          <p className="mt-1 text-xs text-surface-400">
+            选中的板块会以独立区块排在首页；其帖子不会再出现在首页和“讨论”页的最新讨论流中。
+          </p>
+          {categories.length > 0 ? (
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              {categories.map((category) => {
+                const checked = parseFeaturedCategoryIds(values.home_featured_category_ids).includes(category.id);
+                return (
+                  <label key={category.id} className="flex cursor-pointer items-center gap-2 rounded border border-surface-200 px-3 py-2 text-sm text-surface-700 hover:border-surface-300">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleFeaturedCategory(category.id)}
+                    />
+                    <span>{category.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-surface-400">暂无可配置板块。</p>
+          )}
         </div>
 
       </div>

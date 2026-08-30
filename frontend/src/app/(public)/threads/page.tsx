@@ -5,11 +5,24 @@ import { createEmptyPaginatedResult } from "@/lib/api/response";
 import { fetchApiPaginated } from "@/lib/api/server-fetch";
 import type { PostListResponse } from "@/types";
 import Pagination from "@/components/ui/pagination";
+import { fetchPublicSettings } from "@/lib/settings/server";
 
 export const metadata: Metadata = {
   title: "讨论",
   description: "Mindustry 社区讨论区",
 };
+
+function parseFeaturedCategoryIds(value: string | undefined): number[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.filter((id): id is number => Number.isInteger(id) && id > 0))]
+      : [];
+  } catch {
+    return [];
+  }
+}
 
 export default async function ThreadsPage({
   searchParams,
@@ -20,10 +33,15 @@ export default async function ThreadsPage({
   const requestedPage = Number(params.page);
   const page =
     Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const settings = await fetchPublicSettings();
+  const featuredCategoryIds = parseFeaturedCategoryIds(settings.home_featured_category_ids);
+  const excludeCategoryIds = featuredCategoryIds.length
+    ? `&exclude_category_ids=${featuredCategoryIds.join(',')}`
+    : '';
   let threads: PostListResponse;
   try {
     threads = await fetchApiPaginated<PostListResponse["data"][number]>(
-      `/api/posts?page=${page}&limit=30&sort=last_activity_at`,
+      `/api/posts?page=${page}&limit=30&sort=last_activity_at${excludeCategoryIds}`,
       {
         init: { cache: "no-store" },
         fallback:

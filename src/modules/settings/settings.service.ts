@@ -276,6 +276,7 @@ export class SettingsService implements OnModuleInit {
     'latest_posts_show_tags',
     'latest_posts_show_stats',
     'latest_posts_show_index',
+    'home_featured_category_ids',
     'announce_enabled',
     'announce_content',
     'notices_content',
@@ -348,6 +349,7 @@ export class SettingsService implements OnModuleInit {
       'latest_posts_show_tags',
       'latest_posts_show_stats',
       'latest_posts_show_index',
+      'home_featured_category_ids',
       'home_ad_slots',
     ]),
     navigation: new Set([
@@ -480,6 +482,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'latest_posts_show_tags', value: 'true', category: 'display', description: 'Show tags in latest posts list' },
       { key: 'latest_posts_show_stats', value: 'true', category: 'display', description: 'Show stats in latest posts list' },
       { key: 'latest_posts_show_index', value: 'true', category: 'display', description: 'Show row index in latest posts list' },
+      { key: 'home_featured_category_ids', value: '[]', category: 'display', description: 'Category IDs rendered as dedicated homepage discussion sections' },
       { key: 'home_ad_slots', value: '[]', category: 'display', description: 'Homepage advertisement slots as JSON' },
       { key: 'announce_enabled', value: 'false', category: 'announce', description: 'Enable announcement banner' },
       { key: 'announce_content', value: '', category: 'announce', description: 'Announcement banner content' },

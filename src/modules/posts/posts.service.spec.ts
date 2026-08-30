@@ -235,6 +235,17 @@ describe('PostsService', () => {
     );
   });
 
+  it('omits configured homepage categories from a discussion stream without hiding uncategorised posts', async () => {
+    const { service, listQueryBuilder } = createService();
+
+    await service.findAll({ page: 1, limit: 30, exclude_category_ids: [3, 9] });
+
+    expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+      '(post.category_id IS NULL OR post.category_id NOT IN (:...excludedCategoryIds))',
+      { excludedCategoryIds: [3, 9] },
+    );
+  });
+
   it('maps a post detail DTO and caches the mapped response', async () => {
     const { service, postRepository, postDetailService, redisService } = createService({
       postRepository: {
