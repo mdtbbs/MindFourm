@@ -171,6 +171,44 @@ X-Request-ID: <request-id>
 
 ---
 
+## 正文格式（Markdown 富文本）
+
+所有包含 `content` 字段的写接口（发帖、回复、资源说明等）均支持 **Markdown + GFM（GitHub Flavored Markdown）** 富文本格式。请求体中的 `content` 使用 Markdown 语法编写，后端通过 `marked` + `sanitize-html` 解析为安全的 HTML 后存储，前端以 `react-markdown` + `remark-gfm` 渲染。
+
+### 支持的语法
+
+| 类型 | 语法示例 |
+| --- | --- |
+| **标题** | `# H1` ～ `###### H6` |
+| **加粗** | `**粗体**` |
+| **斜体** | `*斜体*` |
+| **下划线** | `<u>下划线</u>` |
+| **删除线** | `~~删除线~~`，或 `<del>删除</del>` / `<s>删除</s>` |
+| **行内代码** | `` `code` `` |
+| **代码块**（支持语法高亮） | 三个反引号包裹，如 <code>```ts</code> |
+| **引用** | `> 引用内容` |
+| **无序列表** | `- 项目` |
+| **有序列表** | `1. 项目`（支持 `start` 起始序号） |
+| **任务列表**（GFM 复选框） | `- [x] 已完成` / `- [ ] 未完成` |
+| **链接** | `[文字](https://example.com)` |
+| **图片** | `![alt](https://example.com/img.png)` |
+| **表格**（GFM） | `\| 列1 \| 列2 \|` |
+| **分割线** | `---` |
+| **上下标** | `<sub>下标</sub>`、`<sup>上标</sup>` |
+| **插入文本** | `<ins>插入</ins>` |
+| **折叠块** | `<details><summary>标题</summary>内容</details>` |
+
+### 渲染与安全限制
+
+- 允许的 URL 协议：仅 `http`、`https`、`mailto`；拒绝 `javascript:`、`data:` 等协议及编码变体。
+- 所有链接自动添加 `target="_blank"` 与 `rel="nofollow noopener noreferrer"`，在新窗口打开且不传递来源信息。
+- 图片自动懒加载（`loading="lazy"`）并异步解码（`decoding="async"`）。
+- 行内或原始 `<script>`、`<style>` 及 `on*` 事件属性会被移除。
+- 表格单元格支持 `colspan`、`rowspan`、`scope` 属性。
+- GFM 任务列表渲染为只读（`disabled`）复选框。
+
+> **提示**：`content` 为空字符串或纯文本时同样有效——纯文本会被作为普通段落处理。
+
 ## API Key 管理接口（后台）
 
 后台页面：
