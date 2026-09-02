@@ -53,6 +53,12 @@ function tokensMatch(a: string, b: string): boolean {
 
 function isExempt(req: Request): boolean {
   if (EXEMPT_PATHS.has(req.path)) return true;
+  // These endpoints accept native PKCE artifacts or a mobile bearer token, never
+  // a browser session cookie. Keeping this list exact preserves CSRF protection
+  // for every other V1 write route.
+  if (req.path === '/api/v1/auth/mobile/exchange') return true;
+  if (req.path === '/api/v1/auth/mobile/refresh') return true;
+  if (req.path === '/api/v1/auth/mobile/logout') return true;
   if (req.path.startsWith('/api/external/')) return true;
   if (req.path.startsWith('/api/service-api/')) return true;
   if (req.path.startsWith('/api/auto-post/')) return true;

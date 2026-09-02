@@ -38,6 +38,10 @@ export const appConfig = () => ({
     baseUrl: process.env.MINDAUTH_URL || 'http://localhost:4001',
     clientId: process.env.MINDAUTH_CLIENT_ID || 'forum',
     clientSecret: process.env.MINDAUTH_CLIENT_SECRET || '',
+    // First-party Android native authorization codes are exchanged only by this
+    // backend.  This is intentionally separate from the browser OAuth client.
+    nativeClientId: process.env.MINDAUTH_NATIVE_CLIENT_ID || 'mdtbbs_android',
+    nativeExchangeSecret: process.env.MINDAUTH_NATIVE_EXCHANGE_SECRET || '',
     // Derived from this service's own base URL rather than a fixed default. A
     // hardcoded `http://localhost:4000/...` fallback silently contradicted
     // deployments running on another port (this one uses 4500), producing a

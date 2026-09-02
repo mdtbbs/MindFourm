@@ -48,6 +48,7 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
 
   // --- OAuth: without these, nobody can log in ---
   requireInProduction(config.mindauth.clientSecret, 'MINDAUTH_CLIENT_SECRET');
+  requireInProduction(config.mindauth.nativeExchangeSecret, 'MINDAUTH_NATIVE_EXCHANGE_SECRET');
   if (isProduction && looksLocal(config.mindauth.baseUrl)) {
     errors.push('MINDAUTH_URL must not point to localhost in production');
   }
@@ -56,6 +57,9 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   }
   requireInProduction(mobileAuth.jwtSecret, 'MOBILE_AUTH_JWT_SECRET');
   requireInProduction(mobileAuth.refreshHmacSecret, 'MOBILE_AUTH_REFRESH_HMAC_SECRET');
+  if (isProduction && looksLocal(mobileAuth.issuer || '')) {
+    errors.push('MOBILE_AUTH_ISSUER must not point to localhost in production');
+  }
 
   // --- Public URLs: wrong values silently corrupt emails, sitemaps and redirects ---
   if (isProduction && looksLocal(config.app.frontendUrl)) {

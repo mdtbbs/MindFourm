@@ -203,17 +203,21 @@ export class AuthService {
     }
   }
 
-  async exchangeMobileCode(code: string, codeVerifier: string, redirectUri: string, deviceName: string, ip: string, userAgent?: string): Promise<any> {
-    if (!code || !codeVerifier || !redirectUri) throw new UnauthorizedException('Invalid mobile authorization exchange');
+  async exchangeMobileCode(code: string, codeVerifier: string, _redirectUri: string | undefined, deviceName: string, ip: string, userAgent?: string): Promise<any> {
+    if (!code || !codeVerifier) throw new UnauthorizedException('Invalid mobile authorization exchange');
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
-    const clientId = this.configService.get<string>('MINDAUTH_CLIENT_ID');
-    const clientSecret = this.configService.get<string>('MINDAUTH_CLIENT_SECRET');
+    const clientId = this.configService.get<string>('mindauth.nativeClientId');
+    const clientSecret = this.configService.get<string>('mindauth.nativeExchangeSecret');
     try {
-      const response = await mindAuthHttp.post(joinMindAuthApiUrl(mindauthUrl, '/token'), {
-        grant_type: 'authorization_code', code, code_verifier: codeVerifier, redirect_uri: redirectUri,
-        client_id: clientId, client_secret: clientSecret,
-      });
-      const user = await this.getOrCreateUser(await this.getUserInfo(response.data.access_token));
+      // Native codes are intentionally not OAuth browser codes.  MindAuth
+      // consumes them here, validates PKCE, and returns user data only to this
+      // trusted server; Android never receives a MindAuth web session/token.
+      const response = await mindAuthHttp.post(
+        joinMindAuthApiUrl(mindauthUrl, '/v1/native/auth/exchange'),
+        { client_id: clientId, code, code_verifier: codeVerifier },
+        { headers: { 'x-mindfourm-client-secret': clientSecret } },
+      );
+      const user = await this.getOrCreateUser(response.data.user);
       if (await this.checkNeedsTermsAcceptance(user)) throw new UnauthorizedException({ code: 'TERMS_ACCEPTANCE_REQUIRED', message: '请先接受社区条款' });
       return this.createMobileSession(user, deviceName, ip, userAgent);
     } catch (error) {

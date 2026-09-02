@@ -41,4 +41,19 @@ describe('csrfMiddleware', () => {
     expect(res.status).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalled();
   });
+
+  it.each([
+    '/api/v1/auth/mobile/exchange',
+    '/api/v1/auth/mobile/refresh',
+    '/api/v1/auth/mobile/logout',
+  ])('allows the reviewed native mobile route without a browser CSRF token: %s', (path) => {
+    const req: any = { method: 'POST', path, headers: {} };
+    const res = createResponse();
+    const next = jest.fn();
+
+    csrfMiddleware(req, res as any, next);
+
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
 });

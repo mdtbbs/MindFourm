@@ -22,6 +22,8 @@ function makeConfig(overrides: Record<string, any> = {}): Config {
       baseUrl: 'https://auth.example.com',
       clientId: 'forum',
       clientSecret: 'client-secret',
+      nativeClientId: 'mdtbbs_android',
+      nativeExchangeSecret: 'native-exchange-secret',
       callbackUrl: 'https://forum.example.com/api/auth/callback',
     },
     easymanager: { enabled: false, baseUrl: '', apiKey: '' },
