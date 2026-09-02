@@ -62,6 +62,12 @@ cp frontend/.env.local.example frontend/.env.production
 
 生产环境不要使用 `.env.example` 中的 `change-me` 值。
 
+### 阿里云 ESA 回源与客户端上下文
+
+将源站仅暴露给 ESA/受信反代，并在 ESA 开启回源 IP 透传。后端按以下顺序读取已由边缘覆写的地址：`ali-real-client-ip`、`x-real-ip`、`cf-connecting-ip`、`X-Forwarded-For` 首项、TCP 对端地址。因此 ESA 存在时会优先记录其提供的真实客户端 IP，而非 CDN 地址。位置缺少省市信息时，`ali-ip-country` 的 ISO 3166-1 Alpha-2 值（例如 `cn`）会作为位置标签回退。
+
+不要让客户端绕过 ESA 直连应用端口；否则任何可直连的客户端都可能伪造这些请求标头，影响按 IP 的限流、封禁和审计。
+
 ### 前端
 
 前端生产变量使用 `frontend/.env.production`，至少确认：

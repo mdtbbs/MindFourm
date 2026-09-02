@@ -121,9 +121,19 @@ async function bootstrap() {
       // Downloads are served cross-origin to the Next.js frontend.
       crossOriginResourcePolicy: { policy: 'cross-origin' },
       crossOriginEmbedderPolicy: false,
-      referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+      xFrameOptions: { action: 'sameorigin' },
+      xXssProtection: false,
+      referrerPolicy: { policy: 'same-origin' },
     }),
   );
+  app.use((_req, res, next) => {
+    // Keep origin responses consistent with ESA's security-header contract.
+    // Helmet intentionally emits X-XSS-Protection: 0, so this legacy ESA
+    // compatibility header must be set explicitly after Helmet.
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Expect-CT', 'max-age=86400, enforce');
+    next();
+  });
 
   app.use(compression());
 
