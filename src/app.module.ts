@@ -8,9 +8,11 @@ import { appConfig } from './config/app.config';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './common/health.controller';
 import { AuthModule } from './modules/auth/auth.module';
+import { MobileAuthV1Module } from './modules/auth/mobile-auth-v1.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { RepliesModule } from './modules/replies/replies.module';
 import { UsersModule } from './modules/users/users.module';
+import { UsersV1Module } from './modules/users/v1/users-v1.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { TagsModule } from './modules/tags/tags.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -101,9 +103,11 @@ import { NoticesModule } from './modules/notices/notices.module';
       serveRoot: '/public',
     }),
     AuthModule,
+    MobileAuthV1Module,
     PostsModule,
     RepliesModule,
     UsersModule,
+    UsersV1Module,
     CategoriesModule,
     TagsModule,
     NotificationsModule,

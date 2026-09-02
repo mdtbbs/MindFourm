@@ -1,0 +1,1351 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/resources": {
+      "get": {
+        "operationId": "ResourcesController_getList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "ResourcesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/hot": {
+      "get": {
+        "operationId": "ResourcesController_getHotResources",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/filter-options": {
+      "get": {
+        "operationId": "ResourcesController_getFilterOptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/user/{userId}": {
+      "get": {
+        "operationId": "ResourcesController_getUserResources",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/categories": {
+      "get": {
+        "operationId": "ResourcesController_listCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "ResourcesController_createCategory",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResourceCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/categories/tree": {
+      "get": {
+        "operationId": "ResourcesController_listCategoriesTree",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/categories/admin": {
+      "get": {
+        "operationId": "ResourcesController_listAdminCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/categories/{categoryId}": {
+      "put": {
+        "operationId": "ResourcesController_updateCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateResourceCategoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "ResourcesController_deleteCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/admin": {
+      "get": {
+        "operationId": "ResourcesController_getAdminList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/my": {
+      "get": {
+        "operationId": "ResourcesController_getMyResources",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}": {
+      "get": {
+        "operationId": "ResourcesController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "put": {
+        "operationId": "ResourcesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateResourceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "ResourcesController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/related": {
+      "get": {
+        "operationId": "ResourcesController_getRelated",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/download": {
+      "get": {
+        "operationId": "ResourcesController_download",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/versions": {
+      "get": {
+        "operationId": "ResourcesController_getVersions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "ResourcesController_addVersion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/versions/{versionId}": {
+      "delete": {
+        "operationId": "ResourcesController_deleteVersion",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/status": {
+      "put": {
+        "operationId": "ResourcesController_updateStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/admin": {
+      "delete": {
+        "operationId": "ResourcesController_adminDelete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/admin/cleanup-storage": {
+      "post": {
+        "operationId": "ResourcesController_cleanupStorage",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/rating": {
+      "post": {
+        "operationId": "ResourcesController_upsertRating",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "ResourcesController_deleteRating",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "get": {
+        "operationId": "ResourcesController_getUserRating",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/favorite": {
+      "get": {
+        "operationId": "ResourcesController_getFavorite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "ResourcesController_addFavorite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "ResourcesController_removeFavorite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{id}/subscription": {
+      "get": {
+        "operationId": "ResourcesController_getSubscription",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "ResourcesController_subscribe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "ResourcesController_unsubscribe",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/api/v1/v1/resources/{id}": {
+      "get": {
+        "operationId": "ResourcesV1Controller_getResource",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource detail"
+          }
+        },
+        "tags": [
+          "v1-resources"
+        ]
+      }
+    },
+    "/api/v1/v1/capabilities": {
+      "get": {
+        "operationId": "CapabilitiesController_getCapabilities",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Current first-party API capabilities"
+          }
+        },
+        "tags": [
+          "v1-capabilities"
+        ]
+      }
+    },
+    "/api/v1/v1/client/config": {
+      "get": {
+        "operationId": "ClientConfigV1Controller_config",
+        "parameters": [
+          {
+            "name": "platform",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version_code",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-client"
+        ]
+      }
+    },
+    "/api/v1/v1/auth/mobile/exchange": {
+      "post": {
+        "operationId": "MobileAuthController_exchange",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileExchangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/api/v1/v1/auth/mobile/refresh": {
+      "post": {
+        "operationId": "MobileAuthController_refresh",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileRefreshDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/api/v1/v1/auth/mobile/logout": {
+      "post": {
+        "operationId": "MobileAuthController_logout",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MobileLogoutDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/api/v1/v1/auth/mobile/sessions": {
+      "get": {
+        "operationId": "MobileAuthController_sessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/api/v1/v1/auth/mobile/sessions/{id}": {
+      "delete": {
+        "operationId": "MobileAuthController_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-auth"
+        ]
+      }
+    },
+    "/api/v1/v1/me": {
+      "get": {
+        "operationId": "UsersV1Controller_getMe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Authenticated viewer profile with stable first-party fields."
+          }
+        },
+        "tags": [
+          "v1-users"
+        ]
+      }
+    },
+    "/api/v1/v1/threads": {
+      "get": {
+        "operationId": "ThreadsV1Controller_listThreads",
+        "parameters": [
+          {
+            "name": "category_id",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "offset",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of threads"
+          }
+        },
+        "tags": [
+          "v1-threads"
+        ]
+      },
+      "post": {
+        "operationId": "ThreadWriteV1Controller_createThread",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Thread created. It can be pending moderation."
+          }
+        },
+        "tags": [
+          "v1-thread-writes"
+        ]
+      }
+    },
+    "/api/v1/v1/threads/{id}": {
+      "get": {
+        "operationId": "ThreadsV1Controller_getThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread detail"
+          }
+        },
+        "tags": [
+          "v1-threads"
+        ]
+      },
+      "put": {
+        "operationId": "ThreadWriteV1Controller_updateThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePostDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thread updated by its owner or staff."
+          }
+        },
+        "tags": [
+          "v1-thread-writes"
+        ]
+      },
+      "delete": {
+        "operationId": "ThreadWriteV1Controller_deleteThread",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Thread soft-deleted by its owner or staff."
+          }
+        },
+        "tags": [
+          "v1-thread-writes"
+        ]
+      }
+    },
+    "/api/v1/v1/threads/{id}/like": {
+      "put": {
+        "operationId": "ThreadInteractionsV1Controller_like",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread is liked; safe to repeat."
+          }
+        },
+        "tags": [
+          "v1-thread-interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "ThreadInteractionsV1Controller_unlike",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread is not liked; safe to repeat."
+          }
+        },
+        "tags": [
+          "v1-thread-interactions"
+        ]
+      }
+    },
+    "/api/v1/v1/threads/{id}/bookmark": {
+      "put": {
+        "operationId": "ThreadInteractionsV1Controller_bookmark",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread is bookmarked; safe to repeat."
+          }
+        },
+        "tags": [
+          "v1-thread-interactions"
+        ]
+      },
+      "delete": {
+        "operationId": "ThreadInteractionsV1Controller_removeBookmark",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread is not bookmarked; safe to repeat."
+          }
+        },
+        "tags": [
+          "v1-thread-interactions"
+        ]
+      }
+    },
+    "/api/v1/v1/threads/{id}/replies": {
+      "post": {
+        "operationId": "ThreadWriteV1Controller_createReply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reply created. It can be pending moderation."
+          }
+        },
+        "tags": [
+          "v1-thread-writes"
+        ]
+      }
+    },
+    "/api/v1/v1/threads/{threadId}/replies/{replyId}": {
+      "put": {
+        "operationId": "ThreadWriteV1Controller_updateReply",
+        "parameters": [
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "replyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reply updated by its owner or staff."
+          }
+        },
+        "tags": [
+          "v1-thread-writes"
+        ]
+      },
+      "delete": {
+        "operationId": "ThreadWriteV1Controller_deleteReply",
+        "parameters": [
+          {
+            "name": "threadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "replyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reply soft-deleted by its owner or staff."
+          }
+        },
+        "tags": [
+          "v1-thread-writes"
+        ]
+      }
+    },
+    "/api/v1/v1/discover": {
+      "get": {
+        "operationId": "DiscoverV1Controller_getSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Discovery summary"
+          }
+        },
+        "tags": [
+          "v1-discover"
+        ]
+      }
+    },
+    "/api/v1/v1/portal": {
+      "get": {
+        "operationId": "PortalV1Controller_getPortalData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Portal homepage data"
+          }
+        },
+        "tags": [
+          "v1-portal"
+        ]
+      }
+    },
+    "/api/v1/v1/notices": {
+      "get": {
+        "operationId": "NoticesController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pinned",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published notice list"
+          }
+        },
+        "tags": [
+          "v1-notices"
+        ]
+      }
+    },
+    "/api/v1/v1/notices/{id}": {
+      "get": {
+        "operationId": "NoticesController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-notices"
+        ]
+      }
+    },
+    "/api/v1/v1/admin/notices": {
+      "get": {
+        "operationId": "AdminNoticesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-admin-notices"
+        ]
+      },
+      "post": {
+        "operationId": "AdminNoticesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNoticeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-admin-notices"
+        ]
+      }
+    },
+    "/api/v1/v1/admin/notices/{id}": {
+      "patch": {
+        "operationId": "AdminNoticesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNoticeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-admin-notices"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminNoticesController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-admin-notices"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "MDTBBS First-party API",
+    "description": "Stable V1 contract for MDTBBS first-party clients. Clients must call /api/v1/capabilities first and must not infer unavailable features from undocumented endpoints.",
+    "version": "1.0.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [
+    {
+      "url": "https://mdtbbs.cn/api/v1",
+      "description": "生产环境"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "CreateResourceCategoryDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateResourceCategoryDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateResourceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MobileExchangeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MobileRefreshDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MobileLogoutDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreatePostDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdatePostDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateReplyDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateReplyDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateNoticeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateNoticeDto": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+}

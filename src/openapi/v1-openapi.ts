@@ -1,6 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { CapabilitiesModule } from '../modules/capabilities/capabilities.module';
+import { MobileAuthV1Module } from '../modules/auth/mobile-auth-v1.module';
+import { UsersV1Module } from '../modules/users/v1/users-v1.module';
 import { ResourcesModule } from '../modules/resources/resources.module';
 import { ThreadsModule } from '../modules/threads/threads.module';
 import { DiscoverModule } from '../modules/discover/discover.module';
@@ -17,6 +19,8 @@ export function createV1OpenApiDocument(app: INestApplication) {
   return SwaggerModule.createDocument(app, config, {
     include: [
       CapabilitiesModule,
+      MobileAuthV1Module,
+      UsersV1Module,
       ResourcesModule,
       ThreadsModule,
       DiscoverModule,

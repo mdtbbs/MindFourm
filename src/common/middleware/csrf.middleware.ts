@@ -59,6 +59,13 @@ function isExempt(req: Request): boolean {
   if (req.path === '/api/v1/auth/mobile/exchange') return true;
   if (req.path === '/api/v1/auth/mobile/refresh') return true;
   if (req.path === '/api/v1/auth/mobile/logout') return true;
+  // Android authenticates with an explicit Bearer token, never an ambient browser
+  // cookie. Requiring a double-submit cookie here made every normal V1 write fail
+  // before JwtAuthGuard could apply its mobile token and phone-verification checks.
+  // Requiring both markers keeps cookie-backed browser writes CSRF-protected.
+  const authorization = req.headers.authorization;
+  const platform = req.headers['x-client-platform'];
+  if (platform === 'android' && typeof authorization === 'string' && /^Bearer\s+\S+$/i.test(authorization)) return true;
   if (req.path.startsWith('/api/external/')) return true;
   if (req.path.startsWith('/api/service-api/')) return true;
   if (req.path.startsWith('/api/auto-post/')) return true;

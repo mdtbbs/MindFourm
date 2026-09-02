@@ -19,6 +19,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,16 +30,20 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -54,10 +60,11 @@ import java.time.Instant
 @Composable
 fun ThreadDetailRoute(
     onBack: () -> Unit,
+    onLogin: (String) -> Unit,
     viewModel: ThreadDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
-    ThreadDetailScreen(state = state, onBack = onBack, onRetry = viewModel::load)
+    ThreadDetailScreen(state = state, onBack = onBack, onRetry = viewModel::load, onLike = { viewModel.toggleLike(onLogin) }, onBookmark = { viewModel.toggleBookmark(onLogin) }, onReply = { viewModel.reply(onLogin, it) })
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -66,7 +73,11 @@ fun ThreadDetailScreen(
     state: ThreadDetailUiState,
     onBack: () -> Unit,
     onRetry: () -> Unit,
+    onLike: () -> Unit,
+    onBookmark: () -> Unit,
+    onReply: (String) -> Unit,
 ) {
+    var replyComposerOpen by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -89,9 +100,16 @@ fun ThreadDetailScreen(
             is ThreadDetailUiState.Content -> ThreadDetailContent(
                 thread = state.thread,
                 modifier = Modifier.padding(padding),
+                onLike = onLike,
+                onBookmark = onBookmark,
+                onOpenReply = { replyComposerOpen = true },
             )
         }
     }
+    if (replyComposerOpen) ReplyComposer(
+        onDismiss = { replyComposerOpen = false },
+        onSubmit = { content -> replyComposerOpen = false; onReply(content) },
+    )
 }
 
 @Composable
@@ -115,7 +133,7 @@ private fun DetailError(modifier: Modifier, onRetry: () -> Unit) = Column(
 }
 
 @Composable
-private fun ThreadDetailContent(thread: ThreadDetail, modifier: Modifier = Modifier) {
+private fun ThreadDetailContent(thread: ThreadDetail, modifier: Modifier = Modifier, onLike: () -> Unit, onBookmark: () -> Unit, onOpenReply: () -> Unit) {
     val summary = thread.summary
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -171,6 +189,13 @@ private fun ThreadDetailContent(thread: ThreadDetail, modifier: Modifier = Modif
             }
         }
         item { HorizontalDivider() }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onLike) { Text(if (thread.viewer?.liked == true) "取消点赞" else "点赞") }
+                Button(onClick = onBookmark) { Text(if (thread.viewer?.bookmarked == true) "取消收藏" else "收藏") }
+                Button(onClick = onOpenReply, enabled = !thread.locked) { Text(if (thread.locked) "主题已关闭" else "回复") }
+            }
+        }
         item { MarkdownContent(thread.content) }
         if (summary.updatedAt != summary.createdAt) {
             item {
@@ -181,7 +206,29 @@ private fun ThreadDetailContent(thread: ThreadDetail, modifier: Modifier = Modif
                 )
             }
         }
+        item { HorizontalDivider() }
+        item { Text("回复（${thread.replies.size}）", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        thread.replies.forEach { reply ->
+            item(key = "reply-${reply.id}") {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("${reply.author.name} · ${relativeTime(reply.createdAt)}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    MarkdownContent(reply.content)
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun ReplyComposer(onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
+    var content by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("回复主题") },
+        text = { OutlinedTextField(content, { content = it }, Modifier.fillMaxWidth(), label = { Text("回复内容（支持 Markdown）") }, minLines = 4) },
+        confirmButton = { Button(onClick = { onSubmit(content.trim()) }, enabled = content.isNotBlank()) { Text("发送") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }
 
 /** A deliberately small, safe Markdown renderer for M1 source Markdown. */

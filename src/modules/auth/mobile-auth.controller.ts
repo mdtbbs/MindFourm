@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiV1 } from '../../common/decorators/api-v1.decorator';
+import { ApiTags } from '@nestjs/swagger';
 import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verification.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { getClientIp } from '../../common/utils/client-context.util';
@@ -7,6 +8,7 @@ import { AuthService } from './auth.service';
 import { MobileExchangeDto, MobileLogoutDto, MobileRefreshDto } from './dto/mobile-auth.dto';
 
 @ApiV1()
+@ApiTags('v1-auth')
 @Controller('v1/auth/mobile')
 export class MobileAuthController {
   constructor(private readonly authService: AuthService) {}

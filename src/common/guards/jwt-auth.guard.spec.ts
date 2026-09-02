@@ -6,6 +6,7 @@ import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AuthService } from '../../modules/auth/auth.service';
+import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
 
 function createContext(method: string, sessionToken?: string) {
   const request: any = {
@@ -84,6 +85,14 @@ describe('JwtAuthGuard phone verification', () => {
   it('allows write requests for users with verified phone', async () => {
     const { guard } = createGuard({ id: 1, phone_verified: true });
     const { context } = createContext('DELETE', 'session-token');
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+  });
+
+  it('allows an explicitly phone-verification-exempt write for an unverified user', async () => {
+    const { guard } = createGuard({ id: 1, phone_verified: false });
+    const { context } = createContext('POST', 'session-token');
+    (guard as any).reflector.getAllAndOverride.mockImplementation((key: string) => key === SKIP_PHONE_VERIFICATION_KEY);
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
   });

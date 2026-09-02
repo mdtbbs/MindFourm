@@ -81,6 +81,37 @@ export class LikesService {
     }
   }
 
+  /** Idempotent V1 operation. Legacy POST /likes/posts/:id intentionally remains strict. */
+  async ensurePostLiked(userId: number, postId: number): Promise<{ liked: boolean; count: number }> {
+    if (!await this.isPostLiked(userId, postId)) {
+      try {
+        await this.likePost(userId, postId);
+      } catch (error) {
+        // A concurrent idempotent request may have created the unique row first.
+        if (!await this.isPostLiked(userId, postId)) throw error;
+      }
+    }
+    return { liked: true, count: await this.getPostLikeCount(postId) };
+  }
+
+  /** Idempotent V1 operation. Legacy DELETE /likes/posts/:id intentionally remains strict. */
+  async ensurePostUnliked(userId: number, postId: number): Promise<{ liked: boolean; count: number }> {
+    await this.assertPostExists(postId);
+    if (await this.isPostLiked(userId, postId)) {
+      try {
+        await this.unlikePost(userId, postId);
+      } catch (error) {
+        if (await this.isPostLiked(userId, postId)) throw error;
+      }
+    }
+    return { liked: false, count: await this.getPostLikeCount(postId) };
+  }
+
+  private async assertPostExists(postId: number): Promise<void> {
+    const post = await this.postRepo.findOne({ where: { id: postId }, select: ['id'] });
+    if (!post) throw new NotFoundException('Post not found');
+  }
+
   async isPostLiked(userId: number, postId: number): Promise<boolean> {
     const like = await this.postLikeRepo.findOne({
       where: { user_id: userId, post_id: postId },

@@ -5,6 +5,8 @@ import cn.mdtbbs.android.core.model.Category
 import cn.mdtbbs.android.core.model.Tag
 import cn.mdtbbs.android.core.model.ThreadDetail
 import cn.mdtbbs.android.core.model.ThreadSummary
+import cn.mdtbbs.android.core.model.ThreadViewer
+import cn.mdtbbs.android.core.model.ThreadReply
 import cn.mdtbbs.android.core.network.ThreadDto
 import java.time.Instant
 
@@ -26,4 +28,8 @@ fun ThreadDto.toDetail(): ThreadDetail = ThreadDetail(
     summary = toSummary(),
     content = content.orEmpty(),
     contentHtml = contentHtml,
+    viewer = viewer?.let { ThreadViewer(it.liked, it.bookmarked) },
+    replies = replies.map { reply -> ThreadReply(reply.id, reply.userId, reply.parentReplyId, reply.content, Author(reply.userId.toString(), reply.authorName ?: "Unknown", reply.authorAvatarUrl), Instant.parse(reply.createdAt), Instant.parse(reply.updatedAt)) },
+    locked = isLocked,
+    isOwner = isOwner,
 )

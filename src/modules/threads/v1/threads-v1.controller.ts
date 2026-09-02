@@ -7,12 +7,19 @@ import { PostsService } from '../../posts/posts.service';
 import { QueryThreadsV1Dto } from './query-threads-v1.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { OptionalAuth } from '../../../common/decorators/public.decorator';
+import { LikesService } from '../../likes/likes.service';
+import { BookmarksService } from '../../bookmarks/bookmarks.service';
 
 @ApiV1()
 @ApiTags('v1-threads')
 @Controller('v1/threads')
 export class ThreadsV1Controller {
-  constructor(private readonly threadAdapter: ThreadReadAdapterService, private readonly postsService?: PostsService) {}
+  constructor(
+    private readonly threadAdapter: ThreadReadAdapterService,
+    private readonly postsService?: PostsService,
+    private readonly likesService?: LikesService,
+    private readonly bookmarksService?: BookmarksService,
+  ) {}
 
   @Get()
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -46,7 +53,29 @@ export class ThreadsV1Controller {
     const thread = await this.threadAdapter.getThreadV1(id);
     if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, '讨论不存在或不可见', false);
     if (!this.postsService) return thread;
-    const detail = await this.postsService.findById(id, req?.user);
-    return { ...thread, ...detail };
+    const [detail, replies] = await Promise.all([
+      this.postsService.findById(id, req?.user),
+      this.postsService.getReplies(id, 50, 1),
+    ]);
+    const userId = req?.user?.id;
+    const viewer = userId && this.likesService && this.bookmarksService
+      ? {
+        liked: await this.likesService.isPostLiked(userId, id),
+        bookmarked: await this.bookmarksService.check(userId, id),
+      }
+      : null;
+    return {
+      ...thread,
+      ...detail,
+      viewer,
+      is_owner: userId === detail.user_id,
+      replies: replies.data,
+      reply_pagination: {
+        total: replies.total,
+        page: replies.page,
+        limit: replies.limit,
+        total_pages: replies.totalPages,
+      },
+    };
   }
 }

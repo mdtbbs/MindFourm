@@ -54,6 +54,13 @@ export class BookmarksService {
     }
   }
 
+  /** Idempotent V1 operation. Legacy DELETE /bookmarks/:id retains its 404 semantics. */
+  async ensureRemoved(userId: number, postId: number): Promise<void> {
+    const post = await this.postRepository.findOne({ where: { id: postId }, select: ['id'] });
+    if (!post) throw new NotFoundException(`Post with id ${postId} not found`);
+    await this.bookmarkRepository.delete({ user_id: userId, post_id: postId });
+  }
+
   async check(userId: number, postId: number): Promise<boolean> {
     const count = await this.bookmarkRepository.count({
       where: { user_id: userId, post_id: postId },

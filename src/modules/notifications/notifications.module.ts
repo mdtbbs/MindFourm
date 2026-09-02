@@ -7,6 +7,7 @@ import { EmailService } from './email.service';
 import { EmailQueueService } from './email-queue.service';
 import { TemplateService } from './template.service';
 import { Notification } from '../../entities/notification.entity';
+import { NotificationsV1Controller } from './v1/notifications-v1.controller';
 import { User } from '../../entities/user.entity';
 import { Post } from '../../entities/post.entity';
 import { Reply } from '../../entities/reply.entity';
@@ -26,6 +27,6 @@ import { SettingsModule } from '../settings/settings.module';
     TemplateService,
   ],
   exports: [NotificationsService, EmailService, EmailQueueService, TemplateService, NotificationStreamService],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, NotificationsV1Controller],
 })
 export class NotificationsModule {}

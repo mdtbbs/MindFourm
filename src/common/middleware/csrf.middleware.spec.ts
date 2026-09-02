@@ -56,4 +56,20 @@ describe('csrfMiddleware', () => {
     expect(res.status).not.toHaveBeenCalled();
     expect(next).toHaveBeenCalled();
   });
+
+  it('allows an Android bearer write without a browser cookie token', () => {
+    const req: any = { method: 'POST', path: '/api/v1/threads', headers: { authorization: 'Bearer mobile-token', 'x-client-platform': 'android' } };
+    const res = createResponse(); const next = jest.fn();
+    csrfMiddleware(req, res as any, next);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('keeps a browser write CSRF-protected when its platform marker is absent', () => {
+    const req: any = { method: 'POST', path: '/api/v1/threads', headers: { authorization: 'Bearer browser-token' } };
+    const res = createResponse(); const next = jest.fn();
+    csrfMiddleware(req, res as any, next);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+  });
 });

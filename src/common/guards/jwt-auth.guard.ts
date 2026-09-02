@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY, IS_OPTIONAL_AUTH_KEY } from '../decorators/public.decorator';
+import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
 import { AuthService } from '../../modules/auth/auth.service';
 import { BansService } from '../../modules/bans/bans.service';
 
@@ -43,11 +44,18 @@ export class JwtAuthGuard implements CanActivate {
     await this.bansService.assertUserNotBanned(user.id);
 
     request.user = user;
-    this.assertPhoneVerifiedForWrites(request);
+    const skipPhoneVerification = this.reflector.getAllAndOverride<boolean>(SKIP_PHONE_VERIFICATION_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    this.assertPhoneVerifiedForWrites(request, skipPhoneVerification);
     return true;
   }
 
-  private assertPhoneVerifiedForWrites(request: any): void {
+  private assertPhoneVerifiedForWrites(request: any, skipPhoneVerification = false): void {
+    if (skipPhoneVerification) {
+      return;
+    }
     const method = String(request.method || '').toUpperCase();
     if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
       return;
