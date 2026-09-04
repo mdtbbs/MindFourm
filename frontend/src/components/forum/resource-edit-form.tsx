@@ -120,6 +120,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         <TiptapEditor
           value={description}
           onChange={setDescription}
+          ariaLabel="资源短介绍"
           placeholder="会显示在资源列表标题下方，支持富文本和图片"
           minHeight="120px"
           compact
@@ -150,6 +151,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         <TiptapEditor
           value={content}
           onChange={setContent}
+          ariaLabel="资源正文"
           placeholder="使用富文本编辑器详细介绍资源内容、使用方式和注意事项，支持粘贴 / 拖放上传图片"
           minHeight="260px"
           imageUpload

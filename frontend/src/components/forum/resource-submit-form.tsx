@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { ExternalLink, Loader2, Upload } from 'lucide-react';
@@ -8,7 +8,8 @@ import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { ResourceCategory } from '@/types';
 import { useToastStore } from '@/store/toast-store';
-import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import DraftRecovery from '@/components/ui/draft-recovery';
 
 type ResourceType = 'upload' | 'external';
 
@@ -37,9 +38,13 @@ export default function ResourceSubmitForm() {
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [restoredDraft, setRestoredDraft] = useState(false);
+  const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
   const draft = useDraft('resource');
-  const draftValues = { resourceType, title, version, description, categoryId, isPublic, content, externalUrl };
+  const saveDraft = draft.save;
+  const draftValues = useMemo(
+    () => ({ resourceType, title, version, description, categoryId, isPublic, content, externalUrl }),
+    [resourceType, title, version, description, categoryId, isPublic, content, externalUrl],
+  );
   const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl);
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
@@ -48,7 +53,13 @@ export default function ResourceSubmitForm() {
   }, []);
 
   useEffect(() => {
-    const saved = draft.load();
+    setRecoverableDraft(draft.load());
+  // A draft is checked exactly once when this new-resource form mounts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const restoreDraft = () => {
+    const saved = recoverableDraft?.values;
     if (!saved) return;
     if (saved.resourceType === 'upload' || saved.resourceType === 'external') setResourceType(saved.resourceType);
     if (typeof saved.title === 'string') setTitle(saved.title);
@@ -58,20 +69,28 @@ export default function ResourceSubmitForm() {
     if (typeof saved.isPublic === 'boolean') setIsPublic(saved.isPublic);
     if (typeof saved.content === 'string') setContent(saved.content);
     if (typeof saved.externalUrl === 'string') setExternalUrl(saved.externalUrl);
-    setRestoredDraft(true);
-  // A draft is restored exactly once when this new-resource form mounts.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setRecoverableDraft(null);
+  };
+
+  const discardDraft = () => {
+    draft.clear();
+    setRecoverableDraft(null);
+  };
 
   useEffect(() => {
     const warnBeforeLeave = (event: BeforeUnloadEvent) => {
       if (!hasDraftContent || isSubmitting) return;
+      saveDraft(draftValues);
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', warnBeforeLeave);
     return () => window.removeEventListener('beforeunload', warnBeforeLeave);
-  }, [hasDraftContent, isSubmitting]);
+  }, [saveDraft, draftValues, hasDraftContent, isSubmitting]);
+
+  useEffect(() => {
+    if (hasDraftContent && recoverableDraft) setRecoverableDraft(null);
+  }, [hasDraftContent, recoverableDraft]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,10 +151,16 @@ export default function ResourceSubmitForm() {
       onSubmit={handleSubmit}
       className="space-y-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-6"
     >
-      {restoredDraft && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[var(--radius)] border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-700 dark:text-blue-300">
-          <span>已恢复上次未提交的资源草稿。文件需要重新选择。</span>
-          <button type="button" onClick={() => { draft.clear(); setRestoredDraft(false); }} className="font-medium underline">丢弃草稿</button>
+      {recoverableDraft && (
+        <DraftRecovery
+          savedAt={recoverableDraft.timestamp}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+        />
+      )}
+      {draft.saveError && (
+        <div className="rounded-[var(--radius)] border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">
+          {draft.saveError}
         </div>
       )}
       {error && (
@@ -227,6 +252,7 @@ export default function ResourceSubmitForm() {
         <TiptapEditor
           value={description}
           onChange={setDescription}
+          ariaLabel="资源短介绍"
           placeholder="会显示在资源列表标题下方，支持富文本和图片"
           minHeight="120px"
           compact
@@ -259,6 +285,7 @@ export default function ResourceSubmitForm() {
         <TiptapEditor
           value={content}
           onChange={setContent}
+          ariaLabel="资源正文"
           placeholder="使用富文本编辑器详细介绍资源内容、使用方式和注意事项，支持粘贴 / 拖放上传图片"
           minHeight="260px"
           imageUpload
@@ -331,6 +358,9 @@ export default function ResourceSubmitForm() {
           {resourceType === 'external' ? <ExternalLink className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
           {isSubmitting ? '提交中...' : '提交资源'}
         </button>
+        {draft.lastSavedAt && hasDraftContent && (
+          <span className="self-center text-xs text-[var(--text-muted)]">已保存到此设备</span>
+        )}
       </div>
     </form>
   );

@@ -33,6 +33,7 @@ export async function generateMetadata({
     description: "MDTBBS Mindustry 资源中心，浏览 Mod、地图、蓝图、存档、游戏版本与实用工具。",
     path: "/resources",
     brandInfo,
+    openGraphImage: settings.seo_og_image,
   });
 
   // Filter, sort, tag, cursor and search combinations are useful to visitors but

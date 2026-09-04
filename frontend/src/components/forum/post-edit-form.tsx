@@ -149,6 +149,8 @@ export default function PostEditForm({ post }: PostEditFormProps) {
           <TiptapEditor
             value={content}
             onChange={setContent}
+            id="post-content"
+            ariaLabel="帖子正文"
             placeholder="使用富文本编辑器编辑帖子内容..."
             minHeight="18rem"
             imageUpload

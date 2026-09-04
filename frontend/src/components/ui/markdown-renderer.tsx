@@ -43,6 +43,17 @@ export default function MarkdownRenderer({ content, fallback, className, mode = 
         components={{
           h2: ({ children }) => <h2 id={headingId(children)}>{children}</h2>,
           h3: ({ children }) => <h3 id={headingId(children)}>{children}</h3>,
+          // Content images do not affect the initial route shell. Decoding them off
+          // the main rendering path reduces jank on long threads and resource pages.
+          img: ({ alt, src, node: _node, ...props }) => (
+            <img
+              {...props}
+              src={typeof src === 'string' ? src : undefined}
+              alt={alt || ''}
+              loading="lazy"
+              decoding="async"
+            />
+          ),
         }}
       >
         {normalizedContent}

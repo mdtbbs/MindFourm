@@ -6,9 +6,7 @@ import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
 import ImageExt from "@tiptap/extension-image";
 import Placeholder from "@tiptap/extension-placeholder";
-import Underline from "@tiptap/extension-underline";
 import LinkExt from "@tiptap/extension-link";
-import TextAlign from "@tiptap/extension-text-align";
 import CharacterCount from "@tiptap/extension-character-count";
 import { Table as TableExtension } from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
@@ -18,12 +16,12 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { common, createLowlight } from "lowlight";
 import type { Editor } from "@tiptap/react";
 import { uploadImage, isUploadableImage } from "@/lib/tiptap/upload-image";
+import { userApi } from "@/lib/api/client";
 import { useToastStore } from "@/store/toast-store";
 import { normalizeEditorContent } from "@/lib/editor-content";
 import {
   Bold,
   Italic,
-  Underline as UnderlineIcon,
   Strikethrough,
   Heading1,
   Heading2,
@@ -38,9 +36,6 @@ import {
   Image as ImageIcon,
   Table as TableIcon,
   Minus,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
   Undo2,
   Redo2,
   CodeXml,
@@ -64,7 +59,25 @@ interface TiptapEditorProps {
   imageUpload?: boolean;
   /** Applied to the editable surface and source textarea for E2E/tests. */
   testId?: string;
+  /** Stable ID for the editable surface, so an external <label> can target it. */
+  id?: string;
+  /** Accessible name when there is no external label. */
+  ariaLabel?: string;
   className?: string;
+}
+
+type MentionUser = Awaited<ReturnType<typeof userApi.search>>[number];
+
+interface MentionSuggestion {
+  query: string;
+  from: number;
+  top: number;
+  left: number;
+}
+
+interface FailedImageUpload {
+  file: File;
+  message: string;
 }
 
 /* ─── Main component ────────────────────────────────────── */
@@ -77,11 +90,19 @@ export default function TiptapEditor({
   compact = false,
   imageUpload = false,
   testId,
+  id,
+  ariaLabel = "富文本编辑器",
   className = "",
 }: TiptapEditorProps) {
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number; filename: string } | null>(null);
+  const [failedUploads, setFailedUploads] = useState<FailedImageUpload[]>([]);
   const [sourceMode, setSourceMode] = useState(false);
   const [sourceValue, setSourceValue] = useState(value);
+  const [mention, setMention] = useState<MentionSuggestion | null>(null);
+  const [mentionUsers, setMentionUsers] = useState<MentionUser[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const showError = useToastStore((s) => s.showError);
   // Track whether a value change comes from the editor itself (to avoid re-setting content)
@@ -91,31 +112,37 @@ export default function TiptapEditor({
   // but the actual handler is defined later (depends on `editor`). The ref bridges
   // the gap so paste/drop always calls the latest version.
   const imageUploadFnRef = useRef<(files: File[]) => Promise<void>>();
+  const imageUploadQueueRef = useRef<File[]>([]);
+  const imageUploadProcessingRef = useRef(false);
+  const mentionUpdateFnRef = useRef<(activeEditor: Editor) => void>();
+  const mentionKeydownFnRef = useRef<(event: KeyboardEvent) => boolean>();
+  const mentionRequestRef = useRef(0);
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         codeBlock: false, // replaced by CodeBlockLowlight
-        // StarterKit v3 includes link and underline — disable to avoid duplicates
-        // since we add our own configured versions below.
+        // StarterKit v3 includes link — disable it because we add a configured version below.
         link: false,
-        underline: false,
       }),
       Markdown.configure({
         html: false,
         transformPastedText: true,
         transformCopiedText: true,
       }),
-      ImageExt.configure({ inline: true, allowBase64: true }),
+      // Persist uploaded URLs only. Base64 image data can make a post enormous and
+      // is not accepted by the server-side Markdown sanitizer in any case.
+      ImageExt.configure({ inline: true, allowBase64: false }),
       Placeholder.configure({ placeholder }),
-      Underline,
       LinkExt.configure({
         openOnClick: false,
         HTMLAttributes: { class: "editor-link" },
       }),
-      TextAlign.configure({ types: ["heading", "paragraph"] }),
       CharacterCount,
-      TableExtension.configure({ resizable: true }),
+      // GFM preserves table text, headers and rows, but not layout geometry.
+      // Disabling resize avoids presenting column-width editing that cannot survive
+      // a Markdown save and subsequent visual-editor reload.
+      TableExtension.configure({ resizable: false }),
       TableRow,
       TableCell,
       TableHeader,
@@ -133,9 +160,17 @@ export default function TiptapEditor({
       queueMicrotask(() => {
         internalUpdateRef.current = false;
       });
+      mentionUpdateFnRef.current?.(e);
+    },
+    onSelectionUpdate({ editor: e }) {
+      mentionUpdateFnRef.current?.(e);
     },
     editorProps: {
-      attributes: testId ? { "data-testid": testId } : {},
+      attributes: {
+        ...(testId ? { "data-testid": testId } : {}),
+        ...(id ? { id } : {}),
+        "aria-label": ariaLabel,
+      },
       handlePaste(_view, event) {
         if (!imageUpload) return false;
         const files = event.clipboardData?.files;
@@ -155,6 +190,9 @@ export default function TiptapEditor({
         event.preventDefault();
         imageUploadFnRef.current?.(images);
         return true;
+      },
+      handleKeyDown(_view, event) {
+        return mentionKeydownFnRef.current?.(event) ?? false;
       },
     },
   });
@@ -183,9 +221,24 @@ export default function TiptapEditor({
   const handleImageUploads = useCallback(
     async (files: File[]) => {
       if (!editor) return;
+      const uploadableFiles = files.filter(isUploadableImage);
+      if (!uploadableFiles.length) {
+        showError("请选择 PNG、JPG、GIF 或 WebP 图片（单张不超过 2MB）");
+        return;
+      }
+
+      imageUploadQueueRef.current.push(...uploadableFiles);
+      if (imageUploadProcessingRef.current) return;
+
+      imageUploadProcessingRef.current = true;
       setUploading(true);
+      let processed = 0;
       try {
-        for (const file of files) {
+        while (imageUploadQueueRef.current.length) {
+          const file = imageUploadQueueRef.current.shift();
+          if (!file) continue;
+          const total = processed + imageUploadQueueRef.current.length + 1;
+          setUploadProgress({ current: processed + 1, total, filename: file.name });
           try {
             const result = await uploadImage(file);
             editor
@@ -194,11 +247,16 @@ export default function TiptapEditor({
               .setImage({ src: result.url, alt: result.alt })
               .run();
           } catch (err) {
-            showError(err instanceof Error ? err.message : "图片上传失败");
+            const message = err instanceof Error ? err.message : "图片上传失败";
+            setFailedUploads((previous) => [...previous, { file, message }]);
+            showError(`${file.name}：${message}`);
           }
+          processed += 1;
         }
       } finally {
+        imageUploadProcessingRef.current = false;
         setUploading(false);
+        setUploadProgress(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
       }
     },
@@ -208,9 +266,125 @@ export default function TiptapEditor({
   // Keep the ref in sync so editorProps paste/drop handlers always call the latest version
   imageUploadFnRef.current = handleImageUploads;
 
+  const retryFailedImageUploads = useCallback(() => {
+    const files = failedUploads.map(({ file }) => file);
+    setFailedUploads([]);
+    if (files.length) void handleImageUploads(files);
+  }, [failedUploads, handleImageUploads]);
+
   const triggerImagePicker = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  /* ── @ user suggestions ─────────────────────────────── */
+
+  const updateMentionSuggestions = useCallback((activeEditor: Editor) => {
+    const { from, empty } = activeEditor.state.selection;
+    if (!empty) {
+      setMention(null);
+      return;
+    }
+
+    // The server recognises `@(\\w+)`, so only offer names that will also produce
+    // a notification after the Markdown is submitted.
+    const textBeforeCursor = activeEditor.state.doc.textBetween(Math.max(0, from - 64), from, "\u0000", "\u0000");
+    const match = /(?:^|\s)@([A-Za-z0-9_]{1,30})$/.exec(textBeforeCursor);
+    if (!match) {
+      setMention(null);
+      return;
+    }
+
+    const coords = activeEditor.view.coordsAtPos(from);
+    const nextMention: MentionSuggestion = {
+      query: match[1],
+      from: from - match[1].length - 1,
+      // Use viewport coordinates so the menu is not clipped by the editor's
+      // rounded/overflow-hidden container.
+      top: coords.bottom + 4,
+      left: Math.max(8, Math.min(coords.left, window.innerWidth - 268)),
+    };
+    setMention((previous) => (
+      previous
+      && previous.query === nextMention.query
+      && previous.from === nextMention.from
+      && previous.top === nextMention.top
+      && previous.left === nextMention.left
+        ? previous
+        : nextMention
+    ));
+  }, []);
+
+  mentionUpdateFnRef.current = updateMentionSuggestions;
+
+  useEffect(() => {
+    if (!mention?.query) {
+      setMentionUsers([]);
+      setMentionLoading(false);
+      return;
+    }
+    const requestId = ++mentionRequestRef.current;
+    setMentionLoading(true);
+    const timer = window.setTimeout(() => {
+      userApi.search(mention.query, 6)
+        .then((users) => {
+          if (mentionRequestRef.current === requestId) {
+            setMentionUsers(users.filter((user) => Boolean(user.username)));
+            setMentionLoading(false);
+          }
+        })
+        .catch(() => {
+          if (mentionRequestRef.current === requestId) {
+            setMentionUsers([]);
+            setMentionLoading(false);
+          }
+        });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [mention?.query]);
+
+  useEffect(() => {
+    setActiveMentionIndex(0);
+  }, [mention?.query]);
+
+  const selectMentionUser = useCallback((user: MentionUser) => {
+    if (!editor || !mention || !user.username) return;
+    const to = editor.state.selection.from;
+    if (to < mention.from) return;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from: mention.from, to }, `@${user.username} `)
+      .run();
+    setMention(null);
+  }, [editor, mention]);
+
+  const handleMentionKeydown = useCallback((event: KeyboardEvent): boolean => {
+    if (!mention) return false;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMention(null);
+      return true;
+    }
+    if (!mentionUsers.length) return false;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveMentionIndex((index) => (index + 1) % mentionUsers.length);
+      return true;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveMentionIndex((index) => (index - 1 + mentionUsers.length) % mentionUsers.length);
+      return true;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      selectMentionUser(mentionUsers[activeMentionIndex]);
+      return true;
+    }
+    return false;
+  }, [activeMentionIndex, mention, mentionUsers, selectMentionUser]);
+
+  mentionKeydownFnRef.current = handleMentionKeydown;
 
   /* ── Source mode toggle ──────────────────────────────── */
 
@@ -310,7 +484,9 @@ export default function TiptapEditor({
             onChange(e.target.value);
           }}
           placeholder={placeholder}
+          id={id}
           data-testid={testId}
+          aria-label={ariaLabel}
           className="tiptap-source"
           style={{ minHeight }}
         />
@@ -324,15 +500,53 @@ export default function TiptapEditor({
 
       {/* ── Character count ─────────────────────────────── */}
       {!sourceMode && (
-        <div className="tiptap-status">
+        <div className="tiptap-status" aria-live="polite">
           {uploading && (
             <span className="tiptap-status-uploading">
-              <Loader2 className="w-3 h-3 animate-spin" /> 图片上传中…
+              <Loader2 className="w-3 h-3 animate-spin" />
+              {uploadProgress ? `正在上传 ${uploadProgress.current}/${uploadProgress.total}：${uploadProgress.filename}` : "图片上传中…"}
             </span>
+          )}
+          {!uploading && failedUploads.length > 0 && (
+            <button type="button" onClick={retryFailedImageUploads} className="tiptap-upload-retry">
+              重试失败的 {failedUploads.length} 张图片
+            </button>
           )}
           <span className="tiptap-status-count">
             {editor.storage.characterCount?.characters() ?? 0} 字符
           </span>
+          <span
+            className="tiptap-status-count"
+            title="保存为标准 Markdown；表格仅支持标准 GFM 表格，不保存下划线、对齐或列宽样式。"
+          >
+            Markdown 兼容模式
+          </span>
+        </div>
+      )}
+
+      {mention && !sourceMode && (
+        <div
+          className="tiptap-mention-menu"
+          role="listbox"
+          aria-label={`提及用户：${mention.query}`}
+          style={{ top: mention.top, left: mention.left }}
+        >
+          {mentionUsers.length > 0 ? mentionUsers.map((user, index) => (
+            <button
+              key={user.id}
+              type="button"
+              role="option"
+              aria-selected={index === activeMentionIndex}
+              className={`tiptap-mention-option ${index === activeMentionIndex ? "tiptap-mention-option-active" : ""}`}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => selectMentionUser(user)}
+            >
+              {user.avatar_url ? <img src={user.avatar_url} alt="" className="tiptap-mention-avatar" /> : <span className="tiptap-mention-avatar tiptap-mention-avatar-fallback" aria-hidden="true">@</span>}
+              <span>@{user.username}</span>
+            </button>
+          )) : (
+            <span className="tiptap-mention-empty">{mentionLoading ? "正在查找用户…" : "没有匹配的用户"}</span>
+          )}
         </div>
       )}
 
@@ -374,7 +588,7 @@ function EditorToolbar({
 }: ToolbarProps) {
   if (sourceMode) {
     return (
-      <div className="tiptap-toolbar">
+      <div className="tiptap-toolbar" role="toolbar" aria-label="编辑器工具栏">
         <TBtn
           active={false}
           onClick={onToggleSourceMode}
@@ -389,7 +603,7 @@ function EditorToolbar({
   const isLinkActive = editor.isActive("link");
 
   return (
-    <div className="tiptap-toolbar">
+    <div className="tiptap-toolbar" role="toolbar" aria-label="编辑器工具栏">
       {/* Undo / Redo */}
       {!compact && (
         <>
@@ -426,15 +640,6 @@ function EditorToolbar({
       >
         <Italic className="w-4 h-4" />
       </TBtn>
-      {!compact && (
-        <TBtn
-          active={editor.isActive("underline")}
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          title="下划线 (Ctrl+U)"
-        >
-          <UnderlineIcon className="w-4 h-4" />
-        </TBtn>
-      )}
       <TBtn
         active={editor.isActive("strike")}
         onClick={() => editor.chain().focus().toggleStrike().run()}
@@ -574,47 +779,22 @@ function EditorToolbar({
               .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
               .run()
           }
-          title="表格"
+          title="插入标准 GFM 表格"
         >
           <TableIcon className="w-4 h-4" />
         </TBtn>
       )}
 
-      {!compact && (
-        <>
-          <Divider />
-          {/* Text align */}
-          <TBtn
-            active={editor.isActive({ textAlign: "left" })}
-            onClick={() => editor.chain().focus().setTextAlign("left").run()}
-            title="左对齐"
-          >
-            <AlignLeft className="w-4 h-4" />
-          </TBtn>
-          <TBtn
-            active={editor.isActive({ textAlign: "center" })}
-            onClick={() => editor.chain().focus().setTextAlign("center").run()}
-            title="居中"
-          >
-            <AlignCenter className="w-4 h-4" />
-          </TBtn>
-          <TBtn
-            active={editor.isActive({ textAlign: "right" })}
-            onClick={() => editor.chain().focus().setTextAlign("right").run()}
-            title="右对齐"
-          >
-            <AlignRight className="w-4 h-4" />
-          </TBtn>
-          <Divider />
-          <TBtn
-            active={false}
-            onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            title="分割线"
-          >
-            <Minus className="w-4 h-4" />
-          </TBtn>
-        </>
-      )}
+      {!compact && <>
+        <Divider />
+        <TBtn
+          active={false}
+          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          title="分割线"
+        >
+          <Minus className="w-4 h-4" />
+        </TBtn>
+      </>}
 
       {/* Spacer + source toggle */}
       <div className="flex-1" />
@@ -648,6 +828,7 @@ function TBtn({
     <button
       type="button"
       title={title}
+      aria-label={title}
       onClick={onClick}
       disabled={disabled}
       className={`tiptap-btn ${active ? "tiptap-btn-active" : ""}`}
@@ -690,10 +871,18 @@ function LinkDialog({
   }, [onApply, onClose]);
 
   return (
-    <div className="tiptap-link-dialog">
-      <div className="tiptap-link-dialog-inner">
+    <div className="tiptap-link-dialog" role="presentation">
+      <div
+        className="tiptap-link-dialog-inner"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="tiptap-link-dialog-title"
+      >
+        <h2 id="tiptap-link-dialog-title" className="sr-only">插入或编辑链接</h2>
+        <label htmlFor="tiptap-link-url" className="sr-only">链接地址</label>
         <input
           ref={inputRef}
+          id="tiptap-link-url"
           type="url"
           value={url}
           onChange={(e) => onUrlChange(e.target.value)}

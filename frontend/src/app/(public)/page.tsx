@@ -54,6 +54,7 @@ export async function generateMetadata(): Promise<Metadata> {
     title: "像素工厂中文论坛（Mindustry）- Mod、地图、蓝图与联机社区",
     description: "MDTBBS 是面向 Mindustry（像素工厂）玩家的中文社区，提供 Mod、地图、蓝图、存档、游戏版本、联机交流、教程与资源分享。",
     brandInfo: resolveBrand(settings),
+    openGraphImage: settings.seo_og_image,
   });
 }
 

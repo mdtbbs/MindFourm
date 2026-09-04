@@ -2,7 +2,7 @@
  * Shared Page Metadata Helper
  *
  * Generates consistent Next.js Metadata for all pages. Centralises the
- * title-suffix convention, Open Graph / Twitter tags and favicon resolution
+ * title-suffix convention, Open Graph tags and favicon resolution
  * so that individual pages never have to repeat the same boilerplate or
  * hard-code the site name.
  *
@@ -17,6 +17,8 @@ export interface PageMetadataOptions {
   description?: string;
   path?: string;
   brandInfo: BrandInfo;
+  /** Admin-configured social sharing image, falling back to the site logo. */
+  openGraphImage?: string;
 }
 
 export function generatePageMetadata({
@@ -24,17 +26,19 @@ export function generatePageMetadata({
   description,
   path = '/',
   brandInfo,
+  openGraphImage,
 }: PageMetadataOptions): Metadata {
   const fullTitle = `${title} | ${brandInfo.siteName}`;
   const finalDescription = description || brandInfo.description || '';
 
   const favicon = brandInfo.faviconUrl || '/favicon.ico';
-  const images = brandInfo.logoUrl ? [brandInfo.logoUrl] : [];
+  const socialImage = openGraphImage?.trim() || brandInfo.logoUrl;
+  const images = socialImage ? [socialImage] : [];
 
   // NOTE: `title` is returned bare — the root layout's `title.template` appends
   // the site-name suffix automatically. Passing `fullTitle` here produced
   // "标题 | MindForum | MindForum" because the suffix was applied twice.
-  // OG/Twitter are not templated, so they still need the full title.
+  // Open Graph titles are not templated, so they still need the full title.
   return {
     title,
     description: finalDescription,
@@ -52,11 +56,6 @@ export function generatePageMetadata({
       images,
       type: 'website',
       url: path,
-    },
-    twitter: {
-      card: 'summary',
-      title: fullTitle,
-      description: finalDescription,
     },
   };
 }

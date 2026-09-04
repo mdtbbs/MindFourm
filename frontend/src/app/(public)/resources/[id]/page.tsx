@@ -42,12 +42,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
       url: canonical,
       images: resource.metadata?.cover_image_url ? [resource.metadata.cover_image_url] : undefined,
     },
-    twitter: {
-      card: resource.metadata?.cover_image_url ? 'summary_large_image' : 'summary',
-      title: `${resource.title} - Mindustry ${kind}`,
-      description,
-      images: resource.metadata?.cover_image_url ? [resource.metadata.cover_image_url] : undefined,
-    },
   };
 }
 

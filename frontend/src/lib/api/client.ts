@@ -695,6 +695,8 @@ export const adminApi = {
     request<{ message: string }>('/api/admin/cleanup/logs', { method: 'POST' }),
   cleanupSoftDeleted: () =>
     request<{ message: string }>('/api/admin/cleanup/soft-deleted', { method: 'POST' }),
+  cleanupPublicImages: () =>
+    request<{ message: string; deleted: number; keptReferenced: number; keptRecent: number; failed: number }>('/api/admin/cleanup/public-images', { method: 'POST' }),
   listExternalApiKeys: (params?: { page?: number; limit?: number; enabled?: boolean }) =>
     request<any>(`/api/admin/external-api/keys${buildQueryString({
       page: params?.page,

@@ -6,7 +6,8 @@ import { Reply } from '@/types';
 import Button from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import Alert from '@/components/ui/alert';
-import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import DraftRecovery from '@/components/ui/draft-recovery';
 import { useToastStore } from '@/store/toast-store';
 
 // TipTap editor is client-only
@@ -40,19 +41,46 @@ export default function ReplyEditor({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const showSuccess = useToastStore((state) => state.showSuccess);
 
   const replyId = quoteReply?.id ?? replyToReply?.id;
   const draft = useDraft('reply', replyId ? `r-${replyId}` : `p-${postId}`);
   const loadDraft = draft.load;
-  useDraftAutoSave({ content }, draft.save, !!content);
+  const saveDraft = draft.save;
+  useDraftAutoSave({ content }, draft.save, !!content && !isSubmitting);
 
   // Restore the draft when the editor mounts or switches target (quote/reply-to).
   useEffect(() => {
-    const saved = loadDraft();
-    if (saved?.content) setContent(saved.content as string);
+    setRecoverableDraft(loadDraft());
   }, [loadDraft]);
+
+  useEffect(() => {
+    const persistBeforeLeave = (event: BeforeUnloadEvent) => {
+      if (!content.trim() || isSubmitting) return;
+      saveDraft({ content });
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', persistBeforeLeave);
+    return () => window.removeEventListener('beforeunload', persistBeforeLeave);
+  }, [content, saveDraft, isSubmitting]);
+
+  useEffect(() => {
+    if (content.trim() && recoverableDraft) setRecoverableDraft(null);
+  }, [content, recoverableDraft]);
+
+  const restoreDraft = () => {
+    const savedContent = recoverableDraft?.values.content;
+    if (typeof savedContent === 'string') setContent(savedContent);
+    setRecoverableDraft(null);
+  };
+
+  const discardDraft = () => {
+    draft.clear();
+    setRecoverableDraft(null);
+  };
 
   // The composer sits below a paginated reply list, so bring it into view when a
   // quote/reply target is picked — otherwise the buttons look like they did nothing.
@@ -116,17 +144,30 @@ export default function ReplyEditor({
 
         {error && <Alert type="error" message={error} />}
         {success && <Alert type="success" message={success} className="mt-3" />}
+        {recoverableDraft && (
+          <DraftRecovery
+            savedAt={recoverableDraft.timestamp}
+            onRestore={restoreDraft}
+            onDiscard={discardDraft}
+            className="mb-3"
+          />
+        )}
+        {draft.saveError && <Alert type="error" message={draft.saveError} className="mt-3" />}
 
         <TiptapEditor
           value={content}
           onChange={setContent}
+          ariaLabel="回复正文"
           placeholder="使用富文本编辑器编写回复，支持粘贴 / 拖放上传图片..."
           minHeight="120px"
           compact
           imageUpload
         />
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex items-center justify-end gap-3">
+          {draft.lastSavedAt && content.trim() && (
+            <span className="text-xs text-surface-400">已自动保存到此设备</span>
+          )}
           <Button
             type="submit"
             disabled={isSubmitting || !content.trim()}

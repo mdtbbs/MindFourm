@@ -16,7 +16,7 @@ export function getSiteUrl(): string | null {
 /**
  * `metadataBase` for the Next.js Metadata API.
  *
- * Without it, relative OG/Twitter image paths resolve against an unknown origin and
+ * Without it, relative Open Graph image paths resolve against an unknown origin and
  * Next emits a build warning. `seo_og_image` is admin-editable and may well be a
  * relative path.
  */

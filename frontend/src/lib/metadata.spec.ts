@@ -2,7 +2,7 @@
  * Page Metadata Helper spec
  *
  * Verifies that generatePageMetadata() produces consistent metadata with
- * site-name suffixes, Open Graph tags, Twitter cards and favicon fallbacks.
+ * site-name suffixes, Open Graph tags and favicon fallbacks.
  *
  * This spec runs as a plain Node script (no Jest/RTL setup needed), following
  * the same IIFE + assert pattern as `site-navigation.spec.ts` and
@@ -43,7 +43,7 @@ const brandInfo: BrandInfo = {
 };
 
 // ────────────────────────────────────────────────────────────────────────────
-// Test: should generate metadata with site name suffix
+// Test: child metadata must stay bare so the root title template adds the suffix once
 // ────────────────────────────────────────────────────────────────────────────
 (function testTitleWithSiteNameSuffix() {
   const metadata = generatePageMetadata({
@@ -51,7 +51,7 @@ const brandInfo: BrandInfo = {
     brandInfo,
   });
 
-  assertEqual(metadata.title, 'Home | Test Forum', 'title should include site name suffix');
+  assertEqual(metadata.title, 'Home', 'title should stay bare for the root title template');
 })();
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -108,19 +108,16 @@ const brandInfo: BrandInfo = {
 })();
 
 // ────────────────────────────────────────────────────────────────────────────
-// Test: should include Twitter card tags
+// Test: an admin-configured social image should override the logo on all cards
 // ────────────────────────────────────────────────────────────────────────────
-(function testTwitterCardTags() {
+(function testConfiguredSocialImageOverridesLogo() {
   const metadata = generatePageMetadata({
     title: 'Home',
     brandInfo,
+    openGraphImage: 'https://example.com/social-card.png',
   });
 
-  assert(metadata.twitter !== undefined, 'twitter should be defined');
-  const twitter = metadata.twitter as Record<string, unknown>;
-  assertEqual(twitter.card, 'summary', 'twitter card should be summary');
-  assertEqual(twitter.title, 'Home | Test Forum', 'twitter title should match full title');
-  assertEqual(twitter.description, 'A test forum', 'twitter description should match brand description');
+  assertDeepEqual(metadata.openGraph!.images, ['https://example.com/social-card.png'], 'OG should prefer the configured social image');
 })();
 
 // ────────────────────────────────────────────────────────────────────────────

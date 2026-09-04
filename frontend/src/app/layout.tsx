@@ -20,7 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = brand.description;
 
   const meta: Metadata = {
-    // Required for relative OG/Twitter images to resolve, and for `alternates.canonical`
+    // Required for relative Open Graph images to resolve, and for `alternates.canonical`
     // on child pages to produce absolute URLs.
     metadataBase: getMetadataBase(),
     title: {
@@ -47,12 +47,6 @@ export async function generateMetadata(): Promise<Metadata> {
       url: '/',
       locale: 'zh_CN',
     },
-    twitter: {
-      // Upgrades from the small `summary` card Twitter falls back to without this.
-      card: settings.seo_og_image ? 'summary_large_image' : 'summary',
-      title: siteName,
-      description,
-    },
   };
 
   const faviconUrl = brand.faviconUrl || '/favicon.ico';
@@ -64,7 +58,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
   if (settings.seo_og_image) {
     meta.openGraph = { ...meta.openGraph, images: [settings.seo_og_image] };
-    meta.twitter = { ...meta.twitter, images: [settings.seo_og_image] };
   }
 
   return meta;

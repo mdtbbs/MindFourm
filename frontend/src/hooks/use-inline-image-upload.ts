@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState, useCallback } from 'react';
-import { attachmentApi } from '@/lib/api/client';
+import { isUploadableImage, uploadImage } from '@/lib/tiptap/upload-image';
 
 interface UseInlineImageUploadOptions {
   /** Insert markdown at the cursor position. Called once per uploaded image. */
@@ -20,16 +20,13 @@ interface UseInlineImageUploadReturn {
   handleDrop: (event: React.DragEvent) => void;
 }
 
-const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
-
 /**
  * Inline image upload for Markdown editors.
  *
- * Uploads pasted, dropped, or picked image files to the attachment endpoint,
- * then calls `insertMarkdown` with a `![filename](url)` snippet so the editor
- * can place it at the cursor. Non-image files are silently ignored so the
- * surrounding text edit is unaffected.
+ * Images can be selected before their parent post/reply exists, so this must use
+ * the public editor-image endpoint rather than moderated attachments (which
+ * require a post_id or reply_id). Non-image files are ignored so surrounding
+ * text editing is unaffected.
  */
 export default function useInlineImageUpload({
   insertMarkdown,
@@ -39,23 +36,14 @@ export default function useInlineImageUpload({
 
   const uploadFiles = useCallback(
     async (files: File[]) => {
-      const images = files.filter(
-        (f) => IMAGE_TYPES.has(f.type) && f.size <= MAX_FILE_SIZE,
-      );
+      const images = files.filter(isUploadableImage);
       if (images.length === 0) return;
 
       setUploading(true);
       try {
         for (const file of images) {
-          const formData = new FormData();
-          formData.append('files', file);
-          const result = await attachmentApi.upload(formData);
-          const attachments = Array.isArray(result) ? result : [result];
-          if (attachments.length > 0 && attachments[0].id) {
-            const url = attachmentApi.download(attachments[0].id);
-            const alt = attachments[0].file_name || file.name || 'image';
-            insertMarkdown(`![${alt}](${url})`);
-          }
+          const result = await uploadImage(file);
+          insertMarkdown(`![${result.alt}](${result.url})`);
         }
       } catch (err) {
         console.error('Inline image upload failed:', err);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
@@ -11,7 +11,8 @@ import Button from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import Alert from '@/components/ui/alert';
-import { useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
+import DraftRecovery from '@/components/ui/draft-recovery';
 import { Send, Save, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
 
@@ -50,11 +51,14 @@ export default function PostForm() {
   // Validation errors
   const [titleError, setTitleError] = useState('');
   const [contentError, setContentError] = useState('');
+  const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
 
   // Draft
   const draft = useDraft('post');
-  const draftValues = { title, content, categoryId, tagsInput, status };
-  useDraftAutoSave(draftValues, draft.save);
+  const saveDraft = draft.save;
+  const draftValues = useMemo(() => ({ title, content, categoryId, tagsInput, status }), [title, content, categoryId, tagsInput, status]);
+  const hasDraftContent = Boolean(title.trim() || content.trim() || categoryId || tagsInput.trim() || status === 'draft');
+  useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
   // Load categories & tags
   useEffect(() => {
@@ -69,16 +73,42 @@ export default function PostForm() {
 
   // Restore draft
   useEffect(() => {
-    const saved = draft.load();
-    if (saved) {
-      if (saved.title) setTitle(saved.title as string);
-      if (saved.content) setContent(saved.content as string);
-      if (saved.categoryId) setCategoryId(saved.categoryId as string);
-      if (saved.tagsInput) setTagsInput(saved.tagsInput as string);
-      if (saved.status) setStatus(saved.status as 'draft' | 'published');
-    }
+    setRecoverableDraft(draft.load());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const persistBeforeLeave = (event: BeforeUnloadEvent) => {
+      if (!hasDraftContent || isSubmitting) return;
+      saveDraft(draftValues);
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', persistBeforeLeave);
+    return () => window.removeEventListener('beforeunload', persistBeforeLeave);
+  }, [saveDraft, draftValues, hasDraftContent, isSubmitting]);
+
+  // Starting a new post is an explicit choice too; never leave an old recovery
+  // button around that could overwrite what the user has just typed.
+  useEffect(() => {
+    if (hasDraftContent && recoverableDraft) setRecoverableDraft(null);
+  }, [hasDraftContent, recoverableDraft]);
+
+  const restoreDraft = () => {
+    const saved = recoverableDraft?.values;
+    if (!saved) return;
+    if (typeof saved.title === 'string') setTitle(saved.title);
+    if (typeof saved.content === 'string') setContent(saved.content);
+    if (typeof saved.categoryId === 'string') setCategoryId(saved.categoryId);
+    if (typeof saved.tagsInput === 'string') setTagsInput(saved.tagsInput);
+    if (saved.status === 'draft' || saved.status === 'published') setStatus(saved.status);
+    setRecoverableDraft(null);
+  };
+
+  const discardDraft = () => {
+    draft.clear();
+    setRecoverableDraft(null);
+  };
 
   // ── Helpers ──────────────────────────────────────────────
   const parseTags = (): string[] =>
@@ -180,9 +210,15 @@ export default function PostForm() {
 
       {/* ── Alerts ──────────────────────────────────── */}
       {error && <Alert type="error" message={error} className="mb-4" />}
-      {draft.hasDraft && (
-        <Alert type="info" message="已自动恢复上次未保存的草稿" className="mb-4" />
+      {recoverableDraft && (
+        <DraftRecovery
+          savedAt={recoverableDraft.timestamp}
+          onRestore={restoreDraft}
+          onDiscard={discardDraft}
+          className="mb-4"
+        />
       )}
+      {draft.saveError && <Alert type="error" message={draft.saveError} className="mb-4" />}
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
@@ -207,6 +243,7 @@ export default function PostForm() {
           <TiptapEditor
             value={content}
             onChange={setContent}
+            ariaLabel="帖子正文"
             placeholder="使用富文本编辑器编写帖子内容，支持粘贴 / 拖放上传图片..."
             minHeight="280px"
             imageUpload
@@ -273,12 +310,12 @@ export default function PostForm() {
 
         {/* ── Actions ───────────────────────────────── */}
         <div className="flex items-center justify-between pt-4 border-t border-surface-200 dark:border-gray-700">
-          <Button type="button" variant="secondary" onClick={() => router.back()}>
+          <Button type="button" variant="secondary" onClick={() => { if (hasDraftContent) draft.save(draftValues); router.back(); }}>
             取消
           </Button>
           <div className="flex gap-3 items-center">
             <Button type="button" variant="secondary"
-              onClick={() => { draft.save(draftValues); }}>
+              onClick={() => { if (draft.save(draftValues)) showSuccess('已保存到此设备'); }}>
               <Save className="w-4 h-4 inline mr-1" />
               存草稿
             </Button>
@@ -300,6 +337,9 @@ export default function PostForm() {
                 </>
               )}
             </Button>
+            {draft.lastSavedAt && hasDraftContent && (
+              <span className="text-xs text-surface-400">已保存到此设备</span>
+            )}
           </div>
         </div>
       </form>

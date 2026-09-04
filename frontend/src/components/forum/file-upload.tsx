@@ -44,6 +44,15 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
   const [error, setError] = useState<string | null>(null);
 
   const handleFiles = async (files: FileList) => {
+    // Attachments are intentionally moderated and must belong to an existing
+    // post or reply. Images while composing belong in the rich-text editor,
+    // which uses /api/uploads/images instead.
+    if (postId === undefined && replyId === undefined) {
+      setError('请先保存帖子或回复后再上传附件；正文图片请使用编辑器中的图片按钮。');
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+
     const selected = Array.from(files);
     const rejectedType = selected.filter(
       (f) => !ALLOWED_TYPES.includes(f.type) && !hasAllowedExtension(f.name),

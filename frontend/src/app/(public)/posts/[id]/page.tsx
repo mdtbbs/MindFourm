@@ -93,16 +93,10 @@ export async function generateMetadata({
       type: 'article',
       url: canonical,
     },
-    twitter: {
-      card: settings.seo_og_image ? 'summary_large_image' : 'summary',
-      title: post.title,
-      description,
-    },
   };
 
   if (settings.seo_og_image) {
     meta.openGraph = { ...meta.openGraph, images: [settings.seo_og_image] };
-    meta.twitter = { ...meta.twitter, images: [settings.seo_og_image] };
   }
 
   return meta;

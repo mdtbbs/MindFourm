@@ -10,7 +10,11 @@ export const dynamic = 'force-dynamic';
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings({ fresh: true });
-  return generatePageMetadata({ title: '公告中心', brandInfo: resolveBrand(settings) });
+  return generatePageMetadata({
+    title: '公告中心',
+    brandInfo: resolveBrand(settings),
+    openGraphImage: settings.seo_og_image,
+  });
 }
 
 export default async function NoticesPage() {

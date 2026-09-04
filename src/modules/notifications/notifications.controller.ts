@@ -4,9 +4,11 @@ import { NotificationStreamService } from './notification-stream.service';
 import { QueryNotificationsDto } from './dto/query-notifications.dto';
 import { UpdateEmailPreferenceDto } from './dto/update-email-preference.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Observable, Subject, concat, of } from 'rxjs';
-import { finalize, tap } from 'rxjs/operators';
+import { Observable, Subject, concat, interval, merge, of } from 'rxjs';
+import { finalize, map, tap } from 'rxjs/operators';
 import { OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+
+const SSE_HEARTBEAT_INTERVAL_MS = 20_000;
 
 @Controller('notifications')
 export class NotificationsController implements OnModuleInit, OnModuleDestroy {
@@ -93,7 +95,14 @@ export class NotificationsController implements OnModuleInit, OnModuleDestroy {
     // `startWith` rather than an eager `subject.next(...)`: the handler returns
     // before Nest subscribes, and a plain Subject does not replay, so the connected
     // event used to be emitted into the void every single time.
-    return concat(of(connected), subject.asObservable()).pipe(
+    // `event-source-polyfill` treats a quiet stream as dead after roughly 45
+    // seconds. Keep the HTTP/2 response active even when the user has no new
+    // notifications, otherwise it reconnects with `lastEventId` in a loop.
+    const heartbeat = interval(SSE_HEARTBEAT_INTERVAL_MS).pipe(
+      map(() => ({ data: JSON.stringify({ type: 'heartbeat' }) }) as MessageEvent),
+    );
+
+    return concat(of(connected), merge(subject.asObservable(), heartbeat)).pipe(
       tap({
         subscribe: () => {
           const subjects = this.connections.get(userId) ?? new Set();

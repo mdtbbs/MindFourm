@@ -57,8 +57,8 @@ docker compose -f docker-compose.dev.yml up -d
 ┌──────────────────────────────────────────────────────────────────────────┐
 │                   NestJS Backend (Port 4000)                               │
 │  src/main.ts - Bootstrap with global prefix /api                           │
-│  src/app.module.ts - Root module importing 45 feature modules              │
-│  src/modules/ - 45 feature modules (controller + service + DTO)            │
+│  src/app.module.ts - Root module importing 55 feature modules              │
+│  src/modules/ - 55 feature modules (controller + service + DTO)            │
 │  src/common/ - Guards, filters, interceptors, decorators, utils            │
 │  src/entities/ - 19 TypeORM entity definitions                             │
 │  src/database/ - TypeORM MySQL + Redis modules                             │
@@ -85,10 +85,13 @@ docker compose -f docker-compose.dev.yml up -d
 Each follows: `*.module.ts` | `*.controller.ts` | `*.service.ts` | `dto/`. A count is
 deliberately not given here — it went stale the first time a module was added.
 
+**Total: 55 modules** (as of 2026-09)
+
 | Module | Description |
 |--------|-------------|
 | `auth` | MindAuth OAuth callback, Redis session create/verify/destroy, sliding renewal |
 | `posts` | Post CRUD, Markdown parsing, tags, cursor pagination, search |
+| `threads` | V1 Thread Read Adapter — projects `Post` records as V1 Thread DTOs (no table rename) |
 | `replies` | Reply management, @mention parsing, soft delete; refuses to write to a locked post |
 | `reports` | Member-filed reports on posts/replies/resources/users; moderator queue at `/admin/reports`; auto-requeues content at `report_auto_hide_threshold` pending reports |
 | `user-blocks` | User-to-user blocking; enforced in `MessagesService.create`; staff and self cannot be blocked |
@@ -97,12 +100,18 @@ deliberately not given here — it went stale the first time a module was added.
 | `categories` | Hierarchical category management (parent/child) |
 | `tags` | Tag CRUD with auto-slug generation, merge support |
 | `notifications` | In-app notifications (5 types), SSE events, Redis cache, email dispatch |
+| `admin-notifications` | Admin-targeted notifications: SSE stream + webhook dispatch; has unit tests |
 | `bookmarks` | Bookmark CRUD |
 | `likes` | Post/reply likes with count updates |
 | `messages` | Private messaging with cursor pagination |
 | `attachments` | File upload with multer |
 | `resources` | Resource management (upload/external), versioning, categories |
+| `resource-comments` | Comments on resources (CRUD, pagination) |
+| `media` | Display media management (cover images, screenshots); separate from downloadable resource files |
+| `downloads` | Download lifecycle events (requested/granted/started/completed/failed); in-memory tracking placeholder |
 | `servers` | Paused EasyManager proxy module; returns empty/disabled responses unless enabled |
+| `game-servers` | Public game server registry with snapshots (player count, map, online status) |
+| `game-versions` | Mindustry version records with comparator for ordering/range checks |
 | `post-servers` | Preserved post-to-server link module for future EasyManager restoration |
 | `auto-post` | Preserved EasyManager callback handler for auto-post announcements |
 | `admin` | Admin panel: dashboard stats, bulk ops, moderation, tag merge, cleanup |
@@ -113,9 +122,9 @@ deliberately not given here — it went stale the first time a module was added.
 | `points` | Points: earn via actions (rules), cursor-paginated history, leaderboard, manual award/deduct; race-safe atomic deduction |
 | `levels` | Level tiers by point thresholds, user progress calculation, default seed |
 | `badges` | Badge definitions, per-user awards (duplicate-safe), bulk transactional grant |
+| `shop` | Shop items, point-based purchase in a single transaction (atomic stock decrement + point deduction); fixes past overselling bug |
 | `follows` | User-to-user follow/unfollow, follower/following lists, follow counts, public-data stripping for unauth viewers |
 | `groups` | Group CRUD with auto-slug, membership management, join/leave, role within group; security-hardened against privilege escalation |
-| `shop` | Shop items, point-based purchase in a single transaction (atomic stock decrement + point deduction); fixes past overselling bug |
 | `rss` | RSS 2.0 feeds for all posts and per-category; XML escape + RFC 822 dates, 50 latest posts |
 | `plugins` | Full plugin lifecycle: install/load/enable/disable/configure, dynamic `require()`, EventBus hook system, dependency check, path-traversal protection |
 | `presence` | Redis-backed presence with TTL + batch MGET, keyspace notifications for real-time friend push via SSE, 30s cooldown |
@@ -124,7 +133,17 @@ deliberately not given here — it went stale the first time a module was added.
 | `service-api` | External API platform: 24+ endpoints for posts/replies/resources CRUD, API key management (prefix+hash), scoped permissions, impersonation, full audit trail |
 | `search` | LIKE + `escapeLike`, relevance-ranked results, Redis-backed popular searches (5-min cache), search history; rate limited |
 | `uploads` | Public image upload interceptor for external API: UUID filenames, MIME filtering (JPEG/PNG/GIF/WebP), 2MB limit |
-| `admin-notifications` | Admin-targeted notifications: SSE stream + webhook dispatch; has unit tests |
+| `security` | CSP report recording (Redis), security-related utilities |
+| `content-safety` | Content risk assessment with configurable keywords, built-in high-risk term detection |
+| `capabilities` | Client capability flags (resource_read, download_grants, device_auth, etc.) driven by settings |
+| `discover` | Content aggregation across resources/posts/servers for discovery pages |
+| `creator` | Creator profile aggregation (resources, posts, downloads, favorites) |
+| `portal` | Homepage module data builder (featured content, latest threads/resources/versions/servers/knowledge) |
+| `knowledge` | Knowledge articles CRUD with public_id, slug, related resource/thread links |
+| `notices` | System notices (announcements) with revision history, status workflow, Redis cache |
+| `privacy` | Privacy/GDPR: user data deletion requests, legal acceptance tracking, audit logs |
+| `feedback` | User feedback submission (bug/suggestion/other) with CRUD |
+| `events` | Transactional outbox pattern for durable events; Redis Pub/Sub for real-time SSE fan-out |
 
 ### Common Layer (`src/common/`)
 
@@ -162,14 +181,14 @@ deliberately not given here — it went stale the first time a module was added.
 
 ### Entities (`src/entities/`)
 
-TypeORM entities with `utf8mb4` charset and `ON DELETE CASCADE` foreign keys. 46 entity classes total. The
+TypeORM entities with `utf8mb4` charset and `ON DELETE CASCADE` foreign keys. 73 entity files total (as of 2026-09). The
 authoritative list is the `entities` array in `src/entities/index.ts` — an entity missing
 from it fails at boot with "No metadata for …", so that array, not this file, is what has
 to be correct.
 
-Core: `user` (has `total_points`, `available_points`) | `post` (soft delete) | `reply` (soft delete) | `category` | `tag` | `post-tag` | `bookmark` | `notification` | `admin-notification` | `message` | `attachment` | `resource` (soft delete) | `resource-category` | `resource-version` | `post-like` | `reply-like` | `ban` | `setting` | `operation-log` | `session-audit`
+Core: `user` (has `total_points`, `available_points`) | `post` (soft delete) | `reply` (soft delete) | `category` | `tag` | `post-tag` | `bookmark` | `notification` | `admin-notification` | `message` | `attachment` | `resource` (soft delete) | `resource-category` | `resource-version` | `resource-file` | `resource-attribution` | `resource-favorite` | `resource-subscription` | `resource-version-compatibility` | `resource-version-dependency` | `resource-comment` | `resource-rating` | `resource-media-link` | `media-asset` | `post-like` | `reply-like` | `ban` | `setting` | `operation-log` | `session-audit` | `feedback`
 
-Moderation and social: `report` | `user-block` | `reaction` | `post-revision` | `follow` | `friendship`
+Moderation and social: `report` | `user-block` | `reaction` | `post-revision` | `follow` | `friendship` | `user-data-deletion-request` | `legal-acceptance`
 
 Gamification: `point-log` | `point-rule` | `level` | `badge` | `user-badge` | `shop-item` | `purchase`
 
@@ -179,7 +198,15 @@ Plugins: `plugin` | `plugin-hook` | `plugin-config` | `plugin-permission`
 
 External API: `external-api-key` | `external-api-audit-log`
 
-Other: `email-log` | `search-history` | `popular-search` | `resource-rating` | `lanlink-quick-code`
+Game servers & versions: `game-server` | `game-server-snapshot` | `game-version` | `game-version-build`
+
+Knowledge & notices: `knowledge-article` | `knowledge-revision` | `notice` | `notice-revision`
+
+Events & search: `outbox-event` | `search-history` | `popular-search`
+
+Mobile auth: `mobile-session` | `mobile-refresh-token`
+
+Other: `email-log` | `lanlink-quick-code`
 
 Soft-delete uses `@DeleteDateColumn` for posts, replies, and resources.
 
@@ -709,4 +736,4 @@ MFL_API_KEY=<write-permission-key>
 | Deployment | Docker + Docker Compose, Nginx (reverse proxy + SSL) |
 
 ---
-*Last updated: 2026-08-06*
+*Last updated: 2026-09-02*

@@ -19,7 +19,7 @@ export async function uploadImage(file: File): Promise<UploadImageResult> {
     throw new Error(`不支持的图片格式：${file.type || '未知'}。支持 PNG、JPG、GIF、WebP`);
   }
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`图片过大：${(file.size / 1024 / 1024).toFixed(1)}MB，最大 10MB`);
+    throw new Error(`图片过大：${(file.size / 1024 / 1024).toFixed(1)}MB，最大 2MB`);
   }
 
   const formData = new FormData();

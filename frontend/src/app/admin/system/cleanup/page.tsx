@@ -33,6 +33,7 @@ export default function CleanupPage() {
     cleanupSessions: adminApi.cleanupSessions,
     cleanupLogs: adminApi.cleanupLogs,
     cleanupSoftDeleted: adminApi.cleanupSoftDeleted,
+    cleanupPublicImages: adminApi.cleanupPublicImages,
   };
 
   const runCleanup = async (action: string) => {
@@ -72,6 +73,15 @@ export default function CleanupPage() {
           </div>
 
           <div className="bg-surface-50 border border-surface-200 p-5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">未引用编辑器图片</h3>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-surface-600">保留天数</span>
+              <input min="1" max="365" type="number" className="w-20 px-2 py-1 border border-surface-200 rounded text-sm text-center font-mono" value={values.cleanup_public_image_retention_days ?? '7'} onChange={(e) => update('cleanup_public_image_retention_days', e.target.value)} />
+            </div>
+            <p className="text-xs text-surface-400">只删除未被内容、历史版本或站点设置引用的公共编辑器图片</p>
+          </div>
+
+          <div className="bg-surface-50 border border-surface-200 p-5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">软删除数据</h3>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-surface-600">保留天数</span>
@@ -95,6 +105,7 @@ export default function CleanupPage() {
           <Button variant="destructive" onClick={() => runCleanup('cleanupSessions')}>清除过期会话</Button>
           <Button variant="destructive" onClick={() => runCleanup('cleanupLogs')}>清除旧日志</Button>
           <Button variant="destructive" onClick={() => runCleanup('cleanupSoftDeleted')}>清除软删除数据</Button>
+          <Button variant="destructive" onClick={() => runCleanup('cleanupPublicImages')}>清理未引用编辑器图片</Button>
         </div>
       </div>
     </div>

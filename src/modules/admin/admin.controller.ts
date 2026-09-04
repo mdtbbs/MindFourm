@@ -26,6 +26,7 @@ import { TagsService } from '../tags/tags.service';
 import { UsersService } from '../users/users.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { UploadsService } from '../uploads/uploads.service';
+import { PublicImageCleanupService } from '../uploads/public-image-cleanup.service';
 import { cleanupUploadedPublicImage, publicImageUploadInterceptor } from '../uploads/public-image-upload';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -67,6 +68,7 @@ export class AdminController {
     private readonly usersService: UsersService,
     private readonly adminNotificationsService: AdminNotificationsService,
     private readonly uploadsService: UploadsService,
+    private readonly publicImageCleanupService: PublicImageCleanupService,
     private readonly rateLimitTelemetry: RateLimitTelemetryService,
     private readonly performanceTelemetry: PerformanceTelemetryService,
   ) {}
@@ -564,6 +566,22 @@ export class AdminController {
   async cleanupSoftDeleted() {
     const count = await this.adminService.cleanupSoftDeleted();
     return { message: `${count} items cleaned up` };
+  }
+
+  /**
+   * Remove editor images whose grace period elapsed without a database reference.
+   * Kept separate from soft-delete cleanup because public editor images can exist
+   * before their parent post or resource does.
+   */
+  @Post('cleanup/public-images')
+  @Roles('admin')
+  async cleanupPublicImages(@Req() req: any) {
+    const result = await this.publicImageCleanupService.cleanupOrphanedPublicImages();
+    await this.logOperation(req, 'cleanup.public_images', 'public_image', undefined, { ...result });
+    return {
+      ...result,
+      message: `已清理 ${result.deleted} 张未引用编辑器图片（保留期 ${result.retentionDays} 天）`,
+    };
   }
 
   /**
