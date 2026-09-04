@@ -29,7 +29,7 @@ fun ThreadDto.toDetail(): ThreadDetail = ThreadDetail(
     content = content.orEmpty(),
     contentHtml = contentHtml,
     viewer = viewer?.let { ThreadViewer(it.liked, it.bookmarked) },
-    replies = replies.map { reply -> ThreadReply(reply.id, reply.userId, reply.parentReplyId, reply.content, Author(reply.userId.toString(), reply.authorName ?: "Unknown", reply.authorAvatarUrl), Instant.parse(reply.createdAt), Instant.parse(reply.updatedAt)) },
+    replies = replies.map { reply -> ThreadReply(reply.id, reply.userId, reply.parentReplyId, reply.content, Author(reply.userId.toString(), reply.authorName ?: "Unknown", reply.authorAvatarUrl), Instant.parse(reply.createdAt), Instant.parse(reply.updatedAt), reply.isOwner) },
     locked = isLocked,
     isOwner = isOwner,
 )

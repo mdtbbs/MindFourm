@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -29,6 +30,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -44,22 +51,27 @@ import androidx.paging.PagingData
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import cn.mdtbbs.android.core.model.ThreadSummary
+import cn.mdtbbs.android.ui.theme.MdtLime
 import kotlinx.coroutines.flow.Flow
 import java.time.Duration
 import java.time.Instant
 
 private val MdtBlue = Color(0xFF2476C9)
-private val PixelAccent = Color(0xFF89D43D)
 
 @Composable
 fun HomeScreen(
     threads: Flow<PagingData<ThreadSummary>>,
     onThreadClick: (String) -> Unit,
+    onNotifications: () -> Unit = {},
+    onLanLinkRooms: () -> Unit = {},
+    onResources: () -> Unit = {},
+    onNotices: () -> Unit = {},
+    onFeedback: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val items = threads.collectAsLazyPagingItems()
     Surface(modifier = modifier.fillMaxSize()) {
-        HomeThreadList(items = items, onThreadClick = onThreadClick)
+        HomeThreadList(items = items, onThreadClick = onThreadClick, onNotifications = onNotifications, onLanLinkRooms = onLanLinkRooms, onResources = onResources, onNotices = onNotices, onFeedback = onFeedback)
     }
 }
 
@@ -67,11 +79,16 @@ fun HomeScreen(
 fun HomeThreadList(
     items: LazyPagingItems<ThreadSummary>,
     onThreadClick: (String) -> Unit,
+    onNotifications: () -> Unit,
+    onLanLinkRooms: () -> Unit,
+    onResources: () -> Unit,
+    onNotices: () -> Unit,
+    onFeedback: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val refresh = items.loadState.refresh
     when {
-        refresh is LoadState.Loading && items.itemCount == 0 -> HomeSkeleton(modifier)
+        refresh is LoadState.Loading && items.itemCount == 0 -> HomeSkeleton(modifier, onNotifications, onLanLinkRooms, onResources, onNotices, onFeedback)
         refresh is LoadState.Error && items.itemCount == 0 -> HomeMessage(
             title = "主题加载失败",
             message = "请检查网络后重试",
@@ -79,17 +96,13 @@ fun HomeThreadList(
             onAction = items::retry,
             modifier = modifier,
         )
-        refresh is LoadState.NotLoading && items.itemCount == 0 -> HomeMessage(
-            title = "这里还没有主题",
-            message = "稍后再来看看社区的新内容。",
-            modifier = modifier,
-        )
+        refresh is LoadState.NotLoading && items.itemCount == 0 -> HomeEmptyFeed(modifier = modifier, onRefresh = items::refresh, onNotifications = onNotifications, onLanLinkRooms = onLanLinkRooms, onResources = onResources, onNotices = onNotices, onFeedback = onFeedback)
         else -> LazyColumn(
             modifier = modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            item(key = "home-title") { HomeHeader() }
+            item(key = "home-title") { HomeHeader(onNotifications, onLanLinkRooms, onResources, onNotices, onFeedback) }
             items(count = items.itemCount, key = { index -> items[index]?.id ?: "placeholder-$index" }) { index ->
                 items[index]?.let { thread ->
                     ThreadCard(thread = thread, onClick = { onThreadClick(thread.id) })
@@ -107,23 +120,34 @@ fun HomeThreadList(
 }
 
 @Composable
-private fun HomeHeader() {
-    Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
+private fun HomeHeader(onNotifications: () -> Unit, onLanLinkRooms: () -> Unit, onResources: () -> Unit, onNotices: () -> Unit, onFeedback: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(10.dp)
-                    .background(PixelAccent, RoundedCornerShape(1.dp)),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text("最新主题", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(42.dp)) {
+                Box(contentAlignment = Alignment.Center) { Text("M", color = MaterialTheme.colorScheme.onPrimary, style = MaterialTheme.typography.titleLarge) }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text("MDT BBS", style = MaterialTheme.typography.titleMedium)
+                Text("Mindustry 社区", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onClick = onNotifications) {
+                Icon(Icons.Outlined.NotificationsNone, contentDescription = "通知", tint = MaterialTheme.colorScheme.onSurface)
+            }
         }
-        Text(
-            "Mindustry 社区正在讨论什么",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 18.dp, top = 2.dp),
-        )
+        Row(modifier = Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).background(MdtLime, RoundedCornerShape(2.dp)))
+            Spacer(Modifier.width(7.dp))
+            Text("最新讨论", style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.width(8.dp))
+            Text("此刻社区正在发生什么", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Row(modifier = Modifier.padding(top = 4.dp)) {
+            TextButton(onClick = onResources) { Text("资源中心") }
+            TextButton(onClick = onNotices) { Text("公告") }
+            TextButton(onClick = onLanLinkRooms) { Text("联机大厅") }
+            TextButton(onClick = onFeedback) { Text("反馈") }
+        }
     }
 }
 
@@ -196,7 +220,7 @@ fun ThreadCard(thread: ThreadSummary, onClick: () -> Unit, modifier: Modifier = 
 }
 
 @Composable
-private fun HomeSkeleton(modifier: Modifier) {
+private fun HomeSkeleton(modifier: Modifier, onNotifications: () -> Unit, onLanLinkRooms: () -> Unit, onResources: () -> Unit, onNotices: () -> Unit, onFeedback: () -> Unit) {
     val alpha by animateFloatAsState(
         targetValue = .55f,
         animationSpec = infiniteRepeatable(tween(850), RepeatMode.Reverse),
@@ -207,7 +231,7 @@ private fun HomeSkeleton(modifier: Modifier) {
         contentPadding = PaddingValues(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        item { HomeHeader() }
+        item { HomeHeader(onNotifications, onLanLinkRooms, onResources, onNotices, onFeedback) }
         items(5) {
             Column(
                 Modifier
@@ -231,6 +255,36 @@ private fun HomeMessage(title: String, message: String, action: String? = null, 
         Spacer(Modifier.height(6.dp))
         Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (action != null && onAction != null) TextButton(onClick = onAction) { Text(action) }
+    }
+}
+
+@Composable
+private fun HomeEmptyFeed(modifier: Modifier, onRefresh: () -> Unit, onNotifications: () -> Unit, onLanLinkRooms: () -> Unit, onResources: () -> Unit, onNotices: () -> Unit, onFeedback: () -> Unit) = LazyColumn(
+    modifier = modifier.fillMaxSize(),
+    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+) {
+    item { HomeHeader(onNotifications, onLanLinkRooms, onResources, onNotices, onFeedback) }
+    item {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = .45f)),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 34.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = RoundedCornerShape(18.dp), modifier = Modifier.size(58.dp)) {
+                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Outlined.Forum, null, tint = MaterialTheme.colorScheme.secondary) }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("这里还没有主题", style = MaterialTheme.typography.titleLarge)
+                Text("先逛逛分类，或者成为第一个发起讨论的人。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
+                TextButton(onClick = onRefresh, modifier = Modifier.padding(top = 10.dp)) { Icon(Icons.Outlined.Refresh, null); Spacer(Modifier.width(4.dp)); Text("刷新内容") }
+            }
+        }
     }
 }
 

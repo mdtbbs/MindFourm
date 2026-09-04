@@ -1,15 +1,24 @@
 package cn.mdtbbs.android.feature.category
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,6 +34,7 @@ import androidx.lifecycle.viewModelScope
 import cn.mdtbbs.android.core.data.ThreadRepository
 import cn.mdtbbs.android.core.model.Category
 import cn.mdtbbs.android.feature.home.HomeScreen
+import cn.mdtbbs.android.ui.theme.MdtLime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,19 +71,59 @@ fun CategoryRoute(onCategoryClick: (String) -> Unit, viewModel: CategoryListView
             val content = state as CategoryListState.Content
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item { Text("分类", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(20.dp)) }
+                item { CategoryHeader() }
+                if (content.categories.isEmpty()) item { EmptyCategories() }
                 items(content.categories, key = { it.id }) { category ->
-                    Column(
-                        modifier = Modifier.fillMaxWidth().clickable { onCategoryClick(category.id) }.padding(20.dp, 14.dp),
+                    Surface(
+                        modifier = Modifier.fillMaxWidth().clickable { onCategoryClick(category.id) },
+                        color = MaterialTheme.colorScheme.surface,
+                        shape = RoundedCornerShape(16.dp),
+                        tonalElevation = 1.dp,
                     ) {
-                        Text(category.name, style = MaterialTheme.typography.titleMedium)
-                        Text(category.slug, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(42.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(13.dp)), contentAlignment = Alignment.Center) {
+                                Text(category.name.take(1), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(category.name, style = MaterialTheme.typography.titleMedium)
+                                Text(category.slug, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 3.dp))
+                            }
+                            Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CategoryHeader() = Surface(
+    color = MaterialTheme.colorScheme.surfaceVariant,
+    shape = RoundedCornerShape(18.dp),
+    modifier = Modifier.fillMaxWidth(),
+) {
+    Column(Modifier.padding(18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(9.dp).background(MdtLime, RoundedCornerShape(2.dp)))
+            Spacer(Modifier.width(8.dp))
+            Text("找到你的阵地", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.tertiary)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text("浏览分类", style = MaterialTheme.typography.headlineSmall)
+        Text("按主题进入更专注的讨论。", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+    }
+}
+
+@Composable
+private fun EmptyCategories() = Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+    Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("分类正在整理中", style = MaterialTheme.typography.titleMedium)
+        Text("稍后再来看看新的讨论板块。", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 6.dp))
     }
 }
 

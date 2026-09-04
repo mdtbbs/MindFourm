@@ -6,6 +6,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import cn.mdtbbs.android.navigation.MdtBbsNavHost
 import cn.mdtbbs.android.feature.settings.AppGate
+import cn.mdtbbs.android.ui.theme.MdtBbsTheme
 import cn.mdtbbs.android.core.auth.AuthCoordinator
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.lifecycle.lifecycleScope
@@ -19,4 +20,4 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) { super.onNewIntent(intent); setIntent(intent); handOffAuthIntent(intent) }
     private fun handOffAuthIntent(intent: android.content.Intent?) { lifecycleScope.launch { authCoordinator.handleIntent(intent) } }
 }
-@Composable private fun MdtBbsApp() { MaterialTheme { Surface { AppGate(content = { MdtBbsNavHost() }) } } }
+@Composable private fun MdtBbsApp() { MdtBbsTheme { Surface(color = MaterialTheme.colorScheme.background) { AppGate(content = { MdtBbsNavHost() }) } } }

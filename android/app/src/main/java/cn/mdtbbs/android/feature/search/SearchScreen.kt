@@ -11,7 +11,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import cn.mdtbbs.android.core.model.ThreadSummary
+import cn.mdtbbs.android.feature.home.ThreadCard
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,7 +87,13 @@ fun SearchRoute(onThreadClick: (String) -> Unit, viewModel: SearchViewModel = an
     val query by viewModel.query.collectAsState()
     val state by viewModel.state.collectAsState()
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        OutlinedTextField(value = query, onValueChange = viewModel::updateQuery, label = { Text("搜索主题") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer, shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp)) {
+                Text("搜索社区", style = androidx.compose.material3.MaterialTheme.typography.headlineSmall)
+                Text("帖子标题和内容都可以被找到。", style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = androidx.compose.material3.MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = .72f), modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+        OutlinedTextField(value = query, onValueChange = viewModel::updateQuery, label = { Text("输入关键词") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true, shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth().padding(top = 14.dp))
         when (state) {
             SearchUiState.Idle -> Message("输入关键词开始搜索")
             SearchUiState.Loading -> Message("正在搜索…", loading = true)
@@ -90,12 +101,9 @@ fun SearchRoute(onThreadClick: (String) -> Unit, viewModel: SearchViewModel = an
             is SearchUiState.Error -> Message("搜索失败", retry = viewModel::retry)
             is SearchUiState.Content -> {
                 val content = state as SearchUiState.Content
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 12.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 12.dp)) {
                     items(content.items, key = { it.id }) { thread ->
-                        Column(Modifier.fillMaxWidth().clickable { onThreadClick(thread.id) }.padding(vertical = 12.dp)) {
-                            Text(thread.title, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            thread.excerpt?.let { Text(it, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-                        }
+                        ThreadCard(thread = thread, onClick = { onThreadClick(thread.id) })
                     }
                     if (content.hasMore) item { Button(onClick = viewModel::loadMore, modifier = Modifier.fillMaxWidth()) { Text("加载更多") } }
                 }
