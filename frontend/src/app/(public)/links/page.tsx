@@ -1,0 +1,70 @@
+import Link from 'next/link';
+import type { Metadata } from 'next';
+import { ExternalLink, Globe2 } from 'lucide-react';
+import { getFooterSettings, isExternalHref } from '@/lib/footer/footer-settings';
+import { fetchPublicSettings } from '@/lib/settings/server';
+
+export const revalidate = 60;
+
+export const metadata: Metadata = {
+  title: '友情链接',
+};
+
+export default async function LinksPage() {
+  const settings = await fetchPublicSettings();
+  const footer = getFooterSettings(settings);
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mb-8 text-center">
+        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--text-muted)] opacity-60">Links</p>
+        <h1 className="mt-3 text-3xl font-bold text-[var(--text)]">友情链接</h1>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
+          以下是我们推荐的友好站点，与 Mindustry、开源社区和论坛生态相关。
+        </p>
+      </div>
+
+      {footer.friendlyLinks.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-card)] px-6 py-12 text-center">
+          <p className="text-sm text-[var(--text-secondary)]">暂无友情链接</p>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">稍后再来看看吧。</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {footer.friendlyLinks.map((link) => {
+            const external = isExternalHref(link.href);
+            let hostname = '';
+            try { hostname = new URL(link.href).hostname.replace(/^www\./, ''); } catch { /* internal link */ }
+            const content = (
+              <div className="h-full rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5 transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Globe2 className="h-5 w-5" /></span>
+                  {external && <ExternalLink className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />}
+                </div>
+                <h2 className="mt-4 truncate text-base font-semibold text-[var(--text)]">{link.label}</h2>
+                {link.description && (
+                  <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{link.description}</p>
+                )}
+                {hostname && <p className="mt-5 truncate text-xs text-[var(--text-muted)]">{hostname}</p>}
+              </div>
+            );
+
+            if (external) {
+              return (
+                <a key={`${link.label}-${link.href}`} href={link.href} target="_blank" rel="noopener noreferrer">
+                  {content}
+                </a>
+              );
+            }
+
+            return (
+              <Link key={`${link.label}-${link.href}`} href={link.href}>
+                {content}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

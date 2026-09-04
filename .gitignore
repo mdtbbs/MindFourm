@@ -1,8 +1,33 @@
 node_modules/
 data/
 .env
-test-results/
 *.log
 .DS_Store
 Thumbs.db
-uploads/resources/e2e-static-leak-*.txt
+*.tsbuildinfo
+
+# Build output
+dist/
+
+# Android local and generated build state
+android/.gradle/
+android/.kotlin/
+android/app/build/
+
+# Uploads (keep directory structure with .gitkeep)
+uploads/attachments/
+uploads/resources/
+uploads/avatars/
+!uploads/avatars/.gitkeep
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# Tool artifacts
+.claude/scheduled_tasks.lock
+.superpowers/
+.tmp/
+
+# Local service state
+*.rdb

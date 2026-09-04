@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
     role VARCHAR(50) NOT NULL DEFAULT 'user',
     avatar_url VARCHAR(500),
     bio TEXT,
+    phone_verified TINYINT(1) NOT NULL DEFAULT 0,
+    phone_verified_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_users_mindauth_id (mindauth_id),
     INDEX idx_users_role (role),
@@ -25,10 +27,18 @@ CREATE TABLE IF NOT EXISTS categories (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(255) NOT NULL UNIQUE,
     slug VARCHAR(255) NOT NULL UNIQUE,
+    description TEXT NULL,
+    color VARCHAR(7) NULL,
+    icon VARCHAR(50) NULL,
+    group_key VARCHAR(50) NULL,
+    parent_id INT NULL,
     sort_order INT DEFAULT 0,
     is_active TINYINT DEFAULT 1,
+    show_in_sidebar TINYINT(1) NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_categories_slug (slug)
+    INDEX idx_categories_slug (slug),
+    INDEX idx_categories_sidebar_order (show_in_sidebar, group_key, sort_order),
+    FOREIGN KEY (parent_id) REFERENCES categories(id) ON DELETE SET NULL
 );
 
 -- posts
@@ -253,7 +263,7 @@ CREATE TABLE IF NOT EXISTS resources (
     user_id INT NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
-    resource_type VARCHAR(50) NOT NULL DEFAULT 'file',
+    resource_type VARCHAR(50) NOT NULL DEFAULT 'upload',
     file_name VARCHAR(255),
     file_path VARCHAR(500),
     file_size INT DEFAULT 0,
@@ -284,6 +294,11 @@ CREATE TABLE IF NOT EXISTS resource_versions (
     resource_id INT NOT NULL,
     version VARCHAR(50) NOT NULL,
     file_path VARCHAR(500),
+    file_name VARCHAR(255),
+    file_size INT,
+    mime_type VARCHAR(100),
+    content TEXT,
+    content_html TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (resource_id) REFERENCES resources(id) ON DELETE CASCADE,
     UNIQUE KEY unique_version (resource_id, version),
@@ -300,12 +315,31 @@ INSERT IGNORE INTO resource_categories (name, slug, description, icon, sort_orde
 ('工具', 'tool', '辅助工具', 'Wrench', 6),
 ('其他', 'other', '其他资源', 'FileText', 7);
 
--- Performance optimization indexes
--- Composite index for resource listing query (status + category + created_at)
-ALTER TABLE resources ADD INDEX idx_resources_list (status, category_id, created_at DESC);
+-- Phase 3: likes (post and reply likes)
+CREATE TABLE IF NOT EXISTS post_likes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    post_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_post_like (user_id, post_id),
+    INDEX idx_post_likes_user (user_id, created_at DESC),
+    INDEX idx_post_likes_post (post_id)
+);
 
--- Composite index for notifications unread count query
-ALTER TABLE notifications ADD INDEX idx_notifications_unread (user_id, is_read);
+CREATE TABLE IF NOT EXISTS reply_likes (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    user_id INT NOT NULL,
+    reply_id INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (reply_id) REFERENCES replies(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_reply_like (user_id, reply_id),
+    INDEX idx_reply_likes_user (user_id, created_at DESC),
+    INDEX idx_reply_likes_reply (reply_id)
+);
 
--- Posts composite index for user's posts query
-ALTER TABLE posts ADD INDEX idx_posts_user_status (user_id, status, created_at DESC);
+-- Add like_count columns to posts and replies (run as ALTER if columns don't exist)
+-- ALTER TABLE posts ADD COLUMN like_count INT DEFAULT 0 AFTER view_count;
+-- ALTER TABLE replies ADD COLUMN like_count INT DEFAULT 0 AFTER status;

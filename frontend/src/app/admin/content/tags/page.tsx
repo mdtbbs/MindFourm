@@ -18,8 +18,8 @@ export default function TagsPage() {
 
   const fetchTags = useCallback(async () => {
     try {
-      const data = await adminApi.getTags();
-      setTags(data);
+      const res = await adminApi.getTags({ page: 1, limit: 200 });
+      setTags(res.data ?? []);
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
     finally { setLoading(false); }
   }, []);

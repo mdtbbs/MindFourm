@@ -1,38 +1,40 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-
-function createState(returnTo: string): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  const nonce = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  document.cookie = `oauth_state_nonce=${nonce}; Max-Age=600; Path=/; SameSite=Lax`;
-  return `${nonce}.${encodeURIComponent(returnTo)}`;
-}
-
-function getSafeReturnTo(): string {
-  const params = new URLSearchParams(window.location.search);
-  const requested = params.get('returnTo');
-  const fallback = '/';
-  const candidate = requested || fallback;
-  if (!candidate.startsWith('/') || candidate.startsWith('//') || candidate.includes('://')) return fallback;
-  if (candidate.startsWith('/login') || candidate.startsWith('/register') || candidate.startsWith('/callback')) return fallback;
-  return candidate;
-}
+import { useCallback, useEffect } from "react";
 
 export default function LoginPage() {
-  const mindauthUrl = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:4001';
+  const startLogin = useCallback(() => {
+    const mindauthUrl =
+      process.env.NEXT_PUBLIC_MINDAUTH_URL || "http://localhost:4001";
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const redirectUrl = encodeURIComponent(`${siteUrl}/api/auth/callback`);
+    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || "forum";
+    const query = new URLSearchParams(window.location.search);
+    const returnUrl = query.get("redirect") || query.get("returnUrl") || "/";
+
+    window.location.href = `${mindauthUrl}/authorize?redirect=${redirectUrl}&client_id=${clientId}&response_type=code&state=${encodeURIComponent(returnUrl)}`;
+  }, []);
 
   useEffect(() => {
-    const redirectUrl = encodeURIComponent(`${window.location.origin}/callback`);
-    const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || '';
-    const state = createState(getSafeReturnTo());
-    window.location.href = `${mindauthUrl}/login?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(state)}`;
-  }, [mindauthUrl]);
+    startLogin();
+  }, [startLogin]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <p className="text-surface-500">正在跳转到登录页面...</p>
+    <div className="flex min-h-screen items-center justify-center">
+      <div className="text-center">
+        <div className="mb-4 text-4xl">🔄</div>
+        <p className="text-lg text-[var(--text)]">正在跳转到登录页面...</p>
+        <p className="mt-2 text-sm text-[var(--text-muted)]">
+          如果没有自动跳转，
+          <a
+            href="#"
+            onClick={startLogin}
+            className="text-[var(--primary)] hover:underline"
+          >
+            点击这里
+          </a>
+        </p>
+      </div>
     </div>
   );
 }

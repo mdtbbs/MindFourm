@@ -1,0 +1,280 @@
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Reply } from '../../entities/reply.entity';
+import { Post } from '../../entities/post.entity';
+import { User } from '../../entities/user.entity';
+import { NotificationsService } from '../notifications/notifications.service';
+import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
+import { EventBusService } from '../plugins/event-bus.service';
+import { CreateReplyDto } from './dto/create-reply.dto';
+import { parseMarkdown } from '../../common/utils/markdown.util';
+import { PointsService } from '../points/points.service';
+import { SettingsService } from '../settings/settings.service';
+import { RedisService } from '../../database/redis.service';
+import { REPLY_STATUS } from '../../common/utils/constants';
+import { ContentSafetyService } from '../content-safety/content-safety.service';
+import { PostActivityService } from '../posts/post-activity.service';
+
+@Injectable()
+export class RepliesService {
+  constructor(
+    @InjectRepository(Reply)
+    private replyRepository: Repository<Reply>,
+    @InjectRepository(Post)
+    private postRepository: Repository<Post>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+    private notificationsService: NotificationsService,
+    private adminNotificationsService: AdminNotificationsService,
+    private eventBus: EventBusService,
+    private pointsService: PointsService,
+    private settingsService: SettingsService,
+    private redisService: RedisService,
+    private postActivityService: PostActivityService,
+    private contentSafety?: ContentSafetyService,
+  ) {}
+
+  async createReplyForPost(
+    postId: number,
+    dto: CreateReplyDto,
+    userId: number,
+    provenance: { ipAddress?: string; locationLabel?: string | null } = {},
+  ): Promise<Reply> {
+    const { content, parent_reply_id } = dto;
+
+    // Execute "before" hook
+    let modifiedDto = await this.eventBus.execute('reply.create', { ...dto, postId, userId });
+    dto = modifiedDto;
+
+    // Validate post exists and is published
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+    });
+
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    if (post.status !== 'published') {
+      throw new ForbiddenException('Cannot reply to unpublished post');
+    }
+
+    // Enforced here rather than by hiding the composer: the client is not the security
+    // boundary, and this is the only path that writes a reply, so it is the only place
+    // the lock can actually hold.
+    //
+    // Applies to moderators too. A lock is a statement about the thread, not about who
+    // is asking — a moderator who needs to post an explanation unlocks it first, which
+    // leaves an operation-log entry saying so. It is also the only rule this method can
+    // enforce honestly: it is handed a user id and no role, so a staff exemption would
+    // mean plumbing privilege into a code path that has never needed it.
+    if (post.is_locked) {
+      throw new ForbiddenException('帖子已锁定，无法回复');
+    }
+
+    // If replying to a parent reply, validate it exists
+    if (parent_reply_id) {
+      const parentReply = await this.replyRepository.findOne({
+        where: { id: parent_reply_id },
+      });
+
+      if (!parentReply) {
+        throw new NotFoundException('Parent reply not found');
+      }
+
+      if (parentReply.post_id !== postId) {
+        throw new ForbiddenException('Parent reply does not belong to this post');
+      }
+    }
+
+    // Parse markdown to HTML
+    const contentHtml = parseMarkdown(content);
+
+    // Get current user for response
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const risk = this.contentSafety
+      ? await this.contentSafety.assess(content)
+      : { score: 0, rules: [], mustReview: false };
+    const requiresApproval = risk.mustReview || await this.settingsService.getBoolean('require_reply_approval', true);
+
+    // Create reply
+    const newReply = this.replyRepository.create({
+      post_id: postId,
+      user_id: userId,
+      parent_reply_id: parent_reply_id,
+      content,
+      content_html: contentHtml,
+      status: requiresApproval ? REPLY_STATUS.pending : REPLY_STATUS.published,
+      like_count: 0,
+      ip_address: provenance.ipAddress || null,
+      location_label: provenance.locationLabel || null,
+    });
+
+    const savedReply = await this.replyRepository.save(newReply);
+    if (savedReply.status === REPLY_STATUS.published) {
+      await this.postActivityService.markPostActive(postId, savedReply.created_at || new Date());
+    }
+    if (this.contentSafety) {
+      await this.contentSafety.recordFlag({ userId, targetType: 'reply', targetId: savedReply.id, risk, ipAddress: provenance.ipAddress }).catch(() => undefined);
+    }
+    await this.invalidatePostCache(postId);
+
+    // Create notification for post author (if not the same user)
+    if (savedReply.status === 'published' && post.user_id !== userId) {
+      await this.notificationsService.create({
+        user_id: post.user_id,
+        type: 'reply',
+        actor_id: userId,
+        post_id: postId,
+        reply_id: savedReply.id,
+        content: content,
+      });
+    }
+
+    if (savedReply.status === 'published') {
+      await this.notificationsService.notifyMentionedUsers(
+        content,
+        postId,
+        userId,
+        savedReply.id,
+      );
+
+      // Award points for creating reply
+      await this.awardPointsForReply(savedReply.id, userId);
+    } else if (savedReply.status === 'pending') {
+      this.adminNotificationsService.publishModerationPending({
+        item_type: 'reply',
+        item_id: savedReply.id,
+        title: `帖子 #${postId} 的新回复`,
+        content,
+        author_username: user.username || `#${userId}`,
+        action_url: '/admin/content/moderation?type=replies',
+      }).catch((err) =>
+        console.error('Admin reply moderation notification error:', err),
+      );
+    }
+
+    // Execute "after" hook
+    this.eventBus.execute('reply.created', { reply: savedReply, userId }).catch((err) =>
+      console.error('reply.created hook error:', err),
+    );
+
+    return savedReply;
+  }
+
+  async awardPointsForReply(replyId: number, userId: number): Promise<void> {
+    await this.pointsService.awardPoints(userId, 'create_reply', 'reply', replyId);
+  }
+
+  async getByPostId(postId: number, page: number = 1, limit: number = 20): Promise<{ data: Reply[]; total: number; page: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+
+    const [replies, total] = await this.replyRepository.findAndCount({
+      where: {
+        post_id: postId,
+        status: REPLY_STATUS.published,
+      },
+      relations: ['user'],
+      order: {
+        created_at: 'ASC',
+      },
+      skip,
+      take: limit,
+    });
+
+    return {
+      data: replies,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findById(id: number): Promise<Reply> {
+    const reply = await this.replyRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!reply) {
+      throw new NotFoundException('Reply not found');
+    }
+
+    if (reply.status === 'deleted') {
+      throw new NotFoundException('Reply has been deleted');
+    }
+
+    return reply;
+  }
+
+  async update(id: number, content: string, userId: number, userRole?: string): Promise<Reply> {
+    const reply = await this.replyRepository.findOne({
+      where: { id },
+    });
+
+    if (!reply) {
+      throw new NotFoundException('Reply not found');
+    }
+
+    const canEditAny = userRole === 'admin' || userRole === 'moderator';
+    if (reply.user_id !== userId && !canEditAny) {
+      throw new ForbiddenException('You can only edit your own replies');
+    }
+
+    if (reply.status === 'deleted') {
+      throw new ForbiddenException('Cannot update deleted reply');
+    }
+
+    // Parse markdown to HTML
+    const contentHtml = parseMarkdown(content);
+
+    // Update reply
+    reply.content = content;
+    reply.content_html = contentHtml;
+    reply.updated_at = new Date();
+
+    const saved = await this.replyRepository.save(reply);
+    await this.invalidatePostCache(reply.post_id);
+    return saved;
+  }
+
+  async softDelete(id: number, userId: number, userRole?: string): Promise<void> {
+    const reply = await this.replyRepository.findOne({
+      where: { id },
+    });
+
+    if (!reply) {
+      throw new NotFoundException('Reply not found');
+    }
+
+    const canDeleteAny = userRole === 'admin' || userRole === 'moderator';
+    if (reply.user_id !== userId && !canDeleteAny) {
+      throw new ForbiddenException('You can only delete your own replies');
+    }
+
+    const wasPublished = reply.status === REPLY_STATUS.published;
+    // Soft delete
+    reply.status = REPLY_STATUS.deleted;
+    reply.deleted_at = new Date();
+
+    await this.replyRepository.save(reply);
+    if (wasPublished) {
+      await this.postActivityService.recalculatePostActivity(reply.post_id);
+    }
+    await this.invalidatePostCache(reply.post_id);
+  }
+
+  private async invalidatePostCache(postId: number): Promise<void> {
+    await this.redisService.del(`post:${postId}`);
+    await this.redisService.del(`post:detail:v4:${postId}`);
+    await this.redisService.del(`post_view:${postId}`);
+  }
+}

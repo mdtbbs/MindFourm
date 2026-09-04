@@ -1,76 +1,33 @@
+/**
+ * Toast Context - Backward compatibility wrapper for Zustand toast store
+ *
+ * This file provides backward compatibility for existing components
+ * that use ToastProvider/useToast pattern, while internally using Zustand.
+ *
+ * New components should import directly from '@/store/toast-store'
+ */
+
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
-import Toast, { type ToastType } from '@/components/ui/toast';
+import React from 'react';
+import { useToastStore, useToast, ToastItem } from '@/store/toast-store';
+import Toast from '@/components/ui/toast';
 
-interface ToastItem {
-  id: string;
-  message: string;
-  type: ToastType;
-}
+// Re-export useToast for backward compatibility
+export { useToast };
 
-interface ToastContextValue {
-  showToast: (message: string, type?: ToastType) => void;
-  showError: (message: string) => void;
-  showSuccess: (message: string) => void;
-  showInfo: (message: string) => void;
-  dismissToast: (id: string) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
-
-export function ToastProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<ToastItem[]>([]);
-  // Keep a ref so dismiss callbacks don't cause stale closures
-  const toastsRef = useRef(toasts);
-  toastsRef.current = toasts;
-
-  const dismissToast = useCallback((id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  }, []);
-
-  const showToast = useCallback(
-    (message: string, type: ToastType = 'info') => {
-      const id = generateId();
-      setToasts((prev) => [...prev, { id, message, type }]);
-    },
-    []
-  );
-
-  const showError = useCallback(
-    (message: string) => showToast(message, 'error'),
-    [showToast]
-  );
-
-  const showSuccess = useCallback(
-    (message: string) => showToast(message, 'success'),
-    [showToast]
-  );
-
-  const showInfo = useCallback(
-    (message: string) => showToast(message, 'info'),
-    [showToast]
-  );
-
-  const value = useMemo(
-    () => ({ showToast, showError, showSuccess, showInfo, dismissToast }),
-    [showToast, showError, showSuccess, showInfo, dismissToast]
-  );
+/**
+ * ToastProvider - Renders toast notifications from Zustand store
+ *
+ * Renders the toast container and handles toast display.
+ * Existing components using useToast() will work without changes.
+ */
+export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const toasts = useToastStore((state) => state.toasts);
+  const dismissToast = useToastStore((state) => state.dismissToast);
 
   return (
-    <ToastContext.Provider value={value}>
+    <>
       {children}
       {/* Toast container — fixed top-right, above header (z-50) */}
       <div
@@ -78,24 +35,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
         aria-atomic="true"
       >
-        {toasts.map((toast) => (
+        {toasts.map((toast: ToastItem) => (
           <Toast
             key={toast.id}
             id={toast.id}
             message={toast.message}
             type={toast.type}
+            duration={toast.duration}
+            dismissible={toast.dismissible}
             onDismiss={dismissToast}
           />
         ))}
       </div>
-    </ToastContext.Provider>
+    </>
   );
-}
-
-export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return ctx;
 }

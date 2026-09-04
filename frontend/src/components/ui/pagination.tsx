@@ -20,21 +20,38 @@ export default function Pagination({
   if (totalPages <= 1) return null;
 
   const buildUrl = (page: number) => {
-    const params = new URLSearchParams();
-    if (page > 1) params.set('page', String(page));
+    // `basePath` may already carry a query string (e.g. `/users/5?tab=posts`).
+    // Appending another `?` produced `/users/5?tab=posts?page=2`, where `page`
+    // never parsed and `tab` became "posts?page=2".
+    const [pathname, existingQuery = ''] = basePath.split('?');
+    const params = new URLSearchParams(existingQuery);
+
+    if (page > 1) {
+      params.set('page', String(page));
+    } else {
+      params.delete('page');
+    }
+
     for (const [key, value] of Object.entries(queryParams)) {
       if (value !== undefined && value !== '') params.set(key, String(value));
     }
+
     const qs = params.toString();
-    return qs ? `${basePath}?${qs}` : basePath;
+    return qs ? `${pathname}?${qs}` : pathname;
   };
 
   return (
-    <nav className={`flex items-center justify-center space-x-1 ${className}`}>
+    <nav
+      aria-label="分页"
+      className={`flex items-center justify-center space-x-1 ${className}`}
+    >
       {currentPage > 1 && (
         <Link
           href={buildUrl(currentPage - 1)}
-          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-lg"
+          // rel prev/next tells crawlers these pages form one sequence rather than a
+          // set of unrelated near-duplicates.
+          rel="prev"
+          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-lg"
           aria-label="上一页"
         >
           上一页
@@ -54,13 +71,16 @@ export default function Pagination({
             <span key={page} className="inline-flex items-center">
               {showEllipsis && <span className="px-2 text-surface-400">...</span>}
               {page === currentPage ? (
-                <span className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg font-medium">
+                <span
+                  aria-current="page"
+                  className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg font-medium"
+                >
                   {page}
                 </span>
               ) : (
                 <Link
                   href={buildUrl(page)}
-                  className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-lg"
+                  className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-lg"
                   aria-label={`第${page}页`}
                 >
                   {page}
@@ -72,7 +92,8 @@ export default function Pagination({
       {currentPage < totalPages && (
         <Link
           href={buildUrl(currentPage + 1)}
-          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus:outline-none focus:ring-2 focus:ring-primary-500 rounded-lg"
+          rel="next"
+          className="px-3 py-1.5 text-sm text-surface-600 hover:bg-surface-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-600 rounded-lg"
           aria-label="下一页"
         >
           下一页

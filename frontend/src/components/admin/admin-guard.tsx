@@ -3,6 +3,7 @@
 import { useAuth } from '@/lib/auth/context';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import LoadingSpinner from '@/components/ui/loading-spinner';
 
 interface AdminGuardProps {
   children: React.ReactNode;
@@ -29,7 +30,7 @@ export default function AdminGuard({
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+        <LoadingSpinner variant="orbital" size="lg" />
       </div>
     );
   }

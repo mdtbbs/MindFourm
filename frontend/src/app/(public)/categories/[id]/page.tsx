@@ -1,71 +1,56 @@
 import { Metadata } from 'next';
-import Link from 'next/link';
-import Sidebar from '@/components/forum/sidebar';
-import PostCard from '@/components/forum/post-card';
+import ThreadList from '@/components/forum/thread-list';
+import CategoryHeader from '@/components/forum/category-header';
 import Pagination from '@/components/ui/pagination';
-import { Category, Tag, PostListResponse } from '@/types';
+import EmptyState from '@/components/ui/empty-state';
+import { MessageCircle } from 'lucide-react';
+import { createEmptyPaginatedResult } from '@/lib/api/response';
+import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
+import { Category, PostListResponse } from '@/types';
 import { notFound } from 'next/navigation';
 
 export const revalidate = 300;
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
 async function fetchPosts(page: number, categoryId: number): Promise<PostListResponse> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/posts?page=${page}&limit=20&category_id=${categoryId}`, { next: { tags: ['posts'] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-    return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit: 20, total: 0, totalPages: 1 },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
-}
-
-async function fetchCategories(): Promise<Category[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
-}
-
-async function fetchTags(): Promise<Tag[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/tags`, { next: { tags: ['tags'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
+  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?page=${page}&limit=20&category_id=${categoryId}`, {
+    init: { cache: 'no-store' },
+    fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
+    forwardCookies: true,
+  });
 }
 
 async function fetchCategory(id: number): Promise<Category | null> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/categories/${id}`, { next: { tags: ['categories'] } });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.success ? json.data : null;
-  } catch {
-    return null;
-  }
+  return fetchApiData<Category | null>(`/api/categories/${id}`, {
+    init: { next: { tags: ['categories'] } },
+    fallback: null,
+  });
 }
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
-  const category = await fetchCategory(parseInt(params.id));
-  if (!category) return { title: 'Not Found' };
+export async function generateMetadata({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ page?: string }> }): Promise<Metadata> {
+  const [{ id }, { page: pageParam }] = await Promise.all([params, searchParams]);
+  const category = await fetchCategory(parseInt(id));
+  if (!category) {
+    // Not in the page body: `loading.tsx` flushes a 200 shell before the body runs, and
+    // `notFound()` cannot change an already-sent status. generateMetadata runs first.
+    notFound();
+  }
+
+  // Bare title — the root layout's `title.template` appends the site suffix. Hardcoding
+  // it here produced "分类名 | MindForum | MindForum".
+  const description = `${category.name} 分类下的全部帖子`;
+  const page = Number.parseInt(pageParam || '1', 10);
+  const isPaginated = Number.isFinite(page) && page > 1;
+  const canonical = isPaginated ? `/categories/${category.id}?page=${page}` : `/categories/${category.id}`;
+
   return {
-    title: `${category.name} | MindForum`,
+    title: isPaginated ? `${category.name} - 第 ${page} 页` : category.name,
+    description,
+    alternates: { canonical },
     openGraph: {
-      title: `${category.name} | MindForum`,
+      title: category.name,
+      description,
       type: 'website',
+      url: canonical,
     },
   };
 }
@@ -74,53 +59,40 @@ export default async function CategoryPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams: { page?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
-  const categoryId = parseInt(params.id);
-  const page = parseInt(searchParams.page || '1');
+  const { id } = await params;
+  const { page: pageStr } = await searchParams;
+  const categoryId = parseInt(id);
+  const page = parseInt(pageStr || '1');
 
-  const [category, postsResult, categories, tags] = await Promise.all([
+  const [category, postsResult] = await Promise.all([
     fetchCategory(categoryId),
     fetchPosts(page, categoryId),
-    fetchCategories(),
-    fetchTags(),
   ]);
 
   if (!category) return notFound();
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex gap-8">
-        <div className="hidden lg:block w-64 flex-shrink-0">
-          <Sidebar
-            categories={categories}
-            tags={tags}
-            selectedCategory={categoryId}
-          />
-        </div>
-        <div className="flex-1 space-y-4">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{category.name}</h1>
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="space-y-4">
+          <CategoryHeader category={category} />
           {postsResult.data.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-gray-500 dark:text-gray-400 mb-4">该分类下暂无帖子</p>
-              <Link href="/posts/new" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-                发布第一篇帖子 &rarr;
-              </Link>
-            </div>
+            <EmptyState
+              icon={<MessageCircle className="h-10 w-10" />}
+              title="这里还没有主题"
+              description="有什么想讨论的吗？成为第一个发布内容的人。"
+              action={{ label: '发布主题', href: '/posts/new' }}
+            />
           ) : (
-            <div className="space-y-3">
-              {postsResult.data.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
-            </div>
+            <ThreadList posts={postsResult.data} showCategory={false} />
           )}
           <Pagination
             currentPage={postsResult.pagination.page}
             totalPages={postsResult.pagination.totalPages}
             basePath={`/categories/${categoryId}`}
           />
-        </div>
       </div>
     </div>
   );

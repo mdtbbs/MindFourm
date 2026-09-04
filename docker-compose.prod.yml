@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      # Spelling matches the repository and the application default: `mindfourm`.
+      # This said `mindforum`, so the entrypoint created a database the backend
+      # never connected to.
+      MYSQL_DATABASE: mindfourm
+      # Least-privilege account for the application; root stays for administration.
+      MYSQL_USER: mindforum
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # No init-dir mount: the backend runs TypeORM migrations at boot. The MySQL
+      # entrypoint executes init files in alphabetical order, which ran an
+      # `ALTER TABLE posts` before anything had created `posts` and failed
+      # container initialisation.
+      - ./backups:/backups
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    # Sessions live here, so it must not be reachable unauthenticated by anything
+    # else sharing the bridge network.
+    command: >
+      redis-server --appendonly yes
+      --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      # Startup validation refuses to boot in production when any of the required
+      # values below is missing, so `:?` here surfaces the problem at `up` time
+      # instead of in a crash loop.
+      NODE_ENV: production
+      PORT: 4000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      # Least-privilege application account, not root.
+      MYSQL_USER: mindforum
+      MYSQL_PASSWORD: ${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}
+      MYSQL_DATABASE: mindfourm
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      API_URL: ${API_URL:-http://backend:4000}
+      MINDAUTH_URL: ${MINDAUTH_URL:?MINDAUTH_URL is required}
+      MINDAUTH_CLIENT_ID: forum
+      MINDAUTH_CLIENT_SECRET: ${MINDAUTH_CLIENT_SECRET:?MINDAUTH_CLIENT_SECRET is required}
+      # Must match the redirect_uri registered for this client in MindAuth.
+      MINDAUTH_CALLBACK_URL: ${MINDAUTH_CALLBACK_URL:-${FRONTEND_URL}/api/auth/callback}
+      # Integrations. Previously absent entirely, so MindFileList uploads and the
+      # service API silently no-opped inside Docker.
+      FORUM_API_KEY: ${FORUM_API_KEY:-}
+      MFL_BASE_URL: ${MFL_BASE_URL:-}
+      MFL_API_KEY: ${MFL_API_KEY:-}
+      EASYMANAGER_ENABLED: ${EASYMANAGER_ENABLED:-false}
+      EASYMANAGER_URL: ${EASYMANAGER_URL:-}
+      EASYMANAGER_API_KEY: ${EASYMANAGER_API_KEY:-}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+      - web
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ""
+        NEXT_PUBLIC_MINDAUTH_URL: ${MINDAUTH_URL}
+        NEXT_PUBLIC_MINDAUTH_CLIENT_ID: forum
+        NEXT_PUBLIC_SITE_URL: ${FRONTEND_URL}
+    restart: always
+    environment:
+      NEXT_PUBLIC_API_URL: ""
+      API_URL: http://backend:4000
+      NEXT_PUBLIC_MINDAUTH_URL: ${MINDAUTH_URL}
+      NEXT_PUBLIC_MINDAUTH_CLIENT_ID: forum
+      NEXT_PUBLIC_SITE_URL: ${FRONTEND_URL}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - internal
+      - web
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - web
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  internal:
+    driver: bridge
+  web:
+    driver: bridge

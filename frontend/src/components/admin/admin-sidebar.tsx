@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth/context';
+import { adminApi } from '@/lib/api/client';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen
+  Package, AlertCircle, FolderOpen, Puzzle, Award, Star, ShoppingBag, Flag, Gauge
 } from 'lucide-react';
 
 const navSections = [
@@ -21,8 +22,10 @@ const navSections = [
     title: '站点',
     items: [
       { href: '/admin/settings/basic', label: '基本信息', icon: Settings, roles: ['admin'] },
+      { href: '/admin/settings/brand', label: '品牌设置', icon: Settings, roles: ['admin'] },
       { href: '/admin/settings/announce', label: '公告管理', icon: Megaphone, roles: ['admin'] },
       { href: '/admin/settings/display', label: '显示设置', icon: Palette, roles: ['admin'] },
+      { href: '/admin/settings/sidebar', label: '侧栏导航', icon: FolderTree, roles: ['admin'] },
       { href: '/admin/settings/seo', label: 'SEO 设置', icon: Search, roles: ['admin'] },
     ],
   },
@@ -32,6 +35,7 @@ const navSections = [
       { href: '/admin/posts', label: '帖子管理', icon: FileText, roles: ['admin', 'moderator'] },
       { href: '/admin/content/tags', label: '标签管理', icon: Tag, roles: ['admin'] },
       { href: '/admin/content/moderation', label: '审核队列', icon: AlertTriangle, roles: ['admin', 'moderator'] },
+      { href: '/admin/content/reports', label: '举报处理', icon: Flag, roles: ['admin', 'moderator'] },
     ],
   },
   {
@@ -39,6 +43,7 @@ const navSections = [
     items: [
       { href: '/admin/system/rules', label: '发帖规则', icon: FileCheck, roles: ['admin'] },
       { href: '/admin/system/rate-limits', label: '限流设置', icon: Clock, roles: ['admin'] },
+      { href: '/admin/system/performance', label: '性能监控', icon: Gauge, roles: ['admin'] },
       { href: '/admin/system/bans', label: '封禁管理', icon: Ban, roles: ['admin'] },
       { href: '/admin/system/cleanup', label: '数据清理', icon: Trash2, roles: ['admin'] },
     ],
@@ -56,7 +61,17 @@ const navSections = [
     items: [
       { href: '/admin/resources', label: '资源管理', icon: Package, roles: ['admin', 'moderator'] },
       { href: '/admin/resources/moderation', label: '资源审批', icon: AlertCircle, roles: ['admin', 'moderator'] },
-      { href: '/admin/resource-categories', label: '类别管理', icon: FolderOpen, roles: ['admin'] },
+      { href: '/admin/resources/categories', label: '类别管理', icon: FolderOpen, roles: ['admin'] },
+    ],
+  },
+  {
+    title: '扩展',
+    items: [
+      { href: '/admin/points', label: '积分规则', icon: Star, roles: ['admin'] },
+      { href: '/admin/plugins', label: '插件管理', icon: Puzzle, roles: ['admin'] },
+      { href: '/admin/levels', label: '等级管理', icon: Star, roles: ['admin'] },
+      { href: '/admin/badges', label: '徽章管理', icon: Award, roles: ['admin'] },
+      { href: '/admin/shop', label: '商城管理', icon: ShoppingBag, roles: ['admin'] },
     ],
   },
 ];
@@ -64,15 +79,7 @@ const navSections = [
 function Badge({ count }: { count: number }) {
   if (!count) return null;
   return (
-    <span style={{
-      marginLeft: 'auto',
-      fontSize: 11,
-      background: 'var(--primary)',
-      color: '#fff',
-      borderRadius: 999,
-      padding: '2px 6px',
-      fontWeight: 500,
-    }}>
+    <span className="ml-auto text-xs bg-surface-600 text-surface-100 rounded-full px-1.5 py-0.5 font-semibold">
       {count}
     </span>
   );
@@ -85,47 +92,26 @@ export default function AdminSidebar() {
   const [badges, setBadges] = useState({ moderation_pending: 0, announce_active: 0 });
 
   useEffect(() => {
-    fetch('/api/admin/badge-counts', {
-      credentials: 'include',
-    })
-      .then(r => r.json())
-      .then(j => { if (j.success) setBadges(j.data); })
+    adminApi.getBadgeCounts()
+      .then((data) => setBadges(data))
       .catch(() => {});
   }, []);
 
   return (
-    <aside
-      className="admin-sidebar"
-      style={{
-        width: 'var(--sidebar-width)',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        height: '100vh',
-        background: 'var(--bg-card)',
-        borderRight: '1px solid var(--border)',
-        overflowY: 'auto',
-      }}
-    >
-      <div style={{ padding: 16, borderBottom: '1px solid var(--border)' }}>
-        <h2 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>MindForum</h2>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>管理后台</p>
+    <aside className="w-64 bg-surface-900 text-surface-300 min-h-screen border-r border-surface-800">
+      <div className="p-6 border-b border-surface-800">
+        <h2 className="text-sm font-bold text-white tracking-wide">MINDFORUM</h2>
+        <p className="text-xs text-surface-500 mt-1 tracking-widest">管理后台</p>
       </div>
-      <nav style={{ padding: 12 }}>
+      <nav className="py-3">
         {navSections.map((section) => {
           const visibleItems = section.items.filter((item) =>
             item.roles.includes(userRole as string)
           );
           if (!visibleItems.length) return null;
           return (
-            <div key={section.title} style={{ marginBottom: 8 }}>
-              <div style={{
-                padding: '8px 12px',
-                fontSize: 11,
-                fontWeight: 500,
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-              }}>
+            <div key={section.title} className="mb-2">
+              <div className="px-5 py-2 text-xs font-semibold uppercase tracking-wider text-surface-600">
                 {section.title}
               </div>
               {visibleItems.map((item) => {
@@ -136,20 +122,13 @@ export default function AdminSidebar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 12px',
-                      fontSize: 13,
-                      borderRadius: 6,
-                      marginBottom: 2,
-                      transition: 'all 0.15s ease',
-                      background: isActive ? 'var(--bg-elevated)' : 'transparent',
-                      color: isActive ? 'var(--text)' : 'var(--text-secondary)',
-                    }}
+                    className={`flex items-center gap-3 px-5 py-2 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-surface-800 text-white'
+                        : 'text-surface-400 hover:bg-surface-800/50 hover:text-white'
+                    }`}
                   >
-                    <item.icon style={{ width: 16, height: 16, opacity: 0.6 }} />
+                    <item.icon className="w-4 h-4 shrink-0 opacity-60" />
                     {item.label}
                     <Badge count={badgeCount} />
                   </Link>
@@ -158,8 +137,8 @@ export default function AdminSidebar() {
             </div>
           );
         })}
-        <div style={{ padding: '12px 12px', marginTop: 12, borderTop: '1px solid var(--border-light)' }}>
-          <Link href="/" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+        <div className="px-5 pt-3">
+          <Link href="/" className="text-sm text-surface-500 hover:text-white transition-colors">
             ← 返回论坛
           </Link>
         </div>

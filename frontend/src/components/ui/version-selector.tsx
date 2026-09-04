@@ -5,28 +5,46 @@ import { Tag } from 'lucide-react';
 
 interface VersionSelectorProps {
   versions: ResourceVersion[];
-  currentVersion: string | null;
-  onSelect: (version: string) => void;
+  baseVersion: string | null;
+  selectedVersionId: number | null;
+  onSelect: (versionId: number | null) => void;
 }
 
-export default function VersionSelector({ versions, currentVersion, onSelect }: VersionSelectorProps) {
-  if (versions.length === 0) return null;
+export default function VersionSelector({
+  versions,
+  baseVersion,
+  selectedVersionId,
+  onSelect,
+}: VersionSelectorProps) {
+  if (versions.length === 0 && !baseVersion) return null;
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <Tag className="w-4 h-4 text-[var(--text-muted)]" />
       <span className="text-sm text-[var(--text-secondary)]">版本:</span>
-      {versions.map((v) => (
+      <button
+        type="button"
+        onClick={() => onSelect(null)}
+        className={`px-2.5 py-1 text-xs rounded-[var(--radius-sm)] transition-colors ${
+          selectedVersionId === null
+            ? 'bg-[var(--primary)] text-white font-medium'
+            : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)]'
+        }`}
+      >
+        {baseVersion || '主文件'}
+      </button>
+      {versions.map((version) => (
         <button
-          key={v.version}
-          onClick={() => onSelect(v.version)}
+          type="button"
+          key={version.id}
+          onClick={() => onSelect(version.id)}
           className={`px-2.5 py-1 text-xs rounded-[var(--radius-sm)] transition-colors ${
-            currentVersion === v.version
+            selectedVersionId === version.id
               ? 'bg-[var(--primary)] text-white font-medium'
               : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)]'
           }`}
         >
-          {v.version}
+          {version.version}
         </button>
       ))}
     </div>

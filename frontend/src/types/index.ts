@@ -9,7 +9,11 @@ export interface User {
   role: UserRole;
   avatar_url?: string | null;
   bio?: string | null;
+  phone_verified?: boolean;
+  phone_verified_at?: string | null;
   createdAt: string;
+  /** Coarse province label from the member's latest public content; no raw IP is exposed. */
+  last_location_label?: string | null;
 }
 
 export interface AuthCheckResponse {
@@ -28,7 +32,14 @@ export interface Category {
   slug: string;
   sort_order: number;
   is_active: boolean;
+  description?: string | null;
+  color?: string | null;
+  icon?: string | null;
+  group_key?: 'community' | 'creation' | 'game' | 'meta' | null;
+  parent_id?: number | null;
+  show_in_sidebar?: boolean;
   created_at: string;
+  post_count?: number;
 }
 
 // Tag types
@@ -41,35 +52,84 @@ export interface Tag {
 }
 
 // Post types
-export interface Post {
+export interface PostSummary {
   id: number;
   user_id: number;
   category_id: number | null;
+  server_id?: number | null;
+  post_type?: string;
+  slug?: string | null;
   title: string;
-  content: string;
-  content_html: string;
+  excerpt: string;
   status: 'draft' | 'published' | 'pending' | 'deleted';
   is_pinned: boolean;
   view_count: number;
   reply_count: number;
+  like_count: number;
+  location_label?: string | null;
+  created_at: string;
+  updated_at: string;
+  last_activity_at?: string;
+  category_name: string | null;
+  category_slug: string | null;
+  category_color?: string | null;
+  category_icon?: string | null;
+  author_mindauth_id: number | null;
+  author_role: UserRole | null;
+  author_name?: string | null;
+  author_avatar_url?: string | null;
+  tags: Tag[];
+}
+
+export interface Post {
+  id: number;
+  user_id: number;
+  category_id: number | null;
+  server_id?: number | null;
+  required_group_id?: number | null;
+  post_type?: string;
+  slug?: string | null;
+  title: string;
+  content: string;
+  content_html: string | null;
+  status: 'draft' | 'published' | 'pending' | 'deleted';
+  reject_reason?: string | null;
+  is_pinned: boolean;
+  view_count: number;
+  reply_count?: number;
+  like_count: number;
+  location_label?: string | null;
   created_at: string;
   updated_at: string;
   category_name: string | null;
   category_slug: string | null;
-  author_mindauth_id: number;
-  author_role: UserRole;
+  category_color?: string | null;
+  category_icon?: string | null;
+  author_mindauth_id: number | null;
+  author_role: UserRole | null;
+  author_name?: string | null;
+  author_avatar_url?: string | null;
   tags: Tag[];
+  current_user_role?: UserRole | null;
+  /** Set by the post-detail endpoint: whether the requesting session authored this post. */
+  is_owner?: boolean;
+  /** Closed to new replies. Enforced by the API, not just reflected here. */
+  is_locked?: boolean;
+  /** The reply the author or staff accepted as the answer. */
+  best_reply_id?: number | null;
+  /** Last time the title or body changed; absent if never edited. */
+  edited_at?: string | null;
   replies?: Reply[];
-  repliesPagination?: {
+  replyPagination?: {
+    total: number;
     page: number;
     limit: number;
-    total: number;
     totalPages: number;
   };
 }
 
 export interface PostListResponse {
-  data: Post[];
+  data: PostSummary[];
   pagination: {
     page: number;
     limit: number;
@@ -93,13 +153,17 @@ export interface Reply {
   user_id: number;
   parent_reply_id: number | null;
   content: string;
-  content_html: string;
+  content_html: string | null;
   post_title?: string | null;
-  status: 'active' | 'pending' | 'deleted';
+  status: 'active' | 'published' | 'pending' | 'deleted';
+  like_count: number;
+  location_label?: string | null;
   created_at: string;
   updated_at: string;
-  author_mindauth_id: number;
-  author_role: UserRole;
+  author_mindauth_id: number | null;
+  author_role: UserRole | null;
+  author_name?: string | null;
+  author_avatar_url?: string | null;
 }
 
 export interface ReplyListResponse {
@@ -154,11 +218,18 @@ export interface AdminStats {
   total_posts: number;
   total_replies: number;
   total_users: number;
+  total_resources: number;
   active_24h: number;
   today_posts: number;
   today_replies: number;
   today_users: number;
+  today_resources: number;
+  pending_resources: number;
+  pending_reports: number;
+  average_report_resolution_hours: number | null;
+  zero_result_searches_7d: number;
   activity_7d: number[];
+  resource_type_breakdown: Array<{ type: string; count: number }>;
 }
 
 export interface AdminBan {
@@ -185,12 +256,33 @@ export interface CreateBanInput {
 
 export interface ModerationItem {
   id: number;
-  item_type: 'post' | 'reply';
+  item_type: 'post' | 'reply' | 'avatar';
   title?: string;
   content: string;
   author_username: string;
   created_at: string;
   post_id?: number;
+  avatar_url?: string;
+}
+
+export interface SearchHistoryEntry {
+  id: number;
+  query: string;
+  search_type: string;
+  results_count: number;
+  created_at: string;
+}
+
+export interface SearchResultResponse {
+  data: PostSummary[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  popular_searches?: string[];
+  resources?: Resource[];
 }
 
 // Phase 2: User Profile
@@ -201,10 +293,21 @@ export interface UserProfile {
   email: string | null;
   role: UserRole;
   avatar_url: string | null;
+  pending_avatar_url?: string | null;
+  avatar_status?: 'approved' | 'pending' | 'rejected';
   bio: string | null;
   created_at: string;
   post_count: number;
   reply_count: number;
+  last_location_label?: string | null;
+  // Points & Level
+  total_points?: number;
+  level?: { id: number; name: string; slug: string; color: string | null; icon: string | null; progress?: number };
+  // Follow stats
+  follower_count?: number;
+  following_count?: number;
+  // Badges
+  badges?: Array<{ id: number; name: string; slug: string; icon: string | null; level: string | null }>;
 }
 
 // Phase 2: Bookmarks
@@ -234,9 +337,9 @@ export interface BookmarkListResponse {
 export interface Notification {
   id: number;
   user_id: number;
-  type: 'reply' | 'mention' | 'message';
-  actor_id: number;
-  actor_name: string;
+  type: 'reply' | 'mention' | 'message' | 'post_like' | 'reply_like' | 'system' | 'best_answer' | 'friend_request' | 'friend_accepted';
+  actor_id: number | null;
+  actor_name: string | null;
   actor_avatar: string | null;
   post_id: number | null;
   post_title: string | null;
@@ -256,6 +359,31 @@ export interface NotificationListResponse {
   };
 }
 
+export interface AdminNotification {
+  id: number;
+  user_id: number;
+  event_key: string;
+  category: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  content: string | null;
+  action_url: string | null;
+  metadata: Record<string, unknown> | null;
+  is_read: boolean;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface AdminNotificationListResponse {
+  data: AdminNotification[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
 // Attachments
 export interface Attachment {
   id: number;
@@ -267,6 +395,9 @@ export interface Attachment {
   file_size: number;
   mime_type: string;
   download_count: number;
+  renderer_status?: string | null;
+  renderer_resource_id?: string | null;
+  renderer_error_code?: string | null;
   created_at: string;
 }
 
@@ -298,11 +429,14 @@ export interface Resource {
   user_id: number;
   title: string;
   description: string | null;
-  resource_type: 'file' | 'external';
+  resource_type: 'upload' | 'external';
+  resource_kind?: string | null;
+  integrity?: string | null;
   file_name: string | null;
   file_path: string | null;
   file_size: number;
   mime_type: string | null;
+  content_hash?: string | null;
   external_url: string | null;
   version: string | null;
   content: string | null;
@@ -311,13 +445,33 @@ export interface Resource {
   category_name: string | null;
   category_icon: string | null;
   download_count: number;
+  slug?: string | null;
+  rating_count?: number;
+  rating_sum?: number;
+  rating_average?: number;
   is_public: boolean;
   status: string;
+  reject_reason?: string | null;
+  use_mfl: boolean;
+  mfl_download_url: string | null;
   username: string;
   avatar_url: string | null;
   created_at: string;
   updated_at: string;
+  metadata?: ResourceDetailMetadata;
+  favorite_count?: number;
+  is_favorited?: boolean;
+  is_subscribed?: boolean;
   versions?: ResourceVersion[];
+}
+
+export interface ResourceDetailMetadata {
+  cover_image_url: string | null;
+  gallery_images: string[];
+  tags: string[];
+  supported_versions: string[];
+  compatibility: string[];
+  changelog: string | null;
 }
 
 export interface ResourceCategory {
@@ -336,7 +490,45 @@ export interface ResourceVersion {
   resource_id: number;
   version: string;
   file_path: string | null;
+  file_name: string | null;
+  file_size: number;
+  mime_type: string | null;
+  content: string | null;
+  content_html: string | null;
+  checksum?: string | null;
+  release_notes?: string | null;
+  release_notes_markdown?: string | null;
+  published_at?: string | null;
   created_at: string;
+}
+
+// Resource Comments
+export interface ResourceComment {
+  id: number;
+  resource_id: number;
+  user_id: number;
+  parent_id: number | null;
+  content: string;
+  content_html: string | null;
+  status: string;
+  edited_at: string | null;
+  upvote_count: number;
+  downvote_count: number;
+  report_count: number;
+  created_at: string;
+  updated_at: string;
+  username?: string;
+  avatar_url?: string | null;
+}
+
+export interface ResourceCommentListResponse {
+  data: ResourceComment[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 // Servers (EasyManager integration)
@@ -368,3 +560,21 @@ export interface ServerTemplate {
   version: string;
   is_public: boolean;
 }
+
+// Phase 3: Likes
+export interface LikedPost {
+  id: number;
+  created_at: string;
+  post_id: number;
+  title: string;
+  status: string;
+  like_count: number;
+  category_name: string | null;
+  category_id: number | null;
+  author_mindauth_id: number;
+  author_role: UserRole;
+  author_name: string | null;
+}
+
+// LanLink types
+export * from './lanlink';

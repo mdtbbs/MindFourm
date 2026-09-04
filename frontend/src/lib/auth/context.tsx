@@ -1,73 +1,45 @@
+/**
+ * Auth Context - Backward compatibility wrapper for Zustand user store
+ *
+ * This file provides backward compatibility for existing components
+ * that use AuthProvider/useAuth pattern, while internally using Zustand.
+ *
+ * New components should import directly from '@/store/user-store'
+ */
+
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { User } from '@/types';
-import { authApi } from '@/lib/api/client';
+import React, { useEffect } from 'react';
+import { useUserStore, useAuth } from '@/store/user-store';
 
-interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  logout: () => Promise<void>;
-  refreshAuth: () => Promise<void>;
-}
+// Re-export useAuth for backward compatibility
+export { useAuth };
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  isAuthenticated: false,
-  isLoading: true,
-  logout: async () => {},
-  refreshAuth: async () => {},
-});
-
+/**
+ * AuthProvider - Initializes Zustand user store on mount
+ *
+ * This Provider triggers the initial auth check when the app loads.
+ * Existing components using useAuth() will work without changes.
+ */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const refreshAuth = useUserStore((state) => state.refreshAuth);
 
-  const refreshAuth = useCallback(async () => {
-    try {
-      const response = await authApi.check();
-      if (response.authenticated) {
-        setUser(response.user || null);
-      } else {
-        setUser(null);
-      }
-    } catch {
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
+  // Trigger initial auth check on mount
   useEffect(() => {
     refreshAuth();
   }, [refreshAuth]);
 
-  const logout = useCallback(async () => {
-    try {
-      await authApi.logout();
-    } catch {
-      // Ignore errors during logout
-    }
-    setUser(null);
-  }, []);
-
-  // 非阻塞模式：直接渲染 children，不等待 auth 完成
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        logout,
-        refreshAuth,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  return useContext(AuthContext);
+  // `children` renders unconditionally, and that is the point.
+  //
+  // This provider used to return a full-screen spinner while `isLoading` was true.
+  // `isLoading` starts true and is only cleared by the effect above, which never runs
+  // on the server — so every server-rendered page was a spinner and nothing else. No
+  // headings, no post bodies, no per-page JSON-LD, and `notFound()` never executed
+  // server-side, which is why deleted posts answered 200. The two routes that opted
+  // out by pathname, /login and /register, were the only ones that ever server-rendered.
+  //
+  // Anything that genuinely needs to wait for the session reads `isLoading` from
+  // `useAuth()` itself. Access control does not depend on this: `middleware.ts` gates
+  // authenticated routes and the API authorises every request independently.
+  return <>{children}</>;
 }

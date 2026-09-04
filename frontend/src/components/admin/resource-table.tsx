@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { resourceAdminApi, resourceApi } from '@/lib/api/client';
 import { Resource, ResourceCategory } from '@/types';
 import { ExternalLink, Download, Trash2 } from 'lucide-react';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 function formatSize(bytes: number): string {
   if (!bytes) return '';
@@ -18,37 +20,56 @@ export default function ResourceTable() {
   const [status, setStatus] = useState<string>('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  // Swallowing the failure left the table showing "暂无资源", which is
+  // indistinguishable from genuinely having none.
+  const [error, setError] = useState<string | null>(null);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setLoading(true);
+    setError(null);
     Promise.all([
       resourceAdminApi.list({ limit: 50, status: status || undefined, search: search || undefined }),
       resourceApi.getCategories(),
     ]).then(([resRes, cats]) => {
       setResources(resRes.data || []);
       setCategories(cats);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  };
+    }).catch((err) => {
+      setError(err instanceof Error ? err.message : '加载资源失败');
+    }).finally(() => setLoading(false));
+  }, [search, status]);
 
-  useEffect(() => { loadData(); }, [status, search]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除此资源？')) return;
-    await resourceAdminApi.delete(id);
-    loadData();
+    try {
+      await resourceAdminApi.delete(id);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '删除失败');
+    }
   };
 
   const handleStatusChange = async (id: number, newStatus: string) => {
-    await resourceAdminApi.updateStatus(id, newStatus);
-    loadData();
+    try {
+      await resourceAdminApi.updateStatus(id, newStatus);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新状态失败');
+    }
   };
 
-  if (loading) return <div className="p-8 text-center">加载中...</div>;
+  if (loading && resources.length === 0) return <InlineLoading label="正在加载资源" className="min-h-32" />;
+
+  if (error && resources.length === 0) {
+    return <ErrorState title="资源加载失败" description={error} onRetry={loadData} />;
+  }
 
   return (
     <div>
       <div className="flex gap-3 mb-4">
+        {loading && resources.length > 0 ? <InlineLoading label="正在刷新资源" className="min-h-8" /> : null}
+        {error && resources.length > 0 ? <ErrorState title="刷新资源失败" description={error} onRetry={loadData} className="min-h-0 py-3" /> : null}
         <input
           type="text"
           value={search}

@@ -1,0 +1,42 @@
+# CNB quality gates. CNB is the source-of-truth build platform for this repo.
+# The backend and frontend pipelines run independently for faster feedback.
+
+.backend: &backend
+  name: backend-quality-gates
+  docker:
+    image: node:20
+    volumes:
+      - /root/.npm:copy-on-write
+  stages:
+    - name: install backend dependencies
+      script: npm ci
+    - name: build backend
+      script: npm run build:backend
+    - name: test backend
+      script: npm test -- --runInBand
+
+.frontend: &frontend
+  name: frontend-quality-gates
+  docker:
+    image: node:20
+    volumes:
+      - /root/.npm:copy-on-write
+  stages:
+    - name: install frontend dependencies
+      script: cd frontend && npm ci
+    - name: lint frontend
+      script: cd frontend && npm run lint
+    - name: typecheck frontend
+      script: cd frontend && npm run typecheck
+    - name: build frontend
+      env:
+        NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      script: cd frontend && npm run build
+
+master:
+  push:
+    - <<: *backend
+    - <<: *frontend
+  pull_request:
+    - <<: *backend
+    - <<: *frontend

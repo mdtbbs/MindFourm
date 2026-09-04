@@ -1,43 +1,35 @@
 'use client';
 
 import { useAuth } from '@/lib/auth/context';
+import { useSettings } from '@/lib/settings/context';
+import { resolveBrand } from '@/lib/theme/brand';
 import { LogOut } from 'lucide-react';
+import AdminNotificationBell from '@/components/admin/admin-notification-bell';
+import { roleLabel } from '@/lib/display-labels';
 
 export default function AdminHeader() {
   const { user, logout } = useAuth();
+  const settings = useSettings();
+  const brand = resolveBrand(settings);
 
-  const handleLogout = async () => {
-    await logout();
-    window.location.href = '/';
+  const handleLogout = () => {
+    logout();
   };
 
   return (
-    <header style={{
-      background: 'var(--bg-card)',
-      borderBottom: '1px solid var(--border)',
-      padding: '16px 24px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    }}>
-      <h1 style={{ fontSize: 18, fontWeight: 500, color: 'var(--text)' }}>MindForum 管理后台</h1>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          {user?.username} ({user?.role})
+    <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4 flex items-center justify-between">
+      <h1 className="text-xl font-bold text-[var(--text)]">{brand.siteName} 管理后台</h1>
+      <div className="flex items-center gap-4">
+        <AdminNotificationBell />
+        <span className="text-sm text-[var(--text-secondary)]">
+          {user?.username} ({roleLabel(user?.role)})
         </span>
         <button
           onClick={handleLogout}
-          style={{
-            padding: 8,
-            color: 'var(--text-secondary)',
-            background: 'transparent',
-            border: 'none',
-            borderRadius: 6,
-            cursor: 'pointer',
-          }}
+          className="p-2 text-[var(--text-secondary)] hover:text-red-600 transition-colors"
           aria-label="退出登录"
         >
-          <LogOut style={{ width: 18, height: 18 }} />
+          <LogOut className="w-5 h-5" />
         </button>
       </div>
     </header>

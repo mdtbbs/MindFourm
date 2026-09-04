@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      # Spelling matches the repository and the application default.
+      MYSQL_DATABASE: mindfourm
+    # Bound to loopback rather than every interface: with a root/root credential
+    # pair, publishing on 0.0.0.0 exposed the database to the whole local network.
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Schema comes from the backend's TypeORM migrations at boot, not the MySQL
+      # init directory — see docker-compose.prod.yml.
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: 4000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+      MYSQL_DATABASE: mindfourm
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FRONTEND_URL: http://localhost:3000
+      API_URL: http://backend:4000
+      MINDAUTH_URL: http://localhost:4001
+      MINDAUTH_CLIENT_ID: forum
+      MINDAUTH_CLIENT_SECRET: ${MINDAUTH_CLIENT_SECRET:-dev-secret}
+      # Registers POST /api/auth/test-login for the Playwright suite. Refused in
+      # production regardless; see src/modules/auth/test-auth.util.ts.
+      ENABLE_TEST_AUTH: ${ENABLE_TEST_AUTH:-false}
+    depends_on:
+      - mysql
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000
+        NEXT_PUBLIC_MINDAUTH_URL: http://localhost:4001
+        NEXT_PUBLIC_MINDAUTH_CLIENT_ID: forum
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_MINDAUTH_URL: http://localhost:4001
+      NEXT_PUBLIC_MINDAUTH_CLIENT_ID: forum
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:

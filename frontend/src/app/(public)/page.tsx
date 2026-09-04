@@ -1,135 +1,159 @@
-import { categoryApi, postApi, tagApi } from '@/lib/api/client';
-import Sidebar from '@/components/forum/sidebar';
-import PostCard from '@/components/forum/post-card';
-import Pagination from '@/components/ui/pagination';
-import ServerSection from '@/components/forum/server-section';
-import { Category, Post, Tag, PostListResponse } from '@/types';
-import Link from 'next/link';
+import Link from "next/link";
+import type { Metadata } from "next";
+import { ArrowRight } from "lucide-react";
+import ThreadList from "@/components/forum/thread-list";
+import ErrorState from "@/components/ui/error-state";
+import { createEmptyPaginatedResult } from "@/lib/api/response";
+import { fetchApiData, fetchApiPaginated } from "@/lib/api/server-fetch";
+import { fetchPublicSettings } from "@/lib/settings/server";
+import { resolveBrand } from "@/lib/theme/brand";
+import { generatePageMetadata } from "@/lib/metadata";
+import type { Category, PostListResponse, ResourceCategory } from "@/types";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
-const API_BASE = process.env.API_URL || 'http://localhost:4000';
-
-async function fetchCategories(): Promise<Category[]> {
+function parseFeaturedCategoryIds(value: string | undefined): number[] {
+  if (!value) return [];
   try {
-    const res = await fetch(`${API_BASE}/api/v1/categories`, { next: { tags: ['categories'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? [...new Set(parsed.filter((id): id is number => Number.isInteger(id) && id > 0))]
+      : [];
   } catch {
     return [];
   }
 }
 
-async function fetchTags(): Promise<Tag[]> {
-  try {
-    const res = await fetch(`${API_BASE}/api/v1/tags`, { next: { tags: ['tags'] } });
-    if (!res.ok) return [];
-    const json = await res.json();
-    return json.success ? json.data : [];
-  } catch {
-    return [];
-  }
+async function fetchPosts(categoryId?: number, excludedCategoryIds: number[] = []): Promise<PostListResponse> {
+  const params = new URLSearchParams({ page: '1', limit: '6', sort: 'last_activity_at' });
+  if (categoryId) params.set('category_id', String(categoryId));
+  if (excludedCategoryIds.length) params.set('exclude_category_ids', excludedCategoryIds.join(','));
+  return fetchApiPaginated<PostListResponse["data"][number]>(
+    `/api/posts?${params.toString()}`,
+    {
+      init: { cache: "no-store" },
+      fallback: createEmptyPaginatedResult<PostListResponse["data"][number]>(6),
+      forwardCookies: true,
+      throwOnError: true,
+    },
+  );
 }
 
-async function fetchSettings(): Promise<Record<string, string>> {
-  try {
-    const res = await fetch(`${API_BASE}/api/settings`, { next: { revalidate: 60 } });
-    if (!res.ok) return {};
-    const json = await res.json();
-    return json.success ? json.data : {};
-  } catch {
-    return {};
-  }
-}
-
-async function fetchPosts(page: number, limit: number, categoryId?: number): Promise<PostListResponse> {
-  try {
-    const qs = new URLSearchParams();
-    qs.set('page', String(page));
-    qs.set('limit', String(limit));
-    if (categoryId) qs.set('category_id', String(categoryId));
-    const res = await fetch(`${API_BASE}/api/v1/posts?${qs}`, { next: { tags: ['posts'] } });
-    if (!res.ok) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
-    const json = await res.json();
-    if (!json.success) return { data: [], pagination: { page: 1, limit, total: 0, totalPages: 1 } };
-    return {
-      data: json.data || [],
-      pagination: json.pagination || { page: 1, limit, total: 0, totalPages: 1 },
-    };
-  } catch {
-    return { data: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } };
-  }
-}
-
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: { page?: string; category_id?: string };
-}) {
-  const page = parseInt(searchParams.page || '1');
-  const categoryId = searchParams.category_id ? parseInt(searchParams.category_id) : undefined;
-
-  // 并行请求所有数据，包括 settings
-  const [categories, tags, postsResult, settings] = await Promise.all([
-    fetchCategories(),
-    fetchTags(),
-    fetchPosts(page, 20, categoryId),
-    fetchSettings(),
+async function fetchPublicNavigation(): Promise<{ categories: Category[]; resourceCategories: ResourceCategory[] }> {
+  const [categories, resourceCategories] = await Promise.all([
+    fetchApiData<Category[]>('/api/categories', { init: { next: { revalidate: 300 } }, fallback: [] }),
+    fetchApiData<ResourceCategory[]>('/api/resources/categories', { init: { next: { revalidate: 300 } }, fallback: [] }),
   ]);
+  return { categories, resourceCategories };
+}
 
-  const postsPerPage = parseInt(settings?.posts_per_page || '20');
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await fetchPublicSettings();
+  return generatePageMetadata({
+    title: "像素工厂中文论坛（Mindustry）- Mod、地图、蓝图与联机社区",
+    description: "MDTBBS 是面向 Mindustry（像素工厂）玩家的中文社区，提供 Mod、地图、蓝图、存档、游戏版本、联机交流、教程与资源分享。",
+    brandInfo: resolveBrand(settings),
+  });
+}
+
+export default async function HomePage() {
+  const settings = await fetchPublicSettings();
+  const brand = resolveBrand(settings);
+  let postsResult: PostListResponse;
+  let navigation: Awaited<ReturnType<typeof fetchPublicNavigation>>;
+  let featuredCategorySections: Array<{ category: Category; posts: PostListResponse }> = [];
+
+  try {
+    navigation = await fetchPublicNavigation();
+    const featuredCategoryIds = parseFeaturedCategoryIds(settings.home_featured_category_ids);
+    const featuredCategories = featuredCategoryIds
+      .map((id) => navigation.categories.find((category) => category.id === id))
+      .filter((category): category is Category => Boolean(category));
+    const [latestPosts, ...featuredPosts] = await Promise.all([
+      fetchPosts(undefined, featuredCategories.map((category) => category.id)),
+      ...featuredCategories.map((category) => fetchPosts(category.id)),
+    ]);
+    postsResult = latestPosts;
+    featuredCategorySections = featuredCategories.map((category, index) => ({
+      category,
+      posts: featuredPosts[index],
+    }));
+  } catch {
+    return (
+      <ErrorState
+        title="首页加载失败"
+        description="暂时无法获取社区内容，请稍后重试。"
+        action={{ label: "重新加载", href: "/" }}
+      />
+    );
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex gap-8">
-        {/* Left Sidebar */}
-        <div className="hidden lg:block w-64 flex-shrink-0">
-          <Sidebar
-            categories={categories}
-            tags={tags}
-            selectedCategory={categoryId}
-          />
-        </div>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+      <section className="mb-5 border-b border-[var(--border)] pb-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
+          {brand.siteName}
+        </p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--text)]">像素工厂中文论坛</h1>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">Mindustry 玩家讨论、资源分享、联机与创作社区。</p>
+      </section>
 
-        {/* Main Content */}
-        <div className="flex-1 space-y-4">
-          {/* 服务器区域 - 在帖子列表上方 */}
-          <ServerSection />
-
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">
-              {categoryId
-                ? categories.find((c) => c.id === categoryId)?.name || '分类'
-                : '最新帖子'}
-            </h1>
+      <div>
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-[var(--text)]">最新讨论</h2>
+            <Link
+              href="/threads"
+              className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline"
+            >
+              查看全部 <ArrowRight className="h-4 w-4" />
+            </Link>
           </div>
-
-          {postsResult.data.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-surface-500 dark:text-gray-400 mb-4">暂无帖子</p>
-              <Link
-                href="/posts/new"
-                className="inline-flex items-center px-4 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-700 transition-colors"
-              >
-                发布第一篇帖子
-              </Link>
-            </div>
+          {postsResult.data.length > 0 ? (
+            <ThreadList posts={postsResult.data} />
           ) : (
-            <div className="space-y-3">
-              {postsResult.data.map((post) => (
-                <PostCard key={post.id} post={post} />
-              ))}
+            <div className="border border-[var(--border)] p-8 text-center text-sm text-[var(--text-muted)]">
+              暂时没有讨论
             </div>
           )}
+        </section>
 
-          <Pagination
-            currentPage={postsResult.pagination.page}
-            totalPages={postsResult.pagination.totalPages}
-            basePath="/"
-            queryParams={categoryId ? { category_id: String(categoryId) } : {}}
-          />
-        </div>
+        {featuredCategorySections.map(({ category, posts }) => (
+          <section key={category.id} className="mt-8">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-[var(--text)]">{category.name}</h2>
+              <Link href={`/categories/${category.id}`} className="inline-flex items-center gap-1 text-sm text-[var(--primary)] hover:underline">
+                查看板块 <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+            {posts.data.length > 0 ? (
+              <ThreadList posts={posts.data} />
+            ) : (
+              <div className="border border-[var(--border)] p-8 text-center text-sm text-[var(--text-muted)]">
+                该板块暂时没有讨论
+              </div>
+            )}
+          </section>
+        ))}
+
+        {(navigation.categories.length > 0 || navigation.resourceCategories.length > 0) && (
+          <nav aria-label="论坛与资源分类" className="mt-8 grid gap-6 border-t border-[var(--border)] pt-6 sm:grid-cols-2">
+            {navigation.categories.length > 0 && <section>
+              <h2 className="text-base font-semibold text-[var(--text)]">讨论板块</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {navigation.categories.map((category) => <Link key={category.id} href={`/categories/${category.id}`} className="rounded border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{category.name}</Link>)}
+              </div>
+            </section>}
+            {navigation.resourceCategories.length > 0 && <section>
+              <h2 className="text-base font-semibold text-[var(--text)]">资源分类</h2>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {navigation.resourceCategories.map((category) => <Link key={category.id} href={`/resources?category_id=${category.id}`} className="rounded border border-[var(--border)] px-2.5 py-1.5 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{category.name}</Link>)}
+              </div>
+            </section>}
+          </nav>
+        )}
+
       </div>
     </div>
   );

@@ -9,14 +9,21 @@ import Alert from '@/components/ui/alert';
 
 interface CategoryFormProps {
   category?: Category | null;
+  categories?: Category[];
   onSuccess?: (category: Category) => void;
 }
 
 interface FormValues {
   name: string;
   slug: string;
+  description: string;
+  color: string;
+  icon: string;
+  group_key: string;
+  parent_id: string;
   sort_order: string;
   is_active: boolean;
+  show_in_sidebar: boolean;
 }
 
 interface FormErrors {
@@ -25,14 +32,29 @@ interface FormErrors {
   sort_order?: string;
 }
 
-export default function CategoryForm({ category, onSuccess }: CategoryFormProps) {
+const GROUP_OPTIONS = [
+  { value: 'community', label: '社区' },
+  { value: 'creation', label: '创作' },
+  { value: 'game', label: '游戏' },
+  { value: 'meta', label: '站务' },
+];
+
+const ICON_OPTIONS = ['MessageCircle', 'CircleHelp', 'BookOpen', 'Code2', 'Map', 'Shapes', 'Radio', 'Megaphone', 'MessagesSquare', 'Wrench'];
+
+export default function CategoryForm({ category, categories = [], onSuccess }: CategoryFormProps) {
   const isEditMode = !!category;
 
   const [values, setValues] = useState<FormValues>({
     name: '',
     slug: '',
+    description: '',
+    color: '#64748B',
+    icon: 'MessageCircle',
+    group_key: 'community',
+    parent_id: '',
     sort_order: '0',
     is_active: true,
+    show_in_sidebar: true,
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,11 +65,17 @@ export default function CategoryForm({ category, onSuccess }: CategoryFormProps)
       setValues({
         name: category.name,
         slug: category.slug,
+        description: category.description || '',
+        color: category.color || '#64748B',
+        icon: category.icon || 'MessageCircle',
+        group_key: category.group_key || 'community',
+        parent_id: category.parent_id ? String(category.parent_id) : '',
         sort_order: String(category.sort_order),
-        is_active: category.is_active,
+        is_active: Boolean(category.is_active),
+        show_in_sidebar: category.show_in_sidebar !== false,
       });
     } else {
-      setValues({ name: '', slug: '', sort_order: '0', is_active: true });
+      setValues({ name: '', slug: '', description: '', color: '#64748B', icon: 'MessageCircle', group_key: 'community', parent_id: '', sort_order: '0', is_active: true, show_in_sidebar: true });
     }
     setErrors({});
     setAlert(null);
@@ -88,7 +116,14 @@ export default function CategoryForm({ category, onSuccess }: CategoryFormProps)
       const data = {
         name: values.name.trim(),
         slug: values.slug.trim(),
+        description: values.description.trim() || null,
+        color: values.color,
+        icon: values.icon || null,
+        group_key: values.group_key ? values.group_key as NonNullable<Category['group_key']> : null,
+        parent_id: values.parent_id ? Number(values.parent_id) : null,
         sort_order: Number(values.sort_order),
+        is_active: values.is_active,
+        show_in_sidebar: values.show_in_sidebar,
       };
 
       let result: Category;
@@ -103,7 +138,7 @@ export default function CategoryForm({ category, onSuccess }: CategoryFormProps)
       if (isEditMode) {
         onSuccess?.(result);
       } else {
-        setValues({ name: '', slug: '', sort_order: '0', is_active: true });
+        setValues({ name: '', slug: '', description: '', color: '#64748B', icon: 'MessageCircle', group_key: 'community', parent_id: '', sort_order: '0', is_active: true, show_in_sidebar: true });
       }
     } catch (err) {
       setAlert({
@@ -145,6 +180,50 @@ export default function CategoryForm({ category, onSuccess }: CategoryFormProps)
           />
         </div>
 
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-surface-700">板块说明</label>
+          <textarea
+            value={values.description}
+            onChange={(event) => handleChange('description', event.target.value)}
+            placeholder="简短说明这个板块适合讨论什么"
+            disabled={isSubmitting}
+            rows={2}
+            className="w-full rounded border border-surface-300 px-3 py-2 text-sm outline-none focus:border-primary-500 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block text-sm font-medium text-surface-700">
+            板块分组
+            <select value={values.group_key} onChange={(event) => handleChange('group_key', event.target.value)} disabled={isSubmitting} className="mt-1.5 w-full rounded border border-surface-300 px-3 py-2 text-sm outline-none focus:border-primary-500">
+              {GROUP_OPTIONS.map((group) => <option key={group.value} value={group.value}>{group.label}</option>)}
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-surface-700">
+            图标
+            <select value={values.icon} onChange={(event) => handleChange('icon', event.target.value)} disabled={isSubmitting} className="mt-1.5 w-full rounded border border-surface-300 px-3 py-2 text-sm outline-none focus:border-primary-500">
+              {ICON_OPTIONS.map((icon) => <option key={icon} value={icon}>{icon}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="block text-sm font-medium text-surface-700">
+            板块颜色
+            <span className="mt-1.5 flex h-10 items-center gap-2 rounded border border-surface-300 px-2">
+              <input type="color" value={values.color} onChange={(event) => handleChange('color', event.target.value.toUpperCase())} disabled={isSubmitting} className="h-6 w-8 cursor-pointer border-0 bg-transparent p-0" />
+              <span className="font-mono text-xs text-surface-600">{values.color}</span>
+            </span>
+          </label>
+          <label className="block text-sm font-medium text-surface-700">
+            上级板块
+            <select value={values.parent_id} onChange={(event) => handleChange('parent_id', event.target.value)} disabled={isSubmitting} className="mt-1.5 w-full rounded border border-surface-300 px-3 py-2 text-sm outline-none focus:border-primary-500">
+              <option value="">无（一级板块）</option>
+              {categories.filter((item) => item.id !== category?.id).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input
             label="排序"
@@ -165,6 +244,16 @@ export default function CategoryForm({ category, onSuccess }: CategoryFormProps)
                 disabled={isSubmitting}
               />
               <span className="text-sm font-medium text-surface-700">启用</span>
+            </label>
+            <label className="ml-6 flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={values.show_in_sidebar}
+                onChange={(e) => handleChange('show_in_sidebar', e.target.checked)}
+                className="w-4 h-4 rounded border-surface-300 text-primary-600 focus:ring-primary-500"
+                disabled={isSubmitting}
+              />
+              <span className="text-sm font-medium text-surface-700">在侧栏显示</span>
             </label>
           </div>
         </div>

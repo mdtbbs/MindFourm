@@ -1,69 +1,116 @@
-/* Mindustry Community - 统一设计系统变量 */
-/* Material Design + 温暖柔和风格 */
+/* MindProject - 统一设计系统变量 */
+/* 现代极简风格 */
 
 :root {
-  /* ===== 品牌色 (Mindustry 橙色系) ===== */
-  --primary: #ff6b35;
-  --primary-dark: #e55a2b;
-  --primary-light: #ff8c5a;
-  --accent: #ffc107;
+  /* ===== 品牌色（运行时可由站点设置覆盖） ===== */
+  --primary: #2f80ed;
+  --primary-dark: #2563eb;
+  --primary-light: #5ba0ff;
+  --accent: #dcecff;
 
-  /* ===== 浅色主题 (默认) ===== */
-  --bg: #faf8f5;
+  /* ===== 浅色主题 (默认) - 现代极简 ===== */
+  --bg: #f5f9ff;
   --bg-card: #ffffff;
-  --bg-elevated: #f5f2ed;
-  --text: #2d2a26;
-  --text-secondary: #6b6660;
-  --text-muted: #a09890;
-  --border: #e8e5e0;
+  --bg-elevated: #eef4fb;
+  --bg-hover: #eaf2ff;
+  --text: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --border: #d8e2f0;
+  --border-light: #e8eef6;
 
   /* ===== 功能色 ===== */
-  --success: #22c55e;
+  --success: #4caf50;
   --warning: #ffc107;
-  --error: #ef4444;
+  --error: #f44336;
+  --info: #2196f3;
 
   /* ===== 圆角 ===== */
   --radius-sm: 4px;
   --radius: 6px;
-  --radius-lg: 8px;
-  --radius-card: 0px;
+  --radius-lg: 6px;
+  --radius-card: 6px;
+  --radius-badge: 999px;
 
   /* ===== 阴影 (浅色主题) ===== */
-  --shadow-card: 0 2px 8px rgba(0,0,0,0.08);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.12);
-  --shadow-modal: 0 8px 24px rgba(0,0,0,0.16);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.12);
 
-  /* ===== 尺寸 ===== */
+  /* ===== 布局尺寸 ===== */
   --header-height: 56px;
   --header-height-mobile: 48px;
+  --sidebar-width: 200px;
+  --sidebar-width-sm: 180px;
+  --sidebar-width-collapsed: 60px;
+  --content-max-width: 640px;
   --btn-height: 40px;
   --btn-height-sm: 32px;
   --btn-height-lg: 48px;
   --input-height: 40px;
   --card-padding: 16px;
   --card-padding-lg: 24px;
+
+  /* ===== 勋章等级颜色 ===== */
+  --badge-lv1: #e0e0e0;
+  --badge-lv2-start: #64b5f6;
+  --badge-lv2-end: #90caf9;
+  --badge-lv3-start: #ffb347;
+  --badge-lv3-end: #ffd700;
+  --badge-lv4-start: #ff8c5a;
+  --badge-lv4-end: #ff6b35;
+
+  /* ===== 称号颜色 ===== */
+  --title-active: #4caf50;
+  --title-core: #2196f3;
+  --title-mod: #ff6b35;
+  --title-admin: #ffc107;
+  --title-contributor: #9c27b0;
 }
 
-/* ===== 深色主题 ===== */
-[data-theme="dark"],
-.dark {
-  --bg: #1a1816;
-  --bg-card: #262420;
-  --bg-elevated: #363230;
-  --text: #f5f2ed;
-  --text-secondary: #a09890;
-  --text-muted: #6b6b60;
-  --border: #3a3630;
-
-  /* 深色主题阴影更重 */
-  --shadow-card: 0 2px 8px rgba(0,0,0,0.24);
-  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.32);
-  --shadow-modal: 0 8px 24px rgba(0,0,0,0.40);
+/* ===== 主题切换动画 ===== */
+.theme-transitioning,
+.theme-transitioning * {
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease !important;
 }
 
 /* ===== 字体 ===== */
 :root {
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont,
-    'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-mono: 'Geist Mono', 'JetBrains Mono', 'Consolas', monospace;
+  --font-family:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", "Consolas", monospace;
+}
+
+[data-theme="dark"],
+.dark {
+  --bg: #0b1220;
+  --bg-card: #101a2d;
+  --bg-elevated: #13233c;
+  --bg-hover: #173153;
+  --text: #e5eefc;
+  --text-secondary: #9fb0ca;
+  --text-muted: #7c8ca6;
+  --border: rgba(148, 163, 184, 0.18);
+  --border-light: rgba(148, 163, 184, 0.1);
+  --primary: #74a9ff;
+  --primary-dark: #5f9cff;
+  --primary-light: #9fc2ff;
+  --accent: #173153;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.24);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.32);
+  --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --badge-lv1: #424242;
+  --badge-lv2-start: #1976d2;
+  --badge-lv2-end: #2196f3;
+  --badge-lv3-start: #ffb347;
+  --badge-lv3-end: #ffd700;
+  --badge-lv4-start: #ff8c5a;
+  --badge-lv4-end: #ff6b35;
 }

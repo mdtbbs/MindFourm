@@ -1,55 +1,155 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { notificationApi } from '@/lib/api/client';
+import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Notification } from '@/types';
-import { MessageSquare, AtSign, CheckCheck, Filter } from 'lucide-react';
+import { MessageSquare, AtSign, CheckCheck, Filter, Heart, Mail, Bell, UserPlus, UserCheck } from 'lucide-react';
 import Link from 'next/link';
+import EmptyState from '@/components/ui/empty-state';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const loadNotifications = useCallback(async (page: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // The filter goes to the server. Fetching one page and filtering it here left the
+      // page count describing unfiltered rows, so "仅未读" showed an empty list whenever
+      // the unread items were past page one — while the bell still reported them.
+      const res = await notificationApi.list({ page, limit: 50, filter });
+      setNotifications(res.data);
+      setPagination(res.pagination);
+    } catch {
+      setError('通知加载失败,请稍后重试');
+    }
+    setLoading(false);
+  }, [filter]);
 
   useEffect(() => {
     loadNotifications(1);
-  }, [filter]);
+  }, [filter, loadNotifications]);
 
-  const loadNotifications = async (page: number) => {
-    setLoading(true);
-    try {
-      const res = await notificationApi.list({ page, limit: 50 });
-      let filtered = res.data;
-      if (filter === 'unread') filtered = res.data.filter(n => !n.is_read);
-      if (filter === 'read') filtered = res.data.filter(n => n.is_read);
-      setNotifications(filtered);
-      setPagination(res.pagination);
-    } catch {
-      setNotifications([]);
-    }
-    setLoading(false);
-  };
+  // Under a read/unread filter the server decides membership, so a row that just
+  // changed state has to be re-fetched out of (or into) the list rather than mutated in
+  // place — otherwise "仅未读" keeps showing rows it has just marked read.
+  const isFiltered = filter !== 'all';
 
   const handleMarkAllRead = async () => {
     try {
       await notificationApi.markAllAsRead();
-      setNotifications(notifications.map(n => ({ ...n, is_read: true })));
-    } catch {}
+      if (isFiltered) {
+        await loadNotifications(1);
+      } else {
+        setNotifications(notifications.map(n => ({ ...n, is_read: true })));
+      }
+    } catch {
+      setActionError('标记已读失败,请稍后重试');
+    }
   };
 
   const handleMarkRead = async (id: number) => {
     try {
       await notificationApi.markAsRead(id);
-      setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
-    } catch {}
+      if (isFiltered) {
+        await loadNotifications(pagination.page);
+      } else {
+        setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
+      }
+    } catch {
+      setActionError('标记已读失败,请稍后重试');
+    }
   };
 
-  const typeIcon = (type: string) =>
-    type === 'reply' ? <MessageSquare className="w-5 h-5 text-blue-500" /> : <AtSign className="w-5 h-5 text-orange-500" />;
+  const typeIcon = (type: string) => {
+    switch (type) {
+      case 'reply':
+        return <MessageSquare className="w-5 h-5 text-blue-500" />;
+      case 'mention':
+        return <AtSign className="w-5 h-5 text-orange-500" />;
+      case 'post_like':
+      case 'reply_like':
+        return <Heart className="w-5 h-5 text-red-500" />;
+      case 'message':
+        return <Mail className="w-5 h-5 text-green-500" />;
+      case 'best_answer':
+        return <CheckCheck className="w-5 h-5 text-emerald-600" />;
+      case 'friend_request':
+        return <UserPlus className="w-5 h-5 text-cyan-500" />;
+      case 'friend_accepted':
+        return <UserCheck className="w-5 h-5 text-teal-500" />;
+      case 'system':
+        return <Bell className="w-5 h-5 text-purple-500" />;
+      default:
+        return <Bell className="w-5 h-5 text-surface-400" />;
+    }
+  };
 
-  const typeText = (type: string) =>
-    type === 'reply' ? '回复了你的帖子' : '在帖子中提到了你';
+  const typeText = (type: string) => {
+    switch (type) {
+      case 'reply':
+        return '回复了你的帖子';
+      case 'mention':
+        return '在帖子中提到了你';
+      case 'post_like':
+        return '点赞了你的帖子';
+      case 'reply_like':
+        return '点赞了你的回复';
+      case 'message':
+        return '给你发了私信';
+      case 'friend_request':
+        return '请求添加你为好友';
+      case 'friend_accepted':
+        return '接受了你的好友请求';
+      case 'system':
+        return '系统通知';
+      case 'best_answer':
+        return '将你的回复设为最佳答案';
+      default:
+        return '新通知';
+    }
+  };
+
+  const actorLabel = (notification: Notification) => {
+    if (notification.type === 'system') {
+      return null;
+    }
+    return notification.actor_name || '社区';
+  };
+
+  const renderContent = (notification: Notification) => {
+    if (!notification.content) {
+      return null;
+    }
+
+    if (notification.type === 'system') {
+      return (
+        <div className="mb-2 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-200">
+          <MarkdownRenderer
+            content={notification.content}
+            className="prose-p:my-1 prose-headings:my-2 prose-ul:my-2 prose-li:my-0"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <p className="mb-2 line-clamp-2 text-sm text-surface-600 dark:text-gray-300">{notification.content}</p>
+    );
+  };
+
+  // First, last, and a window around the current page.
+  const visiblePages = Array.from({ length: pagination.totalPages }, (_, i) => i + 1).filter(
+    (p) => p === 1 || p === pagination.totalPages || Math.abs(p - pagination.page) <= 2,
+  );
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
@@ -82,11 +182,11 @@ export default function NotificationsPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-surface-400 dark:text-gray-500">加载中...</div>
+        <InlineLoading label="正在加载通知" className="min-h-[180px]" />
+      ) : error ? (
+        <ErrorState title="通知加载失败" description={error} onRetry={() => void loadNotifications(pagination.page)} />
       ) : notifications.length === 0 ? (
-        <div className="text-center py-12 text-surface-400 dark:text-gray-500">
-          <p>暂无通知</p>
-        </div>
+        <EmptyState title={filter === 'unread' ? '没有未读通知' : filter === 'read' ? '没有已读通知' : '暂无通知'} />
       ) : (
         <div className="space-y-3">
           {notifications.map(n => (
@@ -100,12 +200,12 @@ export default function NotificationsPage() {
                 <div className="shrink-0">{typeIcon(n.type)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-surface-900 dark:text-gray-100">{n.actor_name}</span>
+                    {actorLabel(n) && (
+                      <span className="font-medium text-surface-900 dark:text-gray-100">{actorLabel(n)}</span>
+                    )}
                     <span className="text-sm text-surface-500 dark:text-gray-400">{typeText(n.type)}</span>
                   </div>
-                  {n.content && (
-                    <p className="text-sm text-surface-600 dark:text-gray-300 line-clamp-2 mb-2">{n.content}</p>
-                  )}
+                  {renderContent(n)}
                   {n.post_title && (
                     <Link
                       href={`/posts/${n.post_id}${n.reply_id ? `#reply-${n.reply_id}` : ''}`}
@@ -134,19 +234,39 @@ export default function NotificationsPage() {
         </div>
       )}
 
+      {actionError && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300" role="alert">
+          <span>{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="font-medium underline">关闭</button>
+        </div>
+      )}
+
       {pagination.totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-8">
-          {Array.from({ length: pagination.totalPages }, (_, i) => i + 1).map(p => (
-            <button
-              key={p}
-              onClick={() => loadNotifications(p)}
-              className={`px-3 py-1 rounded ${
-                p === pagination.page ? 'bg-primary-600 text-white' : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+          {/* Windowed: rendering one button per page allocated an array the length of
+              totalPages on every render and produced an unusable strip once the count
+              grew. Mirrors the windowing in components/ui/pagination.tsx. */}
+          {visiblePages.map((p, idx) => {
+            const previous = visiblePages[idx - 1];
+            const gap = previous !== undefined && p - previous > 1;
+
+            return (
+              <span key={p} className="inline-flex items-center gap-2">
+                {gap && <span className="px-1 text-surface-400">…</span>}
+                <button
+                  onClick={() => loadNotifications(p)}
+                  aria-current={p === pagination.page ? 'page' : undefined}
+                  className={`px-3 py-1 rounded ${
+                    p === pagination.page
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300'
+                  }`}
+                >
+                  {p}
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
     </div>

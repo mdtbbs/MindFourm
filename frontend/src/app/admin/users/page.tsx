@@ -8,6 +8,9 @@ import Button from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import Alert from '@/components/ui/alert';
 import Pagination from '@/components/ui/pagination';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
+import { roleLabel } from '@/lib/display-labels';
 
 const PAGE_SIZE = 20;
 
@@ -43,7 +46,7 @@ export default function AdminUsersPage() {
       setUsers(res.data);
       setTotalPages(res.pagination.totalPages);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load users');
+      setError(err instanceof Error ? err.message : '加载用户失败');
     } finally {
       setLoading(false);
     }
@@ -78,16 +81,18 @@ export default function AdminUsersPage() {
     setPage(1);
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="text-surface-500">加载用户中...</div>
-      </div>
-    );
+  if (loading && users.length === 0) {
+    return <InlineLoading label="正在加载用户" className="min-h-64" />;
   }
 
-  if (error) {
-    return <Alert type="error" message={error} />;
+  if (error && users.length === 0) {
+    return (
+      <ErrorState
+        title="用户加载失败"
+        description={error}
+        onRetry={fetchUsers}
+      />
+    );
   }
 
   return (
@@ -116,6 +121,8 @@ export default function AdminUsersPage() {
       </div>
 
       {updateError && <Alert type="error" message={updateError} />}
+      {loading && users.length > 0 ? <InlineLoading label="正在刷新用户" /> : null}
+      {error && users.length > 0 ? <Alert type="error" message={error} /> : null}
 
       <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
         <div className="overflow-x-auto">
@@ -138,7 +145,7 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 font-medium text-surface-900">{user.username}</td>
                   <td className="px-4 py-3 text-surface-600">{user.email}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={roleVariant[user.role]}>{user.role}</Badge>
+                    <Badge variant={roleVariant[user.role]}>{roleLabel(user.role)}</Badge>
                   </td>
                   <td className="px-4 py-3 text-surface-500">{user.mindauthId}</td>
                   <td className="px-4 py-3 text-surface-500">

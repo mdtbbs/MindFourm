@@ -5,41 +5,82 @@ import { resourceAdminApi } from '@/lib/api/client';
 import { Resource } from '@/types';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Check, X, Eye } from 'lucide-react';
+import ErrorState from '@/components/ui/error-state';
+import InlineLoading from '@/components/ui/inline-loading';
 
 export default function ResourceModerationTable() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedResource, setSelectedResource] = useState<Resource | null>(null);
+  // Without this a failed load rendered "暂无待审批资源" — a moderator would read
+  // that as "nothing to review" and move on, while the queue was actually unread.
+  const [error, setError] = useState<string | null>(null);
+  const [rejectDialog, setRejectDialog] = useState<{ resource: Resource } | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const loadPending = () => {
     setLoading(true);
+    setError(null);
     resourceAdminApi.list({ status: 'pending', limit: 50 })
-      .then(res => {
-        setResources(res.data || []);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      .then(res => setResources(res.data || []))
+      .catch((err) => setError(err instanceof Error ? err.message : '加载待审资源失败'))
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { loadPending(); }, []);
 
-  const handleAction = async (id: number, action: 'approved' | 'rejected') => {
-    await resourceAdminApi.updateStatus(id, action);
-    setSelectedResource(null);
-    loadPending();
+  const handleApprove = async (id: number) => {
+    try {
+      await resourceAdminApi.updateStatus(id, 'approved');
+      setSelectedResource(null);
+      loadPending();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '审核操作失败');
+    }
   };
 
-  if (loading) return <div className="p-8 text-center">加载中...</div>;
+  const handleRejectClick = (resource: Resource) => {
+    setRejectDialog({ resource });
+    setRejectReason('');
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!rejectDialog) return;
+    setIsRejecting(true);
+    try {
+      await resourceAdminApi.updateStatus(rejectDialog.resource.id, 'rejected', rejectReason || undefined);
+      setRejectDialog(null);
+      setSelectedResource(null);
+      loadPending();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '审核操作失败');
+    } finally {
+      setIsRejecting(false);
+    }
+  };
+
+  if (loading && resources.length === 0) return <InlineLoading label="正在加载待审批资源" className="min-h-32" />;
+
+  if (error && resources.length === 0) {
+    return <ErrorState title="待审批资源加载失败" description={error} onRetry={loadPending} />;
+  }
 
   return (
     <div>
       {selectedResource && (
         <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 p-6">
           <h3 className="text-lg font-semibold mb-4">{selectedResource.title}</h3>
-          {selectedResource.content_html ? (
-            <MarkdownRenderer content={selectedResource.content_html} className="mb-4" />
+          {selectedResource.description && (
+            <div className="mb-4 rounded-lg bg-surface-50 p-4 dark:bg-gray-800">
+              <h4 className="mb-2 text-sm font-medium text-surface-700 dark:text-gray-300">短介绍</h4>
+              <MarkdownRenderer content={selectedResource.description} />
+            </div>
+          )}
+          {selectedResource.content ? (
+            <MarkdownRenderer content={selectedResource.content} className="mb-4" />
           ) : (
-            <p className="text-surface-500 mb-4">{selectedResource.description || '暂无介绍'}</p>
+            !selectedResource.description && <p className="text-surface-500 mb-4">暂无介绍</p>
           )}
           {selectedResource.resource_type === 'external' && selectedResource.external_url && (
             <p className="text-sm text-surface-500 mb-2">外链: {selectedResource.external_url}</p>
@@ -47,13 +88,13 @@ export default function ResourceModerationTable() {
           <p className="text-sm text-surface-500 mb-4">上传者: {selectedResource.username}</p>
           <div className="flex gap-3">
             <button
-              onClick={() => handleAction(selectedResource.id, 'approved')}
+              onClick={() => handleApprove(selectedResource.id)}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
             >
               <Check className="w-4 h-4" /> 通过
             </button>
             <button
-              onClick={() => handleAction(selectedResource.id, 'rejected')}
+              onClick={() => handleRejectClick(selectedResource)}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700"
             >
               <X className="w-4 h-4" /> 拒绝
@@ -64,6 +105,45 @@ export default function ResourceModerationTable() {
             >
               关闭
             </button>
+          </div>
+        </div>
+      )}
+
+      {rejectDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white p-6 dark:bg-gray-800">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+              拒绝资源：{rejectDialog.resource.title}
+            </h3>
+            <div className="mb-4">
+              <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                拒绝理由（可选）
+              </label>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="请说明拒绝的原因，例如：内容不符合规范、包含违规信息等"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                rows={4}
+              />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setRejectDialog(null)}
+                disabled={isRejecting}
+                className="rounded-lg bg-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-300 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleRejectConfirm}
+                disabled={isRejecting}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {isRejecting && <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                确认拒绝
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -95,13 +175,13 @@ export default function ResourceModerationTable() {
                       <Eye className="w-4 h-4 inline" /> 查看
                     </button>
                     <button
-                      onClick={() => handleAction(r.id, 'approved')}
+                      onClick={() => handleApprove(r.id)}
                       className="text-sm text-green-600 hover:underline"
                     >
                       通过
                     </button>
                     <button
-                      onClick={() => handleAction(r.id, 'rejected')}
+                      onClick={() => handleRejectClick(r)}
                       className="text-sm text-red-600 hover:underline"
                     >
                       拒绝
