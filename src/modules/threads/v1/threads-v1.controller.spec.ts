@@ -27,7 +27,7 @@ describe('ThreadsV1Controller', () => {
 
   it('adds viewer interaction state for an authenticated detail request', async () => {
     const adapter = { getThreadV1: jest.fn().mockResolvedValue({ id: 1, title: 'Test', status: 'published' }) };
-    const posts = { findById: jest.fn().mockResolvedValue({ body: 'content', user_id: 7 }), getReplies: jest.fn().mockResolvedValue({ data: [], total: 0, page: 1, limit: 50, totalPages: 0 }) };
+    const posts = { findById: jest.fn().mockResolvedValue({ body: 'content', user_id: 7 }), getReplies: jest.fn().mockResolvedValue({ data: [{ id: 2, user_id: 7 }], total: 1, page: 1, limit: 50, totalPages: 1 }) };
     const likes = { isPostLiked: jest.fn().mockResolvedValue(true) };
     const bookmarks = { check: jest.fn().mockResolvedValue(false) };
     const controller = new ThreadsV1Controller(adapter as any, posts as any, likes as any, bookmarks as any);
@@ -35,6 +35,7 @@ describe('ThreadsV1Controller', () => {
     await expect(controller.getThread(1, { user: { id: 7 } })).resolves.toMatchObject({
       id: 1,
       viewer: { liked: true, bookmarked: false },
+      replies: [{ id: 2, user_id: 7, is_owner: true }],
     });
   });
 

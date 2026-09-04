@@ -69,7 +69,13 @@ export class ThreadsV1Controller {
       ...detail,
       viewer,
       is_owner: userId === detail.user_id,
-      replies: replies.data,
+      // The server remains the authority for all mutations. This additive flag
+      // merely lets a first-party client present edit/delete controls without
+      // having to fetch and compare profile data itself.
+      replies: replies.data.map((reply: any) => ({
+        ...reply,
+        is_owner: userId === reply.user_id,
+      })),
       reply_pagination: {
         total: replies.total,
         page: replies.page,

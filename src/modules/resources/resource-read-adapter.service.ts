@@ -6,6 +6,7 @@ import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceAttribution } from '@entities/resource-attribution.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceLegacyProjectionService } from './resource-legacy-projection.service';
+import { escapeLike } from '@common/utils/search.util';
 
 /**
  * V1 Resource Read Adapter.
@@ -125,6 +126,26 @@ export class ResourceReadAdapterService {
       })),
       download_count: resource.download_count || 0,
     };
+  }
+
+  async listResourcesV1(params: { limit?: number; offset?: number; search?: string }): Promise<{ items: V1ResourceDto[]; pagination: { limit: number; offset: number; next_offset: number | null; has_more: boolean } }> {
+    const limit = Math.max(1, Math.min(params.limit || 20, 50));
+    const offset = Math.max(0, params.offset || 0);
+    const query = this.resourceRepo.createQueryBuilder('resource')
+      .where('resource.deleted_at IS NULL')
+      .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .orderBy('resource.created_at', 'DESC')
+      .addOrderBy('resource.id', 'DESC')
+      .skip(offset)
+      .take(limit + 1);
+    if (params.search?.trim()) {
+      query.andWhere('(resource.title LIKE :search OR resource.description LIKE :search)', { search: `%${escapeLike(params.search.trim())}%` });
+    }
+    const rows = await query.getMany();
+    const hasMore = rows.length > limit;
+    const visible = rows.slice(0, limit);
+    const items = (await Promise.all(visible.map((row) => this.getResourceV1(row.id)))).filter((row): row is V1ResourceDto => row !== null);
+    return { items, pagination: { limit, offset, next_offset: hasMore ? offset + limit : null, has_more: hasMore } };
   }
 
   private buildVersionDto(version: ResourceVersion, allFiles: ResourceFile[]): V1VersionDto {

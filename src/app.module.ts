@@ -18,6 +18,7 @@ import { TagsModule } from './modules/tags/tags.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AdminNotificationsModule } from './modules/admin-notifications/admin-notifications.module';
 import { BookmarksModule } from './modules/bookmarks/bookmarks.module';
+import { BookmarksV1Module } from './modules/bookmarks/v1/bookmarks-v1.module';
 import { LikesModule } from './modules/likes/likes.module';
 import { MessagesModule } from './modules/messages/messages.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
@@ -113,6 +114,7 @@ import { NoticesModule } from './modules/notices/notices.module';
     NotificationsModule,
     AdminNotificationsModule,
     BookmarksModule,
+    BookmarksV1Module,
     LikesModule,
     MessagesModule,
     AttachmentsModule,

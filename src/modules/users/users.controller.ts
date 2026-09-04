@@ -50,7 +50,7 @@ function avatarFileFilter(
   callback(null, true);
 }
 
-const avatarUploadInterceptor = FileInterceptor('avatar', {
+export const avatarUploadInterceptor = FileInterceptor('avatar', {
   storage: diskStorage({
     destination: (_req, _file, callback) => {
       mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
@@ -65,7 +65,7 @@ const avatarUploadInterceptor = FileInterceptor('avatar', {
   fileFilter: avatarFileFilter,
 });
 
-async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
+export async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
   if (!file?.path) return;
   await fs.unlink(file.path).catch(() => undefined);
 }

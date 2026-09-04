@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Param, ParseIntPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
-import { ApiCreatedResponse, ApiNoContentResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { getClientIp, getClientRegion } from '../../../common/utils/client-context.util';
@@ -48,7 +48,7 @@ export class ThreadWriteV1Controller {
   }
 
   @Delete(':id')
-  @ApiNoContentResponse({ description: 'Thread soft-deleted by its owner or staff.' })
+  @ApiOkResponse({ description: 'Thread soft-deleted by its owner or staff.' })
   async deleteThread(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     await this.posts.softDelete(id, req.user.id, req.user.role);
     return { deleted: true };
@@ -81,7 +81,7 @@ export class ThreadWriteV1Controller {
   }
 
   @Delete(':threadId/replies/:replyId')
-  @ApiNoContentResponse({ description: 'Reply soft-deleted by its owner or staff.' })
+  @ApiOkResponse({ description: 'Reply soft-deleted by its owner or staff.' })
   async deleteReply(
     @Param('threadId', ParseIntPipe) _threadId: number,
     @Param('replyId', ParseIntPipe) replyId: number,

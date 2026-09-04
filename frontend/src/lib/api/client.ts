@@ -1116,6 +1116,22 @@ export const attachmentApi = {
   renderStatus: (id: number) => request<Attachment>(`/api/attachments/${id}/render-status`),
 };
 
+export interface PublicImageUploadResult {
+  url: string;
+  filename: string;
+  original_name: string;
+  mime_type: string;
+  size: number;
+}
+
+/** Images embedded in editor content exist before their parent record is saved. */
+export const inlineImageApi = {
+  upload: (formData: FormData) => request<PublicImageUploadResult>('/api/uploads/images', {
+    method: 'POST',
+    body: formData,
+  }),
+};
+
 // Message APIs
 export const messageApi = {
   send: (recipient_id: number, content: string) =>

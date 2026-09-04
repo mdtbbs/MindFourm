@@ -61,4 +61,13 @@ describe('ResourcesV1Controller', () => {
     expect(result.attributions).toHaveLength(1);
     expect(result.download_count).toBe(42);
   });
+
+  it('lists public resources through the same capability gate', async () => {
+    const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true }) };
+    const adapter = { listResourcesV1: jest.fn().mockResolvedValue({ items: [{ id: 2, title: 'Mod' }], pagination: { limit: 20, offset: 0, next_offset: null, has_more: false } }) };
+    const controller = new ResourcesV1Controller(capabilities as any, adapter as any);
+
+    await expect(controller.listResources('20', '0', 'mod')).resolves.toMatchObject({ items: [{ id: 2, title: 'Mod' }] });
+    expect(adapter.listResourcesV1).toHaveBeenCalledWith({ limit: 20, offset: 0, search: 'mod' });
+  });
 });

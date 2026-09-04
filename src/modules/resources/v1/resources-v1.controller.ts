@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseIntPipe, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, HttpStatus, Query } from '@nestjs/common';
 import { ApiTags, ApiOkResponse, ApiParam } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
@@ -25,19 +25,18 @@ export class ResourcesV1Controller {
     private readonly resourceReadAdapter: ResourceReadAdapterService,
   ) {}
 
+  @Get()
+  @ApiOkResponse({ description: 'Public resource list' })
+  async listResources(@Query('limit') limit?: string, @Query('offset') offset?: string, @Query('q') query?: string) {
+    await this.assertEnabled();
+    return this.resourceReadAdapter.listResourcesV1({ limit: Number(limit) || 20, offset: Number(offset) || 0, search: query });
+  }
+
   @Get(':id')
   @ApiParam({ name: 'id', type: 'number' })
   @ApiOkResponse({ description: 'Resource detail' })
   async getResource(@Param('id', new ParseIntPipe()) id: number): Promise<V1ResourceDetail> {
-    const caps = await this.capabilitiesService.getCapabilities();
-    if (!caps.resource_read) {
-      throw new ApiV1Exception(
-        'RESOURCE_V1_DISABLED',
-        HttpStatus.FORBIDDEN,
-        'V1 资源接口暂未启用',
-        false,
-      );
-    }
+    await this.assertEnabled();
 
     const resource = await this.resourceReadAdapter.getResourceV1(id);
     if (!resource) {
@@ -50,6 +49,11 @@ export class ResourcesV1Controller {
     }
 
     return this.toDetailDto(resource);
+  }
+
+  private async assertEnabled(): Promise<void> {
+    const caps = await this.capabilitiesService.getCapabilities();
+    if (!caps.resource_read) throw new ApiV1Exception('RESOURCE_V1_DISABLED', HttpStatus.FORBIDDEN, 'V1 资源接口暂未启用', false);
   }
 
   private toDetailDto(dto: V1ResourceDto): V1ResourceDetail {

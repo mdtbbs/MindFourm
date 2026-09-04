@@ -1,16 +1,15 @@
-import { attachmentApi } from '@/lib/api/client';
+import { inlineImageApi } from '@/lib/api/client';
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // Matches the server-side public image limit.
 
 export interface UploadImageResult {
   url: string;
   alt: string;
-  id: number;
 }
 
 /**
- * Upload an image file to the attachment endpoint and return its download URL.
+ * Upload an image that can be embedded before its parent content is saved.
  *
  * Validates file type and size client-side before uploading. Throws on invalid
  * files or upload failure so the caller can show an error state.
@@ -24,18 +23,16 @@ export async function uploadImage(file: File): Promise<UploadImageResult> {
   }
 
   const formData = new FormData();
-  formData.append('files', file);
-  const result = await attachmentApi.upload(formData);
-  const attachment = result.attachments?.[0];
+  formData.append('image', file);
+  const image = await inlineImageApi.upload(formData);
 
-  if (!attachment?.id) {
+  if (!image?.url) {
     throw new Error('上传成功但未返回文件信息');
   }
 
   return {
-    url: attachmentApi.download(attachment.id),
-    alt: attachment.file_name || file.name || 'image',
-    id: attachment.id,
+    url: image.url,
+    alt: image.original_name || file.name || 'image',
   };
 }
 

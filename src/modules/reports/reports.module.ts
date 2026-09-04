@@ -11,6 +11,7 @@ import { PostsModule } from '../posts/posts.module';
 import { ReportsService } from './reports.service';
 import { ReportsController } from './reports.controller';
 import { ReportsAdminController } from './reports-admin.controller';
+import { ReportsV1Controller } from './reports-v1.controller';
 
 @Module({
   imports: [
@@ -20,7 +21,7 @@ import { ReportsAdminController } from './reports-admin.controller';
     PostsModule,
   ],
   providers: [ReportsService],
-  controllers: [ReportsController, ReportsAdminController],
+  controllers: [ReportsController, ReportsAdminController, ReportsV1Controller],
   exports: [ReportsService],
 })
 export class ReportsModule {}

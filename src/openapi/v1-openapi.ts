@@ -8,6 +8,11 @@ import { ThreadsModule } from '../modules/threads/threads.module';
 import { DiscoverModule } from '../modules/discover/discover.module';
 import { PortalModule } from '../modules/portal/portal.module';
 import { NoticesModule } from '../modules/notices/notices.module';
+import { BookmarksV1Module } from '../modules/bookmarks/v1/bookmarks-v1.module';
+import { LanLinkModule } from '../modules/lanlink/lanlink.module';
+import { FeedbackModule } from '../modules/feedback/feedback.module';
+import { ReportsModule } from '../modules/reports/reports.module';
+import { UploadsModule } from '../modules/uploads/uploads.module';
 
 export function createV1OpenApiDocument(app: INestApplication) {
   const config = new DocumentBuilder()
@@ -26,6 +31,11 @@ export function createV1OpenApiDocument(app: INestApplication) {
       DiscoverModule,
       PortalModule,
       NoticesModule,
+      BookmarksV1Module,
+      LanLinkModule,
+      FeedbackModule,
+      ReportsModule,
+      UploadsModule,
     ],
   });
 }
