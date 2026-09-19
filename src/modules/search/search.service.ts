@@ -6,9 +6,26 @@ import { User } from '@entities/user.entity';
 import { SearchHistory } from '@entities/search-history.entity';
 import { PopularSearch } from '@entities/popular-search.entity';
 import { Resource } from '@entities/resource.entity';
+import { GroupMember } from '@entities/group-member.entity';
+import { GameServer } from '@entities/game-server.entity';
+import { GameVersion } from '@entities/game-version.entity';
+import { KnowledgeArticle } from '@entities/knowledge-article.entity';
+import { DeveloperFeedEntry } from '@entities/developer-feed-entry.entity';
 import { RedisService } from '../../database/redis.service';
 import { escapeLike } from '../../common/utils/search.util';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
+
+export type SearchViewer = { id: number; role: string } | undefined;
+
+export type UnifiedSearchGroups = {
+  users: Array<{ id: number; username: string; avatar_url: string | null; bio: string | null }>;
+  posts: PostSummaryDto[];
+  resources: any[];
+  servers: Array<{ id: number; public_id: string; name: string; slug: string | null; description: string | null; status: string }>;
+  game_versions: Array<{ id: number; public_id: string; build: string | null; version_value: string; display_name: string | null; channel: string | null; is_latest: boolean }>;
+  wiki: Array<{ id: number; public_id: string; title: string; slug: string | null; summary: string | null; category: string | null }>;
+  developer_feed: Array<{ id: number; provider: string; repository: string; item_type: string; external_id: string; state: string; summary: string | null; source_url: string; author_login: string; updated_at: Date }>;
+};
 
 @Injectable()
 export class SearchService {
@@ -25,6 +42,16 @@ export class SearchService {
     private popularSearchRepo: Repository<PopularSearch>,
     @InjectRepository(Resource)
     private resourceRepository: Repository<Resource>,
+    @InjectRepository(GroupMember)
+    private groupMemberRepository: Repository<GroupMember>,
+    @InjectRepository(GameServer)
+    private gameServerRepository: Repository<GameServer>,
+    @InjectRepository(GameVersion)
+    private gameVersionRepository: Repository<GameVersion>,
+    @InjectRepository(KnowledgeArticle)
+    private knowledgeRepository: Repository<KnowledgeArticle>,
+    @InjectRepository(DeveloperFeedEntry)
+    private developerFeedRepository: Repository<DeveloperFeedEntry>,
     private redisService: RedisService,
     private postSummaryService: PostSummaryService,
   ) {}
@@ -32,6 +59,7 @@ export class SearchService {
   async searchPosts(
     query: string,
     options: { page?: number; limit?: number; category?: string; sort?: string },
+    viewer?: SearchViewer,
   ): Promise<{
     data: PostSummaryDto[];
     pagination: {
@@ -70,6 +98,22 @@ export class SearchService {
         'category.slug',
       ])
       .where('p.status = :status', { status: 'published' });
+
+    // Search is a discovery endpoint, so it must enforce the same group wall as
+    // the post reader. Never let a keyword turn a group-only discussion into an
+    // anonymous preview. Staff may search every published discussion; members can
+    // search only the groups they actually joined.
+    if (!viewer || !['admin', 'moderator'].includes(viewer.role)) {
+      const memberships = viewer
+        ? await this.groupMemberRepository.find({ where: { user_id: viewer.id }, select: ['group_id'] })
+        : [];
+      const groupIds = memberships.map((membership) => membership.group_id);
+      if (groupIds.length) {
+        qb.andWhere('(p.required_group_id IS NULL OR p.required_group_id IN (:...groupIds))', { groupIds });
+      } else {
+        qb.andWhere('p.required_group_id IS NULL');
+      }
+    }
 
     // `posts` has no schema migration that guarantees a matching FULLTEXT
     // index in every deployed database. Running MATCH() optimistically makes
@@ -123,14 +167,118 @@ export class SearchService {
   }
 
   async searchUsers(query: string, limit: number = 20) {
+    const username = query.startsWith('@') ? query.slice(1) : query;
+    const uid = this.parseUid(query);
+    const exact = uid ? await this.userRepository.findOne({
+      where: { id: uid },
+      select: ['id', 'username', 'avatar_url', 'bio'],
+    }) : null;
     return this.userRepository.find({
       where: [
-        { username: Like(`%${escapeLike(query)}%`) },
-        { bio: Like(`%${escapeLike(query)}%`) },
+        { username: Like(`%${escapeLike(username)}%`) },
+        { bio: Like(`%${escapeLike(username)}%`) },
       ],
       take: limit,
       select: ['id', 'username', 'avatar_url', 'bio'],
+    }).then((users) => exact && !users.some((user) => user.id === exact.id)
+      ? [exact, ...users].slice(0, limit)
+      : users);
+  }
+
+  /**
+   * V2 unified public search. The result remains grouped so consumers do not
+   * mistake a resource or developer mirror for a forum post. All visibility
+   * predicates live here on the server; clients only receive already-safe cards.
+   */
+  async searchUnified(query: string, viewer?: SearchViewer, limit = 10): Promise<{
+    groups: UnifiedSearchGroups;
+    total_by_type: Record<keyof UnifiedSearchGroups, number>;
+  }> {
+    const normalized = query.trim();
+    const resultLimit = Math.max(1, Math.min(limit, 20));
+    const [postResult, resources, users, servers, gameVersions, wiki, developerFeed] = await Promise.all([
+      this.searchPosts(normalized, { page: 1, limit: resultLimit, sort: 'relevance' }, viewer),
+      this.searchResources(normalized, resultLimit),
+      this.searchUsers(normalized, resultLimit),
+      this.searchServers(normalized, resultLimit),
+      this.searchGameVersions(normalized, resultLimit),
+      this.searchWiki(normalized, resultLimit),
+      this.searchDeveloperFeed(normalized, resultLimit),
+    ]);
+    const groups: UnifiedSearchGroups = {
+      users,
+      posts: postResult.data,
+      resources,
+      servers,
+      game_versions: gameVersions,
+      wiki,
+      developer_feed: developerFeed,
+    };
+    return {
+      groups,
+      total_by_type: Object.fromEntries(
+        Object.entries(groups).map(([type, values]) => [type, values.length]),
+      ) as Record<keyof UnifiedSearchGroups, number>,
+    };
+  }
+
+  private async searchServers(query: string, limit: number) {
+    const escaped = `%${escapeLike(query)}%`;
+    return this.gameServerRepository.createQueryBuilder('server')
+      .select(['server.id', 'server.public_id', 'server.name', 'server.slug', 'server.description', 'server.status'])
+      .where('server.is_public = :isPublic', { isPublic: true })
+      .andWhere('server.status = :status', { status: 'active' })
+      .andWhere('(server.name LIKE :query OR server.slug LIKE :query OR server.description LIKE :query)', { query: escaped })
+      .orderBy('server.name', 'ASC').take(limit).getMany();
+  }
+
+  private async searchGameVersions(query: string, limit: number) {
+    // GameVersion's public endpoints already use the official-source boundary;
+    // apply it again here so manually entered/experimental builds are not leaked.
+    const exactBuild = query.replace(/^build\s*/i, '');
+    const versions = await this.gameVersionRepository.find({
+      where: [
+        { is_official: true, build: exactBuild },
+        { is_official: true, version_value: exactBuild },
+        { is_official: true, display_name: Like(`%${escapeLike(query)}%`) },
+      ],
+      order: { is_latest: 'DESC', released_at: 'DESC' },
+      take: limit,
+      select: ['id', 'public_id', 'build', 'version_value', 'display_name', 'channel', 'is_latest'],
     });
+    return versions;
+  }
+
+  private async searchWiki(query: string, limit: number) {
+    return this.knowledgeRepository.find({
+      where: [
+        { status: 'published', is_public: true, title: Like(`%${escapeLike(query)}%`) },
+        { status: 'published', is_public: true, summary: Like(`%${escapeLike(query)}%`) },
+      ],
+      order: { sort_order: 'ASC', updated_at: 'DESC' },
+      take: limit,
+      select: ['id', 'public_id', 'title', 'slug', 'summary', 'category'],
+    });
+  }
+
+  private async searchDeveloperFeed(query: string, limit: number) {
+    return this.developerFeedRepository.createQueryBuilder('feed')
+      .select([
+        'feed.id', 'feed.provider', 'feed.repository', 'feed.item_type', 'feed.external_id',
+        'feed.state', 'feed.summary', 'feed.source_url', 'feed.author_login', 'feed.updated_at',
+      ])
+      .where('feed.is_indexable = :isIndexable', { isIndexable: true })
+      .andWhere('(feed.summary LIKE :query OR feed.repository LIKE :query OR feed.author_login LIKE :query)', {
+        query: `%${escapeLike(query)}%`,
+      })
+      .orderBy('feed.updated_at', 'DESC').take(limit).getMany();
+  }
+
+  private parseUid(query: string): number | null {
+    const match = /^(?:uid:)?(\d+)$/.exec(query.trim());
+    if (!match) return null;
+    const id = Number(match[1]);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
   }
 
   /**

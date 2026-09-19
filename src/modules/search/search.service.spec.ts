@@ -1,5 +1,10 @@
 const decorator = () => () => undefined;
 
+jest.mock('@nestjs/common', () => ({
+  Injectable: decorator,
+  Logger: class Logger { warn = jest.fn(); },
+}));
+
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
@@ -21,12 +26,20 @@ jest.mock('typeorm', () => ({
   DeleteDateColumn: decorator,
   Index: decorator,
   Unique: decorator,
+  Like: (value: string) => ({ _type: 'like', value }),
 }));
 
 jest.mock('@entities/post.entity', () => ({ Post: class Post {} }));
 jest.mock('@entities/tag.entity', () => ({ Tag: class Tag {} }));
 jest.mock('@entities/category.entity', () => ({ Category: class Category {} }));
 jest.mock('@entities/user.entity', () => ({ User: class User {} }));
+jest.mock('@entities/group-member.entity', () => ({ GroupMember: class GroupMember {} }));
+jest.mock('@entities/game-server.entity', () => ({ GameServer: class GameServer {} }));
+jest.mock('@entities/game-version.entity', () => ({ GameVersion: class GameVersion {} }));
+jest.mock('@entities/knowledge-article.entity', () => ({ KnowledgeArticle: class KnowledgeArticle {} }));
+jest.mock('@entities/developer-feed-entry.entity', () => ({ DeveloperFeedEntry: class DeveloperFeedEntry {} }));
+jest.mock('../../database/redis.service', () => ({ RedisService: class RedisService {} }));
+jest.mock('../posts/post-summary.service', () => ({ PostSummaryService: class PostSummaryService {} }));
 
 import { SearchService } from './search.service';
 
@@ -56,9 +69,26 @@ function createResourceQueryBuilder(resources: any[]) {
   };
 }
 
+function createTextQueryBuilder(items: any[]) {
+  return {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue(items),
+  };
+}
+
 function createService(overrides: {
   postRepository?: Record<string, jest.Mock>;
   postSummaryService?: Record<string, jest.Mock>;
+  groupMemberRepository?: Record<string, jest.Mock>;
+  userRepository?: Record<string, jest.Mock>;
+  gameServerRepository?: Record<string, jest.Mock>;
+  gameVersionRepository?: Record<string, jest.Mock>;
+  knowledgeRepository?: Record<string, jest.Mock>;
+  developerFeedRepository?: Record<string, jest.Mock>;
 } = {}) {
   const queryBuilder = createQueryBuilder(
     [
@@ -87,6 +117,12 @@ function createService(overrides: {
   const resourceRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(createResourceQueryBuilder([])),
   };
+  const userRepository = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), ...overrides.userRepository };
+  const groupMemberRepository = { find: jest.fn().mockResolvedValue([]), ...overrides.groupMemberRepository };
+  const gameServerRepository = { createQueryBuilder: jest.fn().mockReturnValue(createTextQueryBuilder([])), ...overrides.gameServerRepository };
+  const gameVersionRepository = { find: jest.fn().mockResolvedValue([]), ...overrides.gameVersionRepository };
+  const knowledgeRepository = { find: jest.fn().mockResolvedValue([]), ...overrides.knowledgeRepository };
+  const developerFeedRepository = { createQueryBuilder: jest.fn().mockReturnValue(createTextQueryBuilder([])), ...overrides.developerFeedRepository };
   const redisService = {
     get: jest.fn(),
     set: jest.fn(),
@@ -96,10 +132,15 @@ function createService(overrides: {
 
   const service = new SearchService(
     postRepository as any,
-    {} as any,
+    userRepository as any,
     {} as any,
     {} as any,
     resourceRepository as any,
+    groupMemberRepository as any,
+    gameServerRepository as any,
+    gameVersionRepository as any,
+    knowledgeRepository as any,
+    developerFeedRepository as any,
     redisService as any,
     postSummaryService as any,
   );
@@ -110,6 +151,9 @@ function createService(overrides: {
     postSummaryService,
     queryBuilder,
     resourceRepository,
+    groupMemberRepository,
+    userRepository,
+    gameVersionRepository,
   };
 }
 
@@ -226,5 +270,50 @@ describe('SearchService', () => {
       'MATCH(r.title, r.description) AGAINST(:query IN NATURAL LANGUAGE MODE)',
       { query: 'guide' },
     );
+  });
+
+  it('excludes group-only discussions when the searcher is anonymous', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.searchPosts('private', { page: 1, limit: 10 });
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('p.required_group_id IS NULL');
+  });
+
+  it('allows a signed-in member to search only their own group discussions', async () => {
+    const { service, queryBuilder, groupMemberRepository } = createService({
+      groupMemberRepository: { find: jest.fn().mockResolvedValue([{ group_id: 4 }, { group_id: 9 }]) },
+    });
+
+    await service.searchPosts('mod', { page: 1, limit: 10 }, { id: 92, role: 'user' });
+
+    expect(groupMemberRepository.find).toHaveBeenCalledWith({ where: { user_id: 92 }, select: ['group_id'] });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(p.required_group_id IS NULL OR p.required_group_id IN (:...groupIds))',
+      { groupIds: [4, 9] },
+    );
+  });
+
+  it('treats uid, username and build patterns as first-class unified search inputs', async () => {
+    const { service, userRepository, gameVersionRepository } = createService({
+      userRepository: {
+        findOne: jest.fn().mockResolvedValue({ id: 92, username: 'alice', avatar_url: null, bio: null }),
+        find: jest.fn().mockResolvedValue([]),
+      },
+      gameVersionRepository: { find: jest.fn().mockResolvedValue([{ id: 7, public_id: 'v', build: '160.4', version_value: '160.4', display_name: '160.4', channel: 'stable', is_latest: true }]) },
+    });
+
+    const uid = await service.searchUnified('uid:92');
+    const build = await service.searchUnified('160.4');
+    await service.searchUsers('@alice');
+
+    expect(uid.groups.users).toEqual([{ id: 92, username: 'alice', avatar_url: null, bio: null }]);
+    expect(build.groups.game_versions).toHaveLength(1);
+    expect(userRepository.find).toHaveBeenLastCalledWith(expect.objectContaining({
+      where: expect.arrayContaining([expect.objectContaining({ username: expect.anything() })]),
+    }));
+    expect(gameVersionRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.arrayContaining([expect.objectContaining({ build: '160.4', is_official: true })]),
+    }));
   });
 });

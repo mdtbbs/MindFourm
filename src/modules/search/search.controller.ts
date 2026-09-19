@@ -23,7 +23,7 @@ export class SearchController {
         limit: dto.limit,
         category: dto.category,
         sort: dto.sort,
-      }),
+      }, req?.user),
       this.searchService.searchResources(dto.q, 20),
     ]);
 

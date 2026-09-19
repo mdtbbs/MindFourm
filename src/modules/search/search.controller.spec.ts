@@ -1,3 +1,15 @@
+const decorator = () => () => undefined;
+
+jest.mock('@nestjs/common', () => ({
+  Controller: decorator,
+  Get: decorator,
+  Delete: decorator,
+  Query: decorator,
+  UseGuards: decorator,
+  Req: decorator,
+  SetMetadata: decorator,
+}));
+
 jest.mock('../../common/guards/jwt-auth.guard', () => ({
   JwtAuthGuard: class JwtAuthGuard {},
 }));
@@ -5,6 +17,7 @@ jest.mock('../../common/guards/jwt-auth.guard', () => ({
 jest.mock('./search.service', () => ({
   SearchService: class SearchService {},
 }));
+jest.mock('./dto/search-query.dto', () => ({ SearchQueryDto: class SearchQueryDto {} }));
 
 import { SearchController } from './search.controller';
 
@@ -50,14 +63,14 @@ describe('SearchController', () => {
       page: 1,
       limit: 20,
       sort: 'relevance',
-    } as any);
+    } as any, {});
 
     expect(searchService.searchPosts).toHaveBeenCalledWith('guide', {
       page: 1,
       limit: 20,
       category: undefined,
       sort: 'relevance',
-    });
+    }, undefined);
     expect(searchService.searchResources).toHaveBeenCalledWith('guide', 20);
     expect(searchService.recordSearch).toHaveBeenCalledWith(undefined, 'guide', 1);
     expect(result).toMatchObject({
@@ -86,7 +99,7 @@ describe('SearchController', () => {
       },
     });
 
-    await controller.search({ q: 'resource', page: 1, limit: 20 } as any);
+    await controller.search({ q: 'resource', page: 1, limit: 20 } as any, {});
 
     expect(searchService.recordSearch).toHaveBeenCalledWith(undefined, 'resource', 1);
   });
