@@ -3,10 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { Resource } from '@entities/resource.entity';
+import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceFileMeta } from './resources.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ResourceVersionService {
@@ -86,7 +88,13 @@ export class ResourceVersionService {
     const content = dto.content?.trim() || undefined;
     const version = this.versionRepository.create({
       resource_id: dto.resource_id,
+      public_id: randomUUID(),
       version: dto.version.trim(),
+      status: 'pending_review',
+      release_channel: 'stable',
+      created_by_user_id: userId,
+      release_notes_markdown: content || null,
+      release_notes_html: content ? parseMarkdown(content) : null,
       file_path: file.file_path,
       file_name: file.file_name,
       file_size: file.file_size,
@@ -97,6 +105,23 @@ export class ResourceVersionService {
     });
 
     const saved = await this.versionRepository.save(version);
+    await this.versionRepository.manager.save(ResourceFile, {
+      public_id: randomUUID(),
+      resource_version_id: saved.id,
+      role: 'primary',
+      delivery_mode: 'managed',
+      original_filename: file.file_name,
+      mime_type: file.mime_type,
+      size_bytes: file.file_size,
+      hash_algorithm: 'sha256',
+      content_hash: file.content_hash,
+      integrity_status: 'verified',
+      storage_backend: 'local',
+      storage_key: file.file_path,
+      external_url: null,
+      availability_status: 'available',
+      sort_order: 0,
+    });
     // Any new binary changes the reviewed release surface. Keep the whole
     // resource unavailable until staff approves this version again.
     if (resource.status === 'approved') {

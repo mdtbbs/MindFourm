@@ -25,6 +25,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
     "audit:resources": "npm run build:backend && node dist/scripts/resource-migration-audit.js",
+    "backfill:resources-v2": "npm run build:backend && node dist/scripts/resource-v2-backfill.js",
     "probe:mindauth": "npm run build:backend && node dist/scripts/mindauth-capability-probe.js",
     "mock:mindauth": "npm run build:backend && node dist/scripts/mindauth-mock.js",
     "benchmark:search": "npm run build:backend && node dist/scripts/chinese-search-benchmark.js"

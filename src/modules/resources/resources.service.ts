@@ -4,6 +4,9 @@ import { Repository, DataSource, EntityManager, Like, LessThan, In } from 'typeo
 import { Resource } from '@entities/resource.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
+import { ResourceAttribution } from '@entities/resource-attribution.entity';
+import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
 import { ResourceRating } from '@entities/resource-rating.entity';
 import { User } from '@entities/user.entity';
 import { CreateResourceDto } from './dto/create-resource.dto';
@@ -23,6 +26,7 @@ import { mergeResourceMetadata, normalizeResourceMetadata } from './resource-det
 import { ResourceStorageService } from './resource-storage.service';
 import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
+import { randomUUID } from 'crypto';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -262,6 +266,8 @@ export class ResourcesService {
       content_hash: file?.content_hash,
       external_url: resourceType === 'external' ? dto.external_url : undefined,
       version: dto.version,
+      source_url: dto.source_url || null,
+      license: dto.license?.trim() || null,
       content: dto.content,
       content_html: contentHtml,
       category_id: categoryId,
@@ -273,6 +279,15 @@ export class ResourcesService {
     });
 
     const saved = await this.resourceRepository.save(newResource);
+
+    try {
+      await this.createInitialV2Aggregate(saved, dto, userId, file);
+    } catch (error) {
+      // The legacy projection is a rollback path, not a second source of truth.
+      // Do not leave an invisible pending row when structured persistence fails.
+      await this.resourceRepository.delete(saved.id);
+      throw error;
+    }
 
     const finalResult = await this.resourceRepository.findOne({
       where: { id: saved.id },
@@ -307,6 +322,84 @@ export class ResourcesService {
     }
 
     return this.normalizeResource(finalResult);
+  }
+
+  /**
+   * Dual-writes the structured aggregate while legacy columns remain available
+   * for the controlled rollback period. Every new resource therefore has an
+   * explicit submitter, release, delivery record and optional compatibility.
+   */
+  private async createInitialV2Aggregate(
+    resource: Resource,
+    dto: CreateResourceDto,
+    submitterUserId: number,
+    file: ResourceFileMeta | undefined,
+  ): Promise<void> {
+    await this.dataSource.transaction(async (manager) => {
+      const release = await manager.save(ResourceVersion, manager.create(ResourceVersion, {
+        resource_id: resource.id,
+        public_id: randomUUID(),
+        // This is strictly the resource's own release version. Mindustry build
+        // compatibility is represented below in ResourceVersionCompatibility.
+        version: dto.version.trim(),
+        release_channel: 'stable',
+        status: 'pending_review',
+        release_notes_markdown: dto.content?.trim() || null,
+        release_notes_html: dto.content?.trim() ? parseMarkdown(dto.content) : null,
+        created_by_user_id: submitterUserId,
+        file_path: file?.file_path || null,
+        file_name: file?.file_name || null,
+        file_size: file?.file_size || null,
+        mime_type: file?.mime_type || null,
+        content_hash: file?.content_hash || null,
+      } as Partial<ResourceVersion>));
+
+      const credits = [
+        { role: 'submitter', subject_type: 'local_user', user_id: submitterUserId, display_name: null },
+        ...this.normalizeCredits(dto.original_authors).map((display_name) => ({ role: 'original_author', subject_type: 'external_person', user_id: null, display_name })),
+        ...this.normalizeCredits(dto.maintainers).map((display_name) => ({ role: 'maintainer', subject_type: 'external_person', user_id: null, display_name })),
+      ];
+      await manager.save(ResourceAttribution, credits.map((credit, sort_order) => manager.create(ResourceAttribution, {
+        resource_id: resource.id,
+        ...credit,
+        sort_order,
+      })));
+
+      const hosted = resource.resource_type === 'upload';
+      await manager.save(ResourceFile, manager.create(ResourceFile, {
+        public_id: randomUUID(),
+        resource_version_id: release.id,
+        role: 'primary',
+        delivery_mode: hosted ? 'managed' : 'external',
+        original_filename: hosted ? file?.file_name || null : null,
+        mime_type: hosted ? file?.mime_type || null : null,
+        size_bytes: hosted ? file?.file_size || null : null,
+        hash_algorithm: hosted ? 'sha256' : null,
+        content_hash: hosted ? file?.content_hash || null : null,
+        integrity_status: hosted ? 'verified' : 'unverified_legacy',
+        storage_backend: hosted ? 'local' : null,
+        storage_key: hosted ? file?.file_path || null : null,
+        external_url: hosted ? null : resource.external_url,
+        availability_status: hosted ? (file ? 'available' : 'unavailable') : 'available',
+        sort_order: 0,
+      }));
+
+      const compatibility = dto.compatibility || [];
+      if (compatibility.length) {
+        await manager.save(ResourceVersionCompatibility, compatibility.map((item) => manager.create(ResourceVersionCompatibility, {
+          resource_version_id: release.id,
+          runtime: 'mindustry',
+          min_version_value: item.min_version_value?.trim() || null,
+          max_version_value: item.max_version_value?.trim() || null,
+          channel: item.channel?.trim() || null,
+          notes: item.notes?.trim() || null,
+        })));
+      }
+    });
+  }
+
+  private normalizeCredits(values: string[] | undefined): string[] {
+    return [...new Set((values || []).map((value) => value.trim()).filter(Boolean))];
   }
 
   /**
@@ -1022,6 +1115,7 @@ export class ResourcesService {
         updateData.reject_reason = null;
       }
       await this.resourceRepository.update(id, updateData);
+      await this.syncLatestV2ReleaseStatus(id, status);
 
       // Sync approval status to MFL if applicable
       if (existingResource.use_mfl && existingResource.mfl_file_id) {
@@ -1086,6 +1180,31 @@ export class ResourcesService {
     }
 
     return this.normalizeResource(resource);
+  }
+
+  /** Keep the resource-level moderation workflow projected onto its latest release. */
+  private async syncLatestV2ReleaseStatus(resourceId: number, resourceStatus: string): Promise<void> {
+    const latest = await this.versionRepository.find({
+      where: { resource_id: resourceId },
+      order: { created_at: 'DESC', id: 'DESC' },
+      take: 1,
+    });
+    const release = latest[0];
+    if (!release) return;
+
+    if (resourceStatus === RESOURCE_STATUS_APPROVED) {
+      await this.versionRepository.update(release.id, {
+        status: 'published',
+        published_at: new Date(),
+      } as Partial<ResourceVersion>);
+      await this.resourceRepository.update(resourceId, {
+        latest_published_version_id: release.id,
+      });
+    } else if (resourceStatus === RESOURCE_STATUS_REJECTED) {
+      await this.versionRepository.update(release.id, {
+        status: 'rejected',
+      } as Partial<ResourceVersion>);
+    }
   }
 
   async countByStatus(status: string): Promise<number> {

@@ -134,6 +134,16 @@ describe('runResourceV2Backfill', () => {
 
     expect(result.files_created).toBe(1);
     expect(result.errors).toHaveLength(0);
+    const fileInsert = mockDataSource.query.mock.calls.find(
+      (call: any[]) => typeof call[0] === 'string' && call[0].includes('INSERT INTO `resource_files`'),
+    );
+    // MFL is a provider-backed delivery, not an external link. Keeping the
+    // URL in storage_key prevents a client from treating it as an unverified
+    // third-party redirect.
+    expect(fileInsert![1]).toContain('mfl');
+    expect(fileInsert![1]).toContain('https://mfl.example.com/file/99');
+    expect(fileInsert![1]).toContain(99);
+    expect(fileInsert![1]).toContain(null);
   });
 
   it('handles external resources', async () => {

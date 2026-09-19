@@ -532,6 +532,9 @@ export class ExternalApiController {
     @Body() body: ExternalCreateResourceDto,
     @Req() req: any,
   ) {
+    if (!body.version?.trim()) {
+      throw new BadRequestException('资源版本不能为空');
+    }
     const actor = await this.actorResolver.resolveWritableActor(
       body,
       req.externalApiKey,
@@ -542,7 +545,7 @@ export class ExternalApiController {
         description: body.description,
         resource_type: body.resource_type,
         external_url: body.external_url,
-        version: body.version,
+        version: body.version.trim(),
         content: body.content,
         category_id: body.category_id as any,
         is_public: body.is_public as any,

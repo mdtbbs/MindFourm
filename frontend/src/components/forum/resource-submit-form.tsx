@@ -105,6 +105,11 @@ export default function ResourceSubmitForm() {
       return;
     }
 
+    if (!version.trim()) {
+      setError('请填写资源版本');
+      return;
+    }
+
     if (resourceType === 'upload' && !file) {
       setError('请选择要上传的文件');
       return;
@@ -123,7 +128,7 @@ export default function ResourceSubmitForm() {
       formData.append('title', title.trim());
       formData.append('resource_type', resourceType);
 
-      if (version.trim()) formData.append('version', version.trim());
+      formData.append('version', version.trim());
       if (description.trim()) formData.append('description', description.trim());
       if (categoryId) formData.append('category_id', String(categoryId));
       formData.append('is_public', isPublic ? '1' : '0');

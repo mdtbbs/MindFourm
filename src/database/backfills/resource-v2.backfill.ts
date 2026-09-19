@@ -127,16 +127,16 @@ async function backfillOneResource(
   if (existingFile.length > 0) {
     result.files_skipped++;
   } else {
-    const { deliveryMode, externalUrl, availabilityStatus } = resolveFileDelivery(resource);
+    const { deliveryMode, externalUrl, storageBackend, storageKey, providerFileId, availabilityStatus } = resolveFileDelivery(resource);
 
     if (mode === 'write') {
       await dataSource.query(
         `INSERT INTO \`resource_files\`
           (\`public_id\`, \`resource_version_id\`, \`role\`, \`delivery_mode\`,
            \`original_filename\`, \`mime_type\`, \`size_bytes\`,
-           \`integrity_status\`, \`storage_backend\`, \`external_url\`,
+           \`integrity_status\`, \`storage_backend\`, \`storage_key\`, \`provider_file_id\`, \`external_url\`,
            \`availability_status\`, \`sort_order\`, \`created_at\`)
-         VALUES (?, ?, 'primary', ?, ?, ?, ?, 'unverified_legacy', ?, ?, ?, 0, NOW())`,
+         VALUES (?, ?, 'primary', ?, ?, ?, ?, 'unverified_legacy', ?, ?, ?, ?, ?, 0, NOW())`,
         [
           randomUUID(),
           versionId,
@@ -144,7 +144,9 @@ async function backfillOneResource(
           resource.file_name || null,
           resource.mime_type || null,
           resource.file_size || null,
-          resolveStorageBackend(deliveryMode),
+          storageBackend,
+          storageKey,
+          providerFileId,
           externalUrl,
           availabilityStatus,
         ],
@@ -177,6 +179,9 @@ async function backfillOneResource(
 function resolveFileDelivery(resource: Record<string, any>): {
   deliveryMode: string;
   externalUrl: string | null;
+  storageBackend: string | null;
+  storageKey: string | null;
+  providerFileId: number | null;
   availabilityStatus: string;
 } {
   if (resource.resource_type === 'external') {
@@ -185,6 +190,9 @@ function resolveFileDelivery(resource: Record<string, any>): {
     return {
       deliveryMode: 'external',
       externalUrl: url || null,
+      storageBackend: null,
+      storageKey: null,
+      providerFileId: null,
       availabilityStatus: isValid ? 'available' : 'unavailable',
     };
   }
@@ -192,7 +200,10 @@ function resolveFileDelivery(resource: Record<string, any>): {
   if (resource.use_mfl === 1 || resource.use_mfl === true) {
     return {
       deliveryMode: 'mfl',
-      externalUrl: resource.mfl_download_url || null,
+      externalUrl: null,
+      storageBackend: 'mfl',
+      storageKey: resource.mfl_download_url || null,
+      providerFileId: resource.mfl_file_id || null,
       availabilityStatus: resource.mfl_file_id ? 'available' : 'unavailable',
     };
   }
@@ -201,15 +212,9 @@ function resolveFileDelivery(resource: Record<string, any>): {
   return {
     deliveryMode: 'managed',
     externalUrl: null,
+    storageBackend: 'local',
+    storageKey: resource.file_path || null,
+    providerFileId: null,
     availabilityStatus: resource.file_path ? 'available' : 'unavailable',
   };
-}
-
-function resolveStorageBackend(deliveryMode: string): string | null {
-  switch (deliveryMode) {
-    case 'managed': return 'local';
-    case 'mfl': return 'mfl';
-    case 'external': return null;
-    default: return null;
-  }
 }

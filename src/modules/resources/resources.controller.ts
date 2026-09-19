@@ -321,6 +321,9 @@ export class ResourcesController {
         forbidNonWhitelisted: true,
         transform: true,
       }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
+      if (body.resource_type === 'external' && file) {
+        throw new BadRequestException('外链资源不能同时上传本站托管文件');
+      }
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
       storedFile = await this.resourceStorageService.storeIncoming(file);
       const resource = await this.resourcesService.create(body, userId, storedFile, {
