@@ -1,5 +1,15 @@
 const decorator = () => () => undefined;
 
+jest.mock('@nestjs/common', () => {
+  class HttpException extends Error {}
+  return {
+    Injectable: decorator,
+    BadRequestException: class BadRequestException extends HttpException {},
+    ForbiddenException: class ForbiddenException extends HttpException {},
+    NotFoundException: class NotFoundException extends HttpException {},
+  };
+});
+
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
@@ -39,6 +49,16 @@ jest.mock('@entities/post-tag.entity', () => ({ PostTag: class PostTag {} }));
 jest.mock('@entities/reply.entity', () => ({ Reply: class Reply {} }));
 jest.mock('@entities/post-revision.entity', () => ({ PostRevision: class PostRevision {} }));
 jest.mock('@common/utils/markdown.util', () => ({ parseMarkdown: (value: string) => value }));
+jest.mock('../../database/redis.service', () => ({ RedisService: class RedisService {} }));
+jest.mock('../points/points.service', () => ({ PointsService: class PointsService {} }));
+jest.mock('../groups/groups.service', () => ({ GroupsService: class GroupsService {} }));
+jest.mock('../plugins/event-bus.service', () => ({ EventBusService: class EventBusService {} }));
+jest.mock('../notifications/notifications.service', () => ({ NotificationsService: class NotificationsService {} }));
+jest.mock('../admin-notifications/admin-notifications.service', () => ({ AdminNotificationsService: class AdminNotificationsService {} }));
+jest.mock('../settings/settings.service', () => ({ SettingsService: class SettingsService {} }));
+jest.mock('./post-summary.service', () => ({ PostSummaryService: class PostSummaryService {} }));
+jest.mock('./post-detail.service', () => ({ PostDetailService: class PostDetailService {} }));
+jest.mock('../content-safety/content-safety.service', () => ({ ContentSafetyService: class ContentSafetyService {} }));
 
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PostsService } from './posts.service';
@@ -706,6 +726,19 @@ describe('PostsService.update revision history', () => {
       expect.anything(),
       88,
       expect.objectContaining({ title: 'New title', edited_at: expect.any(Date) }),
+    );
+  });
+
+  it('normalizes pasted Markdown heading markers before persisting a title', async () => {
+    const manager = createManagerMock({ Post: EXISTING, Category: { id: 3 } });
+    const { service } = createService({ manager });
+
+    await service.update(88, { title: '# # New title' }, AUTHOR.id, AUTHOR.role);
+
+    expect(manager.update).toHaveBeenCalledWith(
+      expect.anything(),
+      88,
+      expect.objectContaining({ title: 'New title' }),
     );
   });
 

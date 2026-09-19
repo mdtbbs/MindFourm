@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { FileText, AlertCircle } from "lucide-react";
 import ErrorState from "@/components/ui/error-state";
 import ResourceFilters from "@/components/forum/resource-list-filters-client";
@@ -143,6 +144,18 @@ export default async function ResourcesPage({
 
   const { resources, nextCursor, hasMore, resourceCategories, filterOptions } =
     data;
+
+  // Resource categories are now a single, active taxonomy. Old bookmarks and
+  // legacy UI links may still carry a deleted category_id; treating that as a
+  // valid filter produced a convincing but false “暂无资源” page. Canonicalize
+  // the URL instead of hiding the problem in the empty-state copy.
+  if (params.category_id && !resourceCategories.some((category) => String(category.id) === params.category_id)) {
+    const canonical = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (key !== 'category_id' && value) canonical.set(key, value);
+    });
+    redirect(canonical.size ? `/resources?${canonical.toString()}` : '/resources');
+  }
 
   return (
     <div className="min-w-0 mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">

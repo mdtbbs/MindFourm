@@ -30,6 +30,7 @@ import { Roles } from '@common/decorators/roles.decorator';
 import { Public } from '@common/decorators/public.decorator';
 import type { Request, Response } from 'express';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
+import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -191,7 +192,7 @@ export class AttachmentsController {
     }
 
     await this.attachmentsService.incrementDownloadCount(id);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(attachment.file_name)}"`);
+    res.setHeader('Content-Disposition', attachmentContentDisposition(attachment.file_name));
     // nosniff (set by helmet) stops the browser from re-interpreting this.
     res.setHeader('Content-Type', attachment.mime_type || 'application/octet-stream');
 

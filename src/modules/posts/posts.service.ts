@@ -47,6 +47,7 @@ import {
 import { generateSlug, makeUniqueSlug } from '@common/utils/url-slug.util';
 import { PostActor, isStaffActor } from './post-actor.util';
 import { ContentSafetyService } from '../content-safety/content-safety.service';
+import { normalizePostTitle } from '@common/utils/post-title.util';
 
 @Injectable()
 export class PostsService {
@@ -91,6 +92,8 @@ export class PostsService {
     // Execute "before" hook to allow plugins to modify input
     let modifiedDto = await this.eventBus.execute('post.create', { ...dto, userId });
     dto = modifiedDto;
+    dto.title = normalizePostTitle(dto.title);
+    if (!dto.title) throw new BadRequestException('标题不能为空');
 
     // Parse markdown to HTML
     const contentHtml = parseMarkdown(dto.content);
@@ -609,13 +612,15 @@ export class PostsService {
       // Update fields
       const updateData: Partial<Post> = {};
 
-      if (dto.title) {
-        updateData.title = dto.title;
+      if (dto.title !== undefined) {
+        const title = normalizePostTitle(dto.title);
+        if (!title) throw new BadRequestException('标题不能为空');
+        updateData.title = title;
         // Keep the slug in step with the title so the canonical URL keeps matching
         // the content. The id stays the real key, so changing this breaks no links —
         // the post route redirects a stale slug to the current one.
-        if (dto.title !== post.title) {
-          updateData.slug = await this.resolveUniquePostSlug(manager, dto.title);
+        if (title !== post.title) {
+          updateData.slug = await this.resolveUniquePostSlug(manager, title);
         }
       }
       if (dto.content) updateData.content = dto.content;

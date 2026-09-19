@@ -110,7 +110,18 @@ export class PostSummaryService {
   }
 
   private stripMarkdown(input: string): string {
-    return input
+    // Legacy imports sometimes persisted escaped JSON/HTML instead of Markdown.
+    // Decode those safe textual representations before removing markup.
+    const normalized = input
+      .replace(/\\([\\"/bnrt])/g, (_match, token: string) => ({ '\\': '\\', '"': '"', '/': '/', b: ' ', n: ' ', r: ' ', t: ' ' }[token] || token))
+      .replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (match, entity: string) => {
+        const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+        if (entity[0] !== '#') return named[entity.toLowerCase()] || match;
+        const codePoint = entity.slice(1, 2).toLowerCase() === 'x' ? Number.parseInt(entity.slice(2), 16) : Number.parseInt(entity.slice(1), 10);
+        return Number.isSafeInteger(codePoint) ? String.fromCodePoint(codePoint) : match;
+      });
+    return normalized
+      .replace(/<[^>]*>/g, ' ')
       .replace(/```[\s\S]*?```/g, ' ')
       .replace(/`([^`]+)`/g, '$1')
       .replace(/!\[[^\]]*\]\([^)]+\)/g, ' ')

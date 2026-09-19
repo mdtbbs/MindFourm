@@ -1,5 +1,7 @@
 const decorator = () => () => undefined;
 
+jest.mock('@nestjs/common', () => ({ Injectable: decorator }));
+
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
@@ -156,5 +158,10 @@ describe('PostSummaryService', () => {
     expect(result).toEqual([]);
     expect(postTagRepository.find).not.toHaveBeenCalled();
     expect(replyRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('decodes legacy escaped HTML and JSON newlines before building an excerpt', () => {
+    const { service } = createService();
+    expect(service.buildExcerpt('&lt;p&gt;第一行\\n第二行&lt;/p&gt;')).toBe('第一行 第二行');
   });
 });

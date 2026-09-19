@@ -28,7 +28,7 @@ const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
 });
 
 export default function PostForm() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const showSuccess = useToastStore((state) => state.showSuccess);
@@ -154,15 +154,9 @@ export default function PostForm() {
     }
   };
 
-  // ── Loading / Auth ───────────────────────────────────────
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="text-surface-500 text-sm">加载中...</div>
-      </div>
-    );
-  }
-
+  // The session probe is intentionally not a page-wide blocking state. A failed
+  // probe used to leave guests on /posts/new at “加载中...” forever; the API still
+  // authorizes the eventual write, while guests immediately get a login action.
   if (!isAuthenticated) {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">

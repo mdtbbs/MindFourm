@@ -39,6 +39,7 @@ import { OptionalAuth } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { RawHttpResponse } from '@common/decorators/api-v1.decorator';
 import { assertSafeRedirectUrl } from '@common/utils/safe-url.util';
+import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { ResourceStorageService } from './resource-storage.service';
@@ -287,7 +288,7 @@ export class ResourcesController {
 
     res.set({
       'Content-Type': target.mime_type || 'application/octet-stream',
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(target.file_name || 'file')}"`,
+      'Content-Disposition': attachmentContentDisposition(target.file_name || 'file'),
     });
 
     return new StreamableFile(createReadStream(filePath));
