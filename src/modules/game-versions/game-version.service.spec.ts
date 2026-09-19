@@ -1,3 +1,10 @@
+jest.mock('@nestjs/common', () => ({
+  Injectable: () => () => undefined,
+  Logger: class { warn = jest.fn(); },
+}));
+jest.mock('@nestjs/typeorm', () => ({ InjectRepository: () => () => undefined }));
+jest.mock('@entities/game-version.entity', () => ({ GameVersion: class GameVersion {} }));
+
 import { GameVersionService } from './game-version.service';
 
 describe('GameVersionService', () => {
@@ -36,5 +43,21 @@ describe('GameVersionService', () => {
 
     const result = await service.getLatestStable();
     expect(result).toBeNull();
+  });
+
+  it('uses the explicitly marked latest stable version rather than comparing release strings', async () => {
+    const repo = {
+      find: jest.fn().mockResolvedValue([{
+        id: 9, public_id: 'latest', version_value: '160', build: '160', channel: 'stable',
+        game_series: 'stable', release_channel: 'stable', display_name: 'v160',
+        released_at: new Date('2026-06-01'), is_official: true, is_stable: true, is_latest: true,
+      }]),
+    };
+    const service = new GameVersionService(repo as any);
+
+    await expect(service.getLatestStable()).resolves.toMatchObject({ build: '160', channel: 'stable', is_latest: true });
+    expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: { is_latest: true, is_stable: true, is_official: true },
+    }));
   });
 });

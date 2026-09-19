@@ -54,8 +54,9 @@ export class PortalService {
         select: ['id', 'title', 'slug', 'category'],
       }),
       this.versionRepo.find({
-        order: { released_at: 'DESC' }, take: 5,
-        select: ['id', 'version_value', 'display_name', 'game_series'],
+        where: { is_latest: true },
+        order: { channel: 'ASC' }, take: 5,
+        select: ['id', 'build', 'version_value', 'display_name', 'channel'],
       }),
     ]);
 
@@ -82,7 +83,7 @@ export class PortalService {
         key: 'versions',
         title: 'Mindustry 版本',
         hidden: versions.length < PortalService.MIN_ITEMS_TO_SHOW,
-        items: versions.map(v => ({ id: v.id, version: v.version_value, display_name: v.display_name, series: v.game_series })),
+        items: versions.map(v => ({ id: v.id, version: v.build || v.version_value, display_name: v.display_name, channel: v.channel || null })),
       },
     ];
 

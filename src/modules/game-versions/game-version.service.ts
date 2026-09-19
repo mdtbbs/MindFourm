@@ -16,11 +16,15 @@ export type GameVersionDto = {
   id: number;
   public_id: string;
   version_value: string;
+  build: string;
+  channel: string;
   game_series: string;
   release_channel: string;
   display_name: string | null;
   released_at: string | null;
   is_official: boolean;
+  is_stable: boolean;
+  is_latest: boolean;
 };
 
 @Injectable()
@@ -32,9 +36,9 @@ export class GameVersionService {
     private readonly gameVersionRepo: Repository<GameVersion>,
   ) {}
 
-  async listVersions(series?: string): Promise<GameVersionDto[]> {
+  async listVersions(channel?: string): Promise<GameVersionDto[]> {
     const where: any = {};
-    if (series) where.game_series = series;
+    if (channel) where.channel = channel;
 
     const versions = await this.gameVersionRepo.find({
       where,
@@ -46,7 +50,7 @@ export class GameVersionService {
 
   async getLatestStable(): Promise<GameVersionDto | null> {
     const versions = await this.gameVersionRepo.find({
-      where: { game_series: 'stable', is_official: true },
+      where: { is_latest: true, is_stable: true, is_official: true },
       order: { released_at: 'DESC' },
     });
 
@@ -83,11 +87,15 @@ export class GameVersionService {
       id: entity.id,
       public_id: entity.public_id,
       version_value: entity.version_value,
+      build: entity.build || entity.version_value,
+      channel: entity.channel || entity.release_channel,
       game_series: entity.game_series,
       release_channel: entity.release_channel,
       display_name: entity.display_name || null,
       released_at: entity.released_at?.toISOString() || null,
       is_official: entity.is_official,
+      is_stable: !!entity.is_stable,
+      is_latest: !!entity.is_latest,
     };
   }
 }

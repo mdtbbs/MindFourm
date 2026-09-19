@@ -507,7 +507,6 @@ export class ResourcesService {
       // never alter the JSON path or the surrounding query.
       const metadataFilters: Array<[string | undefined, string, string]> = [
         [tag, 'tags', 'resourceTag'],
-        [supported_version, 'supported_versions', 'supportedVersion'],
         [compatibility, 'compatibility', 'resourceCompatibility'],
       ];
       for (const [value, field, parameter] of metadataFilters) {
@@ -515,6 +514,16 @@ export class ResourcesService {
         qb.andWhere(
           `JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:${parameter}), '$.${field}')`,
           { [parameter]: value.trim() },
+        );
+      }
+
+      if (supported_version?.trim()) {
+        // New releases declare Mindustry builds in their compatibility rows.
+        // JSON metadata remains a legacy fallback until reconciliation proves
+        // every historical resource has been migrated.
+        qb.andWhere(
+          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
+          { supportedVersion: supported_version.trim() },
         );
       }
 
@@ -645,6 +654,26 @@ export class ResourcesService {
       const metadata = normalizeResourceMetadata(row.metadata_json);
       metadata.supported_versions.forEach((value) => supportedVersions.add(value));
       metadata.compatibility.forEach((value) => compatibility.add(value));
+    }
+
+    // A failed compatibility query must not hide legacy filter options during
+    // the additive migration. It becomes authoritative as backfill completes.
+    try {
+      const structured = await this.dataSource.query(
+        `SELECT DISTINCT rvc.min_version_value, rvc.max_version_value, rvc.platform_key
+         FROM resource_version_compatibilities rvc
+         INNER JOIN resource_versions rv ON rv.id = rvc.resource_version_id
+         INNER JOIN resources resource ON resource.id = rv.resource_id
+         WHERE rvc.runtime = 'mindustry' AND resource.deleted_at IS NULL AND resource.status IN (?, ?) AND resource.is_public = 1`,
+        PUBLIC_RESOURCE_STATUSES,
+      );
+      for (const row of structured) {
+        if (row.min_version_value) supportedVersions.add(String(row.min_version_value));
+        if (row.max_version_value) supportedVersions.add(String(row.max_version_value));
+        if (row.platform_key) compatibility.add(String(row.platform_key));
+      }
+    } catch {
+      // Legacy metadata continues to serve filters until the new tables exist.
     }
 
     return {

@@ -1,3 +1,8 @@
+jest.mock('@nestjs/common', () => ({ Injectable: () => () => undefined }));
+jest.mock('@nestjs/typeorm', () => ({ InjectRepository: () => () => undefined }));
+jest.mock('@entities/game-server.entity', () => ({ GameServer: class GameServer {} }));
+jest.mock('@entities/game-server-snapshot.entity', () => ({ GameServerSnapshot: class GameServerSnapshot {} }));
+
 import { GameServerService } from './game-server.service';
 
 describe('GameServerService', () => {

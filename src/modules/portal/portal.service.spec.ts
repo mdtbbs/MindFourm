@@ -1,3 +1,10 @@
+jest.mock('@nestjs/common', () => ({ Injectable: () => () => undefined }));
+jest.mock('@nestjs/typeorm', () => ({ InjectRepository: () => () => undefined }));
+jest.mock('@entities/resource.entity', () => ({ Resource: class Resource {} }));
+jest.mock('@entities/post.entity', () => ({ Post: class Post {} }));
+jest.mock('@entities/knowledge-article.entity', () => ({ KnowledgeArticle: class KnowledgeArticle {} }));
+jest.mock('@entities/game-version.entity', () => ({ GameVersion: class GameVersion {} }));
+
 import { PortalService } from './portal.service';
 
 describe('PortalService', () => {

@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, Index } from 
 
 @Entity('game_versions')
 @Index('idx_game_versions_series', ['game_series'])
+@Index('idx_game_versions_latest', ['is_latest', 'channel'])
 export class GameVersion {
   @PrimaryGeneratedColumn()
   id: number;
@@ -11,6 +12,13 @@ export class GameVersion {
 
   @Column({ length: 50 })
   version_value: string; // "159", "159.1" — parsed by MindustryVersionValue
+
+  /** Canonical Mindustry build value. version_value remains a legacy projection. */
+  @Column({ length: 50, nullable: true })
+  build: string | null;
+
+  @Column({ length: 50, nullable: true })
+  channel: string | null;
 
   @Column({ length: 50 })
   game_series: string; // stable | beta | legacy
@@ -29,6 +37,12 @@ export class GameVersion {
 
   @Column({ default: false })
   is_official: boolean;
+
+  @Column({ default: false })
+  is_stable: boolean;
+
+  @Column({ default: false })
+  is_latest: boolean;
 
   @CreateDateColumn()
   created_at: Date;
