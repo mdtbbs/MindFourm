@@ -107,6 +107,8 @@ import { Notice } from './notice.entity';
 import { NoticeRevision } from './notice-revision.entity';
 import { MobileSession } from './mobile-session.entity';
 import { MobileRefreshToken } from './mobile-refresh-token.entity';
+import { DeveloperFeedEntry } from './developer-feed-entry.entity';
+import { ServiceAccount } from './service-account.entity';
 
 export const entities = [
   User,
@@ -205,6 +207,8 @@ export const entities = [
   NoticeRevision,
   MobileSession,
   MobileRefreshToken,
+  DeveloperFeedEntry,
+  ServiceAccount,
 ];
 
 export {
@@ -269,4 +273,6 @@ export {
   // Feedback
   Feedback,
   MobileSession, MobileRefreshToken,
+  DeveloperFeedEntry,
+  ServiceAccount,
 };

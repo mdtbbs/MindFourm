@@ -67,7 +67,7 @@ async function bootstrap() {
   // Keep JSON parsing deterministic for every API route.  Multipart resource
   // and attachment uploads are handled separately by Multer and are not
   // consumed by these parsers.
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '1mb', verify: (req: any, _res, buffer) => { req.rawBody = buffer; } }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
   // Behind nginx, X-Forwarded-For must be trusted or every request appears to come

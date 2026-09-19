@@ -40,6 +40,7 @@ import { AddPostLastActivity1720000045000 } from './1720000045000-AddPostLastAct
 import { CreateNotices1720000046000 } from './1720000046000-CreateNotices';
 import { CreateMobileAuth1720000047000 } from './1720000047000-CreateMobileAuth';
 import { GameVersionFoundation1720000048000 } from './1720000048000-GameVersionFoundation';
+import { CreateDeveloperFeed1720000049000 } from './1720000049000-CreateDeveloperFeed';
 
 /**
  * Migrations in run order.
@@ -91,4 +92,5 @@ export const migrations = [
   CreateNotices1720000046000,
   CreateMobileAuth1720000047000,
   GameVersionFoundation1720000048000,
+  CreateDeveloperFeed1720000049000,
 ];
