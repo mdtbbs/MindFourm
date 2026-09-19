@@ -25,7 +25,7 @@ export default async function NoticesPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 border-b border-[var(--border)] pb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">Community updates</p>
+        <p className="text-xs font-semibold tracking-[0.16em] text-[var(--text-muted)]">社区动态</p>
         <h1 className="mt-2 text-3xl font-bold text-[var(--text)]">公告中心</h1>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">论坛维护、活动和重要规则更新都会在这里保留。</p>
       </div>

@@ -1,10 +1,11 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Category } from '@entities/category.entity';
 import { Post } from '@entities/post.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
 
 @Injectable()
 export class CategoriesService {
@@ -13,6 +14,7 @@ export class CategoriesService {
     private readonly categoryRepository: Repository<Category>,
     @InjectRepository(Post)
     private readonly postRepository: Repository<Post>,
+    @Optional() @Inject(NAVIGATION_INVALIDATOR) private readonly navigationService?: NavigationInvalidator,
   ) {}
 
   async getAll(includeInactive = false) {
@@ -80,7 +82,9 @@ export class CategoriesService {
       is_active: dto.is_active === false ? 0 : 1,
       show_in_sidebar: dto.show_in_sidebar === false ? 0 : 1,
     });
-    return this.categoryRepository.save(category);
+    const saved = await this.categoryRepository.save(category);
+    await this.navigationService?.invalidate();
+    return saved;
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
@@ -98,7 +102,9 @@ export class CategoriesService {
     if (dto.sort_order !== undefined) category.sort_order = dto.sort_order;
     if (dto.is_active !== undefined) category.is_active = dto.is_active ? 1 : 0;
     if (dto.show_in_sidebar !== undefined) category.show_in_sidebar = dto.show_in_sidebar ? 1 : 0;
-    return this.categoryRepository.save(category);
+    const saved = await this.categoryRepository.save(category);
+    await this.navigationService?.invalidate();
+    return saved;
   }
 
   private async assertValidParent(parentId: number, categoryId?: number): Promise<void> {
@@ -121,6 +127,7 @@ export class CategoriesService {
   async delete(id: number) {
     const category = await this.getById(id);
     await this.categoryRepository.remove(category);
+    await this.navigationService?.invalidate();
     return { message: 'Category deleted successfully' };
   }
 }

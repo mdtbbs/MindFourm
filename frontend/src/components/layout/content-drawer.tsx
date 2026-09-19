@@ -65,7 +65,7 @@ function ForumDrawer({
     <Link data-testid="mobile-drawer-nav-item-home" href="/" onClick={onClose} className={linkClass(isPathActive(pathname, '/threads') || pathname === '/')}><Home className="h-4 w-4" />全部讨论</Link>
     <section className="mt-4 border-t border-[var(--border)] pt-3">
       <button type="button" className={groupButtonClass} onClick={() => setBoardsOpen((open) => !open)} aria-expanded={boardsOpen}><span>讨论板块</span><ChevronDown className={`h-3.5 w-3.5 transition-transform ${boardsOpen ? '' : '-rotate-90'}`} /></button>
-      {boardsOpen && <div className="mt-1">{groupForumCategories(categories).length > 0 ? groupForumCategories(categories).map((group) => <section key={group.key} className="mb-4 last:mb-0"><h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{group.label}</h2>{group.boards.map(({ category, children }) => <div key={category.id}><DrawerBoardLink category={category} onClose={onClose} />{children.map((child) => <DrawerBoardLink key={child.id} category={child} nested onClose={onClose} />)}</div>)}</section>) : <p className="px-3 py-2 text-xs text-[var(--text-muted)]">暂无讨论板块</p>}</div>}
+      {boardsOpen && <div className="mt-1">{groupForumCategories(categories).map((group) => <section key={group.key} className="mb-4 last:mb-0"><h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{group.label}</h2>{group.boards.map(({ category, children }) => <div key={category.id}><DrawerBoardLink category={category} onClose={onClose} />{children.map((child) => <DrawerBoardLink key={child.id} category={child} nested onClose={onClose} />)}</div>)}</section>)}</div>}
     </section>
     <section className="mt-4 border-t border-[var(--border)] pt-4">
       <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">发现</h2>
@@ -75,11 +75,11 @@ function ForumDrawer({
     </section>
     {showResourceLink && <section className="mt-4 border-t border-[var(--border)] pt-3">
       <button type="button" className={groupButtonClass} onClick={() => setResourcesOpen((open) => !open)} aria-expanded={resourcesOpen}><span>资源中心</span><ChevronDown className={`h-3.5 w-3.5 transition-transform ${resourcesOpen ? '' : '-rotate-90'}`} /></button>
-      {resourcesOpen && <div className="mt-1 space-y-0.5"><Link href="/resources" onClick={onClose} className={linkClass(pathname === '/resources' && !searchParams.get('category_id'))}><FolderOpen className="h-4 w-4" />全部资源</Link>{resourceCategories.length > 0 ? resourceCategories.map((category) => {
+      {resourcesOpen && <div className="mt-1 space-y-0.5"><Link href="/resources" onClick={onClose} className={linkClass(pathname === '/resources' && !searchParams.get('category_id'))}><FolderOpen className="h-4 w-4" />全部资源</Link>{resourceCategories.map((category) => {
         const Icon = getIconComponent(category.icon || 'Folder');
         const active = pathname === '/resources' && searchParams.get('category_id') === String(category.id);
         return <Link key={category.id} href={`/resources?category_id=${category.id}`} onClick={onClose} className={linkClass(active)}><Icon className="h-4 w-4" />{category.name}</Link>;
-      }) : <p className="px-3 py-2 text-xs text-[var(--text-muted)]">暂无资源分类</p>}</div>}
+      })}</div>}
     </section>}
     {isAuthenticated && <section className="mt-4 border-t border-[var(--border)] pt-3">
       <button type="button" className={groupButtonClass} onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen}><span>我的</span><ChevronDown className={`h-3.5 w-3.5 transition-transform ${accountOpen ? '' : '-rotate-90'}`} /></button>

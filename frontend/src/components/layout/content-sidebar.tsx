@@ -107,7 +107,7 @@ function ForumSidebar({
           <span>讨论板块</span><ChevronDown className={`h-3.5 w-3.5 transition-transform ${boardsOpen ? '' : '-rotate-90'}`} />
         </button>
         {boardsOpen && <div className="mt-1">
-          {groups.length > 0 ? groups.map((group) => (
+          {groups.length > 0 && groups.map((group) => (
             <section key={group.key} className="mb-4 last:mb-0">
               <h2 className="px-3 pb-1.5 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{group.label}</h2>
               <div className="space-y-0.5">
@@ -117,7 +117,7 @@ function ForumSidebar({
                 </div>)}
               </div>
             </section>
-          )) : <p className="px-3 py-2 text-xs text-[var(--text-muted)]">暂无讨论板块</p>}
+          ))}
         </div>}
       </section>
 
@@ -133,11 +133,11 @@ function ForumSidebar({
         </button>
         {resourcesOpen && <div className="mt-1 space-y-0.5">
           <Link href="/resources" className={navItemClass(pathname === '/resources' && !searchParams.get('category_id'))}><FolderOpen className="h-4 w-4" />全部资源</Link>
-          {resourceCategories.length > 0 ? resourceCategories.map((category) => {
+          {resourceCategories.length > 0 && resourceCategories.map((category) => {
             const Icon = getIconComponent(category.icon || 'Folder');
             const active = pathname === '/resources' && searchParams.get('category_id') === String(category.id);
             return <Link key={category.id} href={`/resources?category_id=${category.id}`} className={navItemClass(active)}><Icon className="h-4 w-4" />{category.name}</Link>;
-          }) : <p className="px-3 py-2 text-xs text-[var(--text-muted)]">暂无资源分类</p>}
+          })}
         </div>}
       </section>}
       {isAuthenticated && <section className="mt-4 border-t border-[var(--border)] pt-3">

@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { RedisService } from '@database/redis.service';
 import { RevalidationService } from '@common/services/revalidation.service';
 import { RESOURCE_CATEGORY_ICONS } from './resource-category-icons';
+import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
 
 const RESOURCE_CATEGORY_ICON_WHITELIST = new Set<string>(RESOURCE_CATEGORY_ICONS);
 
@@ -16,6 +17,7 @@ export class ResourceCategoryService {
     private dataSource: DataSource,
     private readonly redisService: RedisService,
     private readonly revalidationService: RevalidationService,
+    @Optional() @Inject(NAVIGATION_INVALIDATOR) private readonly navigationService?: NavigationInvalidator,
   ) {}
 
   /**
@@ -28,7 +30,7 @@ export class ResourceCategoryService {
    */
   private async invalidateCategoryCache(): Promise<void> {
     try {
-      const keys = await this.redisService.keys('cache:resources:categories:*');
+      const keys = await this.redisService.scanKeys('cache:resources:categories:*');
       if (keys.length > 0) {
         await Promise.all(keys.map((key) => this.redisService.del(key)));
       }
@@ -47,6 +49,8 @@ export class ResourceCategoryService {
         `[ResourceCategoryService] Failed to trigger Next.js revalidation: ${(error as Error).message}`,
       );
     }
+
+    await this.navigationService?.invalidate();
   }
 
   /**

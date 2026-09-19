@@ -82,7 +82,9 @@ export interface FetchV1Options {
    * user's session. Client-side calls rely on `credentials: 'include'`.
    */
   cookies?: string;
-  init?: RequestInit;
+  init?: RequestInit & {
+    next?: { tags?: string[]; revalidate?: number | false };
+  };
 }
 
 /**
@@ -112,7 +114,9 @@ export async function fetchV1<T>(
     ...options?.init,
     headers: { ...headers, ...(options?.init?.headers as Record<string, string> | undefined) },
     signal: options?.signal,
-    cache: 'no-store',
+    // V1 reads default to no-store. Server callers may opt into a tagged
+    // cache for immutable read models such as the global navigation snapshot.
+    cache: options?.init?.cache ?? (options?.init?.next ? undefined : 'no-store'),
     credentials: options?.cookies ? undefined : 'include',
   });
 

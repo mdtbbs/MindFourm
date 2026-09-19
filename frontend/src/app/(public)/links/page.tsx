@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ExternalLink, Globe2 } from 'lucide-react';
-import { getFooterSettings, isExternalHref } from '@/lib/footer/footer-settings';
-import { fetchPublicSettings } from '@/lib/settings/server';
+import { isExternalHref } from '@/lib/footer/footer-settings';
+import { fetchNavigation } from '@/lib/navigation/server';
 
 export const revalidate = 60;
 
@@ -11,27 +11,25 @@ export const metadata: Metadata = {
 };
 
 export default async function LinksPage() {
-  const settings = await fetchPublicSettings();
-  const footer = getFooterSettings(settings);
+  const navigation = await fetchNavigation();
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 text-center">
-        <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-[var(--text-muted)] opacity-60">Links</p>
         <h1 className="mt-3 text-3xl font-bold text-[var(--text)]">友情链接</h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
           以下是我们推荐的友好站点，与 Mindustry、开源社区和论坛生态相关。
         </p>
       </div>
 
-      {footer.friendlyLinks.length === 0 ? (
+      {navigation.links.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-card)] px-6 py-12 text-center">
           <p className="text-sm text-[var(--text-secondary)]">暂无友情链接</p>
           <p className="mt-2 text-xs text-[var(--text-muted)]">稍后再来看看吧。</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {footer.friendlyLinks.map((link) => {
+          {navigation.links.map((link) => {
             const external = isExternalHref(link.href);
             let hostname = '';
             try { hostname = new URL(link.href).hostname.replace(/^www\./, ''); } catch { /* internal link */ }

@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function ThanksPage() {
   return (
     <ConfiguredFooterPage
-      eyebrow="Thanks"
+      eyebrow="鸣谢"
       title="鸣谢"
       settingKey="footer_thanks_content"
       fallback={(

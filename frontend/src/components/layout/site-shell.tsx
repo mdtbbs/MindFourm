@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import AuthFlowShell from '@/components/layout/auth-flow-shell';
-import UserSiteShell from '@/components/layout/user-site-shell';
+import ContentShell from '@/components/layout/content-shell';
 
 const AUTH_FLOW_PATHS = new Set(['/login', '/register', '/callback', '/accept-terms']);
 
@@ -13,5 +13,5 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
     return <AuthFlowShell>{children}</AuthFlowShell>;
   }
 
-  return <UserSiteShell>{children}</UserSiteShell>;
+  return <ContentShell>{children}</ContentShell>;
 }

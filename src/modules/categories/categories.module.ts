@@ -5,9 +5,10 @@ import { CategoriesController } from './categories.controller';
 import { CategoriesV1Controller } from './v1-categories.controller';
 import { Category } from '../../entities/category.entity';
 import { Post } from '../../entities/post.entity';
+import { NavigationModule } from '../navigation/navigation.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Category, Post])],
+  imports: [TypeOrmModule.forFeature([Category, Post]), NavigationModule],
   controllers: [CategoriesController, CategoriesV1Controller],
   providers: [CategoriesService],
   exports: [CategoriesService],

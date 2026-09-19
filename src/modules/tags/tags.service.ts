@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Tag } from '../../entities/tag.entity';
 import { Post } from '../../entities/post.entity';
 import { PostTag } from '../../entities/post-tag.entity';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
+import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
 
 @Injectable()
 export class TagsService {
@@ -16,6 +17,7 @@ export class TagsService {
     @InjectRepository(PostTag)
     private readonly postTagRepository: Repository<PostTag>,
     private readonly postSummaryService: PostSummaryService,
+    @Optional() @Inject(NAVIGATION_INVALIDATOR) private readonly navigationService?: NavigationInvalidator,
   ) {}
 
   async getAll() {
@@ -61,6 +63,7 @@ export class TagsService {
         slug,
       });
       tag = await this.tagRepository.save(tag);
+      await this.navigationService?.invalidate();
     }
 
     return tag;
@@ -202,6 +205,7 @@ export class TagsService {
     });
 
     const saved = await this.tagRepository.save(tag);
+    await this.navigationService?.invalidate();
     return saved;
   }
 
@@ -221,7 +225,9 @@ export class TagsService {
       tag.slug = dto.slug;
     }
 
-    return await this.tagRepository.save(tag);
+    const saved = await this.tagRepository.save(tag);
+    await this.navigationService?.invalidate();
+    return saved;
   }
 
   async delete(id: number) {
@@ -234,6 +240,7 @@ export class TagsService {
     }
 
     await this.tagRepository.remove(tag);
+    await this.navigationService?.invalidate();
     return { message: 'Tag deleted successfully' };
   }
 }

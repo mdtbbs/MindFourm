@@ -9,10 +9,8 @@ import { resolveBrand } from "@/lib/theme/brand";
 import {
   messageApi,
   friendsApi,
-  resourceApi,
-  categoryApi,
 } from "@/lib/api/client";
-import type { Notification, ResourceCategory, Category } from "@/types";
+import type { Notification } from "@/types";
 import Footer from "@/components/forum/footer";
 import AnnouncementBanner from "@/components/forum/announcement-banner";
 import PrivacyNotice from "@/components/legal/privacy-notice";
@@ -20,6 +18,7 @@ import ContentSidebar from "@/components/layout/content-sidebar";
 import ContentDrawer from "@/components/layout/content-drawer";
 import ContentToolbar from "@/components/layout/content-toolbar";
 import { roleLabel } from "@/lib/display-labels";
+import { useNavigation } from '@/lib/navigation/context';
 
 export default function ContentShell({
   children,
@@ -28,11 +27,12 @@ export default function ContentShell({
 }) {
   const { user, isAuthenticated, logout } = useAuth();
   const settings = useSettings();
+  const navigation = useNavigation();
   const brand = resolveBrand(settings);
   const router = useRouter();
   const pathname = usePathname();
   const isResources = pathname.startsWith('/resources');
-  // ContentShell is mounted only from UserSiteShell: every route here is a
+  // ContentShell is mounted only from SiteShell: every route here is a
   // user-facing product page and therefore shares the persistent sidebar.
   const sidebarMode = isResources ? 'resources' : 'forum';
   const mindauthUrl =
@@ -41,40 +41,10 @@ export default function ContentShell({
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
   const [unreadFriendRequestCount, setUnreadFriendRequestCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [resourceCategories, setResourceCategories] = useState<
-    ResourceCategory[]
-  >([]);
-  const [forumCategories, setForumCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
-
-  useEffect(() => {
-    let cancelled = false;
-    resourceApi
-      .getCategories()
-      .then((res) => {
-        if (!cancelled) setResourceCategories(res);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    categoryApi
-      .getList()
-      .then((res) => {
-        if (!cancelled) setForumCategories(Array.isArray(res) ? res : []);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -141,7 +111,7 @@ export default function ContentShell({
     : isAuthenticated
       ? "已登录"
       : "未登录";
-  // Admin lives in its own route layout. Every UserSiteShell page keeps this
+  // Admin lives in its own route layout. Every SiteShell page keeps this
   // sidebar, with resource pages merely changing which section is emphasised.
   const showDesktopSidebar = true;
 
@@ -165,29 +135,31 @@ export default function ContentShell({
             userId={user?.id}
             isAuthenticated={isAuthenticated}
             userMeta={userMeta}
-            resourceCategories={resourceCategories}
-            forumCategories={forumCategories}
+            resourceCategories={navigation.resourceTypes}
+            forumCategories={navigation.forumCategories}
           />
         </Suspense>
       )}
 
-      <Suspense fallback={null}>
-        <ContentDrawer
-          open={mobileMenuOpen}
-          mode={sidebarMode}
-          onClose={() => setMobileMenuOpen(false)}
-          siteName={brand.siteName}
-          sidebarTitle={brand.sidebarTitle}
-          logoUrl={brand.logoUrl || undefined}
-          sidebarLogoUrl={brand.sidebarLogoUrl || undefined}
-          userName={user?.username || undefined}
-          userId={user?.id}
-          isAuthenticated={isAuthenticated}
-          userMeta={userMeta}
-          resourceCategories={resourceCategories}
-          forumCategories={forumCategories}
-        />
-      </Suspense>
+      {mobileMenuOpen && (
+        <Suspense fallback={null}>
+          <ContentDrawer
+            open
+            mode={sidebarMode}
+            onClose={() => setMobileMenuOpen(false)}
+            siteName={brand.siteName}
+            sidebarTitle={brand.sidebarTitle}
+            logoUrl={brand.logoUrl || undefined}
+            sidebarLogoUrl={brand.sidebarLogoUrl || undefined}
+            userName={user?.username || undefined}
+            userId={user?.id}
+            isAuthenticated={isAuthenticated}
+            userMeta={userMeta}
+            resourceCategories={navigation.resourceTypes}
+            forumCategories={navigation.forumCategories}
+          />
+        </Suspense>
+      )}
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <ContentToolbar
@@ -207,7 +179,6 @@ export default function ContentShell({
           onSearch={handleSearch}
           onOpenDrawer={() => setMobileMenuOpen(true)}
           navigationMode={sidebarMode}
-          showPublicNavigation={false}
         />
         <AnnouncementBanner />
         <PrivacyNotice />

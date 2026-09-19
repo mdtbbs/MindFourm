@@ -2,6 +2,8 @@ const decorator = () => () => undefined;
 
 jest.mock('@nestjs/common', () => ({
   Injectable: () => () => undefined,
+  Optional: () => () => undefined,
+  Inject: () => () => undefined,
   NotFoundException: class NotFoundException extends Error {},
   BadRequestException: class BadRequestException extends Error {},
 }));
@@ -66,7 +68,7 @@ function createService(overrides: {
   const dataSource = {};
 
   const redisService = {
-    keys: jest.fn().mockResolvedValue([]),
+    scanKeys: jest.fn().mockResolvedValue([]),
     del: jest.fn().mockResolvedValue(1),
     ...overrides.redisService,
   };
@@ -276,7 +278,7 @@ describe('ResourceCategoryService - Public Visibility', () => {
 describe('ResourceCategoryService - Cache Invalidation', () => {
   it('should clear category cache on create', async () => {
     const redisService = {
-      keys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
+      scanKeys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
       del: jest.fn().mockResolvedValue(1),
     };
     const revalidationService = {
@@ -297,14 +299,14 @@ describe('ResourceCategoryService - Cache Invalidation', () => {
 
     await service.create({ name: 'New', slug: 'new', is_active: 1 });
 
-    expect(redisService.keys).toHaveBeenCalledWith('cache:resources:categories:*');
+    expect(redisService.scanKeys).toHaveBeenCalledWith('cache:resources:categories:*');
     expect(redisService.del).toHaveBeenCalledWith('cache:resources:categories:public');
     expect(revalidationService.triggerRevalidation).toHaveBeenCalledWith('/resources');
   });
 
   it('should clear category cache on update', async () => {
     const redisService = {
-      keys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
+      scanKeys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
       del: jest.fn().mockResolvedValue(1),
     };
     const revalidationService = {
@@ -322,14 +324,14 @@ describe('ResourceCategoryService - Cache Invalidation', () => {
 
     await service.update(1, { name: 'Updated' });
 
-    expect(redisService.keys).toHaveBeenCalledWith('cache:resources:categories:*');
+    expect(redisService.scanKeys).toHaveBeenCalledWith('cache:resources:categories:*');
     expect(redisService.del).toHaveBeenCalledWith('cache:resources:categories:public');
     expect(revalidationService.triggerRevalidation).toHaveBeenCalledWith('/resources');
   });
 
   it('should clear category cache on delete', async () => {
     const redisService = {
-      keys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
+      scanKeys: jest.fn().mockResolvedValue(['cache:resources:categories:public']),
       del: jest.fn().mockResolvedValue(1),
     };
     const revalidationService = {
@@ -348,14 +350,14 @@ describe('ResourceCategoryService - Cache Invalidation', () => {
 
     await service.delete(1);
 
-    expect(redisService.keys).toHaveBeenCalledWith('cache:resources:categories:*');
+    expect(redisService.scanKeys).toHaveBeenCalledWith('cache:resources:categories:*');
     expect(redisService.del).toHaveBeenCalledWith('cache:resources:categories:public');
     expect(revalidationService.triggerRevalidation).toHaveBeenCalledWith('/resources');
   });
 
   it('should not throw when Redis keys lookup fails during invalidation', async () => {
     const redisService = {
-      keys: jest.fn().mockRejectedValue(new Error('Redis down')),
+      scanKeys: jest.fn().mockRejectedValue(new Error('Redis down')),
       del: jest.fn(),
     };
     const revalidationService = {

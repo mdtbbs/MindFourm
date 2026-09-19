@@ -2,6 +2,8 @@ const decorator = () => () => undefined;
 
 jest.mock('@nestjs/common', () => ({
   Injectable: () => () => undefined,
+  Optional: () => () => undefined,
+  Inject: () => () => undefined,
   NotFoundException: class NotFoundException extends Error {},
   ForbiddenException: class ForbiddenException extends Error {},
   BadRequestException: class BadRequestException extends Error {},

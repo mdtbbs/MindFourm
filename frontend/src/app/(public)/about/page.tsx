@@ -30,7 +30,7 @@ export default async function AboutPage() {
 
   return (
     <ConfiguredFooterPage
-      eyebrow="About"
+      eyebrow="关于"
       title="关于我们"
       settingKey="footer_about_content"
       fallback={(

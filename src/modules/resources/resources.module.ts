@@ -28,6 +28,7 @@ import { ResourceStorageService } from './resource-storage.service';
 import { LogsModule } from '../logs/logs.module';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
+import { NavigationModule } from '../navigation/navigation.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ResourceSubscriptionsService } from './resource-subscriptions.service';
     CapabilitiesModule,
     SettingsModule,
     LogsModule,
+    NavigationModule,
     TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceSubscription]),
   ],
   providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],

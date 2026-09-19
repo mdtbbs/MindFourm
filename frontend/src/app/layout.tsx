@@ -11,6 +11,8 @@ import { fetchPublicSettings } from '@/lib/settings/server';
 import { getMetadataBase, getSiteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
 import { buildBrandCssVariables, resolveBrand, resolveTitleSuffix } from '@/lib/theme/brand';
+import { NavigationProvider } from '@/lib/navigation/context';
+import { fetchNavigation } from '@/lib/navigation/server';
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await fetchPublicSettings();
@@ -99,7 +101,10 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const settings = await fetchPublicSettings();
+  const [settings, navigation] = await Promise.all([
+    fetchPublicSettings(),
+    fetchNavigation(),
+  ]);
   const webSiteJsonLd = buildWebSiteJsonLd(settings);
   const brandStyle = buildBrandStyle(settings);
 
@@ -132,19 +137,21 @@ export default async function RootLayout({
         {webSiteJsonLd && <JsonLd data={webSiteJsonLd} />}
       </head>
       <body>
-        <ThemeProvider>
-          <SettingsProvider initialSettings={settings}>
-            <AuthProvider>
-              <LikeProvider>
-                <ToastProvider>
-                  <PhoneVerificationProvider>
-                    {children}
-                  </PhoneVerificationProvider>
-                </ToastProvider>
-              </LikeProvider>
-            </AuthProvider>
-          </SettingsProvider>
-        </ThemeProvider>
+        <NavigationProvider initialNavigation={navigation}>
+          <ThemeProvider>
+            <SettingsProvider initialSettings={settings}>
+              <AuthProvider>
+                <LikeProvider>
+                  <ToastProvider>
+                    <PhoneVerificationProvider>
+                      {children}
+                    </PhoneVerificationProvider>
+                  </ToastProvider>
+                </LikeProvider>
+              </AuthProvider>
+            </SettingsProvider>
+          </ThemeProvider>
+        </NavigationProvider>
       </body>
     </html>
   );

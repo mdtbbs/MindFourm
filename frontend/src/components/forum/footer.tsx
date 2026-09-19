@@ -9,6 +9,7 @@ import {
   isExternalHref,
   type FooterFriendlyLink,
 } from '@/lib/footer/footer-settings';
+import { useNavigation } from '@/lib/navigation/context';
 
 const FOOTER_LINKS = [
   { href: '/links', label: '友情链接' },
@@ -70,9 +71,10 @@ function FilingText({ number, href }: { number: string; href: string }) {
 export default function Footer() {
   const pathname = usePathname();
   const settings = useSettings();
+  const navigation = useNavigation();
   const footer = getFooterSettings(settings);
   const showFriendlyLinks = pathname === '/';
-  const featuredLinks = showFriendlyLinks ? footer.friendlyLinks.slice(0, 3) : [];
+  const featuredLinks = showFriendlyLinks ? navigation.links.slice(0, 3) : [];
 
   return (
     <footer className="mt-auto border-t border-[var(--border)] bg-[var(--bg-card)]">

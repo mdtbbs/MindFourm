@@ -8,9 +8,10 @@ import { Post } from '../../entities/post.entity';
 import { PostTag } from '../../entities/post-tag.entity';
 import { Reply } from '../../entities/reply.entity';
 import { PostSummaryService } from '../posts/post-summary.service';
+import { NavigationModule } from '../navigation/navigation.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tag, Post, PostTag, Reply])],
+  imports: [TypeOrmModule.forFeature([Tag, Post, PostTag, Reply]), NavigationModule],
   controllers: [TagsController, TagsV1Controller],
   providers: [TagsService, PostSummaryService],
   exports: [TagsService],

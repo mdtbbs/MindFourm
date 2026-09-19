@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '@entities/setting.entity';
@@ -18,6 +18,7 @@ import {
   SidebarNavigationItem,
 } from '@common/utils/sidebar-navigation.util';
 import { getDefaultSidebarNavigation } from '@common/utils/sidebar-navigation-defaults';
+import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
 import {
   DEFAULT_WELCOME_NOTIFICATION_BODY,
   DEFAULT_WELCOME_NOTIFICATION_TITLE,
@@ -427,6 +428,7 @@ export class SettingsService implements OnModuleInit {
   constructor(
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
+    @Optional() @Inject(NAVIGATION_INVALIDATOR) private readonly navigationService?: NavigationInvalidator,
   ) {}
 
   async onModuleInit() {
@@ -741,6 +743,7 @@ export class SettingsService implements OnModuleInit {
     );
 
     await this.loadSettings();
+    await this.invalidateNavigationIfNeeded([key]);
   }
 
   /**
@@ -778,6 +781,21 @@ export class SettingsService implements OnModuleInit {
 
     // Reload cache after update
     await this.loadSettings();
+    await this.invalidateNavigationIfNeeded(normalizedPairs.keys());
+  }
+
+  private async invalidateNavigationIfNeeded(keys: Iterable<string>): Promise<void> {
+    const navigationKeys = new Set([
+      'footer_friendly_links',
+      'sidebar_navigation_items',
+      'top_navigation_items',
+    ]);
+    for (const key of keys) {
+      if (navigationKeys.has(key)) {
+        await this.navigationService?.invalidate();
+        return;
+      }
+    }
   }
 
   /**
