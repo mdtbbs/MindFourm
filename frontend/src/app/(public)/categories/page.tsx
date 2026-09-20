@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { fetchApiData } from '@/lib/api/server-fetch';
+import { getCategories } from '@/lib/api/v1/categories';
 import { getForumCategoryColor, groupForumCategories } from '@/lib/navigation/forum-categories';
 import type { Category } from '@/types';
 
@@ -12,10 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function CategoriesPage() {
-  const categories = await fetchApiData<Category[]>('/api/categories', {
-    init: { cache: 'no-store' },
-    fallback: [],
-  });
+  const categories = await getCategories({ init: { cache: 'no-store' } }).catch(() => [] as Category[]);
 
   const groups = groupForumCategories(categories);
 

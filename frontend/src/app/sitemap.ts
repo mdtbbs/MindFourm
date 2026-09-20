@@ -5,6 +5,7 @@ import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { getSiteUrl } from '@/lib/seo/site-url';
 import { buildHybridParam } from '@/lib/seo/hybrid-param';
+import { getCategories } from '@/lib/api/v1/categories';
 
 const POST_LIMIT = 5000;
 const RESOURCE_LIMIT = 1000;
@@ -35,10 +36,7 @@ async function fetchSitemapPosts(limit: number = POST_LIMIT): Promise<PostSummar
 }
 
 async function fetchSitemapCategories(): Promise<Category[]> {
-  return fetchApiData<Category[]>('/api/categories', {
-    init: { next: { revalidate: 300 } },
-    fallback: [],
-  });
+  return getCategories({ init: { next: { revalidate: 300 } } }).catch(() => []);
 }
 
 async function fetchSitemapTags(): Promise<Tag[]> {

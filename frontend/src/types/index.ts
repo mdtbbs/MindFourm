@@ -58,6 +58,7 @@ export interface PostSummary {
   category_id: number | null;
   server_id?: number | null;
   post_type?: string;
+  source?: 'USER' | 'SYSTEM' | 'GITHUB_ISSUE' | 'GITHUB_PR' | 'RSS' | 'IMPORT' | 'API';
   slug?: string | null;
   title: string;
   excerpt: string;
@@ -88,6 +89,7 @@ export interface Post {
   server_id?: number | null;
   required_group_id?: number | null;
   post_type?: string;
+  source?: 'USER' | 'SYSTEM' | 'GITHUB_ISSUE' | 'GITHUB_PR' | 'RSS' | 'IMPORT' | 'API';
   slug?: string | null;
   title: string;
   content: string;
@@ -216,11 +218,15 @@ export interface FormState<T> {
 // Admin panel types
 export interface AdminStats {
   total_posts: number;
+  community_posts: number;
+  automated_posts: number;
   total_replies: number;
   total_users: number;
   total_resources: number;
   active_24h: number;
   today_posts: number;
+  today_community_posts: number;
+  today_automated_posts: number;
   today_replies: number;
   today_users: number;
   today_resources: number;

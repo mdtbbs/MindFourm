@@ -6,6 +6,7 @@ import { Post } from '@entities/post.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
+import { PublicCategoryDto, publicCategoryFromEntity, publicCategoryFromRow } from './category-public.dto';
 
 @Injectable()
 export class CategoriesService {
@@ -17,7 +18,7 @@ export class CategoriesService {
     @Optional() @Inject(NAVIGATION_INVALIDATOR) private readonly navigationService?: NavigationInvalidator,
   ) {}
 
-  async getAll(includeInactive = false) {
+  async getAll(includeInactive = false): Promise<PublicCategoryDto[]> {
     const builder = this.categoryRepository
       .createQueryBuilder('category')
       .leftJoin('category.posts', 'post')
@@ -32,30 +33,13 @@ export class CategoriesService {
 
     const categories = await builder.getRawMany();
 
-    return categories.map((row) => ({
-      id: row.category_id,
-      name: row.category_name,
-      slug: row.category_slug,
-      sort_order: row.category_sort_order,
-      is_active: Boolean(row.category_is_active),
-      description: row.category_description,
-      color: row.category_color,
-      icon: row.category_icon,
-      group_key: row.category_group_key,
-      parent_id: row.category_parent_id,
-      show_in_sidebar: Boolean(row.category_show_in_sidebar),
-      created_at: row.category_created_at,
-      post_count: parseInt(row.post_count, 10),
-    }));
+    return categories.map((row) => publicCategoryFromRow(row));
   }
 
   async getById(id: number) {
-    const category = await this.categoryRepository.findOne({ where: { id } });
-    if (!category) {
-      throw new NotFoundException(`Category with ID ${id} not found`);
-    }
+    const category = await this.findEntityById(id);
     const post_count = await this.postRepository.count({ where: { category_id: id } });
-    return { ...category, post_count };
+    return publicCategoryFromEntity(category, post_count);
   }
 
   async getBySlug(slug: string) {
@@ -88,7 +72,7 @@ export class CategoriesService {
   }
 
   async update(id: number, dto: UpdateCategoryDto) {
-    const category = await this.getById(id);
+    const category = await this.findEntityById(id);
     if (dto.name !== undefined) category.name = dto.name;
     if (dto.slug !== undefined) category.slug = dto.slug;
     if (dto.description !== undefined) category.description = dto.description;
@@ -125,9 +109,15 @@ export class CategoriesService {
   }
 
   async delete(id: number) {
-    const category = await this.getById(id);
+    const category = await this.findEntityById(id);
     await this.categoryRepository.remove(category);
     await this.navigationService?.invalidate();
     return { message: 'Category deleted successfully' };
+  }
+
+  private async findEntityById(id: number): Promise<Category> {
+    const category = await this.categoryRepository.findOne({ where: { id } });
+    if (!category) throw new NotFoundException(`Category with ID ${id} not found`);
+    return category;
   }
 }

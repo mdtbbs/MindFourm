@@ -21,6 +21,7 @@ import { Group } from './group.entity';
 @Index('idx_posts_slug', ['slug'])
 @Index('idx_posts_post_type', ['post_type'])
 @Index('idx_posts_server_id', ['server_id'])
+@Index('idx_posts_source_status_activity', ['source', 'status', 'last_activity_at'])
 @Entity('posts')
 export class Post {
   @PrimaryGeneratedColumn()
@@ -47,6 +48,14 @@ export class Post {
 
   @Column({ length: 50, default: 'normal' })
   post_type: string;
+
+  /**
+   * Provenance is deliberately separate from `post_type`: a question, guide or
+   * announcement can each be authored by a member or created by an integration.
+   * Existing rows are backfilled as USER by the additive migration.
+   */
+  @Column({ length: 32, default: 'USER' })
+  source: 'USER' | 'SYSTEM' | 'GITHUB_ISSUE' | 'GITHUB_PR' | 'RSS' | 'IMPORT' | 'API';
 
   @Column({ length: 255 })
   title: string;

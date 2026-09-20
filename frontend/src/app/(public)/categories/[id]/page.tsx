@@ -5,7 +5,8 @@ import Pagination from '@/components/ui/pagination';
 import EmptyState from '@/components/ui/empty-state';
 import { MessageCircle } from 'lucide-react';
 import { createEmptyPaginatedResult } from '@/lib/api/response';
-import { fetchApiData, fetchApiPaginated } from '@/lib/api/server-fetch';
+import { fetchApiPaginated } from '@/lib/api/server-fetch';
+import { getCategory } from '@/lib/api/v1/categories';
 import { Category, PostListResponse } from '@/types';
 import { notFound } from 'next/navigation';
 
@@ -20,10 +21,7 @@ async function fetchPosts(page: number, categoryId: number): Promise<PostListRes
 }
 
 async function fetchCategory(id: number): Promise<Category | null> {
-  return fetchApiData<Category | null>(`/api/categories/${id}`, {
-    init: { next: { tags: ['categories'] } },
-    fallback: null,
-  });
+  return getCategory(id, { init: { next: { tags: ['categories'], revalidate: 300 } } }).catch(() => null);
 }
 
 export async function generateMetadata({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ page?: string }> }): Promise<Metadata> {

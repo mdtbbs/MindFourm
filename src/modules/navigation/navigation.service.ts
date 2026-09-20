@@ -7,6 +7,7 @@ import { Tag } from '@entities/tag.entity';
 import { Setting } from '@entities/setting.entity';
 import { RedisService } from '@database/redis.service';
 import { RevalidationService } from '@common/services/revalidation.service';
+import { publicCategoryFromRow } from '../categories/category-public.dto';
 
 const NAVIGATION_CACHE_KEY = 'cache:navigation:v1';
 const NAVIGATION_CACHE_TTL_SECONDS = 60 * 60;
@@ -128,20 +129,7 @@ export class NavigationService {
     ]);
 
     return {
-      forumCategories: forumRows.map((row) => ({
-        id: Number(row.category_id),
-        name: row.category_name,
-        slug: row.category_slug,
-        sort_order: Number(row.category_sort_order),
-        is_active: Boolean(row.category_is_active),
-        description: row.category_description ?? null,
-        color: row.category_color ?? null,
-        icon: row.category_icon ?? null,
-        group_key: row.category_group_key ?? null,
-        parent_id: row.category_parent_id === null ? null : Number(row.category_parent_id),
-        show_in_sidebar: Boolean(row.category_show_in_sidebar),
-        post_count: Number(row.post_count) || 0,
-      })),
+      forumCategories: forumRows.map((row) => publicCategoryFromRow(row)),
       resourceTypes: resourceTypes.map((category) => ({
         id: category.id,
         name: category.name,

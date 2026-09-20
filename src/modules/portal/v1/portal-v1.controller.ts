@@ -1,10 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOkResponse } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
+import { Public } from '../../../common/decorators/public.decorator';
 import { PortalService, PortalData } from '../portal.service';
 
 @ApiV1()
 @ApiTags('v1-portal')
+@Public()
 @Controller('v1/portal')
 export class PortalV1Controller {
   constructor(private readonly portalService: PortalService) {}
@@ -14,4 +16,5 @@ export class PortalV1Controller {
   getPortalData(): Promise<PortalData> {
     return this.portalService.getPortalData();
   }
+
 }

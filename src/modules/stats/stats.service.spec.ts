@@ -36,10 +36,14 @@ describe('StatsService', () => {
       query: jest.fn()
         .mockResolvedValueOnce([{
           total_posts: '12',
+          community_posts: '9',
+          automated_posts: '3',
           total_replies: '34',
           total_users: '56',
           total_resources: '7',
           today_posts: '2',
+          today_community_posts: '1',
+          today_automated_posts: '1',
           today_replies: '3',
           today_users: '4',
           today_resources: '1',
@@ -76,11 +80,15 @@ describe('StatsService', () => {
 
     await expect(service.getDashboardStats()).resolves.toEqual({
       total_posts: 12,
+      community_posts: 9,
+      automated_posts: 3,
       total_replies: 34,
       total_users: 56,
       total_resources: 7,
       active_24h: 2,
       today_posts: 2,
+      today_community_posts: 1,
+      today_automated_posts: 1,
       today_replies: 3,
       today_users: 4,
       today_resources: 1,

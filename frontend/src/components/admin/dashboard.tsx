@@ -31,7 +31,7 @@ export default function Dashboard() {
   }, []);
 
   const statItems = [
-    { label: '帖子', value: stats?.total_posts ?? '--' },
+    { label: '社区主题', value: stats?.community_posts ?? '--' },
     { label: '回复', value: stats?.total_replies ?? '--' },
     { label: '用户', value: stats?.total_users ?? '--' },
     { label: '24小时活跃', value: stats?.active_24h ?? '--' },
@@ -97,7 +97,8 @@ export default function Dashboard() {
           <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-[var(--text)]"><Flag className="h-4 w-4" />处理效率</div>
           <dl className="space-y-3 text-sm">
             <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">举报平均处理（30 天）</dt><dd>{stats?.average_report_resolution_hours == null ? '暂无数据' : `${stats.average_report_resolution_hours} 小时`}</dd></div>
-            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">今日发帖</dt><dd>{stats?.today_posts ?? '--'}</dd></div>
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">今日社区主题</dt><dd>{stats?.today_community_posts ?? '--'}</dd></div>
+            <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">自动内容</dt><dd>{stats?.automated_posts ?? '--'}（今日 {stats?.today_automated_posts ?? '--'}）</dd></div>
             <div className="flex justify-between"><dt className="text-[var(--text-secondary)]">今日回帖</dt><dd>{stats?.today_replies ?? '--'}</dd></div>
           </dl>
         </section>

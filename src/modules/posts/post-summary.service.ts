@@ -19,6 +19,7 @@ export interface PostSummaryDto {
   category_id: number | null;
   server_id: number | null;
   post_type: string;
+  source: string;
   slug: string | null;
   title: string;
   excerpt: string;
@@ -77,6 +78,7 @@ export class PostSummaryService {
       category_id: post.category_id ?? null,
       server_id: post.server_id ?? null,
       post_type: post.post_type,
+      source: post.source || 'USER',
       slug: post.slug ?? null,
       title: post.title,
       excerpt: this.buildExcerpt(post.content),

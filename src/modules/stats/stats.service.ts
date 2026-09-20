@@ -7,11 +7,15 @@ import { PUBLIC_RESOURCE_STATUSES } from '@common/utils/constants';
 
 export interface DashboardStats {
   total_posts: number;
+  community_posts: number;
+  automated_posts: number;
   total_replies: number;
   total_users: number;
   total_resources: number;
   active_24h: number;
   today_posts: number;
+  today_community_posts: number;
+  today_automated_posts: number;
   today_replies: number;
   today_users: number;
   today_resources: number;
@@ -59,10 +63,14 @@ export class StatsService {
       this.postRepository.query(`
         SELECT
           (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
+          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source = 'USER') as community_posts,
+          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source <> 'USER') as automated_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'published') as total_replies,
           (SELECT COUNT(*) FROM users) as total_users,
           (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL) as total_resources,
           (SELECT COUNT(*) FROM posts WHERE status = 'published' AND created_at >= ?) as today_posts,
+          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source = 'USER' AND created_at >= ?) as today_community_posts,
+          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source <> 'USER' AND created_at >= ?) as today_automated_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'published' AND created_at >= ?) as today_replies,
           (SELECT COUNT(*) FROM users WHERE created_at >= ?) as today_users,
           (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND created_at >= ?) as today_resources,
@@ -70,7 +78,7 @@ export class StatsService {
           (SELECT COUNT(*) FROM reports WHERE status = 'pending') as pending_reports,
           (SELECT AVG(TIMESTAMPDIFF(SECOND, created_at, handled_at)) / 3600 FROM reports WHERE status IN ('resolved', 'dismissed') AND handled_at IS NOT NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as average_report_resolution_hours,
           (SELECT COUNT(*) FROM search_history WHERE results_count = 0 AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as zero_result_searches_7d
-      `, [today, today, today, today]),
+      `, [today, today, today, today, today, today]),
       // SCAN rather than KEYS: this is served on request paths, and KEYS blocks the
       // whole Redis instance for the duration of the scan.
       this.redisService.countKeys('session:*'),
@@ -81,12 +89,16 @@ export class StatsService {
 
     return {
       total_posts: this.parseCount(stats?.total_posts),
+      community_posts: this.parseCount(stats?.community_posts),
+      automated_posts: this.parseCount(stats?.automated_posts),
       total_replies: this.parseCount(stats?.total_replies),
       total_users: this.parseCount(stats?.total_users),
       total_resources: this.parseCount(stats?.total_resources),
       // Counts every live session (7-day TTL), not strictly 24-hour activity.
       active_24h: sessionCount,
       today_posts: this.parseCount(stats?.today_posts),
+      today_community_posts: this.parseCount(stats?.today_community_posts),
+      today_automated_posts: this.parseCount(stats?.today_automated_posts),
       today_replies: this.parseCount(stats?.today_replies),
       today_users: this.parseCount(stats?.today_users),
       today_resources: this.parseCount(stats?.today_resources),
