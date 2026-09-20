@@ -164,9 +164,9 @@ export default function ContentDrawer({
         <button type="button" aria-label="关闭" className="rounded-lg p-2 text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]" onClick={onClose}><X className="h-5 w-5" /></button>
       </div>
       <nav data-testid="mobile-drawer-nav" className={DRAWER_LAYOUT_CLASSES.nav}>
-        {mode === 'resources' && <ResourceDrawer categories={resourceCategories} onClose={onClose} />}
-        {mode === 'resources' && <section className="mt-5 border-t border-[var(--border)] pt-4"><h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">论坛</h2></section>}
-        <ForumDrawer categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} onClose={onClose} resourceCategories={resourceCategories} showResourceLink={mode !== 'resources'} />
+        {mode === 'resources'
+          ? <ResourceDrawer categories={resourceCategories} onClose={onClose} />
+          : <ForumDrawer categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} onClose={onClose} resourceCategories={resourceCategories} />}
       </nav>
       <Link href="/posts/new" onClick={onClose} className="mx-3 mb-3 flex shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" />发布主题</Link>
       <div data-testid="mobile-drawer-user" className={DRAWER_LAYOUT_CLASSES.user}><SidebarUserPanel userName={userName} userMeta={userMeta} /></div>

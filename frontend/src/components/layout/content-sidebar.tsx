@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Bell, BookOpen, ChevronDown, FolderOpen, Home, Mail, Plus, Radio, Settings, Star, UserRound, Users, type LucideIcon } from 'lucide-react';
@@ -208,13 +208,22 @@ export default function ContentSidebar({
   forumCategories?: Category[];
 }) {
   const subtitle = mode === 'resources' ? '资源中心' : sidebarTitle;
+  const navRef = useRef<HTMLElement>(null);
+
+  // Navigating from the forum's lower "资源中心" group prepends the resource
+  // navigation. Without an explicit reset, CSS scroll anchoring leaves the
+  // active resource links above the visible part of this persistent scroller.
+  useEffect(() => {
+    navRef.current?.scrollTo({ top: 0 });
+  }, [mode]);
+
   return (
     <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
       <SidebarBrand siteName={siteName} subtitle={subtitle} logoUrl={logoUrl} sidebarLogoUrl={sidebarLogoUrl} />
-      <nav data-testid="sidebar-nav" aria-label="站点导航" className={SIDEBAR_LAYOUT_CLASSES.nav}>
-        {mode === 'resources' && <ResourceSidebar categories={resourceCategories} />}
-        {mode === 'resources' && <div className="mt-5 border-t border-[var(--border)] pt-4"><h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">论坛</h2></div>}
-        <ForumSidebar categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} resourceCategories={resourceCategories} showResourceLink={mode !== 'resources'} />
+      <nav ref={navRef} data-testid="sidebar-nav" aria-label="站点导航" className={SIDEBAR_LAYOUT_CLASSES.nav}>
+        {mode === 'resources'
+          ? <ResourceSidebar categories={resourceCategories} />
+          : <ForumSidebar categories={forumCategories} userId={userId} isAuthenticated={isAuthenticated} resourceCategories={resourceCategories} />}
       </nav>
       <Link href="/posts/new" className="mx-3 mb-3 flex shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--primary-dark)]">
         <Plus className="h-4 w-4" />发布主题
