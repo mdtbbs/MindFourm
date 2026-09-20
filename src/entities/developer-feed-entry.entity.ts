@@ -12,7 +12,7 @@ export class DeveloperFeedEntry {
   @Column({ length: 40 }) state: string;
   @Column({ type: 'int', nullable: true }) service_account_id: number | null;
   @Column({ length: 255 }) author_login: string;
-  @Column({ length: 255, nullable: true }) author_display_name: string | null;
+  @Column({ type: 'varchar', length: 255, nullable: true }) author_display_name: string | null;
   @Column({ type: 'varchar', length: 500, nullable: true }) author_avatar_url: string | null;
   @Column({ type: 'varchar', length: 500 }) source_url: string;
   @Column({ type: 'varchar', length: 500, nullable: true }) summary: string | null;
