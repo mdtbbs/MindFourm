@@ -14,7 +14,7 @@ export class GameVersion {
   version_value: string; // "159", "159.1" — parsed by MindustryVersionValue
 
   /** Canonical Mindustry build value. version_value remains a legacy projection. */
-  @Column({ length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
   build: string | null;
 
   @Column({ length: 50, nullable: true })

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import type { DataSource } from 'typeorm';
+import { DataSource } from 'typeorm';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import type { SettingsService } from '../settings/settings.service';
+import { SettingsService } from '../settings/settings.service';
 import { PUBLIC_IMAGE_UPLOAD_DIR } from './public-image-upload';
 
 const DEFAULT_RETENTION_DAYS = 7;

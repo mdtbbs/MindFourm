@@ -12,6 +12,10 @@ jest.mock('./public-image-upload', () => ({
   PUBLIC_IMAGE_UPLOAD_DIR: './uploads/public-images',
 }));
 
+jest.mock('../settings/settings.service', () => ({
+  SettingsService: class SettingsService {},
+}));
+
 import * as fs from 'fs/promises';
 import { PublicImageCleanupService } from './public-image-cleanup.service';
 
