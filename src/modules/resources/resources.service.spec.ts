@@ -348,6 +348,33 @@ describe('ResourcesService', () => {
     } as any, 5)).rejects.toThrow('地图必须上传本站托管文件');
   });
 
+  it('rejects a download URL even when a blueprint also includes a managed file', async () => {
+    const { service } = createService();
+
+    await expect(service.create({
+      title: 'Blueprint', resource_type: 'upload', resource_kind: 'schematic',
+      external_url: 'https://example.com/blueprint.msch', version: '1.0',
+    } as any, 5, {
+      file_name: 'blueprint.msch', file_path: '/safe/blueprint.msch', file_size: 12,
+      mime_type: 'application/octet-stream', content_hash: 'a'.repeat(64),
+    })).rejects.toThrow('不能设置外链地址');
+  });
+
+  it('does not let an existing blueprint gain an external download address', async () => {
+    const { service, manager } = createService({
+      manager: {
+        findOne: jest.fn().mockResolvedValue({
+          id: 23, user_id: 5, title: 'Blueprint', status: 'pending', resource_type: 'upload',
+          resource_kind: 'schematic', file_name: 'blueprint.msch', file_path: '/safe/blueprint.msch',
+        }),
+      },
+    });
+
+    await expect(service.update(23, 5, { external_url: 'https://example.com/blueprint.msch' } as any, 'user'))
+      .rejects.toThrow('不能设置外链地址');
+    expect(manager.update).not.toHaveBeenCalled();
+  });
+
   it('enqueues an approved map for forum-owned rendering', async () => {
     const preview = { supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
     const { service } = createService({

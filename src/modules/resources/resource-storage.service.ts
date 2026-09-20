@@ -64,6 +64,36 @@ export class ResourceStorageService {
     return { file_name: file.originalname, file_path: storedPath, file_size: file.size, mime_type: file.mimetype, content_hash: contentHash };
   }
 
+  /**
+   * A copied Mindustry schematic is base64-encoded binary, not an external
+   * link. Decode it straight into the same private quarantine used by normal
+   * resource uploads so moderation and download rules remain identical.
+   */
+  async storePastedSchematic(code: string): Promise<StoredResourceFile> {
+    const normalized = code.replace(/\s+/g, '');
+    if (!normalized || normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+      throw new BadRequestException('蓝图代码不是有效的 Base64 内容');
+    }
+
+    const data = Buffer.from(normalized, 'base64');
+    const maxBytes = 20 * 1024 * 1024;
+    if (data.length < 5 || data.length > maxBytes || data.subarray(0, 4).toString('ascii') !== 'msch') {
+      throw new BadRequestException('蓝图代码不是有效的 Mindustry .msch 文件');
+    }
+
+    const fileName = `pasted-schematic-${Date.now()}-${createHash('sha256').update(data).digest('hex').slice(0, 12)}.msch`;
+    const storedPath = path.join(await this.getQuarantineDirectory(), fileName);
+    await fs.writeFile(storedPath, data, { flag: 'wx', mode: 0o640 });
+
+    return {
+      file_name: fileName,
+      file_path: storedPath,
+      file_size: data.length,
+      mime_type: 'application/octet-stream',
+      content_hash: createHash('sha256').update(data).digest('hex'),
+    };
+  }
+
   private async move(source: string, target: string): Promise<void> {
     try {
       await fs.rename(source, target);

@@ -28,4 +28,28 @@ describe('ResourceStorageService', () => {
     await expect(fs.access(stored!.file_path)).rejects.toThrow();
     await fs.rm(root, { recursive: true, force: true });
   });
+
+  it('turns a pasted Mindustry schematic into a quarantined managed file', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const raw = Buffer.concat([Buffer.from('msch\x01', 'binary'), Buffer.from('fixture')]);
+
+    const stored = await service.storePastedSchematic(raw.toString('base64'));
+
+    expect(stored.file_name).toMatch(/^pasted-schematic-.*\.msch$/);
+    expect(stored.file_path).toContain(`${path.sep}.quarantine${path.sep}resources${path.sep}`);
+    await expect(fs.readFile(stored.file_path)).resolves.toEqual(raw);
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('rejects pasted data that is not a Mindustry schematic', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+
+    await expect(service.storePastedSchematic(Buffer.from('not a schematic').toString('base64')))
+      .rejects.toThrow('不是有效的 Mindustry .msch 文件');
+    await fs.rm(root, { recursive: true, force: true });
+  });
 });

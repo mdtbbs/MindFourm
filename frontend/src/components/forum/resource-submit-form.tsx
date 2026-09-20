@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { ExternalLink, Loader2, Upload } from 'lucide-react';
+import { ClipboardPaste, ExternalLink, Loader2, Map, Upload } from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { ResourceCategory } from '@/types';
@@ -13,6 +13,7 @@ import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
 
 type ResourceType = 'upload' | 'external';
+type SchematicSource = 'file' | 'paste';
 
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
@@ -38,16 +39,18 @@ export default function ResourceSubmitForm() {
   const [content, setContent] = useState('');
   const [externalUrl, setExternalUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [schematicSource, setSchematicSource] = useState<SchematicSource>('file');
+  const [schematicCode, setSchematicCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
   const draft = useDraft('resource');
   const saveDraft = draft.save;
   const draftValues = useMemo(
-    () => ({ resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl }),
-    [resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl],
+    () => ({ resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl, schematicSource, schematicCode }),
+    [resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl, schematicSource, schematicCode],
   );
-  const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl);
+  const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl || schematicCode);
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
   useEffect(() => {
@@ -72,6 +75,8 @@ export default function ResourceSubmitForm() {
     if (typeof saved.isPublic === 'boolean') setIsPublic(saved.isPublic);
     if (typeof saved.content === 'string') setContent(saved.content);
     if (typeof saved.externalUrl === 'string') setExternalUrl(saved.externalUrl);
+    if (saved.schematicSource === 'file' || saved.schematicSource === 'paste') setSchematicSource(saved.schematicSource);
+    if (typeof saved.schematicCode === 'string') setSchematicCode(saved.schematicCode);
     setRecoverableDraft(null);
   };
 
@@ -95,6 +100,14 @@ export default function ResourceSubmitForm() {
     if (hasDraftContent && recoverableDraft) setRecoverableDraft(null);
   }, [hasDraftContent, recoverableDraft]);
 
+  const isMap = resourceKind === 'map';
+  const isSchematic = resourceKind === 'schematic';
+  const isForumManagedKind = isMap || isSchematic;
+
+  useEffect(() => {
+    if (isForumManagedKind && resourceType !== 'upload') setResourceType('upload');
+  }, [isForumManagedKind, resourceType]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -113,7 +126,12 @@ export default function ResourceSubmitForm() {
       return;
     }
 
-    if (resourceType === 'upload' && !file) {
+    if (isSchematic && schematicSource === 'paste' && !schematicCode.trim()) {
+      setError('请粘贴从 Mindustry 复制的蓝图代码');
+      return;
+    }
+
+    if (resourceType === 'upload' && (!file && !(isSchematic && schematicSource === 'paste'))) {
       setError('请选择要上传的文件');
       return;
     }
@@ -138,7 +156,9 @@ export default function ResourceSubmitForm() {
       formData.append('is_public', isPublic ? '1' : '0');
       if (content.trim()) formData.append('content', content.trim());
 
-      if (resourceType === 'external') {
+      if (isSchematic && schematicSource === 'paste') {
+        formData.append('schematic_code', schematicCode.trim());
+      } else if (resourceType === 'external') {
         formData.append('external_url', externalUrl.trim());
       } else if (file) {
         formData.append('file', file);
@@ -178,9 +198,10 @@ export default function ResourceSubmitForm() {
         </div>
       )}
 
-      <div className="space-y-2">
-        <p className="text-sm font-medium text-surface-700 dark:text-gray-300">资源类型 *</p>
-        <div className="grid gap-3 sm:grid-cols-2">
+      {!isForumManagedKind ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-surface-700 dark:text-gray-300">资源类型 *</p>
+          <div className="grid gap-3 sm:grid-cols-2">
           <label
             data-testid="resource-type-upload"
             className={`cursor-pointer rounded-lg border p-4 transition-colors ${
@@ -210,7 +231,7 @@ export default function ResourceSubmitForm() {
 
           <label
             data-testid="resource-type-external"
-            className={`${resourceKind === 'map' || resourceKind === 'schematic' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} rounded-lg border p-4 transition-colors ${
+            className={`cursor-pointer rounded-lg border p-4 transition-colors ${
               resourceType === 'external'
                 ? 'border-[var(--primary)] bg-[var(--primary)]/5'
                 : 'border-[var(--border)] bg-[var(--bg-elevated)]'
@@ -222,7 +243,6 @@ export default function ResourceSubmitForm() {
               value="external"
               checked={resourceType === 'external'}
               onChange={() => setResourceType('external')}
-              disabled={resourceKind === 'map' || resourceKind === 'schematic'}
               className="sr-only"
             />
             <div className="flex items-start gap-3">
@@ -235,8 +255,26 @@ export default function ResourceSubmitForm() {
               </div>
             </div>
           </label>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div
+          data-testid="resource-managed-kind-notice"
+          className="rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4"
+        >
+          <div className="flex items-start gap-3">
+            <Map className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
+            <div>
+              <p className="text-sm font-semibold text-[var(--text)]">{isMap ? '地图提交' : '蓝图提交'}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
+                {isMap
+                  ? '地图会以本站托管的 .msav 文件提交，审核通过后生成预览图。'
+                  : '蓝图仅保存为本站托管的 .msch 文件：可上传文件，也可粘贴游戏中复制的蓝图代码。'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-[var(--text-secondary)]">资源分类 *</label>
@@ -246,6 +284,8 @@ export default function ResourceSubmitForm() {
             const nextKind = event.target.value;
             setResourceKind(nextKind);
             setFile(null);
+            setSchematicCode('');
+            setSchematicSource('file');
             if (nextKind === 'map' || nextKind === 'schematic') setResourceType('upload');
           }}
           className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
@@ -332,13 +372,52 @@ export default function ResourceSubmitForm() {
         />
       )}
 
-      {resourceType === 'upload' && (
+      {isSchematic && (
+        <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+          <p className="text-sm font-medium text-[var(--text)]">蓝图来源 *</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              data-testid="schematic-source-file"
+              onClick={() => { setSchematicSource('file'); setSchematicCode(''); }}
+              className={`rounded-lg border px-3 py-3 text-left text-sm ${schematicSource === 'file' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}
+            >
+              <Upload className="mb-1 h-4 w-4 text-[var(--primary)]" />
+              上传 .msch 文件
+            </button>
+            <button
+              type="button"
+              data-testid="schematic-source-paste"
+              onClick={() => { setSchematicSource('paste'); setFile(null); }}
+              className={`rounded-lg border px-3 py-3 text-left text-sm ${schematicSource === 'paste' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}
+            >
+              <ClipboardPaste className="mb-1 h-4 w-4 text-[var(--primary)]" />
+              粘贴游戏蓝图代码
+            </button>
+          </div>
+          {schematicSource === 'paste' && (
+            <div className="space-y-2">
+              <textarea
+                data-testid="schematic-code-input"
+                value={schematicCode}
+                onChange={(event) => setSchematicCode(event.target.value)}
+                className="min-h-36 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-3 font-mono text-xs text-[var(--text)]"
+                placeholder="在 Mindustry 中复制蓝图后，将以 bXNja... 开头的代码粘贴到这里"
+                spellCheck={false}
+              />
+              <p className="text-xs text-[var(--text-muted)]">论坛会将代码转换为受审核的 .msch 附件；不会保存或跳转外链。</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {resourceType === 'upload' && (!isSchematic || schematicSource === 'file') && (
         <div>
-          <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">文件 *</label>
+          <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{isMap ? '地图文件 (.msav) *' : isSchematic ? '蓝图文件 (.msch) *' : '文件 *'}</label>
           <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-4">
             <Upload className="h-5 w-5 text-[var(--text-muted)]" />
             <span className="flex-1 truncate text-sm text-[var(--text)]">
-              {file?.name || '选择要上传的文件'}
+              {file?.name || (isMap ? '选择 .msav 地图文件' : isSchematic ? '选择 .msch 蓝图文件' : '选择要上传的文件')}
             </span>
             <input
               data-testid="resource-file-input"

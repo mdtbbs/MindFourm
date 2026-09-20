@@ -1,5 +1,5 @@
 import {
-  IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, IsArray, ValidateNested,
+  IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, IsArray, ValidateNested, MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -37,6 +37,16 @@ export class CreateResourceDto {
   @IsOptional()
   @IsIn(['mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'other'])
   resource_kind?: string;
+
+  /**
+   * Mindustry's clipboard export is the base64 representation of an .msch
+   * payload.  It is accepted only for schematic resources and becomes a
+   * forum-managed .msch file before the resource row is created.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(28 * 1024 * 1024)
+  schematic_code?: string;
 
   /** Must be a real http(s) URL — see UpdateResourceDto for why. */
   @IsOptional()

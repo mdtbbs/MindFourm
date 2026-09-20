@@ -98,7 +98,7 @@ const resourceUploadInterceptor = FileInterceptor('file', {
       callback(null, `${uniqueSuffix}${extname(file.originalname).toLowerCase()}`);
     },
   }),
-  limits: { fileSize: MAX_RESOURCE_SIZE },
+  limits: { fileSize: MAX_RESOURCE_SIZE, fieldSize: 28 * 1024 * 1024 },
   fileFilter: resourceFileFilter,
 });
 
@@ -344,11 +344,20 @@ export class ResourcesController {
         forbidNonWhitelisted: true,
         transform: true,
       }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
+      const schematicCode = body.schematic_code?.trim();
       if (body.resource_type === 'external' && file) {
         throw new BadRequestException('外链资源不能同时上传本站托管文件');
       }
+      if (schematicCode && (body.resource_kind !== 'schematic' || body.resource_type !== 'upload')) {
+        throw new BadRequestException('粘贴蓝图代码仅可用于本站托管的蓝图资源');
+      }
+      if (file && schematicCode) {
+        throw new BadRequestException('蓝图请在上传文件和粘贴代码中二选一');
+      }
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
-      storedFile = await this.resourceStorageService.storeIncoming(file);
+      storedFile = schematicCode
+        ? await this.resourceStorageService.storePastedSchematic(schematicCode)
+        : await this.resourceStorageService.storeIncoming(file);
       const resource = await this.resourcesService.create(body, userId, storedFile, {
         ipAddress: getClientIp(req),
       });

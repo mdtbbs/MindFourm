@@ -248,6 +248,9 @@ export class ResourcesService {
       throw new BadRequestException('外链类资源必须填写外链地址');
     }
     this.assertKindFileContract(resourceKind, resourceType, file?.file_name);
+    if ((resourceKind === 'map' || resourceKind === 'schematic') && dto.external_url) {
+      throw new BadRequestException('地图和蓝图只能使用本站托管文件，不能设置外链地址');
+    }
 
     const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
     const risk = this.contentSafety
@@ -971,6 +974,9 @@ export class ResourcesService {
         ? this.normalizeResourceType(dto.resource_type)
         : resource.resource_type;
       const requestedResourceKind = dto.resource_kind ?? resource.resource_kind ?? 'other';
+      if ((requestedResourceKind === 'map' || requestedResourceKind === 'schematic') && dto.external_url !== undefined) {
+        throw new BadRequestException('地图和蓝图只能使用本站托管文件，不能设置外链地址');
+      }
       this.assertKindFileContract(requestedResourceKind, requestedResourceType, resource.file_name || undefined);
 
       if (dto.title) updateData.title = dto.title;
