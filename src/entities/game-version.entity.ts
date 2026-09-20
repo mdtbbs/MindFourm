@@ -17,7 +17,7 @@ export class GameVersion {
   @Column({ type: 'varchar', length: 50, nullable: true })
   build: string | null;
 
-  @Column({ length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true })
   channel: string | null;
 
   @Column({ length: 50 })
