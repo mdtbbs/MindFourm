@@ -39,5 +39,15 @@ describe('ThreadReadAdapterService', () => {
 
     const result = await service.listThreadsV1({ limit: 10 });
     expect(result).toHaveLength(1);
+    expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'published', source: 'USER' } }));
+  });
+
+  it('keeps a requested category as an independent board', async () => {
+    const repo = { find: jest.fn().mockResolvedValue([]) };
+    const service = new ThreadReadAdapterService(repo as any);
+
+    await service.listThreadsV1({ limit: 20, categoryId: 7 });
+
+    expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'published', category_id: 7 } }));
   });
 });

@@ -255,6 +255,14 @@ describe('PostsService', () => {
     );
   });
 
+  it('can request the member-authored stream without hiding an explicit board', async () => {
+    const { service, listQueryBuilder } = createService();
+
+    await service.findAll({ page: 1, limit: 30, source: 'USER' });
+
+    expect(listQueryBuilder.andWhere).toHaveBeenCalledWith('post.source = :source', { source: 'USER' });
+  });
+
   it('omits configured homepage categories from a discussion stream without hiding uncategorised posts', async () => {
     const { service, listQueryBuilder } = createService();
 

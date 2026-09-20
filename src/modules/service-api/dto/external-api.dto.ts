@@ -114,6 +114,15 @@ export class ExternalCreatePostDto extends ServiceAccountSelectorDto {
   @IsNumber()
   category_id?: number;
 
+  /**
+   * Integration provenance. This endpoint is API-key guarded; browser-originated
+   * post creation never accepts this field.
+   */
+  @IsOptional()
+  @IsString()
+  @IsIn(['SYSTEM', 'GITHUB_ISSUE', 'GITHUB_PR'])
+  source?: 'SYSTEM' | 'GITHUB_ISSUE' | 'GITHUB_PR';
+
   @IsOptional()
   @IsNumber()
   server_id?: number;

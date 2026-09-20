@@ -164,6 +164,7 @@ export class ExternalApiController {
       body,
       req.externalApiKey,
     );
+    const source = await this.resolveAutomationSource(body);
     const post = await this.postsService.create(
       {
         title: body.title,
@@ -179,6 +180,7 @@ export class ExternalApiController {
       {
         ipAddress: this.getClientIp(req),
         locationLabel: req.clientRegion || null,
+        source,
       },
     );
 
@@ -192,6 +194,7 @@ export class ExternalApiController {
       {
         status: post?.status,
         title: post?.title,
+        source: post?.source,
       },
     );
 
@@ -202,6 +205,20 @@ export class ExternalApiController {
       actor_user_id: actor.id,
       post,
     };
+  }
+
+  /**
+   * Existing GitHub polling clients predate the source field.  The two reserved
+   * boards are therefore a backwards-compatible, server-side provenance mapping;
+   * browser users cannot reach this API-key-only endpoint.
+   */
+  private async resolveAutomationSource(body: ExternalCreatePostDto): Promise<'SYSTEM' | 'GITHUB_ISSUE' | 'GITHUB_PR' | undefined> {
+    if (body.source) return body.source;
+    if (!body.category_id) return undefined;
+    const category = await this.categoriesService.getById(body.category_id).catch(() => null);
+    if (category?.name === 'iss问题动态') return 'GITHUB_ISSUE';
+    if (category?.name === 'PR合并请求') return 'GITHUB_PR';
+    return undefined;
   }
 
   @Get("posts/:id")

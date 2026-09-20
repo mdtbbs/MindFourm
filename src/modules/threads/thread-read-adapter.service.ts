@@ -61,7 +61,10 @@ export class ThreadReadAdapterService {
     offset?: number;
   }): Promise<V1ThreadDto[]> {
     const where: any = { status: 'published' };
+    // A category route is an explicit board request. The default Android stream
+    // is community discussion and must not be flooded by integration updates.
     if (params.categoryId) where.category_id = params.categoryId;
+    else where.source = 'USER';
 
     const posts = await this.postRepo.find({
       where,

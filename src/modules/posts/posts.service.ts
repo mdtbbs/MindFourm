@@ -16,7 +16,7 @@ import {
   MoreThan,
   Like,
 } from 'typeorm';
-import { Post } from '@entities/post.entity';
+import { Post, type PostSource } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
 import { Category } from '@entities/category.entity';
 import { Tag } from '@entities/tag.entity';
@@ -87,7 +87,7 @@ export class PostsService {
   async create(
     dto: CreatePostDto,
     userId: number,
-    provenance: { ipAddress?: string; locationLabel?: string | null } = {},
+    provenance: { ipAddress?: string; locationLabel?: string | null; source?: PostSource } = {},
   ): Promise<Post | null> {
     // Execute "before" hook to allow plugins to modify input
     let modifiedDto = await this.eventBus.execute('post.create', { ...dto, userId });
@@ -131,6 +131,7 @@ export class PostsService {
         server_id: dto.server_id,
         required_group_id: dto.required_group_id,
         post_type: dto.post_type || 'normal',
+        source: provenance.source || 'USER',
         title: dto.title,
         slug: await this.resolveUniquePostSlug(manager, dto.title),
         content: dto.content,
@@ -175,7 +176,7 @@ export class PostsService {
     }
 
     // Award points for creating post
-    if (post.status === 'published') {
+    if (post.status === 'published' && post.source === 'USER') {
       await this.pointsService.awardPoints(userId, 'create_post', 'post', post.id);
     } else if (post.status === 'pending') {
       this.adminNotificationsService.publishModerationPending({
@@ -330,6 +331,7 @@ export class PostsService {
       page = 1,
       limit = 20,
       category_id,
+      source,
       exclude_category_ids,
       status,
       user_id,
@@ -347,6 +349,10 @@ export class PostsService {
 
     if (category_id) {
       qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
+    }
+
+    if (source) {
+      qb.andWhere('post.source = :source', { source });
     }
 
     if (exclude_category_ids?.length) {
@@ -417,6 +423,7 @@ export class PostsService {
     const {
       limit = 20,
       category_id,
+      source,
       exclude_category_ids,
       status,
       user_id,
@@ -432,6 +439,10 @@ export class PostsService {
 
     if (category_id) {
       qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
+    }
+
+    if (source) {
+      qb.andWhere('post.source = :source', { source });
     }
 
     if (exclude_category_ids?.length) {
@@ -1167,7 +1178,7 @@ export class PostsService {
     const skip = (page - 1) * limit;
 
     const [posts, total] = await this.postRepository.findAndCount({
-      where: { user_id: userId, status: 'published' },
+      where: { user_id: userId, status: 'published', source: 'USER' },
       relations: ['user', 'category'],
       select: {
         id: true,

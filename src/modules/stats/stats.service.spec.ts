@@ -101,6 +101,8 @@ describe('StatsService', () => {
     });
 
     expect(postRepository.query).toHaveBeenCalledTimes(3);
+    expect(postRepository.query.mock.calls[0][0]).toContain("status = 'published' AND source = 'USER'");
+    expect(postRepository.query.mock.calls[1][0]).toContain("p.status = 'published' AND p.source = 'USER'");
     expect(redisService.countKeys).toHaveBeenCalledWith('session:*');
   });
 

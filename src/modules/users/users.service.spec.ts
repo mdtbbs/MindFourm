@@ -139,3 +139,17 @@ describe('UsersService.getRepliesByUserId', () => {
     });
   });
 });
+
+describe('UsersService.getById', () => {
+  it('counts only member-authored topics on a public profile', async () => {
+    const postQuery = createChain({ getRawOne: jest.fn().mockResolvedValue({ count: '3' }) });
+    const replyQuery = createChain({ getRawOne: jest.fn().mockResolvedValue({ count: '5' }) });
+    const { service } = createService({
+      postRepository: { createQueryBuilder: jest.fn(() => postQuery) },
+      replyRepository: { createQueryBuilder: jest.fn(() => replyQuery) },
+    });
+
+    await expect(service.getById(7)).resolves.toMatchObject({ post_count: 3, reply_count: 5 });
+    expect(postQuery.andWhere).toHaveBeenCalledWith('post.source = :source', { source: 'USER' });
+  });
+});

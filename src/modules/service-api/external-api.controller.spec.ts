@@ -41,4 +41,16 @@ describe("ExternalApiController bot read endpoints", () => {
       compatibility: ["Android"],
     });
   });
+
+  it("classifies legacy polling clients from their reserved board when they omit source", async () => {
+    const categoriesService = { getById: jest.fn().mockResolvedValue({ name: "iss问题动态" }) };
+    const classified = new ExternalApiController(
+      {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+      categoriesService as any, {} as any, {} as any, {} as any,
+    );
+
+    await expect((classified as any).resolveAutomationSource({ category_id: 6 })).resolves.toBe("GITHUB_ISSUE");
+    await expect((classified as any).resolveAutomationSource({ category_id: 7, source: "GITHUB_PR" })).resolves.toBe("GITHUB_PR");
+    expect(categoriesService.getById).toHaveBeenCalledWith(6);
+  });
 });

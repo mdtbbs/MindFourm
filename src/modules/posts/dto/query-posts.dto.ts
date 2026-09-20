@@ -1,5 +1,6 @@
-import { IsArray, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
+import { POST_SOURCES, type PostSource } from '@entities/post.entity';
 
 export class QueryPostsDto {
   @IsOptional()
@@ -19,6 +20,12 @@ export class QueryPostsDto {
   @Type(() => Number)
   @IsNumber()
   category_id?: number;
+
+  /** Filter by persisted provenance; used by the public community-discussion stream. */
+  @IsOptional()
+  @IsString()
+  @IsIn(POST_SOURCES)
+  source?: PostSource;
 
   /**
    * Comma-separated category IDs to omit from a curated discussion stream.

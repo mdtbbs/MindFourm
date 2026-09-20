@@ -41,7 +41,7 @@ export default async function ThreadsPage({
   let threads: PostListResponse;
   try {
     threads = await fetchApiPaginated<PostListResponse["data"][number]>(
-      `/api/posts?page=${page}&limit=30&sort=last_activity_at${excludeCategoryIds}`,
+      `/api/posts?page=${page}&limit=30&sort=last_activity_at&source=USER${excludeCategoryIds}`,
       {
         init: { cache: "no-store" },
         fallback:

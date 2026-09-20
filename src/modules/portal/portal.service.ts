@@ -6,7 +6,6 @@ import { Post } from '@entities/post.entity';
 import { KnowledgeArticle } from '@entities/knowledge-article.entity';
 import { GameVersion } from '@entities/game-version.entity';
 import { Notice } from '@entities/notice.entity';
-import { DeveloperFeedEntry } from '@entities/developer-feed-entry.entity';
 import { RedisService } from '@database/redis.service';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
 
@@ -19,7 +18,7 @@ export type HomeSection<T> = { state: HomeSectionState; items: T[] };
 export type HomeResource = { id: number; title: string; slug: string | null; resource_kind: string | null; version: string | null; updated_at: string; author_name: string | null; category_name: string | null };
 export type HomeNotice = { id: number; public_id: string; title: string; excerpt: string | null; published_at: string | null };
 export type HomeNews = { id: number; title: string; slug: string | null; category: string | null };
-export type HomeDeveloperEntry = { id: number; external_id: string; title: string; state: string; url: string; repository: string; updated_at: string };
+export type HomeDeveloperEntry = { id: number; category_id: number | null; external_id: string; title: string; state: string; url: string; repository: string; updated_at: string };
 
 export type HomeData = {
   discussions: HomeSection<PostSummaryDto>;
@@ -50,7 +49,6 @@ export class PortalService {
     @InjectRepository(KnowledgeArticle) private readonly knowledgeRepo: Repository<KnowledgeArticle>,
     @InjectRepository(GameVersion) private readonly versionRepo: Repository<GameVersion>,
     @InjectRepository(Notice) private readonly noticeRepo: Repository<Notice>,
-    @InjectRepository(DeveloperFeedEntry) private readonly developerFeedRepo: Repository<DeveloperFeedEntry>,
     private readonly redisService: RedisService,
     private readonly postSummaryService: PostSummaryService,
   ) {}
@@ -89,7 +87,7 @@ export class PortalService {
   private async buildHomeData(previous?: HomeData): Promise<HomeData> {
     const results = await Promise.allSettled([
       this.getLatestCommunityDiscussions(), this.getLatestResources(), this.getNews(), this.getNotices(),
-      this.getDeveloperEntries('issue'), this.getDeveloperEntries('pull_request'),
+      this.getDeveloperEntries('GITHUB_ISSUE'), this.getDeveloperEntries('GITHUB_PR'),
     ]);
     return {
       discussions: this.sectionFrom(results[0], previous?.discussions),
@@ -179,9 +177,26 @@ export class PortalService {
     return rows.map((notice) => ({ id: notice.id, public_id: notice.public_id, title: notice.title, excerpt: notice.excerpt, published_at: notice.published_at?.toISOString() || null }));
   }
 
-  private async getDeveloperEntries(type: 'issue' | 'pull_request'): Promise<HomeDeveloperEntry[]> {
-    const rows = await this.developerFeedRepo.find({ where: { item_type: type, is_low_value: false, is_indexable: true }, order: { updated_at: 'DESC', id: 'DESC' }, take: 3 });
-    return rows.map((row) => ({ id: row.id, external_id: row.external_id, title: row.summary || `#${row.external_id}`, state: row.state, url: row.source_url, repository: row.repository, updated_at: row.updated_at.toISOString() }));
+  private async getDeveloperEntries(source: 'GITHUB_ISSUE' | 'GITHUB_PR'): Promise<HomeDeveloperEntry[]> {
+    const rows = await this.postRepo.find({
+      where: { status: 'published', source },
+      relations: ['category'],
+      order: { last_activity_at: 'DESC', id: 'DESC' },
+      take: 3,
+    });
+    return rows.map((row) => {
+      const match = row.title.match(/^\[#(\d+)\]\s*/);
+      return {
+        id: row.id,
+        category_id: row.category_id ?? null,
+        external_id: match?.[1] || String(row.id),
+        title: row.title.replace(/^\[#\d+\]\s*/, '') || `#${row.id}`,
+        state: source === 'GITHUB_ISSUE' ? 'Issue' : 'Pull Request',
+        url: `/posts/${row.id}${row.slug ? `-${row.slug}` : ''}`,
+        repository: row.category?.name || 'GitHub 同步',
+        updated_at: (row.last_activity_at || row.updated_at).toISOString(),
+      };
+    });
   }
 
   private async getVersions(): Promise<Array<Record<string, string | number | null>>> {

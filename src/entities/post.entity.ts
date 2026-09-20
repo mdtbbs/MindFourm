@@ -12,6 +12,9 @@ import { PostLike } from './post-like.entity';
 import { PostTag } from './post-tag.entity';
 import { Group } from './group.entity';
 
+export const POST_SOURCES = ['USER', 'SYSTEM', 'GITHUB_ISSUE', 'GITHUB_PR', 'RSS', 'IMPORT', 'API'] as const;
+export type PostSource = typeof POST_SOURCES[number];
+
 // The list endpoints all filter on (deleted_at IS NULL, status) and then order by
 // (is_pinned, created_at); one composite index covers that whole clause instead of
 // scanning the table and sorting in memory.
@@ -55,7 +58,7 @@ export class Post {
    * Existing rows are backfilled as USER by the additive migration.
    */
   @Column({ length: 32, default: 'USER' })
-  source: 'USER' | 'SYSTEM' | 'GITHUB_ISSUE' | 'GITHUB_PR' | 'RSS' | 'IMPORT' | 'API';
+  source: PostSource;
 
   @Column({ length: 255 })
   title: string;

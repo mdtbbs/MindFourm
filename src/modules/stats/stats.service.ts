@@ -62,7 +62,7 @@ export class StatsService {
     const [statsRows, sessionCount, activity7d, resourceTypeBreakdown] = await Promise.all([
       this.postRepository.query(`
         SELECT
-          (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
+          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source = 'USER') as total_posts,
           (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source = 'USER') as community_posts,
           (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source <> 'USER') as automated_posts,
           (SELECT COUNT(*) FROM replies WHERE status = 'published') as total_replies,
@@ -157,7 +157,7 @@ export class StatsService {
         UNION ALL SELECT DATE_SUB(CURDATE(), INTERVAL 1 DAY)
         UNION ALL SELECT CURDATE()
       ) d
-      LEFT JOIN posts p ON DATE(p.created_at) = d.date AND p.status = 'published'
+      LEFT JOIN posts p ON DATE(p.created_at) = d.date AND p.status = 'published' AND p.source = 'USER'
       GROUP BY d.date
       ORDER BY d.date ASC
     `);

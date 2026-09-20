@@ -69,6 +69,7 @@ export class UsersService {
       .select('COUNT(*)', 'count')
       .where('post.user_id = :userId', { userId: id })
       .andWhere('post.status = :status', { status: POST_STATUS.published })
+      .andWhere('post.source = :source', { source: 'USER' })
       .getRawOne();
 
     // Get public reply count via subquery

@@ -42,6 +42,7 @@ import { CreateMobileAuth1720000047000 } from './1720000047000-CreateMobileAuth'
 import { GameVersionFoundation1720000048000 } from './1720000048000-GameVersionFoundation';
 import { CreateDeveloperFeed1720000049000 } from './1720000049000-CreateDeveloperFeed';
 import { AddPostSource1720000050000 } from './1720000050000-AddPostSource';
+import { ClassifyLegacyGithubSyncPosts1720000051000 } from './1720000051000-ClassifyLegacyGithubSyncPosts';
 
 /**
  * Migrations in run order.
@@ -95,4 +96,5 @@ export const migrations = [
   GameVersionFoundation1720000048000,
   CreateDeveloperFeed1720000049000,
   AddPostSource1720000050000,
+  ClassifyLegacyGithubSyncPosts1720000051000,
 ];
