@@ -28,7 +28,7 @@ async function fetchUserProfile(userId: number): Promise<UserProfile | null> {
 }
 
 async function fetchUserPosts(userId: number, page: number): Promise<PostListResponse> {
-  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?page=${page}&limit=20&user_id=${userId}`, {
+  return fetchApiPaginated<PostListResponse['data'][number]>(`/api/posts?page=${page}&limit=20&user_id=${userId}&source=USER`, {
     init: { cache: 'no-store' },
     fallback: createEmptyPaginatedResult<PostListResponse['data'][number]>(20),
   });
