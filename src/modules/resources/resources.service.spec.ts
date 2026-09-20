@@ -76,6 +76,7 @@ function createService(overrides: {
   versionRepository?: Record<string, jest.Mock>;
   adminNotificationsService?: Record<string, jest.Mock>;
   mflClientService?: Record<string, jest.Mock>;
+  resourcePreviewService?: Record<string, jest.Mock>;
 } = {}) {
   const defaultQb = {
     where: jest.fn().mockReturnThis(),
@@ -154,6 +155,11 @@ function createService(overrides: {
     adminNotificationsService as any,
     notificationsService as any,
     mflClientService as any,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    overrides.resourcePreviewService as any,
   );
 
   return {
@@ -331,5 +337,37 @@ describe('ResourcesService', () => {
       subject: 'Useful Pack',
       action_url: '/admin/resources?status=approved',
     });
+  });
+
+  it('rejects a map declared as an external resource before it can enter moderation', async () => {
+    const { service } = createService();
+
+    await expect(service.create({
+      title: 'Invalid map', resource_type: 'external', resource_kind: 'map',
+      external_url: 'https://example.com/map.msav', version: '1.0',
+    } as any, 5)).rejects.toThrow('地图必须上传本站托管文件');
+  });
+
+  it('enqueues an approved map for forum-owned rendering', async () => {
+    const preview = { supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
+    const { service } = createService({
+      resourcePreviewService: preview,
+      resourceRepository: {
+        findOne: jest.fn()
+          .mockResolvedValueOnce({
+            id: 31, title: 'Map', status: 'pending', resource_kind: 'map', file_name: 'map.msav', file_path: '/safe/map.msav',
+            content_hash: 'a'.repeat(64), is_public: 1, file_size: 12, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
+          })
+          .mockResolvedValueOnce({
+            id: 31, title: 'Map', status: 'approved', resource_kind: 'map', file_name: 'map.msav', file_path: '/safe/map.msav',
+            content_hash: 'a'.repeat(64), is_public: 1, file_size: 12, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
+          }),
+      },
+    });
+
+    await service.updateStatus(31, 'approved');
+
+    expect(preview.supports).toHaveBeenCalledWith(expect.objectContaining({ id: 31, resource_kind: 'map' }));
+    expect(preview.enqueue).toHaveBeenCalledWith(expect.objectContaining({ id: 31, file_name: 'map.msav' }));
   });
 });

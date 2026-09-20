@@ -44,6 +44,7 @@ import { CreateDeveloperFeed1720000049000 } from './1720000049000-CreateDevelope
 import { AddPostSource1720000050000 } from './1720000050000-AddPostSource';
 import { ClassifyLegacyGithubSyncPosts1720000051000 } from './1720000051000-ClassifyLegacyGithubSyncPosts';
 import { RepairLegacyGithubSyncPostClassification1720000052000 } from './1720000052000-RepairLegacyGithubSyncPostClassification';
+import { AddResourceRenderState1720000053000 } from './1720000053000-AddResourceRenderState';
 
 /**
  * Migrations in run order.
@@ -99,4 +100,5 @@ export const migrations = [
   AddPostSource1720000050000,
   ClassifyLegacyGithubSyncPosts1720000051000,
   RepairLegacyGithubSyncPostClassification1720000052000,
+  AddResourceRenderState1720000053000,
 ];

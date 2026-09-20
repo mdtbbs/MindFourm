@@ -48,6 +48,7 @@ import { getClientIp } from '@common/utils/client-context.util';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
+import { ResourcePreviewService } from './resource-preview.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -133,6 +134,7 @@ export class ResourcesController {
     private readonly logsService: LogsService,
     private readonly resourceLifecycleService: ResourceLifecycleService,
     private readonly subscriptionsService: ResourceSubscriptionsService,
+    private readonly resourcePreviewService: ResourcePreviewService,
   ) {}
 
   @Get()
@@ -222,6 +224,26 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard)
   async getMyResources(@Query() query: QueryResourcesDto, @Req() req: any) {
     return this.resourcesService.getByUserId(req.user.id, query.limit, query.cursor);
+  }
+
+  @Get(':id/render-status')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getRenderStatus(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.resourcesService.getById(id, req?.user);
+  }
+
+  @Get(':id/preview')
+  @RawHttpResponse()
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getPreview(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
+    const resource = await this.resourcesService.getById(id, req?.user);
+    const preview = await this.resourcePreviewService.readPreview(resource);
+    if (!preview) throw new NotFoundException('预览尚未生成');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.send(preview);
   }
 
   @Get(':id')
@@ -352,6 +374,19 @@ export class ResourcesController {
     });
     await this.logOperation(req, 'resource.update', id, { fields: Object.keys(dto) });
     return resource;
+  }
+
+  @Post(':id/retry-preview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async retryPreview(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const resource = await this.resourcesService.getById(id, req.user);
+    if (!this.resourcePreviewService.supports(resource)) {
+      throw new BadRequestException('该资源类型不支持预览');
+    }
+    void this.resourcePreviewService.enqueue(resource);
+    await this.logOperation(req, 'resource.preview_retry', id);
+    return { status: 'processing' };
   }
 
   @Delete(':id')

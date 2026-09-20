@@ -1,0 +1,45 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'cn.mdtbbs'
+version = '0.1.0'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+application { mainClass = 'cn.mdtbbs.renderer.MapRenderer' }
+
+def mindustryVersion = findProperty('mindustryVersion') ?: 'v158.1'
+def mindustryJar = file("$buildDir/deps/server-release-${mindustryVersion}.jar")
+
+repositories { mavenCentral() }
+
+tasks.register('downloadMindustry') {
+    outputs.file(mindustryJar)
+    doLast {
+        if (!mindustryJar.parentFile.exists()) mindustryJar.parentFile.mkdirs()
+        if (!mindustryJar.exists()) {
+            new URL("https://github.com/Anuken/Mindustry/releases/download/${mindustryVersion}/server-release.jar").withInputStream { input ->
+                mindustryJar.withOutputStream { output -> output << input }
+            }
+        }
+    }
+}
+
+dependencies { implementation files(mindustryJar) }
+tasks.compileJava.dependsOn(tasks.named('downloadMindustry'))
+
+jar {
+    archiveBaseName = 'mindfourm-mindustry-renderer'
+    manifest { attributes('Main-Class': 'cn.mdtbbs.renderer.MapRenderer') }
+}
+
+tasks.register('copyMindustryRuntime', Copy) {
+    from(mindustryJar)
+    into(layout.buildDirectory.dir('libs'))
+    rename { "mindustry-server-${mindustryVersion}.jar" }
+    dependsOn(tasks.named('downloadMindustry'))
+}

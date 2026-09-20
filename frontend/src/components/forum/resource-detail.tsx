@@ -15,7 +15,7 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import ReportDialog from './report-dialog';
 import ResourceReviews from './resource-reviews';
 import { formatDate } from '@/lib/utils';
-import { resourceTypeLabel } from '@/lib/display-labels';
+import { resourceKindLabel, resourceTypeLabel } from '@/lib/display-labels';
 
 interface ResourceDetailProps { resource: Resource; }
 type TabType = 'overview' | 'updates' | 'versions' | 'reviews';
@@ -53,9 +53,9 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
 
   const metadata = resource.metadata;
   const gallery = useMemo(() => {
-    const all = [metadata?.cover_image_url, ...(metadata?.gallery_images || [])].filter(Boolean) as string[];
+    const all = [resource.preview_url, metadata?.cover_image_url, ...(metadata?.gallery_images || [])].filter(Boolean) as string[];
     return [...new Set(all)];
-  }, [metadata]);
+  }, [metadata, resource.preview_url]);
   const downloadUrl = resourceApi.download(resource.id);
   const primaryVersion = resource.versions?.[0];
   const primaryChecksum = primaryVersion?.checksum || resource.content_hash;
@@ -156,7 +156,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
                 {resource.category_name && <Link href={`/resources?category_id=${resource.category_id}`} className="text-[var(--primary)] hover:underline">{resource.category_name}</Link>}
-                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-secondary)] px-2.5 py-1">{resource.resource_kind}</span>}
+                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-secondary)] px-2.5 py-1">{resourceKindLabel(resource.resource_kind)}</span>}
                 <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-600">已审核</span>
               </div>
               <h1 className="text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
@@ -167,6 +167,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
                 <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{resource.download_count || 0} 次下载</span>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">{(metadata?.tags || []).map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-secondary)]"><Tag className="h-3.5 w-3.5" />{tag}</span>)}</div>
+              {['map', 'schematic'].includes(resource.resource_kind || '') && resource.renderer_status !== 'ready' && <p className="mt-3 text-sm text-[var(--text-muted)]">{resource.renderer_status === 'processing' ? '正在生成官方 Mindustry 预览图…' : resource.renderer_status === 'failed' ? '预览生成失败，仍可下载原文件。' : '预览服务暂不可用，仍可下载原文件。'}</p>}
             </div>
           </div>
           <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-5">

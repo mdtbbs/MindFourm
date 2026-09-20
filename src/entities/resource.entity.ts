@@ -130,6 +130,23 @@ export class Resource {
   @Column({ type: 'json', nullable: true })
   metadata_json: any;
 
+  // Generated only by the forum-owned, sandboxed Mindustry renderer.  This is
+  // separate from author metadata so a submission cannot forge preview output.
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  renderer_status: 'processing' | 'ready' | 'failed' | 'unavailable' | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  renderer_error_code: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  renderer_preview_key: string | null;
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  renderer_parser_version: string | null;
+
+  @Column({ type: 'json', nullable: true })
+  renderer_metadata_json: any;
+
   @ManyToOne(() => ResourceVersion, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'latest_published_version_id' })
   latest_published_version: ResourceVersion;

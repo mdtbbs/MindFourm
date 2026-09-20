@@ -25,7 +25,7 @@ export class CapabilitiesService {
       device_auth: false,
       notifications_v1: false,
       notices_v1: true,
-      forge_preview: Boolean(process.env.MDT_FORGE_URL && process.env.MDT_FORGE_API_KEY),
+      forge_preview: Boolean(process.env.RESOURCE_RENDERER_URL),
       minimum_supported_client_version: null,
       recommended_client_version: null,
     };

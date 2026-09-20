@@ -14,6 +14,10 @@ export class UpdateResourceDto {
   @IsIn(['upload', 'external'])
   resource_type?: string;
 
+  @IsOptional()
+  @IsIn(['mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'other'])
+  resource_kind?: string;
+
   /**
    * `@IsString()` alone allowed `javascript:` here, and the download route 302s to
    * this value — turning an approved resource into an open redirect and a script

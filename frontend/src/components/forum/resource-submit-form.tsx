@@ -7,6 +7,7 @@ import { ExternalLink, Loader2, Upload } from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { ResourceCategory } from '@/types';
+import { RESOURCE_KINDS } from '@/lib/display-labels';
 import { useToastStore } from '@/store/toast-store';
 import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
@@ -28,6 +29,7 @@ export default function ResourceSubmitForm() {
   const showSuccess = useToastStore((state) => state.showSuccess);
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
   const [resourceType, setResourceType] = useState<ResourceType | null>(null);
+  const [resourceKind, setResourceKind] = useState('other');
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
@@ -42,8 +44,8 @@ export default function ResourceSubmitForm() {
   const draft = useDraft('resource');
   const saveDraft = draft.save;
   const draftValues = useMemo(
-    () => ({ resourceType, title, version, description, categoryId, isPublic, content, externalUrl }),
-    [resourceType, title, version, description, categoryId, isPublic, content, externalUrl],
+    () => ({ resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl }),
+    [resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl],
   );
   const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl);
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
@@ -62,6 +64,7 @@ export default function ResourceSubmitForm() {
     const saved = recoverableDraft?.values;
     if (!saved) return;
     if (saved.resourceType === 'upload' || saved.resourceType === 'external') setResourceType(saved.resourceType);
+    if (typeof saved.resourceKind === 'string') setResourceKind(saved.resourceKind);
     if (typeof saved.title === 'string') setTitle(saved.title);
     if (typeof saved.version === 'string') setVersion(saved.version);
     if (typeof saved.description === 'string') setDescription(saved.description);
@@ -127,6 +130,7 @@ export default function ResourceSubmitForm() {
       const formData = new FormData();
       formData.append('title', title.trim());
       formData.append('resource_type', resourceType);
+      formData.append('resource_kind', resourceKind);
 
       formData.append('version', version.trim());
       if (description.trim()) formData.append('description', description.trim());
@@ -206,7 +210,7 @@ export default function ResourceSubmitForm() {
 
           <label
             data-testid="resource-type-external"
-            className={`cursor-pointer rounded-lg border p-4 transition-colors ${
+            className={`${resourceKind === 'map' || resourceKind === 'schematic' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} rounded-lg border p-4 transition-colors ${
               resourceType === 'external'
                 ? 'border-[var(--primary)] bg-[var(--primary)]/5'
                 : 'border-[var(--border)] bg-[var(--bg-elevated)]'
@@ -218,6 +222,7 @@ export default function ResourceSubmitForm() {
               value="external"
               checked={resourceType === 'external'}
               onChange={() => setResourceType('external')}
+              disabled={resourceKind === 'map' || resourceKind === 'schematic'}
               className="sr-only"
             />
             <div className="flex items-start gap-3">
@@ -231,6 +236,23 @@ export default function ResourceSubmitForm() {
             </div>
           </label>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">资源分类 *</label>
+        <select
+          value={resourceKind}
+          onChange={(event) => {
+            const nextKind = event.target.value;
+            setResourceKind(nextKind);
+            setFile(null);
+            if (nextKind === 'map' || nextKind === 'schematic') setResourceType('upload');
+          }}
+          className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
+        >
+          {RESOURCE_KINDS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        {(resourceKind === 'map' || resourceKind === 'schematic') && <p className="text-xs text-[var(--text-muted)]">{resourceKind === 'map' ? '地图仅接受 .msav 文件；审核通过后会自动生成预览图。' : '蓝图仅接受 .msch 文件；审核通过后会自动生成预览图。'}</p>}
       </div>
 
       <Input
@@ -321,7 +343,7 @@ export default function ResourceSubmitForm() {
             <input
               data-testid="resource-file-input"
               type="file"
-              accept=".zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif"
+              accept={resourceKind === 'map' ? '.msav' : resourceKind === 'schematic' ? '.msch' : '.zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif'}
               onChange={(e) => setFile(e.target.files?.[0] || null)}
               className="hidden"
             />

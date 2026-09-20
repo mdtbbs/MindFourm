@@ -33,6 +33,11 @@ export class CreateResourceDto {
   @IsIn(['upload', 'external'])
   resource_type: string;
 
+  /** Classification is intentionally distinct from upload/external delivery. */
+  @IsOptional()
+  @IsIn(['mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'other'])
+  resource_kind?: string;
+
   /** Must be a real http(s) URL — see UpdateResourceDto for why. */
   @IsOptional()
   @ValidateIf((_o, value) => value !== '' && value !== null)

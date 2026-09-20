@@ -29,6 +29,7 @@ import { LogsModule } from '../logs/logs.module';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { NavigationModule } from '../navigation/navigation.module';
+import { ResourcePreviewService } from './resource-preview.service';
 
 @Module({
   imports: [
@@ -40,7 +41,7 @@ import { NavigationModule } from '../navigation/navigation.module';
     NavigationModule,
     TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceSubscription]),
   ],
-  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
   controllers: [ResourcesController, ResourcesV1Controller],
   exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
 })

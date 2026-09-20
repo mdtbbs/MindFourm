@@ -27,6 +27,7 @@ import { ResourceStorageService } from './resource-storage.service';
 import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { randomUUID } from 'crypto';
+import { ResourcePreviewService } from './resource-preview.service';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -72,6 +73,7 @@ export class ResourcesService {
     private resourceStorageService?: ResourceStorageService,
     private contentSafety?: ContentSafetyService,
     private resourceSubscriptionsService?: ResourceSubscriptionsService,
+    private resourcePreviewService?: ResourcePreviewService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -135,6 +137,8 @@ export class ResourcesService {
       category_name: resource.category?.name || null,
       category_icon: resource.category?.icon || null,
       metadata: normalizeResourceMetadata(resource.metadata_json),
+      renderer_metadata: resource.renderer_metadata_json || null,
+      preview_url: resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null,
       versions: versions?.map((version) => this.normalizeVersion(version)),
     };
   }
@@ -223,6 +227,7 @@ export class ResourcesService {
   ): Promise<any> {
     const categoryId = this.toOptionalNumber((dto as any).category_id);
     const resourceType = this.normalizeResourceType(dto.resource_type);
+    const resourceKind = dto.resource_kind || 'other';
 
     const category = categoryId
       ? await this.categoryRepository.findOne({ where: { id: categoryId } })
@@ -242,6 +247,7 @@ export class ResourcesService {
     if (resourceType === 'external' && !dto.external_url) {
       throw new BadRequestException('外链类资源必须填写外链地址');
     }
+    this.assertKindFileContract(resourceKind, resourceType, file?.file_name);
 
     const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
     const risk = this.contentSafety
@@ -257,8 +263,12 @@ export class ResourcesService {
     const newResource = this.resourceRepository.create({
       user_id: userId,
       title: dto.title,
+      public_id: randomUUID(),
       description: dto.description,
       resource_type: resourceType,
+      resource_kind: resourceKind,
+      summary: dto.description || null,
+      visibility: this.toTinyInt((dto as any).is_public, 1) ? 'public' : 'private',
       file_name: file?.file_name,
       file_path: file?.file_path,
       file_size: file?.file_size,
@@ -400,6 +410,17 @@ export class ResourcesService {
 
   private normalizeCredits(values: string[] | undefined): string[] {
     return [...new Set((values || []).map((value) => value.trim()).filter(Boolean))];
+  }
+
+  private assertKindFileContract(kind: string, resourceType: string, fileName?: string): void {
+    if (kind !== 'map' && kind !== 'schematic') return;
+    if (resourceType !== 'upload' || !fileName) {
+      throw new BadRequestException(`${kind === 'map' ? '地图' : '蓝图'}必须上传本站托管文件`);
+    }
+    const expectedExtension = kind === 'map' ? '.msav' : '.msch';
+    if (!fileName.toLowerCase().endsWith(expectedExtension)) {
+      throw new BadRequestException(`${kind === 'map' ? '地图' : '蓝图'}仅支持 ${expectedExtension} 文件`);
+    }
   }
 
   /**
@@ -946,14 +967,29 @@ export class ResourcesService {
 
       const updateData: Partial<Resource> = {};
 
+      const requestedResourceType = dto.resource_type
+        ? this.normalizeResourceType(dto.resource_type)
+        : resource.resource_type;
+      const requestedResourceKind = dto.resource_kind ?? resource.resource_kind ?? 'other';
+      this.assertKindFileContract(requestedResourceKind, requestedResourceType, resource.file_name || undefined);
+
       if (dto.title) updateData.title = dto.title;
       if (dto.description !== undefined) updateData.description = dto.description;
       if (dto.resource_type) {
-        const resourceType = this.normalizeResourceType(dto.resource_type);
-        if (!['upload', 'external'].includes(resourceType)) {
+        if (!['upload', 'external'].includes(requestedResourceType)) {
           throw new BadRequestException('无效的资源类型');
         }
-        updateData.resource_type = resourceType;
+        updateData.resource_type = requestedResourceType;
+      }
+      if (dto.resource_kind !== undefined) {
+        updateData.resource_kind = requestedResourceKind;
+        if (!this.resourcePreviewService?.supports({ resource_kind: requestedResourceKind } as Resource)) {
+          updateData.renderer_status = null;
+          updateData.renderer_error_code = null;
+          updateData.renderer_preview_key = null;
+          updateData.renderer_parser_version = null;
+          updateData.renderer_metadata_json = null;
+        }
       }
       if (dto.external_url !== undefined) {
         if (dto.external_url && !isSafeExternalUrl(dto.external_url)) {
@@ -1203,6 +1239,11 @@ export class ResourcesService {
       );
 
       if (status === RESOURCE_STATUS_APPROVED) {
+        if (this.resourcePreviewService?.supports(resource)) {
+          void this.resourcePreviewService.enqueue(resource).catch((err) =>
+            console.error(`Resource preview enqueue error for ${resource.id}:`, err),
+          );
+        }
         this.resourceSubscriptionsService?.notifyResourceUpdate(resource)
           .catch((err) => console.error('Resource subscriber notification error:', err));
       }

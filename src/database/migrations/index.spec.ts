@@ -54,4 +54,10 @@ describe('migration registry', () => {
       'RepairLegacyGithubSyncPostClassification1720000052000',
     );
   });
+
+  it('includes persisted resource preview state before renderer output is exposed', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'AddResourceRenderState1720000053000',
+    );
+  });
 });

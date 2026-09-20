@@ -465,6 +465,10 @@ export interface Resource {
   created_at: string;
   updated_at: string;
   metadata?: ResourceDetailMetadata;
+  renderer_status?: 'processing' | 'ready' | 'failed' | 'unavailable' | null;
+  renderer_error_code?: string | null;
+  renderer_metadata?: Record<string, unknown> | null;
+  preview_url?: string | null;
   favorite_count?: number;
   is_favorited?: boolean;
   is_subscribed?: boolean;
