@@ -20,6 +20,12 @@ jest.mock('typeorm', () => ({
   PrimaryGeneratedColumn: decorator,
   PrimaryColumn: decorator,
   Column: decorator,
+  ManyToOne: decorator,
+  OneToMany: decorator,
+  ManyToMany: decorator,
+  OneToOne: decorator,
+  JoinColumn: decorator,
+  JoinTable: decorator,
   CreateDateColumn: decorator,
   UpdateDateColumn: decorator,
   DeleteDateColumn: decorator,
@@ -165,6 +171,17 @@ function createService(overrides: {
     getById: jest.fn().mockResolvedValue(null),
     ...overrides.categoryService,
   };
+  const transactionManager = {
+    create: jest.fn().mockImplementation((_entity: unknown, value: unknown) => value),
+    save: jest.fn().mockImplementation(async (_entity: unknown, value: unknown) => {
+      if (Array.isArray(value)) return value;
+      return { id: 1, ...(value as Record<string, unknown>) };
+    }),
+  };
+  const dataSource = {
+    transaction: jest.fn().mockImplementation(async (callback: (manager: typeof transactionManager) => unknown) =>
+      callback(transactionManager)),
+  };
   const contentSafety = overrides.contentSafety;
 
   return {
@@ -172,9 +189,12 @@ function createService(overrides: {
       resourceRepository as any,
       {} as any, // userRepository
       {} as any, // categoryRepository
-      {} as any, // versionRepository
+      {
+        find: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue(undefined),
+      } as any, // versionRepository
       {} as any, // ratingRepository
-      {} as any, // dataSource
+      dataSource as any,
       { publishModerationPending: jest.fn().mockResolvedValue(undefined), publishModerationResult: jest.fn().mockResolvedValue(undefined) } as any,
       { create: jest.fn() } as any,
       { uploadFile: jest.fn(), getDownloadUrl: jest.fn(), blockDownloads: jest.fn(), updateApprovalStatus: jest.fn() } as any,
@@ -203,6 +223,7 @@ describe('ResourcesService - Public Visibility', () => {
       description: '包含木马的描述',
       resource_type: 'external',
       external_url: 'https://example.com/tool',
+      version: '1.0.0',
       status: 'pending',
       is_public: 1,
       use_mfl: 0,
@@ -222,6 +243,7 @@ describe('ResourcesService - Public Visibility', () => {
       description: '包含木马的描述',
       resource_type: 'external',
       external_url: 'https://example.com/tool',
+      version: '1.0.0',
     } as any, 7, undefined, { ipAddress: '203.0.113.7' });
 
     expect(result.status).toBe('pending');

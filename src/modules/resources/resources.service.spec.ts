@@ -1,5 +1,14 @@
 const decorator = () => () => undefined;
 
+jest.mock('@nestjs/common', () => ({
+  Injectable: () => () => undefined,
+  Optional: () => () => undefined,
+  Inject: () => () => undefined,
+  NotFoundException: class NotFoundException extends Error {},
+  ForbiddenException: class ForbiddenException extends Error {},
+  BadRequestException: class BadRequestException extends Error {},
+}));
+
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
@@ -31,6 +40,32 @@ jest.mock('@entities/resource.entity', () => ({ Resource: class Resource {} }));
 jest.mock('@entities/resource-category.entity', () => ({ ResourceCategory: class ResourceCategory {} }));
 jest.mock('@entities/resource-version.entity', () => ({ ResourceVersion: class ResourceVersion {} }));
 jest.mock('@entities/user.entity', () => ({ User: class User {} }));
+jest.mock('@entities/resource-attribution.entity', () => ({ ResourceAttribution: class ResourceAttribution {} }));
+jest.mock('@entities/resource-file.entity', () => ({ ResourceFile: class ResourceFile {} }));
+jest.mock('@entities/resource-version-compatibility.entity', () => ({ ResourceVersionCompatibility: class ResourceVersionCompatibility {} }));
+jest.mock('@entities/resource-rating.entity', () => ({ ResourceRating: class ResourceRating {} }));
+
+jest.mock('../admin-notifications/admin-notifications.service', () => ({
+  AdminNotificationsService: class AdminNotificationsService {},
+}));
+jest.mock('../notifications/notifications.service', () => ({
+  NotificationsService: class NotificationsService {},
+}));
+jest.mock('./mfl-client.service', () => ({
+  MflClientService: class MflClientService {},
+}));
+jest.mock('./resource-categories.service', () => ({
+  ResourceCategoryService: class ResourceCategoryService {},
+}));
+jest.mock('./resource-storage.service', () => ({
+  ResourceStorageService: class ResourceStorageService {},
+}));
+jest.mock('@modules/content-safety/content-safety.service', () => ({
+  ContentSafetyService: class ContentSafetyService {},
+}));
+jest.mock('./resource-subscriptions.service', () => ({
+  ResourceSubscriptionsService: class ResourceSubscriptionsService {},
+}));
 
 import { ResourcesService } from './resources.service';
 
@@ -38,6 +73,7 @@ function createService(overrides: {
   resourceRepository?: Record<string, jest.Mock>;
   manager?: Record<string, jest.Mock>;
   dataSource?: Record<string, jest.Mock>;
+  versionRepository?: Record<string, jest.Mock>;
   adminNotificationsService?: Record<string, jest.Mock>;
   mflClientService?: Record<string, jest.Mock>;
 } = {}) {
@@ -86,6 +122,11 @@ function createService(overrides: {
       callback(manager)),
     ...overrides.dataSource,
   };
+  const versionRepository = {
+    find: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue(undefined),
+    ...overrides.versionRepository,
+  };
   const adminNotificationsService = {
     publishModerationPending: jest.fn().mockResolvedValue([]),
     publishModerationResult: jest.fn().mockResolvedValue([]),
@@ -107,7 +148,7 @@ function createService(overrides: {
     resourceRepository as any,
     {} as any,
     {} as any,
-    {} as any,
+    versionRepository as any,
     {} as any,
     dataSource as any,
     adminNotificationsService as any,
@@ -120,6 +161,7 @@ function createService(overrides: {
     resourceRepository,
     manager,
     dataSource,
+    versionRepository,
     adminNotificationsService,
     mflClientService,
     defaultQb,
@@ -170,7 +212,7 @@ describe('ResourcesService', () => {
       { resourceTag: 'campaign' },
     );
     expect(defaultQb.andWhere).toHaveBeenCalledWith(
-      "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions')",
+      "(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))",
       { supportedVersion: 'v8' },
     );
     expect(defaultQb.andWhere).toHaveBeenCalledWith(
@@ -224,6 +266,7 @@ describe('ResourcesService', () => {
         title: 'Useful Pack',
         description: 'A reviewed upload',
         resource_type: 'upload',
+        version: '1.0.0',
       } as any,
       5,
       {
