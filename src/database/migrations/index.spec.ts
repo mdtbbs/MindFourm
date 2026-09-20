@@ -48,4 +48,10 @@ describe('migration registry', () => {
       'CreateNotices1720000046000',
     );
   });
+
+  it('includes the GitHub synchronization classification repair', () => {
+    expect(migrations.map((migration) => migration.name)).toContain(
+      'RepairLegacyGithubSyncPostClassification1720000052000',
+    );
+  });
 });

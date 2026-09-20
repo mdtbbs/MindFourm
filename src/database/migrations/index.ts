@@ -43,6 +43,7 @@ import { GameVersionFoundation1720000048000 } from './1720000048000-GameVersionF
 import { CreateDeveloperFeed1720000049000 } from './1720000049000-CreateDeveloperFeed';
 import { AddPostSource1720000050000 } from './1720000050000-AddPostSource';
 import { ClassifyLegacyGithubSyncPosts1720000051000 } from './1720000051000-ClassifyLegacyGithubSyncPosts';
+import { RepairLegacyGithubSyncPostClassification1720000052000 } from './1720000052000-RepairLegacyGithubSyncPostClassification';
 
 /**
  * Migrations in run order.
@@ -97,4 +98,5 @@ export const migrations = [
   CreateDeveloperFeed1720000049000,
   AddPostSource1720000050000,
   ClassifyLegacyGithubSyncPosts1720000051000,
+  RepairLegacyGithubSyncPostClassification1720000052000,
 ];
