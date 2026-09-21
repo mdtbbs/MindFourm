@@ -66,4 +66,31 @@ describe('ResourcePreviewService', () => {
     expect(update).toHaveBeenLastCalledWith(8, { renderer_status: 'failed', renderer_error_code: 'INVALID_RENDER_RESULT', renderer_preview_key: null });
     await fs.rm(root, { recursive: true, force: true });
   });
+
+  it('keeps pre-submit previews private to their creator until consumed', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-preview-'));
+    const source = path.join(root, 'blueprint.msch');
+    const input = Buffer.from('blueprint payload');
+    const hash = crypto.createHash('sha256').update(input).digest('hex');
+    const key = `resources/schematic/${hash.slice(0, 2)}/${hash}/preview.png`;
+    const previewPath = path.join(root, key);
+    await fs.writeFile(source, input);
+    await fs.mkdir(path.dirname(previewPath), { recursive: true });
+    await fs.writeFile(previewPath, Buffer.from('private preview'));
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    process.env.RESOURCE_PREVIEW_ROOT = root;
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ previewKey: key, metadata: { name: 'Private' } }) }) as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any, { removeManaged: jest.fn() } as any);
+
+    const draft = await service.createDraft(17, 'schematic', {
+      file_name: 'blueprint.msch', file_path: source, file_size: input.length,
+      mime_type: 'application/octet-stream', content_hash: hash,
+    });
+
+    await expect(service.readDraftPreview(17, draft.id)).resolves.toEqual(Buffer.from('private preview'));
+    await expect(service.readDraftPreview(18, draft.id)).rejects.toThrow('预览草稿不存在或已过期');
+    await expect(service.takeDraft(18, draft.id, 'schematic')).rejects.toThrow('预览草稿不存在或已过期');
+    await expect(service.takeDraft(17, draft.id, 'schematic')).resolves.toMatchObject({ file_path: source });
+    await fs.rm(root, { recursive: true, force: true });
+  });
 });

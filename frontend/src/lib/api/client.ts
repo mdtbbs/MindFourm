@@ -1173,6 +1173,11 @@ export const resourceApi = {
       method: 'POST',
       body: formData,
     }),
+  previewDraft: (formData: FormData) =>
+    request<{ id: string; preview_url: string; metadata: Record<string, unknown> | null; parser_version: string | null; expires_at: string }>('/api/resources/drafts/preview', {
+      method: 'POST',
+      body: formData,
+    }),
   update: (id: number, data: Partial<Resource>) => {
     clearCache();
     return request<Resource>(`/api/resources/${id}`, {

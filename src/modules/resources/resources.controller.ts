@@ -29,6 +29,7 @@ import { ResourceVersionService } from './resource-versions.service';
 import { ResourceFavoritesService } from './resource-favorites.service';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { CreateResourceDto } from './dto/create-resource.dto';
+import { CreateResourcePreviewDraftDto } from './dto/create-resource-preview-draft.dto';
 import { QueryResourcesDto } from './dto/query-resources.dto';
 import { CreateResourceCategoryDto } from './dto/create-resource-category.dto';
 import { UpdateResourceCategoryDto } from './dto/update-resource-category.dto';
@@ -87,7 +88,8 @@ function resourceFileFilter(
   callback(null, true);
 }
 
-const resourceUploadInterceptor = FileInterceptor('file', {
+function createResourceFileInterceptor() {
+  return FileInterceptor('file', {
   storage: diskStorage({
     destination: (_req, _file, callback) => {
       mkdirSync(RESOURCE_INCOMING_DIR, { recursive: true });
@@ -100,7 +102,11 @@ const resourceUploadInterceptor = FileInterceptor('file', {
   }),
   limits: { fileSize: MAX_RESOURCE_SIZE, fieldSize: 28 * 1024 * 1024 },
   fileFilter: resourceFileFilter,
-});
+  });
+}
+
+const resourceUploadInterceptor = createResourceFileInterceptor();
+const resourcePreviewDraftInterceptor = createResourceFileInterceptor();
 
 function normalizeCategoryBody(body: any): any {
   const normalized: Record<string, unknown> = {
@@ -226,6 +232,59 @@ export class ResourcesController {
     return this.resourcesService.getByUserId(req.user.id, query.limit, query.cursor);
   }
 
+  @Post('drafts/preview')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(resourcePreviewDraftInterceptor)
+  @RateLimit({ max: 5, window: 60 })
+  async previewDraft(
+    @Body() rawBody: Record<string, any>,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req() req: any,
+  ) {
+    let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
+    try {
+      const body = await new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }).transform(rawBody, { type: 'body', metatype: CreateResourcePreviewDraftDto });
+      const schematicCode = body.schematic_code?.trim();
+      if (file && schematicCode) throw new BadRequestException('蓝图请在上传文件和粘贴代码中二选一');
+      if (body.resource_kind === 'map' && (!file || schematicCode)) {
+        throw new BadRequestException('地图请上传 .msav 文件');
+      }
+      if (body.resource_kind === 'schematic' && !file && !schematicCode) {
+        throw new BadRequestException('请上传 .msch 文件或粘贴蓝图代码');
+      }
+      if (file) {
+        const expectedExtension = body.resource_kind === 'map' ? '.msav' : '.msch';
+        if (!file.originalname.toLowerCase().endsWith(expectedExtension)) {
+          throw new BadRequestException(`${body.resource_kind === 'map' ? '地图' : '蓝图'}仅支持 ${expectedExtension} 文件`);
+        }
+      }
+      if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
+      storedFile = schematicCode
+        ? await this.resourceStorageService.storePastedSchematic(schematicCode)
+        : await this.resourceStorageService.storeIncoming(file);
+      if (!storedFile) throw new BadRequestException('请选择要预览的文件');
+      return await this.resourcePreviewService.createDraft(req.user.id, body.resource_kind, storedFile);
+    } catch (error) {
+      await cleanupUploadedFile(file);
+      if (storedFile?.file_path) await this.resourceStorageService.removeManaged(storedFile.file_path).catch(() => undefined);
+      throw error;
+    }
+  }
+
+  @Get('drafts/:draftId/preview')
+  @RawHttpResponse()
+  @UseGuards(JwtAuthGuard)
+  async getDraftPreview(@Param('draftId') draftId: string, @Req() req: any, @Res() res: Response) {
+    const preview = await this.resourcePreviewService.readDraftPreview(req.user.id, draftId);
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'private, no-store');
+    return res.send(preview);
+  }
+
   @Get(':id/render-status')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
@@ -345,6 +404,7 @@ export class ResourcesController {
         transform: true,
       }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
       const schematicCode = body.schematic_code?.trim();
+      const previewDraftId = body.preview_draft_id?.trim();
       if (body.resource_type === 'external' && file) {
         throw new BadRequestException('外链资源不能同时上传本站托管文件');
       }
@@ -354,8 +414,13 @@ export class ResourcesController {
       if (file && schematicCode) {
         throw new BadRequestException('蓝图请在上传文件和粘贴代码中二选一');
       }
+      if (previewDraftId && (file || schematicCode)) {
+        throw new BadRequestException('已生成预览的资源不能再次上传文件或粘贴蓝图代码');
+      }
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
-      storedFile = schematicCode
+      storedFile = previewDraftId
+        ? await this.resourcePreviewService.takeDraft(userId, previewDraftId, body.resource_kind || '')
+        : schematicCode
         ? await this.resourceStorageService.storePastedSchematic(schematicCode)
         : await this.resourceStorageService.storeIncoming(file);
       const resource = await this.resourcesService.create(body, userId, storedFile, {

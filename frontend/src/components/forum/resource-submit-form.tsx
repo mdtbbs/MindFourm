@@ -282,6 +282,10 @@ export default function ResourceSubmitForm() {
           value={resourceKind}
           onChange={(event) => {
             const nextKind = event.target.value;
+            if (nextKind === 'map' || nextKind === 'schematic') {
+              router.push(`/resources/submit/${nextKind}`);
+              return;
+            }
             setResourceKind(nextKind);
             setFile(null);
             setSchematicCode('');
@@ -290,7 +294,7 @@ export default function ResourceSubmitForm() {
           }}
           className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
         >
-          {RESOURCE_KINDS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
+          {RESOURCE_KINDS.map(({ value, label }) => <option key={value} value={value}>{value === 'map' || value === 'schematic' ? `${label}（专用工作台）` : label}</option>)}
         </select>
         {(resourceKind === 'map' || resourceKind === 'schematic') && <p className="text-xs text-[var(--text-muted)]">{resourceKind === 'map' ? '地图仅接受 .msav 文件；审核通过后会自动生成预览图。' : '蓝图仅接受 .msch 文件；审核通过后会自动生成预览图。'}</p>}
       </div>

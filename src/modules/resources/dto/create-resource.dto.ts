@@ -48,6 +48,12 @@ export class CreateResourceDto {
   @MaxLength(28 * 1024 * 1024)
   schematic_code?: string;
 
+  /** A private, user-bound preview draft that has already been parsed. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  preview_draft_id?: string;
+
   /** Must be a real http(s) URL — see UpdateResourceDto for why. */
   @IsOptional()
   @ValidateIf((_o, value) => value !== '' && value !== null)
