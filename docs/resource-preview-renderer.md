@@ -33,7 +33,7 @@ Environment=STORAGE_ROOT=/data/mindfourm/uploads/previews
 Environment=WORKER_TOKEN=replace-with-a-secret
 Environment=WORKER_HOST=127.0.0.1
 Environment=WORKER_PORT=6100
-ExecStart=/usr/bin/java -Xmx512m -cp build/libs/mindfourm-mindustry-renderer-0.1.0.jar:build/libs/mindustry-server-v158.1.jar cn.mdtbbs.renderer.MapRenderer
+ExecStart=/usr/bin/java -Xmx512m -cp build/libs/mindfourm-mindustry-renderer-0.1.0.jar:build/libs/mindustry-server-v160.2.jar cn.mdtbbs.renderer.MapRenderer
 Restart=on-failure
 NoNewPrivileges=true
 PrivateTmp=true

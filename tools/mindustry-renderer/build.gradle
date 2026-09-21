@@ -12,7 +12,10 @@ java {
 
 application { mainClass = 'cn.mdtbbs.renderer.MapRenderer' }
 
-def mindustryVersion = findProperty('mindustryVersion') ?: 'v158.1'
+// Keep this runtime current: MapIO cannot read save formats introduced after
+// the bundled Mindustry build.  The forum preview service must be able to
+// render maps authored by the current official client.
+def mindustryVersion = findProperty('mindustryVersion') ?: 'v160.2'
 def mindustryJar = file("$buildDir/deps/server-release-${mindustryVersion}.jar")
 
 repositories { mavenCentral() }

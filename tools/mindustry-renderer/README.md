@@ -18,7 +18,7 @@ Start it with the same preview root as the forum:
 ```bash
 STORAGE_ROOT=/data/mindfourm/uploads/previews \
 WORKER_TOKEN=replace-me \
-java -Xmx512m -cp build/libs/mindfourm-mindustry-renderer-0.1.0.jar:build/libs/mindustry-server-v158.1.jar cn.mdtbbs.renderer.MapRenderer
+java -Xmx512m -cp build/libs/mindfourm-mindustry-renderer-0.1.0.jar:build/libs/mindustry-server-v160.2.jar cn.mdtbbs.renderer.MapRenderer
 ```
 
 Set the forum's `RESOURCE_RENDERER_URL=http://127.0.0.1:6100`, matching

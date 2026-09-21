@@ -40,7 +40,7 @@ import java.util.concurrent.Executors;
  */
 public final class MapRenderer {
     private static final int MAX_BYTES = 20 * 1024 * 1024;
-    private static final String VERSION = "v158.1";
+    private static final String VERSION = "v160.2";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
     private static String token;
