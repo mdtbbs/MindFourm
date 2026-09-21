@@ -17,6 +17,7 @@ android/app/build/
 # Uploads (keep directory structure with .gitkeep)
 uploads/attachments/
 uploads/resources/
+uploads/previews/
 uploads/avatars/
 !uploads/avatars/.gitkeep
 
