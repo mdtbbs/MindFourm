@@ -47,6 +47,7 @@ import { RepairLegacyGithubSyncPostClassification1720000052000 } from './1720000
 import { AddResourceRenderState1720000053000 } from './1720000053000-AddResourceRenderState';
 import { BackfillResourcePublicIds1720000054000 } from './1720000054000-BackfillResourcePublicIds';
 import { CreateResourceLikes1720000055000 } from './1720000055000-CreateResourceLikes';
+import { RepairResourceFilenames1720000056000 } from './1720000056000-RepairResourceFilenames';
 
 /**
  * Migrations in run order.
@@ -105,4 +106,5 @@ export const migrations = [
   AddResourceRenderState1720000053000,
   BackfillResourcePublicIds1720000054000,
   CreateResourceLikes1720000055000,
+  RepairResourceFilenames1720000056000,
 ];

@@ -29,6 +29,26 @@ describe('ResourceStorageService', () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 
+  it('repairs a multipart filename decoded as Latin-1 before persistence', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const incoming = path.join(root, 'incoming.msch');
+    await fs.writeFile(incoming, 'content');
+
+    const mojibake = Buffer.from('(双科).msch', 'utf8').toString('latin1');
+    const stored = await service.storeIncoming({
+      path: incoming,
+      filename: 'stored.msch',
+      originalname: mojibake,
+      size: 7,
+      mimetype: 'application/octet-stream',
+    } as any);
+
+    expect(stored!.file_name).toBe('(双科).msch');
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
   it('treats an already-promoted file as a successful retry', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
     process.env.RESOURCE_UPLOAD_ROOT = root;

@@ -4,6 +4,7 @@ import * as path from 'path';
 import { createReadStream } from 'fs';
 import { createHash } from 'crypto';
 import { SettingsService } from '../settings/settings.service';
+import { repairMojibakeFilename } from '@common/utils/filename.util';
 
 export type StoredResourceFile = {
   file_name: string;
@@ -61,7 +62,13 @@ export class ResourceStorageService {
       stream.on('data', (chunk) => hash.update(chunk));
       stream.on('end', () => resolve(hash.digest('hex')));
     });
-    return { file_name: file.originalname, file_path: storedPath, file_size: file.size, mime_type: file.mimetype, content_hash: contentHash };
+    return {
+      file_name: repairMojibakeFilename(file.originalname) || 'file',
+      file_path: storedPath,
+      file_size: file.size,
+      mime_type: file.mimetype,
+      content_hash: contentHash,
+    };
   }
 
   /**

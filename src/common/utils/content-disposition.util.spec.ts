@@ -10,4 +10,11 @@ describe('attachmentContentDisposition', () => {
   it('does not allow quotes or control characters to split the header', () => {
     expect(attachmentContentDisposition('a\"b\n.zip')).toContain('filename="a_b.zip"');
   });
+
+  it('repairs a persisted mojibake filename before encoding the download header', () => {
+    const mojibake = Buffer.from('(双科).msch', 'utf8').toString('latin1');
+    expect(attachmentContentDisposition(mojibake)).toContain(
+      "filename*=UTF-8''%28%E5%8F%8C%E7%A7%91%29.msch",
+    );
+  });
 });
