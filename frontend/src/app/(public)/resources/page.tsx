@@ -162,21 +162,15 @@ export default async function ResourcesPage({
   }
 
   return (
-    <div className="min-w-0 mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
+    <div className="content-width-resources mx-auto min-w-0 px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-[var(--text)]">资源中心</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
             浏览社区资源，快速查看版本、简介和下载信息。
           </p>
         </div>
-        <Link
-          href="/resources/submit"
-          className="inline-flex shrink-0 items-center rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
-        >
-          提交资源
-        </Link>
       </div>
 
       {/* Main content */}

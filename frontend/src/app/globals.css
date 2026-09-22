@@ -28,6 +28,11 @@
  */
 @custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
 
+/* Shared reading widths for the main content families. */
+.content-width-feed { max-width: 66rem; }
+.content-width-resources { max-width: 80rem; }
+.content-width-detail { max-width: 80rem; }
+
 /*
  * 唯一的本地 :root。这里只做两件事，不再重复定义任何品牌色：
  *

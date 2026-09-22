@@ -139,12 +139,11 @@ function isFeatureEnabled(featureKey: string | undefined, settings: Record<strin
 export function buildSidebarNavigation(context: SidebarNavigationContext): SidebarNavigationItem[] {
   const parsed = parseSidebarNavigationItems(context.settings.sidebar_navigation_items);
   const configuredItems = parsed.length > 0 ? parsed : DEFAULT_SIDEBAR_NAVIGATION;
-  const requiredItems = DEFAULT_SIDEBAR_NAVIGATION.filter((item) => ['home', 'notices'].includes(item.id));
-  const missingRequired = requiredItems.filter((item) => !configuredItems.some((existing) => existing.id === item.id));
-  const items = [
-    ...missingRequired,
-    ...configuredItems.map((item) => item.id === 'home' ? { ...item, enabled: true } : item),
-  ];
+  const items = configuredItems.map((item) => item.id === 'home' ? { ...item, enabled: true } : item);
+  const defaultHome = DEFAULT_SIDEBAR_NAVIGATION.find((item) => item.id === 'home')!;
+  const defaultNotices = DEFAULT_SIDEBAR_NAVIGATION.find((item) => item.id === 'notices')!;
+  if (!items.some((item) => item.id === 'home')) items.unshift(defaultHome);
+  if (!items.some((item) => item.id === 'notices')) items.splice(1, 0, defaultNotices);
 
   return items.filter((item) => {
     if (!item.enabled) return false;

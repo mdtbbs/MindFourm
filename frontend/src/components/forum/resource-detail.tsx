@@ -3,91 +3,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  ArrowDownToLine, Calendar, Check, ChevronLeft, ChevronRight, Clipboard,
-  Bell, Download, ExternalLink, FileArchive, Flag, Heart, Image as ImageIcon,
-  Link2, MessageSquare, Package, Share2, ShieldCheck, Star, Tag, User,
+  Calendar, Download, Package, Tag, User,
 } from 'lucide-react';
 import { Resource } from '@/types';
 import { resourceApi } from '@/lib/api/client';
 import { useAuth } from '@/store/user-store';
 import { useToastStore } from '@/store/toast-store';
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
-import ReportDialog from './report-dialog';
-import ResourceReviews from './resource-reviews';
+import ResourceKindDetails from './resource-kind-details';
+import ResourceGallery from './resources/detail/resource-gallery';
+import ResourceActions from './resources/detail/resource-actions';
+import ResourceTabs, { type ResourceTab } from './resources/detail/resource-tabs';
+import ResourceAside from './resources/detail/resource-aside';
+import { resourceFileExtension, resourceStatusLabel } from '@/lib/resources/presentation';
 import { formatDate } from '@/lib/utils';
-import { resourceKindLabel, resourceTypeLabel } from '@/lib/display-labels';
+import { resourceKindLabel } from '@/lib/display-labels';
 
 interface ResourceDetailProps { resource: Resource; }
-type TabType = 'overview' | 'updates' | 'versions' | 'reviews';
-
-function formatSize(bytes?: number | null) {
-  if (!bytes) return '大小未知';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-}
-
-const MINDUSTRY_LABELS: Record<string, string> = {
-  'water-extractor': '水抽取器', 'inverted-sorter': '反向分类器', battery: '电池',
-  'bridge-conveyor': '传送带桥', 'spore-press': '孢子压缩机', 'bridge-conduit': '导管桥',
-  'liquid-router': '液体路由器', cultivator: '培养机', 'power-node': '电力节点',
-  'coal-centrifuge': '煤炭离心机', 'micro-processor': '微型处理器', conduit: '导管',
-  'underflow-gate': '下溢门', 'pyratite-mixer': '硫化物混合器', 'blast-mixer': '爆炸混合器',
-  'overdrive-projector': '超速投影器', 'impact-reactor': '冲击反应堆',
-  'cryofluid-mixer': '冷冻液混合器', sorter: '分类器', 'item-source': '物品源',
-  unloader: '卸货器', copper: '铜', lead: '铅', metaglass: '钢化玻璃', graphite: '石墨',
-  titanium: '钛', thorium: '钍', silicon: '硅', plastanium: '塑钢', 'surge-alloy': '巨浪合金',
-};
-
-function mindustryLabel(value?: string | null) {
-  if (!value) return '未标注';
-  return MINDUSTRY_LABELS[value] || value.replaceAll('-', ' ');
-}
-
-function MeterChart({
-  title,
-  items,
-  tone = 'primary',
-}: {
-  title: string;
-  items: Array<{ label: string; value: number }>;
-  tone?: 'primary' | 'amber' | 'green';
-}) {
-  const max = Math.max(...items.map((item) => Math.abs(item.value)), 1);
-  const colors = tone === 'amber'
-    ? ['bg-amber-500', 'bg-orange-400', 'bg-yellow-400']
-    : tone === 'green'
-      ? ['bg-emerald-500', 'bg-teal-500', 'bg-cyan-500']
-      : ['bg-[var(--primary)]', 'bg-sky-400', 'bg-indigo-400'];
-  return <div>
-    <h3 className="mb-4 text-sm font-semibold text-[var(--text)]">{title}</h3>
-    <div className="space-y-3">
-      {items.map((item, index) => <div key={item.label}>
-        <div className="mb-1 flex items-center justify-between gap-3 text-xs">
-          <span className="truncate text-[var(--text-secondary)]">{item.label}</span>
-          <span className="shrink-0 font-medium tabular-nums text-[var(--text)]">{item.value.toLocaleString('zh-CN')}</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-secondary)]"><div className={`h-full rounded-full ${colors[index % colors.length]}`} style={{ width: `${Math.max(4, Math.min(100, Math.abs(item.value) / max * 100))}%` }} /></div>
-      </div>)}
-    </div>
-  </div>;
-}
-
-function Stars({ value, interactive = false, onChange }: { value: number; interactive?: boolean; onChange?: (value: number) => void }) {
-  return <div className="flex items-center gap-0.5" aria-label={`${value.toFixed(1)} 分`}>
-    {[1, 2, 3, 4, 5].map((star) => (
-      <button key={star} type="button" disabled={!interactive} onClick={() => onChange?.(star)} className={interactive ? 'cursor-pointer' : 'cursor-default'} aria-label={`${star} 星`}>
-        <Star className={`h-4 w-4 ${star <= Math.round(value) ? 'fill-amber-400 text-amber-400' : 'text-[var(--border)]'}`} />
-      </button>
-    ))}
-  </div>;
-}
 
 export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const { isAuthenticated } = useAuth();
   const showSuccess = useToastStore((state) => state.showSuccess);
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [activeTab, setActiveTab] = useState<ResourceTab>('overview');
   const [galleryIndex, setGalleryIndex] = useState(0);
   const [related, setRelated] = useState<Resource[]>([]);
   const [favorite, setFavorite] = useState(Boolean(resource.is_favorited));
@@ -106,31 +42,8 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     : {};
   const isMap = resource.resource_kind === 'map';
   const isSchematic = resource.resource_kind === 'schematic';
-  const renderedWidth = typeof rendererMetadata.width === 'number' ? rendererMetadata.width : null;
-  const renderedHeight = typeof rendererMetadata.height === 'number' ? rendererMetadata.height : null;
-  const renderedSpawns = typeof rendererMetadata.spawns === 'number' ? rendererMetadata.spawns : null;
-  const renderedBlocks = typeof rendererMetadata.block_count === 'number'
-    ? rendererMetadata.block_count
-    : typeof rendererMetadata.blocks === 'number' ? rendererMetadata.blocks : null;
   const renderedBuild = typeof rendererMetadata.build === 'number' && rendererMetadata.build > 1
     ? rendererMetadata.build : null;
-  const blockTypes = Array.isArray(rendererMetadata.block_types)
-    ? rendererMetadata.block_types.filter((item): item is { name?: string; count?: number } => Boolean(item && typeof item === 'object'))
-    : [];
-  const requirements = Array.isArray(rendererMetadata.requirements)
-    ? rendererMetadata.requirements.filter((item): item is { item?: string; amount?: number } => Boolean(item && typeof item === 'object'))
-    : [];
-  const blockChartItems = blockTypes
-    .filter((item) => typeof item.count === 'number' && item.count > 0)
-    .map((item) => ({ label: mindustryLabel(item.name), value: item.count as number }))
-    .sort((a, b) => b.value - a.value);
-  const materialChartItems = requirements
-    .filter((item) => typeof item.amount === 'number' && item.amount > 0)
-    .map((item) => ({ label: mindustryLabel(item.item), value: item.amount as number }))
-    .sort((a, b) => b.value - a.value);
-  const powerProduction = typeof rendererMetadata.power_production === 'number' ? rendererMetadata.power_production : null;
-  const powerConsumption = typeof rendererMetadata.power_consumption === 'number' ? rendererMetadata.power_consumption : null;
-  const netPower = typeof rendererMetadata.net_power === 'number' ? rendererMetadata.net_power : null;
   const displayTags = [...new Set([
     ...(metadata?.tags || []),
     ...(Array.isArray(rendererMetadata.tags) ? rendererMetadata.tags.filter((item): item is string => typeof item === 'string') : []),
@@ -146,15 +59,9 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     if (metadata?.supported_versions?.length) return metadata.supported_versions;
     return renderedBuild === null ? [] : [`Build ${renderedBuild}`];
   }, [metadata?.supported_versions, renderedBuild]);
-  const displayedCompatibility = useMemo(() => {
-    if (metadata?.compatibility?.length) return metadata.compatibility;
-    const source = `${resource.title}\n${resource.description || ''}`.toLowerCase();
-    return [
-      ['Windows', 'windows'], ['Linux', 'linux'], ['macOS', 'macos'],
-      ['Android', 'android'], ['iOS', 'ios'],
-    ].filter(([, needle]) => source.includes(needle)).map(([label]) => label);
-  }, [metadata?.compatibility, resource.description, resource.title]);
-  const downloadLabel = isSchematic ? '下载 .msch' : isMap ? '下载 .msav' : `下载 ${resource.version || primaryVersion?.version || '资源'}`;
+  const displayedCompatibility = metadata?.compatibility || [];
+  const downloadExtension = resourceFileExtension(primaryVersion?.file_name || resource.file_name);
+  const downloadLabel = isSchematic || isMap ? `下载${downloadExtension ? ` ${downloadExtension}` : '文件'}` : `下载 ${resource.version || primaryVersion?.version || '资源'}`;
 
   const copyChecksum = async (checksum: string) => {
     await navigator.clipboard.writeText(checksum);
@@ -269,38 +176,23 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     } catch { /* cancelled share */ }
   };
 
-  const tabs = [
-    { id: 'overview' as const, label: '资源介绍', icon: Package },
-    { id: 'updates' as const, label: '更新日志', icon: ArrowDownToLine, count: resource.versions?.length || 0 },
-    { id: 'versions' as const, label: '文件与版本', icon: FileArchive, count: resource.versions?.length || 0 },
-    { id: 'reviews' as const, label: '评价', icon: MessageSquare, count: resource.rating_count || 0 },
-  ];
-
   return <div className="space-y-6">
     <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm">
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div>
         <div className="p-5 sm:p-8">
           <div className="flex flex-col gap-6 sm:flex-row">
-            <div className={`w-full shrink-0 ${isMap || isSchematic ? 'sm:w-80' : 'sm:w-52'}`}>
-              <div className={`relative overflow-hidden rounded-xl bg-gradient-to-br from-[var(--primary)]/80 to-[var(--primary-dark)] ${isMap || isSchematic ? 'aspect-[16/10]' : 'aspect-[16/10]'}`}>
-                {gallery[galleryIndex] ? <img src={gallery[galleryIndex]} alt={`${resource.title} 封面`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[var(--primary)]"><Package className="h-14 w-14" /></div>}
-                {gallery.length > 1 && <>
-                  <button type="button" onClick={() => setGalleryIndex((galleryIndex - 1 + gallery.length) % gallery.length)} className="absolute left-2 top-1/2 rounded-full bg-black/45 p-1 text-white" aria-label="上一张"><ChevronLeft className="h-4 w-4" /></button>
-                  <button type="button" onClick={() => setGalleryIndex((galleryIndex + 1) % gallery.length)} className="absolute right-2 top-1/2 rounded-full bg-black/45 p-1 text-white" aria-label="下一张"><ChevronRight className="h-4 w-4" /></button>
-                </>}
-              </div>
-              {gallery.length > 1 && <div className="mt-2 flex gap-2 overflow-x-auto">{gallery.map((image, index) => <button key={image} type="button" onClick={() => setGalleryIndex(index)} className={`h-12 w-16 shrink-0 overflow-hidden rounded-md border-2 ${galleryIndex === index ? 'border-[var(--primary)]' : 'border-transparent'}`}><img src={image} alt={`截图 ${index + 1}`} className="h-full w-full object-cover" /></button>)}</div>}
-            </div>
+            <ResourceGallery title={resource.title} images={gallery} index={galleryIndex} contain={isMap || isSchematic} onSelect={setGalleryIndex} />
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
                 {resource.category_name && <Link href={`/resources?category_id=${resource.category_id}`} className="text-[var(--primary)] hover:underline">{resource.category_name}</Link>}
-                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-secondary)] px-2.5 py-1">{resourceKindLabel(resource.resource_kind)}</span>}
-                <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-emerald-600">已审核</span>
+                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{resourceKindLabel(resource.resource_kind)}</span>}
+                {(primaryVersion?.version || resource.version) && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">资源版本 {primaryVersion?.version || resource.version}</span>}
+                <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-[var(--text-secondary)]">{resourceStatusLabel(resource.status)}</span>
               </div>
               <h1 className="text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
               <p className="mt-3 max-w-3xl line-clamp-3 text-base leading-7 text-[var(--text-secondary)]">{resource.description || '暂无简短介绍，查看下方完整资源说明。'}</p>
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
-                <Link href={`/users/${resource.user_id}`} className="inline-flex items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-secondary)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span>{resource.username || '未知作者'}</Link>
+                <Link href={`/users/${resource.user_id}`} className="inline-flex items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span>{resource.username || '未知作者'}</Link>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(resource.updated_at || resource.created_at)} 更新</span>
                 <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{resource.download_count || 0} 次下载</span>
               </div>
@@ -308,170 +200,45 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
               {['map', 'schematic'].includes(resource.resource_kind || '') && resource.renderer_status !== 'ready' && <p className="mt-3 text-sm text-[var(--text-muted)]">{resource.renderer_status === 'processing' ? '正在生成官方 Mindustry 预览图…' : resource.renderer_status === 'failed' ? '预览生成失败，仍可下载原文件。' : '预览服务暂不可用，仍可下载原文件。'}</p>}
             </div>
           </div>
-          <div className="mt-7 flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-5">
-            {resource.resource_type === 'external' && resource.external_url ? (
-              <a href={resource.external_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><ExternalLink className="h-5 w-5" />访问资源</a>
-            ) : (
-              <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />{downloadLabel}</a>
-            )}
-            {isSchematic && <button type="button" onClick={copySchematicCode} className="inline-flex items-center gap-2 rounded-lg border border-[var(--primary)] px-4 py-2.5 font-semibold text-[var(--primary)] transition hover:bg-[var(--primary)]/10"><Clipboard className="h-5 w-5" />{schematicCopied ? '已复制蓝图' : '复制蓝图'}</button>}
-            <button type="button" disabled={busy} onClick={toggleFavorite} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${favorite ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />{favorite ? '已收藏' : '收藏'} <span className="text-xs">{favoriteCount}</span></button>
-            <button type="button" disabled={busy} onClick={toggleLike} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${liked ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />{liked ? '已点赞' : '点赞'} <span className="text-xs">{likeCount}</span></button>
-            <button type="button" disabled={busy} onClick={toggleSubscription} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${subscribed ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)]'}`}><Bell className={`h-5 w-5 ${subscribed ? 'fill-current' : ''}`} />{subscribed ? '已订阅' : '订阅更新'}</button>
-            <button type="button" onClick={share} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 font-medium text-[var(--text-secondary)] hover:text-[var(--primary)]"><Share2 className="h-5 w-5" />{copied ? '链接已复制' : '分享'}</button>
-            <ReportDialog targetType="resource" targetId={resource.id} label="举报" />
-          </div>
+          <ResourceActions
+            resource={resource}
+            downloadUrl={downloadUrl}
+            downloadLabel={downloadLabel}
+            primaryVersionId={primaryVersion?.id}
+            isSchematic={isSchematic}
+            schematicCopied={schematicCopied}
+            favorite={favorite}
+            favoriteCount={favoriteCount}
+            liked={liked}
+            likeCount={likeCount}
+            subscribed={subscribed}
+            busy={busy}
+            copied={copied}
+            onCopySchematic={copySchematicCode}
+            onFavorite={toggleFavorite}
+            onLike={toggleLike}
+            onSubscribe={toggleSubscription}
+            onShare={share}
+          />
         </div>
-        <aside className="border-t border-[var(--border)] bg-[var(--bg-secondary)]/45 p-5 lg:border-l lg:border-t-0 lg:p-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">作者信息</h2>
-          <Link href={`/users/${resource.user_id}`} className="mt-4 flex items-center gap-3 rounded-xl p-2 transition hover:bg-[var(--bg-card)]"><span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-6 w-6" />}</span><span className="min-w-0"><span className="block truncate font-semibold text-[var(--text)]">{resource.username || '未知作者'}</span><span className="text-sm text-[var(--text-muted)]">查看作者主页</span></span><ExternalLink className="ml-auto h-4 w-4 text-[var(--text-muted)]" /></Link>
-          <div className="mt-5 grid grid-cols-3 gap-3 text-center"><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{resource.download_count || 0}</div><div className="mt-1 text-xs text-[var(--text-muted)]">下载</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{likeCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">点赞</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{favoriteCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">收藏</div></div></div>
-          <div className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><span className="text-[var(--text-muted)]">当前版本</span><span className="font-medium text-[var(--text)]">{displayedSupportedVersions[0] || resource.version || primaryVersion?.version || '未标注'}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">文件类型</span><span className="font-medium text-[var(--text)]">{resource.mime_type || resourceTypeLabel(resource.resource_type)}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">更新时间</span><span className="font-medium text-[var(--text)]">{formatDate(resource.updated_at)}</span></div></div>
-        </aside>
+
       </div>
     </section>
 
-    {(isMap || isSchematic) && <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-sm sm:p-7">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">Mindustry {isMap ? 'Map' : 'Schematic'}</p>
-          <h2 className="mt-1 text-2xl font-bold text-[var(--text)]">{isMap ? '地图数据' : '蓝图数据'}</h2>
-        </div>
-        <p className="text-sm text-[var(--text-muted)]">来自文件解析结果，无法可靠推导的项目不会虚构</p>
-      </div>
-      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">尺寸</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{renderedWidth !== null && renderedHeight !== null ? `${renderedWidth} × ${renderedHeight}` : '未标注'}</div></div>
-        <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">{isMap ? '出生点' : '方块数量'}</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{isMap ? renderedSpawns ?? '未标注' : renderedBlocks ?? '未标注'}</div></div>
-        {isMap ? <>
-          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">地图作者</div><div className="mt-1 truncate text-base font-bold text-[var(--text)]">{typeof rendererMetadata.author === 'string' && rendererMetadata.author ? rendererMetadata.author : '未标注'}</div></div>
-          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">游戏模式</div><div className="mt-1 truncate text-base font-bold text-[var(--text)]">{Array.isArray(rendererMetadata.game_modes) && rendererMetadata.game_modes.length ? rendererMetadata.game_modes.join('、') : '未标注'}</div></div>
-        </> : <>
-          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">建造材料</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{materialChartItems.length ? materialChartItems.length : '未标注'}<span className="ml-1 text-xs font-normal">种</span></div></div>
-          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">净功率</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{netPower !== null ? netPower.toFixed(1) : '未标注'}</div></div>
-        </>}
-      </div>
-      {isSchematic && <div className="mt-6 grid gap-5 xl:grid-cols-2">
-        <section className="rounded-xl border border-[var(--border)] p-5">
-          <div className="mb-5 flex items-center justify-between"><div><h3 className="font-semibold text-[var(--text)]">能量概览</h3><p className="mt-1 text-xs text-[var(--text-muted)]">按解析到的方块能力估算</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${netPower !== null && netPower >= 0 ? 'bg-emerald-500/10 text-emerald-700' : 'bg-rose-500/10 text-rose-700'}`}>{netPower !== null && netPower >= 0 ? '能源盈余' : '能源不足'}</span></div>
-          {powerProduction !== null || powerConsumption !== null ? <MeterChart title="功率 / 秒" tone="green" items={[
-            ...(powerProduction === null ? [] : [{ label: '发电', value: powerProduction }]),
-            ...(powerConsumption === null ? [] : [{ label: '耗电', value: powerConsumption }]),
-            ...(netPower === null ? [] : [{ label: '净功率', value: netPower }]),
-          ]} /> : <p className="text-sm text-[var(--text-muted)]">暂无可靠的功率数据。</p>}
-        </section>
-        <section className="rounded-xl border border-[var(--border)] p-5">
-          <div className="mb-5"><h3 className="font-semibold text-[var(--text)]">建造材料需求</h3><p className="mt-1 text-xs text-[var(--text-muted)]">完成这份蓝图所需的材料数量</p></div>
-          {materialChartItems.length ? <MeterChart title="材料数量" tone="amber" items={materialChartItems.slice(0, 10)} /> : <p className="text-sm text-[var(--text-muted)]">暂无可靠的材料数据。</p>}
-        </section>
-        <section className="rounded-xl border border-[var(--border)] p-5 xl:col-span-2">
-          <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="font-semibold text-[var(--text)]">方块组成</h3><p className="mt-1 text-xs text-[var(--text-muted)]">按数量从多到少排列，名称已转换为中文</p></div><span className="text-xs text-[var(--text-muted)]">共 {blockChartItems.length} 种</span></div>
-          {blockChartItems.length ? <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">{blockChartItems.slice(0, 16).map((item) => <div key={item.label}><div className="mb-1 flex items-center justify-between gap-3 text-sm"><span className="truncate text-[var(--text-secondary)]">{item.label}</span><span className="font-semibold tabular-nums text-[var(--text)]">{item.value}</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--bg-secondary)]"><div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.max(5, item.value / Math.max(...blockChartItems.map((entry) => entry.value)) * 100)}%` }} /></div></div>)}</div> : <p className="text-sm text-[var(--text-muted)]">暂无方块组成数据。</p>}
-        </section>
-      </div>}
-      {isMap && <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {typeof rendererMetadata.planet === 'string' && rendererMetadata.planet && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">星球</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.planet}</div></div>}
-        {Array.isArray(rendererMetadata.teams) && rendererMetadata.teams.length > 0 && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">队伍</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.teams.join('、')}</div></div>}
-        {typeof rendererMetadata.core_count === 'number' && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">核心</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.core_count} 个</div></div>}
-        {typeof rendererMetadata.waves === 'boolean' && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">波次</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.waves ? '启用' : '禁用'}</div></div>}
-      </div>}
-    </section>}
+    <ResourceKindDetails resource={resource} />
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <main className="min-w-0">
-        <div className="mb-5 flex gap-1 overflow-x-auto border-b border-[var(--border)]">{tabs.map(({ id, label, icon: Icon, count }) => <button key={id} type="button" onClick={() => setActiveTab(id)} className={`relative inline-flex shrink-0 items-center gap-2 px-4 py-3 text-sm font-semibold ${activeTab === id ? 'text-[var(--primary)]' : 'text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{<Icon className="h-4 w-4" />}{label}{count ? <span className="rounded-full bg-[var(--bg-secondary)] px-1.5 py-0.5 text-xs">{count}</span> : null}{activeTab === id && <span className="absolute inset-x-0 bottom-0 h-0.5 bg-[var(--primary)]" />}</button>)}</div>
-        {activeTab === 'overview' && <div className="space-y-5"><section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7"><h2 className="mb-4 text-xl font-bold text-[var(--text)]">详细介绍</h2>{resource.content ? <MarkdownRenderer content={resource.content} /> : <p className="text-[var(--text-muted)]">作者还没有补充详细介绍。</p>}</section>{metadata?.gallery_images?.length ? <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7"><h2 className="mb-4 flex items-center gap-2 text-xl font-bold text-[var(--text)]"><ImageIcon className="h-5 w-5" />截图与画廊</h2><div className="grid gap-3 sm:grid-cols-2">{metadata.gallery_images.map((image) => <img key={image} src={image} alt={`${resource.title} 截图`} className="max-h-80 w-full rounded-lg object-cover" />)}</div></section> : null}</div>}
-        {activeTab === 'updates' && <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7"><h2 className="mb-5 text-xl font-bold text-[var(--text)]">更新日志</h2>{metadata?.changelog && <div className="mb-6 border-b border-[var(--border)] pb-6"><MarkdownRenderer content={metadata.changelog} /></div>}{resource.versions?.length ? <div className="space-y-6">{resource.versions.map((version) => <article key={version.id} className="relative border-l-2 border-[var(--primary)] pl-5"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[var(--text)]">{version.version || '未命名版本'}</h3><span className="text-sm text-[var(--text-muted)]">{new Date(version.published_at || version.created_at).toLocaleDateString('zh-CN')}</span></div>{version.release_notes_markdown || version.release_notes || version.content ? <div className="mt-2"><MarkdownRenderer content={version.release_notes_markdown || version.release_notes || version.content || ''} /></div> : <p className="mt-2 text-sm text-[var(--text-muted)]">此版本未填写更新说明。</p>}</article>)}</div> : <p className="text-[var(--text-muted)]">暂无更新日志。</p>}</section>}
-        {activeTab === 'versions' && <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7"><h2 className="mb-5 text-xl font-bold text-[var(--text)]">多版本文件</h2>{resource.versions?.length ? <div className="space-y-3">{resource.versions.map((version) => <div key={version.id} className="rounded-xl border border-[var(--border)] p-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><div className="rounded-lg bg-[var(--primary)]/10 p-2 text-[var(--primary)]"><FileArchive className="h-5 w-5" /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[var(--text)]">版本 {version.version || '未标注'}</h3><span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-600">可下载</span></div><p className="mt-1 truncate text-sm text-[var(--text-muted)]">{version.file_name || '资源文件'} · {formatSize(version.file_size)} · {new Date(version.created_at).toLocaleDateString('zh-CN')}</p>{version.checksum && <p className="mt-1 flex items-center gap-1 break-all text-xs text-[var(--text-muted)]"><ShieldCheck className="h-3.5 w-3.5 shrink-0" />校验值：{version.checksum}</p>}</div></div><a href={resourceApi.download(resource.id, version.id)} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"><Download className="h-4 w-4" />下载</a></div></div>)}</div> : <div className="rounded-lg bg-[var(--bg-secondary)] p-5 text-sm text-[var(--text-muted)]">暂无独立版本记录，将下载当前资源文件。<a href={downloadUrl} className="ml-2 text-[var(--primary)] hover:underline">下载当前文件</a></div>}</section>}
-        {activeTab === 'reviews' && <ResourceReviews resource={resource} />}
-      </main>
-      <aside className="space-y-5">
-        {(isMap || isSchematic) && (
-          <section className="hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
-            <h2 className="flex items-center gap-2 font-semibold text-[var(--text)]">
-              <Clipboard className="h-4 w-4 text-[var(--primary)]" />
-              {isMap ? '地图信息' : '蓝图信息'}
-            </h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              {(renderedWidth !== null && renderedHeight !== null) && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--text-muted)]">尺寸</dt>
-                  <dd className="text-right text-[var(--text)]">{renderedWidth} × {renderedHeight}</dd>
-                </div>
-              )}
-              {isMap && renderedSpawns !== null && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--text-muted)]">出生点</dt>
-                  <dd className="text-right text-[var(--text)]">{renderedSpawns}</dd>
-                </div>
-              )}
-              {isMap && typeof rendererMetadata.author === 'string' && rendererMetadata.author && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">地图作者</dt><dd className="max-w-[180px] truncate text-right text-[var(--text)]">{rendererMetadata.author}</dd></div>
-              )}
-              {isMap && typeof rendererMetadata.planet === 'string' && rendererMetadata.planet && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">星球</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.planet}</dd></div>
-              )}
-              {isMap && Array.isArray(rendererMetadata.game_modes) && rendererMetadata.game_modes.length > 0 && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">游戏模式</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.game_modes.join('、')}</dd></div>
-              )}
-              {isMap && Array.isArray(rendererMetadata.teams) && rendererMetadata.teams.length > 0 && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">队伍</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.teams.join('、')}</dd></div>
-              )}
-              {isMap && typeof rendererMetadata.core_count === 'number' && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">核心</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.core_count} 个{Array.isArray(rendererMetadata.core_teams) && rendererMetadata.core_teams.length ? ` · ${rendererMetadata.core_teams.join('、')}` : ''}</dd></div>
-              )}
-              {isSchematic && renderedBlocks !== null && (
-                <div className="flex justify-between gap-3">
-                  <dt className="text-[var(--text-muted)]">方块数量</dt>
-                  <dd className="text-right text-[var(--text)]">{renderedBlocks}</dd>
-                </div>
-              )}
-              {isSchematic && typeof rendererMetadata.net_power === 'number' && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">净功率</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.net_power.toFixed(2)} / 秒</dd></div>
-              )}
-              {isSchematic && typeof rendererMetadata.planet === 'string' && rendererMetadata.planet && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">星球</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.planet}</dd></div>
-              )}
-              {isSchematic && blockTypes.length > 0 && (
-                <div><dt className="mb-2 text-[var(--text-muted)]">方块组成</dt><dd className="flex flex-wrap gap-2">{blockTypes.slice(0, 24).map((item, index) => <span key={`${item.name || 'block'}-${index}`} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-xs text-[var(--text-secondary)]">{item.name || '未知方块'} × {item.count ?? '?'}</span>)}</dd></div>
-              )}
-              {isSchematic && requirements.length > 0 && (
-                <div><dt className="mb-2 text-[var(--text-muted)]">建造材料</dt><dd className="flex flex-wrap gap-2">{requirements.map((item, index) => <span key={`${item.item || 'item'}-${index}`} className="rounded-md bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700">{item.item || '未知材料'} × {item.amount ?? '?'}</span>)}</dd></div>
-              )}
-              {isMap && metadata?.planets?.length ? (
-                <div>
-                  <dt className="mb-2 text-[var(--text-muted)]">可用星球</dt>
-                  <dd className="flex flex-wrap gap-2">
-                    {metadata.planets.map((planet) => <span key={planet} className="rounded-md bg-[var(--primary)]/10 px-2.5 py-1 text-xs text-[var(--primary)]">{planet}</span>)}
-                  </dd>
-                </div>
-              ) : null}
-              {metadata?.required_mods?.length ? (
-                <div>
-                  <dt className="mb-2 text-[var(--text-muted)]">所需 Mod</dt>
-                  <dd className="flex flex-wrap gap-2">
-                    {metadata.required_mods.map((mod) => <span key={mod} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-xs text-[var(--text-secondary)]">{mod}</span>)}
-                  </dd>
-                </div>
-              ) : null}
-              {isMap && Array.isArray(rendererMetadata.mod_dependencies) && rendererMetadata.mod_dependencies.length > 0 ? (
-                <div><dt className="mb-2 text-[var(--text-muted)]">解析到的 Mod 依赖</dt><dd className="flex flex-wrap gap-2">{rendererMetadata.mod_dependencies.map((mod) => <span key={mod} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-xs text-[var(--text-secondary)]">{mod}</span>)}</dd></div>
-              ) : null}
-              {isMap && typeof rendererMetadata.waves === 'boolean' && (
-                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">波次</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.waves ? '启用' : '禁用'}</dd></div>
-              )}
-              {isMap && Array.isArray(rendererMetadata.banned_units) && rendererMetadata.banned_units.length > 0 && (
-                <div><dt className="mb-2 text-[var(--text-muted)]">禁用单位</dt><dd className="text-xs text-[var(--text-secondary)]">{rendererMetadata.banned_units.join('、')}</dd></div>
-              )}
-              {isMap && Array.isArray(rendererMetadata.banned_blocks) && rendererMetadata.banned_blocks.length > 0 && (
-                <div><dt className="mb-2 text-[var(--text-muted)]">禁用方块</dt><dd className="text-xs text-[var(--text-secondary)]">{rendererMetadata.banned_blocks.join('、')}</dd></div>
-              )}
-            </dl>
-          </section>
-        )}
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><ShieldCheck className="h-4 w-4 text-emerald-600" />支持与兼容性</h2><div className="mt-4 space-y-4 text-sm"><div><div className="mb-2 text-[var(--text-muted)]">支持版本</div><div className="flex flex-wrap gap-2">{displayedSupportedVersions.length ? displayedSupportedVersions.map((item) => <span key={item} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-[var(--text-secondary)]">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div><div><div className="mb-2 text-[var(--text-muted)]">兼容性</div><div className="flex flex-wrap gap-2">{displayedCompatibility.length ? displayedCompatibility.map((item) => <span key={item} className="rounded-md bg-emerald-500/10 px-2.5 py-1 text-emerald-700">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div></div></section>
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><Star className="h-4 w-4 text-amber-400" />社区评分</h2>{(resource.rating_count || 0) > 0 ? <div className="mt-4 flex items-center gap-3"><span className="text-3xl font-bold text-[var(--text)]">{(resource.rating_average || 0).toFixed(1)}</span><div><Stars value={resource.rating_average || 0} /><p className="mt-1 text-xs text-[var(--text-muted)]">{resource.rating_count} 人评分</p></div></div> : <div className="mt-4"><Stars value={0} /><p className="mt-2 text-sm font-medium text-[var(--text)]">暂无评分</p><p className="mt-1 text-xs text-[var(--text-muted)]">成为第一个评分的人</p></div>}{isAuthenticated && <div className="mt-4 border-t border-[var(--border)] pt-4"><p className="mb-2 text-sm text-[var(--text-muted)]">给这个资源评分</p><Stars value={userRating || 0} interactive onChange={rate} /></div>}</section>
-        <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><Clipboard className="h-4 w-4" />资源信息</h2><dl className="mt-4 space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">创建时间</dt><dd className="text-right text-[var(--text)]">{formatDate(resource.created_at)}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">文件数量</dt><dd className="text-right text-[var(--text)]">{resource.versions?.length || 1}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">最新文件</dt><dd className="max-w-[150px] truncate text-right text-[var(--text)]">{primaryVersion?.file_name || resource.file_name || '外部链接'}</dd></div>{primaryChecksum && <div className="space-y-1"><dt className="text-[var(--text-muted)]">SHA-256</dt><dd><button type="button" onClick={() => copyChecksum(primaryChecksum)} className="block w-full break-all rounded bg-[var(--bg-secondary)] p-2 text-left font-mono text-[11px] text-[var(--text)] hover:text-[var(--primary)]" title="点击复制 SHA-256">{primaryChecksum}</button></dd></div>}</dl></section>
-      </aside>
+      <ResourceTabs resource={resource} activeTab={activeTab} onChange={setActiveTab} downloadUrl={downloadUrl} />
+      <ResourceAside
+        resource={resource}
+        supportedVersions={displayedSupportedVersions}
+        compatibility={displayedCompatibility}
+        isAuthenticated={isAuthenticated}
+        userRating={userRating}
+        checksum={primaryChecksum || null}
+        onRate={rate}
+        onCopyChecksum={copyChecksum}
+      />
     </div>
 
     {related.length > 0 && <section><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-bold text-[var(--text)]">相关推荐</h2><Link href="/resources" className="text-sm text-[var(--primary)] hover:underline">浏览更多资源</Link></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{related.map((item) => <Link key={item.id} href={`/resources/${item.slug ? `${item.id}-${item.slug}` : item.id}`} className="group rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--primary)]"><div className="flex gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Package className="h-5 w-5" /></div><div className="min-w-0"><h3 className="truncate font-semibold text-[var(--text)] group-hover:text-[var(--primary)]">{item.title}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{item.username || '未知作者'} · {item.download_count || 0} 次下载</p></div></div></Link>)}</div></section>}

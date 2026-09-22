@@ -32,8 +32,7 @@ export default function ContentShell({
   const router = useRouter();
   const pathname = usePathname();
   const isResources = pathname.startsWith('/resources');
-  // ContentShell is mounted only from SiteShell: every route here is a
-  // user-facing product page and therefore shares the persistent sidebar.
+  // Global navigation remains stable; only the context section follows the route.
   const sidebarMode = isResources ? 'resources' : 'forum';
   const mindauthUrl =
     process.env.NEXT_PUBLIC_MINDAUTH_URL || "http://localhost:4001";
@@ -135,7 +134,8 @@ export default function ContentShell({
             userId={user?.id}
             isAuthenticated={isAuthenticated}
             userMeta={userMeta}
-            resourceCategories={navigation.resourceTypes}
+            settings={settings}
+            resourceCategories={navigation.resourceCategories}
             forumCategories={navigation.forumCategories}
           />
         </Suspense>
@@ -155,7 +155,8 @@ export default function ContentShell({
             userId={user?.id}
             isAuthenticated={isAuthenticated}
             userMeta={userMeta}
-            resourceCategories={navigation.resourceTypes}
+            settings={settings}
+            resourceCategories={navigation.resourceCategories}
             forumCategories={navigation.forumCategories}
           />
         </Suspense>

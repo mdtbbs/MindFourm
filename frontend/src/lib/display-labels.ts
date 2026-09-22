@@ -42,5 +42,5 @@ export const RESOURCE_KIND_LABELS: Record<string, string> = Object.fromEntries(
 
 export function resourceKindLabel(kind?: string | null): string {
   if (!kind) return "资源";
-  return RESOURCE_KIND_LABELS[kind] || kind;
+  return RESOURCE_KIND_LABELS[kind] || "其他";
 }

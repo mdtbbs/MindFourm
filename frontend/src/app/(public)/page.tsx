@@ -34,10 +34,6 @@ function SectionHeading({ title, href }: { title: string; href?: string }) {
   return <div className="mb-3 flex items-center justify-between gap-4"><h2 className="text-lg font-semibold text-[var(--text)]">{title}</h2>{href && <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-sm text-[var(--primary)] hover:underline">查看全部 <ArrowRight className="h-4 w-4" /></Link>}</div>;
 }
 
-function StateNote({ section }: { section: HomeSection<unknown> }) {
-  return section.state === 'stale' ? <p className="mb-2 text-xs text-[var(--text-muted)]">正在显示最近一次成功加载的内容。</p> : null;
-}
-
 export default async function HomePage() {
   const [settings, home] = await Promise.all([
     fetchPublicSettings(),
@@ -47,9 +43,10 @@ export default async function HomePage() {
     getHomeData({ signal: AbortSignal.timeout(4500), init: { cache: 'no-store' } }).catch(() => UNAVAILABLE_HOME),
   ]);
   const brand = resolveBrand(settings);
+  const staleSections = [home.discussions, home.resources, home.news, home.notices, home.development.issues, home.development.pull_requests].filter((section) => section.state === 'stale').length;
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+    <main className="content-width-feed mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">
       <section className="mb-8 border-b border-[var(--border)] pb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{brand.siteName}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry 中文玩家社区</h1>
@@ -58,13 +55,15 @@ export default async function HomePage() {
         <nav aria-label="快捷入口" className="mt-4 flex flex-wrap gap-2"><Link href="/resources?resource_kind=mod" className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">找 Mod</Link><Link href="/resources?resource_kind=map" className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">找地图</Link><Link href="/resources?resource_kind=schematic" className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">找蓝图</Link><Link href="/servers" className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] hover:border-[var(--primary)] hover:text-[var(--primary)]">找服务器</Link></nav>
       </section>
 
-      <section><SectionHeading title="正在讨论" href="/threads" /><StateNote section={home.discussions} />{home.discussions.state === 'unavailable' ? <SectionUnavailable /> : home.discussions.items.length ? <ThreadList posts={home.discussions.items} /> : <p className="border border-[var(--border)] p-6 text-center text-sm text-[var(--text-muted)]">暂时没有社区讨论</p>}</section>
+      {staleSections > 0 && <p role="status" className="-mt-4 mb-5 text-xs text-[var(--text-muted)]">部分内容来自最近一次成功加载的缓存。</p>}
 
-      <section className="mt-8"><SectionHeading title="最新资源" href="/resources" /><StateNote section={home.resources} />{home.resources.state === 'unavailable' ? <SectionUnavailable /> : <div className="grid gap-3 sm:grid-cols-2">{home.resources.items.map((resource) => <Link key={resource.id} href={`/resources/${resource.id}${resource.slug ? `-${resource.slug}` : ''}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{resource.title}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}{resource.version ? ` · v${resource.version}` : ''}{resource.author_name ? ` · ${resource.author_name}` : ''}</p></Link>)}</div>}</section>
+      <section><SectionHeading title="正在讨论" href="/threads" />{home.discussions.state === 'unavailable' ? <SectionUnavailable /> : home.discussions.items.length ? <ThreadList posts={home.discussions.items} /> : <p className="border border-[var(--border)] p-6 text-center text-sm text-[var(--text-muted)]">暂时没有社区讨论</p>}</section>
 
-      <section className="mt-8"><SectionHeading title="像素快报" /><StateNote section={home.news} />{home.news.state === 'unavailable' ? <SectionUnavailable /> : home.news.items.length ? <div className="grid gap-3 sm:grid-cols-2">{home.news.items.map((news) => <Link key={news.id} href={`/search?q=${encodeURIComponent(news.title)}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{news.title}</h3>{news.category && <p className="mt-1 text-xs text-[var(--text-muted)]">{news.category}</p>}</Link>)}</div> : null}</section>
+      <section className="mt-8"><SectionHeading title="最新资源" href="/resources" />{home.resources.state === 'unavailable' ? <SectionUnavailable /> : <div className="grid gap-3 sm:grid-cols-2">{home.resources.items.map((resource) => <Link key={resource.id} href={`/resources/${resource.id}${resource.slug ? `-${resource.slug}` : ''}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{resource.title}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}{resource.version ? ` · 资源版本 ${resource.version}` : ''}{resource.author_name ? ` · ${resource.author_name}` : ''}</p></Link>)}</div>}</section>
 
-      <section className="mt-8"><SectionHeading title="社区公告" href="/notices" /><StateNote section={home.notices} />{home.notices.state === 'unavailable' ? <SectionUnavailable /> : home.notices.items.length ? <div className="grid gap-3">{home.notices.items.map((notice) => <Link key={notice.id} href={`/notices/${notice.public_id}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{notice.title}</h3>{notice.excerpt && <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{notice.excerpt}</p>}</Link>)}</div> : null}</section>
+      <section className="mt-8"><SectionHeading title="像素快报" />{home.news.state === 'unavailable' ? <SectionUnavailable /> : home.news.items.length ? <div className="grid gap-3 sm:grid-cols-2">{home.news.items.map((news) => <Link key={news.id} href={`/search?q=${encodeURIComponent(news.title)}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{news.title}</h3>{news.category && <p className="mt-1 text-xs text-[var(--text-muted)]">{news.category}</p>}</Link>)}</div> : null}</section>
+
+      <section className="mt-8"><SectionHeading title="社区公告" href="/notices" />{home.notices.state === 'unavailable' ? <SectionUnavailable /> : home.notices.items.length ? <div className="grid gap-3">{home.notices.items.map((notice) => <Link key={notice.id} href={`/notices/${notice.public_id}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{notice.title}</h3>{notice.excerpt && <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{notice.excerpt}</p>}</Link>)}</div> : null}</section>
 
       <section className="mt-10 border-t border-[var(--border)] pt-7"><SectionHeading title="Mindustry 开发动态" /><p className="-mt-1 mb-4 text-sm text-[var(--text-secondary)]">GitHub 自动同步内容，独立于社区讨论与用户主题统计。</p><div className="grid gap-6 md:grid-cols-2"><DeveloperList title="Issue" section={home.development.issues} /><DeveloperList title="Pull Request" section={home.development.pull_requests} /></div></section>
     </main>
@@ -73,5 +72,5 @@ export default async function HomePage() {
 
 function DeveloperList({ title, section }: { title: string; section: HomeSection<HomeData['development']['issues']['items'][number]> }) {
   const categoryId = section.items[0]?.category_id;
-  return <section><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-medium text-[var(--text-secondary)]">{title}</h3>{categoryId ? <Link href={`/categories/${categoryId}`} className="text-xs text-[var(--primary)] hover:underline">查看板块</Link> : null}</div><StateNote section={section} />{section.state === 'unavailable' ? <SectionUnavailable /> : section.items.length ? <ul className="divide-y divide-[var(--border)] border border-[var(--border)]">{section.items.map((item) => <li key={item.id}><Link href={item.url} className="block p-3 hover:bg-[var(--bg-hover)]"><p className="text-sm font-medium text-[var(--text)]">#{item.external_id} {item.title}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{item.repository} · {item.state}</p></Link></li>)}</ul> : <p className="text-sm text-[var(--text-muted)]">暂无动态</p>}</section>;
+  return <section><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-medium text-[var(--text-secondary)]">{title}</h3>{categoryId ? <Link href={`/categories/${categoryId}`} className="text-xs text-[var(--primary)] hover:underline">查看板块</Link> : null}</div>{section.state === 'unavailable' ? <SectionUnavailable /> : section.items.length ? <ul className="divide-y divide-[var(--border)] border border-[var(--border)]">{section.items.map((item) => <li key={item.id}><Link href={item.url} className="block p-3 hover:bg-[var(--bg-hover)]"><p className="text-sm font-medium text-[var(--text)]">#{item.external_id} {item.title}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{item.repository} · {item.state}</p></Link></li>)}</ul> : <p className="text-sm text-[var(--text-muted)]">暂无动态</p>}</section>;
 }

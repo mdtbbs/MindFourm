@@ -74,7 +74,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
     ],
   };
 
-  return <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+  return <div className="content-width-detail mx-auto min-w-0 px-4 py-8 sm:px-6 lg:px-8">
     <JsonLd data={[resourceJsonLd, breadcrumbJsonLd]} />
     <nav className="mb-6 flex items-center gap-2 text-sm text-[var(--text-muted)]">
       <Link href="/resources" className="inline-flex items-center gap-1 transition-colors hover:text-[var(--primary)]"><ArrowLeft className="h-4 w-4" />资源中心</Link>

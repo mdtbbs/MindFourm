@@ -526,6 +526,7 @@ export interface MindustryRendererMetadata {
 
 export interface ResourceCategory {
   id: number;
+  parent_id?: number | null;
   name: string;
   slug: string;
   description: string | null;
