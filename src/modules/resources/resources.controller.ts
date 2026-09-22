@@ -27,6 +27,7 @@ import { ResourcesService } from './resources.service';
 import { ResourceCategoryService } from './resource-categories.service';
 import { ResourceVersionService } from './resource-versions.service';
 import { ResourceFavoritesService } from './resource-favorites.service';
+import { ResourceLikesService } from './resource-likes.service';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { CreateResourcePreviewDraftDto } from './dto/create-resource-preview-draft.dto';
@@ -136,6 +137,7 @@ export class ResourcesController {
     private readonly categoryService: ResourceCategoryService,
     private readonly versionService: ResourceVersionService,
     private readonly favoritesService: ResourceFavoritesService,
+    private readonly likesService: ResourceLikesService,
     private readonly resourceStorageService: ResourceStorageService,
     private readonly logsService: LogsService,
     private readonly resourceLifecycleService: ResourceLifecycleService,
@@ -599,6 +601,28 @@ export class ResourcesController {
   async removeFavorite(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     const result = await this.favoritesService.remove(id, req.user.id);
     await this.logOperation(req, 'resource.unfavorite', id);
+    return result;
+  }
+
+  @Get(':id/like')
+  @UseGuards(JwtAuthGuard)
+  async getLike(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.likesService.getStatus(id, req.user.id);
+  }
+
+  @Post(':id/like')
+  @UseGuards(JwtAuthGuard)
+  async addLike(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const result = await this.likesService.add(id, req.user.id);
+    await this.logOperation(req, 'resource.like', id);
+    return result;
+  }
+
+  @Delete(':id/like')
+  @UseGuards(JwtAuthGuard)
+  async removeLike(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const result = await this.likesService.remove(id, req.user.id);
+    await this.logOperation(req, 'resource.unlike', id);
     return result;
   }
 

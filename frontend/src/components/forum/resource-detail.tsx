@@ -46,12 +46,23 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const [related, setRelated] = useState<Resource[]>([]);
   const [favorite, setFavorite] = useState(Boolean(resource.is_favorited));
   const [favoriteCount, setFavoriteCount] = useState(resource.favorite_count || 0);
+  const [liked, setLiked] = useState(Boolean(resource.is_liked));
+  const [likeCount, setLikeCount] = useState(resource.like_count || 0);
   const [subscribed, setSubscribed] = useState(Boolean(resource.is_subscribed));
   const [userRating, setUserRating] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const metadata = resource.metadata;
+  const rendererMetadata = resource.renderer_metadata && typeof resource.renderer_metadata === 'object'
+    ? resource.renderer_metadata as Record<string, unknown>
+    : {};
+  const isMap = resource.resource_kind === 'map';
+  const isSchematic = resource.resource_kind === 'schematic';
+  const renderedWidth = typeof rendererMetadata.width === 'number' ? rendererMetadata.width : null;
+  const renderedHeight = typeof rendererMetadata.height === 'number' ? rendererMetadata.height : null;
+  const renderedSpawns = typeof rendererMetadata.spawns === 'number' ? rendererMetadata.spawns : null;
+  const renderedBlocks = typeof rendererMetadata.blocks === 'number' ? rendererMetadata.blocks : null;
   const gallery = useMemo(() => {
     const all = [resource.preview_url, metadata?.cover_image_url, ...(metadata?.gallery_images || [])].filter(Boolean) as string[];
     return [...new Set(all)];
@@ -87,6 +98,10 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         setFavorite(result.is_favorited);
         setFavoriteCount(result.favorite_count);
       }).catch(() => undefined);
+      resourceApi.getLike(resource.id).then((result) => {
+        setLiked(result.is_liked);
+        setLikeCount(result.like_count);
+      }).catch(() => undefined);
       resourceApi.getUserRating(resource.id).then((result) => setUserRating(result.rating)).catch(() => undefined);
       resourceApi.getSubscription(resource.id).then((result) => setSubscribed(result.is_subscribed)).catch(() => undefined);
     }
@@ -100,6 +115,17 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       setFavorite(result.is_favorited);
       setFavoriteCount(result.favorite_count);
     } catch (error) { showSuccess(error instanceof Error ? error.message : '收藏操作失败'); }
+    setBusy(false);
+  };
+
+  const toggleLike = async () => {
+    if (!isAuthenticated) { showSuccess('请先登录后点赞'); return; }
+    setBusy(true);
+    try {
+      const result = liked ? await resourceApi.removeLike(resource.id) : await resourceApi.addLike(resource.id);
+      setLiked(result.is_liked);
+      setLikeCount(result.like_count);
+    } catch (error) { showSuccess(error instanceof Error ? error.message : '点赞操作失败'); }
     setBusy(false);
   };
 
@@ -177,6 +203,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
               <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />下载 {resource.version || primaryVersion?.version || '资源'}</a>
             )}
             <button type="button" disabled={busy} onClick={toggleFavorite} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${favorite ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />{favorite ? '已收藏' : '收藏'} <span className="text-xs">{favoriteCount}</span></button>
+            <button type="button" disabled={busy} onClick={toggleLike} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${liked ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />{liked ? '已点赞' : '点赞'} <span className="text-xs">{likeCount}</span></button>
             <button type="button" disabled={busy} onClick={toggleSubscription} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${subscribed ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)]'}`}><Bell className={`h-5 w-5 ${subscribed ? 'fill-current' : ''}`} />{subscribed ? '已订阅' : '订阅更新'}</button>
             <button type="button" onClick={share} className="inline-flex items-center gap-2 rounded-lg border border-[var(--border)] px-4 py-2.5 font-medium text-[var(--text-secondary)] hover:text-[var(--primary)]"><Share2 className="h-5 w-5" />{copied ? '链接已复制' : '分享'}</button>
             <ReportDialog targetType="resource" targetId={resource.id} label="举报" />
@@ -185,7 +212,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         <aside className="border-t border-[var(--border)] bg-[var(--bg-secondary)]/45 p-5 lg:border-l lg:border-t-0 lg:p-6">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">作者信息</h2>
           <Link href={`/users/${resource.user_id}`} className="mt-4 flex items-center gap-3 rounded-xl p-2 transition hover:bg-[var(--bg-card)]"><span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-6 w-6" />}</span><span className="min-w-0"><span className="block truncate font-semibold text-[var(--text)]">{resource.username || '未知作者'}</span><span className="text-sm text-[var(--text-muted)]">查看作者主页</span></span><ExternalLink className="ml-auto h-4 w-4 text-[var(--text-muted)]" /></Link>
-          <div className="mt-5 grid grid-cols-2 gap-3 text-center"><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{resource.download_count || 0}</div><div className="mt-1 text-xs text-[var(--text-muted)]">下载</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{favoriteCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">收藏</div></div></div>
+          <div className="mt-5 grid grid-cols-3 gap-3 text-center"><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{resource.download_count || 0}</div><div className="mt-1 text-xs text-[var(--text-muted)]">下载</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{likeCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">点赞</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{favoriteCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">收藏</div></div></div>
           <div className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><span className="text-[var(--text-muted)]">当前版本</span><span className="font-medium text-[var(--text)]">{resource.version || primaryVersion?.version || '未标注'}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">文件类型</span><span className="font-medium text-[var(--text)]">{resource.mime_type || resourceTypeLabel(resource.resource_type)}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">更新时间</span><span className="font-medium text-[var(--text)]">{formatDate(resource.updated_at)}</span></div></div>
         </aside>
       </div>
@@ -200,6 +227,50 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         {activeTab === 'reviews' && <ResourceReviews resource={resource} />}
       </main>
       <aside className="space-y-5">
+        {(isMap || isSchematic) && (
+          <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
+            <h2 className="flex items-center gap-2 font-semibold text-[var(--text)]">
+              <Clipboard className="h-4 w-4 text-[var(--primary)]" />
+              {isMap ? '地图信息' : '蓝图信息'}
+            </h2>
+            <dl className="mt-4 space-y-3 text-sm">
+              {(renderedWidth !== null && renderedHeight !== null) && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--text-muted)]">尺寸</dt>
+                  <dd className="text-right text-[var(--text)]">{renderedWidth} × {renderedHeight}</dd>
+                </div>
+              )}
+              {isMap && renderedSpawns !== null && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--text-muted)]">出生点</dt>
+                  <dd className="text-right text-[var(--text)]">{renderedSpawns}</dd>
+                </div>
+              )}
+              {isSchematic && renderedBlocks !== null && (
+                <div className="flex justify-between gap-3">
+                  <dt className="text-[var(--text-muted)]">方块数量</dt>
+                  <dd className="text-right text-[var(--text)]">{renderedBlocks}</dd>
+                </div>
+              )}
+              {isMap && metadata?.planets?.length ? (
+                <div>
+                  <dt className="mb-2 text-[var(--text-muted)]">可用星球</dt>
+                  <dd className="flex flex-wrap gap-2">
+                    {metadata.planets.map((planet) => <span key={planet} className="rounded-md bg-[var(--primary)]/10 px-2.5 py-1 text-xs text-[var(--primary)]">{planet}</span>)}
+                  </dd>
+                </div>
+              ) : null}
+              {metadata?.required_mods?.length ? (
+                <div>
+                  <dt className="mb-2 text-[var(--text-muted)]">所需 Mod</dt>
+                  <dd className="flex flex-wrap gap-2">
+                    {metadata.required_mods.map((mod) => <span key={mod} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-xs text-[var(--text-secondary)]">{mod}</span>)}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+        )}
         <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><ShieldCheck className="h-4 w-4 text-emerald-600" />支持与兼容性</h2><div className="mt-4 space-y-4 text-sm"><div><div className="mb-2 text-[var(--text-muted)]">支持版本</div><div className="flex flex-wrap gap-2">{displayedSupportedVersions.length ? displayedSupportedVersions.map((item) => <span key={item} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-[var(--text-secondary)]">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div><div><div className="mb-2 text-[var(--text-muted)]">兼容性</div><div className="flex flex-wrap gap-2">{displayedCompatibility.length ? displayedCompatibility.map((item) => <span key={item} className="rounded-md bg-emerald-500/10 px-2.5 py-1 text-emerald-700">{item}</span>) : <span className="text-[var(--text-muted)]">作者未标注</span>}</div></div></div></section>
         <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><Star className="h-4 w-4 text-amber-400" />社区评分</h2>{(resource.rating_count || 0) > 0 ? <div className="mt-4 flex items-center gap-3"><span className="text-3xl font-bold text-[var(--text)]">{(resource.rating_average || 0).toFixed(1)}</span><div><Stars value={resource.rating_average || 0} /><p className="mt-1 text-xs text-[var(--text-muted)]">{resource.rating_count} 人评分</p></div></div> : <div className="mt-4"><Stars value={0} /><p className="mt-2 text-sm font-medium text-[var(--text)]">暂无评分</p><p className="mt-1 text-xs text-[var(--text-muted)]">成为第一个评分的人</p></div>}{isAuthenticated && <div className="mt-4 border-t border-[var(--border)] pt-4"><p className="mb-2 text-sm text-[var(--text-muted)]">给这个资源评分</p><Stars value={userRating || 0} interactive onChange={rate} /></div>}</section>
         <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5"><h2 className="flex items-center gap-2 font-semibold text-[var(--text)]"><Clipboard className="h-4 w-4" />资源信息</h2><dl className="mt-4 space-y-3 text-sm"><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">创建时间</dt><dd className="text-right text-[var(--text)]">{formatDate(resource.created_at)}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">文件数量</dt><dd className="text-right text-[var(--text)]">{resource.versions?.length || 1}</dd></div><div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">最新文件</dt><dd className="max-w-[150px] truncate text-right text-[var(--text)]">{primaryVersion?.file_name || resource.file_name || '外部链接'}</dd></div>{primaryChecksum && <div className="space-y-1"><dt className="text-[var(--text-muted)]">SHA-256</dt><dd><button type="button" onClick={() => copyChecksum(primaryChecksum)} className="block w-full break-all rounded bg-[var(--bg-secondary)] p-2 text-left font-mono text-[11px] text-[var(--text)] hover:text-[var(--primary)]" title="点击复制 SHA-256">{primaryChecksum}</button></dd></div>}</dl></section>

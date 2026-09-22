@@ -1230,6 +1230,16 @@ export const resourceApi = {
     clearCache();
     return request<{ is_favorited: boolean; favorite_count: number }>(`/api/resources/${id}/favorite`, { method: 'DELETE' });
   },
+  getLike: (id: number) =>
+    request<{ is_liked: boolean; like_count: number }>(`/api/resources/${id}/like`),
+  addLike: (id: number) => {
+    clearCache();
+    return request<{ is_liked: boolean; like_count: number }>(`/api/resources/${id}/like`, { method: 'POST' });
+  },
+  removeLike: (id: number) => {
+    clearCache();
+    return request<{ is_liked: boolean; like_count: number }>(`/api/resources/${id}/like`, { method: 'DELETE' });
+  },
   getSubscription: (id: number) => request<{ is_subscribed: boolean }>(`/api/resources/${id}/subscription`),
   subscribe: (id: number) => request<{ is_subscribed: boolean }>(`/api/resources/${id}/subscription`, { method: 'POST' }),
   unsubscribe: (id: number) => request<{ is_subscribed: boolean }>(`/api/resources/${id}/subscription`, { method: 'DELETE' }),

@@ -45,6 +45,8 @@ import { AddPostSource1720000050000 } from './1720000050000-AddPostSource';
 import { ClassifyLegacyGithubSyncPosts1720000051000 } from './1720000051000-ClassifyLegacyGithubSyncPosts';
 import { RepairLegacyGithubSyncPostClassification1720000052000 } from './1720000052000-RepairLegacyGithubSyncPostClassification';
 import { AddResourceRenderState1720000053000 } from './1720000053000-AddResourceRenderState';
+import { BackfillResourcePublicIds1720000054000 } from './1720000054000-BackfillResourcePublicIds';
+import { CreateResourceLikes1720000055000 } from './1720000055000-CreateResourceLikes';
 
 /**
  * Migrations in run order.
@@ -101,4 +103,6 @@ export const migrations = [
   ClassifyLegacyGithubSyncPosts1720000051000,
   RepairLegacyGithubSyncPostClassification1720000052000,
   AddResourceRenderState1720000053000,
+  BackfillResourcePublicIds1720000054000,
+  CreateResourceLikes1720000055000,
 ];

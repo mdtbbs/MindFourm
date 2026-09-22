@@ -67,7 +67,7 @@ export default function ResourceLoadMore({
 
   return (
     <>
-      <div className="overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)]">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {resources.map((resource) => (
           <ResourceRow key={resource.id} resource={resource} />
         ))}

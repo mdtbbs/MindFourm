@@ -60,4 +60,11 @@ describe('migration registry', () => {
       'AddResourceRenderState1720000053000',
     );
   });
+
+  it('includes stable resource public ids before resource likes', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('BackfillResourcePublicIds1720000054000');
+    expect(names).toContain('CreateResourceLikes1720000055000');
+    expect(names.indexOf('BackfillResourcePublicIds1720000054000')).toBeLessThan(names.indexOf('CreateResourceLikes1720000055000'));
+  });
 });

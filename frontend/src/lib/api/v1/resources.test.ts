@@ -28,12 +28,18 @@ describe('V1 Resources API', () => {
       json: async () => ({
         data: {
           public_id: 'abc',
-          id: 1,
           title: 'Test Resource',
           summary: 'Sum',
           resource_kind: 'mod',
           visibility: 'public',
           download_count: 42,
+          metadata: {
+            schema_version: 1,
+            tags: [],
+            supported_versions: [],
+            compatibility: [],
+            preview: { url: null, status: 'none' },
+          },
           latest_version: null,
           attributions: [],
         },
@@ -41,15 +47,15 @@ describe('V1 Resources API', () => {
       }),
     } as Response);
 
-    const result = await getResourceV1(1);
+    const result = await getResourceV1('abc');
 
-    expect(result.id).toBe(1);
+    expect(result.public_id).toBe('abc');
     expect(result.title).toBe('Test Resource');
     expect(result.download_count).toBe(42);
     expect(mockFetch).toHaveBeenCalledTimes(1);
     // The URL should hit the V1 namespace, routed through buildPublicApiUrl.
     const calledUrl = mockFetch.mock.calls[0][0] as string;
-    expect(calledUrl).toContain('/api/v1/resources/1');
+    expect(calledUrl).toContain('/api/v1/resources/abc');
   });
 
   it('throws a typed V1ApiError on structured error responses', async () => {
@@ -68,10 +74,10 @@ describe('V1 Resources API', () => {
       }),
     } as Response);
 
-    await expect(getResourceV1(999)).rejects.toThrow(V1ApiError);
+    await expect(getResourceV1('missing')).rejects.toThrow(V1ApiError);
 
     try {
-      await getResourceV1(999);
+      await getResourceV1('missing');
     } catch (e) {
       const err = e as V1ApiError;
       expect(err).toBeInstanceOf(V1ApiError);
@@ -91,10 +97,10 @@ describe('V1 Resources API', () => {
       },
     } as unknown as Response);
 
-    await expect(getResourceV1(1)).rejects.toThrow(V1ApiError);
+    await expect(getResourceV1('abc')).rejects.toThrow(V1ApiError);
 
     try {
-      await getResourceV1(1);
+      await getResourceV1('abc');
     } catch (e) {
       const err = e as V1ApiError;
       expect(err.code).toBe('HTTP_ERROR');

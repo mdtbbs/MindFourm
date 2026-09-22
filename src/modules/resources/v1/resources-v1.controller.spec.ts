@@ -10,13 +10,13 @@ describe('ResourcesV1Controller', () => {
 
   it('returns RESOURCE_V1_DISABLED when capability is off', async () => {
     const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: false }) };
-    const adapter = { getResourceV1: jest.fn() };
+    const adapter = { getResourceByPublicId: jest.fn() };
     const controller = new ResourcesV1Controller(capabilities as any, adapter as any);
 
-    await expect(controller.getResource(1)).rejects.toThrow();
+    await expect(controller.getResource('resource-id')).rejects.toThrow();
 
     try {
-      await controller.getResource(1);
+      await controller.getResource('resource-id');
     } catch (e: any) {
       expect(e.getStatus()).toBe(HttpStatus.FORBIDDEN);
       expect(e.code).toBe('RESOURCE_V1_DISABLED');
@@ -25,11 +25,11 @@ describe('ResourcesV1Controller', () => {
 
   it('returns RESOURCE_NOT_FOUND when adapter returns null', async () => {
     const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true }) };
-    const adapter = { getResourceV1: jest.fn().mockResolvedValue(null) };
+    const adapter = { getResourceByPublicId: jest.fn().mockResolvedValue(null) };
     const controller = new ResourcesV1Controller(capabilities as any, adapter as any);
 
     try {
-      await controller.getResource(999);
+      await controller.getResource('missing-resource');
     } catch (e: any) {
       expect(e.getStatus()).toBe(HttpStatus.NOT_FOUND);
       expect(e.code).toBe('RESOURCE_NOT_FOUND');
@@ -39,9 +39,9 @@ describe('ResourcesV1Controller', () => {
   it('returns a V1ResourceDetail when resource is found', async () => {
     const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true }) };
     const adapter = {
-      getResourceV1: jest.fn().mockResolvedValue({
+      getResourceByPublicId: jest.fn().mockResolvedValue({
         public_id: 'abc', id: 1, title: 'Test', summary: 'A summary',
-        resource_kind: 'mod', visibility: 'public', download_count: 42,
+        resource_kind: 'mod', visibility: 'public', metadata: { schema_version: 1, tags: [], supported_versions: [], compatibility: [], preview: { url: null, status: 'none' } }, download_count: 42,
         latest_version: {
           public_id: 'ver', id: 10, version: '1.0', display_version: '1.0',
           status: 'published', is_legacy_root_release: true,
@@ -52,9 +52,9 @@ describe('ResourcesV1Controller', () => {
     };
     const controller = new ResourcesV1Controller(capabilities as any, adapter as any);
 
-    const result = await controller.getResource(1);
+    const result = await controller.getResource('resource-id');
 
-    expect(result.id).toBe(1);
+    expect(result.public_id).toBe('abc');
     expect(result.title).toBe('Test');
     expect(result.latest_version).not.toBeNull();
     expect(result.latest_version!.file_count).toBe(1);
@@ -64,10 +64,10 @@ describe('ResourcesV1Controller', () => {
 
   it('lists public resources through the same capability gate', async () => {
     const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true }) };
-    const adapter = { listResourcesV1: jest.fn().mockResolvedValue({ items: [{ id: 2, title: 'Mod' }], pagination: { limit: 20, offset: 0, next_offset: null, has_more: false } }) };
+    const adapter = { listResourcesV1: jest.fn().mockResolvedValue({ items: [{ public_id: 'resource-2', title: 'Mod' }], pagination: { limit: 20, offset: 0, next_offset: null, has_more: false } }) };
     const controller = new ResourcesV1Controller(capabilities as any, adapter as any);
 
-    await expect(controller.listResources('20', '0', 'mod')).resolves.toMatchObject({ items: [{ id: 2, title: 'Mod' }] });
+    await expect(controller.listResources('20', '0', 'mod')).resolves.toMatchObject({ items: [{ public_id: 'resource-2', title: 'Mod' }] });
     expect(adapter.listResourcesV1).toHaveBeenCalledWith({ limit: 20, offset: 0, search: 'mod' });
   });
 });

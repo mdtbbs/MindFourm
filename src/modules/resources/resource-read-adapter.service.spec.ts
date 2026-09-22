@@ -75,8 +75,11 @@ describe('ResourceReadAdapterService', () => {
       findOne: jest.fn().mockResolvedValue({
         id: 1, title: 'Test Resource', is_public: 1, deleted_at: null,
         public_id: 'abc-123', summary: 'A summary', description: 'Full desc',
-        resource_kind: 'mod', visibility: null,
+        resource_kind: 'map', visibility: null,
         latest_published_version_id: 10, download_count: 42,
+        metadata_json: { tags: ['survival'], planets: ['serpulo'] },
+        renderer_status: 'ready',
+        renderer_metadata_json: { width: 256, height: 128, spawns: 4 },
       }),
     };
     const versionRepo = {
@@ -111,10 +114,45 @@ describe('ResourceReadAdapterService', () => {
     expect(result!.title).toBe('Test Resource');
     expect(result!.summary).toBe('A summary');
     expect(result!.download_count).toBe(42);
+    expect(result!.metadata.tags).toEqual(['survival']);
+    expect(result!.metadata.preview.status).toBe('ready');
+    expect(result!.metadata.map?.width).toBe(256);
+    expect(result!.metadata.map?.planets).toEqual(['serpulo']);
     expect(result!.attributions).toHaveLength(1);
     expect(result!.attributions[0].role).toBe('submitter');
     expect(result!.latest_version).not.toBeNull();
     expect(result!.latest_version!.files).toHaveLength(1);
     expect(result!.latest_version!.files[0].installable).toBe(true);
+  });
+
+  it('builds a stable launcher manifest from published versions', async () => {
+    const resourceRepo = {
+      findOne: jest.fn().mockResolvedValue({ id: 1, public_id: 'resource-abc', resource_kind: 'mod', is_public: 1, deleted_at: null }),
+      find: jest.fn().mockResolvedValue([]),
+      increment: jest.fn(),
+    };
+    const versionRepo = {
+      find: jest.fn().mockResolvedValue([
+        { id: 10, resource_id: 1, public_id: 'version-abc', version: '1.2.0', status: 'published', release_channel: 'stable', published_at: new Date('2026-09-20T00:00:00.000Z'), created_at: new Date() },
+      ]),
+    };
+    const fileRepo = {
+      find: jest.fn().mockResolvedValue([
+        { id: 12, resource_version_id: 10, public_id: 'file-abc', role: 'primary', delivery_mode: 'managed', platform_key: 'android', architecture_key: null, package_type: 'jar', display_name: 'Example.jar', original_filename: 'Example.jar', mime_type: 'application/java-archive', size_bytes: 12, hash_algorithm: 'sha256', content_hash: 'hash', integrity_status: 'verified', availability_status: 'available', sort_order: 0 },
+      ]),
+    };
+    const dependencyRepo = { find: jest.fn().mockResolvedValue([]) };
+    const compatibilityRepo = { find: jest.fn().mockResolvedValue([{ resource_version_id: 10, runtime: 'mindustry', game_series: 'v7', min_version_value: null, max_version_value: null, channel: 'stable', platform_key: 'android', created_at: new Date() }]) };
+    const service = new ResourceReadAdapterService(
+      resourceRepo as any, versionRepo as any, {} as any, fileRepo as any,
+      new ResourceLegacyProjectionService(), dependencyRepo as any, compatibilityRepo as any,
+    );
+
+    const result = await service.getManifestByPublicId('resource-abc');
+
+    expect(result?.resource_public_id).toBe('resource-abc');
+    expect(result?.versions[0].compatibility[0].platform).toBe('android');
+    expect(result?.versions[0].files[0].installable).toBe(true);
+    expect(result?.versions[0].files[0].download_url).toContain('/api/v1/resources/resource-abc/versions/version-abc/files/file-abc/download');
   });
 });

@@ -87,6 +87,7 @@ import { OutboxEvent } from './outbox-event.entity';
 
 // Phase 7 (refactor): Community — Resource interactions
 import { ResourceFavorite } from './resource-favorite.entity';
+import { ResourceLike } from './resource-like.entity';
 import { ResourceSubscription } from './resource-subscription.entity';
 
 // Phase 8A (refactor): Game Versions
@@ -191,6 +192,7 @@ export const entities = [
   OutboxEvent,
   // Phase 7 (refactor): Community — Resource interactions
   ResourceFavorite,
+  ResourceLike,
   ResourceSubscription,
   // Phase 8A (refactor): Game Versions
   GameVersion,
@@ -263,7 +265,7 @@ export {
   // Phase 5 (refactor): Events
   OutboxEvent,
   // Phase 7 (refactor): Community — Resource interactions
-  ResourceFavorite, ResourceSubscription,
+  ResourceFavorite, ResourceLike, ResourceSubscription,
   // Phase 8A (refactor): Game Versions
   GameVersion, GameVersionBuild,
   // Phase 8B (refactor): Servers

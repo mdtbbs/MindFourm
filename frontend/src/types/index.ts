@@ -471,6 +471,9 @@ export interface Resource {
   preview_url?: string | null;
   favorite_count?: number;
   is_favorited?: boolean;
+  like_count?: number;
+  is_liked?: boolean;
+  comment_count?: number;
   is_subscribed?: boolean;
   versions?: ResourceVersion[];
 }
@@ -481,6 +484,9 @@ export interface ResourceDetailMetadata {
   tags: string[];
   supported_versions: string[];
   compatibility: string[];
+  planets: string[];
+  game_modes: string[];
+  required_mods: string[];
   changelog: string | null;
 }
 

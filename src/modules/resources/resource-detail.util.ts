@@ -6,6 +6,9 @@ export interface ResourceDetailMetadata {
   tags: string[];
   supported_versions: string[];
   compatibility: string[];
+  planets: string[];
+  game_modes: string[];
+  required_mods: string[];
   changelog: string | null;
 }
 
@@ -15,6 +18,9 @@ const emptyMetadata = (): ResourceDetailMetadata => ({
   tags: [],
   supported_versions: [],
   compatibility: [],
+  planets: [],
+  game_modes: [],
+  required_mods: [],
   changelog: null,
 });
 
@@ -54,6 +60,9 @@ export function normalizeResourceMetadata(value: unknown): ResourceDetailMetadat
     tags: stringList(raw.tags),
     supported_versions: stringList(raw.supported_versions),
     compatibility: stringList(raw.compatibility),
+    planets: stringList(raw.planets ?? raw.planet),
+    game_modes: stringList(raw.game_modes ?? raw.gamemodes),
+    required_mods: stringList(raw.required_mods),
     changelog: typeof raw.changelog === 'string' ? raw.changelog.slice(0, 20000) : null,
   };
 }
