@@ -129,7 +129,8 @@ public final class MapRenderer {
                 first = false;
                 String key = (type == ContentType.item ? "item." : "block.") + id + ".name";
                 String localizedName = chineseBundle == null ? null : chineseBundle.getProperty(key);
-                BufferedImage icon = spriteAtlas == null ? null : spriteAtlas.find(id);
+                BufferedImage icon = spriteAtlas == null ? null
+                    : type == ContentType.item ? spriteAtlas.findItem(id) : spriteAtlas.findBlock(id);
                 String iconData = "null";
                 if (icon != null) {
                     ByteArrayOutputStream png = new ByteArrayOutputStream();
@@ -612,6 +613,16 @@ public final class MapRenderer {
             BufferedImage sprite = regions.get(name);
             if (sprite == null) sprite = regions.get(name + "-bottom");
             return sprite == null ? regions.get(name + "-top") : sprite;
+        }
+
+        BufferedImage findItem(String name) {
+            BufferedImage sprite = regions.get("item-" + name + "-ui");
+            return sprite == null ? regions.get("item-" + name) : sprite;
+        }
+
+        BufferedImage findBlock(String name) {
+            BufferedImage sprite = regions.get("block-" + name + "-ui");
+            return sprite == null ? find(name) : sprite;
         }
 
         BufferedImage standalone(String name) {
