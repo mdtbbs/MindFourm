@@ -93,4 +93,46 @@ describe('ResourcePreviewService', () => {
     await expect(service.takeDraft(17, draft.id, 'schematic')).resolves.toMatchObject({ file_path: source });
     await fs.rm(root, { recursive: true, force: true });
   });
+
+  it('resolves item and block names and icons in one renderer request while keeping unknown IDs safe', async () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100/';
+    process.env.RESOURCE_RENDERER_TOKEN = 'renderer-secret';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: {
+          copper: { name: '铜', icon: 'data:image/png;base64,Y29wcGVy' },
+          'some-mod-item': { name: 'some-mod-item', icon: null },
+          ignored: { name: 'ignored', icon: 'https://example.com/not-an-image.png' },
+        },
+        blocks: { 'water-extractor': { name: '抽水机', icon: 'data:image/png;base64,d2F0ZXItZXh0cmFjdG9y' } },
+      }),
+    }) as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+
+    await expect(service.resolveContentMetadata(
+      ['copper', 'some-mod-item', '../invalid', 'ignored'],
+      ['water-extractor'],
+    )).resolves.toEqual({
+      items: {
+        copper: { name: '铜', icon: 'data:image/png;base64,Y29wcGVy' },
+        'some-mod-item': { name: 'some-mod-item', icon: null },
+        ignored: { name: 'ignored', icon: null },
+      },
+      blocks: { 'water-extractor': { name: '抽水机', icon: 'data:image/png;base64,d2F0ZXItZXh0cmFjdG9y' } },
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toContain('/v1/content-metadata?');
+    expect(decodeURIComponent(url)).toContain('items=copper,some-mod-item,ignored');
+    expect(decodeURIComponent(url)).toContain('blocks=water-extractor');
+    expect(options.headers).toEqual({ authorization: 'Bearer renderer-secret' });
+  });
+
+  it('returns an empty catalog if the renderer is not configured', async () => {
+    delete process.env.RESOURCE_RENDERER_URL;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+    await expect(service.resolveContentMetadata(['copper'], ['battery']))
+      .resolves.toEqual({ items: {}, blocks: {} });
+  });
 });

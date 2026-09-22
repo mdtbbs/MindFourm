@@ -1,4 +1,5 @@
 node_modules/
+tools/mindustry-renderer/build/
 data/
 .env
 *.log

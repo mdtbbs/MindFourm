@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { readFile, unlink } from 'fs/promises';
@@ -54,6 +54,51 @@ export class ResourcePreviewService {
 
   isConfigured(): boolean {
     return Boolean(process.env.RESOURCE_RENDERER_URL);
+  }
+
+  async resolveContentMetadata(items: string[], blocks: string[]): Promise<{
+    items: Record<string, { name: string; icon: string | null }>;
+    blocks: Record<string, { name: string; icon: string | null }>;
+  }> {
+    const normalize = (ids: string[]) => [...new Set(ids)]
+      .filter((id) => /^[a-zA-Z0-9_.-]{1,100}$/.test(id))
+      .slice(0, 100);
+    const safeItems = normalize(items);
+    const safeBlocks = normalize(blocks);
+    if (!this.isConfigured()) return { items: {}, blocks: {} };
+    const query = new URLSearchParams({ items: safeItems.join(','), blocks: safeBlocks.join(',') });
+    try {
+      const response = await fetch(`${this.rendererUrl}/v1/content-metadata?${query}`, {
+        headers: process.env.RESOURCE_RENDERER_TOKEN
+          ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` }
+          : {},
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!response.ok) throw new Error(`renderer responded ${response.status}`);
+      const body = await response.json() as { items?: unknown; blocks?: unknown };
+      return {
+        items: this.validateContentMetadata(body.items, safeItems),
+        blocks: this.validateContentMetadata(body.blocks, safeBlocks),
+      };
+    } catch (error) {
+      this.logger.warn(`Mindustry content metadata unavailable: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 内容数据暂不可用');
+    }
+  }
+
+  private validateContentMetadata(value: unknown, allowedIds: string[]): Record<string, { name: string; icon: string | null }> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const result: Record<string, { name: string; icon: string | null }> = {};
+    for (const id of allowedIds) {
+      const entry = (value as Record<string, unknown>)[id];
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      const name = typeof record.name === 'string' && record.name.length <= 200 ? record.name : id;
+      const icon = typeof record.icon === 'string' && record.icon.startsWith('data:image/png;base64,')
+        && record.icon.length <= 100_000 ? record.icon : null;
+      result[id] = { name, icon };
+    }
+    return result;
   }
 
   /**

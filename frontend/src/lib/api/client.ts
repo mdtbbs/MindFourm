@@ -1164,6 +1164,10 @@ export const resourceApi = {
     ),
   getById: (id: number) =>
     request<Resource>(`/api/resources/${id}`),
+  getMindustryContentMetadata: (items: string[], blocks: string[]) =>
+    request<{ items: Record<string, { name: string; icon: string | null }>; blocks: Record<string, { name: string; icon: string | null }> }>(
+      `/api/resources/content-metadata${buildQueryString({ items: items.join(','), blocks: blocks.join(',') })}`
+    ),
   getRelated: (id: number, limit = 6) =>
     request<Resource[]>(`/api/resources/${id}/related?limit=${limit}`),
   download: (id: number, versionId?: number | null) =>

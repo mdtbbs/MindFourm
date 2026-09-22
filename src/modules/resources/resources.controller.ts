@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Header,
   Post,
   Put,
   Delete,
@@ -158,6 +159,16 @@ export class ResourcesController {
   @Get('filter-options')
   async getFilterOptions() {
     return this.resourcesService.getFilterOptions();
+  }
+
+  @Get('content-metadata')
+  @Header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400')
+  async getMindustryContentMetadata(
+    @Query('items') items = '',
+    @Query('blocks') blocks = '',
+  ) {
+    const parseIds = (value: string) => value.split(',').filter(Boolean);
+    return this.resourcePreviewService.resolveContentMetadata(parseIds(items), parseIds(blocks));
   }
 
   @Get('user/:userId')

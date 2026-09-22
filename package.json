@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "npm run build:backend && npm run build:frontend",
+    "build:production": "npm run build && npm run build:renderer",
+    "build:renderer": "bash tools/mindustry-renderer/build-renderer.sh",
     "build:backend": "nest build",
     "build:frontend": "cd frontend && npm run build",
     "start": "node dist/main",

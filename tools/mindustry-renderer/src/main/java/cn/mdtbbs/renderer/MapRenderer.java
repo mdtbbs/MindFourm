@@ -12,6 +12,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import mindustry.Vars;
 import mindustry.core.Platform;
+import mindustry.ctype.ContentType;
 import mindustry.game.Schematic;
 import mindustry.game.Schematics;
 import mindustry.io.MapIO;
@@ -27,14 +28,19 @@ import java.awt.image.BufferedImage;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Properties;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.HexFormat;
 import java.util.concurrent.Executors;
@@ -50,6 +56,7 @@ public final class MapRenderer {
     private static Path storageRoot;
     private static String token;
     private static SpriteAtlas spriteAtlas;
+    private static Properties chineseBundle;
 
     private MapRenderer() {}
 
@@ -79,12 +86,14 @@ public final class MapRenderer {
         Vars.content.createBaseContent();
         Vars.content.init();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
+        chineseBundle = loadChineseBundle();
     }
 
     private static void start() throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(env("WORKER_HOST", "127.0.0.1"), Integer.parseInt(env("WORKER_PORT", "6100"))), 8);
         server.createContext("/health", MapRenderer::health);
         server.createContext("/v1/analyze", MapRenderer::analyze);
+        server.createContext("/v1/content-metadata", MapRenderer::contentMetadata);
         server.setExecutor(Executors.newSingleThreadExecutor());
         server.start();
         System.out.println("MindFourm renderer listening on loopback");
@@ -93,6 +102,68 @@ public final class MapRenderer {
     private static void health(HttpExchange exchange) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
         send(exchange, 200, "{\"status\":\"ok\",\"mindustryVersion\":\"" + VERSION + "\",\"textureAssets\":" + (spriteAtlas != null) + "}");
+    }
+
+    /** Resolve all requested vanilla icons/names in one request, using the bundled official atlas and zh_CN bundle. */
+    private static void contentMetadata(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        try {
+            Map<String, String> query = queryParameters(exchange.getRequestURI().getRawQuery());
+            String items = contentEntries(query.getOrDefault("items", ""), ContentType.item);
+            String blocks = contentEntries(query.getOrDefault("blocks", ""), ContentType.block);
+            send(exchange, 200, "{\"items\":" + items + ",\"blocks\":" + blocks + "}");
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 400, error("INVALID_CONTENT_QUERY"));
+        }
+    }
+
+    private static String contentEntries(String encodedIds, ContentType type) throws IOException {
+        StringBuilder result = new StringBuilder("{");
+        if (!encodedIds.isBlank()) {
+            String[] ids = encodedIds.split(",");
+            if (ids.length > 100) throw new IllegalArgumentException("too many content ids");
+            boolean first = true;
+            for (String id : ids) {
+                if (!id.matches("[a-zA-Z0-9_.-]{1,100}")) throw new IllegalArgumentException("invalid content id");
+                if (!first) result.append(',');
+                first = false;
+                String key = (type == ContentType.item ? "item." : "block.") + id + ".name";
+                String localizedName = chineseBundle == null ? null : chineseBundle.getProperty(key);
+                BufferedImage icon = spriteAtlas == null ? null : spriteAtlas.find(id);
+                String iconData = "null";
+                if (icon != null) {
+                    ByteArrayOutputStream png = new ByteArrayOutputStream();
+                    ImageIO.write(icon, "png", png);
+                    iconData = quote("data:image/png;base64," + Base64.getEncoder().encodeToString(png.toByteArray()));
+                }
+                result.append(quote(id)).append(":{\"name\":")
+                    .append(quote(localizedName == null || localizedName.isBlank() ? id : localizedName))
+                    .append(",\"icon\":").append(iconData).append('}');
+            }
+        }
+        return result.append('}').toString();
+    }
+
+    private static Properties loadChineseBundle() {
+        Properties properties = new Properties();
+        try (var stream = MapRenderer.class.getResourceAsStream("/bundles/bundle_zh_CN.properties")) {
+            if (stream == null) return properties;
+            properties.load(new InputStreamReader(stream, StandardCharsets.UTF_8));
+        } catch (IOException exception) {
+            System.err.println("could not load Mindustry zh_CN bundle: " + exception.getMessage());
+        }
+        return properties;
+    }
+
+    private static Map<String, String> queryParameters(String rawQuery) {
+        HashMap<String, String> result = new HashMap<>();
+        if (rawQuery == null || rawQuery.isBlank()) return result;
+        for (String parameter : rawQuery.split("&")) {
+            String[] pair = parameter.split("=", 2);
+            result.put(URLDecoder.decode(pair[0], StandardCharsets.UTF_8), pair.length == 2 ? URLDecoder.decode(pair[1], StandardCharsets.UTF_8) : "");
+        }
+        return result;
     }
 
     private static void analyze(HttpExchange exchange) throws IOException {

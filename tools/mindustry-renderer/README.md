@@ -31,3 +31,13 @@ all generated paths are content-hash derived.
 Deploy that directory to `ASSETS_ROOT`; it is read-only at runtime and is kept
 outside the worker JAR so normal schematic previews render recognisable
 Mindustry block icons without requiring an OpenGL context.
+
+The production release also runs `npm run build:renderer`, which compiles the
+worker against `MINDUSTRY_SERVER_JAR` (defaulting to the v160.2 runtime already
+installed on the production host) and packages the resources directory into the
+worker JAR. The generated `build/` directory is ignored by Git.
+
+The worker also exposes authenticated `GET /v1/content-metadata?items=...&blocks=...`
+for batched schematic labels and icons. It uses the bundled Mindustry v160.2
+Simplified Chinese localization file and the same official sprite atlas used by
+the preview renderer. Unknown IDs keep their internal name and return a null icon.

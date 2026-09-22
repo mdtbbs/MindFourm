@@ -1,5 +1,18 @@
+import { useEffect, useState } from 'react';
+import { Blocks, Package } from 'lucide-react';
 import type { Resource } from '@/types';
+import { resourceApi } from '@/lib/api/client';
 import { resourceCardFacts, resourceFileSummary } from '@/lib/resources/presentation';
+
+type ContentEntry = { name: string; icon: string | null };
+
+function ContentIcon({ entry, kind }: { entry?: ContentEntry; kind: 'item' | 'block' }) {
+  const FallbackIcon = kind === 'item' ? Package : Blocks;
+  return <span className="relative flex h-7 w-7 shrink-0 items-center justify-center text-[var(--text-muted)]" title={entry?.name}>
+    <FallbackIcon aria-hidden="true" className="h-4 w-4" />
+    {entry?.icon && <img src={entry.icon} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-contain [image-rendering:pixelated]" onError={(event) => { event.currentTarget.style.display = 'none'; }} />}
+  </span>;
+}
 
 function FactGrid({ resource }: { resource: Resource }) {
   const facts = resourceCardFacts(resource);
@@ -17,6 +30,21 @@ export default function ResourceKindDetails({ resource }: { resource: Resource }
   ];
   const requirements = Array.isArray(metadata.requirements) ? metadata.requirements.filter((item): item is { item?: string; amount?: number } => Boolean(item && typeof item === 'object')) : [];
   const blockTypes = Array.isArray(metadata.block_types) ? metadata.block_types.filter((item): item is { name?: string; count?: number } => Boolean(item && typeof item === 'object')) : [];
+  const itemIds = [...new Set(requirements.map((item) => item.item).filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  const blockIds = [...new Set(blockTypes.map((item) => item.name).filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  const [contentMetadata, setContentMetadata] = useState<{ items: Record<string, ContentEntry>; blocks: Record<string, ContentEntry> }>({ items: {}, blocks: {} });
+  useEffect(() => {
+    if (!itemIds.length && !blockIds.length) { setContentMetadata({ items: {}, blocks: {} }); return; }
+    let active = true;
+    resourceApi.getMindustryContentMetadata(itemIds, blockIds)
+      .then((result) => { if (active) setContentMetadata(result); })
+      .catch(() => { if (active) setContentMetadata({ items: {}, blocks: {} }); });
+    return () => { active = false; };
+  // The IDs form a stable content identity for each schematic metadata payload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemIds.join(','), blockIds.join(',')]);
+  const sortedRequirements = [...requirements].sort((left, right) => (right.amount || 0) - (left.amount || 0));
+  const sortedBlockTypes = [...blockTypes].sort((left, right) => (right.count || 0) - (left.count || 0));
   const extendedMapData = ([
     ['队伍', Array.isArray(metadata.teams) ? metadata.teams.join('、') : ''],
     ['禁用单位', Array.isArray(metadata.banned_units) ? metadata.banned_units.join('、') : ''],
@@ -36,8 +64,24 @@ export default function ResourceKindDetails({ resource }: { resource: Resource }
       {(extendedMapData.length > 0 || dependencies.length > 0 || Boolean(metadata.rules && typeof metadata.rules === 'object')) && <details className="mt-5 border-t border-[var(--border)] pt-4"><summary className="cursor-pointer text-sm font-medium text-[var(--text-secondary)]">更多地图规则与队伍</summary><div className="mt-4 space-y-3 text-sm">{extendedMapData.map(([label, value]) => <p key={label}><span className="text-[var(--text-muted)]">{label}：</span>{value}</p>)}{dependencies.length > 0 && <p><span className="text-[var(--text-muted)]">需要 Mod：</span>{[...new Set(dependencies)].join('、')}</p>}{Boolean(metadata.rules && typeof metadata.rules === 'object') && <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-[var(--bg-elevated)] p-3 text-xs">{JSON.stringify(metadata.rules, null, 2)}</pre>}</div></details>}
     </>}
     {kind === 'schematic' && <div className="mt-5 grid gap-5 sm:grid-cols-2">
-      {requirements.length > 0 && <section><h3 className="mb-2 text-sm font-medium text-[var(--text)]">建造材料</h3><ul className="grid grid-cols-2 gap-2">{requirements.slice(0, 12).map((item, index) => <li key={`${item.item || 'material'}-${index}`} className="flex justify-between gap-2 rounded bg-[var(--bg-elevated)] px-3 py-2 text-sm"><span className="truncate text-[var(--text-secondary)]">{item.item || '材料'}</span><span className="shrink-0 font-medium text-[var(--text)]">{item.amount ?? '—'}</span></li>)}</ul></section>}
-      {blockTypes.length > 0 && <details><summary className="cursor-pointer text-sm font-medium text-[var(--text)]">方块组成（{blockTypes.length} 种）</summary><ul className="mt-3 flex flex-wrap gap-2">{blockTypes.slice(0, 8).map((item, index) => <li key={`${item.name || 'block'}-${index}`} className="rounded bg-[var(--bg-elevated)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)]">{item.name || '方块'} × {item.count ?? '—'}</li>)}</ul></details>}
+      {requirements.length > 0 && <section className="min-w-0"><h3 className="mb-2 text-sm font-medium text-[var(--text)]">建造材料</h3><ul className="grid grid-cols-2 gap-2">{sortedRequirements.map((item, index) => {
+        const id = item.item || '';
+        const content = contentMetadata.items[id];
+        return <li key={`${id || 'material'}-${index}`} title={id || undefined} className="flex min-w-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-2 text-sm">
+          <ContentIcon entry={content} kind="item" />
+          <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">{content?.name || id || '材料'}</span>
+          <span className="shrink-0 font-semibold tabular-nums text-[var(--text)]">{item.amount ?? '—'}</span>
+        </li>;
+      })}</ul></section>}
+      {blockTypes.length > 0 && <section className="min-w-0"><h3 className="mb-2 text-sm font-medium text-[var(--text)]">方块组成（{blockTypes.length} 种）</h3><ul className="grid grid-cols-1 gap-2 xl:grid-cols-2">{sortedBlockTypes.map((item, index) => {
+        const id = item.name || '';
+        const content = contentMetadata.blocks[id];
+        return <li key={`${id || 'block'}-${index}`} title={id || undefined} className="flex min-w-0 items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-2.5 py-2 text-sm">
+          <ContentIcon entry={content} kind="block" />
+          <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">{content?.name || id || '方块'}</span>
+          <span className="shrink-0 font-semibold tabular-nums text-[var(--text)]">× {item.count ?? '—'}</span>
+        </li>;
+      })}</ul></section>}
       {dependencies.length > 0 && <p className="text-sm"><span className="text-[var(--text-muted)]">需要 Mod：</span><span className="text-[var(--text)]">{[...new Set(dependencies)].join('、')}</span></p>}
     </div>}
     {(kind === 'mod' || kind === 'server_plugin' || kind === 'development_tool' || kind === 'texture_ui' || kind === 'save') && <>
