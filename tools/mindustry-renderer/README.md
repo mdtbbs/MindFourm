@@ -34,8 +34,11 @@ Mindustry block icons without requiring an OpenGL context.
 
 The production release also runs `npm run build:renderer`, which compiles the
 worker against `MINDUSTRY_SERVER_JAR` (defaulting to the v160.2 runtime already
-installed on the production host) and packages the resources directory into the
-worker JAR. The generated `build/` directory is ignored by Git.
+installed on the production host) and packages the resources directory into a
+revisioned `renderer-runtime/releases/` directory. It switches the
+`renderer-runtime/current` symlink only after a complete build, so the active
+worker remains startable if compilation fails. The generated `build/` and
+`renderer-runtime/` directories are ignored by Git.
 
 The worker also exposes authenticated `GET /v1/content-metadata?items=...&blocks=...`
 for batched schematic labels and icons. It uses the bundled Mindustry v160.2

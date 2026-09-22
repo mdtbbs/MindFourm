@@ -1,5 +1,6 @@
 node_modules/
 tools/mindustry-renderer/build/
+renderer-runtime/
 data/
 .env
 *.log
