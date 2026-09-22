@@ -28,6 +28,52 @@ function formatSize(bytes?: number | null) {
   return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
 }
 
+const MINDUSTRY_LABELS: Record<string, string> = {
+  'water-extractor': '水抽取器', 'inverted-sorter': '反向分类器', battery: '电池',
+  'bridge-conveyor': '传送带桥', 'spore-press': '孢子压缩机', 'bridge-conduit': '导管桥',
+  'liquid-router': '液体路由器', cultivator: '培养机', 'power-node': '电力节点',
+  'coal-centrifuge': '煤炭离心机', 'micro-processor': '微型处理器', conduit: '导管',
+  'underflow-gate': '下溢门', 'pyratite-mixer': '硫化物混合器', 'blast-mixer': '爆炸混合器',
+  'overdrive-projector': '超速投影器', 'impact-reactor': '冲击反应堆',
+  'cryofluid-mixer': '冷冻液混合器', sorter: '分类器', 'item-source': '物品源',
+  unloader: '卸货器', copper: '铜', lead: '铅', metaglass: '钢化玻璃', graphite: '石墨',
+  titanium: '钛', thorium: '钍', silicon: '硅', plastanium: '塑钢', 'surge-alloy': '巨浪合金',
+};
+
+function mindustryLabel(value?: string | null) {
+  if (!value) return '未标注';
+  return MINDUSTRY_LABELS[value] || value.replaceAll('-', ' ');
+}
+
+function MeterChart({
+  title,
+  items,
+  tone = 'primary',
+}: {
+  title: string;
+  items: Array<{ label: string; value: number }>;
+  tone?: 'primary' | 'amber' | 'green';
+}) {
+  const max = Math.max(...items.map((item) => Math.abs(item.value)), 1);
+  const colors = tone === 'amber'
+    ? ['bg-amber-500', 'bg-orange-400', 'bg-yellow-400']
+    : tone === 'green'
+      ? ['bg-emerald-500', 'bg-teal-500', 'bg-cyan-500']
+      : ['bg-[var(--primary)]', 'bg-sky-400', 'bg-indigo-400'];
+  return <div>
+    <h3 className="mb-4 text-sm font-semibold text-[var(--text)]">{title}</h3>
+    <div className="space-y-3">
+      {items.map((item, index) => <div key={item.label}>
+        <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+          <span className="truncate text-[var(--text-secondary)]">{item.label}</span>
+          <span className="shrink-0 font-medium tabular-nums text-[var(--text)]">{item.value.toLocaleString('zh-CN')}</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-[var(--bg-secondary)]"><div className={`h-full rounded-full ${colors[index % colors.length]}`} style={{ width: `${Math.max(4, Math.min(100, Math.abs(item.value) / max * 100))}%` }} /></div>
+      </div>)}
+    </div>
+  </div>;
+}
+
 function Stars({ value, interactive = false, onChange }: { value: number; interactive?: boolean; onChange?: (value: number) => void }) {
   return <div className="flex items-center gap-0.5" aria-label={`${value.toFixed(1)} 分`}>
     {[1, 2, 3, 4, 5].map((star) => (
@@ -74,6 +120,17 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const requirements = Array.isArray(rendererMetadata.requirements)
     ? rendererMetadata.requirements.filter((item): item is { item?: string; amount?: number } => Boolean(item && typeof item === 'object'))
     : [];
+  const blockChartItems = blockTypes
+    .filter((item) => typeof item.count === 'number' && item.count > 0)
+    .map((item) => ({ label: mindustryLabel(item.name), value: item.count as number }))
+    .sort((a, b) => b.value - a.value);
+  const materialChartItems = requirements
+    .filter((item) => typeof item.amount === 'number' && item.amount > 0)
+    .map((item) => ({ label: mindustryLabel(item.item), value: item.amount as number }))
+    .sort((a, b) => b.value - a.value);
+  const powerProduction = typeof rendererMetadata.power_production === 'number' ? rendererMetadata.power_production : null;
+  const powerConsumption = typeof rendererMetadata.power_consumption === 'number' ? rendererMetadata.power_consumption : null;
+  const netPower = typeof rendererMetadata.net_power === 'number' ? rendererMetadata.net_power : null;
   const displayTags = [...new Set([
     ...(metadata?.tags || []),
     ...(Array.isArray(rendererMetadata.tags) ? rendererMetadata.tags.filter((item): item is string => typeof item === 'string') : []),
@@ -97,6 +154,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       ['Android', 'android'], ['iOS', 'ios'],
     ].filter(([, needle]) => source.includes(needle)).map(([label]) => label);
   }, [metadata?.compatibility, resource.description, resource.title]);
+  const downloadLabel = isSchematic ? '下载 .msch' : isMap ? '下载 .msav' : `下载 ${resource.version || primaryVersion?.version || '资源'}`;
 
   const copyChecksum = async (checksum: string) => {
     await navigator.clipboard.writeText(checksum);
@@ -254,7 +312,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             {resource.resource_type === 'external' && resource.external_url ? (
               <a href={resource.external_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><ExternalLink className="h-5 w-5" />访问资源</a>
             ) : (
-              <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />下载 {resource.version || primaryVersion?.version || '资源'}</a>
+              <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />{downloadLabel}</a>
             )}
             {isSchematic && <button type="button" onClick={copySchematicCode} className="inline-flex items-center gap-2 rounded-lg border border-[var(--primary)] px-4 py-2.5 font-semibold text-[var(--primary)] transition hover:bg-[var(--primary)]/10"><Clipboard className="h-5 w-5" />{schematicCopied ? '已复制蓝图' : '复制蓝图'}</button>}
             <button type="button" disabled={busy} onClick={toggleFavorite} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${favorite ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />{favorite ? '已收藏' : '收藏'} <span className="text-xs">{favoriteCount}</span></button>
@@ -268,10 +326,55 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
           <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-muted)]">作者信息</h2>
           <Link href={`/users/${resource.user_id}`} className="mt-4 flex items-center gap-3 rounded-xl p-2 transition hover:bg-[var(--bg-card)]"><span className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/15 text-[var(--primary)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-6 w-6" />}</span><span className="min-w-0"><span className="block truncate font-semibold text-[var(--text)]">{resource.username || '未知作者'}</span><span className="text-sm text-[var(--text-muted)]">查看作者主页</span></span><ExternalLink className="ml-auto h-4 w-4 text-[var(--text-muted)]" /></Link>
           <div className="mt-5 grid grid-cols-3 gap-3 text-center"><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{resource.download_count || 0}</div><div className="mt-1 text-xs text-[var(--text-muted)]">下载</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{likeCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">点赞</div></div><div className="rounded-lg bg-[var(--bg-card)] p-3"><div className="font-semibold text-[var(--text)]">{favoriteCount}</div><div className="mt-1 text-xs text-[var(--text-muted)]">收藏</div></div></div>
-          <div className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><span className="text-[var(--text-muted)]">当前版本</span><span className="font-medium text-[var(--text)]">{resource.version || primaryVersion?.version || '未标注'}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">文件类型</span><span className="font-medium text-[var(--text)]">{resource.mime_type || resourceTypeLabel(resource.resource_type)}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">更新时间</span><span className="font-medium text-[var(--text)]">{formatDate(resource.updated_at)}</span></div></div>
+          <div className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><span className="text-[var(--text-muted)]">当前版本</span><span className="font-medium text-[var(--text)]">{displayedSupportedVersions[0] || resource.version || primaryVersion?.version || '未标注'}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">文件类型</span><span className="font-medium text-[var(--text)]">{resource.mime_type || resourceTypeLabel(resource.resource_type)}</span></div><div className="flex justify-between"><span className="text-[var(--text-muted)]">更新时间</span><span className="font-medium text-[var(--text)]">{formatDate(resource.updated_at)}</span></div></div>
         </aside>
       </div>
     </section>
+
+    {(isMap || isSchematic) && <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-sm sm:p-7">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">Mindustry {isMap ? 'Map' : 'Schematic'}</p>
+          <h2 className="mt-1 text-2xl font-bold text-[var(--text)]">{isMap ? '地图数据' : '蓝图数据'}</h2>
+        </div>
+        <p className="text-sm text-[var(--text-muted)]">来自文件解析结果，无法可靠推导的项目不会虚构</p>
+      </div>
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">尺寸</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{renderedWidth !== null && renderedHeight !== null ? `${renderedWidth} × ${renderedHeight}` : '未标注'}</div></div>
+        <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">{isMap ? '出生点' : '方块数量'}</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{isMap ? renderedSpawns ?? '未标注' : renderedBlocks ?? '未标注'}</div></div>
+        {isMap ? <>
+          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">地图作者</div><div className="mt-1 truncate text-base font-bold text-[var(--text)]">{typeof rendererMetadata.author === 'string' && rendererMetadata.author ? rendererMetadata.author : '未标注'}</div></div>
+          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">游戏模式</div><div className="mt-1 truncate text-base font-bold text-[var(--text)]">{Array.isArray(rendererMetadata.game_modes) && rendererMetadata.game_modes.length ? rendererMetadata.game_modes.join('、') : '未标注'}</div></div>
+        </> : <>
+          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">建造材料</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{materialChartItems.length ? materialChartItems.length : '未标注'}<span className="ml-1 text-xs font-normal">种</span></div></div>
+          <div className="rounded-xl bg-[var(--bg-secondary)] p-4"><div className="text-xs text-[var(--text-muted)]">净功率</div><div className="mt-1 text-xl font-bold tabular-nums text-[var(--text)]">{netPower !== null ? netPower.toFixed(1) : '未标注'}</div></div>
+        </>}
+      </div>
+      {isSchematic && <div className="mt-6 grid gap-5 xl:grid-cols-2">
+        <section className="rounded-xl border border-[var(--border)] p-5">
+          <div className="mb-5 flex items-center justify-between"><div><h3 className="font-semibold text-[var(--text)]">能量概览</h3><p className="mt-1 text-xs text-[var(--text-muted)]">按解析到的方块能力估算</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${netPower !== null && netPower >= 0 ? 'bg-emerald-500/10 text-emerald-700' : 'bg-rose-500/10 text-rose-700'}`}>{netPower !== null && netPower >= 0 ? '能源盈余' : '能源不足'}</span></div>
+          {powerProduction !== null || powerConsumption !== null ? <MeterChart title="功率 / 秒" tone="green" items={[
+            ...(powerProduction === null ? [] : [{ label: '发电', value: powerProduction }]),
+            ...(powerConsumption === null ? [] : [{ label: '耗电', value: powerConsumption }]),
+            ...(netPower === null ? [] : [{ label: '净功率', value: netPower }]),
+          ]} /> : <p className="text-sm text-[var(--text-muted)]">暂无可靠的功率数据。</p>}
+        </section>
+        <section className="rounded-xl border border-[var(--border)] p-5">
+          <div className="mb-5"><h3 className="font-semibold text-[var(--text)]">建造材料需求</h3><p className="mt-1 text-xs text-[var(--text-muted)]">完成这份蓝图所需的材料数量</p></div>
+          {materialChartItems.length ? <MeterChart title="材料数量" tone="amber" items={materialChartItems.slice(0, 10)} /> : <p className="text-sm text-[var(--text-muted)]">暂无可靠的材料数据。</p>}
+        </section>
+        <section className="rounded-xl border border-[var(--border)] p-5 xl:col-span-2">
+          <div className="mb-5 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="font-semibold text-[var(--text)]">方块组成</h3><p className="mt-1 text-xs text-[var(--text-muted)]">按数量从多到少排列，名称已转换为中文</p></div><span className="text-xs text-[var(--text-muted)]">共 {blockChartItems.length} 种</span></div>
+          {blockChartItems.length ? <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2">{blockChartItems.slice(0, 16).map((item) => <div key={item.label}><div className="mb-1 flex items-center justify-between gap-3 text-sm"><span className="truncate text-[var(--text-secondary)]">{item.label}</span><span className="font-semibold tabular-nums text-[var(--text)]">{item.value}</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--bg-secondary)]"><div className="h-full rounded-full bg-[var(--primary)]" style={{ width: `${Math.max(5, item.value / Math.max(...blockChartItems.map((entry) => entry.value)) * 100)}%` }} /></div></div>)}</div> : <p className="text-sm text-[var(--text-muted)]">暂无方块组成数据。</p>}
+        </section>
+      </div>}
+      {isMap && <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {typeof rendererMetadata.planet === 'string' && rendererMetadata.planet && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">星球</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.planet}</div></div>}
+        {Array.isArray(rendererMetadata.teams) && rendererMetadata.teams.length > 0 && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">队伍</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.teams.join('、')}</div></div>}
+        {typeof rendererMetadata.core_count === 'number' && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">核心</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.core_count} 个</div></div>}
+        {typeof rendererMetadata.waves === 'boolean' && <div className="rounded-xl border border-[var(--border)] p-4"><div className="text-xs text-[var(--text-muted)]">波次</div><div className="mt-2 font-semibold text-[var(--text)]">{rendererMetadata.waves ? '启用' : '禁用'}</div></div>}
+      </div>}
+    </section>}
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <main className="min-w-0">
@@ -283,7 +386,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       </main>
       <aside className="space-y-5">
         {(isMap || isSchematic) && (
-          <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
+          <section className="hidden rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-5">
             <h2 className="flex items-center gap-2 font-semibold text-[var(--text)]">
               <Clipboard className="h-4 w-4 text-[var(--primary)]" />
               {isMap ? '地图信息' : '蓝图信息'}
