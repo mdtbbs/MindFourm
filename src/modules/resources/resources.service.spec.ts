@@ -7,6 +7,7 @@ jest.mock('@nestjs/common', () => ({
   NotFoundException: class NotFoundException extends Error {},
   ForbiddenException: class ForbiddenException extends Error {},
   BadRequestException: class BadRequestException extends Error {},
+  UnprocessableEntityException: class UnprocessableEntityException extends Error {},
 }));
 
 jest.mock('@nestjs/typeorm', () => ({
@@ -71,11 +72,13 @@ import { ResourcesService } from './resources.service';
 
 function createService(overrides: {
   resourceRepository?: Record<string, jest.Mock>;
+  resourceFileRepository?: Record<string, jest.Mock>;
   manager?: Record<string, jest.Mock>;
   dataSource?: Record<string, jest.Mock>;
   versionRepository?: Record<string, jest.Mock>;
   adminNotificationsService?: Record<string, jest.Mock>;
   mflClientService?: Record<string, jest.Mock>;
+  resourceStorageService?: Record<string, jest.Mock>;
   resourcePreviewService?: Record<string, jest.Mock>;
 } = {}) {
   const defaultQb = {
@@ -128,6 +131,10 @@ function createService(overrides: {
     update: jest.fn().mockResolvedValue(undefined),
     ...overrides.versionRepository,
   };
+  const resourceFileRepository = {
+    update: jest.fn().mockResolvedValue(undefined),
+    ...overrides.resourceFileRepository,
+  };
   const adminNotificationsService = {
     publishModerationPending: jest.fn().mockResolvedValue([]),
     publishModerationResult: jest.fn().mockResolvedValue([]),
@@ -150,13 +157,14 @@ function createService(overrides: {
     {} as any,
     {} as any,
     versionRepository as any,
+    resourceFileRepository as any,
     {} as any,
     dataSource as any,
     adminNotificationsService as any,
     notificationsService as any,
     mflClientService as any,
     undefined,
-    undefined,
+    overrides.resourceStorageService as any,
     undefined,
     undefined,
     overrides.resourcePreviewService as any,
@@ -168,6 +176,7 @@ function createService(overrides: {
     manager,
     dataSource,
     versionRepository,
+    resourceFileRepository,
     adminNotificationsService,
     mflClientService,
     defaultQb,
@@ -396,5 +405,58 @@ describe('ResourcesService', () => {
 
     expect(preview.supports).toHaveBeenCalledWith(expect.objectContaining({ id: 31, resource_kind: 'map' }));
     expect(preview.enqueue).toHaveBeenCalledWith(expect.objectContaining({ id: 31, file_name: 'map.msav' }));
+  });
+
+  it('promotes release files and keeps the structured delivery pointer in sync', async () => {
+    const storage = {
+      promote: jest.fn()
+        .mockResolvedValueOnce('/uploads/resources/pack.zip')
+        .mockResolvedValueOnce('/uploads/resources/pack.zip'),
+    };
+    const { service, resourceRepository, versionRepository, resourceFileRepository } = createService({
+      resourceStorageService: storage,
+      resourceRepository: {
+        findOne: jest.fn()
+          .mockResolvedValueOnce({
+            id: 32, title: 'Pack', status: 'pending', resource_type: 'upload',
+            file_path: '/uploads/.quarantine/resources/pack.zip', user_id: 5,
+            is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
+          })
+          .mockResolvedValueOnce({
+            id: 32, title: 'Pack', status: 'approved', resource_type: 'upload',
+            file_path: '/uploads/resources/pack.zip', user_id: 5,
+            is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
+          }),
+      },
+      versionRepository: {
+        find: jest.fn().mockResolvedValue([{ id: 302, resource_id: 32, file_path: '/uploads/.quarantine/resources/pack.zip' }]),
+      },
+    });
+
+    await service.updateStatus(32, 'approved');
+
+    expect(versionRepository.update).toHaveBeenCalledWith(302, { file_path: '/uploads/resources/pack.zip' });
+    expect(resourceFileRepository.update).toHaveBeenCalledWith(
+      { resource_version_id: 302, role: 'primary' },
+      { storage_key: '/uploads/resources/pack.zip' },
+    );
+    expect(resourceRepository.update).toHaveBeenCalledWith(32, { file_path: '/uploads/resources/pack.zip' });
+  });
+
+  it('returns an actionable error when an approved upload is no longer available', async () => {
+    const missingFile = Object.assign(new Error('no such file'), { code: 'ENOENT' });
+    const { service, resourceRepository } = createService({
+      resourceStorageService: { promote: jest.fn().mockRejectedValue(missingFile) },
+      resourceRepository: {
+        findOne: jest.fn().mockResolvedValue({
+          id: 33, title: 'Missing pack', status: 'pending', resource_type: 'upload',
+          file_path: '/uploads/.quarantine/resources/missing.zip', user_id: 5,
+          is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
+        }),
+      },
+    });
+
+    await expect(service.updateStatus(33, 'approved')).rejects.toThrow('资源文件不存在或已失效，请重新上传后再审核');
+    expect(resourceRepository.update).not.toHaveBeenCalled();
   });
 });

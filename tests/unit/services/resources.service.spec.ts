@@ -7,6 +7,7 @@ jest.mock('@nestjs/common', () => ({
   NotFoundException: class NotFoundException extends Error {},
   ForbiddenException: class ForbiddenException extends Error {},
   BadRequestException: class BadRequestException extends Error {},
+  UnprocessableEntityException: class UnprocessableEntityException extends Error {},
 }));
 
 jest.mock('@nestjs/typeorm', () => ({
@@ -193,6 +194,7 @@ function createService(overrides: {
         find: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue(undefined),
       } as any, // versionRepository
+      { update: jest.fn().mockResolvedValue(undefined) } as any, // resourceFileRepository
       {} as any, // ratingRepository
       dataSource as any,
       { publishModerationPending: jest.fn().mockResolvedValue(undefined), publishModerationResult: jest.fn().mockResolvedValue(undefined) } as any,

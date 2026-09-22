@@ -18,6 +18,7 @@ export default function ResourceModerationTable() {
   const [rejectDialog, setRejectDialog] = useState<{ resource: Resource } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [isRejecting, setIsRejecting] = useState(false);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
 
   const loadPending = () => {
     setLoading(true);
@@ -31,12 +32,16 @@ export default function ResourceModerationTable() {
   useEffect(() => { loadPending(); }, []);
 
   const handleApprove = async (id: number) => {
+    if (approvingId === id) return;
+    setApprovingId(id);
     try {
       await resourceAdminApi.updateStatus(id, 'approved');
       setSelectedResource(null);
       loadPending();
     } catch (err) {
       setError(err instanceof Error ? err.message : '审核操作失败');
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -89,9 +94,10 @@ export default function ResourceModerationTable() {
           <div className="flex gap-3">
             <button
               onClick={() => handleApprove(selectedResource.id)}
+              disabled={approvingId === selectedResource.id}
               className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
             >
-              <Check className="w-4 h-4" /> 通过
+              <Check className="w-4 h-4" /> {approvingId === selectedResource.id ? '处理中…' : '通过'}
             </button>
             <button
               onClick={() => handleRejectClick(selectedResource)}
@@ -176,9 +182,10 @@ export default function ResourceModerationTable() {
                     </button>
                     <button
                       onClick={() => handleApprove(r.id)}
+                      disabled={approvingId === r.id}
                       className="text-sm text-green-600 hover:underline"
                     >
-                      通过
+                      {approvingId === r.id ? '处理中…' : '通过'}
                     </button>
                     <button
                       onClick={() => handleRejectClick(r)}

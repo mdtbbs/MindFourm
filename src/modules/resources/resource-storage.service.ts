@@ -112,6 +112,25 @@ export class ResourceStorageService {
     const prefix = `${quarantine}${path.sep}`;
     if (!source.startsWith(prefix)) return filePath;
     const target = path.join(await this.getResourceDirectory(), path.basename(source));
+
+    // Approval can be retried after a request moved the payload but failed while
+    // updating a later release or notification. Treat an already-promoted target
+    // as success instead of trying to rename the missing quarantine source again.
+    try {
+      await fs.access(source);
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') {
+        try {
+          await fs.access(target);
+          return target;
+        } catch {
+          // Preserve the original ENOENT below so the moderation service can
+          // turn it into a user-actionable API error.
+        }
+      }
+      throw error;
+    }
+
     await this.move(source, target);
     return target;
   }

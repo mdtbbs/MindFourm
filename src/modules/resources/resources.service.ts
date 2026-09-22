@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, Like, LessThan, In } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -63,6 +63,8 @@ export class ResourcesService {
     private categoryRepository: Repository<ResourceCategory>,
     @InjectRepository(ResourceVersion)
     private versionRepository: Repository<ResourceVersion>,
+    @InjectRepository(ResourceFile)
+    private resourceFileRepository: Repository<ResourceFile>,
     @InjectRepository(ResourceRating)
     private ratingRepository: Repository<ResourceRating>,
     private dataSource: DataSource,
@@ -1141,6 +1143,18 @@ export class ResourcesService {
     await this.resourceRepository.softDelete(resource.id);
   }
 
+  private async promoteResourceFile(filePath: string | null | undefined): Promise<string | null | undefined> {
+    if (!this.resourceStorageService || !filePath) return filePath;
+    try {
+      return await this.resourceStorageService.promote(filePath);
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') {
+        throw new UnprocessableEntityException('资源文件不存在或已失效，请重新上传后再审核');
+      }
+      throw error;
+    }
+  }
+
   async updateStatus(
     id: number,
     status: string,
@@ -1166,16 +1180,20 @@ export class ResourcesService {
 
     if (existingResource.status !== status) {
       if (status === RESOURCE_STATUS_APPROVED && this.resourceStorageService) {
-        const promotedResourcePath = await this.resourceStorageService.promote(existingResource.file_path);
+        const promotedResourcePath = await this.promoteResourceFile(existingResource.file_path);
         if (typeof promotedResourcePath === 'string' && promotedResourcePath !== existingResource.file_path) {
           await this.resourceRepository.update(id, { file_path: promotedResourcePath });
           existingResource.file_path = promotedResourcePath;
         }
         const versions = await this.versionRepository.find({ where: { resource_id: id } });
         for (const version of versions) {
-          const promotedVersionPath = await this.resourceStorageService.promote(version.file_path);
+          const promotedVersionPath = await this.promoteResourceFile(version.file_path);
           if (typeof promotedVersionPath === 'string' && promotedVersionPath !== version.file_path) {
             await this.versionRepository.update(version.id, { file_path: promotedVersionPath });
+            await this.resourceFileRepository.update(
+              { resource_version_id: version.id, role: 'primary' },
+              { storage_key: promotedVersionPath },
+            );
           }
         }
       }

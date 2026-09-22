@@ -29,6 +29,21 @@ describe('ResourceStorageService', () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 
+  it('treats an already-promoted file as a successful retry', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const quarantine = path.join(root, '.quarantine', 'resources');
+    const resources = path.join(root, 'resources');
+    await fs.mkdir(quarantine, { recursive: true });
+    await fs.mkdir(resources, { recursive: true });
+    const promotedPath = path.join(resources, 'retry.zip');
+    await fs.writeFile(promotedPath, 'content');
+
+    await expect(service.promote(path.join(quarantine, 'retry.zip'))).resolves.toBe(promotedPath);
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
   it('turns a pasted Mindustry schematic into a quarantined managed file', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
     process.env.RESOURCE_UPLOAD_ROOT = root;
