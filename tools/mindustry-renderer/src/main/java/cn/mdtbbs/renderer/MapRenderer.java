@@ -22,7 +22,9 @@ import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -31,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.concurrent.Executors;
 
@@ -44,6 +47,7 @@ public final class MapRenderer {
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
     private static String token;
+    private static SpriteAtlas spriteAtlas;
 
     private MapRenderer() {}
 
@@ -72,6 +76,7 @@ public final class MapRenderer {
         Vars.init();
         Vars.content.createBaseContent();
         Vars.content.init();
+        spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
     }
 
     private static void start() throws IOException {
@@ -85,7 +90,7 @@ public final class MapRenderer {
 
     private static void health(HttpExchange exchange) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
-        send(exchange, 200, "{\"status\":\"ok\",\"mindustryVersion\":\"" + VERSION + "\"}");
+        send(exchange, 200, "{\"status\":\"ok\",\"mindustryVersion\":\"" + VERSION + "\",\"textureAssets\":" + (spriteAtlas != null) + "}");
     }
 
     private static void analyze(HttpExchange exchange) throws IOException {
@@ -138,17 +143,43 @@ public final class MapRenderer {
         graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         graphics.setColor(new Color(15, 20, 25));
         graphics.fillRect(0, 0, image.getWidth(), image.getHeight());
-        for (Schematic.Stile tile : schematic.tiles) {
-            int size = Math.max(1, tile.block.size) * tileSize;
-            int x = padding + tile.x * tileSize - (size - tileSize) / 2;
-            int y = padding + (schematic.height - tile.y - 1) * tileSize - (size - tileSize) / 2;
-            graphics.setColor(new Color(tile.block.mapColor.r, tile.block.mapColor.g, tile.block.mapColor.b, tile.block.mapColor.a));
-            graphics.fillRect(x, y, size, size);
+        BufferedImage background = spriteAtlas == null ? null : spriteAtlas.standalone("schematic-background.png");
+        if (background != null) {
+            for (int x = 0; x < image.getWidth(); x += background.getWidth()) {
+                for (int y = 0; y < image.getHeight(); y += background.getHeight()) {
+                    graphics.drawImage(background, x, y, null);
+                }
+            }
         }
         graphics.dispose();
+        for (Schematic.Stile tile : schematic.tiles) drawSchematicTile(image, tile, schematic.height, tileSize, padding);
         String key = previewKey("schematic", hash);
         if (!ImageIO.write(image, "png", target(key).toFile())) throw new IOException("PNG writer unavailable");
         send(exchange, 200, result("{\"name\":" + quote(schematic.name()) + ",\"description\":" + quote(schematic.description()) + ",\"width\":" + schematic.width + ",\"height\":" + schematic.height + ",\"blocks\":" + schematic.tiles.size + "}", key));
+    }
+
+    /** Draw a client-identical block sprite when the official desktop atlas is installed. */
+    private static void drawSchematicTile(BufferedImage target, Schematic.Stile tile, int height, int tileSize, int padding) {
+        int size = Math.max(1, tile.block.size) * tileSize;
+        int x = padding + tile.x * tileSize - (size - tileSize) / 2;
+        int y = padding + (height - tile.y - 1) * tileSize - (size - tileSize) / 2;
+        BufferedImage sprite = spriteAtlas == null ? null : spriteAtlas.find(tile.block.name);
+        Graphics2D graphics = target.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        if (sprite == null) {
+            // Keep previews useful if an asset bundle is unavailable or a future block is unknown.
+            graphics.setColor(new Color(tile.block.mapColor.r, tile.block.mapColor.g, tile.block.mapColor.b, tile.block.mapColor.a));
+            graphics.fillRect(x, y, size, size);
+            graphics.setColor(new Color(255, 255, 255, 70));
+            graphics.drawRect(x, y, Math.max(0, size - 1), Math.max(0, size - 1));
+        } else {
+            AffineTransform original = graphics.getTransform();
+            graphics.translate(x + size / 2.0, y + size / 2.0);
+            graphics.rotate(Math.toRadians((tile.rotation & 3) * 90));
+            graphics.drawImage(sprite, -size / 2, -size / 2, size, size, null);
+            graphics.setTransform(original);
+        }
+        graphics.dispose();
     }
 
     private static String previewKey(String kind, String hash) { return "resources/" + kind + "/" + hash.substring(0, 2) + "/" + hash + "/preview.png"; }
@@ -165,4 +196,86 @@ public final class MapRenderer {
     private static String error(String code) { return "{\"errorCode\":" + quote(code) + "}"; }
     private static String quote(String value) { StringBuilder result = new StringBuilder("\""); for (char character : value.toCharArray()) { switch (character) { case '\\' -> result.append("\\\\"); case '\"' -> result.append("\\\""); case '\n' -> result.append("\\n"); case '\r' -> result.append("\\r"); default -> result.append(character); } } return result.append('\"').toString(); }
     private static String env(String name, String fallback) { String value = System.getenv(name); return value == null || value.isBlank() ? fallback : value; }
+
+    /** Loads Mindustry's desktop atlas directly, so the headless worker does not need OpenGL. */
+    private static final class SpriteAtlas {
+        private final HashMap<String, BufferedImage> regions;
+        private final Path assetsRoot;
+
+        private SpriteAtlas(HashMap<String, BufferedImage> regions, Path assetsRoot) {
+            this.regions = regions;
+            this.assetsRoot = assetsRoot;
+        }
+
+        static SpriteAtlas load(String configuredRoot) {
+            if (configuredRoot == null || configuredRoot.isBlank()) return null;
+            Path root = Path.of(configuredRoot).toAbsolutePath().normalize();
+            Path atlasPath = root.resolve("sprites/sprites.aatls");
+            if (!Files.isRegularFile(atlasPath)) atlasPath = root.resolve("sprites.aatls");
+            if (!Files.isRegularFile(atlasPath)) {
+                System.err.println("texture assets not found at " + root + "; schematic previews will use fallback colors");
+                return null;
+            }
+            try (DataInputStream input = new DataInputStream(Files.newInputStream(atlasPath))) {
+                byte[] header = input.readNBytes(5);
+                if (header.length != 5 || header[0] != 'A' || header[1] != 'A' || header[2] != 'T' || header[3] != 'L' || header[4] != 'S') throw new IOException("invalid AATLS header");
+                input.readUnsignedShort();
+                HashMap<String, BufferedImage> regions = new HashMap<>();
+                boolean firstPage = true;
+                while (input.available() > 0) {
+                    if (!firstPage) input.readUnsignedByte();
+                    firstPage = false;
+                    String imageName = input.readUTF();
+                    input.readUnsignedShort();
+                    input.readUnsignedShort();
+                    input.readUnsignedByte();
+                    input.readUnsignedByte();
+                    input.readUnsignedByte();
+                    input.readUnsignedByte();
+                    int count = input.readInt();
+                    BufferedImage page = readPage(root, imageName);
+                    for (int index = 0; index < count; index++) {
+                        String name = input.readUTF();
+                        int left = input.readShort();
+                        int top = input.readShort();
+                        int width = input.readShort();
+                        int height = input.readShort();
+                        if (input.readBoolean()) input.skipBytes(8);
+                        if (input.readBoolean()) input.skipBytes(8);
+                        if (input.readBoolean()) input.skipBytes(8);
+                        if (page != null && width > 0 && height > 0 && left >= 0 && top >= 0 && left + width <= page.getWidth() && top + height <= page.getHeight()) {
+                            regions.put(name, page.getSubimage(left, top, width, height));
+                        }
+                    }
+                }
+                System.out.println("loaded " + regions.size() + " Mindustry sprite regions from " + root);
+                return new SpriteAtlas(regions, root);
+            } catch (Exception exception) {
+                exception.printStackTrace(System.err);
+                return null;
+            }
+        }
+
+        private static BufferedImage readPage(Path root, String imageName) throws IOException {
+            Path page = root.resolve("sprites").resolve(imageName).normalize();
+            if (!Files.isRegularFile(page)) page = root.resolve(imageName).normalize();
+            return Files.isRegularFile(page) ? ImageIO.read(page.toFile()) : null;
+        }
+
+        BufferedImage find(String name) {
+            BufferedImage sprite = regions.get(name);
+            if (sprite == null) sprite = regions.get(name + "-bottom");
+            return sprite == null ? regions.get(name + "-top") : sprite;
+        }
+
+        BufferedImage standalone(String name) {
+            try {
+                Path file = assetsRoot.resolve("sprites").resolve(name).normalize();
+                if (!Files.isRegularFile(file)) file = assetsRoot.resolve(name).normalize();
+                return Files.isRegularFile(file) ? ImageIO.read(file.toFile()) : null;
+            } catch (IOException exception) {
+                return null;
+            }
+        }
+    }
 }

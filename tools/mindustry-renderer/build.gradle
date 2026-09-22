@@ -17,6 +17,8 @@ application { mainClass = 'cn.mdtbbs.renderer.MapRenderer' }
 // render maps authored by the current official client.
 def mindustryVersion = findProperty('mindustryVersion') ?: 'v160.2'
 def mindustryJar = file("$buildDir/deps/server-release-${mindustryVersion}.jar")
+def mindustryDesktopJar = file("$buildDir/deps/Mindustry-${mindustryVersion}.jar")
+def textureAssetsDir = file("$buildDir/assets")
 
 repositories { mavenCentral() }
 
@@ -27,6 +29,19 @@ tasks.register('downloadMindustry') {
         if (!mindustryJar.exists()) {
             new URL("https://github.com/Anuken/Mindustry/releases/download/${mindustryVersion}/server-release.jar").withInputStream { input ->
                 mindustryJar.withOutputStream { output -> output << input }
+            }
+        }
+    }
+}
+
+// The server JAR parses resources; the desktop JAR supplies the official block sprites.
+tasks.register('downloadMindustryDesktop') {
+    outputs.file(mindustryDesktopJar)
+    doLast {
+        if (!mindustryDesktopJar.parentFile.exists()) mindustryDesktopJar.parentFile.mkdirs()
+        if (!mindustryDesktopJar.exists()) {
+            new URL("https://github.com/Anuken/Mindustry/releases/download/${mindustryVersion}/Mindustry.jar").withInputStream { input ->
+                mindustryDesktopJar.withOutputStream { output -> output << input }
             }
         }
     }
@@ -45,4 +60,10 @@ tasks.register('copyMindustryRuntime', Copy) {
     into(layout.buildDirectory.dir('libs'))
     rename { "mindustry-server-${mindustryVersion}.jar" }
     dependsOn(tasks.named('downloadMindustry'))
+}
+
+tasks.register('copyMindustryAssets', Copy) {
+    from(zipTree(mindustryDesktopJar)) { include('sprites/**') }
+    into(textureAssetsDir)
+    dependsOn(tasks.named('downloadMindustryDesktop'))
 }
