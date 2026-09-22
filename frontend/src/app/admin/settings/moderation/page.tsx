@@ -123,6 +123,13 @@ export default function ModerationSettingsPage() {
         </div>
 
         <section className="border border-surface-200 p-4">
+          <h3 className="text-sm font-semibold text-surface-800">搜索合规控制</h3>
+          <p className="mt-1 text-xs leading-5 text-surface-500">命中以下词语的搜索会被拒绝并写入账号审计记录，也不会显示在热门搜索中。“开户”为固定拦截词。</p>
+          <label className="mt-4 block text-xs font-medium text-surface-600" htmlFor="search-blocked-keywords">其他禁止搜索的关键词（逗号或换行分隔）</label>
+          <textarea id="search-blocked-keywords" className="mt-1 min-h-20 w-full border border-surface-200 p-2 text-sm" value={values.search_blocked_keywords ?? '开户'} onChange={(e) => setValues((prev) => ({ ...prev, search_blocked_keywords: e.target.value }))} />
+        </section>
+
+        <section className="border border-surface-200 p-4">
           <h3 className="text-sm font-semibold text-surface-800">高风险内容强制审核</h3>
           <p className="mt-1 text-xs leading-5 text-surface-500">即使上方关闭帖子或回帖审核，命中关键词、异常链接数量或重复灌水规则的内容仍会进入审核队列，并保留规则命中审计。</p>
           <label className="mt-4 block text-xs font-medium text-surface-600" htmlFor="content-safety-keywords">额外高风险关键词（逗号或换行分隔）</label>

@@ -1,9 +1,10 @@
-import { IsString, IsOptional, IsInt, Min, Max, IsIn, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsIn, IsNotEmpty, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SearchQueryDto {
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   q: string;
 
   @IsOptional()

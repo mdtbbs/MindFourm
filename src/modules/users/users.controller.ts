@@ -25,6 +25,8 @@ import { toPublicUser, toPublicUsers } from './public-user.util';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp } from '@common/utils/client-context.util';
+import { SearchService } from '../search/search.service';
+import { RateLimit } from '@common/decorators/rate-limit.decorator';
 
 const AVATAR_UPLOAD_DIR = './uploads/avatars';
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
@@ -75,6 +77,7 @@ export class UsersController {
   constructor(
     private readonly usersService: UsersService,
     private readonly logsService: LogsService,
+    private readonly searchService: SearchService,
   ) {}
 
   @Get('me')
@@ -163,12 +166,17 @@ export class UsersController {
   }
 
   @Get('search')
-  async searchUsers(@Query('q') query?: string, @Query('limit') limit?: number) {
+  @UseGuards(JwtAuthGuard)
+  @RateLimit({ max: 30, window: 60 })
+  async searchUsers(@Query('q') query: string | undefined, @Query('limit') limit: number | undefined, @Req() req: any) {
     if (!query) {
       return [];
     }
 
-    return toPublicUsers(await this.usersService.searchByUsername(query, limit || 10));
+    return this.searchService.withSearchAudit(req.user, query, async (normalized) => {
+      const value = toPublicUsers(await this.usersService.searchByUsername(normalized, limit || 10));
+      return { value, resultsCount: value.length };
+    });
   }
 
   @Get(':id')

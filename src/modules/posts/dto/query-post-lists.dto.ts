@@ -1,4 +1,4 @@
-import { IsInt, IsOptional, IsString, Max, MinLength, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, MaxLength, MinLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /**
@@ -46,6 +46,7 @@ export class QueryPostPageDto {
 export class QueryPostSearchDto {
   @IsString()
   @MinLength(1)
+  @MaxLength(255)
   q!: string;
 
   @IsOptional()

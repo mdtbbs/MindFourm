@@ -8,9 +8,10 @@ import { Reply } from '../../entities/reply.entity';
 import { SettingsModule } from '../settings/settings.module';
 import { LogsModule } from '../logs/logs.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
+import { SearchModule } from '../search/search.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Post, Reply]), SettingsModule, LogsModule, AdminNotificationsModule],
+  imports: [TypeOrmModule.forFeature([User, Post, Reply]), SettingsModule, LogsModule, AdminNotificationsModule, SearchModule],
   providers: [UsersService],
   exports: [UsersService],
   controllers: [UsersController],

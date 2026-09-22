@@ -49,6 +49,7 @@ import { BackfillResourcePublicIds1720000054000 } from './1720000054000-Backfill
 import { CreateResourceLikes1720000055000 } from './1720000055000-CreateResourceLikes';
 import { RepairResourceFilenames1720000056000 } from './1720000056000-RepairResourceFilenames';
 import { RepairMindustryRendererBuildSentinel1720000057000 } from './1720000057000-RepairMindustryRendererBuildSentinel';
+import { CreateSearchAudits1720000058000 } from './1720000058000-CreateSearchAudits';
 
 /**
  * Migrations in run order.
@@ -109,4 +110,5 @@ export const migrations = [
   CreateResourceLikes1720000055000,
   RepairResourceFilenames1720000056000,
   RepairMindustryRendererBuildSentinel1720000057000,
+  CreateSearchAudits1720000058000,
 ];

@@ -500,6 +500,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'require_avatar_approval', value: 'true', category: 'moderation', description: 'Require avatar approval before applying' },
       { key: 'auto_approve_trusted', value: 'false', category: 'moderation', description: 'Auto-approve trusted users' },
       { key: 'content_safety_keywords', value: '', category: 'moderation', description: 'Additional high-risk terms, comma or newline separated' },
+      { key: 'search_blocked_keywords', value: '开户', category: 'moderation', description: 'Search terms rejected before search and excluded from popular searches' },
       { key: 'content_safety_review_threshold', value: '3', category: 'moderation', description: 'Risk score that always requires moderation' },
       { key: 'admin_notifications_enabled', value: 'true', category: 'notifications', description: 'Enable admin notification inbox' },
       { key: 'admin_notifications_realtime_enabled', value: 'true', category: 'notifications', description: 'Enable real-time admin notification delivery' },

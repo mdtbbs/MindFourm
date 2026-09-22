@@ -16,15 +16,19 @@ import { GameVersion } from '@entities/game-version.entity';
 import { KnowledgeArticle } from '@entities/knowledge-article.entity';
 import { DeveloperFeedEntry } from '@entities/developer-feed-entry.entity';
 import { PostSummaryService } from '../posts/post-summary.service';
+import { SettingsModule } from '../settings/settings.module';
+import { SearchAudit } from '@entities/search-audit.entity';
+import { SearchAuditController } from './search-audit.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       Post, User, SearchHistory, PopularSearch, PostTag, Reply, Resource,
-      GroupMember, GameServer, GameVersion, KnowledgeArticle, DeveloperFeedEntry,
+      GroupMember, GameServer, GameVersion, KnowledgeArticle, DeveloperFeedEntry, SearchAudit,
     ]),
+    SettingsModule,
   ],
-  controllers: [SearchController, SearchV1Controller],
+  controllers: [SearchController, SearchV1Controller, SearchAuditController],
   providers: [SearchService, PostSummaryService],
   exports: [SearchService],
 })

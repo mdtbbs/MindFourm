@@ -21,6 +21,7 @@ import { PostSummaryService } from './post-summary.service';
 import { PostDetailService } from './post-detail.service';
 import { PostRevisionsService } from './post-revisions.service';
 import { PostActivityService } from './post-activity.service';
+import { SearchModule } from '../search/search.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { PostActivityService } from './post-activity.service';
     NotificationsModule,
     AdminNotificationsModule,
     SettingsModule,
+    SearchModule,
     LogsModule,
     TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision]),
   ],

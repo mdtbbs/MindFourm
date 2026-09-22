@@ -66,7 +66,14 @@ export default async function SearchPage({
   let result: UnifiedSearchResult;
   try {
     result = query ? await fetchUnified(query) : emptyResult;
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('(401)')) {
+      return <ErrorState title="请登录后搜索" description="搜索功能仅对已登录账号开放；登录后每次搜索都会留存审计记录。" action={{ label: '登录', href: '/login?redirect=%2Fsearch' }} />;
+    }
+    if (message.includes('(400)')) {
+      return <ErrorState title="该关键词不可搜索" description="这个搜索词不符合站点的搜索规则，请更换关键词。" action={{ label: '返回搜索', href: '/search' }} />;
+    }
     return <ErrorState title="搜索失败" description="暂时无法获取搜索结果，请稍后重试。" action={{ label: '返回搜索', href: '/search' }} />;
   }
 

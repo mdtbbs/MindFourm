@@ -33,6 +33,7 @@ import { OptionalAuth } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
+import { SearchService } from '../search/search.service';
 
 @Controller('posts')
 export class PostsController {
@@ -40,6 +41,7 @@ export class PostsController {
     private readonly postsService: PostsService,
     private readonly postRevisionsService: PostRevisionsService,
     private readonly logsService: LogsService,
+    private readonly searchService: SearchService,
   ) {}
 
   /**
@@ -83,12 +85,16 @@ export class PostsController {
    * GET /api/posts/search - Search posts
    */
   @Get('search')
-  async search(@Query() query: QueryPostSearchDto) {
-    const term = query.q.trim();
-    if (!term) {
+  @UseGuards(JwtAuthGuard)
+  @RateLimit({ max: 30, window: 60 })
+  async search(@Query() query: QueryPostSearchDto, @Req() req: any) {
+    if (!query.q.trim()) {
       return [];
     }
-    return this.postsService.search(term, query.limit ?? 20);
+    return this.searchService.withSearchAudit(req.user, query.q, async (term) => {
+      const value = await this.postsService.search(term, query.limit ?? 20);
+      return { value, resultsCount: value.length };
+    });
   }
 
   /**

@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
 import { SearchHistory } from '@entities/search-history.entity';
 import { PopularSearch } from '@entities/popular-search.entity';
+import { SearchAudit } from '@entities/search-audit.entity';
 import { Resource } from '@entities/resource.entity';
 import { GroupMember } from '@entities/group-member.entity';
 import { GameServer } from '@entities/game-server.entity';
@@ -14,8 +15,11 @@ import { DeveloperFeedEntry } from '@entities/developer-feed-entry.entity';
 import { RedisService } from '../../database/redis.service';
 import { escapeLike } from '../../common/utils/search.util';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
+import { SettingsService } from '../settings/settings.service';
 
 export type SearchViewer = { id: number; role: string } | undefined;
+export type SearchActor = { id: number; username?: string; role?: string };
+export type AuditedSearchResult<T> = { value: T; resultsCount: number };
 
 export type UnifiedSearchGroups = {
   users: Array<{ id: number; username: string; avatar_url: string | null; bio: string | null }>;
@@ -54,7 +58,100 @@ export class SearchService {
     private developerFeedRepository: Repository<DeveloperFeedEntry>,
     private redisService: RedisService,
     private postSummaryService: PostSummaryService,
+    @Optional()
+    @InjectRepository(SearchAudit)
+    private searchAuditRepo?: Repository<SearchAudit>,
+    @Optional()
+    private settingsService?: SettingsService,
   ) {}
+
+  /** Persist the actor and query before executing any search work. */
+  async withSearchAudit<T>(
+    actor: SearchActor,
+    rawQuery: string,
+    execute: (query: string) => Promise<AuditedSearchResult<T>>,
+  ): Promise<T> {
+    if (!this.searchAuditRepo) {
+      throw new Error('Search audit storage is unavailable');
+    }
+    const query = String(rawQuery ?? '').trim().slice(0, 255);
+    const normalized = query.toLowerCase();
+    const audit = await this.searchAuditRepo.save(this.searchAuditRepo.create({
+      user_id: actor.id,
+      username_snapshot: String(actor.username || `user-${actor.id}`).slice(0, 100),
+      query: normalized,
+      status: 'started',
+      blocked_reason: null,
+      results_count: null,
+      completed_at: null,
+    }));
+    let finalized = false;
+
+    try {
+      if (!normalized) {
+        await this.searchAuditRepo.update(audit.id, {
+          status: 'blocked',
+          blocked_reason: 'empty_query',
+          completed_at: new Date(),
+        });
+        finalized = true;
+        throw new BadRequestException({ code: 'SEARCH_QUERY_REQUIRED', message: '请输入搜索关键词' });
+      }
+
+      const blockedTerm = (await this.getBlockedSearchTerms())
+        .find((term) => this.matchesBlockedTerm(normalized, term));
+      if (blockedTerm) {
+        await this.searchAuditRepo.update(audit.id, {
+          status: 'blocked',
+          blocked_reason: 'policy_keyword',
+          completed_at: new Date(),
+        });
+        finalized = true;
+        throw new BadRequestException({
+          code: 'SEARCH_TERM_BLOCKED',
+          message: '该搜索词暂不可用',
+        });
+      }
+
+      const { value, resultsCount } = await execute(query);
+      await this.searchAuditRepo.update(audit.id, {
+        status: 'completed',
+        results_count: resultsCount,
+        completed_at: new Date(),
+      });
+      finalized = true;
+      await this.recordSearch(actor.id, normalized, resultsCount);
+      return value;
+    } catch (error) {
+      if (!finalized) {
+        await this.searchAuditRepo.update(audit.id, {
+          status: 'failed',
+          completed_at: new Date(),
+        }).catch((auditError) => {
+          this.logger.error(`Failed to finalize search audit ${audit.id}: ${(auditError as Error).message}`);
+        });
+      }
+      throw error;
+    }
+  }
+
+  private async getBlockedSearchTerms(): Promise<string[]> {
+    const configured = await this.settingsService?.get('search_blocked_keywords');
+    const terms = String(configured || '').split(/[\n,，]+/u).map((term) => term.trim()).filter(Boolean);
+    // This term was explicitly identified as prohibited and remains blocked even
+    // if the configurable list is accidentally cleared.
+    return [...new Set(['开户', ...terms])];
+  }
+
+  private matchesBlockedTerm(query: string, term: string): boolean {
+    const compact = (value: string) => value.normalize('NFKC').toLowerCase().replace(/\s+/gu, '');
+    return compact(query).includes(compact(term));
+  }
+
+  private async removeBlockedPopularSearches(queries: string[]): Promise<string[]> {
+    const terms = await this.getBlockedSearchTerms();
+    return queries.filter((query) => !terms.some((term) => this.matchesBlockedTerm(query, term)));
+  }
 
   async searchPosts(
     query: string,
@@ -342,44 +439,38 @@ export class SearchService {
     return tablesWithFTS.includes(table);
   }
 
-  async recordSearch(userId: number | undefined, query: string, resultsCount: number): Promise<void> {
+  async recordSearch(userId: number, query: string, resultsCount: number): Promise<void> {
     const normalized = query.toLowerCase().trim();
     if (!normalized) return;
 
-    // History belongs to a user. The controller used to pass `undefined` here, so
-    // every insert failed on the user_id constraint — and the failure was swallowed
-    // by an empty catch, leaving GET /api/search/history permanently empty.
-    if (userId) {
-      this.searchHistoryRepo.save({
-        user_id: userId,
-        query: normalized,
-        search_type: 'global',
-        results_count: resultsCount,
-      }).catch((error) => {
-        this.logger.warn(`Failed to record search history: ${(error as Error).message}`);
-      });
-    }
+    this.searchHistoryRepo.save({
+      user_id: userId,
+      query: normalized,
+      search_type: 'global',
+      results_count: resultsCount,
+    }).catch((error) => {
+      this.logger.warn(`Failed to record search history: ${(error as Error).message}`);
+    });
 
-    // Popularity is an aggregate, so anonymous searches count towards it too.
     this.redisService.zIncrBy('search:popular', 1, normalized).catch((error) => {
       this.logger.warn(`Failed to update popular searches: ${(error as Error).message}`);
     });
   }
 
   async getPopularSearches(limit: number = 10): Promise<string[]> {
-    // Try cache first
+    // Filter even cached values so a newly blocked term disappears immediately.
     const cached = await this.redisService.get('search:popular:cached');
     if (cached) {
-      return JSON.parse(cached);
+      return (await this.removeBlockedPopularSearches(JSON.parse(cached))).slice(0, limit);
     }
 
-    const popular = await this.redisService.zRevRange('search:popular', 0, limit - 1);
+    const popular = await this.redisService.zRevRange('search:popular', 0, -1);
+    const visible = (await this.removeBlockedPopularSearches(popular)).slice(0, limit);
 
-    // Cache for 5 minutes
-    this.redisService.set('search:popular:cached', JSON.stringify(popular), 300)
+    this.redisService.set('search:popular:cached', JSON.stringify(visible), 300)
       .catch(() => {});
 
-    return popular;
+    return visible;
   }
 
   async getSearchHistory(userId: number, limit: number = 10): Promise<SearchHistory[]> {
@@ -388,6 +479,29 @@ export class SearchService {
       order: { created_at: 'DESC' },
       take: limit,
     });
+  }
+
+  async getSearchAudits(query: string | undefined, page = 1, limit = 50) {
+    if (!this.searchAuditRepo) {
+      throw new Error('Search audit storage is unavailable');
+    }
+    const safePage = Math.max(1, Math.floor(page) || 1);
+    const safeLimit = Math.max(1, Math.min(100, Math.floor(limit) || 50));
+    const qb = this.searchAuditRepo.createQueryBuilder('audit')
+      .select([
+        'audit.id', 'audit.user_id', 'audit.username_snapshot', 'audit.query',
+        'audit.status', 'audit.blocked_reason', 'audit.results_count',
+        'audit.created_at', 'audit.completed_at',
+      ])
+      .orderBy('audit.created_at', 'DESC')
+      .addOrderBy('audit.id', 'DESC');
+    if (query?.trim()) {
+      qb.andWhere('audit.query LIKE :query', {
+        query: `%${escapeLike(query.trim().toLowerCase())}%`,
+      });
+    }
+    const [items, total] = await qb.skip((safePage - 1) * safeLimit).take(safeLimit).getManyAndCount();
+    return { items, total, page: safePage, limit: safeLimit };
   }
 
   async clearSearchHistory(userId: number): Promise<void> {

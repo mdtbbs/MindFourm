@@ -57,6 +57,7 @@ import { EmailLog } from './email-log.entity';
 // Search
 import { SearchHistory } from './search-history.entity';
 import { PopularSearch } from './popular-search.entity';
+import { SearchAudit } from './search-audit.entity';
 
 // Resource Ratings
 import { ResourceRating } from './resource-rating.entity';
@@ -161,6 +162,7 @@ export const entities = [
   // Search
   SearchHistory,
   PopularSearch,
+  SearchAudit,
   // Resource Ratings
   ResourceRating,
   // Moderation
@@ -239,6 +241,7 @@ export {
   // Search
   SearchHistory,
   PopularSearch,
+  SearchAudit,
   // Resource Ratings
   ResourceRating,
   // Moderation
