@@ -19,6 +19,7 @@ fi
 
 rm -rf "$classes_dir"
 mkdir -p "$classes_dir" "$releases_dir"
+chmod 755 "$runtime_dir" "$releases_dir"
 javac --release 17 -cp "$server_jar" -d "$classes_dir" \
   "$renderer_dir/src/main/java/cn/mdtbbs/renderer/MapRenderer.java"
 if [[ -d "$renderer_dir/src/main/resources" ]]; then
@@ -30,6 +31,8 @@ trap 'rm -rf "$stage_dir"' EXIT
 jar --create --file "$stage_dir/mindfourm-mindustry-renderer.jar" \
   --main-class cn.mdtbbs.renderer.MapRenderer \
   -C "$classes_dir" .
+chmod 644 "$stage_dir/mindfourm-mindustry-renderer.jar"
+chmod 755 "$stage_dir"
 ln -s "$server_jar" "$stage_dir/mindustry-server.jar"
 
 release_dir="$releases_dir/$revision"
