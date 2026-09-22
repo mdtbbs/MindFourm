@@ -40,7 +40,6 @@ import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.HexFormat;
 import java.util.concurrent.Executors;
@@ -109,7 +108,7 @@ public final class MapRenderer {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
         if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
         try {
-            Map<String, String> query = queryParameters(exchange.getRequestURI().getRawQuery());
+            java.util.Map<String, String> query = queryParameters(exchange.getRequestURI().getRawQuery());
             String items = contentEntries(query.getOrDefault("items", ""), ContentType.item);
             String blocks = contentEntries(query.getOrDefault("blocks", ""), ContentType.block);
             send(exchange, 200, "{\"items\":" + items + ",\"blocks\":" + blocks + "}");
@@ -156,7 +155,7 @@ public final class MapRenderer {
         return properties;
     }
 
-    private static Map<String, String> queryParameters(String rawQuery) {
+    private static java.util.Map<String, String> queryParameters(String rawQuery) {
         HashMap<String, String> result = new HashMap<>();
         if (rawQuery == null || rawQuery.isBlank()) return result;
         for (String parameter : rawQuery.split("&")) {
