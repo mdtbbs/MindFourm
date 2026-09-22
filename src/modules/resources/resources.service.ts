@@ -499,6 +499,10 @@ export class ResourcesService {
       supported_version,
       compatibility,
       resource_kind,
+      planet,
+      block,
+      width,
+      height,
     } = query;
     const scope = options.scope ?? 'public';
     const sort = validateResourceSort(query.sort);
@@ -525,6 +529,31 @@ export class ResourcesService {
 
       if (resource_kind?.trim()) {
         qb.andWhere('resource.resource_kind = :resourceKind', { resourceKind: resource_kind.trim() });
+      }
+
+      if (planet?.trim()) {
+        qb.andWhere(
+          `JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.planet')) = :resourcePlanet`,
+          { resourcePlanet: planet.trim() },
+        );
+      }
+      if (block?.trim()) {
+        qb.andWhere(
+          `JSON_SEARCH(resource.renderer_metadata_json, 'one', :resourceBlock, NULL, '$.block_types[*].name') IS NOT NULL`,
+          { resourceBlock: block.trim() },
+        );
+      }
+      if (width !== undefined) {
+        qb.andWhere(
+          `CAST(JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.width')) AS UNSIGNED) = :resourceWidth`,
+          { resourceWidth: width },
+        );
+      }
+      if (height !== undefined) {
+        qb.andWhere(
+          `CAST(JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.height')) AS UNSIGNED) = :resourceHeight`,
+          { resourceHeight: height },
+        );
       }
 
       // These fields are normalised arrays in metadata_json. JSON_CONTAINS
@@ -664,22 +693,31 @@ export class ResourcesService {
     };
   }
 
-  async getFilterOptions(): Promise<{ supported_versions: string[]; compatibility: string[] }> {
+  async getFilterOptions(): Promise<{ supported_versions: string[]; compatibility: string[]; planets: string[] }> {
     const rows = await this.resourceRepository
       .createQueryBuilder('resource')
       .leftJoin('resource.category', 'category')
       .select('resource.metadata_json', 'metadata_json')
+      .addSelect('resource.renderer_metadata_json', 'renderer_metadata_json')
       .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
       .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
-      .getRawMany<{ metadata_json: unknown }>();
+      .getRawMany<{ metadata_json: unknown; renderer_metadata_json: unknown }>();
 
     const supportedVersions = new Set<string>();
     const compatibility = new Set<string>();
+    const planets = new Set<string>();
     for (const row of rows) {
       const metadata = normalizeResourceMetadata(row.metadata_json);
       metadata.supported_versions.forEach((value) => supportedVersions.add(value));
       metadata.compatibility.forEach((value) => compatibility.add(value));
+      const renderer = typeof row.renderer_metadata_json === 'string'
+        ? (() => { try { return JSON.parse(row.renderer_metadata_json as string); } catch { return {}; } })()
+        : row.renderer_metadata_json;
+      if (renderer && typeof renderer === 'object' && !Array.isArray(renderer)) {
+        const planet = (renderer as Record<string, unknown>).planet;
+        if (typeof planet === 'string' && planet.trim()) planets.add(planet.trim());
+      }
     }
 
     // A failed compatibility query must not hide legacy filter options during
@@ -705,6 +743,7 @@ export class ResourcesService {
     return {
       supported_versions: Array.from(supportedVersions).sort((a, b) => a.localeCompare(b, 'zh-CN')),
       compatibility: Array.from(compatibility).sort((a, b) => a.localeCompare(b, 'zh-CN')),
+      planets: Array.from(planets).sort((a, b) => a.localeCompare(b, 'zh-CN')),
     };
   }
 

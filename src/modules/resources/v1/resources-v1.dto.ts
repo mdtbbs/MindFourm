@@ -108,6 +108,16 @@ export type V1MapMetadata = {
   build: number | null;
   planets: string[];
   game_modes: string[];
+  tags: string[];
+  teams: string[];
+  rules: Record<string, unknown>;
+  waves: boolean | null;
+  wave_groups: unknown[];
+  banned_blocks: string[];
+  banned_units: string[];
+  core_count: number | null;
+  cores: unknown[];
+  core_teams: string[];
   required_mods: string[];
 };
 
@@ -117,7 +127,16 @@ export type V1SchematicMetadata = {
   width: number | null;
   height: number | null;
   blocks: number | null;
+  block_types: unknown[];
+  block_positions: unknown[];
+  block_positions_truncated: boolean;
   requirements: unknown[];
+  power_production: number | null;
+  power_consumption: number | null;
+  net_power: number | null;
+  planet: string | null;
+  labels: string[];
+  required_mods: string[];
 };
 
 export type V1ModMetadata = {

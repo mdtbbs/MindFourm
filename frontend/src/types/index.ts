@@ -467,7 +467,7 @@ export interface Resource {
   metadata?: ResourceDetailMetadata;
   renderer_status?: 'processing' | 'ready' | 'failed' | 'unavailable' | null;
   renderer_error_code?: string | null;
-  renderer_metadata?: Record<string, unknown> | null;
+  renderer_metadata?: MindustryRendererMetadata | Record<string, unknown> | null;
   preview_url?: string | null;
   favorite_count?: number;
   is_favorited?: boolean;
@@ -488,6 +488,40 @@ export interface ResourceDetailMetadata {
   game_modes: string[];
   required_mods: string[];
   changelog: string | null;
+}
+
+export interface MindustryRendererMetadata {
+  name?: string;
+  author?: string;
+  description?: string;
+  width?: number;
+  height?: number;
+  spawns?: number;
+  version?: number;
+  build?: number;
+  planet?: string;
+  game_modes?: string[];
+  teams?: string[];
+  tags?: string[];
+  mod_dependencies?: string[];
+  waves?: boolean;
+  wave_groups?: Array<Record<string, unknown>>;
+  banned_blocks?: string[];
+  banned_units?: string[];
+  core_count?: number;
+  cores?: Array<Record<string, unknown>>;
+  core_teams?: string[];
+  rules?: Record<string, unknown>;
+  blocks?: number;
+  block_count?: number;
+  block_types?: Array<{ name?: string; count?: number }>;
+  block_positions?: Array<{ block?: string; x?: number; y?: number; rotation?: number; config?: unknown }>;
+  block_positions_truncated?: boolean;
+  requirements?: Array<{ item?: string; amount?: number }>;
+  power_production?: number;
+  power_consumption?: number;
+  net_power?: number;
+  labels?: string[];
 }
 
 export interface ResourceCategory {

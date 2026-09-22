@@ -17,6 +17,7 @@ const RESOURCES_DESCRIPTION = "浏览和下载社区贡献的资源、模组和�
 type ResourceFilterOptions = {
   supported_versions: string[];
   compatibility: string[];
+  planets: string[];
 };
 
 export async function generateMetadata({
@@ -51,6 +52,7 @@ async function fetchData(params: {
   supported_version?: string;
   compatibility?: string;
   resource_kind?: string;
+  planet?: string;
 }) {
   const qs = new URLSearchParams();
   qs.set("limit", "30");
@@ -62,6 +64,7 @@ async function fetchData(params: {
     qs.set("supported_version", params.supported_version);
   if (params.compatibility) qs.set("compatibility", params.compatibility);
   if (params.resource_kind) qs.set("resource_kind", params.resource_kind);
+  if (params.planet) qs.set("planet", params.planet);
 
   const [resourcesResult, resourceCategories, filterOptions] =
     await Promise.all([
@@ -81,7 +84,7 @@ async function fetchData(params: {
       }),
       fetchApiData<ResourceFilterOptions>("/api/resources/filter-options", {
         init: { next: { revalidate: 300 } },
-        fallback: { supported_versions: [], compatibility: [] },
+        fallback: { supported_versions: [], compatibility: [], planets: [] },
         throwOnError: false,
       }),
     ]);
@@ -106,6 +109,7 @@ export default async function ResourcesPage({
     supported_version?: string;
     compatibility?: string;
     resource_kind?: string;
+    planet?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -189,6 +193,7 @@ export default async function ResourcesPage({
           initialResourceKind={params.resource_kind}
           supportedVersions={filterOptions.supported_versions}
           compatibilityOptions={filterOptions.compatibility}
+          planets={filterOptions.planets}
         />
 
         {/* Resource list */}
@@ -219,6 +224,7 @@ export default async function ResourcesPage({
               supportedVersion={params.supported_version}
               compatibility={params.compatibility}
               resourceKind={params.resource_kind}
+              planet={params.planet}
             />
           </div>
         )}

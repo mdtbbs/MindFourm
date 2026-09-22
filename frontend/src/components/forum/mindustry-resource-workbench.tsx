@@ -25,10 +25,10 @@ const copy: Record<Kind, { title: string; short: string; extension: string; acti
 
 function displayMetadata(metadata: Record<string, unknown> | null): Array<[string, string]> {
   if (!metadata) return [];
-  const labels: Record<string, string> = { name: '名称', author: '作者', width: '宽度', height: '高度', spawns: '出生点', blocks: '方块数', version: '版本', build: '构建号' };
+  const labels: Record<string, string> = { name: '名称', author: '作者', width: '宽度', height: '高度', spawns: '出生点', blocks: '方块数', version: '文件版本', build: 'Mindustry Build', tags: '自动标签' };
   return Object.entries(metadata)
-    .filter(([key, value]) => labels[key] && (typeof value === 'string' || typeof value === 'number'))
-    .map(([key, value]) => [labels[key], String(value)]);
+    .filter(([key, value]) => labels[key] && (typeof value === 'string' || typeof value === 'number' || (key === 'tags' && Array.isArray(value))))
+    .map(([key, value]) => [labels[key], Array.isArray(value) ? value.join('、') : String(value)]);
 }
 
 export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
@@ -54,6 +54,16 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
 
   const resetPreview = () => setPreview(null);
   const usePastedCode = kind === 'schematic' && schematicSource === 'paste';
+  const selectFile = (candidate: File | undefined) => {
+    if (!candidate) return;
+    if (!candidate.name.toLowerCase().endsWith(text.extension)) {
+      setError(`仅支持 ${text.extension} 文件`);
+      return;
+    }
+    setFile(candidate);
+    setError(null);
+    resetPreview();
+  };
 
   const generatePreview = async () => {
     if (usePastedCode && !schematicCode.trim()) {
@@ -71,7 +81,14 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       formData.append('resource_kind', kind);
       if (usePastedCode) formData.append('schematic_code', schematicCode.trim());
       else if (file) formData.append('file', file);
-      setPreview(await resourceApi.previewDraft(formData));
+      const nextPreview = await resourceApi.previewDraft(formData);
+      setPreview(nextPreview);
+      const parsed = nextPreview.metadata || {};
+      if (!title.trim() && typeof parsed.name === 'string' && parsed.name.trim()) setTitle(parsed.name.trim());
+      if (!description.trim() && typeof parsed.description === 'string' && parsed.description.trim()) setDescription(parsed.description.trim());
+      // This is the resource release label, not a guessed Mindustry build.
+      // The renderer deliberately returns no build for files without a marker.
+      if (!version.trim()) setVersion(typeof parsed.build === 'number' && parsed.build > 1 ? `Build ${parsed.build}` : '未标注');
     } catch (err) {
       setPreview(null);
       setError(err instanceof Error ? err.message : '预览生成失败');
@@ -82,8 +99,8 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!title.trim() || !version.trim()) {
-      setError('请填写标题和资源版本');
+    if (!title.trim()) {
+      setError('请填写标题');
       return;
     }
     if (!preview) {
@@ -95,7 +112,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
     try {
       const formData = new FormData();
       formData.append('title', title.trim());
-      formData.append('version', version.trim());
+      formData.append('version', version.trim() || '未标注');
       formData.append('resource_type', 'upload');
       formData.append('resource_kind', kind);
       formData.append('preview_draft_id', preview.id);
@@ -141,11 +158,11 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
           )}
 
           {!usePastedCode ? (
-            <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-5 text-center hover:border-[var(--primary)]/60">
+            <label onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); selectFile(event.dataTransfer.files?.[0]); }} className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-5 text-center hover:border-[var(--primary)]/60">
               <Upload className="mb-2 h-7 w-7 text-[var(--primary)]" />
               <span className="text-sm font-medium text-[var(--text)]">{file?.name || `选择 ${text.extension} 文件`}</span>
               <span className="mt-1 text-xs text-[var(--text-muted)]">最大 20 MB，文件不会在提交审核前公开</span>
-              <input type="file" accept={text.extension} className="hidden" onChange={(event) => { setFile(event.target.files?.[0] || null); resetPreview(); }} />
+              <input type="file" accept={text.extension} className="hidden" onChange={(event) => selectFile(event.target.files?.[0])} />
             </label>
           ) : (
             <div>
@@ -163,7 +180,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
             <h2 className="mb-4 text-base font-semibold text-[var(--text)]">2. 补充资源信息</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label={kind === 'map' ? '地图名称 *' : '蓝图名称 *'} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
-              <Input label="资源版本 *" value={version} onChange={(event) => setVersion(event.target.value)} placeholder="例如 v158 / 1.0" maxLength={50} required />
+              <Input label="资源版本（可选）" value={version} onChange={(event) => setVersion(event.target.value)} placeholder="未标注" maxLength={50} />
             </div>
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">短介绍</label>
             <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} className="mt-1 min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder="说明玩法、用途或使用方式" />

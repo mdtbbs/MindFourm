@@ -52,6 +52,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const [userRating, setUserRating] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [schematicCopied, setSchematicCopied] = useState(false);
 
   const metadata = resource.metadata;
   const rendererMetadata = resource.renderer_metadata && typeof resource.renderer_metadata === 'object'
@@ -62,7 +63,21 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const renderedWidth = typeof rendererMetadata.width === 'number' ? rendererMetadata.width : null;
   const renderedHeight = typeof rendererMetadata.height === 'number' ? rendererMetadata.height : null;
   const renderedSpawns = typeof rendererMetadata.spawns === 'number' ? rendererMetadata.spawns : null;
-  const renderedBlocks = typeof rendererMetadata.blocks === 'number' ? rendererMetadata.blocks : null;
+  const renderedBlocks = typeof rendererMetadata.block_count === 'number'
+    ? rendererMetadata.block_count
+    : typeof rendererMetadata.blocks === 'number' ? rendererMetadata.blocks : null;
+  const renderedBuild = typeof rendererMetadata.build === 'number' && rendererMetadata.build > 1
+    ? rendererMetadata.build : null;
+  const blockTypes = Array.isArray(rendererMetadata.block_types)
+    ? rendererMetadata.block_types.filter((item): item is { name?: string; count?: number } => Boolean(item && typeof item === 'object'))
+    : [];
+  const requirements = Array.isArray(rendererMetadata.requirements)
+    ? rendererMetadata.requirements.filter((item): item is { item?: string; amount?: number } => Boolean(item && typeof item === 'object'))
+    : [];
+  const displayTags = [...new Set([
+    ...(metadata?.tags || []),
+    ...(Array.isArray(rendererMetadata.tags) ? rendererMetadata.tags.filter((item): item is string => typeof item === 'string') : []),
+  ])];
   const gallery = useMemo(() => {
     const all = [resource.preview_url, metadata?.cover_image_url, ...(metadata?.gallery_images || [])].filter(Boolean) as string[];
     return [...new Set(all)];
@@ -72,11 +87,8 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const primaryChecksum = primaryVersion?.checksum || resource.content_hash;
   const displayedSupportedVersions = useMemo(() => {
     if (metadata?.supported_versions?.length) return metadata.supported_versions;
-    const version = resource.version || primaryVersion?.version;
-    if (!version) return [];
-    const major = resource.title.match(/\bv(\d+)\b/i)?.[1];
-    return [major ? `v${major} / Build ${version}` : `Build ${version}`];
-  }, [metadata?.supported_versions, primaryVersion?.version, resource.title, resource.version]);
+    return renderedBuild === null ? [] : [`Build ${renderedBuild}`];
+  }, [metadata?.supported_versions, renderedBuild]);
   const displayedCompatibility = useMemo(() => {
     if (metadata?.compatibility?.length) return metadata.compatibility;
     const source = `${resource.title}\n${resource.description || ''}`.toLowerCase();
@@ -89,6 +101,48 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const copyChecksum = async (checksum: string) => {
     await navigator.clipboard.writeText(checksum);
     showSuccess('SHA-256 已复制');
+  };
+
+  const copySchematicCode = async () => {
+    if (!isSchematic) return;
+    try {
+      const response = await fetch(primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl, {
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error('蓝图文件暂时无法读取');
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+      }
+      const code = btoa(binary);
+      if (!code.startsWith('bXNja')) throw new Error('文件不是可复制的 Mindustry 蓝图');
+      let copiedToClipboard = false;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(code);
+          copiedToClipboard = true;
+        }
+      } catch { /* use the legacy fallback below */ }
+      if (!copiedToClipboard) {
+        const textarea = document.createElement('textarea');
+        textarea.value = code;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        copiedToClipboard = document.execCommand('copy');
+        textarea.remove();
+      }
+      if (!copiedToClipboard) throw new Error('当前浏览器禁止访问剪贴板，请下载 .msch 文件导入');
+      setSchematicCopied(true);
+      showSuccess('蓝图代码已复制，可直接在 Mindustry 中导入');
+      window.setTimeout(() => setSchematicCopied(false), 2200);
+    } catch (error) {
+      showSuccess(error instanceof Error ? error.message : '蓝图代码复制失败，请下载 .msch 文件导入');
+    }
   };
 
   useEffect(() => {
@@ -169,8 +223,8 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="p-5 sm:p-8">
           <div className="flex flex-col gap-6 sm:flex-row">
-            <div className="w-full shrink-0 sm:w-52">
-              <div className="relative aspect-[16/10] overflow-hidden rounded-xl bg-gradient-to-br from-[var(--primary)]/80 to-[var(--primary-dark)]">
+            <div className={`w-full shrink-0 ${isMap || isSchematic ? 'sm:w-80' : 'sm:w-52'}`}>
+              <div className={`relative overflow-hidden rounded-xl bg-gradient-to-br from-[var(--primary)]/80 to-[var(--primary-dark)] ${isMap || isSchematic ? 'aspect-[16/10]' : 'aspect-[16/10]'}`}>
                 {gallery[galleryIndex] ? <img src={gallery[galleryIndex]} alt={`${resource.title} 封面`} className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-[var(--primary)]"><Package className="h-14 w-14" /></div>}
                 {gallery.length > 1 && <>
                   <button type="button" onClick={() => setGalleryIndex((galleryIndex - 1 + gallery.length) % gallery.length)} className="absolute left-2 top-1/2 rounded-full bg-black/45 p-1 text-white" aria-label="上一张"><ChevronLeft className="h-4 w-4" /></button>
@@ -192,7 +246,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
                 <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(resource.updated_at || resource.created_at)} 更新</span>
                 <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{resource.download_count || 0} 次下载</span>
               </div>
-              <div className="mt-5 flex flex-wrap gap-2">{(metadata?.tags || []).map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-secondary)]"><Tag className="h-3.5 w-3.5" />{tag}</span>)}</div>
+              <div className="mt-5 flex flex-wrap gap-2">{displayTags.map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-secondary)]"><Tag className="h-3.5 w-3.5" />{tag}</span>)}</div>
               {['map', 'schematic'].includes(resource.resource_kind || '') && resource.renderer_status !== 'ready' && <p className="mt-3 text-sm text-[var(--text-muted)]">{resource.renderer_status === 'processing' ? '正在生成官方 Mindustry 预览图…' : resource.renderer_status === 'failed' ? '预览生成失败，仍可下载原文件。' : '预览服务暂不可用，仍可下载原文件。'}</p>}
             </div>
           </div>
@@ -202,6 +256,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             ) : (
               <a href={primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl} className="inline-flex items-center gap-2 rounded-lg bg-[var(--primary)] px-5 py-2.5 font-semibold text-white transition hover:bg-[var(--primary-dark)]"><Download className="h-5 w-5" />下载 {resource.version || primaryVersion?.version || '资源'}</a>
             )}
+            {isSchematic && <button type="button" onClick={copySchematicCode} className="inline-flex items-center gap-2 rounded-lg border border-[var(--primary)] px-4 py-2.5 font-semibold text-[var(--primary)] transition hover:bg-[var(--primary)]/10"><Clipboard className="h-5 w-5" />{schematicCopied ? '已复制蓝图' : '复制蓝图'}</button>}
             <button type="button" disabled={busy} onClick={toggleFavorite} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${favorite ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${favorite ? 'fill-current' : ''}`} />{favorite ? '已收藏' : '收藏'} <span className="text-xs">{favoriteCount}</span></button>
             <button type="button" disabled={busy} onClick={toggleLike} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${liked ? 'border-rose-300 bg-rose-500/10 text-rose-500' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-rose-500'}`}><Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />{liked ? '已点赞' : '点赞'} <span className="text-xs">{likeCount}</span></button>
             <button type="button" disabled={busy} onClick={toggleSubscription} className={`inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 font-medium transition ${subscribed ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--primary)]'}`}><Bell className={`h-5 w-5 ${subscribed ? 'fill-current' : ''}`} />{subscribed ? '已订阅' : '订阅更新'}</button>
@@ -246,11 +301,38 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
                   <dd className="text-right text-[var(--text)]">{renderedSpawns}</dd>
                 </div>
               )}
+              {isMap && typeof rendererMetadata.author === 'string' && rendererMetadata.author && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">地图作者</dt><dd className="max-w-[180px] truncate text-right text-[var(--text)]">{rendererMetadata.author}</dd></div>
+              )}
+              {isMap && typeof rendererMetadata.planet === 'string' && rendererMetadata.planet && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">星球</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.planet}</dd></div>
+              )}
+              {isMap && Array.isArray(rendererMetadata.game_modes) && rendererMetadata.game_modes.length > 0 && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">游戏模式</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.game_modes.join('、')}</dd></div>
+              )}
+              {isMap && Array.isArray(rendererMetadata.teams) && rendererMetadata.teams.length > 0 && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">队伍</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.teams.join('、')}</dd></div>
+              )}
+              {isMap && typeof rendererMetadata.core_count === 'number' && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">核心</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.core_count} 个{Array.isArray(rendererMetadata.core_teams) && rendererMetadata.core_teams.length ? ` · ${rendererMetadata.core_teams.join('、')}` : ''}</dd></div>
+              )}
               {isSchematic && renderedBlocks !== null && (
                 <div className="flex justify-between gap-3">
                   <dt className="text-[var(--text-muted)]">方块数量</dt>
                   <dd className="text-right text-[var(--text)]">{renderedBlocks}</dd>
                 </div>
+              )}
+              {isSchematic && typeof rendererMetadata.net_power === 'number' && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">净功率</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.net_power.toFixed(2)} / 秒</dd></div>
+              )}
+              {isSchematic && typeof rendererMetadata.planet === 'string' && rendererMetadata.planet && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">星球</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.planet}</dd></div>
+              )}
+              {isSchematic && blockTypes.length > 0 && (
+                <div><dt className="mb-2 text-[var(--text-muted)]">方块组成</dt><dd className="flex flex-wrap gap-2">{blockTypes.slice(0, 24).map((item, index) => <span key={`${item.name || 'block'}-${index}`} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-xs text-[var(--text-secondary)]">{item.name || '未知方块'} × {item.count ?? '?'}</span>)}</dd></div>
+              )}
+              {isSchematic && requirements.length > 0 && (
+                <div><dt className="mb-2 text-[var(--text-muted)]">建造材料</dt><dd className="flex flex-wrap gap-2">{requirements.map((item, index) => <span key={`${item.item || 'item'}-${index}`} className="rounded-md bg-amber-500/10 px-2.5 py-1 text-xs text-amber-700">{item.item || '未知材料'} × {item.amount ?? '?'}</span>)}</dd></div>
               )}
               {isMap && metadata?.planets?.length ? (
                 <div>
@@ -268,6 +350,18 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
                   </dd>
                 </div>
               ) : null}
+              {isMap && Array.isArray(rendererMetadata.mod_dependencies) && rendererMetadata.mod_dependencies.length > 0 ? (
+                <div><dt className="mb-2 text-[var(--text-muted)]">解析到的 Mod 依赖</dt><dd className="flex flex-wrap gap-2">{rendererMetadata.mod_dependencies.map((mod) => <span key={mod} className="rounded-md bg-[var(--bg-secondary)] px-2.5 py-1 text-xs text-[var(--text-secondary)]">{mod}</span>)}</dd></div>
+              ) : null}
+              {isMap && typeof rendererMetadata.waves === 'boolean' && (
+                <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">波次</dt><dd className="text-right text-[var(--text)]">{rendererMetadata.waves ? '启用' : '禁用'}</dd></div>
+              )}
+              {isMap && Array.isArray(rendererMetadata.banned_units) && rendererMetadata.banned_units.length > 0 && (
+                <div><dt className="mb-2 text-[var(--text-muted)]">禁用单位</dt><dd className="text-xs text-[var(--text-secondary)]">{rendererMetadata.banned_units.join('、')}</dd></div>
+              )}
+              {isMap && Array.isArray(rendererMetadata.banned_blocks) && rendererMetadata.banned_blocks.length > 0 && (
+                <div><dt className="mb-2 text-[var(--text-muted)]">禁用方块</dt><dd className="text-xs text-[var(--text-secondary)]">{rendererMetadata.banned_blocks.join('、')}</dd></div>
+              )}
             </dl>
           </section>
         )}

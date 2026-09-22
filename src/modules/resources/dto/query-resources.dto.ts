@@ -58,4 +58,29 @@ export class QueryResourcesDto {
   @IsString()
   @MaxLength(50)
   resource_kind?: string;
+
+  /** Structured map/blueprint filters populated by the official renderer. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  planet?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  block?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(4096)
+  width?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(4096)
+  height?: number;
 }

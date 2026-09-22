@@ -34,6 +34,8 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map.Entry;
 import java.util.HexFormat;
 import java.util.concurrent.Executors;
 
@@ -131,7 +133,13 @@ public final class MapRenderer {
         Path target = target(key);
         PixmapIO.writePng(new Fi(target.toFile()), preview);
         preview.dispose();
-        send(exchange, 200, result("{\"name\":" + quote(map.tags.get("name", "")) + ",\"author\":" + quote(map.tags.get("author", "")) + ",\"description\":" + quote(map.tags.get("description", "")) + ",\"width\":" + map.width + ",\"height\":" + map.height + ",\"spawns\":" + map.spawns + ",\"version\":" + map.version + ",\"build\":" + map.build + "}", key));
+        // The header contains rules, but cores and their positions live in the
+        // loaded tile/build graph. This is kept behind a best-effort boundary:
+        // a valid map preview must remain usable when an old format cannot load
+        // its tile graph in the bundled runtime.
+        boolean tilesLoaded = false;
+        try { MapIO.loadMap(map); tilesLoaded = true; } catch (Throwable ignored) { /* header-only map */ }
+        send(exchange, 200, result(mapMetadata(map, tilesLoaded), key));
     }
 
     private static void renderSchematic(HttpExchange exchange, Path input, String hash) throws IOException {
@@ -155,7 +163,275 @@ public final class MapRenderer {
         for (Schematic.Stile tile : schematic.tiles) drawSchematicTile(image, tile, schematic.height, tileSize, padding);
         String key = previewKey("schematic", hash);
         if (!ImageIO.write(image, "png", target(key).toFile())) throw new IOException("PNG writer unavailable");
-        send(exchange, 200, result("{\"name\":" + quote(schematic.name()) + ",\"description\":" + quote(schematic.description()) + ",\"width\":" + schematic.width + ",\"height\":" + schematic.height + ",\"blocks\":" + schematic.tiles.size + "}", key));
+        send(exchange, 200, result(schematicMetadata(schematic), key));
+    }
+
+    /**
+     * MapIO exposes the map header and Rules object without exposing the tile
+     * grid.  Report only values that come from those objects.  In particular,
+     * build 1 is the default used by older readers when the file carries no
+     * reliable Mindustry build marker, so it is deliberately returned as null.
+     */
+    private static String mapMetadata(Map map, boolean tilesLoaded) {
+        mindustry.game.Rules rules = null;
+        try { rules = map.rules(); } catch (Throwable ignored) { /* optional map rules */ }
+        String planet = rules != null && rules.planet != null ? rules.planet.name : "";
+        String mode = rules != null && rules.modeName != null ? rules.modeName : "";
+        String tags = joinMapTags(map);
+        String dependencies = map.mod != null ? map.mod.name : map.tags.get("mod", "");
+        String teams = teamNames(map);
+        String waves = rules == null ? "null" : Boolean.toString(rules.waves);
+        String rulesJson = rulesJson(rules);
+        String spawnGroups = spawnGroupsJson(rules);
+        String bannedBlocks = rules == null ? "[]" : contentNames(rules.bannedBlocks);
+        String bannedUnits = rules == null ? "[]" : unitNames(rules.bannedUnits);
+        String tileMetadata = mapTileMetadata(map, tilesLoaded);
+        String build = map.build > 1 ? Integer.toString(map.build) : "null";
+        return "{" +
+            "\"name\":" + quote(map.tags.get("name", "")) +
+            ",\"author\":" + quote(map.tags.get("author", "")) +
+            ",\"description\":" + quote(map.tags.get("description", "")) +
+            ",\"width\":" + map.width +
+            ",\"height\":" + map.height +
+            ",\"spawns\":" + map.spawns +
+            ",\"version\":" + map.version +
+            ",\"build\":" + build +
+            ",\"planet\":" + quote(planet) +
+            ",\"game_modes\":" + stringArray(mode) +
+            ",\"teams\":" + stringArray(teams) +
+            ",\"tags\":" + stringArray(tags) +
+            ",\"mod_dependencies\":" + stringArray(dependencies) +
+            ",\"waves\":" + waves +
+            ",\"wave_groups\":" + spawnGroups +
+            ",\"banned_blocks\":" + bannedBlocks +
+            ",\"banned_units\":" + bannedUnits +
+            ",\"rules\":" + rulesJson +
+            ",\"core_count\":" + jsonField(tileMetadata, "core_count", "0") +
+            ",\"cores\":" + jsonField(tileMetadata, "cores", "[]") +
+            ",\"core_teams\":" + jsonField(tileMetadata, "core_teams", "[]") +
+            "}";
+    }
+
+    private static String mapTileMetadata(Map map, boolean tilesLoaded) {
+        if (!tilesLoaded || Vars.world == null || Vars.world.tiles == null || Vars.world.tiles.width != map.width || Vars.world.tiles.height != map.height) {
+            return "{\"core_count\":0,\"cores\":[],\"core_teams\":[]}";
+        }
+        StringBuilder cores = new StringBuilder("[");
+        StringBuilder teams = new StringBuilder("[");
+        java.util.HashSet<String> coreTeams = new java.util.HashSet<>();
+        int[] count = {0};
+        boolean[] firstCore = {true};
+        for (mindustry.world.Tile tile : Vars.world.tiles) {
+            if (!(tile.build instanceof mindustry.world.blocks.storage.CoreBlock.CoreBuild)) continue;
+            mindustry.game.Team team = tile.team();
+            String teamName = team == null ? "" : team.name;
+            if (!firstCore[0]) cores.append(',');
+            firstCore[0] = false;
+            cores.append("{\"x\":").append(tile.x).append(",\"y\":").append(tile.y)
+                .append(",\"team\":").append(quote(teamName)).append('}');
+            coreTeams.add(teamName);
+            count[0]++;
+        }
+        boolean firstTeam = true;
+        for (String team : coreTeams) {
+            if (!firstTeam) teams.append(',');
+            firstTeam = false;
+            teams.append(quote(team));
+        }
+        return "{\"core_count\":" + count[0] + ",\"cores\":" + cores.append(']') + ",\"core_teams\":" + teams.append(']') + "}";
+    }
+
+    private static String jsonField(String json, String key, String fallback) {
+        String marker = "\"" + key + "\":";
+        int start = json.indexOf(marker);
+        if (start < 0) return fallback;
+        start += marker.length();
+        int end = json.indexOf(',', start);
+        if (end < 0) end = json.indexOf('}', start);
+        return end < 0 ? fallback : json.substring(start, end);
+    }
+
+    private static String schematicMetadata(Schematic schematic) {
+        LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
+        StringBuilder positions = new StringBuilder("[");
+        boolean firstPosition = true;
+        int positionLimit = 10000;
+        for (Schematic.Stile tile : schematic.tiles) {
+            String name = tile.block == null ? "unknown" : tile.block.name;
+            counts.put(name, counts.getOrDefault(name, 0) + 1);
+            if (positionLimit-- <= 0) continue;
+            if (!firstPosition) positions.append(',');
+            firstPosition = false;
+            positions.append("{\"block\":").append(quote(name))
+                .append(",\"x\":").append(tile.x)
+                .append(",\"y\":").append(tile.y)
+                .append(",\"rotation\":").append(tile.rotation & 3)
+                .append(",\"config\":").append(configValue(tile.config)).append('}');
+        }
+        positions.append(']');
+
+        StringBuilder blockTypes = new StringBuilder("[");
+        boolean firstType = true;
+        for (Entry<String, Integer> entry : counts.entrySet()) {
+            if (!firstType) blockTypes.append(',');
+            firstType = false;
+            blockTypes.append("{\"name\":").append(quote(entry.getKey()))
+                .append(",\"count\":").append(entry.getValue()).append('}');
+        }
+        blockTypes.append(']');
+
+        StringBuilder requirements = new StringBuilder("[");
+        boolean firstRequirement = true;
+        try {
+            for (mindustry.type.ItemStack stack : schematic.requirements()) {
+                if (!firstRequirement) requirements.append(',');
+                firstRequirement = false;
+                requirements.append("{\"item\":").append(quote(stack.item.name))
+                    .append(",\"amount\":").append(stack.amount).append('}');
+            }
+        } catch (Throwable ignored) { /* requirements are optional for old files */ }
+        requirements.append(']');
+
+        String dependency = schematic.mod == null ? "" : schematic.mod.name;
+        String planet = schematic.tags.get("planet", "");
+        String labels = schematic.labels == null ? "[]" : stringArray(schematic.labels);
+        float production = finite(schematic.powerProduction());
+        float consumption = finite(schematic.powerConsumption());
+        float net = finite(production - consumption);
+        return "{" +
+            "\"name\":" + quote(schematic.name()) +
+            ",\"description\":" + quote(schematic.description()) +
+            ",\"width\":" + schematic.width +
+            ",\"height\":" + schematic.height +
+            ",\"blocks\":" + schematic.tiles.size +
+            ",\"block_count\":" + schematic.tiles.size +
+            ",\"block_types\":" + blockTypes +
+            ",\"block_positions\":" + positions +
+            ",\"block_positions_truncated\":" + (schematic.tiles.size > 10000) +
+            ",\"requirements\":" + requirements +
+            ",\"power_production\":" + number(production) +
+            ",\"power_consumption\":" + number(consumption) +
+            ",\"net_power\":" + number(net) +
+            ",\"planet\":" + quote(planet) +
+            ",\"tags\":" + labels +
+            ",\"labels\":" + labels +
+            ",\"mod_dependencies\":" + stringArray(dependency) +
+            "}";
+    }
+
+    private static String rulesJson(mindustry.game.Rules rules) {
+        if (rules == null) return "{}";
+        return "{\"waves\":" + rules.waves +
+            ",\"wave_timer\":" + rules.waveTimer +
+            ",\"wave_sending\":" + rules.waveSending +
+            ",\"attack_mode\":" + rules.attackMode +
+            ",\"pvp\":" + rules.pvp +
+            ",\"infinite_resources\":" + rules.infiniteResources +
+            ",\"schematics_allowed\":" + rules.schematicsAllowed +
+            ",\"unit_cap\":" + rules.unitCap +
+            ",\"disable_unit_cap\":" + rules.disableUnitCap +
+            ",\"wave_spacing\":" + number(rules.waveSpacing) +
+            ",\"planet\":" + quote(rules.planet == null ? "" : rules.planet.name) + "}";
+    }
+
+    private static String spawnGroupsJson(mindustry.game.Rules rules) {
+        if (rules == null || rules.spawns == null) return "[]";
+        StringBuilder result = new StringBuilder("[");
+        boolean first = true;
+        for (mindustry.game.SpawnGroup group : rules.spawns) {
+            if (!first) result.append(',');
+            first = false;
+            result.append("{\"unit\":").append(quote(group.type == null ? "" : group.type.name))
+                .append(",\"begin\":").append(group.begin)
+                .append(",\"end\":").append(group.end)
+                .append(",\"spacing\":").append(group.spacing)
+                .append(",\"amount\":").append(group.unitAmount)
+                .append(",\"team\":").append(quote(group.team == null ? "" : group.team.name)).append('}');
+        }
+        return result.append(']').toString();
+    }
+
+    private static String contentNames(Iterable<mindustry.world.Block> blocks) {
+        StringBuilder result = new StringBuilder("[");
+        boolean first = true;
+        if (blocks != null) for (mindustry.world.Block block : blocks) {
+            if (!first) result.append(',');
+            first = false;
+            result.append(quote(block.name));
+        }
+        return result.append(']').toString();
+    }
+
+    private static String unitNames(Iterable<mindustry.type.UnitType> units) {
+        StringBuilder result = new StringBuilder("[");
+        boolean first = true;
+        if (units != null) for (mindustry.type.UnitType unit : units) {
+            if (!first) result.append(',');
+            first = false;
+            result.append(quote(unit.name));
+        }
+        return result.append(']').toString();
+    }
+
+    private static String teamNames(Map map) {
+        StringBuilder result = new StringBuilder();
+        boolean[] first = {true};
+        if (map.teams != null) map.teams.each(id -> {
+            mindustry.game.Team team = mindustry.game.Team.get(id);
+            if (team != null) {
+                if (!first[0]) result.append(',');
+                first[0] = false;
+                result.append(team.name);
+            }
+        });
+        return result.toString();
+    }
+
+    private static String joinMapTags(Map map) {
+        StringBuilder result = new StringBuilder();
+        boolean first = true;
+        try {
+            for (String tag : map.extraTags()) {
+                if (tag == null || tag.isBlank()) continue;
+                if (!first) result.append(',');
+                first = false;
+                result.append(tag);
+            }
+        } catch (Throwable ignored) { /* old map formats may not have extra tags */ }
+        return result.toString();
+    }
+
+    private static String configValue(Object config) {
+        if (config == null) return "null";
+        if (config instanceof Number || config instanceof Boolean) return String.valueOf(config);
+        return quote(String.valueOf(config));
+    }
+
+    private static float finite(float value) { return Float.isFinite(value) ? value : 0f; }
+    private static String number(float value) { return Float.isFinite(value) ? Float.toString(value) : "null"; }
+    private static String stringArray(String value) {
+        if (value == null || value.isBlank()) return "[]";
+        String[] values = value.split(",");
+        StringBuilder result = new StringBuilder("[");
+        boolean first = true;
+        for (String item : values) {
+            if (item.isBlank()) continue;
+            if (!first) result.append(',');
+            first = false;
+            result.append(quote(item.trim()));
+        }
+        return result.append(']').toString();
+    }
+    private static String stringArray(arc.struct.Seq<String> values) {
+        StringBuilder result = new StringBuilder("[");
+        boolean first = true;
+        if (values != null) for (String value : values) {
+            if (value == null || value.isBlank()) continue;
+            if (!first) result.append(',');
+            first = false;
+            result.append(quote(value));
+        }
+        return result.append(']').toString();
     }
 
     /** Draw a client-identical block sprite when the official desktop atlas is installed. */

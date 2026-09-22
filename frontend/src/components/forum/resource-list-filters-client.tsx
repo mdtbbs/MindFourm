@@ -17,6 +17,7 @@ interface ResourceFiltersProps {
   initialResourceKind?: string;
   supportedVersions: string[];
   compatibilityOptions: string[];
+  planets: string[];
 }
 
 export default function ResourceFilters({
@@ -30,6 +31,7 @@ export default function ResourceFilters({
   initialResourceKind,
   supportedVersions,
   compatibilityOptions,
+  planets,
 }: ResourceFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -44,6 +46,7 @@ export default function ResourceFilters({
     searchParams?.get("compatibility") || initialCompatibility || "";
   const resourceKind =
     searchParams?.get("resource_kind") || initialResourceKind || "";
+  const planet = searchParams?.get("planet") || "";
 
   // Local search state: only pushes to URL after 300ms debounce or on Enter/blur.
   const [localSearch, setLocalSearch] = useState(urlSearch);
@@ -95,6 +98,7 @@ export default function ResourceFilters({
     supportedVersion ||
     compatibility ||
     resourceKind ||
+    planet ||
     sort !== "created_at",
   );
 
@@ -202,6 +206,14 @@ export default function ResourceFilters({
                 {value}
               </option>
             ))}
+          </select>
+          <select
+            value={planet}
+            onChange={(e) => updateFilters({ planet: e.target.value || null })}
+            className="min-w-0 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-[var(--text)]"
+          >
+            <option value="">全部星球</option>
+            {planets.map((value) => <option key={value} value={value}>{value}</option>)}
           </select>
           <select
             value={compatibility}

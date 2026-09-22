@@ -48,6 +48,7 @@ import { AddResourceRenderState1720000053000 } from './1720000053000-AddResource
 import { BackfillResourcePublicIds1720000054000 } from './1720000054000-BackfillResourcePublicIds';
 import { CreateResourceLikes1720000055000 } from './1720000055000-CreateResourceLikes';
 import { RepairResourceFilenames1720000056000 } from './1720000056000-RepairResourceFilenames';
+import { RepairMindustryRendererBuildSentinel1720000057000 } from './1720000057000-RepairMindustryRendererBuildSentinel';
 
 /**
  * Migrations in run order.
@@ -107,4 +108,5 @@ export const migrations = [
   BackfillResourcePublicIds1720000054000,
   CreateResourceLikes1720000055000,
   RepairResourceFilenames1720000056000,
+  RepairMindustryRendererBuildSentinel1720000057000,
 ];

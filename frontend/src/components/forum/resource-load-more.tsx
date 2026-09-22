@@ -18,6 +18,7 @@ interface ResourceLoadMoreProps {
   supportedVersion?: string;
   compatibility?: string;
   resourceKind?: string;
+  planet?: string;
 }
 
 export default function ResourceLoadMore({
@@ -31,6 +32,7 @@ export default function ResourceLoadMore({
   supportedVersion,
   compatibility,
   resourceKind,
+  planet,
 }: ResourceLoadMoreProps) {
   const [resources, setResources] = useState<Resource[]>(initialResources);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
@@ -53,6 +55,7 @@ export default function ResourceLoadMore({
         supported_version: supportedVersion,
         compatibility,
         resource_kind: resourceKind,
+        planet,
       });
       setResources((prev) => [...prev, ...result.data]);
       setCursor(result.next_cursor);

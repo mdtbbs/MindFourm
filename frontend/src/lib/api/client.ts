@@ -1157,10 +1157,10 @@ export const messageApi = {
 
 // Resource APIs
 export const resourceApi = {
-  getFilterOptions: () => request<{ supported_versions: string[]; compatibility: string[] }>('/api/resources/filter-options'),
-  list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string }) =>
+  getFilterOptions: () => request<{ supported_versions: string[]; compatibility: string[]; planets: string[] }>('/api/resources/filter-options'),
+  list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string; planet?: string; block?: string; width?: number; height?: number }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
-      `/api/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort, tag: params?.tag, supported_version: params?.supported_version, compatibility: params?.compatibility, resource_kind: params?.resource_kind })}`
+      `/api/resources${buildQueryString({ cursor: params?.cursor, limit: params?.limit, category_id: params?.category_id, search: params?.search, sort: params?.sort, tag: params?.tag, supported_version: params?.supported_version, compatibility: params?.compatibility, resource_kind: params?.resource_kind, planet: params?.planet, block: params?.block, width: params?.width, height: params?.height })}`
     ),
   getById: (id: number) =>
     request<Resource>(`/api/resources/${id}`),

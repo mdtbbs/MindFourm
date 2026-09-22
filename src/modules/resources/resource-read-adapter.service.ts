@@ -313,10 +313,29 @@ export class ResourceReadAdapterService {
       height: this.numberValue(renderer.height),
       spawns: this.numberValue(renderer.spawns),
       version: this.numberValue(renderer.version),
-      build: this.numberValue(renderer.build),
-      planets: this.stringList(publisher.planets ?? publisher.planet),
-      game_modes: this.stringList(publisher.game_modes ?? publisher.gamemodes),
-      required_mods: this.stringList(publisher.required_mods),
+      build: this.buildValue(renderer.build),
+      planets: this.uniqueStrings([
+        ...this.stringList(publisher.planets ?? publisher.planet),
+        ...this.stringList(renderer.planet),
+      ]),
+      game_modes: this.uniqueStrings([
+        ...this.stringList(publisher.game_modes ?? publisher.gamemodes),
+        ...this.stringList(renderer.game_modes),
+      ]),
+      tags: this.stringList(renderer.tags ?? publisher.tags),
+      teams: this.stringList(renderer.teams),
+      rules: this.objectValue(renderer.rules),
+      waves: typeof renderer.waves === 'boolean' ? renderer.waves : null,
+      wave_groups: this.safeArray(renderer.wave_groups),
+      banned_blocks: this.stringList(renderer.banned_blocks),
+      banned_units: this.stringList(renderer.banned_units),
+      core_count: this.numberValue(renderer.core_count),
+      cores: this.safeArray(renderer.cores),
+      core_teams: this.stringList(renderer.core_teams),
+      required_mods: this.uniqueStrings([
+        ...this.stringList(publisher.required_mods),
+        ...this.stringList(renderer.mod_dependencies),
+      ]),
     };
   }
 
@@ -327,7 +346,16 @@ export class ResourceReadAdapterService {
       width: this.numberValue(renderer.width),
       height: this.numberValue(renderer.height),
       blocks: this.numberValue(renderer.blocks),
-      requirements: this.safeArray(publisher.requirements),
+      block_types: this.safeArray(renderer.block_types),
+      block_positions: this.safeArray(renderer.block_positions),
+      block_positions_truncated: renderer.block_positions_truncated === true,
+      requirements: this.safeArray(renderer.requirements ?? publisher.requirements),
+      power_production: this.numberValue(renderer.power_production),
+      power_consumption: this.numberValue(renderer.power_consumption),
+      net_power: this.numberValue(renderer.net_power),
+      planet: this.stringValue(renderer.planet),
+      labels: this.stringList(renderer.labels),
+      required_mods: this.stringList(renderer.mod_dependencies),
     };
   }
 
@@ -355,6 +383,17 @@ export class ResourceReadAdapterService {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
 
+  private buildValue(value: unknown): number | null {
+    const number = this.numberValue(value);
+    return number !== null && number > 1 ? number : null;
+  }
+
+  private objectValue(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+  }
+
   private stringList(value: unknown): string[] {
     const values = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
     return values
@@ -366,6 +405,10 @@ export class ResourceReadAdapterService {
 
   private safeArray(value: unknown): unknown[] {
     return Array.isArray(value) ? value.slice(0, 100) : [];
+  }
+
+  private uniqueStrings(values: string[]): string[] {
+    return [...new Set(values)].slice(0, 100);
   }
 
   private toVersionSummary(version: V1VersionDto) {

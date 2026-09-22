@@ -162,10 +162,42 @@ export class ResourcePreviewService {
 
   private safeMetadata(value: unknown): Record<string, unknown> | null {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-    const allowed = ['name', 'author', 'description', 'width', 'height', 'spawns', 'version', 'build', 'blocks', 'labels'];
-    return Object.fromEntries(Object.entries(value).filter(([key, item]) => allowed.includes(key) && (
-      typeof item === 'string' || typeof item === 'number' || Array.isArray(item)
-    )));
+    const allowed = new Set([
+      'name', 'author', 'description', 'width', 'height', 'spawns', 'version', 'build',
+      'planet', 'game_modes', 'teams', 'tags', 'mod_dependencies', 'waves', 'wave_groups',
+      'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'blocks', 'block_count', 'block_types',
+      'block_positions', 'block_positions_truncated', 'requirements', 'power_production',
+      'power_consumption', 'net_power', 'labels',
+    ]);
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) {
+      if (!allowed.has(key)) continue;
+      // Mindustry's map reader uses build 1 as a fallback for files without a
+      // trustworthy build marker. Never persist that sentinel as compatibility.
+      if (key === 'build' && typeof item === 'number' && item <= 1) continue;
+      const safe = this.sanitizeMetadataValue(item);
+      if (safe !== undefined) result[key] = safe;
+    }
+    return result;
+  }
+
+  private sanitizeMetadataValue(value: unknown, depth = 0): unknown {
+    if (depth > 4) return undefined;
+    if (typeof value === 'string') return value.slice(0, 20_000);
+    if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+    if (typeof value === 'boolean' || value === null) return value;
+    if (Array.isArray(value)) {
+      return value.slice(0, 10_000)
+        .map((item) => this.sanitizeMetadataValue(item, depth + 1))
+        .filter((item) => item !== undefined);
+    }
+    if (typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+        .slice(0, 100)
+        .map(([key, item]) => [key.slice(0, 100), this.sanitizeMetadataValue(item, depth + 1)])
+        .filter(([, item]) => item !== undefined));
+    }
+    return undefined;
   }
 
   private safeErrorCode(value: unknown): string {

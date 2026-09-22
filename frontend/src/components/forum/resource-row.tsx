@@ -18,7 +18,9 @@ export default function ResourceRow({ resource }: { resource: Resource }) {
     : {};
   const width = typeof rendererMetadata.width === "number" ? rendererMetadata.width : null;
   const height = typeof rendererMetadata.height === "number" ? rendererMetadata.height : null;
-  const blockCount = typeof rendererMetadata.blocks === "number" ? rendererMetadata.blocks : null;
+  const blockCount = typeof rendererMetadata.block_count === "number"
+    ? rendererMetadata.block_count
+    : typeof rendererMetadata.blocks === "number" ? rendererMetadata.blocks : null;
   const dimensions = width !== null && height !== null ? `${width} × ${height}` : null;
   const visualKind = isMap ? "地图" : isSchematic ? "蓝图" : "资源";
   const resourceHref = `/resources/${resource.id}${resource.slug ? `-${resource.slug}` : ""}`;
