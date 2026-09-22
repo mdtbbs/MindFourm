@@ -1,6 +1,7 @@
 const decorator = () => () => undefined;
 
 jest.mock('@nestjs/common', () => ({
+  Inject: () => () => undefined,
   Injectable: decorator,
   Logger: class Logger { warn = jest.fn(); },
 }));

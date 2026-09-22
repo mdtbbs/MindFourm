@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Post } from '@entities/post.entity';
@@ -15,11 +15,14 @@ import { DeveloperFeedEntry } from '@entities/developer-feed-entry.entity';
 import { RedisService } from '../../database/redis.service';
 import { escapeLike } from '../../common/utils/search.util';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
-import { SettingsService } from '../settings/settings.service';
 
 export type SearchViewer = { id: number; role: string } | undefined;
 export type SearchActor = { id: number; username?: string; role?: string };
 export type AuditedSearchResult<T> = { value: T; resultsCount: number };
+export const SEARCH_SETTINGS_READER = Symbol('SEARCH_SETTINGS_READER');
+export interface SearchSettingsReader {
+  get(key: string): Promise<string | null>;
+}
 
 export type UnifiedSearchGroups = {
   users: Array<{ id: number; username: string; avatar_url: string | null; bio: string | null }>;
@@ -58,11 +61,10 @@ export class SearchService {
     private developerFeedRepository: Repository<DeveloperFeedEntry>,
     private redisService: RedisService,
     private postSummaryService: PostSummaryService,
-    @Optional()
     @InjectRepository(SearchAudit)
     private searchAuditRepo?: Repository<SearchAudit>,
-    @Optional()
-    private settingsService?: SettingsService,
+    @Inject(SEARCH_SETTINGS_READER)
+    private settingsReader?: SearchSettingsReader,
   ) {}
 
   /** Persist the actor and query before executing any search work. */
@@ -136,7 +138,7 @@ export class SearchService {
   }
 
   private async getBlockedSearchTerms(): Promise<string[]> {
-    const configured = await this.settingsService?.get('search_blocked_keywords');
+    const configured = await this.settingsReader?.get('search_blocked_keywords');
     const terms = String(configured || '').split(/[\n,，]+/u).map((term) => term.trim()).filter(Boolean);
     // This term was explicitly identified as prohibited and remains blocked even
     // if the configurable list is accidentally cleared.

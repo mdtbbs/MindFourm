@@ -24,6 +24,7 @@ jest.mock('@nestjs/common', () => ({
   Injectable: () => () => undefined,
   Controller: () => () => undefined,
   Get: () => () => undefined,
+  Header: () => () => undefined,
   Post: () => () => undefined,
   Put: () => () => undefined,
   Delete: () => () => undefined,

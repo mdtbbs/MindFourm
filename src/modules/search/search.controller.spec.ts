@@ -25,6 +25,10 @@ function createController(overrides: {
   searchService?: Record<string, jest.Mock>;
 } = {}) {
   const searchService = {
+    withSearchAudit: jest.fn(async (_actor: any, query: string, execute: (value: string) => Promise<any>) => {
+      const { value } = await execute(query);
+      return value;
+    }),
     searchPosts: jest.fn().mockResolvedValue({
       data: [
         { id: 7, title: 'Result', excerpt: 'summary' },
@@ -55,24 +59,25 @@ function createController(overrides: {
 }
 
 describe('SearchController', () => {
-  it('returns a single-layer search payload and records the query', async () => {
+  it('returns a single-layer search payload through the authenticated audit wrapper', async () => {
     const { controller, searchService } = createController();
+    const actor = { id: 5, username: 'alice', role: 'user' };
 
     const result = await controller.search({
       q: 'guide',
       page: 1,
       limit: 20,
       sort: 'relevance',
-    } as any, {});
+    } as any, { user: actor });
 
+    expect(searchService.withSearchAudit).toHaveBeenCalledWith(actor, 'guide', expect.any(Function));
     expect(searchService.searchPosts).toHaveBeenCalledWith('guide', {
       page: 1,
       limit: 20,
       category: undefined,
       sort: 'relevance',
-    }, undefined);
+    }, actor);
     expect(searchService.searchResources).toHaveBeenCalledWith('guide', 20);
-    expect(searchService.recordSearch).toHaveBeenCalledWith(undefined, 'guide', 1);
     expect(result).toMatchObject({
       data: [
         { id: 7, title: 'Result', excerpt: 'summary' },
@@ -98,10 +103,11 @@ describe('SearchController', () => {
         searchResources: jest.fn().mockResolvedValue([{ id: 9, title: 'Resource match' }]),
       },
     });
+    const actor = { id: 5, username: 'alice', role: 'user' };
 
-    await controller.search({ q: 'resource', page: 1, limit: 20 } as any, {});
+    await controller.search({ q: 'resource', page: 1, limit: 20 } as any, { user: actor });
 
-    expect(searchService.recordSearch).toHaveBeenCalledWith(undefined, 'resource', 1);
+    expect(searchService.withSearchAudit).toHaveBeenCalledWith(actor, 'resource', expect.any(Function));
   });
 
   it('returns raw history and popular arrays without extra wrapping', async () => {
