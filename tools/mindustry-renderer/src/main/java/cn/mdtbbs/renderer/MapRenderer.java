@@ -50,7 +50,7 @@ import java.util.concurrent.Executors;
  */
 public final class MapRenderer {
     private static final int MAX_BYTES = 20 * 1024 * 1024;
-    private static final String VERSION = "v160.2";
+    private static final String VERSION = "v160.2-preview-2";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
     private static String token;
@@ -505,25 +505,39 @@ public final class MapRenderer {
         return result.append(']').toString();
     }
 
-    /** Draw a client-identical block sprite when the official desktop atlas is installed. */
+    /** Draw a block sprite at the atlas region's native world size, as Mindustry does for plans. */
     private static void drawSchematicTile(BufferedImage target, Schematic.Stile tile, int height, int tileSize, int padding) {
-        int size = Math.max(1, tile.block.size) * tileSize;
-        int x = padding + tile.x * tileSize - (size - tileSize) / 2;
-        int y = padding + (height - tile.y - 1) * tileSize - (size - tileSize) / 2;
+        int tileX = padding + tile.x * tileSize;
+        int tileY = padding + (height - tile.y - 1) * tileSize;
+        // Even-sized Mindustry blocks use a half-tile world offset. Apply it
+        // on both axes; image Y is inverted relative to world Y.
+        int blockOffset = Math.round(tile.block.offset * tileSize / Vars.tilesize);
+        int centerX = tileX + tileSize / 2 + blockOffset;
+        int centerY = tileY + tileSize / 2 - blockOffset;
         BufferedImage sprite = spriteAtlas == null ? null : spriteAtlas.find(tile.block.name);
         Graphics2D graphics = target.createGraphics();
         graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         if (sprite == null) {
             // Keep previews useful if an asset bundle is unavailable or a future block is unknown.
+            int size = Math.max(1, tile.block.size) * tileSize;
+            int x = centerX - size / 2;
+            int y = centerY - size / 2;
             graphics.setColor(new Color(tile.block.mapColor.r, tile.block.mapColor.g, tile.block.mapColor.b, tile.block.mapColor.a));
             graphics.fillRect(x, y, size, size);
             graphics.setColor(new Color(255, 255, 255, 70));
             graphics.drawRect(x, y, Math.max(0, size - 1), Math.max(0, size - 1));
         } else {
+            // The desktop atlas is packed at 4x the game's 8px world tile size.
+            // Preserve the region's own aspect ratio and any intentional overhang;
+            // forcing every region into block.size x block.size stretches some sprites.
+            int spriteWidth = Math.max(1, Math.round(sprite.getWidth() * tileSize / 32f));
+            int spriteHeight = Math.max(1, Math.round(sprite.getHeight() * tileSize / 32f));
             AffineTransform original = graphics.getTransform();
-            graphics.translate(x + size / 2.0, y + size / 2.0);
-            graphics.rotate(Math.toRadians((tile.rotation & 3) * 90));
-            graphics.drawImage(sprite, -size / 2, -size / 2, size, size, null);
+            graphics.translate(centerX, centerY);
+            if (tile.block.rotate && tile.block.rotateDraw) {
+                graphics.rotate(Math.toRadians((tile.rotation & 3) * 90));
+            }
+            graphics.drawImage(sprite, -spriteWidth / 2, -spriteHeight / 2, spriteWidth, spriteHeight, null);
             graphics.setTransform(original);
         }
         graphics.dispose();
