@@ -7,11 +7,12 @@ import { Tag } from '../../entities/tag.entity';
 import { Post } from '../../entities/post.entity';
 import { PostTag } from '../../entities/post-tag.entity';
 import { Reply } from '../../entities/reply.entity';
+import { ContentRelation } from '../../entities/content-relation.entity';
 import { PostSummaryService } from '../posts/post-summary.service';
 import { NavigationModule } from '../navigation/navigation.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tag, Post, PostTag, Reply]), NavigationModule],
+  imports: [TypeOrmModule.forFeature([Tag, Post, PostTag, Reply, ContentRelation]), NavigationModule],
   controllers: [TagsController, TagsV1Controller],
   providers: [TagsService, PostSummaryService],
   exports: [TagsService],
