@@ -31,6 +31,7 @@ import { PostDetailService } from './post-detail.service';
 
 function createService(overrides: {
   postTagRepository?: Record<string, jest.Mock>;
+  relationRepository?: Record<string, jest.Mock>;
 } = {}) {
   const postTagRepository = {
     find: jest.fn().mockResolvedValue([
@@ -45,8 +46,10 @@ function createService(overrides: {
     ]),
     ...overrides.postTagRepository,
   };
+  const relationRepository = { findOne: jest.fn().mockResolvedValue(null), ...overrides.relationRepository };
   const service = new PostDetailService(
     postTagRepository as any,
+    relationRepository as any,
   );
 
   return {

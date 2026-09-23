@@ -35,10 +35,7 @@ jest.mock('@entities/tag.entity', () => ({ Tag: class Tag {} }));
 jest.mock('@entities/category.entity', () => ({ Category: class Category {} }));
 jest.mock('@entities/user.entity', () => ({ User: class User {} }));
 jest.mock('@entities/group-member.entity', () => ({ GroupMember: class GroupMember {} }));
-jest.mock('@entities/game-server.entity', () => ({ GameServer: class GameServer {} }));
-jest.mock('@entities/game-version.entity', () => ({ GameVersion: class GameVersion {} }));
 jest.mock('@entities/knowledge-article.entity', () => ({ KnowledgeArticle: class KnowledgeArticle {} }));
-jest.mock('@entities/developer-feed-entry.entity', () => ({ DeveloperFeedEntry: class DeveloperFeedEntry {} }));
 jest.mock('../../database/redis.service', () => ({ RedisService: class RedisService {} }));
 jest.mock('../posts/post-summary.service', () => ({ PostSummaryService: class PostSummaryService {} }));
 
@@ -86,10 +83,8 @@ function createService(overrides: {
   postSummaryService?: Record<string, jest.Mock>;
   groupMemberRepository?: Record<string, jest.Mock>;
   userRepository?: Record<string, jest.Mock>;
-  gameServerRepository?: Record<string, jest.Mock>;
-  gameVersionRepository?: Record<string, jest.Mock>;
   knowledgeRepository?: Record<string, jest.Mock>;
-  developerFeedRepository?: Record<string, jest.Mock>;
+  providerRegistry?: { search: jest.Mock };
 } = {}) {
   const queryBuilder = createQueryBuilder(
     [
@@ -115,15 +110,9 @@ function createService(overrides: {
     ...overrides.postSummaryService,
   };
 
-  const resourceRepository = {
-    createQueryBuilder: jest.fn().mockReturnValue(createResourceQueryBuilder([])),
-  };
   const userRepository = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), ...overrides.userRepository };
   const groupMemberRepository = { find: jest.fn().mockResolvedValue([]), ...overrides.groupMemberRepository };
-  const gameServerRepository = { createQueryBuilder: jest.fn().mockReturnValue(createTextQueryBuilder([])), ...overrides.gameServerRepository };
-  const gameVersionRepository = { find: jest.fn().mockResolvedValue([]), ...overrides.gameVersionRepository };
   const knowledgeRepository = { find: jest.fn().mockResolvedValue([]), ...overrides.knowledgeRepository };
-  const developerFeedRepository = { createQueryBuilder: jest.fn().mockReturnValue(createTextQueryBuilder([])), ...overrides.developerFeedRepository };
   const redisService = {
     get: jest.fn(),
     set: jest.fn(),
@@ -131,19 +120,19 @@ function createService(overrides: {
     expire: jest.fn(),
   };
 
+  const providerRegistry = overrides.providerRegistry || { search: jest.fn().mockResolvedValue([]) };
   const service = new SearchService(
     postRepository as any,
     userRepository as any,
     {} as any,
     {} as any,
-    resourceRepository as any,
     groupMemberRepository as any,
-    gameServerRepository as any,
-    gameVersionRepository as any,
     knowledgeRepository as any,
-    developerFeedRepository as any,
     redisService as any,
     postSummaryService as any,
+    undefined,
+    undefined,
+    providerRegistry as any,
   );
 
   return {
@@ -151,10 +140,9 @@ function createService(overrides: {
     postRepository,
     postSummaryService,
     queryBuilder,
-    resourceRepository,
     groupMemberRepository,
     userRepository,
-    gameVersionRepository,
+    providerRegistry,
   };
 }
 
@@ -176,7 +164,6 @@ describe('SearchService', () => {
       'p.id',
       'p.user_id',
       'p.category_id',
-      'p.server_id',
       'p.post_type',
       'p.title',
       'p.content',
@@ -256,21 +243,10 @@ describe('SearchService', () => {
     });
   });
 
-  it('does not expose resources in a disabled category through search', async () => {
-    const { service, resourceRepository } = createService();
-
-    await service.searchResources('guide');
-
-    const queryBuilder = resourceRepository.createQueryBuilder.mock.results[0].value;
-
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      '(category.id IS NULL OR category.is_active = :categoryActive)',
-      { categoryActive: 1 },
-    );
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      'MATCH(r.title, r.description) AGAINST(:query IN NATURAL LANGUAGE MODE)',
-      { query: 'guide' },
-    );
+  it('delegates resource search to registered domain providers', async () => {
+    const { service, providerRegistry } = createService();
+    await service.searchResources('guide', 7);
+    expect(providerRegistry.search).toHaveBeenCalledWith('resources', 'guide', { limit: 7 });
   });
 
   it('excludes group-only discussions when the searcher is anonymous', async () => {
@@ -295,13 +271,16 @@ describe('SearchService', () => {
     );
   });
 
-  it('treats uid, username and build patterns as first-class unified search inputs', async () => {
-    const { service, userRepository, gameVersionRepository } = createService({
+  it('treats uid and username patterns as first-class inputs and delegates game versions', async () => {
+    const providerRegistry = { search: jest.fn().mockImplementation(async (key: string) => key === 'game_versions'
+      ? [{ id: 7, public_id: 'v', build: '160.4', version_value: '160.4', display_name: '160.4', channel: 'stable', is_latest: true }]
+      : []) };
+    const { service, userRepository } = createService({
       userRepository: {
         findOne: jest.fn().mockResolvedValue({ id: 92, username: 'alice', avatar_url: null, bio: null }),
         find: jest.fn().mockResolvedValue([]),
       },
-      gameVersionRepository: { find: jest.fn().mockResolvedValue([{ id: 7, public_id: 'v', build: '160.4', version_value: '160.4', display_name: '160.4', channel: 'stable', is_latest: true }]) },
+      providerRegistry,
     });
 
     const uid = await service.searchUnified('uid:92');
@@ -313,8 +292,6 @@ describe('SearchService', () => {
     expect(userRepository.find).toHaveBeenLastCalledWith(expect.objectContaining({
       where: expect.arrayContaining([expect.objectContaining({ username: expect.anything() })]),
     }));
-    expect(gameVersionRepository.find).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.arrayContaining([expect.objectContaining({ build: '160.4', is_official: true })]),
-    }));
+    expect(providerRegistry.search).toHaveBeenCalledWith('game_versions', '160.4', { limit: 10, viewer: undefined });
   });
 });

@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
+import { ContentRelation } from '@entities/content-relation.entity';
 import { VISIBLE_REPLY_STATUSES } from '@common/utils/constants';
 
 export interface PostSummaryTag {
@@ -49,6 +50,8 @@ export class PostSummaryService {
     private readonly postTagRepository: Repository<PostTag>,
     @InjectRepository(Reply)
     private readonly replyRepository: Repository<Reply>,
+    @InjectRepository(ContentRelation)
+    private readonly relationRepository: Repository<ContentRelation>,
   ) {}
 
   async toSummaryList(posts: Post[]): Promise<PostSummaryDto[]> {
@@ -57,10 +60,15 @@ export class PostSummaryService {
     }
 
     const postIds = posts.map((post) => post.id);
-    const [tagsByPostId, replyCounts] = await Promise.all([
+    const [tagsByPostId, replyCounts, relations] = await Promise.all([
       this.loadTagsByPostId(postIds),
       this.loadReplyCounts(postIds),
+      this.relationRepository.find({
+        where: { source_type: 'post', source_id: In(postIds), target_type: 'game_server', relation_type: 'related' },
+        select: ['source_id', 'target_id'],
+      }),
     ]);
+    const serverIdByPostId = new Map(relations.map((relation) => [relation.source_id, Number(relation.target_id)]));
 
     return posts.map((post) =>
       this.toSummary(
@@ -68,15 +76,16 @@ export class PostSummaryService {
         tagsByPostId.get(post.id) || [],
         replyCounts.get(post.id) || 0,
         post.last_activity_at || post.created_at,
+        serverIdByPostId.get(post.id) || null,
       ));
   }
 
-  toSummary(post: Post, tags: PostSummaryTag[], replyCount: number, lastActivityAt: Date = post.created_at): PostSummaryDto {
+  toSummary(post: Post, tags: PostSummaryTag[], replyCount: number, lastActivityAt: Date = post.created_at, serverId: number | null = null): PostSummaryDto {
     return {
       id: post.id,
       user_id: post.user_id,
       category_id: post.category_id ?? null,
-      server_id: post.server_id ?? null,
+      server_id: serverId,
       post_type: post.post_type,
       source: post.source || 'USER',
       slug: post.slug ?? null,

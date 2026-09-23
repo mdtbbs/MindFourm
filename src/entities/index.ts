@@ -111,8 +111,10 @@ import { MobileSession } from './mobile-session.entity';
 import { MobileRefreshToken } from './mobile-refresh-token.entity';
 import { DeveloperFeedEntry } from './developer-feed-entry.entity';
 import { ServiceAccount } from './service-account.entity';
+import { ContentRelation } from './content-relation.entity';
 
-export const entities = [
+/** Base forum, content and shared platform entities. */
+export const coreEntities = [
   User,
   Post,
   Reply,
@@ -174,8 +176,6 @@ export const entities = [
   // External API
   ExternalApiKey,
   ExternalApiAuditLog,
-  // LanLink integration
-  LanLinkQuickCode,
   // Friends
   Friendship,
   // Resource Comments
@@ -196,12 +196,6 @@ export const entities = [
   ResourceFavorite,
   ResourceLike,
   ResourceSubscription,
-  // Phase 8A (refactor): Game Versions
-  GameVersion,
-  GameVersionBuild,
-  // Phase 8B (refactor): Servers
-  GameServer,
-  GameServerSnapshot,
   // Phase 8C (refactor): Knowledge
   KnowledgeArticle,
   KnowledgeRevision,
@@ -211,9 +205,22 @@ export const entities = [
   NoticeRevision,
   MobileSession,
   MobileRefreshToken,
-  DeveloperFeedEntry,
   ServiceAccount,
+  ContentRelation,
 ];
+
+/** Entities that belong to Mindustry/MDTBBS integrations rather than Community. */
+export const mdtbbsEntities = [
+  LanLinkQuickCode,
+  GameVersion,
+  GameVersionBuild,
+  GameServer,
+  GameServerSnapshot,
+  DeveloperFeedEntry,
+] as const;
+
+/** Runtime profile composition. MDTBBS remains the current and only profile. */
+export const entities = [...coreEntities, ...mdtbbsEntities];
 
 export {
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
@@ -253,8 +260,6 @@ export {
   // External API
   ExternalApiKey,
   ExternalApiAuditLog,
-  // LanLink integration
-  LanLinkQuickCode,
   // Friends
   Friendship,
   // Resource Comments
@@ -279,5 +284,6 @@ export {
   Feedback,
   MobileSession, MobileRefreshToken,
   DeveloperFeedEntry,
+  ContentRelation,
   ServiceAccount,
 };

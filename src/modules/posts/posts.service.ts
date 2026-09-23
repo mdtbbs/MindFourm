@@ -17,6 +17,7 @@ import {
   Like,
 } from 'typeorm';
 import { Post, type PostSource } from '@entities/post.entity';
+import { ContentRelation } from '@entities/content-relation.entity';
 import { User } from '@entities/user.entity';
 import { Category } from '@entities/category.entity';
 import { Tag } from '@entities/tag.entity';
@@ -128,7 +129,6 @@ export class PostsService {
       const newPost = manager.create(Post, {
         user_id: userId,
         category_id: dto.category_id,
-        server_id: dto.server_id,
         required_group_id: dto.required_group_id,
         post_type: dto.post_type || 'normal',
         source: provenance.source || 'USER',
@@ -146,6 +146,15 @@ export class PostsService {
       });
 
       const savedPost = await manager.save(newPost);
+
+      // Keep the generic content reference synchronized while the legacy
+      // server_id API column remains in its compatibility window.
+      if (dto.server_id) {
+        await manager.insert(ContentRelation, {
+          source_type: 'post', source_id: savedPost.id, target_type: 'game_server',
+          target_id: String(dto.server_id), relation_type: 'related',
+        });
+      }
 
       // Attach tags if provided
       if (dto.tags && dto.tags.length > 0) {
@@ -236,8 +245,7 @@ export class PostsService {
         id: true,
         user_id: true,
         category_id: true,
-        server_id: true,
-        post_type: true,
+          post_type: true,
         title: true,
         content: true,
         content_html: true,
@@ -368,7 +376,8 @@ export class PostsService {
     }
 
     if (server_id) {
-      qb.andWhere('post.server_id = :serverId', { serverId: server_id });
+      qb.innerJoin(ContentRelation, 'serverRelation', "serverRelation.source_type = 'post' AND serverRelation.source_id = post.id AND serverRelation.target_type = 'game_server' AND serverRelation.relation_type = 'related'")
+        .andWhere('serverRelation.target_id = :serverId', { serverId: String(server_id) });
     }
 
     if (search) {
@@ -457,7 +466,8 @@ export class PostsService {
     }
 
     if (server_id) {
-      qb.andWhere('post.server_id = :serverId', { serverId: server_id });
+      qb.innerJoin(ContentRelation, 'serverRelation', "serverRelation.source_type = 'post' AND serverRelation.source_id = post.id AND serverRelation.target_type = 'game_server' AND serverRelation.relation_type = 'related'")
+        .andWhere('serverRelation.target_id = :serverId', { serverId: String(server_id) });
     }
 
     // Status filtering: admins see published + pending; regular users see published + own pending
@@ -637,7 +647,6 @@ export class PostsService {
       if (dto.content) updateData.content = dto.content;
       if (dto.content !== undefined) updateData.content_html = contentHtml;
       if (dto.category_id !== undefined) updateData.category_id = dto.category_id;
-      if (dto.server_id !== undefined) updateData.server_id = dto.server_id;
       if (dto.required_group_id !== undefined) updateData.required_group_id = dto.required_group_id;
       if (dto.post_type) updateData.post_type = dto.post_type;
 
@@ -672,6 +681,18 @@ export class PostsService {
       }
 
       await manager.update(Post, id, updateData);
+
+      if (dto.server_id !== undefined) {
+        await manager.delete(ContentRelation, {
+          source_type: 'post', source_id: id, target_type: 'game_server', relation_type: 'related',
+        });
+        if (dto.server_id) {
+          await manager.insert(ContentRelation, {
+            source_type: 'post', source_id: id, target_type: 'game_server',
+            target_id: String(dto.server_id), relation_type: 'related',
+          });
+        }
+      }
 
       // Re-attach tags if provided
       if (dto.tags) {
@@ -1129,8 +1150,7 @@ export class PostsService {
         id: true,
         user_id: true,
         category_id: true,
-        server_id: true,
-        post_type: true,
+          post_type: true,
         title: true,
         content: true,
         status: true,
@@ -1184,8 +1204,7 @@ export class PostsService {
         id: true,
         user_id: true,
         category_id: true,
-        server_id: true,
-        post_type: true,
+          post_type: true,
         title: true,
         content: true,
         status: true,
@@ -1243,8 +1262,7 @@ export class PostsService {
         id: true,
         user_id: true,
         category_id: true,
-        server_id: true,
-        post_type: true,
+          post_type: true,
         title: true,
         content: true,
         status: true,
@@ -1292,8 +1310,7 @@ export class PostsService {
         id: true,
         user_id: true,
         category_id: true,
-        server_id: true,
-        post_type: true,
+          post_type: true,
         title: true,
         content: true,
         status: true,

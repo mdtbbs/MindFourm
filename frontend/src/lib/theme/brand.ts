@@ -27,7 +27,7 @@ export interface BrandInfo {
 }
 
 const NEUTRAL_DEFAULTS = {
-  siteName: 'MDTBBS',
+  siteName: siteProfile.branding.siteName,
   sidebarTitle: '内容导航中心',
 };
 
@@ -97,3 +97,4 @@ export function buildBrandCssVariables(settings?: Record<string, string> | null)
     '--badge-lv4-end': primary,
   };
 }
+import { siteProfile } from '@/config/site-profile';

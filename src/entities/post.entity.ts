@@ -23,7 +23,6 @@ export type PostSource = typeof POST_SOURCES[number];
 @Index('idx_posts_status', ['status'])
 @Index('idx_posts_slug', ['slug'])
 @Index('idx_posts_post_type', ['post_type'])
-@Index('idx_posts_server_id', ['server_id'])
 @Index('idx_posts_source_status_activity', ['source', 'status', 'last_activity_at'])
 @Entity('posts')
 export class Post {
@@ -35,16 +34,6 @@ export class Post {
 
   @Column({ nullable: true })
   category_id: number;
-
-  /**
-   * EasyManager server this post belongs to.
-   *
-   * EasyManager is a separate service with its own database, so this is a
-   * cross-service reference: it can be indexed but no foreign key can enforce it,
-   * and a missing server has to be tolerated at read time.
-   */
-  @Column({ nullable: true })
-  server_id: number;
 
   @Column({ nullable: true })
   required_group_id: number;

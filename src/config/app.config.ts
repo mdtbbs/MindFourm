@@ -11,6 +11,7 @@ function resolveApiUrl(): string {
 }
 
 export const appConfig = () => ({
+  site: { profile: process.env.SITE_PROFILE || 'mdtbbs' },
   app: {
     port: resolvePort(),
     env: process.env.NODE_ENV || 'development',

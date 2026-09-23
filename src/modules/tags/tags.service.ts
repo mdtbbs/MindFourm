@@ -143,7 +143,6 @@ export class TagsService {
         'post.id',
         'post.user_id',
         'post.category_id',
-        'post.server_id',
         'post.post_type',
         'post.title',
         'post.content',

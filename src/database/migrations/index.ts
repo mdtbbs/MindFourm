@@ -50,6 +50,7 @@ import { CreateResourceLikes1720000055000 } from './1720000055000-CreateResource
 import { RepairResourceFilenames1720000056000 } from './1720000056000-RepairResourceFilenames';
 import { RepairMindustryRendererBuildSentinel1720000057000 } from './1720000057000-RepairMindustryRendererBuildSentinel';
 import { CreateSearchAudits1720000058000 } from './1720000058000-CreateSearchAudits';
+import { CreateContentRelations1720000059000 } from './1720000059000-CreateContentRelations';
 
 /**
  * Migrations in run order.
@@ -111,4 +112,5 @@ export const migrations = [
   RepairResourceFilenames1720000056000,
   RepairMindustryRendererBuildSentinel1720000057000,
   CreateSearchAudits1720000058000,
+  CreateContentRelations1720000059000,
 ];

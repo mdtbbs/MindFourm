@@ -1,8 +1,9 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
+import { ContentRelation } from '@entities/content-relation.entity';
 
 @Injectable()
 export class PostServersService {
@@ -11,17 +12,18 @@ export class PostServersService {
     private postRepo: Repository<Post>,
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(ContentRelation)
+    private relationRepo: Repository<ContentRelation>,
   ) {}
 
   async getPostsByServer(serverId: number) {
-    return this.postRepo
-      .createQueryBuilder('p')
-      .leftJoinAndSelect('p.user', 'u')
-      .leftJoinAndSelect('p.category', 'c')
-      .where('p.server_id = :serverId', { serverId })
-      .andWhere('p.status = :status', { status: 'published' })
-      .orderBy('p.created_at', 'DESC')
-      .getMany();
+    const relations = await this.relationRepo.find({
+      where: { source_type: 'post', target_type: 'game_server', target_id: String(serverId), relation_type: 'related' },
+      select: ['source_id'],
+    });
+    if (relations.length === 0) return [];
+    return this.postRepo.find({ where: { id: In(relations.map((relation) => relation.source_id)), status: 'published' },
+      relations: ['user', 'category'], order: { created_at: 'DESC' } });
   }
 
   async getForumPostsByServer(serverId: number) {
@@ -49,9 +51,11 @@ export class PostServersService {
       throw new ForbiddenException('You can only link your own posts');
     }
 
-    // 3. Update server_id
-    post.server_id = serverId;
-    await this.postRepo.save(post);
+    // Replace any previous server association through the generic relation table.
+    await this.relationRepo.delete({ source_type: 'post', source_id: postId, target_type: 'game_server', relation_type: 'related' });
+    await this.relationRepo.save(this.relationRepo.create({
+      source_type: 'post', source_id: postId, target_type: 'game_server', target_id: String(serverId), relation_type: 'related',
+    }));
 
     return { success: true, post_id: postId, server_id: serverId };
   }
@@ -68,9 +72,7 @@ export class PostServersService {
       throw new ForbiddenException('You can only unlink your own posts');
     }
 
-    // 3. Clear server_id
-    post.server_id = undefined as any;
-    await this.postRepo.save(post);
+    await this.relationRepo.delete({ source_type: 'post', source_id: postId, target_type: 'game_server', relation_type: 'related' });
 
     return { success: true, post_id: postId };
   }

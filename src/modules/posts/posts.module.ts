@@ -9,6 +9,7 @@ import { Tag } from '@entities/tag.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
 import { PostRevision } from '@entities/post-revision.entity';
+import { ContentRelation } from '@entities/content-relation.entity';
 import { DatabaseModule } from '../../database/database.module';
 import { PointsModule } from '../points/points.module';
 import { GroupsModule } from '../groups/groups.module';
@@ -34,7 +35,7 @@ import { SearchModule } from '../search/search.module';
     SettingsModule,
     SearchModule,
     LogsModule,
-    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision]),
+    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision, ContentRelation]),
   ],
   providers: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService, PostActivityService],
   controllers: [PostsController],

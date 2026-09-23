@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { Category } from '@entities/category.entity';
 import { Notification } from '@entities/notification.entity';
+import { ContentRelation } from '@entities/content-relation.entity';
 import { parseMarkdown } from '@common/utils/markdown.util';
 
 @Injectable()
@@ -17,6 +18,8 @@ export class AutoPostService {
     private categoryRepo: Repository<Category>,
     @InjectRepository(Notification)
     private notificationRepo: Repository<Notification>,
+    @InjectRepository(ContentRelation)
+    private relationRepo: Repository<ContentRelation>,
   ) {}
 
   /**
@@ -31,12 +34,10 @@ export class AutoPostService {
     event_id?: string; // For idempotency
   }) {
     // Idempotency: check if post already exists for this server
-    const existing = await this.postRepo.findOne({
-      where: {
-        server_id: data.server_id,
-        post_type: 'server_announcement',
-      },
-    });
+    const link = await this.relationRepo.findOne({ where: {
+      source_type: 'post', target_type: 'game_server', target_id: String(data.server_id), relation_type: 'related',
+    } });
+    const existing = link ? await this.postRepo.findOne({ where: { id: link.source_id, post_type: 'server_announcement' } }) : null;
 
     if (existing) {
       this.logger.warn(`Server announcement already exists for server ${data.server_id}`);
@@ -60,7 +61,6 @@ export class AutoPostService {
     const post = this.postRepo.create({
       user_id: 1, // System user
       category_id: category?.id,
-      server_id: data.server_id,
       post_type: 'server_announcement',
       title: `Server Approved: ${data.server_name}`,
       content,
@@ -68,7 +68,9 @@ export class AutoPostService {
       status: 'published',
     });
 
-    const savedPost = await this.postRepo.save(post);
+    const savedPost = await this.postRepo.save(post) as Post;
+    await this.relationRepo.save(this.relationRepo.create({ source_type: 'post', source_id: savedPost.id,
+      target_type: 'game_server', target_id: String(data.server_id), relation_type: 'related' }));
 
     // Create notification for the applicant if user_id provided
     if (data.user_id) {

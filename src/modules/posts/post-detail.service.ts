@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
+import { ContentRelation } from '@entities/content-relation.entity';
 import { getPrefixMetadata, parsePrefixCatalog, DEFAULT_POST_PREFIXES } from './post-prefixes.util';
 
 export interface PostDetailTag {
@@ -77,11 +78,14 @@ export class PostDetailService {
   constructor(
     @InjectRepository(PostTag)
     private readonly postTagRepository: Repository<PostTag>,
+    @InjectRepository(ContentRelation)
+    private readonly relationRepository: Repository<ContentRelation>,
   ) {}
 
   async toDetail(post: Post, prefixCatalog?: string | null): Promise<PostDetailDto> {
-    const [tags] = await Promise.all([
+    const [tags, serverRelation] = await Promise.all([
       this.loadTags(post.id),
+      this.relationRepository.findOne({ where: { source_type: 'post', source_id: post.id, target_type: 'game_server', relation_type: 'related' } }),
     ]);
 
     const catalog = parsePrefixCatalog(prefixCatalog ?? undefined);
@@ -93,7 +97,7 @@ export class PostDetailService {
       id: post.id,
       user_id: post.user_id,
       category_id: post.category_id ?? null,
-      server_id: post.server_id ?? null,
+      server_id: serverRelation ? Number(serverRelation.target_id) : null,
       required_group_id: post.required_group_id ?? null,
       post_type: post.post_type,
       slug: post.slug ?? null,

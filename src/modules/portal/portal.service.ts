@@ -1,13 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Resource } from '@entities/resource.entity';
 import { Post } from '@entities/post.entity';
 import { KnowledgeArticle } from '@entities/knowledge-article.entity';
-import { GameVersion } from '@entities/game-version.entity';
 import { Notice } from '@entities/notice.entity';
 import { RedisService } from '@database/redis.service';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
+import { PortalSectionRegistry } from './portal-section.registry';
 
 /** The legacy `/v1/portal` surface; kept while `/v1/home` becomes the web read model. */
 export type PortalModule = { key: string; title: string; hidden: boolean; items: any[] };
@@ -44,24 +43,23 @@ export class PortalService {
   private refreshInFlight: Promise<void> | null = null;
 
   constructor(
-    @InjectRepository(Resource) private readonly resourceRepo: Repository<Resource>,
     @InjectRepository(Post) private readonly postRepo: Repository<Post>,
     @InjectRepository(KnowledgeArticle) private readonly knowledgeRepo: Repository<KnowledgeArticle>,
-    @InjectRepository(GameVersion) private readonly versionRepo: Repository<GameVersion>,
     @InjectRepository(Notice) private readonly noticeRepo: Repository<Notice>,
     private readonly redisService: RedisService,
     private readonly postSummaryService: PostSummaryService,
+    private readonly sectionRegistry: PortalSectionRegistry,
   ) {}
 
   /** Compatibility response for existing V1 clients. */
   async getPortalData(): Promise<PortalData> {
     const home = await this.getHomeData();
-    const versions = await this.getVersions().catch(() => []);
+    const versions = await this.sectionRegistry.getSection('versions').catch(() => []);
     const modules: PortalModule[] = [
       this.toPortalModule('latest_resources', '最新资源', home.resources.items),
       this.toPortalModule('latest_threads', '最新讨论', home.discussions.items),
       this.toPortalModule('knowledge', '知识文章', home.news.items),
-      this.toPortalModule('versions', 'Mindustry 版本', versions),
+      this.toPortalModule('versions', this.sectionRegistry.getTitle('versions', '版本'), versions),
     ];
     return { modules, generated_at: home.generated_at };
   }
@@ -86,8 +84,9 @@ export class PortalService {
 
   private async buildHomeData(previous?: HomeData): Promise<HomeData> {
     const results = await Promise.allSettled([
-      this.getLatestCommunityDiscussions(), this.getLatestResources(), this.getNews(), this.getNotices(),
-      this.getDeveloperEntries('GITHUB_ISSUE'), this.getDeveloperEntries('GITHUB_PR'),
+      this.getLatestCommunityDiscussions(), this.sectionRegistry.getSection<HomeResource>('resources'), this.getNews(), this.getNotices(),
+      this.sectionRegistry.getSection<HomeDeveloperEntry>('development:issues'),
+      this.sectionRegistry.getSection<HomeDeveloperEntry>('development:pull_requests'),
     ]);
     return {
       discussions: this.sectionFrom(results[0], previous?.discussions),
@@ -157,15 +156,6 @@ export class PortalService {
     return this.postSummaryService.toSummaryList(posts);
   }
 
-  private async getLatestResources(): Promise<HomeResource[]> {
-    const resources = await this.resourceRepo.createQueryBuilder('resource')
-      .leftJoinAndSelect('resource.user', 'user').leftJoinAndSelect('resource.category', 'category')
-      .where('resource.status IN (:...statuses)', { statuses: ['approved', 'published'] }).andWhere('resource.is_public = :isPublic', { isPublic: 1 })
-      .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
-      .orderBy('resource.updated_at', 'DESC').addOrderBy('resource.id', 'DESC').take(6).getMany();
-    return resources.map((resource) => ({ id: resource.id, title: resource.title, slug: resource.slug || null, resource_kind: resource.resource_kind || null, version: resource.version || null, updated_at: resource.updated_at.toISOString(), author_name: resource.user?.username || null, category_name: resource.category?.name || null }));
-  }
-
   private async getNews(): Promise<HomeNews[]> {
     const rows = await this.knowledgeRepo.find({ where: { status: 'published' as any, is_public: true }, order: { updated_at: 'DESC', id: 'DESC' }, take: 4, select: ['id', 'title', 'slug', 'category'] });
     return rows.map((row) => ({ id: row.id, title: row.title, slug: row.slug || null, category: row.category || null }));
@@ -177,30 +167,4 @@ export class PortalService {
     return rows.map((notice) => ({ id: notice.id, public_id: notice.public_id, title: notice.title, excerpt: notice.excerpt, published_at: notice.published_at?.toISOString() || null }));
   }
 
-  private async getDeveloperEntries(source: 'GITHUB_ISSUE' | 'GITHUB_PR'): Promise<HomeDeveloperEntry[]> {
-    const rows = await this.postRepo.find({
-      where: { status: 'published', source },
-      relations: ['category'],
-      order: { last_activity_at: 'DESC', id: 'DESC' },
-      take: 3,
-    });
-    return rows.map((row) => {
-      const match = row.title.match(/^\[#(\d+)\]\s*/);
-      return {
-        id: row.id,
-        category_id: row.category_id ?? null,
-        external_id: match?.[1] || String(row.id),
-        title: row.title.replace(/^\[#\d+\]\s*/, '') || `#${row.id}`,
-        state: source === 'GITHUB_ISSUE' ? 'Issue' : 'Pull Request',
-        url: `/posts/${row.id}${row.slug ? `-${row.slug}` : ''}`,
-        repository: row.category?.name || 'GitHub 同步',
-        updated_at: (row.last_activity_at || row.updated_at).toISOString(),
-      };
-    });
-  }
-
-  private async getVersions(): Promise<Array<Record<string, string | number | null>>> {
-    const versions = await this.versionRepo.find({ where: { is_latest: true }, order: { channel: 'ASC' }, take: 5, select: ['id', 'build', 'version_value', 'display_name', 'channel'] });
-    return versions.map((version) => ({ id: version.id, version: version.build || version.version_value, display_name: version.display_name, channel: version.channel || null }));
-  }
 }

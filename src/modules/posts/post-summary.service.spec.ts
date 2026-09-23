@@ -35,6 +35,7 @@ import { PostSummaryService } from './post-summary.service';
 function createService(overrides: {
   postTagRepository?: Record<string, jest.Mock>;
   replyRepository?: Record<string, jest.Mock>;
+  relationRepository?: Record<string, jest.Mock>;
 } = {}) {
   const postTagRepository = {
     find: jest.fn().mockResolvedValue([
@@ -66,10 +67,12 @@ function createService(overrides: {
     createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
     ...overrides.replyRepository,
   };
+  const relationRepository = { find: jest.fn().mockResolvedValue([]), ...overrides.relationRepository };
 
   const service = new PostSummaryService(
     postTagRepository as any,
     replyRepository as any,
+    relationRepository as any,
   );
 
   return {
