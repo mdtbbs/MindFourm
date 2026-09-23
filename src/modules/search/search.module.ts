@@ -7,6 +7,8 @@ import { Post } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
 import { SearchHistory } from '@entities/search-history.entity';
 import { PopularSearch } from '@entities/popular-search.entity';
+import { PostTag } from '@entities/post-tag.entity';
+import { Reply } from '@entities/reply.entity';
 import { GroupMember } from '@entities/group-member.entity';
 import { KnowledgeArticle } from '@entities/knowledge-article.entity';
 import { PostSummaryService } from '../posts/post-summary.service';
@@ -21,7 +23,7 @@ import { ContentRelation } from '@entities/content-relation.entity';
   imports: [
     TypeOrmModule.forFeature([
       Post, User, SearchHistory, PopularSearch,
-      GroupMember, KnowledgeArticle, SearchAudit, ContentRelation,
+      PostTag, Reply, GroupMember, KnowledgeArticle, SearchAudit, ContentRelation,
     ]),
     SettingsModule,
   ],
