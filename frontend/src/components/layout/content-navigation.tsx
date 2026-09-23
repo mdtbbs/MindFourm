@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ChevronDown, FolderOpen, type LucideIcon } from 'lucide-react';
-import * as LucideIcons from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { getIconComponent } from '@/lib/resource-icons';
 import { buildContentNavigation } from '@/lib/navigation/content-navigation';
 import type { Category, ResourceCategory } from '@/types';
@@ -39,13 +38,12 @@ export default function ContentNavigation({
             : item.id === 'all-resources'
               ? pathname === '/resources' && !search.get('category_id')
               : item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const IconComponent = item.id.startsWith('resource-category-') ? getIconComponent(item.icon) : ((LucideIcons as Record<string, unknown>)[item.icon] as LucideIcon | undefined) || FolderOpen;
-          const Icon = typeof IconComponent === 'function' ? IconComponent : FolderOpen;
+          const Icon = item.icon ? getIconComponent(item.icon) : null;
           const startsGroup = item.groupLabel && section.items[index - 1]?.groupLabel !== item.groupLabel;
           return <div key={item.id}>
             {startsGroup && <h3 className="px-3 pb-1.5 pt-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{item.groupLabel}</h3>}
             <Link href={item.href} onClick={onNavigate} aria-current={active ? 'page' : undefined} className={linkClass(active, item.indent)}>
-              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />}<span className="min-w-0 flex-1 truncate">{item.label}</span>
               {typeof item.count === 'number' && <span className="shrink-0 text-xs text-[var(--text-muted)]">{item.count}</span>}
             </Link>
           </div>;

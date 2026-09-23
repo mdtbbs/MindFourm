@@ -6,7 +6,7 @@ export type ContentNavigationItem = {
   id: string;
   label: string;
   href: string;
-  icon: string;
+  icon?: string;
   activeMatch?: string;
   indent?: boolean;
   count?: number;
@@ -30,8 +30,8 @@ export type ContentNavigationContext = {
 };
 
 const ICONS: Record<string, string> = {
-  home: 'Home', categories: 'MessageSquare', resources: 'BookOpen', search: 'Search',
-  servers: 'Radio', tags: 'Tag', notices: 'Bell',
+  home: 'Home', categories: 'Folder', resources: 'Package', search: 'Search',
+  servers: 'Server', tags: 'Tag', notices: 'Bell',
 };
 
 function featureEnabled(settings: Record<string, string>, key: string): boolean {
@@ -40,7 +40,7 @@ function featureEnabled(settings: Record<string, string>, key: string): boolean 
 }
 
 function configuredItem(item: SidebarNavigationItem): ContentNavigationItem {
-  return { id: item.id, label: item.label, href: item.href, icon: item.icon || ICONS[item.id] || 'Link' };
+  return { id: item.id, label: item.label, href: item.href, icon: ICONS[item.id] || item.icon || 'Link' };
 }
 
 /** Builds the shared information architecture consumed by the desktop sidebar and mobile drawer. */
@@ -72,12 +72,12 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
     sections.push({
       id: 'context', label: '资源浏览', collapsible: true,
       items: [
-        { id: 'all-resources', label: '全部资源', href: '/resources', icon: 'FolderOpen', activeMatch: '/resources' },
+        { id: 'all-resources', label: '全部资源', href: '/resources', icon: 'Package', activeMatch: '/resources' },
         ...roots.flatMap((category) => [category, ...(categoriesByParent.get(category.id) || [])]).map((category) => ({
           id: `resource-category-${category.id}`,
           label: category.name,
           href: `/resources?category_id=${category.id}`,
-          icon: category.icon || 'Folder',
+          icon: category.icon || undefined,
           activeMatch: `/resources?category_id=${category.id}`,
           indent: Boolean(category.parent_id),
         })),
@@ -87,8 +87,8 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
     const boards: ContentNavigationItem[] = [{ id: 'all-discussions', label: '全部讨论', href: '/threads', icon: 'MessageSquare', activeMatch: '/threads' }];
     for (const group of groupForumCategories(context.forumCategories)) {
       for (const { category, children } of group.boards) {
-        boards.push({ id: `forum-category-${category.id}`, label: category.name, href: `/categories/${category.id}`, icon: category.icon || 'FolderOpen', activeMatch: `/categories/${category.id}`, count: category.post_count, groupLabel: group.label });
-        children.forEach((child) => boards.push({ id: `forum-category-${child.id}`, label: child.name, href: `/categories/${child.id}`, icon: child.icon || 'FolderOpen', activeMatch: `/categories/${child.id}`, indent: true, count: child.post_count, groupLabel: group.label }));
+        boards.push({ id: `forum-category-${category.id}`, label: category.name, href: `/categories/${category.id}`, icon: category.icon || undefined, activeMatch: `/categories/${category.id}`, count: category.post_count, groupLabel: group.label });
+        children.forEach((child) => boards.push({ id: `forum-category-${child.id}`, label: child.name, href: `/categories/${child.id}`, icon: child.icon || undefined, activeMatch: `/categories/${child.id}`, indent: true, count: child.post_count, groupLabel: group.label }));
       }
     }
     sections.push({ id: 'context', label: '讨论板块', collapsible: true, items: boards });
@@ -102,7 +102,7 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
 
   if (context.isAuthenticated) {
     sections.push({ id: 'account', label: '我的', collapsible: true, items: [
-      ...(context.userId ? [{ id: 'my-posts', label: '我的帖子', href: `/users/${context.userId}`, icon: 'UserRound' }] : []),
+      ...(context.userId ? [{ id: 'my-posts', label: '我的帖子', href: `/users/${context.userId}`, icon: 'User' }] : []),
       { id: 'bookmarks', label: '我的收藏', href: '/bookmarks', icon: 'Star' },
       { id: 'messages', label: '私信', href: '/messages', icon: 'Mail' },
       { id: 'notifications', label: '通知', href: '/notifications', icon: 'Bell' },

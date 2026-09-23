@@ -1,12 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, ClipboardPaste, FileImage, Loader2, Map, ShieldCheck, Upload } from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
-import { ResourceCategory } from '@/types';
+import { Resource, ResourceCategory } from '@/types';
 import { useToastStore } from '@/store/toast-store';
+import { useDraft, useDraftAutoSave, type DraftSnapshot } from '@/hooks/use-draft';
+import DraftRecovery from '@/components/ui/draft-recovery';
+import ResourceKindDetails from './resource-kind-details';
+
+const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
+  ssr: false,
+  loading: () => <div className="min-h-32 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text-muted)]">加载编辑器…</div>,
+});
 
 type Kind = 'map' | 'schematic';
 type SchematicSource = 'file' | 'paste';
@@ -46,13 +55,53 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const [schematicSource, setSchematicSource] = useState<SchematicSource>('file');
   const [schematicCode, setSchematicCode] = useState('');
   const [preview, setPreview] = useState<DraftPreview | null>(null);
+  const [previewExpired, setPreviewExpired] = useState(false);
+  const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const draft = useDraft('resource-workbench', kind);
+  const draftValues = useMemo(() => ({ title, version, description, content, categoryId, isPublic, schematicSource, schematicCode }), [title, version, description, content, categoryId, isPublic, schematicSource, schematicCode]);
+  const hasDraftContent = Boolean(title || version || description || content || schematicCode);
+  const draftResource: Resource | null = preview ? {
+    id: 0, user_id: 0, title: title || (kind === 'map' ? '未命名地图' : '未命名蓝图'),
+    description: description || null, resource_type: 'upload', resource_kind: kind, integrity: null,
+    file_name: file?.name || null, file_path: null, file_size: file?.size || 0, mime_type: null,
+    content_hash: null, external_url: null, version: version || null, content: content || null,
+    content_html: null, category_id: categoryId, category_name: categories.find((item) => item.id === categoryId)?.name || null,
+    category_icon: null, download_count: 0, slug: null, is_public: isPublic, status: 'preview',
+    use_mfl: false, mfl_download_url: null, username: '你', avatar_url: null,
+    created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    metadata: { cover_image_url: preview.preview_url, gallery_images: [], tags: [], supported_versions: [], compatibility: [], planets: [], game_modes: [], required_mods: [], changelog: null },
+    renderer_status: 'ready', renderer_metadata: preview.metadata, preview_url: preview.preview_url,
+  } : null;
+  const loadDraft = draft.load;
+
+  useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
   useEffect(() => { resourceApi.getCategories().then(setCategories).catch(() => {}); }, []);
+  useEffect(() => { setRecoverableDraft(loadDraft()); }, [loadDraft]);
+  useEffect(() => {
+    if (!preview) return;
+    const timeout = window.setTimeout(() => setPreviewExpired(true), Math.max(0, Date.parse(preview.expires_at) - Date.now()));
+    return () => window.clearTimeout(timeout);
+  }, [preview]);
 
-  const resetPreview = () => setPreview(null);
+  const restoreDraft = () => {
+    const values = recoverableDraft?.values;
+    if (!values) return;
+    if (typeof values.title === 'string') setTitle(values.title);
+    if (typeof values.version === 'string') setVersion(values.version);
+    if (typeof values.description === 'string') setDescription(values.description);
+    if (typeof values.content === 'string') setContent(values.content);
+    if (typeof values.categoryId === 'number') setCategoryId(values.categoryId);
+    if (typeof values.isPublic === 'boolean') setIsPublic(values.isPublic);
+    if (values.schematicSource === 'file' || values.schematicSource === 'paste') setSchematicSource(values.schematicSource);
+    if (typeof values.schematicCode === 'string') setSchematicCode(values.schematicCode);
+    setRecoverableDraft(null);
+  };
+
+  const resetPreview = () => { setPreview(null); setPreviewExpired(false); };
   const usePastedCode = kind === 'schematic' && schematicSource === 'paste';
   const selectFile = (candidate: File | undefined) => {
     if (!candidate) return;
@@ -83,6 +132,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       else if (file) formData.append('file', file);
       const nextPreview = await resourceApi.previewDraft(formData);
       setPreview(nextPreview);
+      setPreviewExpired(false);
       const parsed = nextPreview.metadata || {};
       if (!title.trim() && typeof parsed.name === 'string' && parsed.name.trim()) setTitle(parsed.name.trim());
       if (!description.trim() && typeof parsed.description === 'string' && parsed.description.trim()) setDescription(parsed.description.trim());
@@ -107,6 +157,11 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       setError('请先解析文件并生成预览');
       return;
     }
+    if (Date.parse(preview.expires_at) <= Date.now()) {
+      setPreview(null);
+      setError('预览已过期，请重新生成后提交。');
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
@@ -121,6 +176,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       if (content.trim()) formData.append('content', content.trim());
       if (categoryId) formData.append('category_id', String(categoryId));
       const resource = await resourceApi.upload(formData);
+      draft.clear();
       showSuccess(`${kind === 'map' ? '地图' : '蓝图'}已提交审核`);
       router.push(`/resources/${resource.id}`);
     } catch (err) {
@@ -132,6 +188,8 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      {recoverableDraft && <DraftRecovery savedAt={recoverableDraft.timestamp} onRestore={restoreDraft} onDiscard={() => { draft.clear(); setRecoverableDraft(null); }} className="mb-5" />}
+      {draft.saveError && <p role="status" className="mb-4 rounded-[var(--radius)] border border-[var(--warning)]/40 bg-[var(--warning)]/10 p-3 text-sm text-[var(--text-secondary)]">{draft.saveError}</p>}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-[var(--primary)]/10 px-3 py-1 text-xs font-medium text-[var(--primary)]"><ShieldCheck className="h-3.5 w-3.5" />论坛托管 · 审核后公开</p>
@@ -183,32 +241,35 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
               <Input label="资源版本（可选）" value={version} onChange={(event) => setVersion(event.target.value)} placeholder="未标注" maxLength={50} />
             </div>
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">短介绍</label>
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1000} className="mt-1 min-h-24 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder="说明玩法、用途或使用方式" />
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={300} className="mt-1 min-h-24 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder="说明玩法、用途或使用方式（最多 300 字）" />
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">分类</label>
             <select value={categoryId ?? ''} onChange={(event) => setCategoryId(event.target.value ? Number(event.target.value) : null)} className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]">
               <option value="">不选择</option>
               {categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">详细说明</label>
-            <textarea value={content} onChange={(event) => setContent(event.target.value)} className="mt-1 min-h-32 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder="可说明版本、玩法、使用步骤和注意事项" />
+            <div className="mt-1"><TiptapEditor value={content} onChange={setContent} ariaLabel="资源详细说明" placeholder="可说明版本、玩法、使用步骤和注意事项" minHeight="180px" imageUpload testId="workbench-resource-content" /></div>
             <label className="mt-4 flex items-center gap-2 text-sm text-[var(--text)]"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />审核通过后公开发布</label>
           </div>
         </section>
 
         <aside className="h-fit rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:sticky sm:top-6">
-          <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold text-[var(--text)]">提交前预览</h2>{preview && <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="h-4 w-4" />已解析</span>}</div>
+          <div className="mb-1 flex items-center justify-between"><h2 className="font-semibold text-[var(--text)]">最终详情页预览</h2>{preview && <span className="inline-flex items-center gap-1 text-xs text-[var(--success)]"><CheckCircle2 className="h-4 w-4" />已解析</span>}</div>
+          <p className="mb-4 text-xs text-[var(--text-muted)]">仅你可见 · 提交审核前预览正式详情页的信息结构</p>
           {preview ? (
             <>
+              {previewExpired && <div className="mb-3 flex items-center justify-between gap-3 rounded-[var(--radius)] bg-[var(--warning)]/10 p-3 text-xs text-[var(--text-secondary)]"><span>此预览已过期，需要重新生成。</span><button type="button" onClick={generatePreview} disabled={isPreviewing} className="shrink-0 font-medium text-[var(--primary)] underline">重新生成</button></div>}
               <div className={`overflow-hidden rounded-xl bg-[#101419] ${kind === 'map' ? 'aspect-video' : 'aspect-square'}`}><img src={preview.preview_url} alt={`${kind === 'map' ? '地图' : '蓝图'}预览`} className="h-full w-full object-contain" /></div>
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                 {displayMetadata(preview.metadata).map(([label, value]) => <div key={label}><dt className="text-xs text-[var(--text-muted)]">{label}</dt><dd className="mt-0.5 break-words text-[var(--text)]">{value}</dd></div>)}
               </dl>
               <p className="mt-4 text-xs text-[var(--text-muted)]">已验证文件格式。提交后仍需通过论坛审核才会公开。</p>
+              {draftResource && <div className="mt-6 border-t border-[var(--border)] pt-5"><h3 className="mb-3 text-sm font-semibold text-[var(--text)]">{draftResource.title}</h3>{draftResource.description && <p className="mb-4 text-sm leading-6 text-[var(--text-secondary)]">{draftResource.description}</p>}<ResourceKindDetails resource={draftResource} /></div>}
             </>
           ) : (
             <div className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] p-6 text-center"><Map className="mb-3 h-8 w-8 text-[var(--text-muted)]" /><p className="text-sm text-[var(--text-muted)]">选择内容并生成预览后，这里会显示解析结果。</p></div>
           )}
-          <button type="submit" disabled={!preview || isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}{isSubmitting ? '正在提交…' : text.action}</button>
+          <button type="submit" disabled={!preview || previewExpired || isSubmitting} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}{isSubmitting ? '正在提交…' : text.action}</button>
         </aside>
       </div>
     </form>

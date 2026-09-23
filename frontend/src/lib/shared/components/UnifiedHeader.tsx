@@ -154,7 +154,7 @@ export function UnifiedHeader({
             {isAuthenticated && user ? (
               <>
                 {showNotifications && (
-                  <div>
+                  <div className="hidden lg:block">
                     {notificationDropdownSlot || (
                       <Link
                         href="/notifications"
@@ -177,7 +177,7 @@ export function UnifiedHeader({
                 )}
 
                 {showMessages && (
-                  <div>
+                  <div className="hidden lg:block">
                     <Link
                       href="/messages"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
@@ -196,7 +196,7 @@ export function UnifiedHeader({
                 )}
 
                 {showFriends && (
-                  <div>
+                  <div className="hidden lg:block">
                     <Link
                       href="/friends"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
@@ -223,7 +223,7 @@ export function UnifiedHeader({
                 )}
 
                 {showPostButton && (
-                  <div>
+                  <div className="hidden lg:block">
                     <Link
                       href="/posts/new"
                       onClick={onPostCreate}
@@ -237,7 +237,7 @@ export function UnifiedHeader({
                   </div>
                 )}
 
-                <div>
+                <div className="hidden lg:block">
                   <details className="group relative">
                     <summary className="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]">
                       <UserIcon className="h-4 w-4" />
@@ -301,7 +301,7 @@ export function UnifiedHeader({
                 {onRegister && (
                   <Link
                     href="/register"
-                    className="bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
+                    className="hidden bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] lg:inline-flex"
                   >
                     注册
                   </Link>
@@ -309,7 +309,7 @@ export function UnifiedHeader({
                 {onLogin && (
                   <Link
                     href="/login"
-                    className="text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
+                    className="hidden text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)] lg:inline-flex"
                   >
                     登录
                   </Link>

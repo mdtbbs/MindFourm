@@ -19,6 +19,7 @@ import ContentDrawer from "@/components/layout/content-drawer";
 import ContentToolbar from "@/components/layout/content-toolbar";
 import { roleLabel } from "@/lib/display-labels";
 import { useNavigation } from '@/lib/navigation/context';
+import MobileBottomNavigation from '@/components/layout/mobile-bottom-navigation';
 
 export default function ContentShell({
   children,
@@ -162,7 +163,7 @@ export default function ContentShell({
         </Suspense>
       )}
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
         <ContentToolbar
           siteName={brand.siteName}
           logoUrl={brand.logoUrl || undefined}
@@ -186,6 +187,7 @@ export default function ContentShell({
         <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
         <Footer />
       </div>
+      <MobileBottomNavigation isAuthenticated={isAuthenticated} userId={user?.id} />
     </div>
   );
 }

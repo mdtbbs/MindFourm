@@ -14,7 +14,7 @@ export type PortalData = { modules: PortalModule[]; generated_at: string };
 
 export type HomeSectionState = 'ready' | 'stale' | 'unavailable';
 export type HomeSection<T> = { state: HomeSectionState; items: T[] };
-export type HomeResource = { id: number; title: string; slug: string | null; resource_kind: string | null; version: string | null; updated_at: string; author_name: string | null; category_name: string | null };
+export type HomeResource = { id: number; title: string; slug: string | null; resource_kind: string | null; version: string | null; updated_at: string; author_name: string | null; category_name: string | null; description: string | null; preview_url: string | null };
 export type HomeNotice = { id: number; public_id: string; title: string; excerpt: string | null; published_at: string | null };
 export type HomeNews = { id: number; title: string; slug: string | null; category: string | null };
 export type HomeDeveloperEntry = { id: number; category_id: number | null; external_id: string; title: string; state: string; url: string; repository: string; updated_at: string };

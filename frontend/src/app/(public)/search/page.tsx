@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import ThreadList from '@/components/forum/thread-list';
-import ResourceCard from '@/components/forum/resource-card';
+import CompactResourceCard from '@/components/forum/compact-resource-card';
 import SearchEnhancements from '@/components/forum/search-enhancements';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { Resource, SearchResultResponse } from '@/types';
@@ -81,14 +81,14 @@ export default async function SearchPage({
   const { groups } = result;
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-surface-900">
+        <h1 className="text-2xl font-bold text-[var(--text)]">
           搜索结果
-          {query && <span className="text-surface-500 font-normal text-lg ml-2">&ldquo;{query}&rdquo;</span>}
+          {query && <span className="ml-2 text-lg font-normal text-[var(--text-muted)]">&ldquo;{query}&rdquo;</span>}
         </h1>
         {totalResults > 0 && (
-          <p className="text-sm text-surface-500 mt-1">
+          <p className="mt-1 text-sm text-[var(--text-secondary)]">
             找到 {totalResults} 条结果
           </p>
         )}
@@ -101,21 +101,21 @@ export default async function SearchPage({
           {groups.users.length > 0 && (
             <SearchSection title="用户" count={groups.users.length}>
               <div className="grid gap-3 sm:grid-cols-2">
-                {groups.users.map((user) => <Link key={user.id} href={`/users/${user.id}`} className="rounded-lg border border-surface-200 p-3 hover:border-primary-300">
-                  <div className="font-medium text-surface-900">@{user.username}</div>
-                  {user.bio && <p className="mt-1 line-clamp-2 text-sm text-surface-500">{user.bio}</p>}
+                {groups.users.map((user) => <Link key={user.id} href={`/users/${user.id}`} className="border border-[var(--border)] p-3 hover:border-[var(--primary)]">
+                  <div className="font-medium text-[var(--text)]">@{user.username}</div>
+                  {user.bio && <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{user.bio}</p>}
                 </Link>)}
               </div>
             </SearchSection>
           )}
           {groups.resources.length > 0 && (
             <div>
-              <h2 className="text-lg font-semibold text-surface-900 mb-3">
+              <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">
                 资源 ({groups.resources.length})
               </h2>
-              <div className="space-y-3">
+              <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">
                 {groups.resources.map((resource) => (
-                  <ResourceCard key={resource.id} resource={resource} />
+                  <CompactResourceCard key={resource.id} resource={resource} />
                 ))}
               </div>
             </div>
@@ -123,7 +123,7 @@ export default async function SearchPage({
 
           {groups.posts.length > 0 && (
             <div>
-              <h2 className="text-lg font-semibold text-surface-900 mb-3">
+            <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">
                 帖子 ({groups.posts.length})
               </h2>
               <ThreadList posts={groups.posts} />
@@ -139,9 +139,9 @@ export default async function SearchPage({
             {groups.wiki.map((article) => <SearchLink key={article.id} href={`/search?q=${encodeURIComponent(article.title)}`} title={article.title} description={article.summary} meta={article.category || undefined} />)}
           </SearchSection>}
           {groups.developer_feed.length > 0 && <SearchSection title="开发动态" count={groups.developer_feed.length}>
-            {groups.developer_feed.map((entry) => <a key={entry.id} href={entry.source_url} rel="noreferrer" className="block rounded-lg border border-surface-200 p-3 hover:border-primary-300">
-              <div className="font-medium text-surface-900">{entry.summary || `${entry.repository} #${entry.external_id}`}</div>
-              <p className="mt-1 text-sm text-surface-500">{entry.repository} · @{entry.author_login} · {entry.state}</p>
+            {groups.developer_feed.map((entry) => <a key={entry.id} href={entry.source_url} rel="noreferrer" className="block border border-[var(--border)] p-3 hover:border-[var(--primary)]">
+              <div className="font-medium text-[var(--text)]">{entry.summary || `${entry.repository} #${entry.external_id}`}</div>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">{entry.repository} · @{entry.author_login} · {entry.state}</p>
             </a>)}
           </SearchSection>}
         </div>
@@ -153,9 +153,9 @@ export default async function SearchPage({
 }
 
 function SearchSection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
-  return <section><h2 className="mb-3 text-lg font-semibold text-surface-900">{title} ({count})</h2><div className="space-y-2">{children}</div></section>;
+  return <section><h2 className="mb-3 text-lg font-semibold text-[var(--text)]">{title} ({count})</h2><div className="space-y-2">{children}</div></section>;
 }
 
 function SearchLink({ href, title, description, meta }: { href: string; title: string; description?: string | null; meta?: string }) {
-  return <Link href={href} className="block rounded-lg border border-surface-200 p-3 hover:border-primary-300"><div className="font-medium text-surface-900">{title}</div>{description && <p className="mt-1 line-clamp-2 text-sm text-surface-500">{description}</p>}{meta && <span className="mt-2 inline-block text-xs text-surface-500">{meta}</span>}</Link>;
+  return <Link href={href} className="block border border-[var(--border)] p-3 hover:border-[var(--primary)]"><div className="font-medium text-[var(--text)]">{title}</div>{description && <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{description}</p>}{meta && <span className="mt-2 inline-block text-xs text-[var(--text-muted)]">{meta}</span>}</Link>;
 }

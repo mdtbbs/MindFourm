@@ -1,5 +1,5 @@
 import type { Resource } from '@/types';
-import { resourceCardFacts, resourceFileExtension, resourceFileSummary, resourceStatusLabel, resourceVersionLabel } from './presentation';
+import { resourceCardFacts, resourceFileExtension, resourceFileSummary, resourceStatusLabel, resourceVersionLabel, resolveResourceCardPresentation } from './presentation';
 import { resourceKindLabel } from '@/lib/display-labels';
 
 const resource = {
@@ -35,4 +35,13 @@ test('map cards prioritize parsed map facts', () => {
     { label: '地图尺寸', value: '300 × 200' },
     { label: '模式', value: 'survival' },
   ]));
+});
+
+test('resource cards use gallery layouts only for maps and schematics', () => {
+  expect(resolveResourceCardPresentation('map')).toBe('gallery');
+  expect(resolveResourceCardPresentation('schematic')).toBe('gallery');
+  expect(resolveResourceCardPresentation('mod')).toBe('information');
+  expect(resolveResourceCardPresentation('development_tool')).toBe('information');
+  expect(resolveResourceCardPresentation('other')).toBe('generic');
+  expect(resolveResourceCardPresentation('unexpected_kind')).toBe('generic');
 });

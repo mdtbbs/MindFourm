@@ -2,11 +2,11 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, Search } from 'lucide-react';
 import ThreadList from '@/components/forum/thread-list';
+import CompactResourceCard from '@/components/forum/compact-resource-card';
 import { getHomeData, type HomeData, type HomeSection } from '@/lib/api/v1/home';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
-import { resourceKindLabel } from '@/lib/display-labels';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,7 +59,7 @@ export default async function HomePage() {
 
       <section><SectionHeading title="正在讨论" href="/threads" />{home.discussions.state === 'unavailable' ? <SectionUnavailable /> : home.discussions.items.length ? <ThreadList posts={home.discussions.items} /> : <p className="border border-[var(--border)] p-6 text-center text-sm text-[var(--text-muted)]">暂时没有社区讨论</p>}</section>
 
-      <section className="mt-8"><SectionHeading title="最新资源" href="/resources" />{home.resources.state === 'unavailable' ? <SectionUnavailable /> : <div className="grid gap-3 sm:grid-cols-2">{home.resources.items.map((resource) => <Link key={resource.id} href={`/resources/${resource.id}${resource.slug ? `-${resource.slug}` : ''}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{resource.title}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}{resource.version ? ` · 资源版本 ${resource.version}` : ''}{resource.author_name ? ` · ${resource.author_name}` : ''}</p></Link>)}</div>}</section>
+      <section className="mt-8"><SectionHeading title="最新资源" href="/resources" />{home.resources.state === 'unavailable' ? <SectionUnavailable /> : home.resources.items.length ? <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">{home.resources.items.map((resource) => <CompactResourceCard key={resource.id} resource={resource} />)}</div> : <p className="border border-[var(--border)] p-5 text-sm text-[var(--text-muted)]">暂时没有公开资源</p>}</section>
 
       <section className="mt-8"><SectionHeading title="像素快报" />{home.news.state === 'unavailable' ? <SectionUnavailable /> : home.news.items.length ? <div className="grid gap-3 sm:grid-cols-2">{home.news.items.map((news) => <Link key={news.id} href={`/search?q=${encodeURIComponent(news.title)}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{news.title}</h3>{news.category && <p className="mt-1 text-xs text-[var(--text-muted)]">{news.category}</p>}</Link>)}</div> : null}</section>
 

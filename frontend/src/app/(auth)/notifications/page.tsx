@@ -72,24 +72,24 @@ export default function NotificationsPage() {
   const typeIcon = (type: string) => {
     switch (type) {
       case 'reply':
-        return <MessageSquare className="w-5 h-5 text-blue-500" />;
+        return <MessageSquare className="w-5 h-5 text-[var(--primary)]" />;
       case 'mention':
-        return <AtSign className="w-5 h-5 text-orange-500" />;
+        return <AtSign className="w-5 h-5 text-[var(--warning)]" />;
       case 'post_like':
       case 'reply_like':
-        return <Heart className="w-5 h-5 text-red-500" />;
+        return <Heart className="w-5 h-5 text-[var(--error)]" />;
       case 'message':
-        return <Mail className="w-5 h-5 text-green-500" />;
+        return <Mail className="w-5 h-5 text-[var(--success)]" />;
       case 'best_answer':
-        return <CheckCheck className="w-5 h-5 text-emerald-600" />;
+        return <CheckCheck className="w-5 h-5 text-[var(--success)]" />;
       case 'friend_request':
-        return <UserPlus className="w-5 h-5 text-cyan-500" />;
+        return <UserPlus className="w-5 h-5 text-[var(--primary)]" />;
       case 'friend_accepted':
-        return <UserCheck className="w-5 h-5 text-teal-500" />;
+        return <UserCheck className="w-5 h-5 text-[var(--success)]" />;
       case 'system':
-        return <Bell className="w-5 h-5 text-purple-500" />;
+        return <Bell className="w-5 h-5 text-[var(--text-muted)]" />;
       default:
-        return <Bell className="w-5 h-5 text-surface-400" />;
+        return <Bell className="w-5 h-5 text-[var(--text-muted)]" />;
     }
   };
 
@@ -132,7 +132,7 @@ export default function NotificationsPage() {
 
     if (notification.type === 'system') {
       return (
-        <div className="mb-2 rounded-lg border border-surface-200 bg-surface-50 px-3 py-2 text-sm text-surface-700 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-200">
+        <div className="mb-2 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text-secondary)]">
           <MarkdownRenderer
             content={notification.content}
             className="prose-p:my-1 prose-headings:my-2 prose-ul:my-2 prose-li:my-0"
@@ -142,7 +142,7 @@ export default function NotificationsPage() {
     }
 
     return (
-      <p className="mb-2 line-clamp-2 text-sm text-surface-600 dark:text-gray-300">{notification.content}</p>
+      <p className="mb-2 line-clamp-2 text-sm text-[var(--text-secondary)]">{notification.content}</p>
     );
   };
 
@@ -152,28 +152,28 @@ export default function NotificationsPage() {
   );
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">通知</h1>
+    <div className="mx-auto max-w-3xl px-4 py-8">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-[var(--text)]">通知</h1>
         <button
           onClick={handleMarkAllRead}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-surface-100 dark:bg-gray-700 hover:bg-surface-200 dark:hover:bg-gray-600 rounded-lg transition-colors text-surface-700 dark:text-gray-300"
+          className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius)] bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
         >
           <CheckCheck className="w-4 h-4" />
           全部标记已读
         </button>
       </div>
 
-      <div className="flex items-center gap-2 mb-6">
-        <Filter className="w-4 h-4 text-surface-500 dark:text-gray-400" />
+      <div className="mb-6 flex items-center gap-2">
+        <Filter className="h-4 w-4 text-[var(--text-muted)]" />
         {(['all', 'unread', 'read'] as const).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-3 py-1 rounded-lg text-sm transition-colors ${
+            className={`min-h-11 rounded-[var(--radius)] px-3 py-1 text-sm transition-colors ${
               filter === f
-                ? 'bg-primary-600 text-white'
-                : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300 hover:bg-surface-200 dark:hover:bg-gray-600'
+                ? 'bg-[var(--primary)] text-white'
+                : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
             }`}
           >
             {f === 'all' ? '全部' : f === 'unread' ? '未读' : '已读'}
@@ -188,40 +188,40 @@ export default function NotificationsPage() {
       ) : notifications.length === 0 ? (
         <EmptyState title={filter === 'unread' ? '没有未读通知' : filter === 'read' ? '没有已读通知' : '暂无通知'} />
       ) : (
-        <div className="space-y-3">
+        <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
           {notifications.map(n => (
             <div
               key={n.id}
-              className={`bg-white dark:bg-gray-800 rounded-lg border p-4 ${
-                !n.is_read ? 'border-primary-200 dark:border-primary-700 bg-primary-50/20 dark:bg-primary-900/10' : 'border-surface-200 dark:border-gray-700'
+              className={`min-w-0 px-3 py-4 sm:px-4 ${
+                !n.is_read ? 'border-l-2 border-l-[var(--primary)] bg-[var(--primary-soft)]' : 'border-l-2 border-l-transparent'
               }`}
             >
               <div className="flex items-start gap-4">
                 <div className="shrink-0">{typeIcon(n.type)}</div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                     {actorLabel(n) && (
-                      <span className="font-medium text-surface-900 dark:text-gray-100">{actorLabel(n)}</span>
+                      <span className="font-medium text-[var(--text)]">{actorLabel(n)}</span>
                     )}
-                    <span className="text-sm text-surface-500 dark:text-gray-400">{typeText(n.type)}</span>
+                    <span className="text-sm text-[var(--text-muted)]">{typeText(n.type)}</span>
                   </div>
                   {renderContent(n)}
                   {n.post_title && (
                     <Link
                       href={`/posts/${n.post_id}${n.reply_id ? `#reply-${n.reply_id}` : ''}`}
-                      className="text-sm text-primary-600 hover:text-primary-700"
+                      className="break-words text-sm text-[var(--primary)] hover:text-[var(--primary-dark)]"
                     >
                       {n.post_title}
                     </Link>
                   )}
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-surface-400 dark:text-gray-500">
+                    <span className="text-xs text-[var(--text-muted)]">
                       {new Date(n.created_at).toLocaleString('zh-CN')}
                     </span>
                     {!n.is_read && (
                       <button
                         onClick={() => handleMarkRead(n.id)}
-                        className="text-xs text-surface-500 dark:text-gray-400 hover:text-primary-600"
+                        className="min-h-11 text-xs text-[var(--text-secondary)] hover:text-[var(--primary)]"
                       >
                         标记已读
                       </button>
@@ -235,14 +235,14 @@ export default function NotificationsPage() {
       )}
 
       {actionError && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300" role="alert">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--error)]/30 bg-[var(--error)]/10 px-3 py-2 text-sm text-[var(--error)]" role="alert">
           <span>{actionError}</span>
           <button type="button" onClick={() => setActionError(null)} className="font-medium underline">关闭</button>
         </div>
       )}
 
       {pagination.totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-8">
+        <div className="mt-8 flex justify-center gap-2">
           {/* Windowed: rendering one button per page allocated an array the length of
               totalPages on every render and produced an unusable strip once the count
               grew. Mirrors the windowing in components/ui/pagination.tsx. */}
@@ -252,14 +252,14 @@ export default function NotificationsPage() {
 
             return (
               <span key={p} className="inline-flex items-center gap-2">
-                {gap && <span className="px-1 text-surface-400">…</span>}
+                {gap && <span className="px-1 text-[var(--text-muted)]">…</span>}
                 <button
                   onClick={() => loadNotifications(p)}
                   aria-current={p === pagination.page ? 'page' : undefined}
-                  className={`px-3 py-1 rounded ${
+                  className={`min-h-11 rounded-[var(--radius)] px-3 py-1 ${
                     p === pagination.page
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300'
+                      ? 'bg-[var(--primary)] text-white'
+                      : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                   }`}
                 >
                   {p}

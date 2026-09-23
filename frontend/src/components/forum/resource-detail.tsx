@@ -14,7 +14,7 @@ import ResourceGallery from './resources/detail/resource-gallery';
 import ResourceActions from './resources/detail/resource-actions';
 import ResourceTabs, { type ResourceTab } from './resources/detail/resource-tabs';
 import ResourceAside from './resources/detail/resource-aside';
-import { resourceFileExtension, resourceStatusLabel } from '@/lib/resources/presentation';
+import { resourceCardFacts, resourceFileExtension, resourceStatusLabel } from '@/lib/resources/presentation';
 import { formatDate } from '@/lib/utils';
 import { resourceKindLabel } from '@/lib/display-labels';
 
@@ -62,6 +62,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     return renderedBuild === null ? [] : [`Build ${renderedBuild}`];
   }, [metadata?.supported_versions, renderedBuild]);
   const displayedCompatibility = metadata?.compatibility || [];
+  const quickFacts = resourceCardFacts(resource).slice(0, 4);
   const downloadExtension = resourceFileExtension(primaryVersion?.file_name || resource.file_name);
   const downloadLabel = isSchematic || isMap ? `下载${downloadExtension ? ` ${downloadExtension}` : '文件'}` : `下载 ${resource.version || primaryVersion?.version || '资源'}`;
 
@@ -178,7 +179,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     } catch { /* cancelled share */ }
   };
 
-  return <div className="space-y-6">
+  return <div className="space-y-6 pb-16 lg:pb-0">
     <section className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] shadow-sm">
       <div>
         <div className="p-5 sm:p-8">
@@ -193,6 +194,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
               </div>
               <h1 className="min-w-0 break-words text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
               <p className="mt-3 max-w-3xl line-clamp-3 text-base leading-7 text-[var(--text-secondary)]">{resource.description || '暂无简短介绍，查看下方完整资源说明。'}</p>
+              {quickFacts.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{quickFacts.map((fact) => <div key={fact.label} className="min-w-0 border-l-2 border-[var(--primary)]/40 pl-2.5"><dt className="text-xs text-[var(--text-muted)]">{fact.label}</dt><dd className="mt-0.5 truncate text-sm font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>}
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
                 <Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 max-w-full items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span><span className="min-w-0 break-all">{resource.username || '未知作者'}</span></Link>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(resource.updated_at || resource.created_at)} 更新</span>

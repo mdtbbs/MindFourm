@@ -29,6 +29,16 @@ export default function ResourceFilters({
   const planet = searchParams.get('planet') || '';
   const [localSearch, setLocalSearch] = useState(urlSearch);
   const [localTag, setLocalTag] = useState(tag);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileFiltersOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileFiltersOpen(false); };
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKeyDown); };
+  }, [mobileFiltersOpen]);
 
   useEffect(() => setLocalSearch(urlSearch), [urlSearch]);
   useEffect(() => setLocalTag(tag), [tag]);
@@ -55,7 +65,8 @@ export default function ResourceFilters({
         <label className="sr-only" htmlFor="resource-sort">排序</label><select id="resource-sort" value={sort} onChange={(event) => updateFilters({ sort: event.target.value || null })} className={inputClass}>
           <option value="created_at">最新发布</option><option value="updated_at">最近更新</option><option value="download_count">最多下载</option><option value="rating_average">评分最高</option><option value="rating_count">评分最多</option>
         </select>
-        <details className="relative">
+        <button type="button" className={`${inputClass} inline-flex items-center gap-2 sm:hidden`} onClick={() => setMobileFiltersOpen(true)} aria-haspopup="dialog"><SlidersHorizontal className="h-4 w-4" />筛选{activeFilters > 0 && <span className="rounded-full bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary)]">{activeFilters}</span>}</button>
+        <details className="relative hidden sm:block">
           <summary className="flex h-full cursor-pointer list-none items-center gap-2 rounded-md border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"><SlidersHorizontal className="h-4 w-4" />筛选{activeFilters > 0 && <span className="rounded-full bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary)]">{activeFilters}</span>}</summary>
           <div className="absolute right-0 z-20 mt-2 grid w-[min(90vw,34rem)] gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 shadow-md sm:grid-cols-2">
             <label className="grid gap-1 text-xs text-[var(--text-muted)]">分类<select value={selectedCategory} onChange={(event) => updateFilters({ category_id: event.target.value || null })} className={inputClass}><option value="">全部分类</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
@@ -67,6 +78,22 @@ export default function ResourceFilters({
         </details>
       </div>
     </div>
+    {mobileFiltersOpen && <div className="fixed inset-0 z-[70] flex items-end sm:hidden" role="dialog" aria-modal="true" aria-label="资源筛选">
+      <button type="button" aria-label="关闭筛选" className="absolute inset-0 bg-black/45" onClick={() => setMobileFiltersOpen(false)} />
+      <section className="relative max-h-[88dvh] w-full overflow-y-auto rounded-t-[var(--radius-card)] border-t border-[var(--border)] bg-[var(--bg-card)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4">
+        <div className="mb-4 flex items-center justify-between"><h2 className="text-base font-semibold text-[var(--text)]">筛选资源</h2><button type="button" aria-label="关闭" onClick={() => setMobileFiltersOpen(false)} className="flex h-11 w-11 items-center justify-center rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"><X className="h-5 w-5" /></button></div>
+        <div className="grid gap-3">
+          <label className="grid gap-1 text-xs text-[var(--text-muted)]">资源类型<select value={resourceKind} onChange={(event) => updateFilters({ resource_kind: event.target.value || null })} className={inputClass}><option value="">全部类型</option>{RESOURCE_KINDS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="grid gap-1 text-xs text-[var(--text-muted)]">分类<select value={selectedCategory} onChange={(event) => updateFilters({ category_id: event.target.value || null })} className={inputClass}><option value="">全部分类</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+          <label className="grid gap-1 text-xs text-[var(--text-muted)]">Mindustry 版本<select value={supportedVersion} onChange={(event) => updateFilters({ supported_version: event.target.value || null })} className={inputClass}><option value="">全部版本</option>{supportedVersions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label className="grid gap-1 text-xs text-[var(--text-muted)]">平台<select value={compatibility} onChange={(event) => updateFilters({ compatibility: event.target.value || null })} className={inputClass}><option value="">全部平台</option>{compatibilityOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label className="grid gap-1 text-xs text-[var(--text-muted)]">星球<select value={planet} onChange={(event) => updateFilters({ planet: event.target.value || null })} className={inputClass}><option value="">全部星球</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label className="grid gap-1 text-xs text-[var(--text-muted)]">标签<input value={localTag} onChange={(event) => setLocalTag(event.target.value)} onBlur={() => { if (localTag !== tag) updateFilters({ tag: localTag || null }); }} onKeyDown={(event) => { if (event.key === 'Enter' && localTag !== tag) updateFilters({ tag: localTag || null }); }} placeholder="输入标签" className={inputClass} /></label>
+          <label className="grid gap-1 text-xs text-[var(--text-muted)]">排序<select value={sort} onChange={(event) => updateFilters({ sort: event.target.value || null })} className={inputClass}><option value="created_at">最新发布</option><option value="updated_at">最近更新</option><option value="download_count">最多下载</option><option value="rating_average">评分最高</option><option value="rating_count">评分最多</option></select></label>
+        </div>
+        <div className="sticky bottom-0 mt-4 flex gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] py-3"><button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); }} className="min-h-11 flex-1 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)]">清除</button><button type="button" onClick={() => setMobileFiltersOpen(false)} className="min-h-11 flex-1 rounded-[var(--radius)] bg-[var(--primary)] px-4 text-sm font-semibold text-white">应用筛选</button></div>
+      </section>
+    </div>}
     <div className="-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 pb-1" aria-label="资源类型">
       <button type="button" aria-pressed={!resourceKind} onClick={() => updateFilters({ resource_kind: null })} className={chipClass(!resourceKind)}>全部</button>
       {RESOURCE_KINDS.map(({ value, label }) => <button key={value} type="button" aria-pressed={resourceKind === value} onClick={() => updateFilters({ resource_kind: value })} className={chipClass(resourceKind === value)}>{label}</button>)}

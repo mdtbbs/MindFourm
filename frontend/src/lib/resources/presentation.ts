@@ -87,3 +87,14 @@ export function resourceStatusLabel(status?: string | null): string {
   if (status === 'archived') return '已归档';
   return '资源';
 }
+
+export type ResourceCardPresentation = 'gallery' | 'information' | 'generic';
+
+/** Maps and schematics need a preview first; software and tools need readable facts. */
+export function resolveResourceCardPresentation(kind?: string | null): ResourceCardPresentation {
+  if (kind === 'map' || kind === 'schematic') return 'gallery';
+  if (['mod', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'save'].includes(kind || '')) {
+    return 'information';
+  }
+  return 'generic';
+}

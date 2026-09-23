@@ -366,7 +366,7 @@ export default async function UserProfilePage({
                   </div>
                   {bookmark.category_name && (
                     <div className="mt-2">
-                      <span className="text-xs text-[var(--text-secondary)] bg-[var(--bg-elevated)] dark:bg-gray-800 px-2 py-1 rounded">
+                      <span className="rounded-[var(--radius)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[var(--text-secondary)]">
                         {bookmark.category_name}
                       </span>
                     </div>
@@ -401,7 +401,7 @@ export default async function UserProfilePage({
                   </div>
                   {like.category_name && (
                     <div className="mt-2 flex items-center gap-2">
-                      <span className="text-xs text-[var(--text-secondary)] bg-[var(--bg-elevated)] dark:bg-gray-800 px-2 py-1 rounded">
+                      <span className="rounded-[var(--radius)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[var(--text-secondary)]">
                         {like.category_name}
                       </span>
                       {like.like_count > 0 && (

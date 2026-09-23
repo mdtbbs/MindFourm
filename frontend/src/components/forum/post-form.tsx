@@ -20,9 +20,9 @@ import { useToastStore } from '@/store/toast-store';
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
   loading: () => (
-    <div className="w-full min-h-[200px] flex items-center justify-center border border-surface-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900">
-      <Loader2 className="w-5 h-5 animate-spin text-surface-400" />
-      <span className="ml-2 text-sm text-surface-400">加载编辑器…</span>
+    <div className="flex min-h-[200px] w-full items-center justify-center rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)]">
+      <Loader2 className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
+      <span className="ml-2 text-sm text-[var(--text-muted)]">加载编辑器…</span>
     </div>
   ),
 });
@@ -196,8 +196,8 @@ export default function PostForm() {
 
       {/* ── Header ──────────────────────────────────── */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">发布新帖子</h1>
-        <p className="text-sm text-surface-500 dark:text-gray-400 mt-1">
+        <h1 className="text-2xl font-bold text-[var(--text)]">发布新帖子</h1>
+        <p className="mt-1 text-sm text-[var(--text-secondary)]">
           使用富文本编辑器编写，支持粘贴 / 拖放上传图片
         </p>
       </div>
@@ -224,12 +224,10 @@ export default function PostForm() {
             onChange={e => { setTitle(e.target.value); if (titleError) setTitleError(''); }}
             placeholder="请输入帖子标题"
             maxLength={200}
-            className={`w-full text-xl font-semibold px-4 py-3 bg-white dark:bg-gray-800 border rounded-xl
-              focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition
-              text-surface-900 dark:text-gray-100 placeholder:text-surface-400 dark:placeholder:text-gray-500
-              ${titleError ? 'border-red-400' : 'border-surface-200 dark:border-gray-700'}`}
+            className={`w-full rounded-[var(--radius)] border bg-[var(--bg-card)] px-4 py-3 text-xl font-semibold text-[var(--text)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20
+              ${titleError ? 'border-[var(--error)]' : 'border-[var(--border)]'}`}
           />
-          {titleError && <p className="text-sm text-red-500 mt-1.5 ml-1">{titleError}</p>}
+          {titleError && <p className="ml-1 mt-1.5 text-sm text-[var(--error)]">{titleError}</p>}
         </div>
 
         {/* ── Editor ────────────────────────────────── */}
@@ -242,10 +240,10 @@ export default function PostForm() {
             placeholder="使用富文本编辑器编写帖子内容，支持粘贴 / 拖放上传图片..."
             minHeight="280px"
             imageUpload
-            className={contentError ? 'ring-1 ring-red-400 rounded-xl' : ''}
+            className={contentError ? 'rounded-[var(--radius-card)] ring-1 ring-[var(--error)]' : ''}
           />
           {contentError && (
-            <p className="text-sm text-red-500 mt-1.5 ml-1">{contentError}</p>
+            <p className="ml-1 mt-1.5 text-sm text-[var(--error)]">{contentError}</p>
           )}
         </div>
 
@@ -253,7 +251,7 @@ export default function PostForm() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Category */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 dark:text-gray-300 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
               分类
             </label>
             <Select
@@ -265,7 +263,7 @@ export default function PostForm() {
 
           {/* Tags */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 dark:text-gray-300 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
               标签
             </label>
             <Input
@@ -275,7 +273,7 @@ export default function PostForm() {
               maxLength={200}
             />
             {availableTagNames && (
-              <p className="text-xs text-surface-400 mt-1 truncate" title={availableTagNames}>
+              <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={availableTagNames}>
                 可用：{availableTagNames}
               </p>
             )}
@@ -283,28 +281,28 @@ export default function PostForm() {
 
           {/* Status */}
           <div>
-            <label className="block text-sm font-medium text-surface-700 dark:text-gray-300 mb-1.5">
+            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
               状态
             </label>
             <div className="flex gap-4 mt-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="status" value="published"
                   checked={status === 'published'} onChange={() => setStatus('published')}
-                  className="text-primary-600 focus:ring-primary-500" />
-                <span className="text-sm text-surface-700 dark:text-gray-300">发布</span>
+                  className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
+                <span className="text-sm text-[var(--text-secondary)]">发布</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="status" value="draft"
                   checked={status === 'draft'} onChange={() => setStatus('draft')}
-                  className="text-primary-600 focus:ring-primary-500" />
-                <span className="text-sm text-surface-700 dark:text-gray-300">草稿</span>
+                  className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
+                <span className="text-sm text-[var(--text-secondary)]">草稿</span>
               </label>
             </div>
           </div>
         </div>
 
         {/* ── Actions ───────────────────────────────── */}
-        <div className="flex items-center justify-between pt-4 border-t border-surface-200 dark:border-gray-700">
+        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 -mx-4 flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--bg-card)]/95 px-4 py-3 backdrop-blur lg:static lg:mx-0 lg:bg-transparent lg:px-0 lg:py-4 lg:backdrop-blur-none lg:bottom-auto">
           <Button type="button" variant="secondary" onClick={() => { if (hasDraftContent) draft.save(draftValues); router.back(); }}>
             取消
           </Button>
@@ -333,7 +331,7 @@ export default function PostForm() {
               )}
             </Button>
             {draft.lastSavedAt && hasDraftContent && (
-              <span className="text-xs text-surface-400">已保存到此设备</span>
+              <span className="text-xs text-[var(--text-muted)]">已保存到此设备</span>
             )}
           </div>
         </div>

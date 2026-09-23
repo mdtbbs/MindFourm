@@ -38,7 +38,8 @@ export class MdtbbsPortalSectionProvider implements PortalSectionProvider, OnMod
     return resources.map((resource) => ({ id: resource.id, title: resource.title, slug: resource.slug || null,
       resource_kind: resource.resource_kind || null, version: resource.version || null,
       updated_at: resource.updated_at.toISOString(), author_name: resource.user?.username || null,
-      category_name: resource.category?.name || null }));
+      category_name: resource.category?.name || null, description: resource.summary || resource.description || null,
+      preview_url: resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null }));
   }
 
   private async getDeveloperEntries(source: 'GITHUB_ISSUE' | 'GITHUB_PR'): Promise<HomeDeveloperEntry[]> {

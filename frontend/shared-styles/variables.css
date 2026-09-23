@@ -6,6 +6,7 @@
   --primary: #2f80ed;
   --primary-dark: #2563eb;
   --primary-light: #5ba0ff;
+  --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
   --accent: #dcecff;
 
   /* ===== 浅色主题 (默认) - 现代极简 ===== */
@@ -101,6 +102,7 @@
   --primary: #74a9ff;
   --primary-dark: #5f9cff;
   --primary-light: #9fc2ff;
+  --primary-soft: color-mix(in srgb, var(--primary) 18%, transparent);
   --accent: #173153;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.24);

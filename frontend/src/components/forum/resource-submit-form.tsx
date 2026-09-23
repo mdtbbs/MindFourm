@@ -200,7 +200,7 @@ export default function ResourceSubmitForm() {
 
       {!isForumManagedKind ? (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-surface-700 dark:text-gray-300">资源类型 *</p>
+          <p className="text-sm font-medium text-[var(--text-secondary)]">资源类型 *</p>
           <div className="grid gap-3 sm:grid-cols-2">
           <label
             data-testid="resource-type-upload"
@@ -320,16 +320,17 @@ export default function ResourceSubmitForm() {
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-[var(--text-secondary)]">短介绍</label>
-        <TiptapEditor
+        <textarea
+          data-testid="resource-description-input"
           value={description}
-          onChange={setDescription}
-          ariaLabel="资源短介绍"
-          placeholder="会显示在资源列表标题下方，支持富文本和图片"
-          minHeight="120px"
-          compact
-          imageUpload
-          testId="resource-description-input"
+          onChange={(event) => setDescription(event.target.value)}
+          aria-label="资源短介绍"
+          placeholder="用几句话介绍资源，会显示在资源列表中。"
+          maxLength={300}
+          rows={3}
+          className="w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm leading-6 text-[var(--text)] placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
         />
+        <p className="text-right text-xs text-[var(--text-muted)]">{description.length}/300</p>
       </div>
 
       <div>
