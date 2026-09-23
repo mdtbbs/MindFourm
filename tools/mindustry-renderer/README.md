@@ -24,8 +24,13 @@ java -Xmx512m -cp build/libs/mindfourm-mindustry-renderer-0.1.0.jar:build/libs/m
 
 Set the forum's `RESOURCE_RENDERER_URL=http://127.0.0.1:6100`, matching
 `RESOURCE_RENDERER_TOKEN`, and `RESOURCE_PREVIEW_ROOT` to the same directory.
-The worker accepts only `POST /v1/analyze`; its input is capped at 20 MiB and
-all generated paths are content-hash derived.
+The worker accepts `POST /v1/analyze` and authenticated batched
+`GET /v1/content-metadata`; analysis input is capped at 20 MiB and all
+generated paths are content-hash derived. The schematic renderer uses the
+official generated block icon composition from the v160.2 desktop atlas where
+available. Map previews use Mindustry v160.2 `MapIO.generatePreview(Map)`,
+which reads saved floor, overlay, block and building-team data from the
+`preview_map` region.
 
 `copyMindustryAssets` extracts only the official desktop `sprites/` directory.
 Deploy that directory to `ASSETS_ROOT`; it is read-only at runtime and is kept

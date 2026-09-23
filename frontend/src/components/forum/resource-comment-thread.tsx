@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { resourceCommentApi } from '@/lib/api/client';
 import type { ResourceComment } from '@/types';
+import { useAuth } from '@/store/user-store';
 import { MessageSquare, Heart, Reply as ReplyIcon, Edit, Trash2, Send } from 'lucide-react';
 
 interface ResourceCommentThreadProps {
   resourceId: number;
   currentUserId?: number;
+  onCountChange?: (count: number) => void;
 }
 
 interface CommentNode extends ResourceComment {
@@ -28,7 +30,7 @@ function buildCommentTree(comments: ResourceComment[]): CommentNode[] {
     const node = map.get(c.id)!;
     if (c.parent_id && map.has(c.parent_id)) {
       map.get(c.parent_id)!.children!.push(node);
-    } else {
+    } else if (!c.parent_id) {
       roots.push(node);
     }
   }
@@ -36,23 +38,39 @@ function buildCommentTree(comments: ResourceComment[]): CommentNode[] {
   return roots;
 }
 
-export default function ResourceCommentThread({ resourceId, currentUserId }: ResourceCommentThreadProps) {
+export default function ResourceCommentThread({ resourceId, currentUserId, onCountChange }: ResourceCommentThreadProps) {
+  const { user } = useAuth();
+  const viewerId = currentUserId ?? user?.id;
+  const viewerIsStaff = user?.role === 'admin' || user?.role === 'moderator';
   const [comments, setComments] = useState<ResourceComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<{ id: number; username: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
 
   const loadComments = useCallback(async () => {
     try {
-      const res = await resourceCommentApi.getByResource(resourceId, { limit: 100 });
+      const res = await resourceCommentApi.getByResource(resourceId, { page: 1, limit: 100 });
       setComments(res.data || []);
+      setPage(1);
+      const count = res.pagination?.total ?? 0;
+      setTotal(count);
+      onCountChange?.(count);
     } catch {
       // silent
     } finally {
       setLoading(false);
     }
-  }, [resourceId]);
+  }, [resourceId, onCountChange]);
+
+  const loadMore = async () => {
+    const nextPage = page + 1;
+    const res = await resourceCommentApi.getByResource(resourceId, { page: nextPage, limit: 100 });
+    setComments((current) => [...current, ...(res.data || [])]);
+    setPage(nextPage);
+  };
 
   useEffect(() => {
     loadComments();
@@ -140,13 +158,15 @@ export default function ResourceCommentThread({ resourceId, currentUserId }: Res
               key={node.id}
               node={node}
               depth={0}
-              currentUserId={currentUserId}
+              currentUserId={viewerId}
+              viewerIsStaff={viewerIsStaff}
               onReply={(id, username) => setReplyTo({ id, username })}
               onDelete={handleDelete}
             />
           ))}
         </div>
       )}
+      {comments.length < total && <button type="button" onClick={loadMore} className="min-h-11 rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]">加载更多评论（{comments.length}/{total}）</button>}
     </div>
   );
 }
@@ -155,17 +175,18 @@ function CommentNode({
   node,
   depth,
   currentUserId,
+  viewerIsStaff,
   onReply,
   onDelete,
 }: {
   node: CommentNode;
   depth: number;
   currentUserId?: number;
+  viewerIsStaff: boolean;
   onReply: (id: number, username: string) => void;
   onDelete: (id: number) => void;
 }) {
-  const canEdit = currentUserId === node.user_id;
-  const canDelete = currentUserId === node.user_id;
+  const canDelete = viewerIsStaff || currentUserId === node.user_id;
 
   return (
     <div className={depth > 0 ? 'ml-8 border-l-2 border-border pl-4' : ''}>
@@ -217,6 +238,7 @@ function CommentNode({
               node={child}
               depth={depth + 1}
               currentUserId={currentUserId}
+              viewerIsStaff={viewerIsStaff}
               onReply={onReply}
               onDelete={onDelete}
             />

@@ -41,6 +41,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
+import java.util.List;
 import java.util.HexFormat;
 import java.util.concurrent.Executors;
 
@@ -50,7 +51,7 @@ import java.util.concurrent.Executors;
  */
 public final class MapRenderer {
     private static final int MAX_BYTES = 20 * 1024 * 1024;
-    private static final String VERSION = "v160.2-preview-2";
+    private static final String VERSION = "v160.2-preview-3";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
     private static String token;
@@ -77,7 +78,7 @@ public final class MapRenderer {
         }, throwable -> throwable.printStackTrace(System.err));
     }
 
-    private static void initialize() {
+    static void initialize() {
         Vars.headless = true;
         Core.settings.setDataDirectory(new Fi(storageRoot.resolve("worker-config").toFile()));
         Vars.loadSettings();
@@ -86,6 +87,17 @@ public final class MapRenderer {
         Vars.content.init();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
         chineseBundle = loadChineseBundle();
+    }
+
+    static void initializeForFixture(Path root) {
+        storageRoot = root.toAbsolutePath().normalize();
+        Vars.headless = true;
+        Core.settings.setDataDirectory(new Fi(storageRoot.resolve("worker-config").toFile()));
+        Vars.init();
+        Vars.content.createBaseContent();
+        Vars.content.init();
+        spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
+        chineseBundle = new Properties();
     }
 
     private static void start() throws IOException {
@@ -199,6 +211,10 @@ public final class MapRenderer {
 
     private static void renderMap(HttpExchange exchange, Path input, String hash) throws IOException {
         Map map = MapIO.createMap(new Fi(input.toFile()), true);
+        // In v160.2 this reads the saved preview_map tile graph itself (floor,
+        // overlay, blocks and building team colors); it does not depend on the
+        // subsequently loaded global World. Keep preview generation before the
+        // full load so malformed building state cannot affect the thumbnail.
         Pixmap preview = MapIO.generatePreview(map);
         String key = previewKey("map", hash);
         Path target = target(key);
@@ -215,6 +231,13 @@ public final class MapRenderer {
 
     private static void renderSchematic(HttpExchange exchange, Path input, String hash) throws IOException {
         Schematic schematic = Schematics.read(new Fi(input.toFile()));
+        BufferedImage image = renderSchematicImage(schematic);
+        String key = previewKey("schematic", hash);
+        if (!ImageIO.write(image, "png", target(key).toFile())) throw new IOException("PNG writer unavailable");
+        send(exchange, 200, result(schematicMetadata(schematic), key));
+    }
+
+    static BufferedImage renderSchematicImage(Schematic schematic) {
         int tileSize = Math.max(4, Math.min(32, 640 / Math.max(1, Math.max(schematic.width, schematic.height))));
         int padding = tileSize;
         BufferedImage image = new BufferedImage(Math.max(1, schematic.width * tileSize + padding * 2), Math.max(1, schematic.height * tileSize + padding * 2), BufferedImage.TYPE_INT_ARGB);
@@ -232,9 +255,7 @@ public final class MapRenderer {
         }
         graphics.dispose();
         for (Schematic.Stile tile : schematic.tiles) drawSchematicTile(image, tile, schematic.height, tileSize, padding);
-        String key = previewKey("schematic", hash);
-        if (!ImageIO.write(image, "png", target(key).toFile())) throw new IOException("PNG writer unavailable");
-        send(exchange, 200, result(schematicMetadata(schematic), key));
+        return image;
     }
 
     /**
@@ -514,7 +535,7 @@ public final class MapRenderer {
         int blockOffset = Math.round(tile.block.offset * tileSize / Vars.tilesize);
         int centerX = tileX + tileSize / 2 + blockOffset;
         int centerY = tileY + tileSize / 2 - blockOffset;
-        BufferedImage sprite = spriteAtlas == null ? null : spriteAtlas.find(tile.block.name);
+        BufferedImage sprite = spriteAtlas == null ? null : spriteAtlas.findBlock(tile.block);
         Graphics2D graphics = target.createGraphics();
         graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         if (sprite == null) {
@@ -544,6 +565,23 @@ public final class MapRenderer {
     }
 
     private static String previewKey(String kind, String hash) { return "resources/" + kind + "/" + hash.substring(0, 2) + "/" + hash + "/preview.png"; }
+
+    static BufferedImage composeLayers(List<BufferedImage> layers) {
+        if (layers.isEmpty()) return null;
+        int width = 0, height = 0;
+        for (BufferedImage layer : layers) {
+            width = Math.max(width, layer.getWidth());
+            height = Math.max(height, layer.getHeight());
+        }
+        BufferedImage composite = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = composite.createGraphics();
+        for (BufferedImage layer : layers) {
+            graphics.drawImage(layer, (width - layer.getWidth()) / 2, (height - layer.getHeight()) / 2, null);
+        }
+        graphics.dispose();
+        return composite;
+    }
+
     private static Path target(String key) throws IOException {
         Path result = storageRoot.resolve(key).normalize();
         if (!result.startsWith(storageRoot)) throw new IOException("preview path escaped storage root");
@@ -627,6 +665,40 @@ public final class MapRenderer {
             BufferedImage sprite = regions.get(name);
             if (sprite == null) sprite = regions.get(name + "-bottom");
             return sprite == null ? regions.get(name + "-top") : sprite;
+        }
+
+        /**
+         * Resolve schematic icons from Mindustry's generated icon composition.
+         * The desktop build pre-generates `block-*-full` by drawing
+         * Block.getGeneratedIcons() in order; use that official composite when
+         * present, otherwise compose those same region names from the atlas.
+         */
+        BufferedImage findBlock(mindustry.world.Block block) {
+            BufferedImage full = regions.get("block-" + block.name + "-full");
+            if (full != null) return full;
+            // The generated UI icon is also composed by the official asset
+            // generator and remains available in headless mode. Prefer it to
+            // calling block.icons(), which can require Core.atlas at runtime.
+            BufferedImage uiIcon = regions.get("block-" + block.name + "-ui");
+            if (uiIcon != null) return uiIcon;
+            arc.graphics.g2d.TextureRegion[] iconLayers;
+            try {
+                iconLayers = block.getGeneratedIcons();
+            } catch (RuntimeException | LinkageError unavailableInHeadlessRuntime) {
+                return find(block.name);
+            }
+            if (iconLayers != null && iconLayers.length > 0) {
+                java.util.ArrayList<BufferedImage> layers = new java.util.ArrayList<>();
+                for (arc.graphics.g2d.TextureRegion layer : iconLayers) {
+                    if (!(layer instanceof arc.graphics.g2d.TextureAtlas.AtlasRegion atlasLayer) || atlasLayer.name == null) continue;
+                    BufferedImage image = regions.get(atlasLayer.name);
+                    if (image != null) layers.add(image);
+                }
+                if (!layers.isEmpty()) {
+                    return composeLayers(layers);
+                }
+            }
+            return find(block.name);
         }
 
         BufferedImage findItem(String name) {

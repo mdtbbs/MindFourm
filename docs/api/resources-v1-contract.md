@@ -43,9 +43,10 @@ DELETE /api/resources/{numeric_id}/like
 ```
 
 The like operation is idempotent. Comments continue to use the existing
-resource discussion/review APIs; the list card links to the same discussion
-anchor, so a later comment-count field can be added without changing the card
-contract.
+resource discussion API. Legacy resource read responses may include the
+additive `comment_count` field, which counts only visible public comments;
+`rating_count`, `rating_sum`, and `rating_average` remain rating aggregates.
+The V1 shape is unchanged.
 
 ## Resource detail shape
 

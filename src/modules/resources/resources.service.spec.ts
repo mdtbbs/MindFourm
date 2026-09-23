@@ -122,6 +122,7 @@ function createService(overrides: {
     ...overrides.manager,
   };
   const dataSource = {
+    query: jest.fn().mockResolvedValue([]),
     transaction: jest.fn().mockImplementation(async (callback: (txnManager: typeof manager) => unknown) =>
       callback(manager)),
     ...overrides.dataSource,
@@ -184,6 +185,20 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('returns visible comment_count independently of rating aggregates', async () => {
+    const resource = { id: 17, user_id: 2, status: 'approved', is_public: 1, rating_count: 6, rating_sum: 24, rating_average: 4 };
+    const { service, resourceRepository, dataSource } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      dataSource: { query: jest.fn().mockResolvedValue([{ resource_id: 17, comment_count: '2' }]) },
+    });
+
+    const result = await service.getById(17, { id: 9, role: 'user' });
+
+    expect(result).toMatchObject({ rating_count: 6, comment_count: 2 });
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining("WHERE status = ? AND resource_id IN (?)"), ['visible', 17]);
+    expect(resourceRepository.findOne).toHaveBeenCalled();
+  });
+
   it('uses public resource statuses for the public list and filters disabled categories', async () => {
     const { service, resourceRepository, defaultQb } = createService();
 

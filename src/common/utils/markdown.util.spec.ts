@@ -78,6 +78,21 @@ describe('markdown.util', () => {
   });
 
   describe('parseMarkdown', () => {
+    it.each([
+      ['`text`', '<code>text</code>'],
+      ['中文 `text` 中文', '中文 <code>text</code> 中文'],
+      ['`a*b`', '<code>a*b</code>'],
+      ['`a b`', '<code>a b</code>'],
+      ['``a ` b``', '<code>a ` b</code>'],
+    ])('renders inline code span %s with code semantics', (markdown, expected) => {
+      expect(parseMarkdown(markdown)).toContain(expected);
+    });
+
+    it('preserves escaped backticks literally and keeps fenced code', () => {
+      expect(parseMarkdown('\\`text\\`')).toContain('`text`');
+      expect(parseMarkdown('```text\nfenced code\n```')).toContain('<pre><code class="language-text">fenced code');
+    });
+
     it('renders standard markdown', () => {
       const result = parseMarkdown('# Title\n\nSome **bold** text.');
 

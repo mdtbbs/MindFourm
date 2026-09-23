@@ -134,6 +134,7 @@ export class ResourcesService {
       rating_count: resource.rating_count || 0,
       rating_sum: resource.rating_sum || 0,
       rating_average: Number(resource.rating_average) || 0,
+      comment_count: Number((resource as Resource & { comment_count?: number }).comment_count) || 0,
       username: resource.user?.username || '',
       avatar_url: resource.user?.avatar_url || null,
       category_name: resource.category?.name || null,
@@ -143,6 +144,28 @@ export class ResourcesService {
       preview_url: resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null,
       versions: versions?.map((version) => this.normalizeVersion(version)),
     };
+  }
+
+  /** One grouped query for a resource batch; never count comments per row. */
+  private async normalizeResources(resources: Resource[]): Promise<any[]> {
+    if (resources.length === 0) return [];
+    const ids = resources.map(({ id }) => id);
+    const rows = await this.dataSource.query(
+      `SELECT resource_id, COUNT(*) AS comment_count
+       FROM resource_comments
+       WHERE status = ? AND resource_id IN (${ids.map(() => '?').join(',')})
+       GROUP BY resource_id`,
+      ['visible', ...ids],
+    ) as Array<{ resource_id: number | string; comment_count: number | string }>;
+    const counts = new Map(rows.map((row) => [Number(row.resource_id), Number(row.comment_count)]));
+    return resources.map((resource) => this.normalizeResource({ ...resource,
+      comment_count: counts.get(resource.id) || 0,
+    } as Resource));
+  }
+
+  private async normalizeOneResource(resource: Resource, versions?: ResourceVersion[]) {
+    const [normalized] = await this.normalizeResources([resource]);
+    return { ...normalized, versions: versions?.map((version) => this.normalizeVersion(version)) };
   }
 
   /**
@@ -218,7 +241,7 @@ export class ResourcesService {
     if (!resource) return null;
 
     const isAccessible = await this.isResourcePubliclyAccessible(resource);
-    return isAccessible ? this.normalizeResource(resource) : null;
+    return isAccessible ? this.normalizeOneResource(resource) : null;
   }
 
   async create(
@@ -336,7 +359,7 @@ export class ResourcesService {
       );
     }
 
-    return this.normalizeResource(finalResult);
+    return this.normalizeOneResource(finalResult);
   }
 
   /**
@@ -621,7 +644,7 @@ export class ResourcesService {
       }
 
       return {
-        data: resources.map((resource) => this.normalizeResource(resource)),
+        data: await this.normalizeResources(resources),
         next_cursor: nextCursor,
         has_more: hasMore,
       };
@@ -687,7 +710,7 @@ export class ResourcesService {
     }
 
     return {
-      data: resources.map((resource) => this.normalizeResource(resource)),
+      data: await this.normalizeResources(resources),
       next_cursor: nextCursor,
       has_more: hasMore,
     };
@@ -787,7 +810,7 @@ export class ResourcesService {
 
     await this.assertResourceVisible(resource, viewer);
 
-    return this.normalizeResource(resource);
+    return this.normalizeOneResource(resource);
   }
 
   async getByIdWithVersions(id: number, viewer?: { id: number; role: string }): Promise<any> {
@@ -807,7 +830,7 @@ export class ResourcesService {
       order: { created_at: 'DESC' },
     });
 
-    return this.normalizeResource(resource, versions);
+    return this.normalizeOneResource(resource, versions);
   }
 
   async getRelatedResources(id: number, limit = 6): Promise<any[]> {
@@ -837,7 +860,7 @@ export class ResourcesService {
     }
 
     const related = await qb.getMany();
-    return related.map((item) => this.normalizeResource(item));
+    return this.normalizeResources(related);
   }
 
   async incrementDownload(id: number): Promise<void> {
@@ -892,7 +915,7 @@ export class ResourcesService {
     }
 
     return {
-      data: resources.map((resource) => this.normalizeResource(resource)),
+      data: await this.normalizeResources(resources),
       next_cursor: nextCursor,
       has_more: hasMore,
     };
@@ -943,7 +966,7 @@ export class ResourcesService {
         .getManyAndCount();
 
       return {
-        data: resources.map((resource) => this.normalizeResource(resource)),
+        data: await this.normalizeResources(resources),
         pagination: {
           page: safePage,
           limit: safeLimit,
@@ -970,7 +993,7 @@ export class ResourcesService {
     }
 
     return {
-      data: resources.map((resource) => this.normalizeResource(resource)),
+      data: await this.normalizeResources(resources),
       next_cursor: nextCursor,
       has_more: hasMore,
     };
@@ -1124,7 +1147,7 @@ export class ResourcesService {
       }).catch((err) => console.error('Admin resource moderation notification error:', err));
     }
 
-    return this.normalizeResource(updateResult.resource);
+    return this.normalizeOneResource(updateResult.resource);
   }
 
   async delete(id: number, userId: number, userRole?: string): Promise<void> {
@@ -1312,7 +1335,7 @@ export class ResourcesService {
       }
     }
 
-    return this.normalizeResource(resource);
+    return this.normalizeOneResource(resource);
   }
 
   /** Keep the resource-level moderation workflow projected onto its latest release. */
@@ -1391,7 +1414,7 @@ export class ResourcesService {
         relations: ['user', 'category'],
       });
 
-      return this.normalizeResource(updatedResource!);
+      return this.normalizeOneResource(updatedResource!);
     });
   }
 
@@ -1423,7 +1446,7 @@ export class ResourcesService {
         relations: ['user', 'category'],
       });
 
-      return this.normalizeResource(updatedResource!);
+      return this.normalizeOneResource(updatedResource!);
     });
   }
 
@@ -1485,6 +1508,6 @@ export class ResourcesService {
       .take(limit)
       .getMany();
 
-    return resources.map((resource) => this.normalizeResource(resource));
+    return this.normalizeResources(resources);
   }
 }

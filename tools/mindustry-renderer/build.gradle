@@ -12,6 +12,13 @@ java {
 
 application { mainClass = 'cn.mdtbbs.renderer.MapRenderer' }
 
+tasks.register('rendererRegression', JavaExec) {
+    dependsOn(tasks.named('testClasses'))
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'cn.mdtbbs.renderer.RendererVisualRegression'
+}
+tasks.named('test') { dependsOn(tasks.named('rendererRegression')) }
+
 // Keep this runtime current: MapIO cannot read save formats introduced after
 // the bundled Mindustry build.  The forum preview service must be able to
 // render maps authored by the current official client.

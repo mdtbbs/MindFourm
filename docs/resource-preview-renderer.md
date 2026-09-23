@@ -7,8 +7,16 @@ reverse proxy.
 
 ## Build
 
-The worker source is in `tools/mindustry-renderer`.  It downloads the official
-Mindustry server runtime selected by `-PmindustryVersion` (default `v158.1`).
+The worker source is in `tools/mindustry-renderer`. It builds against the
+official Mindustry v160.2 server runtime by default (`-PmindustryVersion` can
+select another compatible official release).
+
+Schematic previews use Mindustry's generated block icon composition from the
+official desktop atlas, including the generated `block-*-full` region when it
+exists. The fallback composes the block's `getGeneratedIcons()` regions in
+their official order. Map previews use v160.2 `MapIO.generatePreview(Map)`,
+which reads the saved `preview_map` region and combines floor, overlay, solid
+block, and building team-color layers without needing a loaded global world.
 
 ```bash
 cd tools/mindustry-renderer

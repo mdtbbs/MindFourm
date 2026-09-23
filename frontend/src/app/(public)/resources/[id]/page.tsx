@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { Resource } from '@/types';
 import { notFound } from 'next/navigation';
 import ResourceDetail from '@/components/forum/resource-detail';
-import ResourceCommentThread from '@/components/forum/resource-comment-thread';
 import { ArrowLeft } from 'lucide-react';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import { toMetaDescription } from '@/lib/seo/description';
@@ -82,9 +81,5 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
       <span className="text-[var(--text)]">{resource.title}</span>
     </nav>
     <ResourceDetail resource={resource} />
-    <div className="mt-8">
-      <h2 className="mb-4 text-2xl font-bold">评论</h2>
-      <ResourceCommentThread resourceId={resource.id} />
-    </div>
   </div>;
 }

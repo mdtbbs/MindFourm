@@ -180,6 +180,7 @@ function createService(overrides: {
     }),
   };
   const dataSource = {
+    query: jest.fn().mockResolvedValue([]),
     transaction: jest.fn().mockImplementation(async (callback: (manager: typeof transactionManager) => unknown) =>
       callback(transactionManager)),
   };

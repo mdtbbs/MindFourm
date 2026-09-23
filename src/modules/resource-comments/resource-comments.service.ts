@@ -14,7 +14,7 @@ export class ResourceCommentsService {
 
   async findByResource(resourceId: number, page = 1, limit = 20) {
     const [data, total] = await this.commentRepo.findAndCount({
-      where: { resource_id: resourceId },
+      where: { resource_id: resourceId, status: 'visible' },
       order: { created_at: 'ASC' },
       skip: (page - 1) * limit,
       take: limit,

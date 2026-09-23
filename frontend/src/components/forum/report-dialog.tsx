@@ -11,6 +11,7 @@ interface ReportDialogProps {
   targetId: number;
   /** Rendered as the trigger; defaults to a small text button. */
   label?: string;
+  triggerRole?: 'menuitem';
 }
 
 /**
@@ -22,7 +23,7 @@ interface ReportDialogProps {
  * dropdown do none of that — the dropdown even declares `role="menu"` without
  * implementing any of the keyboard behaviour that role promises.
  */
-export default function ReportDialog({ targetType, targetId, label = '举报' }: ReportDialogProps) {
+export default function ReportDialog({ targetType, targetId, label = '举报', triggerRole }: ReportDialogProps) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReportReason>('spam');
   const [detail, setDetail] = useState('');
@@ -109,9 +110,10 @@ export default function ReportDialog({ targetType, targetId, label = '举报' }:
       <button
         ref={triggerRef}
         type="button"
+        role={triggerRole}
         onClick={() => setOpen(true)}
         data-testid={`report-trigger-${targetType}-${targetId}`}
-        className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--error)] transition-colors"
+        className={`inline-flex items-center gap-1 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--error)] ${triggerRole ? 'min-h-11 w-full rounded px-3 py-2 text-left hover:bg-[var(--bg-hover)]' : 'px-3 py-1.5'}`}
       >
         <Flag className="w-4 h-4" />
         {label}

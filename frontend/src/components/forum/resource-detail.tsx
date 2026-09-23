@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Calendar, Download, Package, Tag, User,
@@ -21,7 +21,7 @@ import { resourceKindLabel } from '@/lib/display-labels';
 interface ResourceDetailProps { resource: Resource; }
 
 export default function ResourceDetail({ resource }: ResourceDetailProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const [activeTab, setActiveTab] = useState<ResourceTab>('overview');
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -35,6 +35,8 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [schematicCopied, setSchematicCopied] = useState(false);
+  const [commentCount, setCommentCount] = useState(resource.comment_count || 0);
+  const updateCommentCount = useCallback((count: number) => setCommentCount(count), []);
 
   const metadata = resource.metadata;
   const rendererMetadata = resource.renderer_metadata && typeof resource.renderer_metadata === 'object'
@@ -189,10 +191,10 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
                 {(primaryVersion?.version || resource.version) && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">资源版本 {primaryVersion?.version || resource.version}</span>}
                 <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-[var(--text-secondary)]">{resourceStatusLabel(resource.status)}</span>
               </div>
-              <h1 className="text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
+              <h1 className="min-w-0 break-words text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
               <p className="mt-3 max-w-3xl line-clamp-3 text-base leading-7 text-[var(--text-secondary)]">{resource.description || '暂无简短介绍，查看下方完整资源说明。'}</p>
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
-                <Link href={`/users/${resource.user_id}`} className="inline-flex items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span>{resource.username || '未知作者'}</Link>
+                <Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 max-w-full items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span><span className="min-w-0 break-all">{resource.username || '未知作者'}</span></Link>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(resource.updated_at || resource.created_at)} 更新</span>
                 <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{resource.download_count || 0} 次下载</span>
               </div>
@@ -219,6 +221,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             onLike={toggleLike}
             onSubscribe={toggleSubscription}
             onShare={share}
+            canManage={Boolean(user && (user.id === resource.user_id || user.role === 'admin' || user.role === 'moderator'))}
           />
         </div>
 
@@ -228,7 +231,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     <ResourceKindDetails resource={resource} />
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <ResourceTabs resource={resource} activeTab={activeTab} onChange={setActiveTab} downloadUrl={downloadUrl} />
+      <ResourceTabs resource={resource} activeTab={activeTab} onChange={setActiveTab} downloadUrl={downloadUrl} commentCount={commentCount} onCommentCountChange={updateCommentCount} />
       <ResourceAside
         resource={resource}
         supportedVersions={displayedSupportedVersions}
