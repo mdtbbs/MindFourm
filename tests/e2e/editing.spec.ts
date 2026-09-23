@@ -22,6 +22,38 @@ function unique(prefix: string): string {
 }
 
 authTest.describe('Editing a post', () => {
+  authTest('inline code survives publish, edit, and a second save', async ({ authenticatedPage, request }) => {
+    const post = await createPublishedPost(request, {
+      author: 'user',
+      title: unique('E2E Inline Code Round Trip'),
+      content: '中文 `inline code` 与 `foo_bar`。',
+    });
+
+    await authenticatedPage.goto(`/posts/${post.id}/edit`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+    const editor = authenticatedPage.locator('#post-content');
+    await authExpect(editor.locator('code')).toHaveText(['inline code', 'foo_bar']);
+    await editor.press('End');
+    await editor.pressSequentially(' 第一次保存');
+    await authenticatedPage.getByTestId('post-edit-submit').click();
+    await authenticatedPage.waitForURL(new RegExp(`/posts/${post.id}$`), { timeout: 30000 });
+    await authExpect(authenticatedPage.locator('[data-testid="post-content"] code')).toHaveText(['inline code', 'foo_bar']);
+
+    await authenticatedPage.goto(`/posts/${post.id}/edit`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+    const secondEditor = authenticatedPage.locator('#post-content');
+    await authExpect(secondEditor.locator('code')).toHaveText(['inline code', 'foo_bar']);
+    await secondEditor.press('End');
+    await secondEditor.pressSequentially(' 第二次保存');
+    await authenticatedPage.getByTestId('post-edit-submit').click();
+    await authenticatedPage.waitForURL(new RegExp(`/posts/${post.id}$`), { timeout: 30000 });
+    await authExpect(authenticatedPage.locator('[data-testid="post-content"] code')).toHaveText(['inline code', 'foo_bar']);
+  });
+
   authTest('the author edits their own post and the change is published', async ({
     authenticatedPage,
     request,

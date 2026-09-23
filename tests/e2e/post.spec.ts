@@ -164,6 +164,25 @@ test.describe('Post Pagination', () => {
 });
 
 authTest.describe('Post Creation (Authenticated)', () => {
+  authTest('the rich editor toolbar stays within common mobile and desktop widths', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto('/posts/new', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    const editor = authenticatedPage.getByTestId('post-content-editor');
+    await expect(editor).toBeVisible({ timeout: 30000 });
+
+    for (const width of [320, 360, 390, 768, 1280]) {
+      await authenticatedPage.setViewportSize({ width, height: 900 });
+      const toolbar = authenticatedPage.getByRole('toolbar', { name: '编辑器工具栏' });
+      const dimensions = await toolbar.evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      }));
+      expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+    }
+
+    await authenticatedPage.getByRole('button', { name: '更多编辑工具' }).click();
+    await expect(authenticatedPage.getByTitle('Markdown 源码')).toBeVisible();
+  });
+
   authTest('should access new post page', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/posts/new', { waitUntil: 'domcontentloaded', timeout: 45000 });
 
@@ -171,8 +190,8 @@ authTest.describe('Post Creation (Authenticated)', () => {
     authExpect(authenticatedPage.url()).toContain('/posts');
 
     // Check for form elements
-    const titleInput = authenticatedPage.locator('[name="title"]');
-    const contentInput = authenticatedPage.locator('[name="content"]');
+    const titleInput = authenticatedPage.getByPlaceholder('请输入帖子标题');
+    const contentInput = authenticatedPage.getByTestId('post-content-editor');
 
     if (await titleInput.isVisible().catch(() => false)) {
       authExpect(await titleInput.isVisible()).toBeTruthy();
@@ -185,10 +204,10 @@ authTest.describe('Post Creation (Authenticated)', () => {
 
     // Fill in post details
     const uniqueTitle = `E2E Test Post ${Date.now()}`;
-    const content = 'This is a test post created by E2E tests.';
+    const content = 'This is a test post with `inline code` created by E2E tests.';
 
-    const titleInput = authenticatedPage.locator('[name="title"]');
-    const contentInput = authenticatedPage.locator('[name="content"]');
+    const titleInput = authenticatedPage.getByPlaceholder('请输入帖子标题');
+    const contentInput = authenticatedPage.getByTestId('post-content-editor');
 
     if (await titleInput.isVisible()) {
       await titleInput.fill(uniqueTitle);
@@ -203,13 +222,14 @@ authTest.describe('Post Creation (Authenticated)', () => {
       // Verify post was created
       authExpect(authenticatedPage.url()).toContain('/posts/');
       authExpect(await authenticatedPage.locator('h1').textContent()).toContain(uniqueTitle);
+      await authExpect(authenticatedPage.locator('[data-testid="post-content"] code')).toHaveText('inline code');
     }
   });
 
   authTest('should auto-save draft', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/posts/new', { waitUntil: 'domcontentloaded', timeout: 45000 });
     const titleInput = authenticatedPage.getByPlaceholder('请输入帖子标题');
-    const contentInput = authenticatedPage.getByPlaceholder('使用 Markdown 格式编写帖子内容...');
+    const contentInput = authenticatedPage.getByTestId('post-content-editor');
     await expect(titleInput).toBeVisible({ timeout: 30000 });
     await expect(contentInput).toBeVisible({ timeout: 30000 });
 

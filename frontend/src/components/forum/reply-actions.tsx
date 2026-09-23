@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import Button from '@/components/ui/button';
 import { LikeButton } from '@/components/forum/like-button';
 import ReportDialog from '@/components/forum/report-dialog';
@@ -10,7 +11,12 @@ import { useAuth } from '@/store/user-store';
 import { postApi, replyApi } from '@/lib/api/client';
 import { useToastStore } from '@/store/toast-store';
 import type { Reply } from '@/types';
-import { CheckCircle2, Pencil, Quote, Reply as ReplyIcon, Trash2 } from 'lucide-react';
+import { CheckCircle2, Loader2, Pencil, Quote, Reply as ReplyIcon, Trash2 } from 'lucide-react';
+
+const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
+  ssr: false,
+  loading: () => <div className="min-h-[120px] rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 text-sm text-[var(--text-muted)]"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />加载编辑器…</div>,
+});
 
 interface ReplyActionsProps {
   reply: Reply;
@@ -107,13 +113,16 @@ export default function ReplyActions({
           <label htmlFor={`reply-edit-${reply.id}`} className="sr-only">
             编辑回复
           </label>
-          <textarea
+          <TiptapEditor
             id={`reply-edit-${reply.id}`}
-            data-testid={`reply-edit-input-${reply.id}`}
+            testId={`reply-edit-input-${reply.id}`}
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            rows={5}
-            className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+            onChange={setDraft}
+            ariaLabel="编辑回复正文"
+            placeholder="输入回复内容…"
+            minHeight="120px"
+            compact
+            imageUpload
           />
           <div className="flex items-center gap-2 mt-2 mb-1">
             <Button size="sm" onClick={save} disabled={busy} data-testid={`reply-edit-save-${reply.id}`}>

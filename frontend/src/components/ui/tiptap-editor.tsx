@@ -85,7 +85,7 @@ interface FailedImageUpload {
 export default function TiptapEditor({
   value,
   onChange,
-  placeholder = "使用 Markdown 格式编写内容…",
+  placeholder = "输入正文内容…",
   minHeight = "200px",
   compact = false,
   imageUpload = false,
@@ -359,6 +359,8 @@ export default function TiptapEditor({
   }, [editor, mention]);
 
   const handleMentionKeydown = useCallback((event: KeyboardEvent): boolean => {
+    // Let Android/iOS IME composition commit its candidate before handling mention keys.
+    if (event.isComposing || event.keyCode === 229) return false;
     if (!mention) return false;
     if (event.key === "Escape") {
       event.preventDefault();
@@ -515,12 +517,6 @@ export default function TiptapEditor({
           <span className="tiptap-status-count">
             {editor.storage.characterCount?.characters() ?? 0} 字符
           </span>
-          <span
-            className="tiptap-status-count"
-            title="保存为标准 Markdown；表格仅支持标准 GFM 表格，不保存下划线、对齐或列宽样式。"
-          >
-            Markdown 兼容模式
-          </span>
         </div>
       )}
 
@@ -586,225 +582,68 @@ function EditorToolbar({
   onOpenLinkDialog,
   onToggleSourceMode,
 }: ToolbarProps) {
+  const moreMenuRef = useRef<HTMLDetailsElement>(null);
+
   if (sourceMode) {
     return (
       <div className="tiptap-toolbar" role="toolbar" aria-label="编辑器工具栏">
-        <TBtn
-          active={false}
-          onClick={onToggleSourceMode}
-          title="返回可视化编辑"
-        >
+        <TBtn active={false} onClick={onToggleSourceMode} title="返回可视化编辑">
           <Eye className="w-4 h-4" /> 预览
         </TBtn>
       </div>
     );
   }
 
-  const isLinkActive = editor.isActive("link");
+  const closeMoreMenu = () => {
+    if (moreMenuRef.current) moreMenuRef.current.open = false;
+  };
+  const menuButton = (content: React.ReactNode, title: string, onClick: () => void, active = false) => (
+    <TBtn active={active} onClick={() => { onClick(); closeMoreMenu(); }} title={title}>
+      {content}
+    </TBtn>
+  );
 
   return (
     <div className="tiptap-toolbar" role="toolbar" aria-label="编辑器工具栏">
-      {/* Undo / Redo */}
-      {!compact && (
-        <>
-          <TBtn
-            onClick={() => editor.chain().focus().undo().run()}
-            disabled={!editor.can().undo()}
-            title="撤销 (Ctrl+Z)"
-          >
-            <Undo2 className="w-4 h-4" />
-          </TBtn>
-          <TBtn
-            onClick={() => editor.chain().focus().redo().run()}
-            disabled={!editor.can().redo()}
-            title="重做 (Ctrl+Y)"
-          >
-            <Redo2 className="w-4 h-4" />
-          </TBtn>
-          <Divider />
-        </>
-      )}
-
-      {/* Text formatting */}
-      <TBtn
-        active={editor.isActive("bold")}
-        onClick={() => editor.chain().focus().toggleBold().run()}
-        title="粗体 (Ctrl+B)"
-      >
-        <Bold className="w-4 h-4" />
-      </TBtn>
-      <TBtn
-        active={editor.isActive("italic")}
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-        title="斜体 (Ctrl+I)"
-      >
-        <Italic className="w-4 h-4" />
-      </TBtn>
-      <TBtn
-        active={editor.isActive("strike")}
-        onClick={() => editor.chain().focus().toggleStrike().run()}
-        title="删除线"
-      >
-        <Strikethrough className="w-4 h-4" />
-      </TBtn>
-
-      <Divider />
-
-      {/* Headings */}
-      {compact ? (
-        <TBtn
-          active={editor.isActive("heading", { level: 2 })}
-          onClick={() =>
-            editor.chain().focus().toggleHeading({ level: 2 }).run()
-          }
-          title="标题"
-        >
-          <Heading2 className="w-4 h-4" />
-        </TBtn>
-      ) : (
-        <>
-          <TBtn
-            active={editor.isActive("heading", { level: 1 })}
-            onClick={() =>
-              editor.chain().focus().toggleHeading({ level: 1 }).run()
-            }
-            title="标题 1"
-          >
-            <Heading1 className="w-4 h-4" />
-          </TBtn>
-          <TBtn
-            active={editor.isActive("heading", { level: 2 })}
-            onClick={() =>
-              editor.chain().focus().toggleHeading({ level: 2 }).run()
-            }
-            title="标题 2"
-          >
-            <Heading2 className="w-4 h-4" />
-          </TBtn>
-          <TBtn
-            active={editor.isActive("heading", { level: 3 })}
-            onClick={() =>
-              editor.chain().focus().toggleHeading({ level: 3 }).run()
-            }
-            title="标题 3"
-          >
-            <Heading3 className="w-4 h-4" />
-          </TBtn>
-          <TBtn
-            active={!editor.isActive("heading") && editor.isActive("paragraph")}
-            onClick={() => editor.chain().focus().setParagraph().run()}
-            title="正文"
-          >
-            <Type className="w-4 h-4" />
-          </TBtn>
-        </>
-      )}
-
-      <Divider />
-
-      {/* Block elements */}
-      <TBtn
-        active={editor.isActive("blockquote")}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        title="引用"
-      >
-        <Quote className="w-4 h-4" />
-      </TBtn>
-      <TBtn
-        active={editor.isActive("code")}
-        onClick={() => editor.chain().focus().toggleCode().run()}
-        title="行内代码"
-      >
-        <Code className="w-4 h-4" />
-      </TBtn>
-      {!compact && (
-        <TBtn
-          active={editor.isActive("codeBlock")}
-          onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-          title="代码块"
-        >
-          <Code2 className="w-4 h-4" />
-        </TBtn>
-      )}
-
-      <Divider />
-
-      {/* Lists */}
-      <TBtn
-        active={editor.isActive("bulletList")}
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-        title="无序列表"
-      >
-        <List className="w-4 h-4" />
-      </TBtn>
-      <TBtn
-        active={editor.isActive("orderedList")}
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        title="有序列表"
-      >
-        <ListOrdered className="w-4 h-4" />
-      </TBtn>
-
-      <Divider />
-
-      {/* Insert */}
-      <TBtn
-        active={isLinkActive}
-        onClick={onOpenLinkDialog}
-        title="链接 (Ctrl+K)"
-      >
-        <Link2 className="w-4 h-4" />
-      </TBtn>
-      {imageUpload && (
-        <TBtn
-          active={false}
-          onClick={onTriggerImagePicker}
-          disabled={uploading}
-          title={uploading ? "上传中…" : "上传图片"}
-        >
-          {uploading ? (
-            <Loader2 className="w-4 h-4" aria-hidden="true" />
-          ) : (
-            <ImageIcon className="w-4 h-4" aria-hidden="true" />
-          )}
-        </TBtn>
-      )}
-      {!compact && (
-        <TBtn
-          active={editor.isActive("table")}
-          onClick={() =>
-            editor
-              .chain()
-              .focus()
-              .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-              .run()
-          }
-          title="插入标准 GFM 表格"
-        >
-          <TableIcon className="w-4 h-4" />
-        </TBtn>
-      )}
-
       {!compact && <>
+        <TBtn onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="撤销 (Ctrl+Z)"><Undo2 className="w-4 h-4" /></TBtn>
+        <TBtn onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="重做 (Ctrl+Y)"><Redo2 className="w-4 h-4" /></TBtn>
         <Divider />
-        <TBtn
-          active={false}
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
-          title="分割线"
-        >
-          <Minus className="w-4 h-4" />
-        </TBtn>
       </>}
-
-      {/* Spacer + source toggle */}
-      <div className="flex-1" />
-      <TBtn
-        active={sourceMode}
-        onClick={onToggleSourceMode}
-        title="Markdown 源码"
-      >
-        <CodeXml className="w-4 h-4" />
-      </TBtn>
+      <TBtn active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} title="粗体 (Ctrl+B)"><Bold className="w-4 h-4" /></TBtn>
+      <TBtn active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title="斜体 (Ctrl+I)"><Italic className="w-4 h-4" /></TBtn>
+      <TBtn active={editor.isActive("heading", { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="标题"><Heading2 className="w-4 h-4" /></TBtn>
+      <TBtn active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title="无序列表"><List className="w-4 h-4" /></TBtn>
+      <TBtn active={editor.isActive("link")} onClick={onOpenLinkDialog} title="链接 (Ctrl+K)"><Link2 className="w-4 h-4" /></TBtn>
+      {imageUpload && <TBtn active={false} onClick={onTriggerImagePicker} disabled={uploading} title={uploading ? "上传中…" : "上传图片"}>
+        {uploading ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <ImageIcon className="w-4 h-4" aria-hidden="true" />}
+      </TBtn>}
+      <Divider />
+      <details className="tiptap-more" ref={moreMenuRef}>
+        <summary className="tiptap-btn tiptap-more-trigger" aria-label="更多编辑工具" title="更多编辑工具"><span aria-hidden="true">…</span><span>更多</span></summary>
+        <div className="tiptap-more-menu" role="group" aria-label="更多编辑工具">
+          {menuButton(<Type className="w-4 h-4" />, "正文", () => editor.chain().focus().setParagraph().run(), !editor.isActive("heading") && editor.isActive("paragraph"))}
+          {!compact && <>
+            {menuButton(<Heading1 className="w-4 h-4" />, "标题 1", () => editor.chain().focus().toggleHeading({ level: 1 }).run(), editor.isActive("heading", { level: 1 }))}
+            {menuButton(<Heading3 className="w-4 h-4" />, "标题 3", () => editor.chain().focus().toggleHeading({ level: 3 }).run(), editor.isActive("heading", { level: 3 }))}
+            {menuButton(<ListOrdered className="w-4 h-4" />, "有序列表", () => editor.chain().focus().toggleOrderedList().run(), editor.isActive("orderedList"))}
+          </>}
+          {menuButton(<Strikethrough className="w-4 h-4" />, "删除线", () => editor.chain().focus().toggleStrike().run(), editor.isActive("strike"))}
+          {menuButton(<Code className="w-4 h-4" />, "行内代码", () => editor.chain().focus().toggleCode().run(), editor.isActive("code"))}
+          {menuButton(<Quote className="w-4 h-4" />, "引用", () => editor.chain().focus().toggleBlockquote().run(), editor.isActive("blockquote"))}
+          {!compact && menuButton(<Code2 className="w-4 h-4" />, "代码块", () => editor.chain().focus().toggleCodeBlock().run(), editor.isActive("codeBlock"))}
+          {!compact && menuButton(<TableIcon className="w-4 h-4" />, "插入标准 GFM 表格", () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), editor.isActive("table"))}
+          {!compact && editor.isActive("table") && <>
+            {menuButton(<span>行+</span>, "在下方增加一行", () => editor.chain().focus().addRowAfter().run())}
+            {menuButton(<span>行−</span>, "删除当前行", () => editor.chain().focus().deleteRow().run())}
+            {menuButton(<span>列+</span>, "在右侧增加一列", () => editor.chain().focus().addColumnAfter().run())}
+            {menuButton(<span>列−</span>, "删除当前列", () => editor.chain().focus().deleteColumn().run())}
+            {menuButton(<span>删表</span>, "删除表格", () => editor.chain().focus().deleteTable().run())}
+          </>}
+          {!compact && menuButton(<Minus className="w-4 h-4" />, "分割线", () => editor.chain().focus().setHorizontalRule().run())}
+          {menuButton(<CodeXml className="w-4 h-4" />, "Markdown 源码", onToggleSourceMode)}
+        </div>
+      </details>
     </div>
   );
 }

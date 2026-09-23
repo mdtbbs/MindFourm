@@ -83,6 +83,8 @@ describe('markdown.util', () => {
       ['中文 `text` 中文', '中文 <code>text</code> 中文'],
       ['`a*b`', '<code>a*b</code>'],
       ['`a b`', '<code>a b</code>'],
+      ['`foo_bar`', '<code>foo_bar</code>'],
+      ['中文 `npm install 😀` 与 https://example.com', '<code>npm install 😀</code>'],
       ['``a ` b``', '<code>a ` b</code>'],
     ])('renders inline code span %s with code semantics', (markdown, expected) => {
       expect(parseMarkdown(markdown)).toContain(expected);

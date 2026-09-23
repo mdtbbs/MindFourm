@@ -237,6 +237,7 @@ export default function PostForm() {
           <TiptapEditor
             value={content}
             onChange={setContent}
+            testId="post-content-editor"
             ariaLabel="帖子正文"
             placeholder="使用富文本编辑器编写帖子内容，支持粘贴 / 拖放上传图片..."
             minHeight="280px"

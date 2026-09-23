@@ -255,7 +255,7 @@ the same reaction.
 
 ### Markdown Editor
 
-Simple textarea + preview mode (no rich text editor). Backend parses with `marked` + `sanitize-html`; frontend renders with `react-markdown` + `remark-gfm`.
+Long-form post, reply, and resource content uses the shared Tiptap editor with Markdown-compatible storage and an optional Markdown source mode. Backend parses with `marked` + `sanitize-html`; frontend renders with `react-markdown` + `remark-gfm`.
 
 ## Key Patterns
 
