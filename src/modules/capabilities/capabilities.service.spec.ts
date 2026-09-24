@@ -26,6 +26,7 @@ describe('CapabilitiesService', () => {
       notifications_v1: false,
       notices_v1: true,
       forge_preview: false,
+      blueprint_production_analysis: false,
       minimum_supported_client_version: null,
       recommended_client_version: null,
     });
@@ -35,6 +36,6 @@ describe('CapabilitiesService', () => {
   it('advertises previews only when the forum-owned renderer is configured', async () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
     const service = new CapabilitiesService({ getBoolean: jest.fn().mockResolvedValue(false), get: jest.fn() } as any);
-    await expect(service.getCapabilities()).resolves.toEqual(expect.objectContaining({ forge_preview: true }));
+    await expect(service.getCapabilities()).resolves.toEqual(expect.objectContaining({ forge_preview: true, blueprint_production_analysis: true }));
   });
 });
