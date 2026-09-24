@@ -1,5 +1,5 @@
 import { INestApplication } from '@nestjs/common';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { DocumentBuilder, OpenAPIObject, SwaggerModule } from '@nestjs/swagger';
 import { CapabilitiesModule } from '../modules/capabilities/capabilities.module';
 import { MobileAuthV1Module } from '../modules/auth/mobile-auth-v1.module';
 import { UsersV1Module } from '../modules/users/v1/users-v1.module';
@@ -15,15 +15,35 @@ import { ReportsModule } from '../modules/reports/reports.module';
 import { UploadsModule } from '../modules/uploads/uploads.module';
 import { GameContentModule } from '../modules/game-content/game-content.module';
 
+function keepOnlyV1Paths(document: OpenAPIObject): OpenAPIObject {
+  // Several feature modules still contain both legacy and V1 controllers.
+  // `include` works at module granularity, so Swagger would otherwise leak
+  // legacy `/resources`, `/reports`, `/feedback`, etc. into the public V1
+  // contract. The first-party specification must describe only `/api/v1/*`.
+  document.paths = Object.fromEntries(
+    Object.entries(document.paths).filter(([path]) => path === '/v1' || path.startsWith('/v1/')),
+  );
+
+  return document;
+}
+
 export function createV1OpenApiDocument(app: INestApplication) {
   const config = new DocumentBuilder()
     .setTitle('MDTBBS First-party API')
-    .setDescription('Stable V1 contract for MDTBBS first-party clients. Clients must call /api/v1/capabilities first and must not infer unavailable features from undocumented endpoints.')
+    .setDescription(
+      'Stable V1 contract for MDTBBS first-party clients. '
+      + 'Use /api/v1/capabilities for feature discovery. '
+      + 'JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.',
+    )
     .setVersion('1.0.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'MindAuth access token' }, 'MindAuthBearer')
+    .addServer('/api', 'Same-origin MindFourm API')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'MindAuth access token' },
+      'MindAuthBearer',
+    )
     .build();
 
-  return SwaggerModule.createDocument(app, config, {
+  const document = SwaggerModule.createDocument(app, config, {
     include: [
       CapabilitiesModule,
       MobileAuthV1Module,
@@ -41,4 +61,6 @@ export function createV1OpenApiDocument(app: INestApplication) {
       GameContentModule,
     ],
   });
+
+  return keepOnlyV1Paths(document);
 }

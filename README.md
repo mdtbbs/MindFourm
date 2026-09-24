@@ -142,27 +142,34 @@ EasyManager 服务器列表、服务器申请和自动公告回调代码保留�
 
 管理后台侧边栏支持按功能分组显示，角色自动过滤（admin/moderator）。
 
-## API 示例
+## API 文档
 
-### 服务 API（外部软件调用）
+API 现在按用途分层：
 
-使用 `FORUM_API_KEY` 以指定账号执行操作：
+- **First-party V1**：`/api/v1/*`，供 Web、Android、桌面端和 Mindustry Mod 使用。
+- **External API**：`/api/external/v1/*`，供机器人和服务端集成使用。
+- **Legacy / internal**：其他 `/api/*`，主要用于论坛现有前端、后台和历史兼容，不承诺第三方稳定性。
 
-```http
-POST /api/service-api/posts
-Content-Type: application/json
-x-api-key: <FORUM_API_KEY>
+文档入口：
 
-{
-  "user_id": 3,
-  "title": "标题",
-  "content": "正文",
-  "category_id": 1,
-  "tags": ["公告"]
-}
+- [`docs/api/README.md`](docs/api/README.md) - API 总览、响应格式、兼容策略
+- [`docs/api/first-party-v1.md`](docs/api/first-party-v1.md) - V1 endpoint 参考
+- [`docs/api/authentication.md`](docs/api/authentication.md) - Browser / Mobile / MindAuth / External API 认证
+- [`docs/api/game-content-v1.md`](docs/api/game-content-v1.md) - 蓝图和地图 API
+- [`docs/api/external.md`](docs/api/external.md) - 机器人 / 服务端 External API
+
+运行时文档：
+
+```text
+/api/docs/v1
+/api/openapi/v1.json
 ```
 
-账号标识支持：`user_id`、`mindauth_id`、`username`（三选一）。
+第一方客户端应从能力发现开始：
+
+```http
+GET /api/v1/capabilities
+```
 
 ## E2E 测试
 
