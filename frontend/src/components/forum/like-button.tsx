@@ -7,8 +7,8 @@ import { useLikeStore } from '@/store/like-store';
 import { useAuth } from '@/lib/auth/context';
 import { useToast } from '@/lib/toast/context';
 
-/** Kept in step with the button's transition duration. */
-const LIKE_ANIMATION_MS = 200;
+/** Tracks the shared normal interaction duration token (180ms). */
+const LIKE_ANIMATION_MS = 180;
 
 interface LikeButtonProps {
   type: 'post' | 'reply';
@@ -53,8 +53,7 @@ export function LikeButton({ type, id, initialCount = 0, className = '', showCou
       return;
     }
 
-    // Matches the transition duration below; a 300ms timer against a 200ms
-    // transition left the button sitting at full scale for 100ms before snapping.
+    // Keep the feedback brief so repeated likes never delay list interaction.
     setIsAnimating(true);
     setTimeout(() => setIsAnimating(false), LIKE_ANIMATION_MS);
 
@@ -70,16 +69,16 @@ export function LikeButton({ type, id, initialCount = 0, className = '', showCou
       onClick={handleClick}
       // `transition-transform`/`transition-colors` rather than `transition-all`:
       // only transform and opacity can be handled off the main thread.
-      className={`inline-flex items-center gap-1.5 transition-[transform,color] duration-200 ${
+      className={`inline-flex items-center gap-1.5 transition-[scale,color] duration-[var(--motion-normal)] motion-reduce:scale-100 ${
         liked
           ? 'text-red-500 dark:text-red-400'
           : 'text-[var(--text-secondary)] hover:text-red-500 dark:hover:text-red-400'
-      } ${isAnimating ? 'scale-125' : 'scale-100'} ${className}`}
+      } ${isAnimating ? 'scale-[1.04]' : 'scale-100'} ${className}`}
       aria-label={liked ? '取消点赞' : '点赞'}
       aria-pressed={liked}
       title={liked ? '取消点赞' : '点赞'}
     >
-      <Heart className={`w-4 h-4 transition-colors duration-200 ${liked ? 'fill-current' : ''}`} />
+      <Heart className={`w-4 h-4 transition-colors duration-[var(--motion-normal)] ${liked ? 'fill-current' : ''}`} />
       {showCount && count > 0 && (
         <span className="text-xs font-medium">{count}</span>
       )}

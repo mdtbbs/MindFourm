@@ -55,7 +55,7 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000, d
     setVisible(false);
     if (timerRef.current) clearTimeout(timerRef.current);
     // Wait for exit animation to finish before removing
-    setTimeout(() => onDismiss(id), 300);
+    setTimeout(() => onDismiss(id), 180);
   }, [id, onDismiss]);
 
   useEffect(() => {
@@ -76,8 +76,8 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000, d
       data-toast-id={id}
       className={[
         'pointer-events-auto flex w-80 items-start gap-3 rounded-lg border p-4 shadow-lg',
-        'transform transition-all duration-300 ease-out',
-        visible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0',
+        'transition-[opacity,translate] duration-[var(--motion-fast)] ease-[var(--motion-easing)]',
+        visible ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
         typeStyles[type],
       ].join(' ')}
       role="alert"

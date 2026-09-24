@@ -184,7 +184,7 @@ export default function ContentShell({
         />
         <AnnouncementBanner />
         <PrivacyNotice />
-        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1">{children}</main>
+        <main id="main-content" data-theme-surface tabIndex={-1} className="min-w-0 flex-1">{children}</main>
         <Footer />
       </div>
       <MobileBottomNavigation isAuthenticated={isAuthenticated} userId={user?.id} />

@@ -25,15 +25,15 @@ export default function ResourceRow({ resource }: { resource: Resource }) {
   const PreviewIcon = isMap ? MapIcon : isSchematic ? FileArchive : resource.resource_kind === 'development_tool' ? Blocks : Package;
   const previewLabel = isMap ? '地图' : isSchematic ? '蓝图' : '资源';
 
-  return <article className="group min-w-0 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] transition-colors hover:border-[var(--primary)]/50">
+  return <article data-theme-surface className="group min-w-0 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] transition-[background-color,border-color] duration-[var(--motion-normal)] hover:border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] hover:bg-[var(--bg-elevated)]">
     {isGallery ? <div className="relative aspect-[16/10] overflow-hidden bg-[var(--bg-elevated)]">
       <Link href={resourceHref} aria-label={`查看 ${resource.title}`} className="block h-full">
-        {resource.preview_url ? <img src={resource.preview_url} alt={`${resource.title} 预览图`} loading="lazy" className="h-full w-full object-contain" /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]"><PreviewIcon className="h-9 w-9" aria-hidden /><span className="text-xs">暂无{previewLabel}预览</span></div>}
+        {resource.preview_url ? <img src={resource.preview_url} alt={`${resource.title} 预览图`} loading="lazy" className="h-full w-full object-contain transition-[scale] duration-[var(--motion-normal)] group-hover:scale-[1.015] motion-reduce:scale-100" /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]"><PreviewIcon className="h-9 w-9" aria-hidden /><span className="text-xs">暂无{previewLabel}预览</span></div>}
       </Link>
       <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white">{resourceKindLabel(resource.resource_kind)}</span>
     </div> : <div className="flex min-w-0 items-start gap-4 border-b border-[var(--border)] p-4">
       <Link href={resourceHref} aria-label={`查看 ${resource.title}`} className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-[var(--bg-elevated)] text-[var(--primary)]">
-        {resource.preview_url ? <img src={resource.preview_url} alt="" loading="lazy" className="h-full w-full object-cover" /> : <PreviewIcon className="h-7 w-7" aria-hidden />}
+        {resource.preview_url ? <img src={resource.preview_url} alt="" loading="lazy" className="h-full w-full object-cover transition-[scale] duration-[var(--motion-normal)] group-hover:scale-[1.015] motion-reduce:scale-100" /> : <PreviewIcon className="h-7 w-7" aria-hidden />}
       </Link>
       <div className="min-w-0 flex-1">
         <span className="text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}</span>

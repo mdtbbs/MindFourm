@@ -115,7 +115,7 @@ export default function ModerationSettingsPage() {
                     checked={enabled}
                     onChange={(e) => toggle(setting.key, e.target.checked)}
                   />
-                  <div className="peer h-6 w-11 border border-surface-200 bg-surface-100 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:border after:border-surface-200 after:bg-white after:transition-all peer-checked:border-amber-500 peer-checked:bg-amber-100 peer-checked:after:translate-x-full peer-checked:after:border-amber-500 peer-checked:after:bg-amber-500" />
+                  <div className="peer h-6 w-11 border border-surface-200 bg-surface-100 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:border after:border-surface-200 after:bg-white after:transition-[transform,background-color,border-color] after:duration-[var(--motion-fast)] peer-checked:border-amber-500 peer-checked:bg-amber-100 peer-checked:after:translate-x-full peer-checked:after:border-amber-500 peer-checked:after:bg-amber-500" />
                 </label>
               </div>
             );

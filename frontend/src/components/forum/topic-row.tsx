@@ -14,7 +14,7 @@ export default function TopicRow({
   const activityAt = post.last_activity_at || post.created_at;
 
   return (
-    <article className="group relative border-b border-[var(--border)] px-4 py-3 transition-[background-color,border-color] duration-150 last:border-b-0 hover:bg-[var(--bg-hover)] focus-within:bg-[var(--bg-hover)] sm:px-5">
+    <article className="group relative border-b border-[var(--border)] px-4 py-3 transition-colors duration-[var(--motion-fast)] last:border-b-0 before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:origin-center before:scale-y-50 before:bg-[var(--primary)] before:opacity-0 before:transition-[opacity,scale] before:duration-[var(--motion-fast)] hover:bg-[var(--bg-hover)] hover:before:scale-y-100 hover:before:opacity-100 focus-within:bg-[var(--bg-hover)] focus-within:before:scale-y-100 focus-within:before:opacity-100 sm:px-5">
       {/* Keep native new-tab/context-menu behaviour without nesting the category,
           tag and author links inside one giant anchor. */}
       <Link

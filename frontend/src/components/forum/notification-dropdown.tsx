@@ -20,10 +20,15 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Notification } from '@/types';
 import { Bell, CheckCheck, MessageSquare, AtSign, Heart, ExternalLink, Mail } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion as motionTokens } from '@/lib/motion';
 
 export default function NotificationDropdown() {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const [justArrived, setJustArrived] = useState(false);
+  const arrivalTimerRef = useRef<number | undefined>(undefined);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Zustand store
@@ -39,25 +44,16 @@ export default function NotificationDropdown() {
 
   const showToast = useToast().showSuccess;
 
-  // Drives a one-shot bell/badge animation when the unread count goes up.
-  const [justArrived, setJustArrived] = useState(false);
-  const previousUnreadRef = useRef(unreadCount);
-
-  useEffect(() => {
-    const rose = unreadCount > previousUnreadRef.current;
-    previousUnreadRef.current = unreadCount;
-    if (!rose) return;
-
-    setJustArrived(true);
-    const timer = window.setTimeout(() => setJustArrived(false), 1200);
-    return () => window.clearTimeout(timer);
-  }, [unreadCount]);
+  useEffect(() => () => window.clearTimeout(arrivalTimerRef.current), []);
 
   // Stable identity: useSse keeps the handler in a ref, but a fresh closure every
   // render still churns that ref for no reason.
   const handleNotification = useCallback(
     (notification: Notification) => {
       addNotification(notification);
+      setJustArrived(true);
+      window.clearTimeout(arrivalTimerRef.current);
+      arrivalTimerRef.current = window.setTimeout(() => setJustArrived(false), 500);
 
       const actorLabel = notification.actor_name || (notification.type === 'system' ? '系统' : '社区');
       const typeText =
@@ -157,7 +153,7 @@ export default function NotificationDropdown() {
         {/* Animates once when the count rises, not continuously. Keying the class off
             `unreadCount > 0` meant a permanently shaking bell and a permanently
             pulsing badge — constant compositor work for no added information. */}
-        <Bell className={`w-5 h-5 transition-transform ${justArrived ? 'animate-wiggle' : ''}`} />
+        <Bell className={`w-5 h-5 ${justArrived ? 'animate-wiggle' : ''}`} />
         {unreadCount > 0 && (
           <span
             className={`absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center shadow-sm ${
@@ -170,10 +166,15 @@ export default function NotificationDropdown() {
         )}
       </button>
 
+      <AnimatePresence>
       {isOpen && (
-        <div
+        <motion.div
           className="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-surface-200 dark:border-gray-700 z-50"
           role="menu"
+          initial={reduceMotion ? false : { opacity: 0, y: -4, scale: 0.985 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4, scale: 0.985 }}
+          transition={{ duration: reduceMotion ? 0 : motionTokens.fast, ease: motionTokens.easing }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-surface-100 dark:border-gray-700">
             <span className="font-medium text-surface-900 dark:text-gray-100">通知</span>
@@ -253,8 +254,9 @@ export default function NotificationDropdown() {
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

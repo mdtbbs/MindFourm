@@ -40,16 +40,23 @@ export default function AdminNotificationBell() {
     addNotification,
     setConnected,
   } = useAdminNotificationStore();
+  const [justArrived, setJustArrived] = useState(false);
+  const arrivalTimerRef = useRef<number | undefined>(undefined);
 
   const showSuccess = useToastStore((state) => state.showSuccess);
   const showInfo = useToastStore((state) => state.showInfo);
   const showWarning = useToastStore((state) => state.showWarning);
   const showError = useToastStore((state) => state.showError);
 
+  useEffect(() => () => window.clearTimeout(arrivalTimerRef.current), []);
+
   // Memoised so the SSE hook is not handed a new closure on every render.
   const handleAdminNotification = useCallback(
     (notification: AdminNotification) => {
       addNotification(notification);
+      setJustArrived(true);
+      window.clearTimeout(arrivalTimerRef.current);
+      arrivalTimerRef.current = window.setTimeout(() => setJustArrived(false), 500);
 
       if (notification.level === 'success') {
         showSuccess(notification.title);
@@ -123,7 +130,7 @@ export default function AdminNotificationBell() {
         aria-label={`后台通知${unreadCount > 0 ? `（${unreadCount} 条未读）` : ''}`}
         aria-expanded={isOpen}
       >
-        <Bell className={`w-5 h-5 ${unreadCount > 0 ? 'animate-wiggle' : ''}`} />
+        <Bell className={`w-5 h-5 ${justArrived ? 'animate-wiggle' : ''}`} />
         {unreadCount > 0 ? (
           <span className="absolute -right-0.5 -top-0.5 min-w-4 h-4 px-1 bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}

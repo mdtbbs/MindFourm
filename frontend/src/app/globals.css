@@ -167,31 +167,6 @@ body {
   min-height: 100vh;
 }
 
-/* 主题切换时的闪光效果 */
-@keyframes theme-flash {
-  0% {
-    opacity: 0;
-    transform: scale(0);
-  }
-  50% {
-    opacity: 0.3;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(1.5);
-  }
-}
-
-.theme-flash-overlay {
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(circle at center, var(--primary), transparent 70%);
-  z-index: 9999;
-  pointer-events: none;
-  animation: theme-flash 0.5s ease-out forwards;
-}
-
 /* ===== Loading Animation System - Industrial Pulse ===== */
 
 @layer components {
@@ -223,31 +198,6 @@ body {
     animation-delay: 0.4s;
   }
 
-  /* Block Wave Animation */
-  .block-wave {
-    animation: block-wave-scale 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-  .block-wave-delay-1 { animation-delay: 0s; }
-  .block-wave-delay-2 { animation-delay: 0.1s; }
-  .block-wave-delay-3 { animation-delay: 0.2s; }
-  .block-wave-delay-4 { animation-delay: 0.3s; }
-  .block-wave-delay-5 { animation-delay: 0.4s; }
-  .block-wave-delay-6 { animation-delay: 0.5s; }
-  .block-wave-delay-7 { animation-delay: 0.6s; }
-  .block-wave-delay-8 { animation-delay: 0.7s; }
-  .block-wave-delay-9 { animation-delay: 0.8s; }
-
-  /* Orbital Animation */
-  .orbital-spin {
-    animation: orbital-rotate 1.5s linear infinite;
-  }
-  .orbital-dot {
-    animation: orbital-dot-pulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  }
-  .orbital-dot-1 { animation-delay: 0s; }
-  .orbital-dot-2 { animation-delay: 0.5s; }
-  .orbital-dot-3 { animation-delay: 1s; }
-
   /*
    * 骨架屏微光。原来写死了橙色 rgba(255,107,53,…)，和 Clean blue 主题不匹配；
    * 改成从 --primary 派生，浅/深色都能跟着走。
@@ -257,20 +207,20 @@ body {
       90deg,
       transparent 0%,
       color-mix(in srgb, var(--primary) 8%, transparent) 25%,
-      color-mix(in srgb, var(--primary) 15%, transparent) 50%,
-      color-mix(in srgb, var(--primary) 8%, transparent) 75%,
+      color-mix(in srgb, var(--primary) 10%, transparent) 50%,
+      color-mix(in srgb, var(--primary) 6%, transparent) 75%,
       transparent 100%
     );
     background-size: 200% 100%;
     animation: shimmer-sweep 2s ease-in-out infinite;
   }
 
-  /* Fade In Animation */
+  /* Short entry used only by the standalone page loader. */
   .fade-in-up {
-    animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation: fade-in-up var(--motion-normal) var(--motion-easing) both;
   }
   .fade-in-up-delay {
-    animation-delay: 0.3s;
+    animation-delay: var(--motion-normal);
     opacity: 0;
   }
 
@@ -282,14 +232,13 @@ body {
     animation-delay: 0.2s;
   }
 
-  /* 通知铃铛：有未读时摇晃 + 角标脉冲 */
+  /* Notification arrival: one short motion, never a permanent unread animation. */
   .animate-wiggle {
-    animation: wiggle 0.5s ease-in-out infinite;
-    animation-delay: 0.3s;
+    animation: wiggle var(--motion-slow) var(--motion-easing) 1;
   }
 
   .animate-badge-pulse {
-    animation: badge-pulse 1.5s ease-in-out infinite;
+    animation: badge-pulse var(--motion-slow) ease-out 1;
   }
 }
 
@@ -301,37 +250,6 @@ body {
   }
   50% {
     transform: scale(1.15);
-    opacity: 1;
-  }
-}
-
-@keyframes block-wave-scale {
-  0%, 100% {
-    transform: scale(0.85);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-@keyframes orbital-rotate {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes orbital-dot-pulse {
-  0%, 100% {
-    transform: scale(0.8);
-    opacity: 0.5;
-  }
-  50% {
-    transform: scale(1.2);
     opacity: 1;
   }
 }
@@ -360,31 +278,28 @@ body {
   0%, 100% {
     transform: rotate(0deg);
   }
-  10% {
-    transform: rotate(-10deg);
-  }
   20% {
-    transform: rotate(10deg);
-  }
-  30% {
     transform: rotate(-8deg);
   }
   40% {
     transform: rotate(8deg);
   }
-  50% {
-    transform: rotate(0deg);
+  60% {
+    transform: rotate(-5deg);
+  }
+  80% {
+    transform: rotate(5deg);
   }
 }
 
 @keyframes badge-pulse {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2);
   }
   50% {
-    transform: scale(1.1);
-    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+    transform: scale(1.04);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0);
   }
 }
 
@@ -413,8 +328,7 @@ body {
  *
  * This block used to *replace* each animation with `pulse … infinite`, so someone
  * who asked for less motion received a different perpetual animation rather than
- * none. Everything now stops; loading indicators keep one slow pulse, because some
- * signal that work is in progress is worth more than absolute stillness.
+ * none. Static loader shapes remain visible as an unambiguous busy state.
  */
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -426,14 +340,6 @@ body {
     scroll-behavior: auto !important;
   }
 
-  .hexagon-pulse,
-  .block-wave,
-  .orbital-spin,
-  .orbital-dot {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
-    animation-duration: 2s !important;
-    animation-iteration-count: infinite !important;
-  }
 }
 
 .panel-surface {
@@ -491,7 +397,7 @@ body {
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1;
-  transition: all 0.15s ease;
+  transition: color var(--motion-fast) ease, background-color var(--motion-fast) ease;
   flex-shrink: 0;
   border: none;
   background: transparent;
@@ -908,7 +814,7 @@ body {
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease;
 }
 
 .tiptap-link-cancel:hover {

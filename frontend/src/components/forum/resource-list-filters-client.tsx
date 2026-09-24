@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion as motionTokens } from '@/lib/motion';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { ResourceCategory } from '@/types';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
@@ -30,6 +32,7 @@ export default function ResourceFilters({
   const [localSearch, setLocalSearch] = useState(urlSearch);
   const [localTag, setLocalTag] = useState(tag);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!mobileFiltersOpen) return;
@@ -78,9 +81,10 @@ export default function ResourceFilters({
         </details>
       </div>
     </div>
-    {mobileFiltersOpen && <div className="fixed inset-0 z-[70] flex items-end sm:hidden" role="dialog" aria-modal="true" aria-label="资源筛选">
+    <AnimatePresence>
+    {mobileFiltersOpen && <motion.div className="fixed inset-0 z-[70] flex items-end sm:hidden" role="dialog" aria-modal="true" aria-label="资源筛选" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduceMotion ? 0 : motionTokens.normal, ease: motionTokens.easing }}>
       <button type="button" aria-label="关闭筛选" className="absolute inset-0 bg-black/45" onClick={() => setMobileFiltersOpen(false)} />
-      <section className="relative max-h-[88dvh] w-full overflow-y-auto rounded-t-[var(--radius-card)] border-t border-[var(--border)] bg-[var(--bg-card)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4">
+      <motion.section className="relative max-h-[88dvh] w-full overflow-y-auto rounded-t-[var(--radius-card)] border-t border-[var(--border)] bg-[var(--bg-card)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4" initial={reduceMotion ? false : { opacity: 0.9, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }} transition={{ duration: reduceMotion ? 0 : motionTokens.panel, ease: motionTokens.easing }}>
         <div className="mb-4 flex items-center justify-between"><h2 className="text-base font-semibold text-[var(--text)]">筛选资源</h2><button type="button" aria-label="关闭" onClick={() => setMobileFiltersOpen(false)} className="flex h-11 w-11 items-center justify-center rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"><X className="h-5 w-5" /></button></div>
         <div className="grid gap-3">
           <label className="grid gap-1 text-xs text-[var(--text-muted)]">资源类型<select value={resourceKind} onChange={(event) => updateFilters({ resource_kind: event.target.value || null })} className={inputClass}><option value="">全部类型</option>{RESOURCE_KINDS.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select></label>
@@ -92,8 +96,9 @@ export default function ResourceFilters({
           <label className="grid gap-1 text-xs text-[var(--text-muted)]">排序<select value={sort} onChange={(event) => updateFilters({ sort: event.target.value || null })} className={inputClass}><option value="created_at">最新发布</option><option value="updated_at">最近更新</option><option value="download_count">最多下载</option><option value="rating_average">评分最高</option><option value="rating_count">评分最多</option></select></label>
         </div>
         <div className="sticky bottom-0 mt-4 flex gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] py-3"><button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); }} className="min-h-11 flex-1 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)]">清除</button><button type="button" onClick={() => setMobileFiltersOpen(false)} className="min-h-11 flex-1 rounded-[var(--radius)] bg-[var(--primary)] px-4 text-sm font-semibold text-white">应用筛选</button></div>
-      </section>
-    </div>}
+      </motion.section>
+    </motion.div>}
+    </AnimatePresence>
     <div className="-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 pb-1" aria-label="资源类型">
       <button type="button" aria-pressed={!resourceKind} onClick={() => updateFilters({ resource_kind: null })} className={chipClass(!resourceKind)}>全部</button>
       {RESOURCE_KINDS.map(({ value, label }) => <button key={value} type="button" aria-pressed={resourceKind === value} onClick={() => updateFilters({ resource_kind: value })} className={chipClass(resourceKind === value)}>{label}</button>)}

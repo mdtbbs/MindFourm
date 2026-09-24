@@ -149,7 +149,7 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
               onClick={() => selectFromPicker(emoji)}
               aria-pressed={reactedEmojis.has(emoji)}
               aria-label={emoji}
-              className={`rounded-full px-1.5 py-0.5 text-base transition-transform hover:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
+          className={`rounded-full px-1.5 py-0.5 text-base transition-[scale] duration-[var(--motion-fast)] hover:scale-[1.03] motion-reduce:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
                 reactedEmojis.has(emoji) ? 'bg-[var(--primary)]/10' : ''
               }`}
             >

@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, X } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion as motionTokens } from '@/lib/motion';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import ContentNavigation from '@/components/layout/content-navigation';
 import { contentNavigationCta } from '@/lib/navigation/content-navigation';
@@ -24,6 +26,7 @@ export default function ContentDrawer({
   logoUrl?: string; sidebarLogoUrl?: string; userName?: string; userId?: number; isAuthenticated: boolean; userMeta?: string;
   settings?: Record<string, string>; resourceCategories?: ResourceCategory[]; forumCategories?: Category[];
 }) {
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
     if (!open) return;
     const previousOverflow = document.body.style.overflow;
@@ -32,12 +35,11 @@ export default function ContentDrawer({
     document.addEventListener('keydown', closeOnEscape);
     return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', closeOnEscape); };
   }, [open, onClose]);
-  if (!open) return null;
   const cta = contentNavigationCta(mode, settings);
   const displayLogoUrl = sidebarLogoUrl || logoUrl;
-  return <div data-testid="mobile-drawer" className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="站点导航">
-    <button type="button" aria-label="关闭导航菜单" className="absolute inset-0 bg-black/40" onClick={onClose} />
-    <div className={DRAWER_LAYOUT_CLASSES.panel}>
+  return <AnimatePresence>{open && <motion.div data-testid="mobile-drawer" className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label="站点导航" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduceMotion ? 0 : motionTokens.normal, ease: motionTokens.easing }}>
+    <motion.button type="button" aria-label="关闭导航菜单" className="absolute inset-0 bg-black/40" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduceMotion ? 0 : motionTokens.normal }} />
+    <motion.div className={DRAWER_LAYOUT_CLASSES.panel} initial={reduceMotion ? false : { x: -16 }} animate={{ x: 0 }} exit={reduceMotion ? { opacity: 0 } : { x: -16 }} transition={{ duration: reduceMotion ? 0 : motionTokens.panel, ease: motionTokens.easing }}>
       <div data-testid="mobile-drawer-brand" className={DRAWER_LAYOUT_CLASSES.brand}>
         <Link href="/" onClick={onClose} className="flex min-w-0 flex-1 items-center gap-3">
           {displayLogoUrl ? <img src={displayLogoUrl} alt={siteName} className="h-8 w-auto max-w-full object-contain" /> : <><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div><div className="text-xs text-[var(--text-muted)]">{mode === 'resources' ? '资源中心' : sidebarTitle}</div></div></>}
@@ -49,6 +51,6 @@ export default function ContentDrawer({
       </nav>
       {cta && <Link href={cta.href} onClick={onClose} className="mx-3 mb-3 flex shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" />{cta.label}</Link>}
       <div data-testid="mobile-drawer-user" className={DRAWER_LAYOUT_CLASSES.user}><SidebarUserPanel userName={userName} userMeta={userMeta} /></div>
-    </div>
-  </div>;
+    </motion.div>
+  </motion.div>}</AnimatePresence>;
 }

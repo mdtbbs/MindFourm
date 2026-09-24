@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Flag, X } from 'lucide-react';
 import Button from '@/components/ui/button';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { motion as motionTokens } from '@/lib/motion';
 import { REPORT_REASONS, reportApi, type ReportReason, type ReportTargetType } from '@/lib/api/client';
 import { useToastStore } from '@/store/toast-store';
 
@@ -29,6 +31,7 @@ export default function ReportDialog({ targetType, targetId, label = '举报', t
   const [detail, setDetail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reduceMotion = useReducedMotion();
 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -119,19 +122,28 @@ export default function ReportDialog({ targetType, targetId, label = '举报', t
         {label}
       </button>
 
+      <AnimatePresence>
       {open && (
-        <div
+        <motion.div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: reduceMotion ? 0 : motionTokens.normal }}
           onClick={(event) => {
             if (event.target === event.currentTarget) close();
           }}
         >
-          <div
+          <motion.div
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="report-dialog-title"
             className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-5 shadow-xl"
+            initial={reduceMotion ? false : { opacity: 0, scale: 0.985, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.985, y: 4 }}
+            transition={{ duration: reduceMotion ? 0 : motionTokens.normal, ease: motionTokens.easing }}
           >
             <div className="flex items-start justify-between mb-4">
               <h2 id="report-dialog-title" className="text-lg font-semibold text-[var(--text)]">
@@ -191,9 +203,10 @@ export default function ReportDialog({ targetType, targetId, label = '举报', t
                 {submitting ? '提交中…' : '提交举报'}
               </Button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </>
   );
 }
