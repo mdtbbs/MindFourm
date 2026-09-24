@@ -9,6 +9,7 @@ export type ClientCapabilities = {
   notifications_v1: boolean;
   notices_v1: boolean;
   forge_preview: boolean;
+  blueprint_production_analysis: boolean;
   minimum_supported_client_version: string | null;
   recommended_client_version: string | null;
 };
@@ -26,6 +27,7 @@ export class CapabilitiesService {
       notifications_v1: false,
       notices_v1: true,
       forge_preview: Boolean(process.env.RESOURCE_RENDERER_URL),
+      blueprint_production_analysis: Boolean(process.env.RESOURCE_RENDERER_URL),
       minimum_supported_client_version: null,
       recommended_client_version: null,
     };

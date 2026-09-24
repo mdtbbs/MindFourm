@@ -127,6 +127,7 @@ describe('ResourcePreviewService', () => {
           ignored: { name: 'ignored', icon: 'https://example.com/not-an-image.png' },
         },
         blocks: { 'water-extractor': { name: '抽水机', icon: 'data:image/png;base64,d2F0ZXItZXh0cmFjdG9y' } },
+        liquids: { water: { name: '水', icon: null } },
       }),
     }) as any;
     const service = new ResourcePreviewService({ update: jest.fn() } as any);
@@ -141,6 +142,7 @@ describe('ResourcePreviewService', () => {
         ignored: { name: 'ignored', icon: null },
       },
       blocks: { 'water-extractor': { name: '抽水机', icon: 'data:image/png;base64,d2F0ZXItZXh0cmFjdG9y' } },
+      liquids: {},
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);
     const [url, options] = (global.fetch as jest.Mock).mock.calls[0];
@@ -154,6 +156,6 @@ describe('ResourcePreviewService', () => {
     delete process.env.RESOURCE_RENDERER_URL;
     const service = new ResourcePreviewService({ update: jest.fn() } as any);
     await expect(service.resolveContentMetadata(['copper'], ['battery']))
-      .resolves.toEqual({ items: {}, blocks: {} });
+      .resolves.toEqual({ items: {}, blocks: {}, liquids: {} });
   });
 });

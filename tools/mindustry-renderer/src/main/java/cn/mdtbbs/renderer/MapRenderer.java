@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
+import java.util.zip.InflaterInputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -51,7 +52,7 @@ import java.util.concurrent.Executors;
  */
 public final class MapRenderer {
     private static final int MAX_BYTES = 20 * 1024 * 1024;
-    private static final String VERSION = "v160.2-preview-3";
+    private static final String VERSION = "v160.2-preview-4-production";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
     private static String token;
@@ -123,7 +124,8 @@ public final class MapRenderer {
             java.util.Map<String, String> query = queryParameters(exchange.getRequestURI().getRawQuery());
             String items = contentEntries(query.getOrDefault("items", ""), ContentType.item);
             String blocks = contentEntries(query.getOrDefault("blocks", ""), ContentType.block);
-            send(exchange, 200, "{\"items\":" + items + ",\"blocks\":" + blocks + "}");
+            String liquids = contentEntries(query.getOrDefault("liquids", ""), ContentType.liquid);
+            send(exchange, 200, "{\"items\":" + items + ",\"blocks\":" + blocks + ",\"liquids\":" + liquids + "}");
         } catch (IllegalArgumentException exception) {
             send(exchange, 400, error("INVALID_CONTENT_QUERY"));
         }
@@ -139,10 +141,12 @@ public final class MapRenderer {
                 if (!id.matches("[a-zA-Z0-9_.-]{1,100}")) throw new IllegalArgumentException("invalid content id");
                 if (!first) result.append(',');
                 first = false;
-                String key = (type == ContentType.item ? "item." : "block.") + id + ".name";
+                String prefix = type == ContentType.item ? "item." : type == ContentType.liquid ? "liquid." : "block.";
+                String key = prefix + id + ".name";
                 String localizedName = chineseBundle == null ? null : chineseBundle.getProperty(key);
                 BufferedImage icon = spriteAtlas == null ? null
-                    : type == ContentType.item ? spriteAtlas.findItem(id) : spriteAtlas.findBlock(id);
+                    : type == ContentType.item ? spriteAtlas.findItem(id)
+                    : type == ContentType.liquid ? spriteAtlas.findLiquid(id) : spriteAtlas.findBlock(id);
                 String iconData = "null";
                 if (icon != null) {
                     ByteArrayOutputStream png = new ByteArrayOutputStream();
@@ -230,11 +234,12 @@ public final class MapRenderer {
     }
 
     private static void renderSchematic(HttpExchange exchange, Path input, String hash) throws IOException {
+        List<String> unknownBlocks = unknownSchematicBlocks(input);
         Schematic schematic = Schematics.read(new Fi(input.toFile()));
         BufferedImage image = renderSchematicImage(schematic);
         String key = previewKey("schematic", hash);
         if (!ImageIO.write(image, "png", target(key).toFile())) throw new IOException("PNG writer unavailable");
-        send(exchange, 200, result(schematicMetadata(schematic), key));
+        send(exchange, 200, result(schematicMetadata(schematic, unknownBlocks), key));
     }
 
     static BufferedImage renderSchematicImage(Schematic schematic) {
@@ -344,6 +349,10 @@ public final class MapRenderer {
     }
 
     private static String schematicMetadata(Schematic schematic) {
+        return schematicMetadata(schematic, List.of());
+    }
+
+    private static String schematicMetadata(Schematic schematic, List<String> unknownBlocks) {
         LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
         StringBuilder positions = new StringBuilder("[");
         boolean firstPosition = true;
@@ -401,6 +410,7 @@ public final class MapRenderer {
             ",\"block_positions\":" + positions +
             ",\"block_positions_truncated\":" + (schematic.tiles.size > 10000) +
             ",\"requirements\":" + requirements +
+            ",\"production\":" + safeProductionAnalysis(schematic, unknownBlocks) +
             ",\"power_production\":" + number(production) +
             ",\"power_consumption\":" + number(consumption) +
             ",\"net_power\":" + number(net) +
@@ -409,6 +419,287 @@ public final class MapRenderer {
             ",\"labels\":" + labels +
             ",\"mod_dependencies\":" + stringArray(dependency) +
             "}";
+    }
+
+    private static String safeProductionAnalysis(Schematic schematic, List<String> unknownBlocks) {
+        try { return productionAnalysis(schematic, unknownBlocks); }
+        catch (Throwable error) {
+            System.err.println("schematic production analysis unavailable: " + error.getClass().getSimpleName());
+            return "null";
+        }
+    }
+
+    /**
+     * Computes a schematic's theoretical, full-load rates from the official
+     * v160.2 Block/consumer definitions already loaded by this renderer. The
+     * game stores craft times and continuous consumer values in ticks; convert
+     * them to seconds here so persisted metadata has one stable unit.
+     */
+    static String productionAnalysis(Schematic schematic) {
+        return productionAnalysis(schematic, List.of());
+    }
+
+    static String productionAnalysis(Schematic schematic, List<String> unknownBlocks) {
+        LinkedHashMap<String, double[]> items = new LinkedHashMap<>();
+        LinkedHashMap<String, double[]> liquids = new LinkedHashMap<>();
+        LinkedHashMap<String, String> itemNames = new LinkedHashMap<>();
+        LinkedHashMap<String, String> liquidNames = new LinkedHashMap<>();
+        LinkedHashMap<String, Integer> warnings = new LinkedHashMap<>();
+        for (String unknownBlock : unknownBlocks) warnings.put("unknown-content:" + unknownBlock, 1);
+        double generated = 0d, consumedPower = 0d;
+        boolean hasFacility = false;
+
+        int analyzedBlocks = 0;
+        for (Schematic.Stile tile : schematic.tiles) {
+            if (analyzedBlocks++ >= 10000) {
+                warn(warnings, "analysis-truncated", "blueprint");
+                break;
+            }
+            Object block = tile.block;
+            if (block == null) {
+                hasFacility = true;
+                warn(warnings, "unknown-content", "unknown");
+                continue;
+            }
+            String id = stringField(block, "name", "unknown");
+            if (isA(block, "OverdriveProjector")) warn(warnings, "boost-not-simulated", id);
+
+            // These classes cannot be assigned a terrain-independent rate.
+            if (isA(block, "Drill")) {
+                hasFacility = true;
+                warn(warnings, "terrain-dependent", id);
+                continue;
+            }
+            if (isA(block, "Pump")) {
+                hasFacility = true;
+                warn(warnings, "terrain-dependent", id);
+                continue;
+            }
+            if (isA(block, "AttributeCrafter")) {
+                hasFacility = true;
+                warn(warnings, "environment-dependent", id);
+                continue;
+            }
+            if (isA(block, "ThermalGenerator") || isA(block, "HeatGenerator")) {
+                hasFacility = true;
+                warn(warnings, "environment-dependent", id);
+                continue;
+            }
+
+            boolean crafter = isA(block, "GenericCrafter");
+            boolean separator = isA(block, "Separator");
+            double blockGeneration = numberField(block, "powerProduction", 0d);
+            double itemDuration = numberField(block, "itemDuration", Double.NaN);
+            double craftTime = numberField(block, "craftTime", Double.NaN);
+            if ((crafter || separator) && (!Double.isFinite(craftTime) || craftTime <= 0d)) {
+                warn(warnings, "unknown-rate", id);
+                continue;
+            }
+            double craftsPerSecond = crafter || separator ? 60d / craftTime : 0d;
+            for (Object consumer : arrayField(block, "consumers")) {
+                if (hasType(consumer, "ConsumeItems")) {
+                    for (Object stack : arrayField(consumer, "items")) {
+                        Object content = field(stack, "item");
+                        String contentId = stringField(content, "name", "unknown");
+                        double amount = numberField(stack, "amount", 0d);
+                        if (crafter || separator) addRate(items, itemNames, contentId, localized(content, contentId), amount * craftsPerSecond, false, 1);
+                        else if (blockGeneration > 0d && Double.isFinite(itemDuration) && itemDuration > 0d) addRate(items, itemNames, contentId, localized(content, contentId), amount * 60d / itemDuration, false, 1);
+                        else warn(warnings, "unknown-rate", id);
+                    }
+                } else if (hasType(consumer, "ConsumeLiquid")) {
+                    Object content = field(consumer, "liquid");
+                    String contentId = stringField(content, "name", "unknown");
+                    double amount = numberField(consumer, "amount", 0d);
+                    addRate(liquids, liquidNames, contentId, localized(content, contentId), amount * 60d, false, 1);
+                } else if (hasType(consumer, "ConsumeLiquids")) {
+                    for (Object stack : arrayField(consumer, "liquids")) {
+                        Object content = field(stack, "liquid");
+                        String contentId = stringField(content, "name", "unknown");
+                        double amount = numberField(stack, "amount", 0d);
+                        addRate(liquids, liquidNames, contentId, localized(content, contentId), amount * 60d, false, 1);
+                    }
+                } else if (hasType(consumer, "ConsumePowerDynamic")) {
+                    warn(warnings, "unknown-rate", id);
+                } else if (hasType(consumer, "ConsumePower")) {
+                    double usage = numberField(consumer, "usage", 0d);
+                    if (!Double.isFinite(usage) || usage < 0d) warn(warnings, "unknown-rate", id);
+                    else consumedPower += usage * 60d;
+                } else if (hasType(consumer, "ConsumeItemFilter") || hasType(consumer, "ConsumeLiquidFilter")) {
+                    warn(warnings, "unknown-rate", id);
+                }
+            }
+
+            if (crafter) {
+                for (Object stack : arrayField(block, "outputItems")) {
+                    Object content = field(stack, "item");
+                    String contentId = stringField(content, "name", "unknown");
+                    addRate(items, itemNames, contentId, localized(content, contentId), numberField(stack, "amount", 0d) * craftsPerSecond, false, 0);
+                }
+                for (Object stack : arrayField(block, "outputLiquids")) {
+                    Object content = field(stack, "liquid");
+                    String contentId = stringField(content, "name", "unknown");
+                    addRate(liquids, liquidNames, contentId, localized(content, contentId), numberField(stack, "amount", 0d) * craftsPerSecond, false, 0);
+                }
+            } else if (separator) {
+                Object[] results = arrayField(block, "results");
+                double total = 0d;
+                for (Object stack : results) total += numberField(stack, "amount", 0d);
+                if (total > 0d) for (Object stack : results) {
+                    Object content = field(stack, "item");
+                    String contentId = stringField(content, "name", "unknown");
+                    double expected = numberField(stack, "amount", 0d) / total * craftsPerSecond;
+                    addRate(items, itemNames, contentId, localized(content, contentId), expected, true, 0);
+                }
+            }
+
+            if (!Double.isFinite(blockGeneration) || blockGeneration < 0d) warn(warnings, "unknown-rate", id);
+            else if (blockGeneration > 0d) generated += blockGeneration * 60d;
+            Object generatorLiquidOutput = field(block, "outputLiquid");
+            if (blockGeneration > 0d && generatorLiquidOutput != null) {
+                Object content = field(generatorLiquidOutput, "liquid");
+                String contentId = stringField(content, "name", "unknown");
+                addRate(liquids, liquidNames, contentId, localized(content, contentId), numberField(generatorLiquidOutput, "amount", 0d) * 60d, false, 0);
+            }
+            if (crafter || separator || blockGeneration > 0d || consumedPower > 0d) hasFacility = true;
+            if (!crafter && !separator && Double.isFinite(blockGeneration) && blockGeneration <= 0d && hasFlag(block, "factory")) {
+                warn(warnings, "unknown-rate", id);
+                hasFacility = true;
+            }
+            if (Double.isFinite(blockGeneration) && blockGeneration <= 0d && hasFlag(block, "generator")) {
+                warn(warnings, "unknown-rate", id);
+                hasFacility = true;
+            }
+        }
+
+        if (!warnings.isEmpty()) hasFacility = true;
+        StringBuilder out = new StringBuilder("{\"mode\":\"theoretical\",\"complete\":").append(warnings.isEmpty());
+        out.append(",\"available\":").append(hasFacility);
+        out.append(",\"items\":").append(flowJson(items, itemNames));
+        out.append(",\"liquids\":").append(flowJson(liquids, liquidNames));
+        double netPower = generated - consumedPower;
+        out.append(",\"power\":{\"generated\":").append(number(generated)).append(",\"consumed\":").append(number(consumedPower)).append(",\"net\":").append(number(netPower)).append('}');
+        out.append(",\"warnings\":[");
+        boolean first = true;
+        for (Entry<String, Integer> warning : warnings.entrySet()) {
+            if (!first) out.append(',');
+            first = false;
+            String type = warning.getKey().substring(0, warning.getKey().indexOf(':'));
+            String blockId = warning.getKey().substring(warning.getKey().indexOf(':') + 1);
+            out.append("{\"type\":").append(quote(type)).append(",\"blockId\":").append(quote(blockId)).append(",\"count\":");
+            if (type.equals("unknown-content")) out.append("null"); else out.append(warning.getValue());
+            if (type.equals("terrain-dependent")) out.append(",\"message\":\"产量依赖地图矿物或地形，未计入\"");
+            if (type.equals("environment-dependent")) out.append(",\"message\":\"生产效率依赖地图环境属性，未计入\"");
+            out.append('}');
+        }
+        return out.append("]}").toString();
+    }
+
+    /** Reads only the official schematic header, tags and block-name dictionary.
+     * Schematics.read() remains the sole decoder for block placements/configs;
+     * this bounded pre-scan preserves names that the official reader replaces
+     * with air when a matching Mod definition is not installed.
+     */
+    static List<String> unknownSchematicBlocks(Path input) {
+        try (DataInputStream file = new DataInputStream(Files.newInputStream(input))) {
+            if (file.readInt() != 0x6d736368) return List.of();
+            file.readUnsignedByte();
+            try (DataInputStream data = new DataInputStream(new InflaterInputStream(file))) {
+                data.readShort(); data.readShort();
+                int tagCount = data.readUnsignedByte();
+                for (int i = 0; i < tagCount; i++) { data.readUTF(); data.readUTF(); }
+                int blockCount = data.readUnsignedByte();
+                java.util.LinkedHashSet<String> unknown = new java.util.LinkedHashSet<>();
+                for (int i = 0; i < blockCount; i++) {
+                    String name = data.readUTF();
+                    String mappedName = mindustry.io.SaveFileReader.fallback.get(name, name);
+                    Block block = Vars.content.block(mappedName);
+                    if (block == null || isA(block, "LegacyBlock")) unknown.add(name);
+                }
+                return List.copyOf(unknown);
+            }
+        } catch (Exception ignored) {
+            return List.of();
+        }
+    }
+
+    private static void warn(LinkedHashMap<String, Integer> warnings, String type, String id) {
+        String key = type + ":" + id;
+        warnings.put(key, warnings.getOrDefault(key, 0) + 1);
+    }
+
+    private static void addRate(LinkedHashMap<String, double[]> values, LinkedHashMap<String, String> names, String id, String name, double rate, boolean estimated, int direction) {
+        if (id == null || !Double.isFinite(rate) || rate <= 0d) return;
+        double[] sums = values.computeIfAbsent(id, ignored -> new double[3]);
+        sums[direction] += rate;
+        if (estimated) sums[2] = 1d;
+        names.putIfAbsent(id, name);
+    }
+
+    private static String flowJson(LinkedHashMap<String, double[]> values, LinkedHashMap<String, String> names) {
+        StringBuilder result = new StringBuilder("{\"inputs\":[");
+        boolean first = true;
+        for (Entry<String, double[]> entry : values.entrySet()) {
+            double[] stats = entry.getValue();
+            double net = stats[0] - stats[1];
+            if (net >= -0.0000001d) continue;
+            if (!first) result.append(','); first = false;
+            result.append("{\"id\":").append(quote(entry.getKey())).append(",\"name\":").append(quote(names.get(entry.getKey()))).append(",\"rate\":").append(number(-net));
+            if (stats[2] > 0d) result.append(",\"estimated\":true");
+            result.append('}');
+        }
+        result.append("],\"outputs\":["); first = true;
+        for (Entry<String, double[]> entry : values.entrySet()) {
+            double[] stats = entry.getValue(); double net = stats[0] - stats[1];
+            if (net <= 0.0000001d) continue;
+            if (!first) result.append(','); first = false;
+            result.append("{\"id\":").append(quote(entry.getKey())).append(",\"name\":").append(quote(names.get(entry.getKey()))).append(",\"rate\":").append(number(net));
+            if (stats[2] > 0d) result.append(",\"estimated\":true");
+            result.append('}');
+        }
+        result.append("],\"internal\":["); first = true;
+        for (Entry<String, double[]> entry : values.entrySet()) {
+            double[] stats = entry.getValue();
+            if (stats[0] <= 0d && stats[1] <= 0d) continue;
+            if (!first) result.append(','); first = false;
+            result.append("{\"id\":").append(quote(entry.getKey())).append(",\"name\":").append(quote(names.get(entry.getKey())))
+                .append(",\"produced\":").append(number(stats[0])).append(",\"consumed\":").append(number(stats[1]))
+                .append(",\"net\":").append(number(stats[0] - stats[1]));
+            if (stats[2] > 0d) result.append(",\"estimated\":true");
+            result.append('}');
+        }
+        return result.append("]}").toString();
+    }
+
+    private static Object field(Object target, String name) {
+        if (target == null) return null;
+        try { return target.getClass().getField(name).get(target); }
+        catch (ReflectiveOperationException ignored) { return null; }
+    }
+    private static boolean isA(Object value, String simpleName) { return value != null && hasType(value, simpleName); }
+    private static boolean hasType(Object value, String simpleName) {
+        for (Class<?> type = value == null ? null : value.getClass(); type != null; type = type.getSuperclass()) {
+            if (type.getSimpleName().equals(simpleName)) return true;
+        }
+        return false;
+    }
+    private static boolean hasFlag(Object block, String flag) {
+        Object flags = field(block, "flags");
+        return flags != null && flags.toString().contains(flag);
+    }
+    private static Object[] arrayField(Object target, String name) {
+        Object value = field(target, name);
+        return value != null && value.getClass().isArray() ? (Object[])value : new Object[0];
+    }
+    private static double numberField(Object target, String name, double fallback) {
+        Object value = field(target, name);
+        return value instanceof Number ? ((Number)value).doubleValue() : fallback;
+    }
+    private static String stringField(Object target, String name, String fallback) {
+        Object value = field(target, name);
+        return value instanceof String ? (String)value : fallback;
+    }
+    private static String localized(Object content, String fallback) {
+        return stringField(content, "localizedName", fallback);
     }
 
     private static String rulesJson(mindustry.game.Rules rules) {
@@ -501,6 +792,7 @@ public final class MapRenderer {
 
     private static float finite(float value) { return Float.isFinite(value) ? value : 0f; }
     private static String number(float value) { return Float.isFinite(value) ? Float.toString(value) : "null"; }
+    private static String number(double value) { return Double.isFinite(value) ? Double.toString(value) : "null"; }
     private static String stringArray(String value) {
         if (value == null || value.isBlank()) return "[]";
         String[] values = value.split(",");
@@ -704,6 +996,11 @@ public final class MapRenderer {
         BufferedImage findItem(String name) {
             BufferedImage sprite = regions.get("item-" + name + "-ui");
             return sprite == null ? regions.get("item-" + name) : sprite;
+        }
+
+        BufferedImage findLiquid(String name) {
+            BufferedImage sprite = regions.get("liquid-" + name + "-ui");
+            return sprite == null ? regions.get("liquid-" + name) : sprite;
         }
 
         BufferedImage findBlock(String name) {

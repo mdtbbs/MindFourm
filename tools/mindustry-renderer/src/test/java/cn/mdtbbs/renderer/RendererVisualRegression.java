@@ -56,6 +56,7 @@ public final class RendererVisualRegression {
                     try {
                         MapRenderer.initializeForFixture(root);
                         verifySchematicFixtures(root);
+                        verifyProductionAnalysis();
                         String mapFixture = System.getenv("MINDFOURM_MSAV_FIXTURE");
                         Path fixture = configuredFixture("MINDFOURM_MSAV_FIXTURE", root.resolve("debris-field.msav"));
                         if (mapFixture == null || mapFixture.isBlank()) {
@@ -121,6 +122,71 @@ public final class RendererVisualRegression {
         }
     }
 
+    private static void verifyProductionAnalysis() throws Exception {
+        var press = Vars.content.block("graphite-press");
+        var drill = Vars.content.block("mechanical-drill");
+        var router = Vars.content.block("router");
+        var separator = Vars.content.block("separator");
+        require(press != null && drill != null && router != null && separator != null, "production fixtures must use official vanilla blocks");
+
+        String factory = MapRenderer.productionAnalysis(schematic(press, press));
+        require(factory.contains("\"mode\":\"theoretical\""), "production result must identify the theoretical mode");
+        require(factory.contains("\"id\":\"coal\""), "graphite press input must come from official item consumers");
+        require(factory.contains("\"id\":\"graphite\""), "graphite output must come from official block content");
+        require(factory.contains("\"available\":true"), "factory fixture must be identified as a production facility");
+
+        var coal = Vars.content.item("coal");
+        var graphite = Vars.content.item("graphite");
+        var silicon = Vars.content.item("silicon");
+        var producer = new mindustry.world.blocks.production.GenericCrafter("fixture-graphite-press");
+        producer.craftTime = 60f;
+        producer.consumers = new mindustry.world.consumers.Consume[] { new mindustry.world.consumers.ConsumeItems(new mindustry.type.ItemStack[] { new mindustry.type.ItemStack(coal, 5) }) };
+        producer.outputItems = new mindustry.type.ItemStack[] { new mindustry.type.ItemStack(graphite, 6) };
+        var consumer = new mindustry.world.blocks.production.GenericCrafter("fixture-silicon-smelter");
+        consumer.craftTime = 60f;
+        consumer.consumers = new mindustry.world.consumers.Consume[] { new mindustry.world.consumers.ConsumeItems(new mindustry.type.ItemStack[] { new mindustry.type.ItemStack(graphite, 4) }) };
+        consumer.outputItems = new mindustry.type.ItemStack[] { new mindustry.type.ItemStack(silicon, 2) };
+        String chain = MapRenderer.productionAnalysis(schematic(producer, consumer));
+        require(chain.contains("\"id\":\"graphite\",\"name\":\"graphite\",\"produced\":6.0,\"consumed\":4.0,\"net\":2.0"), "intermediate production must be globally netted without discarding full internal totals");
+        require(chain.contains("\"id\":\"coal\",\"name\":\"coal\",\"rate\":5.0"), "fixed item inputs must use 60 ticks per second and multiply block counts");
+
+        var water = Vars.content.liquid("water");
+        var cryofluid = Vars.content.liquid("cryofluid");
+        var mixer = new mindustry.world.blocks.production.GenericCrafter("fixture-cryofluid-mixer");
+        mixer.craftTime = 120f;
+        mixer.consumers = new mindustry.world.consumers.Consume[] { new mindustry.world.consumers.ConsumeLiquid(water, 0.05f) };
+        mixer.outputLiquids = new mindustry.type.LiquidStack[] { new mindustry.type.LiquidStack(cryofluid, 0.1f) };
+        String liquid = MapRenderer.productionAnalysis(schematic(mixer));
+        require(liquid.contains("\"id\":\"water\",\"name\":\"water\",\"rate\":3.0"), "liquid consumption must convert per-tick values to per-second rates");
+        require(liquid.contains("\"id\":\"cryofluid\",\"name\":\"cryofluid\",\"rate\":3.0"), "liquid outputs must respect crafter progress in ticks");
+
+        var generator = new mindustry.world.blocks.power.PowerGenerator("fixture-solar-generator");
+        generator.powerProduction = 15f;
+        generator.consumers = new mindustry.world.consumers.Consume[] { new mindustry.world.consumers.ConsumePower(2f, 0f, false) };
+        String power = MapRenderer.productionAnalysis(schematic(generator));
+        require(power.contains("\"power\":{\"generated\":900.0,\"consumed\":120.0,\"net\":780.0}"), "generation and consumption must use official per-tick power values");
+
+        String drillResult = MapRenderer.productionAnalysis(schematic(drill));
+        require(drillResult.contains("terrain-dependent") && !drillResult.contains("copper"), "drill must warn without guessing an ore output");
+
+        String separatorResult = MapRenderer.productionAnalysis(schematic(separator));
+        require(separatorResult.contains("\"estimated\":true"), "separator output must be labelled as expected yield");
+
+        String logistics = MapRenderer.productionAnalysis(schematic(router));
+        require(logistics.contains("\"available\":false"), "pure logistics must report no analyzable production");
+
+        String unknown = MapRenderer.productionAnalysis(schematic((mindustry.world.Block)null));
+        require(unknown.contains("unknown-content") && unknown.contains("\"complete\":false"), "unknown content must preserve known output and mark analysis incomplete");
+
+        Path unknownFile = Files.createTempFile("mindfourm-unknown-block-", ".msch");
+        Schematics.write(schematic(new mindustry.world.Block("example-mod:unknown-machine")), new Fi(unknownFile.toFile()));
+        List<String> unknownIds = MapRenderer.unknownSchematicBlocks(unknownFile);
+        require(unknownIds.contains("example-mod:unknown-machine"), "the bounded msch dictionary scan must retain unknown Mod content IDs");
+        String unknownMod = MapRenderer.productionAnalysis(schematic(router), unknownIds);
+        require(unknownMod.contains("example-mod:unknown-machine") && unknownMod.contains("\"count\":null") && unknownMod.contains("\"complete\":false"), "unknown Mod definitions must not invent a tile count or block known analysis");
+        Files.deleteIfExists(unknownFile);
+    }
+
     private static Path configuredFixture(String variable, Path fallback) {
         String configured = System.getenv(variable);
         return configured == null || configured.isBlank() ? fallback : Path.of(configured).toAbsolutePath().normalize();
@@ -130,6 +196,12 @@ public final class RendererVisualRegression {
         Seq<Schematic.Stile> tiles = new Seq<>();
         tiles.add(new Schematic.Stile(block, width / 2, height / 2, null, rotation));
         return new Schematic(tiles, new StringMap(), width, height);
+    }
+
+    private static Schematic schematic(mindustry.world.Block... blocks) {
+        Seq<Schematic.Stile> tiles = new Seq<>();
+        for (int index = 0; index < blocks.length; index++) tiles.add(new Schematic.Stile(blocks[index], index, 0, null, (byte)0));
+        return new Schematic(tiles, new StringMap(), Math.max(1, blocks.length), 1);
     }
 
     private static void require(boolean condition, String message) {

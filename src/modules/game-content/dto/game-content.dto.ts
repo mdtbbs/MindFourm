@@ -66,6 +66,48 @@ export class GameContentBlueprintBlockDto {
   @ApiProperty() count!: number;
   @ApiProperty({ nullable: true, type: String }) icon!: string | null;
 }
+export class GameContentProductionFlowDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ nullable: true, type: String }) icon!: string | null;
+  @ApiProperty({ description: 'Rate per second' }) rate!: number;
+  @ApiPropertyOptional({ description: 'True when this is a long-run probability-weighted expectation' }) estimated?: boolean;
+}
+export class GameContentProductionItemStatDto {
+  @ApiProperty() id!: string;
+  @ApiProperty() name!: string;
+  @ApiProperty({ nullable: true, type: String }) icon!: string | null;
+  @ApiProperty() produced!: number;
+  @ApiProperty() consumed!: number;
+  @ApiProperty({ description: 'produced - consumed, per second' }) net!: number;
+  @ApiPropertyOptional() estimated?: boolean;
+}
+export class GameContentProductionFlowsDto {
+  @ApiProperty({ type: [GameContentProductionFlowDto] }) inputs!: GameContentProductionFlowDto[];
+  @ApiProperty({ type: [GameContentProductionFlowDto] }) outputs!: GameContentProductionFlowDto[];
+  @ApiProperty({ type: [GameContentProductionItemStatDto] }) internal!: GameContentProductionItemStatDto[];
+}
+export class GameContentProductionWarningDto {
+  @ApiProperty() type!: string;
+  @ApiProperty() blockId!: string;
+  @ApiPropertyOptional() blockName?: string;
+  @ApiProperty({ nullable: true, description: 'null when official schematic decoding discards the unknown block placements' }) count!: number | null;
+  @ApiPropertyOptional() message?: string;
+}
+export class GameContentProductionPowerDto {
+  @ApiProperty({ description: 'Power generated per second' }) generated!: number;
+  @ApiProperty({ description: 'Power consumed per second' }) consumed!: number;
+  @ApiProperty({ description: 'generated - consumed, per second' }) net!: number;
+}
+export class GameContentProductionDto {
+  @ApiProperty({ enum: ['theoretical'] }) mode!: 'theoretical';
+  @ApiProperty() complete!: boolean;
+  @ApiProperty() available!: boolean;
+  @ApiProperty({ type: GameContentProductionFlowsDto }) items!: GameContentProductionFlowsDto;
+  @ApiProperty({ type: GameContentProductionFlowsDto }) liquids!: GameContentProductionFlowsDto;
+  @ApiProperty({ type: GameContentProductionPowerDto }) power!: GameContentProductionPowerDto;
+  @ApiProperty({ type: [GameContentProductionWarningDto] }) warnings!: GameContentProductionWarningDto[];
+}
 export class GameContentLinksDto {
   @ApiProperty() web!: string;
   @ApiPropertyOptional() code?: string;
@@ -86,6 +128,7 @@ export class GameContentBlueprintDetailDto {
   @ApiProperty({ type: GameContentViewerDto, nullable: true }) viewer!: GameContentViewerDto | null;
   @ApiProperty({ type: [GameContentBlueprintMaterialDto] }) materials!: GameContentBlueprintMaterialDto[];
   @ApiProperty({ type: [GameContentBlueprintBlockDto] }) blocks!: GameContentBlueprintBlockDto[];
+  @ApiPropertyOptional({ type: GameContentProductionDto, nullable: true, description: 'Cached theoretical full-load production rates per second' }) production?: GameContentProductionDto | null;
   @ApiProperty({ type: GameContentLinksDto }) links!: GameContentLinksDto;
   @ApiProperty({ format: 'date-time' }) createdAt!: Date;
   @ApiProperty({ format: 'date-time' }) updatedAt!: Date;

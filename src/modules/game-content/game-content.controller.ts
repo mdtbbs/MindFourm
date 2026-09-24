@@ -54,7 +54,8 @@ export class GameContentController {
   @Get('meta')
   @Header('Cache-Control', 'public, max-age=300')
   meta() {
-    return { apiVersion: '1', service: 'MDTBBS Game Content', supportedTypes: ['blueprint', 'map'], features: { blueprints: true, maps: true, authentication: true, favorites: true, likes: true, blueprintUpload: true, mapUpload: true }, limits: { defaultPageSize: 20, maxPageSize: 50, maxBlueprintBytes: this.blueprintMaxBytes(), maxMapBytes: maxMapBytes() } };
+    const rendererAvailable = Boolean(process.env.RESOURCE_RENDERER_URL);
+    return { apiVersion: '1', service: 'MDTBBS Game Content', supportedTypes: ['blueprint', 'map'], features: { blueprints: true, maps: true, authentication: true, favorites: true, likes: true, blueprintUpload: rendererAvailable, mapUpload: rendererAvailable, blueprintProductionAnalysis: rendererAvailable }, limits: { defaultPageSize: 20, maxPageSize: 50, maxBlueprintBytes: this.blueprintMaxBytes(), maxMapBytes: maxMapBytes() } };
   }
 
   @Get('blueprints') @OptionalAuth() @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')

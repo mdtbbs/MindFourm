@@ -27,7 +27,7 @@ describe('GameContentService', () => {
     const resourcesDomain = { getList: jest.fn().mockResolvedValue({ data: [resource], next_cursor: 'cursor-2', has_more: true }), getById: jest.fn().mockResolvedValue(resource), isResourcePubliclyAccessible: jest.fn().mockResolvedValue(true), create: jest.fn() };
     const likeService = { add: jest.fn().mockResolvedValue({ is_liked: true }) };
     const favoriteService = { add: jest.fn().mockResolvedValue({ is_favorited: true }) };
-    const previewService = { resolveContentMetadata: jest.fn().mockResolvedValue({ items: { copper: { name: '铜', icon: 'data:image/png;base64,AA==' } }, blocks: { 'copper-wall': { name: '铜墙', icon: null } } }) };
+    const previewService = { resolveContentMetadata: jest.fn().mockResolvedValue({ items: { copper: { name: '铜', icon: 'data:image/png;base64,AA==' } }, blocks: { 'copper-wall': { name: '铜墙', icon: null } }, liquids: {} }), ensureProduction: jest.fn() };
     const storage = { removeManaged: jest.fn().mockResolvedValue(true) };
     const versions = {};
     const files = {};
@@ -68,9 +68,43 @@ describe('GameContentService', () => {
     const result = await service.detail('blueprint', `bp_${resource.public_id}`, null);
     expect(result.materials).toEqual([{ id: 'copper', name: '铜', amount: 120, icon: 'data:image/png;base64,AA==' }]);
     expect(result.blocks).toEqual([{ id: 'copper-wall', name: '铜墙', count: 12, icon: null }]);
-    expect(previewService.resolveContentMetadata).toHaveBeenCalledWith(['copper'], ['copper-wall']);
+    expect(previewService.resolveContentMetadata).toHaveBeenCalledWith(['copper'], ['copper-wall'], []);
     expect(resourceRepo.increment).toHaveBeenCalledWith({ id: resource.id }, 'view_count', 1);
     expect(result.stats.views).toBe(20);
+  });
+
+  it('returns cached production analysis through Game Content with localized items, liquids and warning blocks', async () => {
+    const { service, resourceRepo, previewService } = dependencies();
+    const productionResource = {
+      ...resource,
+      renderer_metadata_json: {
+        ...resource.renderer_metadata_json,
+        production: {
+          mode: 'theoretical', complete: false, available: true,
+          items: { inputs: [{ id: 'coal', name: 'coal', rate: 12 }], outputs: [], internal: [] },
+          liquids: { inputs: [{ id: 'water', name: 'water', rate: 24 }], outputs: [], internal: [] },
+          power: { generated: 0, consumed: 30, net: -30 },
+          warnings: [{ type: 'terrain-dependent', blockId: 'mechanical-drill', count: 1 }],
+        },
+      },
+    };
+    resourceRepo.findOne.mockResolvedValueOnce(productionResource).mockResolvedValueOnce({ id: resource.id, view_count: '20' });
+    (service as any).likes = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn().mockResolvedValue(null) };
+    (service as any).favorites = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn().mockResolvedValue(null) };
+    previewService.resolveContentMetadata.mockResolvedValueOnce({
+      items: { copper: { name: '铜', icon: null }, coal: { name: '煤', icon: 'data:image/png;base64,AA==' } },
+      blocks: { 'copper-wall': { name: '铜墙', icon: null }, 'mechanical-drill': { name: '机械钻头', icon: null } },
+      liquids: { water: { name: '水', icon: null } },
+    });
+
+    const result = await service.detail('blueprint', `bp_${resource.public_id}`, null) as any;
+    expect(result.production).toMatchObject({
+      mode: 'theoretical', complete: false,
+      items: { inputs: [{ id: 'coal', name: '煤', rate: 12, icon: 'data:image/png;base64,AA==' }] },
+      liquids: { inputs: [{ id: 'water', name: '水', rate: 24 }] },
+      warnings: [{ blockId: 'mechanical-drill', blockName: '机械钻头' }],
+    });
+    expect(previewService.resolveContentMetadata).toHaveBeenCalledWith(['copper', 'coal'], ['copper-wall', 'mechanical-drill'], ['water']);
   });
 
   it('does not expose or count hidden resources through optional owner authentication', async () => {

@@ -166,9 +166,10 @@ export class ResourcesController {
   async getMindustryContentMetadata(
     @Query('items') items = '',
     @Query('blocks') blocks = '',
+    @Query('liquids') liquids = '',
   ) {
     const parseIds = (value: string) => value.split(',').filter(Boolean);
-    return this.resourcePreviewService.resolveContentMetadata(parseIds(items), parseIds(blocks));
+    return this.resourcePreviewService.resolveContentMetadata(parseIds(items), parseIds(blocks), parseIds(liquids));
   }
 
   @Get('user/:userId')

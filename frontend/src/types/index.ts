@@ -523,6 +523,7 @@ export interface MindustryRendererMetadata {
   power_production?: number;
   power_consumption?: number;
   net_power?: number;
+  production?: Record<string, unknown> | null;
   labels?: string[];
 }
 

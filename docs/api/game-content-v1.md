@@ -106,6 +106,34 @@ GET /api/v1/game-content/maps/{id}
 - 数量
 - 可用时提供 `icon`
 
+蓝图详情还提供缓存的 `production` 分析（旧蓝图尚未由新版 renderer 重新解析时为 `null`）。其中 `mode` 固定为 `theoretical`，表示假设可分析设施持续满负载运行，不代表地图中的实际产量；所有速率单位均为每秒。
+
+```json
+{
+  "production": {
+    "mode": "theoretical",
+    "complete": true,
+    "available": true,
+    "items": {
+      "inputs": [{ "id": "coal", "name": "煤", "icon": null, "rate": 12 }],
+      "outputs": [{ "id": "graphite", "name": "石墨", "icon": null, "rate": 6 }],
+      "internal": [{ "id": "graphite", "name": "石墨", "icon": null, "produced": 6, "consumed": 4, "net": 2 }]
+    },
+    "liquids": { "inputs": [], "outputs": [], "internal": [] },
+    "power": { "generated": 900, "consumed": 1320, "net": -420 },
+    "warnings": []
+  }
+}
+```
+
+- `inputs` / `outputs` 按全蓝图净值抵消后生成；`internal` 保留完整 produced、consumed 和 `net = produced - consumed` 统计。
+- 液体的输入、输出与内部统计采用 Mindustry 定义换算为每秒速率；图标和中文名沿用 renderer 的物品 / 液体 / 方块元数据。
+- `power.generated`、`power.consumed` 和 `power.net` 均为每秒电力，`net = generated - consumed`。
+- `complete` 在存在未确定因素或缺失内容时为 `false`；已知部分仍会返回。`available: false` 表示蓝图不含可分析生产设施，例如纯物流蓝图或仅有电池 / 电力节点。
+- `warnings` 可标记 `terrain-dependent`（钻头 / 泵依赖地形）、`environment-dependent`（AttributeCrafter、ThermalGenerator 等依赖环境属性）、`unknown-content`（缺少 Mod 内容定义）、`unknown-rate`、`analysis-truncated` 及 `boost-not-simulated`（未模拟超速效果）。未知 Mod 方块因官方 reader 会将其映射为空气，warning 中 `count` 为 `null` 表示无法安全取得放置数量。
+- 概率产物会在对应输出项上标记 `estimated: true`，其速率是长期数学期望，不保证每个生产周期都得到该产物。
+- API 元数据端点 `/meta` 和全局 `/api/v1/capabilities` 提供 `blueprintProductionAnalysis` / `blueprint_production_analysis` 能力标志。
+
 地图额外包含：
 
 - `map.mode`

@@ -63,6 +63,23 @@ export class GameContentService {
     return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {};
   }
   private asList(value: unknown): string[] { return Array.isArray(value) ? value.filter((x) => typeof x === 'string').slice(0, 30) : []; }
+  private localizeProduction(production: any, labels: any): any {
+    if (!production || typeof production !== 'object' || Array.isArray(production)) return null;
+    const localizeFlow = (flow: any, catalog: any) => ({
+      inputs: (Array.isArray(flow?.inputs) ? flow.inputs : []).map((entry: any) => ({ ...entry, name: catalog[entry.id]?.name || entry.name || entry.id, icon: catalog[entry.id]?.icon || null })),
+      outputs: (Array.isArray(flow?.outputs) ? flow.outputs : []).map((entry: any) => ({ ...entry, name: catalog[entry.id]?.name || entry.name || entry.id, icon: catalog[entry.id]?.icon || null })),
+      internal: (Array.isArray(flow?.internal) ? flow.internal : []).map((entry: any) => ({ ...entry, name: catalog[entry.id]?.name || entry.name || entry.id, icon: catalog[entry.id]?.icon || null })),
+    });
+    return {
+      ...production,
+      items: localizeFlow(production.items, labels.items || {}),
+      liquids: localizeFlow(production.liquids, labels.liquids || {}),
+      warnings: (Array.isArray(production.warnings) ? production.warnings : []).map((warning: any) => ({
+        ...warning,
+        blockName: labels.blocks?.[warning.blockId]?.name || warning.blockName || warning.blockId,
+      })),
+    };
+  }
 
   async list(type: GameResourceType, query: { q?: string; sort?: string; order?: string; tags?: string; gameVersion?: string; author?: string; cursor?: string; limit?: string; featuredOnly?: boolean }) {
     const limit = Math.max(1, Math.min(50, Number.parseInt(query.limit || '20', 10) || 20));
@@ -109,6 +126,7 @@ export class GameContentService {
     if (!(await this.domain.isResourcePubliclyAccessible(resource))) throw new NotFoundException('资源不存在');
     await this.domain.getById(resource.id, viewer || undefined);
     const renderer = this.parseObject(resource.renderer_metadata_json);
+    if (type === 'blueprint' && (!renderer.production || typeof renderer.production !== 'object')) this.previews.ensureProduction(resource);
     const metadata = this.parseObject(resource.metadata_json);
     const [likeCount, favoriteCount, viewerLike, viewerFavorite] = await Promise.all([
       this.likes.count({ where: { resource_id: resource.id } }), this.favorites.count({ where: { resource_id: resource.id } }),
@@ -128,14 +146,23 @@ export class GameContentService {
     if (type === 'blueprint') {
       const requirements = Array.isArray(renderer.requirements) ? renderer.requirements : [];
       const blocks = Array.isArray(renderer.block_types) ? renderer.block_types : [];
+      const production = renderer.production;
       const ids = requirements.map((x) => x?.item || x?.name).filter((x): x is string => typeof x === 'string');
       const blockIds = blocks.map((x) => x?.name).filter((x): x is string => typeof x === 'string');
-      let labels = { items: {}, blocks: {} } as any;
-      if (ids.length || blockIds.length) {
-        try { labels = await this.previews.resolveContentMetadata(ids, blockIds); } catch { /* internal ids remain useful if renderer metadata is offline */ }
+      const labels = { items: {}, blocks: {}, liquids: {} } as any;
+      const getFlowIds = (flow: 'items' | 'liquids') => ['inputs', 'outputs', 'internal'].flatMap((part) =>
+        Array.isArray(production?.[flow]?.[part]) ? production[flow][part].map((entry: any) => entry?.id).filter((id: unknown): id is string => typeof id === 'string') : []);
+      const productionItemIds = getFlowIds('items');
+      const productionLiquidIds = getFlowIds('liquids');
+      const warningBlockIds = Array.isArray(production?.warnings) ? production.warnings.map((warning: any) => warning?.blockId).filter((id: unknown): id is string => typeof id === 'string') : [];
+      const allItemIds = [...new Set([...ids, ...productionItemIds])];
+      const allBlockIds = [...new Set([...blockIds, ...warningBlockIds])];
+      if (allItemIds.length || allBlockIds.length || productionLiquidIds.length) {
+        try { Object.assign(labels, await this.previews.resolveContentMetadata(allItemIds, allBlockIds, productionLiquidIds)); } catch { /* internal ids remain useful if renderer metadata is offline */ }
       }
       base.materials = requirements.map((x) => { const itemId = x.item || x.name; return { id: itemId, name: labels.items[itemId]?.name || itemId, amount: x.amount, icon: labels.items[itemId]?.icon || null }; });
       base.blocks = blocks.map((x) => ({ id: x.name, name: labels.blocks[x.name]?.name || x.name, count: x.count, icon: labels.blocks[x.name]?.icon || null }));
+      base.production = this.localizeProduction(production, labels);
       base.links = { web: `/resources/${resource.id}`, code: `/api/v1/game-content/blueprints/${this.publicId(resource)}/code` };
       await this.countDetailView(resource.id, viewer?.id ?? null, clientIp);
       const updated = await this.resources.findOne({ where: { id: resource.id }, select: ['id', 'view_count'] });

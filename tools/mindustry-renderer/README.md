@@ -45,7 +45,13 @@ revisioned `renderer-runtime/releases/` directory. It switches the
 worker remains startable if compilation fails. The generated `build/` and
 `renderer-runtime/` directories are ignored by Git.
 
-The worker also exposes authenticated `GET /v1/content-metadata?items=...&blocks=...`
+Schematic parsing also stores `production` rates in the resource's derived
+renderer metadata. They are computed from the bundled official v160.2 block,
+consumer, recipe and probability definitions, with game-tick values converted
+to per-second rates. Terrain- and environment-dependent blocks are warnings;
+the worker does not infer map ore, simulate logistics or load user mods.
+
+The worker also exposes authenticated `GET /v1/content-metadata?items=...&blocks=...&liquids=...`
 for batched schematic labels and icons. It uses the bundled Mindustry v160.2
 Simplified Chinese localization file and the same official sprite atlas used by
 the preview renderer. Unknown IDs keep their internal name and return a null icon.

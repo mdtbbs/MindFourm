@@ -49,6 +49,8 @@ export type ConsumedResourcePreviewDraft = {
 export class ResourcePreviewService {
   private readonly logger = new Logger(ResourcePreviewService.name);
   private readonly drafts = new Map<string, PreviewDraft>();
+  private readonly productionBackfills = new Set<number>();
+  private readonly productionBackfillAttempts = new Map<number, number>();
 
   constructor(
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
@@ -63,17 +65,19 @@ export class ResourcePreviewService {
     return Boolean(process.env.RESOURCE_RENDERER_URL);
   }
 
-  async resolveContentMetadata(items: string[], blocks: string[]): Promise<{
+  async resolveContentMetadata(items: string[], blocks: string[], liquids: string[] = []): Promise<{
     items: Record<string, { name: string; icon: string | null }>;
     blocks: Record<string, { name: string; icon: string | null }>;
+    liquids: Record<string, { name: string; icon: string | null }>;
   }> {
     const normalize = (ids: string[]) => [...new Set(ids)]
       .filter((id) => /^[a-zA-Z0-9_.-]{1,100}$/.test(id))
       .slice(0, 100);
     const safeItems = normalize(items);
     const safeBlocks = normalize(blocks);
-    if (!this.isConfigured()) return { items: {}, blocks: {} };
-    const query = new URLSearchParams({ items: safeItems.join(','), blocks: safeBlocks.join(',') });
+    const safeLiquids = normalize(liquids);
+    if (!this.isConfigured()) return { items: {}, blocks: {}, liquids: {} };
+    const query = new URLSearchParams({ items: safeItems.join(','), blocks: safeBlocks.join(','), liquids: safeLiquids.join(',') });
     try {
       const response = await fetch(`${this.rendererUrl}/v1/content-metadata?${query}`, {
         headers: process.env.RESOURCE_RENDERER_TOKEN
@@ -82,10 +86,11 @@ export class ResourcePreviewService {
         signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok) throw new Error(`renderer responded ${response.status}`);
-      const body = await response.json() as { items?: unknown; blocks?: unknown };
+      const body = await response.json() as { items?: unknown; blocks?: unknown; liquids?: unknown };
       return {
         items: this.validateContentMetadata(body.items, safeItems),
         blocks: this.validateContentMetadata(body.blocks, safeBlocks),
+        liquids: this.validateContentMetadata(body.liquids, safeLiquids),
       };
     } catch (error) {
       this.logger.warn(`Mindustry content metadata unavailable: ${(error as Error).message}`);
@@ -201,6 +206,34 @@ export class ResourcePreviewService {
     } catch { await this.fail(resource.id, 'RENDER_FAILED'); }
   }
 
+  /** Rebuilds legacy schematic metadata at most once per resource per process. */
+  ensureProduction(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash' | 'renderer_status' | 'renderer_metadata_json'>): void {
+    if (resource.resource_kind !== 'schematic' || resource.renderer_status !== 'ready' || !this.isConfigured()) return;
+    const now = Date.now();
+    for (const [id, attemptedAt] of this.productionBackfillAttempts) if (now - attemptedAt > 60 * 60 * 1000) this.productionBackfillAttempts.delete(id);
+    const existingProduction = resource.renderer_metadata_json?.production;
+    if ((existingProduction && typeof existingProduction === 'object' && !Array.isArray(existingProduction)) || this.productionBackfills.has(resource.id)
+      || (this.productionBackfillAttempts.get(resource.id) && now - this.productionBackfillAttempts.get(resource.id)! < 60 * 60 * 1000)
+      || this.productionBackfills.size >= 24) return;
+    if (this.productionBackfillAttempts.size >= 500) this.productionBackfillAttempts.delete(this.productionBackfillAttempts.keys().next().value!);
+    this.productionBackfillAttempts.set(resource.id, now);
+    this.productionBackfills.add(resource.id);
+    void (async () => {
+      try {
+        const rendered = await this.render(resource);
+        if (!rendered.preview?.metadata?.production || typeof rendered.preview.metadata.production !== 'object') return;
+        await this.resources.update(resource.id, {
+          renderer_metadata_json: this.safeMetadata(rendered.preview.metadata) as any,
+          renderer_parser_version: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
+        });
+      } catch (error) {
+        this.logger.warn(`Mindustry production metadata backfill failed for resource ${resource.id}: ${(error as Error).message}`);
+      } finally {
+        this.productionBackfills.delete(resource.id);
+      }
+    })();
+  }
+
   async readPreview(resource: Pick<Resource, 'renderer_status' | 'renderer_preview_key'>): Promise<Buffer | null> {
     if (resource.renderer_status !== 'ready' || !this.isValidPreviewKey(resource.renderer_preview_key)) return null;
     try {
@@ -239,7 +272,7 @@ export class ResourcePreviewService {
       'planet', 'game_modes', 'teams', 'tags', 'mod_dependencies', 'waves', 'wave_groups',
       'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'blocks', 'block_count', 'block_types',
       'block_positions', 'block_positions_truncated', 'requirements', 'power_production',
-      'power_consumption', 'net_power', 'labels',
+      'power_consumption', 'net_power', 'labels', 'production',
     ]);
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
