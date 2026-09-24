@@ -14,6 +14,7 @@ import { FeedbackModule } from '../modules/feedback/feedback.module';
 import { ReportsModule } from '../modules/reports/reports.module';
 import { UploadsModule } from '../modules/uploads/uploads.module';
 import { GameContentModule } from '../modules/game-content/game-content.module';
+import { API_V1_VERSION } from './api-version';
 
 function keepOnlyV1Paths(document: OpenAPIObject): OpenAPIObject {
   // Several feature modules still contain both legacy and V1 controllers.
@@ -35,7 +36,7 @@ export function createV1OpenApiDocument(app: INestApplication) {
       + 'Use /api/v1/capabilities for feature discovery. '
       + 'JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.',
     )
-    .setVersion('1.0.0')
+    .setVersion(API_V1_VERSION)
     .addServer('/api', 'Same-origin MindFourm API')
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', bearerFormat: 'MindAuth access token' },
