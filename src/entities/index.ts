@@ -112,6 +112,8 @@ import { MobileRefreshToken } from './mobile-refresh-token.entity';
 import { DeveloperFeedEntry } from './developer-feed-entry.entity';
 import { ServiceAccount } from './service-account.entity';
 import { ContentRelation } from './content-relation.entity';
+import { DownloadEvent } from './download-event.entity';
+import { GameContentUploadSession } from './game-content-upload-session.entity';
 
 /** Base forum, content and shared platform entities. */
 export const coreEntities = [
@@ -207,6 +209,8 @@ export const coreEntities = [
   MobileRefreshToken,
   ServiceAccount,
   ContentRelation,
+  DownloadEvent,
+  GameContentUploadSession,
 ];
 
 /** Entities that belong to Mindustry/MDTBBS integrations rather than Community. */
@@ -285,5 +289,7 @@ export {
   MobileSession, MobileRefreshToken,
   DeveloperFeedEntry,
   ContentRelation,
+  DownloadEvent,
+  GameContentUploadSession,
   ServiceAccount,
 };

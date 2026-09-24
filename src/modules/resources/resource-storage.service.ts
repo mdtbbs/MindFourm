@@ -28,6 +28,26 @@ export class ResourceStorageService {
     return target;
   }
 
+  async cleanupStaleIncomingUploads(before: Date): Promise<number> {
+    const directory = path.join(await this.getQuarantineDirectory(), '.incoming');
+    let entries: import('fs').Dirent[];
+    try { entries = await fs.readdir(directory, { withFileTypes: true }); }
+    catch (error: any) { if (error?.code === 'ENOENT') return 0; throw error; }
+    let removed = 0;
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const candidate = path.resolve(directory, entry.name);
+      if (!this.isInside(candidate, directory)) continue;
+      try {
+        const stat = await fs.stat(candidate);
+        if (stat.mtime < before) { await fs.unlink(candidate); removed += 1; }
+      } catch (error: any) {
+        if (error?.code !== 'ENOENT') throw error;
+      }
+    }
+    return removed;
+  }
+
   async getResourceDirectory(): Promise<string> {
     const configured = (await this.settingsService.get('resource_upload_directory'))?.trim() || 'resources';
     const target = path.isAbsolute(configured) ? path.resolve(configured) : path.resolve(this.uploadRoot, configured);
@@ -83,7 +103,10 @@ export class ResourceStorageService {
     }
 
     const data = Buffer.from(normalized, 'base64');
-    const maxBytes = 20 * 1024 * 1024;
+    const configured = Number(process.env.GAME_CONTENT_BLUEPRINT_MAX_BYTES);
+    const maxBytes = Number.isSafeInteger(configured) && configured > 0
+      ? Math.min(configured, 20 * 1024 * 1024)
+      : 20 * 1024 * 1024;
     if (data.length < 5 || data.length > maxBytes || data.subarray(0, 4).toString('ascii') !== 'msch') {
       throw new BadRequestException('蓝图代码不是有效的 Mindustry .msch 文件');
     }
@@ -99,6 +122,22 @@ export class ResourceStorageService {
       mime_type: 'application/octet-stream',
       content_hash: createHash('sha256').update(data).digest('hex'),
     };
+  }
+
+  /** Read a bounded file only from forum-managed resource/quarantine storage. */
+  async readManagedFile(filePath: string, maxBytes: number): Promise<Buffer> {
+    const managed = await this.statManagedFile(filePath);
+    if (managed.size < 1 || managed.size > maxBytes) throw new BadRequestException('文件大小无效');
+    return fs.readFile(managed.path);
+  }
+
+  async statManagedFile(filePath: string): Promise<{ path: string; size: number }> {
+    const candidate = path.resolve(filePath);
+    const roots = [await this.getQuarantineDirectory(), await this.getResourceDirectory()];
+    if (!roots.some((root) => this.isInside(candidate, root))) throw new BadRequestException('文件存储路径无效');
+    const stat = await fs.stat(candidate);
+    if (!stat.isFile()) throw new BadRequestException('存储对象不是普通文件');
+    return { path: candidate, size: stat.size };
   }
 
   private async move(source: string, target: string): Promise<void> {

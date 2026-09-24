@@ -26,7 +26,13 @@ export class ResourceLikesService {
     if (!resource) throw new NotFoundException('资源不存在');
     const existing = await this.likeRepository.findOne({ where: { resource_id: resourceId, user_id: userId } });
     if (!existing) {
-      await this.likeRepository.save(this.likeRepository.create({ resource_id: resourceId, user_id: userId }));
+      try {
+        await this.likeRepository.save(this.likeRepository.create({ resource_id: resourceId, user_id: userId }));
+      } catch (error: any) {
+        // The unique (user_id, resource_id) key makes concurrent retries
+        // idempotent as well as sequential ones.
+        if (!['ER_DUP_ENTRY', '23505'].includes(error?.code)) throw error;
+      }
     }
     return { is_liked: true, like_count: await this.likeRepository.count({ where: { resource_id: resourceId } }) };
   }

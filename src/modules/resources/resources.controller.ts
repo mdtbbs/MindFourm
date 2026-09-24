@@ -544,6 +544,16 @@ export class ResourcesController {
     return resource;
   }
 
+  @Put(':id/featured')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async setFeatured(@Param('id', ParseIntPipe) id: number, @Body('featured') featured: unknown, @Req() req: any) {
+    if (typeof featured !== 'boolean') throw new BadRequestException('featured 必须是布尔值');
+    const resource = await this.resourcesService.setFeatured(id, featured);
+    await this.logOperation(req, 'resource.featured', id, { featured });
+    return resource;
+  }
+
   @Delete(':id/admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')

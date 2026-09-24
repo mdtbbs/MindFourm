@@ -72,4 +72,22 @@ describe('csrfMiddleware', () => {
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
   });
+
+  it('allows Game Content bearer writes from non-browser clients', () => {
+    const req: any = { method: 'POST', path: '/api/v1/game-content/maps', headers: { authorization: 'Bearer client-token' } };
+    const res = createResponse(); const next = jest.fn();
+    csrfMiddleware(req, res as any, next);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it('keeps Game Content cookie writes protected and does not match lookalike paths', () => {
+    for (const path of ['/api/v1/game-content/maps', '/api/v1/game-content-evil/maps']) {
+      const req: any = { method: 'POST', path, headers: {} };
+      const res = createResponse(); const next = jest.fn();
+      csrfMiddleware(req, res as any, next);
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(next).not.toHaveBeenCalled();
+    }
+  });
 });

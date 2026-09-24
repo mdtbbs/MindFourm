@@ -65,7 +65,12 @@ function isExempt(req: Request): boolean {
   // Requiring both markers keeps cookie-backed browser writes CSRF-protected.
   const authorization = req.headers.authorization;
   const platform = req.headers['x-client-platform'];
-  if (platform === 'android' && typeof authorization === 'string' && /^Bearer\s+\S+$/i.test(authorization)) return true;
+  const hasBearerToken = typeof authorization === 'string' && /^Bearer\s+\S+$/i.test(authorization);
+  if (platform === 'android' && hasBearerToken) return true;
+  // Game Content writes support first-party non-browser clients as well. These
+  // routes are safe to exempt only when they use an explicit bearer credential;
+  // cookie-authenticated browser requests still need the double-submit token.
+  if (req.path.startsWith('/api/v1/game-content/') && hasBearerToken) return true;
   if (req.path.startsWith('/api/external/')) return true;
   if (req.path.startsWith('/api/service-api/')) return true;
   if (req.path.startsWith('/api/auto-post/')) return true;

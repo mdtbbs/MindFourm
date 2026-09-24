@@ -27,7 +27,7 @@ import { ResourceStorageService } from './resource-storage.service';
 import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { randomUUID } from 'crypto';
-import { ResourcePreviewService } from './resource-preview.service';
+import { ConsumedResourcePreviewDraft, ResourcePreviewService } from './resource-preview.service';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -248,7 +248,7 @@ export class ResourcesService {
     dto: CreateResourceDto,
     userId: number,
     file?: ResourceFileMeta,
-    provenance: { ipAddress?: string } = {},
+    provenance: { ipAddress?: string; rendererDraft?: ConsumedResourcePreviewDraft; uploadSessionId?: string } = {},
   ): Promise<any> {
     const categoryId = this.toOptionalNumber((dto as any).category_id);
     const resourceType = this.normalizeResourceType(dto.resource_type);
@@ -311,21 +311,24 @@ export class ResourcesService {
       category_id: categoryId,
       is_public: this.toTinyInt((dto as any).is_public, 1),
       status: RESOURCE_STATUS_PENDING,
+      ...(provenance.uploadSessionId ? { game_content_upload_session_id: provenance.uploadSessionId } : {}),
+      ...(provenance.rendererDraft ? {
+        renderer_status: 'ready' as const,
+        renderer_error_code: null,
+        renderer_preview_key: provenance.rendererDraft.previewKey,
+        renderer_parser_version: provenance.rendererDraft.parserVersion,
+        renderer_metadata_json: provenance.rendererDraft.metadata,
+      } : {}),
       download_count: 0,
       use_mfl: 0,
       metadata_json: (dto as any).metadata ? normalizeResourceMetadata((dto as any).metadata) : null,
     });
 
-    const saved = await this.resourceRepository.save(newResource);
-
-    try {
-      await this.createInitialV2Aggregate(saved, dto, userId, file);
-    } catch (error) {
-      // The legacy projection is a rollback path, not a second source of truth.
-      // Do not leave an invisible pending row when structured persistence fails.
-      await this.resourceRepository.delete(saved.id);
-      throw error;
-    }
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const resource = await manager.save(Resource, newResource);
+      await this.createInitialV2Aggregate(manager, resource, dto, userId, file);
+      return resource;
+    });
 
     const finalResult = await this.resourceRepository.findOne({
       where: { id: saved.id },
@@ -368,12 +371,12 @@ export class ResourcesService {
    * explicit submitter, release, delivery record and optional compatibility.
    */
   private async createInitialV2Aggregate(
+    manager: EntityManager,
     resource: Resource,
     dto: CreateResourceDto,
     submitterUserId: number,
     file: ResourceFileMeta | undefined,
   ): Promise<void> {
-    await this.dataSource.transaction(async (manager) => {
       const release = await manager.save(ResourceVersion, manager.create(ResourceVersion, {
         resource_id: resource.id,
         public_id: randomUUID(),
@@ -433,7 +436,6 @@ export class ResourcesService {
           notes: item.notes?.trim() || null,
         })));
       }
-    });
   }
 
   private normalizeCredits(values: string[] | undefined): string[] {
@@ -510,7 +512,7 @@ export class ResourcesService {
 
   async getList(
     query: QueryResourcesDto,
-    options: { scope?: ResourceListScope } = {},
+    options: { scope?: ResourceListScope; featuredOnly?: boolean; trendingOnly?: boolean } = {},
   ): Promise<any> {
     const {
       limit = 20,
@@ -519,6 +521,8 @@ export class ResourcesService {
       status,
       cursor,
       tag,
+      tags,
+      author,
       supported_version,
       compatibility,
       resource_kind,
@@ -528,7 +532,8 @@ export class ResourcesService {
       height,
     } = query;
     const scope = options.scope ?? 'public';
-    const sort = validateResourceSort(query.sort);
+    const sort = options.trendingOnly ? 'created_at' : validateResourceSort(query.sort);
+    const direction = String(query.order || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
     if (scope === 'public') {
       // Use createQueryBuilder with LEFT JOIN on category so resources whose
@@ -542,6 +547,15 @@ export class ResourcesService {
         .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
         .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
 
+      if (options.featuredOnly) qb.andWhere('resource.is_featured = 1');
+
+      const trendScore = `(
+        (SELECT COUNT(*) * 3 FROM download_events de WHERE de.resource_id = resource.id AND de.event_type = 'granted' AND de.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) +
+        (SELECT COUNT(*) * 2 FROM resource_likes rl WHERE rl.resource_id = resource.id AND rl.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) +
+        (SELECT COUNT(*) * 2 FROM resource_favorites rf WHERE rf.resource_id = resource.id AND rf.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))
+      )`;
+      if (options.trendingOnly) qb.addSelect(trendScore, 'trending_score');
+
       if (category_id) {
         qb.andWhere('resource.category_id = :categoryId', { categoryId: category_id });
       }
@@ -552,6 +566,10 @@ export class ResourcesService {
 
       if (resource_kind?.trim()) {
         qb.andWhere('resource.resource_kind = :resourceKind', { resourceKind: resource_kind.trim() });
+      }
+
+      if (author?.trim()) {
+        qb.andWhere('user.username = :resourceAuthor', { resourceAuthor: author.trim() });
       }
 
       if (planet?.trim()) {
@@ -595,6 +613,11 @@ export class ResourcesService {
         );
       }
 
+      for (const [index, value] of (tags || '').split(',').map((item) => item.trim()).filter(Boolean).entries()) {
+        const parameter = `resourceTagBatch${index}`;
+        qb.andWhere(`JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:${parameter}), '$.tags')`, { [parameter]: value });
+      }
+
       if (supported_version?.trim()) {
         // New releases declare Mindustry builds in their compatibility rows.
         // JSON metadata remains a legacy fallback until reconciliation proves
@@ -609,24 +632,31 @@ export class ResourcesService {
       if (cursor) {
         try {
           const decoded = decodeCursor(cursor);
-          const cursorValue =
-            sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
           const idValue = parseInt(decoded[1]);
-
-          qb.andWhere(
-            `(resource.${sort} < :cursorValue OR (resource.${sort} = :cursorValue AND resource.id < :idValue))`,
-            { cursorValue, idValue },
-          );
+          if (options.trendingOnly) {
+            const cursorScore = Number(decoded[0]);
+            if (!Number.isFinite(cursorScore) || !Number.isSafeInteger(idValue)) throw new Error('invalid cursor');
+            qb.andWhere(`(${trendScore} < :cursorScore OR (${trendScore} = :cursorScore AND resource.id < :idValue))`, { cursorScore, idValue });
+          } else {
+            const cursorValue = sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
+            qb.andWhere(
+              `(resource.${sort} ${direction === 'ASC' ? '>' : '<'} :cursorValue OR (resource.${sort} = :cursorValue AND resource.id ${direction === 'ASC' ? '>' : '<'} :idValue))`,
+              { cursorValue, idValue },
+            );
+          }
         } catch {
           // Ignore invalid cursors.
         }
       }
 
-      qb.orderBy(`resource.${sort}`, 'DESC')
-        .addOrderBy('resource.id', 'DESC')
-        .take(Number(limit) + 1);
+      if (options.trendingOnly) qb.orderBy('trending_score', 'DESC').addOrderBy('resource.id', 'DESC');
+      else qb.orderBy(`resource.${sort}`, direction).addOrderBy('resource.id', direction);
+      qb.take(Number(limit) + 1);
 
-      const resources = await qb.getMany();
+      const selected = options.trendingOnly ? await qb.getRawAndEntities() : null;
+      const resources = selected
+        ? selected.entities.map((entity, index) => Object.assign(entity, { trending_score: Number(selected.raw[index]?.trending_score) || 0 }))
+        : await qb.getMany();
 
       const hasMore = resources.length > Number(limit);
       if (hasMore) {
@@ -636,8 +666,9 @@ export class ResourcesService {
       let nextCursor: string | null = null;
       if (hasMore && resources.length > 0) {
         const lastResource = resources[resources.length - 1];
-        const cursorValue =
-          sort === 'created_at'
+        const cursorValue = options.trendingOnly
+          ? String((lastResource as Resource & { trending_score: number }).trending_score)
+          : sort === 'created_at'
             ? lastResource.created_at.getTime().toString()
             : lastResource[sort].toString();
         nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
@@ -1325,7 +1356,7 @@ export class ResourcesService {
       );
 
       if (status === RESOURCE_STATUS_APPROVED) {
-        if (this.resourcePreviewService?.supports(resource)) {
+        if (resource.renderer_status !== 'ready' && this.resourcePreviewService?.supports(resource)) {
           void this.resourcePreviewService.enqueue(resource).catch((err) =>
             console.error(`Resource preview enqueue error for ${resource.id}:`, err),
           );
@@ -1336,6 +1367,14 @@ export class ResourcesService {
     }
 
     return this.normalizeOneResource(resource);
+  }
+
+  async setFeatured(id: number, featured: boolean): Promise<any> {
+    const resource = await this.resourceRepository.findOne({ where: { id } });
+    if (!resource) throw new NotFoundException('资源不存在');
+    await this.resourceRepository.update(id, { is_featured: featured ? 1 : 0 });
+    const updated = await this.resourceRepository.findOne({ where: { id }, relations: ['user', 'category'] });
+    return updated ? this.normalizeOneResource(updated) : null;
   }
 
   /** Keep the resource-level moderation workflow projected onto its latest release. */

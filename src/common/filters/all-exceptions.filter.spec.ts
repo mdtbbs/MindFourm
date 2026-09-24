@@ -54,4 +54,13 @@ describe('AllExceptionsFilter', () => {
       message: '旧接口参数错误',
     });
   });
+
+  it('preserves explicit stable V1 error codes from structured exceptions', () => {
+    const { host, json } = hostFor('/api/v1/game-content/maps');
+    filter.catch(new BadRequestException({ code: 'INVALID_MAP', message: '地图文件无效' }), host);
+    expect(json).toHaveBeenCalledWith({
+      error: { code: 'INVALID_MAP', message: '地图文件无效', retryable: false, details: [] },
+      meta: { request_id: 'req-500' },
+    });
+  });
 });

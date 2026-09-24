@@ -451,6 +451,8 @@ export interface Resource {
   category_name: string | null;
   category_icon: string | null;
   download_count: number;
+  view_count?: number | string;
+  is_featured?: number | boolean;
   slug?: string | null;
   rating_count?: number;
   rating_sum?: number;

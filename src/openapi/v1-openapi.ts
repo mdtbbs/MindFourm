@@ -13,12 +13,14 @@ import { LanLinkModule } from '../modules/lanlink/lanlink.module';
 import { FeedbackModule } from '../modules/feedback/feedback.module';
 import { ReportsModule } from '../modules/reports/reports.module';
 import { UploadsModule } from '../modules/uploads/uploads.module';
+import { GameContentModule } from '../modules/game-content/game-content.module';
 
 export function createV1OpenApiDocument(app: INestApplication) {
   const config = new DocumentBuilder()
     .setTitle('MDTBBS First-party API')
     .setDescription('Stable V1 contract for MDTBBS first-party clients. Clients must call /api/v1/capabilities first and must not infer unavailable features from undocumented endpoints.')
     .setVersion('1.0.0')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'MindAuth access token' }, 'MindAuthBearer')
     .build();
 
   return SwaggerModule.createDocument(app, config, {
@@ -36,6 +38,7 @@ export function createV1OpenApiDocument(app: INestApplication) {
       FeedbackModule,
       ReportsModule,
       UploadsModule,
+      GameContentModule,
     ],
   });
 }

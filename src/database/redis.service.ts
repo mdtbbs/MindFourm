@@ -61,7 +61,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     this.fallback.stop();
-    await this.client.quit().catch(() => undefined);
+    if (this.client) await this.client.quit().catch(() => undefined);
   }
 
   /** Whether commands are currently reaching Redis rather than the fallback. */
@@ -126,6 +126,15 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         return 'OK' as const;
       },
     );
+  }
+
+  /** Atomic SET NX EX for short-lived deduplication keys. */
+  async setIfNotExists(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    const result = await this.withFallback(
+      () => this.client.set(key, value, 'EX', ttlSeconds, 'NX'),
+      () => this.fallback.setIfAbsent(key, value, ttlSeconds) ? 'OK' : null,
+    );
+    return result === 'OK';
   }
 
   async del(key: string): Promise<number> {

@@ -67,8 +67,8 @@ export class EmailQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
-    await this.queue.close();
-    await this.worker.close();
+    if (this.queue) await this.queue.close();
+    if (this.worker) await this.worker.close();
   }
 
   private truncateErrorMessage(message: string): string {

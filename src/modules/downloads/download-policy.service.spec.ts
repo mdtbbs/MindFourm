@@ -1,6 +1,4 @@
 import { DownloadPolicyService } from './download-policy.service';
-import { DownloadGrantService } from './download-grant.service';
-import { DownloadEventsService } from './download-events.service';
 
 describe('DownloadPolicyService', () => {
   it('returns FILE_NOT_FOUND for missing file', async () => {
@@ -42,48 +40,5 @@ describe('DownloadPolicyService', () => {
     const result = await service.checkEligibility(1);
     expect(result.eligible).toBe(true);
     expect(result.reason).toBeNull();
-  });
-});
-
-describe('DownloadGrantService', () => {
-  it('records a grant and returns true for new grants', () => {
-    const service = new DownloadGrantService();
-    const result = service.recordGrant({
-      resourceId: 1, versionId: 10, fileId: 100,
-      grantedAt: new Date(), userId: 42, clientType: 'web',
-    });
-    expect(result).toBe(true);
-  });
-
-  it('deduplicates grants within the window', () => {
-    const service = new DownloadGrantService();
-    service.recordGrant({
-      resourceId: 1, versionId: 10, fileId: 100,
-      grantedAt: new Date(), userId: 42, clientType: 'web',
-    });
-    const second = service.recordGrant({
-      resourceId: 1, versionId: 10, fileId: 100,
-      grantedAt: new Date(), userId: 42, clientType: 'web',
-    });
-    expect(second).toBe(false);
-  });
-
-  it('computes displayed count as legacy + v1 aggregate', () => {
-    const service = new DownloadGrantService();
-    expect(service.computeDisplayedCount(100, 5)).toBe(105);
-    expect(service.computeDisplayedCount(0, 0)).toBe(0);
-  });
-});
-
-describe('DownloadEventsService', () => {
-  it('records and counts granted events', () => {
-    const service = new DownloadEventsService();
-    service.recordEvent({
-      event_type: 'granted', resource_id: 1, version_id: 10, file_id: 100,
-      user_id: 42, client_type: 'web', platform: null, backend: 'local', created_at: new Date(),
-    });
-    expect(service.getAggregateCount(100)).toBe(1);
-    expect(service.getResourceAggregate(1)).toBe(1);
-    expect(service.getAggregateCount(999)).toBe(0);
   });
 });

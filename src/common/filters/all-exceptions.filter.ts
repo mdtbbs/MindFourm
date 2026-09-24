@@ -64,14 +64,26 @@ export class AllExceptionsFilter implements ExceptionFilter {
         : (exceptionResponse as any).message || exception.message;
 
       const isValidation = status === HttpStatus.BAD_REQUEST;
-      const code = isValidation ? 'VALIDATION_FAILED' : 'HTTP_ERROR';
-      const retryable = status === HttpStatus.TOO_MANY_REQUESTS || status >= 500;
+      const structured = typeof exceptionResponse === 'object' && exceptionResponse !== null
+        ? exceptionResponse as Record<string, any>
+        : {};
+      const inferredCode = status === HttpStatus.TOO_MANY_REQUESTS ? 'RATE_LIMITED'
+        : status === HttpStatus.PAYLOAD_TOO_LARGE ? 'UPLOAD_TOO_LARGE'
+        : status === HttpStatus.NOT_FOUND ? 'RESOURCE_NOT_FOUND'
+        : isValidation ? 'VALIDATION_FAILED' : 'HTTP_ERROR';
+      const code = typeof structured.code === 'string' && /^[A-Z0-9_]{1,100}$/.test(structured.code)
+        ? structured.code
+        : inferredCode;
+      const retryable = typeof structured.retryable === 'boolean'
+        ? structured.retryable
+        : status === HttpStatus.TOO_MANY_REQUESTS || status >= 500;
 
       const details: unknown[] = [];
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
-        const resp = exceptionResponse as any;
-        if (Array.isArray(resp.message)) {
-          details.push(...resp.message);
+        if (Array.isArray(structured.message)) {
+          details.push(...structured.message);
+        } else if (Array.isArray(structured.details)) {
+          details.push(...structured.details);
         }
       }
 

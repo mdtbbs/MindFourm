@@ -1290,6 +1290,13 @@ export const resourceAdminApi = {
       body: JSON.stringify({ status, reject_reason: rejectReason }),
     });
   },
+  updateFeatured: (id: number, featured: boolean) => {
+    clearCache();
+    return request<Resource>(`/api/resources/${id}/featured`, {
+      method: 'PUT',
+      body: JSON.stringify({ featured }),
+    });
+  },
   delete: (id: number) => {
     clearCache();
     return request<void>(`/api/resources/${id}/admin`, { method: 'DELETE' });

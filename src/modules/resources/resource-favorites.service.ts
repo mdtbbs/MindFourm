@@ -26,7 +26,11 @@ export class ResourceFavoritesService {
     if (!resource) throw new NotFoundException('资源不存在');
     const existing = await this.favoriteRepository.findOne({ where: { resource_id: resourceId, user_id: userId } });
     if (!existing) {
-      await this.favoriteRepository.save(this.favoriteRepository.create({ resource_id: resourceId, user_id: userId }));
+      try {
+        await this.favoriteRepository.save(this.favoriteRepository.create({ resource_id: resourceId, user_id: userId }));
+      } catch (error: any) {
+        if (!['ER_DUP_ENTRY', '23505'].includes(error?.code)) throw error;
+      }
     }
     return { is_favorited: true, favorite_count: await this.favoriteRepository.count({ where: { resource_id: resourceId } }) };
   }

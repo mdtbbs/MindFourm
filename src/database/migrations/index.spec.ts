@@ -67,4 +67,14 @@ describe('migration registry', () => {
     expect(names).toContain('CreateResourceLikes1720000055000');
     expect(names.indexOf('BackfillResourcePublicIds1720000054000')).toBeLessThan(names.indexOf('CreateResourceLikes1720000055000'));
   });
+
+  it('adds durable Game Content featured, views, downloads, and upload-session storage', () => {
+    expect(migrations.map((migration) => migration.name)).toContain('GameContentDurability1720000060000');
+  });
+
+  it('upgrades the legacy download event placeholder after creating durable Game Content tables', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('UpgradeDownloadEvents1720000070000');
+    expect(names.indexOf('GameContentDurability1720000060000')).toBeLessThan(names.indexOf('UpgradeDownloadEvents1720000070000'));
+  });
 });

@@ -81,6 +81,12 @@ export class MemoryStore {
     });
   }
 
+  setIfAbsent(key: string, value: string, ttlSeconds: number): boolean {
+    if (this.read(key)) return false;
+    this.set(key, value, ttlSeconds);
+    return true;
+  }
+
   del(key: string): number {
     return this.data.delete(key) ? 1 : 0;
   }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { resourceAdminApi, resourceApi } from '@/lib/api/client';
 import { Resource, ResourceCategory } from '@/types';
-import { ExternalLink, Download, Trash2 } from 'lucide-react';
+import { ExternalLink, Download, Eye, Star, Trash2 } from 'lucide-react';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
 
@@ -59,6 +59,15 @@ export default function ResourceTable() {
     }
   };
 
+  const handleFeaturedChange = async (id: number, featured: boolean) => {
+    try {
+      await resourceAdminApi.updateFeatured(id, featured);
+      loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新精选状态失败');
+    }
+  };
+
   if (loading && resources.length === 0) return <InlineLoading label="正在加载资源" className="min-h-32" />;
 
   if (error && resources.length === 0) {
@@ -99,6 +108,8 @@ export default function ResourceTable() {
               <th className="text-left px-4 py-3 font-medium">类别</th>
               <th className="text-left px-4 py-3 font-medium">大小</th>
               <th className="text-left px-4 py-3 font-medium">下载</th>
+              <th className="text-left px-4 py-3 font-medium">浏览</th>
+              <th className="text-left px-4 py-3 font-medium">精选</th>
               <th className="text-left px-4 py-3 font-medium">状态</th>
               <th className="text-left px-4 py-3 font-medium">操作</th>
             </tr>
@@ -118,6 +129,18 @@ export default function ResourceTable() {
                 <td className="px-4 py-3">{r.category_name || '-'}</td>
                 <td className="px-4 py-3">{formatSize(r.file_size) || '-'}</td>
                 <td className="px-4 py-3 flex items-center gap-1"><Download className="w-3 h-3" /> {r.download_count}</td>
+                <td className="px-4 py-3"><span className="inline-flex items-center gap-1"><Eye className="w-3 h-3" /> {Number(r.view_count) || 0}</span></td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => handleFeaturedChange(r.id, !(r.is_featured === true || r.is_featured === 1))}
+                    aria-label={r.is_featured === true || r.is_featured === 1 ? '取消精选' : '设为精选'}
+                    aria-pressed={r.is_featured === true || r.is_featured === 1}
+                    className={r.is_featured === true || r.is_featured === 1 ? 'text-amber-500 hover:text-amber-600' : 'text-surface-400 hover:text-amber-500'}
+                  >
+                    <Star className="w-4 h-4" fill={r.is_featured === true || r.is_featured === 1 ? 'currentColor' : 'none'} />
+                  </button>
+                </td>
                 <td className="px-4 py-3">
                   <select
                     value={r.status}

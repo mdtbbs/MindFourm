@@ -51,6 +51,8 @@ import { RepairResourceFilenames1720000056000 } from './1720000056000-RepairReso
 import { RepairMindustryRendererBuildSentinel1720000057000 } from './1720000057000-RepairMindustryRendererBuildSentinel';
 import { CreateSearchAudits1720000058000 } from './1720000058000-CreateSearchAudits';
 import { CreateContentRelations1720000059000 } from './1720000059000-CreateContentRelations';
+import { GameContentDurability1720000060000 } from './1720000060000-GameContentDurability';
+import { UpgradeDownloadEvents1720000070000 } from './1720000070000-UpgradeDownloadEvents';
 
 /**
  * Migrations in run order.
@@ -113,4 +115,6 @@ export const migrations = [
   RepairMindustryRendererBuildSentinel1720000057000,
   CreateSearchAudits1720000058000,
   CreateContentRelations1720000059000,
+  GameContentDurability1720000060000,
+  UpgradeDownloadEvents1720000070000,
 ];

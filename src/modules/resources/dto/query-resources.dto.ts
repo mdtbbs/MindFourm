@@ -36,11 +36,27 @@ export class QueryResourcesDto {
   @IsString()
   sort?: string = 'created_at';
 
+  @IsOptional()
+  @IsString()
+  order?: string;
+
   /** Exact metadata tag match, case/normalisation is owned by the publisher. */
   @IsOptional()
   @IsString()
   @MaxLength(80)
   tag?: string;
+
+  /** Comma-separated resource metadata tags. Every requested tag must match. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  tags?: string;
+
+  /** Public username filter used by the shared resource query. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  author?: string;
 
   /** Exact match in resource metadata's supported_versions array. */
   @IsOptional()

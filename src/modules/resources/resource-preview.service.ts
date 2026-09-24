@@ -33,6 +33,13 @@ type PreviewDraft = {
   expiresAt: number;
 };
 
+export type ConsumedResourcePreviewDraft = {
+  file: StoredResourceFile;
+  previewKey: string;
+  metadata: Record<string, unknown> | null;
+  parserVersion: string | null;
+};
+
 /**
  * Forum-side client for the bundled Mindustry renderer. The renderer is a
  * loopback-only, restricted Java process; this service is its only public
@@ -145,10 +152,19 @@ export class ResourcePreviewService {
   }
 
   async takeDraft(userId: number, id: string, kind: string): Promise<StoredResourceFile> {
+    return (await this.consumeDraft(userId, id, kind)).file;
+  }
+
+  async consumeDraft(userId: number, id: string, kind: string): Promise<ConsumedResourcePreviewDraft> {
     const draft = await this.requireDraft(userId, id);
     if (draft.kind !== kind) throw new BadRequestException('预览草稿与资源类型不匹配');
     this.drafts.delete(id);
-    return draft.file;
+    return { file: draft.file, previewKey: draft.previewKey, metadata: draft.metadata, parserVersion: draft.parserVersion };
+  }
+
+  async discardConsumedDraft(draft: ConsumedResourcePreviewDraft): Promise<void> {
+    if (!this.isValidPreviewKey(draft.previewKey)) return;
+    await unlink(path.resolve(this.previewRoot, draft.previewKey)).catch(() => undefined);
   }
 
   async enqueue(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash'>): Promise<void> {
@@ -192,6 +208,17 @@ export class ResourcePreviewService {
     } catch {
       return null;
     }
+  }
+
+  async readPreviewKey(previewKey: string): Promise<Buffer> {
+    if (!this.isValidPreviewKey(previewKey)) throw new NotFoundException('预览不存在');
+    try { return await readFile(path.resolve(this.previewRoot, previewKey)); }
+    catch { throw new NotFoundException('预览不存在'); }
+  }
+
+  async removePreviewKey(previewKey: string | null | undefined): Promise<void> {
+    if (!previewKey || !this.isValidPreviewKey(previewKey)) return;
+    await unlink(path.resolve(this.previewRoot, previewKey)).catch(() => undefined);
   }
 
   private get rendererUrl(): string { return (process.env.RESOURCE_RENDERER_URL || '').replace(/\/$/, ''); }

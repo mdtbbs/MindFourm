@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/api/v1/resources": {
+    "/resources": {
       "get": {
         "operationId": "ResourcesController_getList",
         "parameters": [],
@@ -21,7 +21,7 @@
         }
       }
     },
-    "/api/v1/resources/hot": {
+    "/resources/hot": {
       "get": {
         "operationId": "ResourcesController_getHotResources",
         "parameters": [],
@@ -32,7 +32,7 @@
         }
       }
     },
-    "/api/v1/resources/filter-options": {
+    "/resources/filter-options": {
       "get": {
         "operationId": "ResourcesController_getFilterOptions",
         "parameters": [],
@@ -43,7 +43,18 @@
         }
       }
     },
-    "/api/v1/resources/user/{userId}": {
+    "/resources/content-metadata": {
+      "get": {
+        "operationId": "ResourcesController_getMindustryContentMetadata",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/user/{userId}": {
       "get": {
         "operationId": "ResourcesController_getUserResources",
         "parameters": [
@@ -63,7 +74,7 @@
         }
       }
     },
-    "/api/v1/resources/categories": {
+    "/resources/categories": {
       "get": {
         "operationId": "ResourcesController_listCategories",
         "parameters": [],
@@ -93,7 +104,7 @@
         }
       }
     },
-    "/api/v1/resources/categories/tree": {
+    "/resources/categories/tree": {
       "get": {
         "operationId": "ResourcesController_listCategoriesTree",
         "parameters": [],
@@ -104,7 +115,7 @@
         }
       }
     },
-    "/api/v1/resources/categories/admin": {
+    "/resources/categories/admin": {
       "get": {
         "operationId": "ResourcesController_listAdminCategories",
         "parameters": [],
@@ -115,7 +126,7 @@
         }
       }
     },
-    "/api/v1/resources/categories/{categoryId}": {
+    "/resources/categories/{categoryId}": {
       "put": {
         "operationId": "ResourcesController_updateCategory",
         "parameters": [
@@ -163,7 +174,7 @@
         }
       }
     },
-    "/api/v1/resources/admin": {
+    "/resources/admin": {
       "get": {
         "operationId": "ResourcesController_getAdminList",
         "parameters": [],
@@ -174,7 +185,7 @@
         }
       }
     },
-    "/api/v1/resources/my": {
+    "/resources/my": {
       "get": {
         "operationId": "ResourcesController_getMyResources",
         "parameters": [],
@@ -185,7 +196,78 @@
         }
       }
     },
-    "/api/v1/resources/{id}": {
+    "/resources/drafts/preview": {
+      "post": {
+        "operationId": "ResourcesController_previewDraft",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/drafts/{draftId}/preview": {
+      "get": {
+        "operationId": "ResourcesController_getDraftPreview",
+        "parameters": [
+          {
+            "name": "draftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/{id}/render-status": {
+      "get": {
+        "operationId": "ResourcesController_getRenderStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/{id}/preview": {
+      "get": {
+        "operationId": "ResourcesController_getPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/{id}": {
       "get": {
         "operationId": "ResourcesController_getById",
         "parameters": [
@@ -251,7 +333,7 @@
         }
       }
     },
-    "/api/v1/resources/{id}/related": {
+    "/resources/{id}/related": {
       "get": {
         "operationId": "ResourcesController_getRelated",
         "parameters": [
@@ -279,7 +361,7 @@
         }
       }
     },
-    "/api/v1/resources/{id}/download": {
+    "/resources/{id}/download": {
       "get": {
         "operationId": "ResourcesController_download",
         "parameters": [
@@ -299,7 +381,7 @@
         }
       }
     },
-    "/api/v1/resources/{id}/versions": {
+    "/resources/{id}/versions": {
       "get": {
         "operationId": "ResourcesController_getVersions",
         "parameters": [
@@ -337,7 +419,27 @@
         }
       }
     },
-    "/api/v1/resources/{id}/versions/{versionId}": {
+    "/resources/{id}/retry-preview": {
+      "post": {
+        "operationId": "ResourcesController_retryPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/{id}/versions/{versionId}": {
       "delete": {
         "operationId": "ResourcesController_deleteVersion",
         "parameters": [
@@ -365,7 +467,7 @@
         }
       }
     },
-    "/api/v1/resources/{id}/status": {
+    "/resources/{id}/status": {
       "put": {
         "operationId": "ResourcesController_updateStatus",
         "parameters": [
@@ -385,7 +487,27 @@
         }
       }
     },
-    "/api/v1/resources/{id}/admin": {
+    "/resources/{id}/featured": {
+      "put": {
+        "operationId": "ResourcesController_setFeatured",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/{id}/admin": {
       "delete": {
         "operationId": "ResourcesController_adminDelete",
         "parameters": [
@@ -405,7 +527,7 @@
         }
       }
     },
-    "/api/v1/resources/admin/cleanup-storage": {
+    "/resources/admin/cleanup-storage": {
       "post": {
         "operationId": "ResourcesController_cleanupStorage",
         "parameters": [],
@@ -416,7 +538,7 @@
         }
       }
     },
-    "/api/v1/resources/{id}/rating": {
+    "/resources/{id}/rating": {
       "post": {
         "operationId": "ResourcesController_upsertRating",
         "parameters": [
@@ -472,7 +594,7 @@
         }
       }
     },
-    "/api/v1/resources/{id}/favorite": {
+    "/resources/{id}/favorite": {
       "get": {
         "operationId": "ResourcesController_getFavorite",
         "parameters": [
@@ -528,7 +650,63 @@
         }
       }
     },
-    "/api/v1/resources/{id}/subscription": {
+    "/resources/{id}/like": {
+      "get": {
+        "operationId": "ResourcesController_getLike",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "ResourcesController_addLike",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "ResourcesController_removeLike",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/resources/{id}/subscription": {
       "get": {
         "operationId": "ResourcesController_getSubscription",
         "parameters": [
@@ -584,7 +762,131 @@
         }
       }
     },
-    "/api/v1/v1/resources/{id}": {
+    "/v1/resources": {
+      "get": {
+        "operationId": "ResourcesV1Controller_listResources",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public resource list"
+          }
+        },
+        "tags": [
+          "v1-resources"
+        ]
+      }
+    },
+    "/v1/resources/{id}/manifest": {
+      "get": {
+        "operationId": "ResourcesV1Controller_getManifest",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Launcher and in-game resource manifest"
+          }
+        },
+        "tags": [
+          "v1-resources"
+        ]
+      }
+    },
+    "/v1/resources/{id}/preview": {
+      "get": {
+        "operationId": "ResourcesV1Controller_getPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-resources"
+        ]
+      }
+    },
+    "/v1/resources/{resourceId}/versions/{versionId}/files/{fileId}/download": {
+      "get": {
+        "operationId": "ResourcesV1Controller_downloadFile",
+        "parameters": [
+          {
+            "name": "resourceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-resources"
+        ]
+      }
+    },
+    "/v1/resources/{id}": {
       "get": {
         "operationId": "ResourcesV1Controller_getResource",
         "parameters": [
@@ -593,7 +895,7 @@
             "required": true,
             "in": "path",
             "schema": {
-              "type": "number"
+              "type": "string"
             }
           }
         ],
@@ -607,7 +909,7 @@
         ]
       }
     },
-    "/api/v1/v1/capabilities": {
+    "/v1/capabilities": {
       "get": {
         "operationId": "CapabilitiesController_getCapabilities",
         "parameters": [],
@@ -621,7 +923,7 @@
         ]
       }
     },
-    "/api/v1/v1/client/config": {
+    "/v1/client/config": {
       "get": {
         "operationId": "ClientConfigV1Controller_config",
         "parameters": [
@@ -652,7 +954,32 @@
         ]
       }
     },
-    "/api/v1/v1/auth/mobile/exchange": {
+    "/uploads/images": {
+      "post": {
+        "operationId": "UploadsController_uploadInlineImage",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/uploads/images": {
+      "post": {
+        "operationId": "UploadsV1Controller_image",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-uploads"
+        ]
+      }
+    },
+    "/v1/auth/mobile/exchange": {
       "post": {
         "operationId": "MobileAuthController_exchange",
         "parameters": [],
@@ -676,7 +1003,7 @@
         ]
       }
     },
-    "/api/v1/v1/auth/mobile/refresh": {
+    "/v1/auth/mobile/refresh": {
       "post": {
         "operationId": "MobileAuthController_refresh",
         "parameters": [],
@@ -700,7 +1027,7 @@
         ]
       }
     },
-    "/api/v1/v1/auth/mobile/logout": {
+    "/v1/auth/mobile/logout": {
       "post": {
         "operationId": "MobileAuthController_logout",
         "parameters": [],
@@ -724,7 +1051,7 @@
         ]
       }
     },
-    "/api/v1/v1/auth/mobile/sessions": {
+    "/v1/auth/mobile/sessions": {
       "get": {
         "operationId": "MobileAuthController_sessions",
         "parameters": [],
@@ -738,7 +1065,7 @@
         ]
       }
     },
-    "/api/v1/v1/auth/mobile/sessions/{id}": {
+    "/v1/auth/mobile/sessions/{id}": {
       "delete": {
         "operationId": "MobileAuthController_revoke",
         "parameters": [
@@ -761,7 +1088,7 @@
         ]
       }
     },
-    "/api/v1/v1/me": {
+    "/v1/me": {
       "get": {
         "operationId": "UsersV1Controller_getMe",
         "parameters": [],
@@ -775,7 +1102,227 @@
         ]
       }
     },
-    "/api/v1/v1/threads": {
+    "/v1/users/{id}": {
+      "get": {
+        "operationId": "UsersV1Controller_getPublic",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public user profile without private account fields."
+          }
+        },
+        "tags": [
+          "v1-users"
+        ]
+      }
+    },
+    "/v1/me/profile": {
+      "put": {
+        "operationId": "UsersV1Controller_updateMe",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-users"
+        ]
+      }
+    },
+    "/v1/me/avatar": {
+      "post": {
+        "operationId": "UsersV1Controller_uploadAvatar",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-users"
+        ]
+      }
+    },
+    "/v1/me/bookmarks": {
+      "get": {
+        "operationId": "BookmarksV1Controller_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The current user's bookmarked thread summaries."
+          }
+        },
+        "tags": [
+          "v1-bookmarks"
+        ]
+      }
+    },
+    "/reports": {
+      "post": {
+        "operationId": "ReportsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/reports/mine": {
+      "get": {
+        "operationId": "ReportsController_getMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/admin/reports": {
+      "get": {
+        "operationId": "ReportsAdminController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/admin/reports/{id}": {
+      "patch": {
+        "operationId": "ReportsAdminController_resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/reports": {
+      "post": {
+        "operationId": "ReportsV1Controller_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-reports"
+        ]
+      }
+    },
+    "/v1/reports/mine": {
+      "get": {
+        "operationId": "ReportsV1Controller_mine",
+        "parameters": [
+          {
+            "name": "page",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-reports"
+        ]
+      }
+    },
+    "/v1/threads": {
       "get": {
         "operationId": "ThreadsV1Controller_listThreads",
         "parameters": [
@@ -836,7 +1383,7 @@
         ]
       }
     },
-    "/api/v1/v1/threads/{id}": {
+    "/v1/threads/{id}": {
       "get": {
         "operationId": "ThreadsV1Controller_getThread",
         "parameters": [
@@ -902,7 +1449,7 @@
           }
         ],
         "responses": {
-          "204": {
+          "200": {
             "description": "Thread soft-deleted by its owner or staff."
           }
         },
@@ -911,7 +1458,7 @@
         ]
       }
     },
-    "/api/v1/v1/threads/{id}/like": {
+    "/v1/threads/{id}/like": {
       "put": {
         "operationId": "ThreadInteractionsV1Controller_like",
         "parameters": [
@@ -955,7 +1502,7 @@
         ]
       }
     },
-    "/api/v1/v1/threads/{id}/bookmark": {
+    "/v1/threads/{id}/bookmark": {
       "put": {
         "operationId": "ThreadInteractionsV1Controller_bookmark",
         "parameters": [
@@ -999,7 +1546,7 @@
         ]
       }
     },
-    "/api/v1/v1/threads/{id}/replies": {
+    "/v1/threads/{id}/replies": {
       "post": {
         "operationId": "ThreadWriteV1Controller_createReply",
         "parameters": [
@@ -1032,7 +1579,7 @@
         ]
       }
     },
-    "/api/v1/v1/threads/{threadId}/replies/{replyId}": {
+    "/v1/threads/{threadId}/replies/{replyId}": {
       "put": {
         "operationId": "ThreadWriteV1Controller_updateReply",
         "parameters": [
@@ -1093,7 +1640,7 @@
           }
         ],
         "responses": {
-          "204": {
+          "200": {
             "description": "Reply soft-deleted by its owner or staff."
           }
         },
@@ -1102,35 +1649,42 @@
         ]
       }
     },
-    "/api/v1/v1/discover": {
-      "get": {
-        "operationId": "DiscoverV1Controller_getSummary",
+    "/feedback": {
+      "post": {
+        "operationId": "FeedbackController_submit",
         "parameters": [],
         "responses": {
-          "200": {
-            "description": "Discovery summary"
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/feedback": {
+      "post": {
+        "operationId": "FeedbackV1Controller_submit",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFeedbackV1Dto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
           }
         },
         "tags": [
-          "v1-discover"
+          "v1-feedback"
         ]
       }
     },
-    "/api/v1/v1/portal": {
-      "get": {
-        "operationId": "PortalV1Controller_getPortalData",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "Portal homepage data"
-          }
-        },
-        "tags": [
-          "v1-portal"
-        ]
-      }
-    },
-    "/api/v1/v1/notices": {
+    "/v1/notices": {
       "get": {
         "operationId": "NoticesController_list",
         "parameters": [
@@ -1169,7 +1723,7 @@
         ]
       }
     },
-    "/api/v1/v1/notices/{id}": {
+    "/v1/notices/{id}": {
       "get": {
         "operationId": "NoticesController_detail",
         "parameters": [
@@ -1192,7 +1746,7 @@
         ]
       }
     },
-    "/api/v1/v1/admin/notices": {
+    "/v1/admin/notices": {
       "get": {
         "operationId": "AdminNoticesController_list",
         "parameters": [],
@@ -1228,7 +1782,7 @@
         ]
       }
     },
-    "/api/v1/v1/admin/notices/{id}": {
+    "/v1/admin/notices/{id}": {
       "patch": {
         "operationId": "AdminNoticesController_update",
         "parameters": [
@@ -1281,6 +1835,1123 @@
           "v1-admin-notices"
         ]
       }
+    },
+    "/v1/portal": {
+      "get": {
+        "operationId": "PortalV1Controller_getPortalData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Portal homepage data"
+          }
+        },
+        "tags": [
+          "v1-portal"
+        ]
+      }
+    },
+    "/v1/home": {
+      "get": {
+        "operationId": "HomeV1Controller_getHomeData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Fault-isolated homepage data"
+          }
+        },
+        "tags": [
+          "v1-home"
+        ]
+      }
+    },
+    "/v1/game-content/meta": {
+      "get": {
+        "operationId": "GameContentController_meta",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/blueprints": {
+      "get": {
+        "operationId": "GameContentController_listBlueprints",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "latest",
+                "trending",
+                "featured",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ASC",
+                "DESC",
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gameVersion",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "author",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 50,
+              "default": "20",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      },
+      "post": {
+        "operationId": "GameContentController_createBlueprint",
+        "summary": "Submit a blueprint through the existing resource moderation flow",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBlueprintDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/maps": {
+      "get": {
+        "operationId": "GameContentController_listMaps",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "latest",
+                "trending",
+                "featured",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ASC",
+                "DESC",
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gameVersion",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "author",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 50,
+              "default": "20",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/blueprints/{id}": {
+      "get": {
+        "operationId": "GameContentController_blueprintDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentBlueprintDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/maps/{id}": {
+      "get": {
+        "operationId": "GameContentController_mapDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentMapDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/blueprints/{id}/code": {
+      "get": {
+        "operationId": "GameContentController_blueprintCode",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentBlueprintCodeDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/maps/{id}/download": {
+      "get": {
+        "operationId": "GameContentController_mapDownload",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/maps/{id}/download/file": {
+      "get": {
+        "operationId": "GameContentController_mapDownloadFile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/blueprints/{id}/preview": {
+      "get": {
+        "operationId": "GameContentController_blueprintPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/maps/{id}/preview": {
+      "get": {
+        "operationId": "GameContentController_mapPreview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/feed": {
+      "get": {
+        "operationId": "GameContentController_feed",
+        "parameters": [
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "featured",
+                "latest",
+                "trending",
+                "all"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentFeedResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/search": {
+      "get": {
+        "operationId": "GameContentController_search",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "latest",
+                "trending",
+                "featured",
+                "all"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ASC",
+                "DESC",
+                "asc",
+                "desc"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "tags",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gameVersion",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "author",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 50,
+              "default": "20",
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "all",
+                "blueprint",
+                "map"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/tags": {
+      "get": {
+        "operationId": "GameContentController_tags",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ]
+      }
+    },
+    "/v1/game-content/maps/uploads": {
+      "post": {
+        "operationId": "GameContentController_beginMapUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "sha256"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-fA-F0-9]{64}$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentMapUploadCreatedDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/maps/uploads/{uploadId}/complete": {
+      "post": {
+        "operationId": "GameContentController_completeMapUpload",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteMapUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/maps/uploads/{uploadId}": {
+      "get": {
+        "operationId": "GameContentController_uploadSession",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameContentUploadStatusDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/maps/uploads/{uploadId}/preview": {
+      "get": {
+        "operationId": "GameContentController_uploadSessionPreview",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/blueprints/{id}/like": {
+      "post": {
+        "operationId": "GameContentController_likeBlueprint",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "GameContentController_unlikeBlueprint",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/maps/{id}/like": {
+      "post": {
+        "operationId": "GameContentController_likeMap",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "GameContentController_unlikeMap",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/{type}/{id}/favorite": {
+      "post": {
+        "operationId": "GameContentController_favorite",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "GameContentController_unfavorite",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/me": {
+      "get": {
+        "operationId": "GameContentController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/me/favorites": {
+      "get": {
+        "operationId": "GameContentController_myFavorites",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/game-content/me/resources": {
+      "get": {
+        "operationId": "GameContentController_myResources",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "v1-game-content"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/lanlink/quick-code": {
+      "get": {
+        "operationId": "LanLinkQuickCodeController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      },
+      "post": {
+        "operationId": "LanLinkQuickCodeController_generate",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "operationId": "LanLinkQuickCodeController_disable",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/external/v1/lanlink/quick-code/validate": {
+      "post": {
+        "operationId": "ExternalLanLinkQuickCodeController_validate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateLanLinkQuickCodeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/external/v1/lanlink/quick-code/users/{id}": {
+      "get": {
+        "operationId": "ExternalLanLinkQuickCodeController_userStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/v1/lanlink/rooms": {
+      "get": {
+        "operationId": "LanLinkRoomsV1Controller_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Anonymous public LanLink room list"
+          }
+        },
+        "tags": [
+          "v1-lanlink"
+        ]
+      }
+    },
+    "/v1/discover": {
+      "get": {
+        "operationId": "DiscoverV1Controller_getSummary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Discovery summary"
+          }
+        },
+        "tags": [
+          "v1-discover"
+        ]
+      }
     }
   },
   "info": {
@@ -1290,13 +2961,15 @@
     "contact": {}
   },
   "tags": [],
-  "servers": [
-    {
-      "url": "https://mdtbbs.cn/api/v1",
-      "description": "生产环境"
-    }
-  ],
+  "servers": [],
   "components": {
+    "securitySchemes": {
+      "MindAuthBearer": {
+        "scheme": "bearer",
+        "bearerFormat": "MindAuth access token",
+        "type": "http"
+      }
+    },
     "schemas": {
       "CreateResourceCategoryDto": {
         "type": "object",
@@ -1322,6 +2995,18 @@
         "type": "object",
         "properties": {}
       },
+      "UpdateProfileDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateReportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ResolveReportDto": {
+        "type": "object",
+        "properties": {}
+      },
       "CreatePostDto": {
         "type": "object",
         "properties": {}
@@ -1338,11 +3023,739 @@
         "type": "object",
         "properties": {}
       },
+      "CreateFeedbackV1Dto": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateNoticeDto": {
         "type": "object",
         "properties": {}
       },
       "UpdateNoticeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "GameContentAuthorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "username": {
+            "type": "string"
+          },
+          "avatar": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "avatar"
+        ]
+      },
+      "GameContentListPreviewDto": {
+        "type": "object",
+        "properties": {
+          "thumbnail": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "thumbnail",
+          "width",
+          "height"
+        ]
+      },
+      "GameContentGameDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "minBuild": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "version",
+          "minBuild"
+        ]
+      },
+      "GameContentStatsDto": {
+        "type": "object",
+        "properties": {
+          "downloads": {
+            "type": "number"
+          },
+          "likes": {
+            "type": "number"
+          },
+          "favorites": {
+            "type": "number"
+          },
+          "views": {
+            "type": "number",
+            "description": "真实 Resource.view_count，详情仅在成功读取公开资源后递增"
+          }
+        },
+        "required": [
+          "downloads",
+          "likes",
+          "favorites",
+          "views"
+        ]
+      },
+      "GameContentListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "bp_9df6c1da-c6b5-4e4c-8ea8-9d0f77cabba2"
+          },
+          "resourceId": {
+            "type": "number"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "blueprint",
+              "map"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "author": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameContentAuthorDto"
+              }
+            ]
+          },
+          "preview": {
+            "$ref": "#/components/schemas/GameContentListPreviewDto"
+          },
+          "game": {
+            "$ref": "#/components/schemas/GameContentGameDto"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stats": {
+            "$ref": "#/components/schemas/GameContentStatsDto"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "resourceId",
+          "type",
+          "title",
+          "summary",
+          "author",
+          "preview",
+          "game",
+          "tags",
+          "stats",
+          "featured",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "GameContentPaginationDto": {
+        "type": "object",
+        "properties": {
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "nextCursor",
+          "hasMore"
+        ]
+      },
+      "GameContentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentListItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/GameContentPaginationDto"
+          }
+        },
+        "required": [
+          "data",
+          "pagination"
+        ]
+      },
+      "GameContentPreviewDto": {
+        "type": "object",
+        "properties": {
+          "image": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "image",
+          "width",
+          "height"
+        ]
+      },
+      "GameContentViewerDto": {
+        "type": "object",
+        "properties": {
+          "liked": {
+            "type": "boolean"
+          },
+          "favorited": {
+            "type": "boolean"
+          },
+          "canEdit": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "liked",
+          "favorited",
+          "canEdit"
+        ]
+      },
+      "GameContentBlueprintMaterialDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number"
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "amount",
+          "icon"
+        ]
+      },
+      "GameContentBlueprintBlockDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "number"
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "count",
+          "icon"
+        ]
+      },
+      "GameContentLinksDto": {
+        "type": "object",
+        "properties": {
+          "web": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "download": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "web"
+        ]
+      },
+      "GameContentBlueprintDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceId": {
+            "type": "number"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "blueprint"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "author": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameContentAuthorDto"
+              }
+            ]
+          },
+          "preview": {
+            "$ref": "#/components/schemas/GameContentPreviewDto"
+          },
+          "game": {
+            "$ref": "#/components/schemas/GameContentGameDto"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stats": {
+            "$ref": "#/components/schemas/GameContentStatsDto"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "viewer": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameContentViewerDto"
+              }
+            ]
+          },
+          "materials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentBlueprintMaterialDto"
+            }
+          },
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentBlueprintBlockDto"
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/GameContentLinksDto"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "resourceId",
+          "type",
+          "title",
+          "description",
+          "author",
+          "preview",
+          "game",
+          "tags",
+          "stats",
+          "featured",
+          "viewer",
+          "materials",
+          "blocks",
+          "links",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "GameContentMapMetadataDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "players": {
+            "type": "number",
+            "nullable": true
+          },
+          "planet": {
+            "type": "string",
+            "nullable": true
+          },
+          "resources": {
+            "type": "object",
+            "nullable": true
+          },
+          "cores": {
+            "type": "object",
+            "nullable": true
+          },
+          "waves": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": [
+          "mode",
+          "players",
+          "planet",
+          "resources",
+          "cores",
+          "waves"
+        ]
+      },
+      "GameContentMapFileDto": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "number",
+            "nullable": true
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "size",
+          "sha256"
+        ]
+      },
+      "GameContentMapDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resourceId": {
+            "type": "number"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "map"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "author": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameContentAuthorDto"
+              }
+            ]
+          },
+          "preview": {
+            "$ref": "#/components/schemas/GameContentPreviewDto"
+          },
+          "game": {
+            "$ref": "#/components/schemas/GameContentGameDto"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "stats": {
+            "$ref": "#/components/schemas/GameContentStatsDto"
+          },
+          "featured": {
+            "type": "boolean"
+          },
+          "viewer": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameContentViewerDto"
+              }
+            ]
+          },
+          "map": {
+            "$ref": "#/components/schemas/GameContentMapMetadataDto"
+          },
+          "file": {
+            "$ref": "#/components/schemas/GameContentMapFileDto"
+          },
+          "links": {
+            "$ref": "#/components/schemas/GameContentLinksDto"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "resourceId",
+          "type",
+          "title",
+          "description",
+          "author",
+          "preview",
+          "game",
+          "tags",
+          "stats",
+          "featured",
+          "viewer",
+          "map",
+          "file",
+          "links",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "GameContentBlueprintCodeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code"
+        ]
+      },
+      "GameContentFeedSectionDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "featured",
+              "latest",
+              "trending"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentListItemDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "items"
+        ]
+      },
+      "GameContentFeedResponseDto": {
+        "type": "object",
+        "properties": {
+          "sections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentFeedSectionDto"
+            }
+          }
+        },
+        "required": [
+          "sections"
+        ]
+      },
+      "CreateBlueprintDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "code": {
+            "type": "string",
+            "description": "Mindustry schematic Base64 code",
+            "maxLength": 29360128
+          },
+          "tags": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "title",
+          "code"
+        ]
+      },
+      "GameContentMapUploadCreatedDto": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready_for_completion"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "preview": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "uploadId",
+          "status",
+          "expiresAt",
+          "preview"
+        ]
+      },
+      "CompleteMapUploadDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 20000
+          },
+          "tags": {
+            "maxItems": 30,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "title"
+        ]
+      },
+      "GameContentUploadStatusDto": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploaded",
+              "processing",
+              "completed",
+              "failed",
+              "expired"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resourceId": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "uploadId",
+          "status",
+          "expiresAt",
+          "resourceId"
+        ]
+      },
+      "ValidateLanLinkQuickCodeDto": {
         "type": "object",
         "properties": {}
       }

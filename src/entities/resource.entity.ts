@@ -77,6 +77,15 @@ export class Resource {
   @Column({ default: 0 })
   download_count: number;
 
+  @Column({ type: 'tinyint', unsigned: true, default: 0 })
+  is_featured: number;
+
+  @Column({ type: 'bigint', unsigned: true, default: 0 })
+  view_count: string | number;
+
+  @Column({ type: 'char', length: 36, nullable: true, unique: true, select: false })
+  game_content_upload_session_id: string | null;
+
   @Column({ default: 0 })
   rating_count: number;
 

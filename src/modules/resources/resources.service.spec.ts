@@ -87,10 +87,12 @@ function createService(overrides: {
     leftJoin: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
+    getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
   };
 
   const resourceRepository = {
@@ -98,14 +100,12 @@ function createService(overrides: {
     findOne: jest.fn(),
     update: jest.fn().mockResolvedValue(undefined),
     count: jest.fn().mockResolvedValue(0),
-    // Creation no longer goes through a transaction manager: the MindFileList upload
-    // has to happen outside the transaction, so the row is persisted via the
-    // repository directly.
     create: jest.fn().mockImplementation((value: unknown) => value),
-    save: jest.fn().mockImplementation(async (value: unknown) => ({
-      id: 81,
-      ...(value as Record<string, unknown>),
-    })),
+    save: jest.fn().mockImplementation(async (...args: unknown[]) => {
+      const value = args.length > 1 ? args[1] : args[0];
+      const applyId = (item: any) => ({ id: 81, ...item });
+      return Array.isArray(value) ? value.map(applyId) : applyId(value);
+    }),
     delete: jest.fn().mockResolvedValue(undefined),
     increment: jest.fn().mockResolvedValue(undefined),
     createQueryBuilder: jest.fn(() => defaultQb),
@@ -185,6 +185,30 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('sets featured only through the existing resource moderation service', async () => {
+    const { service, resourceRepository } = createService();
+    const resource = { id: 77, is_featured: 1, status: 'approved', is_public: 1, user: null, category: null };
+    resourceRepository.findOne.mockResolvedValueOnce(resource).mockResolvedValueOnce(resource);
+    await service.setFeatured(77, true);
+    expect(resourceRepository.update).toHaveBeenCalledWith(77, { is_featured: 1 });
+  });
+
+  it('filters featured public resources without bypassing existing visibility conditions', async () => {
+    const { service, defaultQb } = createService();
+    await service.getList({ limit: 20 } as any, { scope: 'public', featuredOnly: true });
+    expect(defaultQb.where).toHaveBeenCalledWith('resource.status IN (:...statuses)', expect.any(Object));
+    expect(defaultQb.andWhere).toHaveBeenCalledWith('resource.is_public = :isPublic', { isPublic: 1 });
+    expect(defaultQb.andWhere).toHaveBeenCalledWith('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
+    expect(defaultQb.andWhere).toHaveBeenCalledWith('resource.is_featured = 1');
+  });
+
+  it('orders trending public resources from the last seven days of persisted grants, likes, and favorites', async () => {
+    const { service, defaultQb } = createService();
+    await service.getList({ limit: 20 } as any, { scope: 'public', trendingOnly: true });
+    expect(defaultQb.addSelect).toHaveBeenCalledWith(expect.stringContaining("DATE_SUB(NOW(), INTERVAL 7 DAY)"), 'trending_score');
+    expect(defaultQb.orderBy).toHaveBeenCalledWith('trending_score', 'DESC');
+  });
+
   it('returns visible comment_count independently of rating aggregates', async () => {
     const resource = { id: 17, user_id: 2, status: 'approved', is_public: 1, rating_count: 6, rating_sum: 24, rating_average: 4 };
     const { service, resourceRepository, dataSource } = createService({
@@ -271,9 +295,7 @@ describe('ResourcesService', () => {
   });
 
   it('publishes a moderation pending notification when a resource is created for review', async () => {
-    // Creation persists via the repository rather than a transaction manager, so the
-    // post-save re-read is mocked there.
-    const { service, adminNotificationsService, resourceRepository } = createService({
+    const { service, adminNotificationsService, resourceRepository, manager } = createService({
       resourceRepository: {
         findOne: jest.fn().mockResolvedValue({
           id: 81,
@@ -304,10 +326,11 @@ describe('ResourcesService', () => {
         file_path: './uploads/resources/pack.zip',
         file_size: 128,
         mime_type: 'application/zip',
+        content_hash: 'a'.repeat(64),
       },
     );
 
-    expect(resourceRepository.save).toHaveBeenCalledTimes(1);
+    expect(manager.save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ title: 'Useful Pack' }));
     expect(adminNotificationsService.publishModerationPending).toHaveBeenCalledWith({
       item_type: 'resource',
       item_id: 81,

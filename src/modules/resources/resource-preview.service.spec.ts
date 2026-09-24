@@ -94,6 +94,27 @@ describe('ResourcePreviewService', () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 
+  it('returns the validated server parse result with a consumed submission draft', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-preview-'));
+    const source = path.join(root, 'map.msav');
+    const input = Buffer.from('map payload');
+    const hash = crypto.createHash('sha256').update(input).digest('hex');
+    const key = `resources/map/${hash.slice(0, 2)}/${hash}/preview.png`;
+    await fs.writeFile(source, input);
+    await fs.mkdir(path.dirname(path.join(root, key)), { recursive: true });
+    await fs.writeFile(path.join(root, key), Buffer.from('preview'));
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    process.env.RESOURCE_PREVIEW_ROOT = root;
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ previewKey: key, parserVersion: 'renderer-2', metadata: { width: 32, height: 16 } }) }) as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+    const preview = await service.createDraft(17, 'map', { file_name: 'map.msav', file_path: source, file_size: input.length, mime_type: 'application/octet-stream', content_hash: hash });
+    const consumed = await service.consumeDraft(17, preview.id, 'map');
+    expect(consumed).toEqual({ file: expect.objectContaining({ file_path: source }), previewKey: key, parserVersion: 'renderer-2', metadata: { width: 32, height: 16 } });
+    await service.discardConsumedDraft(consumed);
+    await expect(fs.access(path.join(root, key))).rejects.toThrow();
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
   it('resolves item and block names and icons in one renderer request while keeping unknown IDs safe', async () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100/';
     process.env.RESOURCE_RENDERER_TOKEN = 'renderer-secret';
