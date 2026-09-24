@@ -3,7 +3,8 @@
   "compilerOptions": {
     "declaration": false,
     "sourceMap": true,
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "incremental": false
   },
   "exclude": [
     "node_modules",
