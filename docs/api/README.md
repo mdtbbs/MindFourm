@@ -21,9 +21,13 @@
 
 生产或开发环境在 `OPENAPI_ENABLED != false` 时提供：
 
-- Swagger UI: `/api/docs/v1`
-- OpenAPI JSON: `/api/openapi/v1.json`
-- Capability discovery: `GET /api/v1/capabilities`
+- 在线开发者入口：`/api/v1`
+- 只读 API Reference：`/api/v1/reference`
+- Swagger 只读视图：`/api/docs/v1`（禁用 Try it）
+- OpenAPI JSON：`/api/openapi/v1.json`
+- Capability discovery：`GET /api/v1/capabilities`
+
+`/api/v1` 的在线文档只展示公开稳定契约。Legacy、管理端和服务间接口不会出现在公开导航中。
 
 仓库内文档：
 
