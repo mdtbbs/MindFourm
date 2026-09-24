@@ -28,6 +28,8 @@ import { createV1OpenApiDocument } from './openapi/v1-openapi';
 import { appConfig } from './config/app.config';
 import { validateConfig } from './config/validate';
 import { PerformanceTelemetryService } from './common/performance/performance-telemetry.service';
+import { registerDeveloperDocs } from './developer-docs/register-developer-docs';
+import packageJson from '../package.json';
 
 function parseCookieHeader(header: string | undefined): Record<string, string> {
   if (!header) return {};
@@ -200,8 +202,14 @@ async function bootstrap() {
   // the supported Mod API undocumented; restricted installations may opt out.
   if (app.get(ConfigService).get<string>('OPENAPI_ENABLED') !== 'false') {
     const document = createV1OpenApiDocument(app);
-    SwaggerModule.setup('api/docs/v1', app, document);
+    SwaggerModule.setup('api/docs/v1', app, document, {
+      customSiteTitle: 'MDTBBS API Reference',
+      swaggerOptions: {
+        supportedSubmitMethods: [],
+      },
+    });
     app.getHttpAdapter().get('/api/openapi/v1.json', (_req: unknown, res: any) => res.json(document));
+    registerDeveloperDocs(app, document, packageJson.version);
   }
 
   const port = process.env.PORT || 4000;
