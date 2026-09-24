@@ -459,7 +459,7 @@ function guidePages(): Record<string, DocPage> {
   const external = `
     <div class="eyebrow">Server Integration</div><h1>External API</h1>
     <p class="lead">External API 面向机器人、同步器和后台自动化，只允许在服务器端持有 API Key。Base URL 为 <code>/api/external/v1</code>。</p>
-    ${section('认证', `${codeBlock('Authorization: Bearer mfk_live_xxxxxxxx.yyyyyyyyyyyyyyyyy\n# 兼容：X-API-Key: mfk_live_...', 'http')}<p>每个 Key 都可以独立设置 scopes、启停、过期、IP 白名单、每分钟限流、默认 actor 和审计。</p>`, 'auth')}
+    ${section('认证', `${codeBlock('Authorization: Bearer mfk_live_xxxxxxxx.yyyyyyyyyyyyyyyyy\n# 兼容：X-API-Key: mfk_live_...', 'http')}<p>每个 Key 都可以独立设置 scopes、启停、过期、IP 白名单、每分钟限流、默认 actor 和审计。</p>${codeTabs(makeCodeSamples('GET', '/external/v1/me', { security: [{ ExternalApiKey: [] }] }))}`, 'auth')}
     ${section('Scopes 与接口', table(['Method', '相对路径', 'Scope', '说明'], externalRows.map((row) => [row[0], inlineCode(row[1]), inlineCode(row[2]), row[3]])), 'endpoints')}
     ${section('用户代发', '<p>需要 <code>users:impersonate</code> 时，可显式指定 <code>user_id</code>、<code>mindauth_id</code> 或 <code>username</code> 之一；未指定时使用 Key 的默认用户。被封禁用户不能被代发。</p>', 'actor')}
     ${callout('warning', '仅服务器端使用', '不要将 External API Key 嵌入 Mod、APK、启动器或浏览器前端。需要终端用户身份时，应使用相应的客户端认证流程。')}
@@ -569,7 +569,7 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
       const operation = (pathItem as any)?.[method];
       if (!operation) continue;
       const samples = makeCodeSamples(method, path, operation);
-      const securityBadge = hasSecurity(operation) ? '<span class="badge">需要认证</span>' : '<span class="badge">公开 / 可选认证</span>';
+      const securityBadge = hasSecurity(operation) ? '<span class="badge">Bearer 认证</span>' : '';
       endpoints.push(`
         <article class="endpoint" data-endpoint-search="${escapeHtml(operationSearchText(method, path, operation))}">
           <div class="endpoint-head">
