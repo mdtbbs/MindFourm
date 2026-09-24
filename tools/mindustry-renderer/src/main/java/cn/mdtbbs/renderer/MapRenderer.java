@@ -18,6 +18,7 @@ import mindustry.game.Schematics;
 import mindustry.io.MapIO;
 import mindustry.maps.Map;
 import mindustry.net.Net;
+import mindustry.world.Block;
 
 import javax.imageio.ImageIO;
 import java.awt.Color;
