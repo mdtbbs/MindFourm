@@ -2,7 +2,7 @@
 
 本指南面向 Web、Android、桌面客户端、Mindustry Mod 和第三方启动器。所有应用使用同一套 MindAuth OAuth Authorization Code + PKCE S256 和 `/api/v1/*`；客户端名称不会带来额外权限。
 
-完整 MindAuth 注册应用、Redirect URI、PKCE、换 token、refresh、revoke 和 Java/Kotlin PKCE 示例见 [MindAuth Public Client PKCE 指南](https://github.com/mdtbbs/MindAuth/blob/main/docs/public-client-pkce.md)。MindFourm 的 OpenAPI 契约位于 `/api/openapi/v1.json`。
+线上接入入口是 [`/api/v1/docs/oauth`](https://mdtbbs.cn/api/v1/docs/oauth)，里面直接列了申请应用、Redirect URI、PKCE、scope、换 token、refresh 和 revoke。需要更完整的协议细节与 Java/Kotlin PKCE 示例时，再看 [MindAuth Public Client PKCE 指南](https://github.com/mdtbbs/MindAuth/blob/main/docs/public-client-pkce.md)。MindFourm 的 OpenAPI 契约位于 `/api/openapi/v1.json`。
 
 ## 1. 接入顺序
 
