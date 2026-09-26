@@ -160,7 +160,9 @@ function commonShell(params: {
     }
     .sidebar { position: sticky; top: 86px; align-self: start; display: flex; flex-direction: column; gap: 2px; }
     .sidebar-title { margin: 0 0 10px 10px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .sidebar a { padding: 7px 10px; border-radius: 2px; color: var(--muted); font-size: 14px; }\n    .nav-group-label { margin: 17px 10px 5px; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .08em; }\n    .sidebar-title + .nav-group-label { margin-top: 3px; }
+    .sidebar a { padding: 7px 10px; border-radius: 2px; color: var(--muted); font-size: 14px; }
+    .nav-group-label { margin: 17px 10px 5px; color: var(--muted); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
+    .sidebar-title + .nav-group-label { margin-top: 3px; }
     .sidebar a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
     .content { min-width: 0; max-width: 900px; }
     .eyebrow { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
@@ -462,7 +464,7 @@ Content-Type: application/json
 
   const firstParty = `
     <div class="eyebrow">论坛</div><h1>论坛 API V1</h1>
-    <p class="lead">这是 Web、Android、桌面端与其他受支持客户端的稳定接口面。完整方法和 Schema 以 API Reference 为准。</p>
+    <p class="lead">这是 Web、Android、桌面端与其他受支持客户端共用的稳定接口面。完整方法和 Schema 以 API 参考为准。</p>
     ${section('基础入口', table(['Method', 'Path', '说明'], [
       ['GET', inlineCode('/api/v1/capabilities'), '能力发现'],
       ['GET', inlineCode('/api/v1/client/config'), '客户端版本与功能配置'],
@@ -474,7 +476,7 @@ Content-Type: application/json
       ['GET', inlineCode('/api/v1/portal'), 'Portal 聚合'],
     ]), 'entry')}
     ${section('写操作', '<p>创建讨论、回复、更新资料、上传图片、举报和反馈等接口需要相应登录状态，同时可能受手机号验证、封禁状态和社区条款约束。</p>', 'writes')}
-    ${callout('info', '不要依赖 Legacy API', '源码里存在 /api/posts、/api/resources 等历史路由，但它们不属于第三方长期稳定契约。')}
+    ${callout('info', '不要依赖旧版接口', '源码里存在 /api/posts、/api/resources 等历史路由，但它们不属于第三方长期稳定契约。')}
   `;
 
   const gameContent = `
@@ -562,7 +564,7 @@ Content-Type: application/json
 
   const external = `
     <div class="eyebrow">服务端集成</div><h1>外部服务 API</h1>
-    <p class="lead">External API 面向机器人、同步器和后台自动化，只允许在服务器端持有 API Key。Base URL 为 <code>/api/external/v1</code>。</p>
+    <p class="lead">外部服务 API 面向机器人、同步器和后台自动化，只允许在服务器端持有 API Key。Base URL 为 <code>/api/external/v1</code>。</p>
     ${section('认证', `${codeBlock('Authorization: Bearer mfk_live_xxxxxxxx.yyyyyyyyyyyyyyyyy\n# 兼容：X-API-Key: mfk_live_...', 'http')}<p>每个 Key 都可以独立设置 scopes、启停、过期、IP 白名单、每分钟限流、默认 actor 和审计。</p>${codeTabs(makeCodeSamples('GET', '/external/v1/me', { security: [{ ExternalApiKey: [] }] }))}`, 'auth')}
     ${section('Scopes 与接口', table(['Method', '相对路径', 'Scope', '说明'], externalRows.map((row) => [row[0], inlineCode(row[1]), inlineCode(row[2]), row[3]])), 'endpoints')}
     ${section('用户代发', '<p>需要 <code>users:impersonate</code> 时，可显式指定 <code>user_id</code>、<code>mindauth_id</code> 或 <code>username</code> 之一；未指定时使用 Key 的默认用户。被封禁用户不能被代发。</p>', 'actor')}
