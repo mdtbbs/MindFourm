@@ -1,13 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Post, Put, Req, UnauthorizedException, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, ParseIntPipe, Post, Put, Req, UnauthorizedException, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { UsersService } from '../users.service';
 import { UpdateProfileDto } from '../dto/update-profile.dto';
 import { avatarUploadInterceptor, cleanupUploadedFile } from '../users.controller';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
-import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
 import { V1PermissionResolverService } from './v1-permission-resolver.service';
 import { AllowBannedUser } from '../../../common/decorators/allow-banned-user.decorator';
 
@@ -32,8 +30,7 @@ export class UsersV1Controller {
 
   @Get('me')
   @AllowBannedUser()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('profile')
+  @OAuthProtected('profile')
   @ApiOkResponse({ description: 'Authenticated viewer profile with stable first-party fields.' })
   async getMe(@Req() req: any): Promise<V1MeDto> {
     const userId = req.user?.id;
@@ -55,16 +52,14 @@ export class UsersV1Controller {
   }
 
   @Put('me/profile')
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('forum.write')
+  @OAuthProtected('profile')
   async updateMe(@Req() req: any, @Body() dto: UpdateProfileDto): Promise<V1MeDto> {
     if (!req.user?.id) throw new UnauthorizedException('Not authenticated');
     return this.toMe(await this.usersService.updateProfile(req.user.id, dto), req.authContext);
   }
 
   @Post('me/avatar')
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('forum.write')
+  @OAuthProtected('profile')
   @UseInterceptors(avatarUploadInterceptor)
   async uploadAvatar(@Req() req: any, @UploadedFile() file?: Express.Multer.File): Promise<V1MeDto> {
     if (!req.user?.id) { await cleanupUploadedFile(file); throw new UnauthorizedException('Not authenticated'); }

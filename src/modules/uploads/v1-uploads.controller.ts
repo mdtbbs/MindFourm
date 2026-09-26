@@ -1,23 +1,20 @@
-import { BadRequestException, Controller, HttpStatus, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Controller, HttpStatus, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '@common/decorators/api-v1.decorator';
-import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
+import { OAuthProtected } from '@common/decorators/oauth-protected.decorator';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { cleanupUploadedPublicImage, MAX_PUBLIC_IMAGE_SIZE, publicImageUploadInterceptor } from './public-image-upload';
 import { UploadsService } from './uploads.service';
-import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../common/decorators/require-oauth-scopes.decorator';
 import { SettingsService } from '../settings/settings.service';
 import { ApiV1Exception } from '../../common/exceptions/api-v1.exception';
 
 @ApiV1()
 @ApiTags('v1-uploads')
 @Controller('v1/uploads')
-@UseGuards(JwtAuthGuard, OAuthScopeGuard)
 export class UploadsV1Controller {
   constructor(private readonly uploads: UploadsService, private readonly settings: SettingsService) {}
   @Post('images')
-  @RequireOAuthScopes('forum.write')
+  @OAuthProtected('forum.write')
   @UseInterceptors(publicImageUploadInterceptor)
   async image(@UploadedFile() file?: Express.Multer.File) {
     if (!await this.settings.getBoolean('feature_public_api_image_upload_enabled', true)) {

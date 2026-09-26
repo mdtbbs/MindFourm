@@ -6,8 +6,8 @@
 
 ## 1. 接入顺序
 
-1. 在 MindAuth 开发者中心创建 Public Client 申请。应用批准后取得 `client_id`；Public Client 没有 `client_secret`。
-2. 注册精确 Redirect URI 和所需 scopes。桌面 loopback 仅允许 `127.0.0.1` 或 `[::1]` 字面回环地址；不得使用 `localhost` 或内网地址。
+1. 登录并完成手机号验证，在 MindAuth 开发者中心自助创建 Public Client。创建后立即取得 `client_id`，无需管理员审核；Public Client 没有 `client_secret`，创建接口按 IP 限流。
+2. 注册精确 Redirect URI 和所需 scopes。桌面 loopback 支持 `127.0.0.1`、`[::1]` 和 `localhost`；以端口 `0` 注册可匹配运行时随机端口，其他内网地址不允许。
 3. 客户端生成随机 PKCE verifier，计算 S256 challenge，使用系统浏览器打开 MindAuth `/api/authorize`，并验证返回的 `state`。
 4. 使用 authorization code、相同 `redirect_uri`、verifier 和 `client_id` 调用 MindAuth `/api/token`。
 5. 将 access token 作为 `Authorization: Bearer` 调用 MindFourm。Forum 服务端通过保密的 Resource Server 凭据 introspect opaque token；客户端不解析 token，也不接触 Forum 的 `MINDAUTH_CLIENT_SECRET`。
@@ -17,15 +17,15 @@
 
 ## 2. Scope
 
-只申请产品需要的 scope。MindAuth 授权页面会展示权限中文说明；新增 scope 需要用户再次确认。
+只申请产品需要的 scope。开发者修改的 scope 立即生效；MindAuth 授权页面会展示权限中文说明，首次授权时展示全部权限，新增 scope 时只强调新增项。`message.read` 和 `message.write` 会标为敏感权限，但不需要人工审核。
 
 | Scope | 用途 | MindFourm API |
 | --- | --- | --- |
 | `openid` | OIDC 身份标识 | MindAuth 登录流程 |
-| `profile` | 用户基本资料 | `GET /api/v1/me`；首次在论坛建立本地身份时需要 |
-| `email` | 邮箱声明 | 首次在论坛建立本地身份时需要 |
-| `forum.read` | 读取论坛 | threads、replies、公开用户资料 |
-| `forum.write` | 论坛写入 | 创建/编辑/删除 thread 与 reply、修改本人资料、头像上传 |
+| `profile` | 用户基本资料 | `GET /api/v1/me`、修改本人资料和头像；首次在论坛建立本地身份时需要 |
+| `email` | 邮箱声明 | MindAuth UserInfo 邮箱兼容 scope，可选；首次建立论坛身份不需要 |
+| `forum.read` | 读取论坛 | threads、replies、search、公开用户资料、reports 查询、bookmarks 查询 |
+| `forum.write` | 论坛写入 | 创建/编辑/删除 thread 与 reply、reports 提交、feedback、图片上传 |
 | `resource.read` | 读取资源 | 资源列表、详情、manifest、预览 |
 | `resource.download` | 下载资源文件 | Resource V1 文件下载 |
 | `resource.upload` | 提交资源 | Resource Draft、地图/蓝图预览和提交 |
@@ -34,6 +34,8 @@
 | `message.write` | 发送私信 | `POST /api/v1/messages` |
 
 scope 表示客户端被允许请求某一类操作，不替代 Forum 的用户权限、手机号验证、社区条款、站点开关、封禁、内容审核、资源策略或私信开关。失败时读取 HTTP 状态和稳定 `error.code`；不要匹配中文消息。
+
+MindFourm 对 opaque Bearer 的 introspection 与 UserInfo 身份信息使用 Redis 缓存 30 秒，缓存 key 是 access token 的 SHA-256 摘要。MindAuth 撤销 token 或应用后，已缓存的论坛 API 身份最迟在 30 秒内失效。API V1 缺少 scope 时返回统一错误 envelope：`error.code` 为 `INSUFFICIENT_SCOPE`，`error.details` 包含 `{ "requiredScopes": ["resource.upload"] }`。
 
 ## 3. Capability discovery
 
@@ -67,7 +69,7 @@ scope 表示客户端被允许请求某一类操作，不替代 Forum 的用户�
 
 ## 4. 当前用户与权限
 
-`GET /api/v1/me` 需要 `profile` scope。除了兼容字段外，响应增加 `verification.phone` 与 `permissions`：
+`GET /api/v1/me` 需要 `profile` scope。首次在论坛建立账号只需 `profile`；邮箱 scope 独立可选。除了兼容字段外，响应增加 `verification.phone` 与 `permissions`：
 
 ```json
 {
@@ -87,10 +89,10 @@ scope 表示客户端被允许请求某一类操作，不替代 Forum 的用户�
 
 | Method | Path | Scope | 说明 |
 | --- | --- | --- | --- |
-| GET | `/api/v1/threads?limit=20&offset=0` | `forum.read` | 分页 thread 列表 |
+| GET | `/api/v1/threads?limit=20&offset=0` | `forum.read`（带 Bearer 时） | 分页 thread 列表；匿名读取仍可用 |
 | GET | `/api/v1/threads?q=search&limit=20` | `forum.read` | 搜索交由既有 SearchService |
-| GET | `/api/v1/threads/{id}` | `forum.read` | 详情；仍包含兼容的首批 replies |
-| GET | `/api/v1/threads/{id}/replies?page=1&limit=20` | `forum.read` | replies 独立分页，不移除详情内 replies |
+| GET | `/api/v1/threads/{id}` | `forum.read`（带 Bearer 时） | 详情；仍包含兼容的首批 replies |
+| GET | `/api/v1/threads/{id}/replies?page=1&limit=20` | `forum.read`（带 Bearer 时） | replies 独立分页，不移除详情内 replies |
 | POST | `/api/v1/threads` | `forum.write` | 创建 thread |
 | POST | `/api/v1/threads/{id}/replies` | `forum.write` | 创建 reply |
 | POST | `/api/v1/uploads/images` | `forum.write` | 正文图片上传；还受图片上传站点开关控制 |
@@ -197,6 +199,7 @@ connection.disconnect()
 
 - `/api/v1/auth/mobile/exchange`、`/refresh` 与 Forum mobile JWT 继续服务已有 Android 客户端；新客户端使用 MindAuth Public Client PKCE。旧接口目前仍受支持，没有因本次升级被删除。
 - `forum_session` 与 mobile legacy 凭证由 Forum 服务端赋予第一方兼容 capability；MindAuth OAuth Bearer 则只按实际 introspection 返回的 scope 授权。
+- `openapi-v1.json` 中受 OAuth 保护的操作声明 `MindAuthBearer` 安全方案与 `x-required-scopes`；匿名读取操作用匿名或 Bearer 两种安全方案表达，并以 `x-oauth-scopes-if-bearer` 说明携带 token 时的 scope 校验。
 - `GET /api/v1/threads/{id}` 的内嵌 replies 保留；新客户端可以使用独立分页 endpoint。
 - `content` Markdown 和已发布的 capability 扁平别名保留；JSON 富文本与嵌套 capabilities 为新增字段。
 - OpenAPI 只包含 `/api/v1/*` 稳定契约；以 `/api/openapi/v1.json` 为机器可读来源。

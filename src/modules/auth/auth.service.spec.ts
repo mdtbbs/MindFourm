@@ -155,14 +155,23 @@ describe('AuthService mobile refresh concurrency contract', () => {
 });
 
 describe('AuthService unified client principal resolver', () => {
-  const createService = () => new AuthService(
-    { findOne: jest.fn() } as any, {} as any, {} as any, {} as any,
-    { get: jest.fn() } as any, {} as any, {} as any, {} as any,
-    {} as any, {} as any, {} as any,
-  );
+  const createService = () => {
+    const cache = new Map<string, string>();
+    const redisService = {
+      get: jest.fn(async (key: string) => cache.get(key) || null),
+      set: jest.fn(async (key: string, value: string, _ttl?: number) => { cache.set(key, value); return 'OK'; }),
+      del: jest.fn(async (key: string) => cache.delete(key) ? 1 : 0),
+    };
+    const service = new AuthService(
+      { findOne: jest.fn() } as any, {} as any, {} as any, redisService as any,
+      { get: jest.fn() } as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any, {} as any,
+    );
+    return { service, redisService };
+  };
 
   it('preserves first-party forum cookie and legacy mobile JWT compatibility', async () => {
-    const service = createService();
+    const { service } = createService();
     const user = { id: 3 } as any;
     jest.spyOn(service, 'verifySession').mockResolvedValue(user);
     const sessionRequest: any = { cookies: { forum_session: 'session' }, headers: {} };
@@ -176,7 +185,7 @@ describe('AuthService unified client principal resolver', () => {
   });
 
   it('introspects opaque MindAuth Bearers server-side and maps only explicitly issued scopes', async () => {
-    const service = createService();
+    const { service } = createService();
     const user = { id: 8, mindauth_id: 22, phone_verified: true } as any;
     const repository = (service as any).usersRepository;
     jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue({ active: true, sub: '22', client_id: 'third-party', scope: 'openid forum.read', client_type: 'public', party_type: 'third_party' });
@@ -191,11 +200,51 @@ describe('AuthService unified client principal resolver', () => {
     expect(result.context).toMatchObject({ source: 'mindauth_oauth', clientId: 'third-party', scopes: ['openid', 'forum.read'], clientType: 'public', partyType: 'third_party' });
   });
 
-  it('requires profile and email scopes before creating a local forum identity', async () => {
-    const service = createService();
+  it('caches introspection and userinfo for 30 seconds under a hashed bearer key', async () => {
+    const { service, redisService } = createService();
+    const user = { id: 8, mindauth_id: 22, phone_verified: true } as any;
+    const repository = (service as any).usersRepository;
+    const introspect = jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue({
+      active: true, sub: '22', client_id: 'third-party', scope: 'profile forum.read',
+      client_type: 'public', party_type: 'third_party', exp: Math.floor(Date.now() / 1000) + 300,
+    });
+    const userInfo = jest.spyOn(service, 'getUserInfo').mockResolvedValue({
+      id: 22, username: 'writer', email: '', avatar_url: '', phone_verified: true,
+    });
+    repository.findOne.mockResolvedValue(user);
+    jest.spyOn(service, 'getOrCreateUser').mockResolvedValue(user);
+    const token = 'opaque-token-that-must-not-appear-in-redis-key';
+
+    await service.resolveMindAuthBearer(token);
+    await service.resolveMindAuthBearer(token);
+
+    expect(introspect).toHaveBeenCalledTimes(1);
+    expect(userInfo).toHaveBeenCalledTimes(1);
+    const [key, value, ttl] = redisService.set.mock.calls[0];
+    expect(key).toMatch(/^mindauth:oauth-introspection:[a-f0-9]{64}$/);
+    expect(key).not.toContain(token);
+    expect(value).not.toContain(token);
+    expect(ttl).toBe(30);
+  });
+
+  it('allows profile without requiring the optional email scope for local account creation', async () => {
+    const { service } = createService();
+    const repository = (service as any).usersRepository;
+    const user = { id: 8, mindauth_id: 22 } as any;
+    jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue({ active: true, sub: '22', client_id: 'public-app', scope: 'profile forum.read', client_type: 'public', party_type: 'third_party' });
+    jest.spyOn(service, 'getUserInfo').mockResolvedValue({ id: 22, username: 'writer', email: null, avatar_url: '' });
+    repository.findOne.mockResolvedValue(null);
+    jest.spyOn(service, 'getOrCreateUser').mockResolvedValue(user);
+
+    await expect(service.resolveMindAuthBearer('opaque-value')).resolves.toMatchObject({ user });
+    expect(service.getOrCreateUser).toHaveBeenCalledWith(expect.objectContaining({ id: 22, username: 'writer', email: null }));
+  });
+
+  it('requires profile scope before creating a local forum identity', async () => {
+    const { service } = createService();
     const repository = (service as any).usersRepository;
     jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue({ active: true, sub: '22', client_id: 'public-app', scope: 'openid forum.read', client_type: 'public', party_type: 'third_party' });
-    jest.spyOn(service, 'getUserInfo').mockResolvedValue({ id: 22, username: 'writer', email: '', avatar_url: '' });
+    jest.spyOn(service, 'getUserInfo').mockResolvedValue({ id: 22, username: 'writer', email: null, avatar_url: '' });
     repository.findOne.mockResolvedValue(null);
     await expect(service.resolveMindAuthBearer('opaque-value')).rejects.toMatchObject({ response: expect.objectContaining({ code: 'INSUFFICIENT_SCOPE' }) });
   });

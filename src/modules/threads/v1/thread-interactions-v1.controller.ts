@@ -1,17 +1,13 @@
-import { Controller, Delete, Param, ParseIntPipe, Put, Req, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Param, ParseIntPipe, Put, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { BookmarksService } from '../../bookmarks/bookmarks.service';
 import { LikesService } from '../../likes/likes.service';
-import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
 
 @ApiV1()
 @ApiTags('v1-thread-interactions')
 @Controller('v1/threads')
-@UseGuards(JwtAuthGuard, OAuthScopeGuard)
-@RequireOAuthScopes('forum.write')
 export class ThreadInteractionsV1Controller {
   constructor(
     private readonly likesService: LikesService,
@@ -19,18 +15,21 @@ export class ThreadInteractionsV1Controller {
   ) {}
 
   @Put(':id/like')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Thread is liked; safe to repeat.' })
   like(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.likesService.ensurePostLiked(req.user.id, id);
   }
 
   @Delete(':id/like')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Thread is not liked; safe to repeat.' })
   unlike(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     return this.likesService.ensurePostUnliked(req.user.id, id);
   }
 
   @Put(':id/bookmark')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Thread is bookmarked; safe to repeat.' })
   async bookmark(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     await this.bookmarksService.add(req.user.id, id);
@@ -38,6 +37,7 @@ export class ThreadInteractionsV1Controller {
   }
 
   @Delete(':id/bookmark')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Thread is not bookmarked; safe to repeat.' })
   async removeBookmark(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     await this.bookmarksService.ensureRemoved(req.user.id, id);

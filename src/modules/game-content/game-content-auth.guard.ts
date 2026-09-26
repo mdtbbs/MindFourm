@@ -33,14 +33,14 @@ export class GameContentAuthGuard implements CanActivate {
     try {
       const resolved = await this.auth.resolveMindAuthBearer(match[1]);
       const user = resolved.user;
-      if (resolved.context.source === 'mindauth_oauth') {
+      if (resolved.context.source === 'mindauth_oauth' && !/\/meta\/?$/i.test(path)) {
         const requiredScope = uploadRoute
           ? 'resource.upload'
           : method === 'GET' && /\/download(?:\/|$)/i.test(path)
             ? 'resource.download'
             : ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? 'forum.write' : 'resource.read';
         if (!resolved.context.scopes.includes(requiredScope)) {
-          throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, [{ scope: requiredScope }]);
+          throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, [{ requiredScopes: [requiredScope] }]);
         }
       }
       await this.bans.assertUserNotBanned(user.id);
@@ -51,7 +51,10 @@ export class GameContentAuthGuard implements CanActivate {
       if (error instanceof ApiV1Exception) throw error;
       if (error instanceof ForbiddenException) {
         const response = error.getResponse() as any;
-        if (response?.code === 'INSUFFICIENT_SCOPE') throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false);
+        if (response?.code === 'INSUFFICIENT_SCOPE') {
+          const details = Array.isArray(response.details) ? response.details : [];
+          throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, details);
+        }
         throw new ApiV1Exception('USER_BANNED', HttpStatus.FORBIDDEN, '账号当前不可使用此服务', false);
       }
       // Avoid putting the bearer value or upstream response into logs.
@@ -79,7 +82,7 @@ export class GameContentRequiredAuthGuard implements CanActivate {
           ? 'resource.download'
           : ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method) ? 'forum.write' : 'resource.read';
       if (!req.authContext.scopes.includes(requiredScope)) {
-        throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false);
+        throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, [{ requiredScopes: [requiredScope] }]);
       }
     }
     if (!req.user.phone_verified) throw new ForbiddenException({ code: 'PERMISSION_DENIED', message: '账号尚未满足发布条件' });

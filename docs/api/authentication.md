@@ -12,6 +12,8 @@ Authorization: Bearer <mindauth-access-token>
 
 Forum 服务端使用只保存在服务器上的 `MINDAUTH_CLIENT_ID` / `MINDAUTH_CLIENT_SECRET` 执行 MindAuth token introspection，再按 `active`、`sub`、`client_id` 和实际授予的 scopes 建立 `ClientAuthContext`。身份由 MindAuth userinfo 同步到 Forum 本地用户；Forum 不会在本地解码 opaque token。第三方客户端不能访问或打包 Forum Resource Server 凭据。
 
+Forum 使用 Redis 对 introspection 和 UserInfo 的必要字段缓存 30 秒，cache key 由 access token 的 SHA-256 摘要生成；撤销或停用后的缓存身份最多保留 30 秒。首次建立 Forum 本地用户只要求 `profile`，`email` 保持可选兼容 scope。
+
 新客户端从 [Public Client API V1 接入指南](./public-client-v1.md) 查看 scopes、capabilities、Forum 端点和请求示例；MindAuth PKCE、refresh 与 revoke 契约见 MindAuth 仓库的 [Public Client PKCE 指南](https://github.com/mdtbbs/MindAuth/blob/main/docs/public-client-pkce.md)。
 
 `forum_session` 与 Forum mobile JWT 会由服务端提供第一方兼容 scope；MindAuth OAuth Bearer 则只拥有 token introspection 返回的 scope。OAuth scope 不覆盖 Forum 的用户封禁、手机号、条款、审核和站点设置。

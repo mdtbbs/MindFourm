@@ -17,6 +17,7 @@ import { SkipPhoneVerification } from '@common/decorators/skip-phone-verificatio
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { getClientIp } from '@common/utils/client-context.util';
 import { GameContentAuthGuard, GameContentRequiredAuthGuard } from './game-content-auth.guard';
+import { OAuthScopeDocumentation, OAuthScopeIfBearer } from '@common/decorators/oauth-protected.decorator';
 import { GameContentService, GameResourceType } from './game-content.service';
 import { CreateBlueprintDto, CompleteMapUploadDto, GameContentBlueprintCodeDto, GameContentBlueprintDetailDto, GameContentFeedResponseDto, GameContentListQueryDto, GameContentListResponseDto, GameContentMapDetailDto, GameContentMapUploadCreatedDto, GameContentUploadStatusDto } from './dto/game-content.dto';
 import { ResourceStorageService } from '../resources/resource-storage.service';
@@ -58,33 +59,33 @@ export class GameContentController {
     return { apiVersion: '1', service: 'MDTBBS Game Content', supportedTypes: ['blueprint', 'map'], features: { blueprints: true, maps: true, authentication: true, favorites: true, likes: true, blueprintUpload: rendererAvailable, mapUpload: rendererAvailable, blueprintProductionAnalysis: rendererAvailable }, limits: { defaultPageSize: 20, maxPageSize: 50, maxBlueprintBytes: this.blueprintMaxBytes(), maxMapBytes: maxMapBytes() } };
   }
 
-  @Get('blueprints') @OptionalAuth() @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+  @Get('blueprints') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
   @ApiOkResponse({ type: GameContentListResponseDto })
   listBlueprints(@Query() query: GameContentListQueryDto) { return this.gameContent.list('blueprint', query); }
 
-  @Get('maps') @OptionalAuth() @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+  @Get('maps') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
   @ApiOkResponse({ type: GameContentListResponseDto })
   listMaps(@Query() query: GameContentListQueryDto) { return this.gameContent.list('map', query); }
 
-  @Get('blueprints/:id') @OptionalAuth() @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=120, stale-while-revalidate=300')
+  @Get('blueprints/:id') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=120, stale-while-revalidate=300')
   @ApiParam({ name: 'id', type: 'string' })
   @ApiOkResponse({ type: GameContentBlueprintDetailDto })
   blueprintDetail(@Param('id') id: string, @Req() req: any) { return this.gameContent.detail('blueprint', id, req.user || null, getClientIp(req)); }
 
-  @Get('maps/:id') @OptionalAuth() @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=120, stale-while-revalidate=300')
+  @Get('maps/:id') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=120, stale-while-revalidate=300')
   @ApiParam({ name: 'id', type: 'string' })
   @ApiOkResponse({ type: GameContentMapDetailDto })
   mapDetail(@Param('id') id: string, @Req() req: any) { return this.gameContent.detail('map', id, req.user || null, getClientIp(req)); }
 
-  @Get('blueprints/:id/code') @OptionalAuth() @RateLimit({ max: 60, window: 60 }) @Header('Cache-Control', 'public, max-age=3600, immutable')
+  @Get('blueprints/:id/code') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 60, window: 60 }) @Header('Cache-Control', 'public, max-age=3600, immutable')
   @ApiOkResponse({ type: GameContentBlueprintCodeDto })
   blueprintCode(@Param('id') id: string, @Req() req: any) { return this.gameContent.blueprintCode(id, req.user || null); }
 
-  @Get('maps/:id/download') @OptionalAuth()
+  @Get('maps/:id/download') @OptionalAuth() @OAuthScopeIfBearer('resource.download')
   @RateLimit({ max: 60, window: 60 })
   mapDownload(@Param('id') id: string) { return this.gameContent.downloadInfo(id); }
 
-  @Get('maps/:id/download/file') @OptionalAuth() @RawHttpResponse() @RateLimit({ max: 30, window: 60 })
+  @Get('maps/:id/download/file') @OptionalAuth() @OAuthScopeIfBearer('resource.download') @RawHttpResponse() @RateLimit({ max: 30, window: 60 })
   async mapDownloadFile(@Param('id') id: string, @Req() req: any, @Res({ passthrough: true }) res: Response) {
     const userAgent = typeof req.headers?.['user-agent'] === 'string' ? req.headers['user-agent'].slice(0, 80) : null;
     const platform = typeof req.headers?.['x-client-platform'] === 'string' ? req.headers['x-client-platform'].slice(0, 40) : null;
@@ -123,10 +124,10 @@ export class GameContentController {
     return new StreamableFile(stream);
   }
 
-  @Get('blueprints/:id/preview') @OptionalAuth() @RawHttpResponse()
+  @Get('blueprints/:id/preview') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RawHttpResponse()
   async blueprintPreview(@Param('id') id: string, @Res() res: Response) { return this.sendPreview('blueprint', id, res); }
 
-  @Get('maps/:id/preview') @OptionalAuth() @RawHttpResponse()
+  @Get('maps/:id/preview') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RawHttpResponse()
   async mapPreview(@Param('id') id: string, @Res() res: Response) { return this.sendPreview('map', id, res); }
 
   private async sendPreview(type: GameResourceType, id: string, res: Response) {
@@ -138,7 +139,7 @@ export class GameContentController {
     return res.send(image);
   }
 
-  @Get('feed') @OptionalAuth() @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+  @Get('feed') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
   @ApiQuery({ name: 'type', required: false, enum: ['featured', 'latest', 'trending', 'all'] })
   @ApiOkResponse({ type: GameContentFeedResponseDto })
   async feed(@Query('type') type = 'all', @Query('limit') limit = '20') {
@@ -173,7 +174,7 @@ export class GameContentController {
     return { sections };
   }
 
-  @Get('search') @OptionalAuth() @RateLimit({ max: 60, window: 60 }) @Header('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
+  @Get('search') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 60, window: 60 }) @Header('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
   @ApiQuery({ name: 'type', required: false, enum: ['all', 'blueprint', 'map'] })
   @ApiOkResponse({ type: GameContentListResponseDto })
   async search(@Query() query: GameContentListQueryDto, @Query('type') type = 'all') {
@@ -203,10 +204,11 @@ export class GameContentController {
     return { data, pagination: { hasMore, nextCursor } };
   }
 
-  @Get('tags') @OptionalAuth() @RateLimit({ max: 60, window: 60 }) @Header('Cache-Control', 'public, max-age=300')
+  @Get('tags') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 60, window: 60 }) @Header('Cache-Control', 'public, max-age=300')
   tags() { return this.gameContent.tags(); }
 
   @Post('blueprints') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 5, window: 3600 })
+  @OAuthScopeDocumentation('resource.upload')
   @ApiBearerAuth('MindAuthBearer')
   @ApiOperation({ summary: 'Submit a blueprint through the existing resource moderation flow' })
   async createBlueprint(@Body() body: CreateBlueprintDto, @Req() req: any) {
@@ -216,6 +218,7 @@ export class GameContentController {
   }
 
   @Post('maps/uploads') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @UseInterceptors(mapFileInterceptor) @RateLimit({ max: 3, window: 3600 })
+  @OAuthScopeDocumentation('resource.upload')
   @ApiBearerAuth('MindAuthBearer')
   @ApiOkResponse({ type: GameContentMapUploadCreatedDto })
   @ApiConsumes('multipart/form-data')
@@ -238,18 +241,19 @@ export class GameContentController {
   }
 
   @Post('maps/uploads/:uploadId/complete') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 5, window: 3600 })
+  @OAuthScopeDocumentation('resource.upload')
   @ApiBearerAuth('MindAuthBearer')
   completeMapUpload(@Param('uploadId') uploadId: string, @Body() body: CompleteMapUploadDto, @Req() req: any) {
     this.assertPhoneVerified(req.user);
     return this.gameContent.completeUpload(req.user.id, 'map', uploadId, body, getClientIp(req));
   }
 
-  @Get('maps/uploads/:uploadId') @UseGuards(GameContentRequiredAuthGuard) @ApiBearerAuth('MindAuthBearer') @ApiOkResponse({ type: GameContentUploadStatusDto })
+  @Get('maps/uploads/:uploadId') @UseGuards(GameContentRequiredAuthGuard) @OAuthScopeDocumentation('resource.upload') @ApiBearerAuth('MindAuthBearer') @ApiOkResponse({ type: GameContentUploadStatusDto })
   uploadSession(@Param('uploadId') uploadId: string, @Req() req: any) {
     return this.gameContent.uploadSessionStatus(req.user.id, uploadId);
   }
 
-  @Get('maps/uploads/:uploadId/preview') @UseGuards(GameContentRequiredAuthGuard) @RawHttpResponse() @ApiBearerAuth('MindAuthBearer')
+  @Get('maps/uploads/:uploadId/preview') @UseGuards(GameContentRequiredAuthGuard) @OAuthScopeDocumentation('resource.upload') @RawHttpResponse() @ApiBearerAuth('MindAuthBearer')
   async uploadSessionPreview(@Param('uploadId') uploadId: string, @Req() req: any, @Res() res: Response) {
     const image = await this.gameContent.uploadSessionPreview(req.user.id, uploadId);
     res.setHeader('Content-Type', 'image/png');
@@ -262,33 +266,39 @@ export class GameContentController {
   }
 
   @Post('blueprints/:id/like') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 60, window: 60 })
+  @OAuthScopeDocumentation('forum.write')
   @ApiBearerAuth('MindAuthBearer')
   likeBlueprint(@Param('id') id: string, @Req() req: any) { this.assertPhoneVerified(req.user); return this.gameContent.toggleLike('blueprint', id, req.user.id, true); }
   @Delete('blueprints/:id/like') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 60, window: 60 })
+  @OAuthScopeDocumentation('forum.write')
   @ApiBearerAuth('MindAuthBearer')
   unlikeBlueprint(@Param('id') id: string, @Req() req: any) { this.assertPhoneVerified(req.user); return this.gameContent.toggleLike('blueprint', id, req.user.id, false); }
   @Post('maps/:id/like') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 60, window: 60 })
+  @OAuthScopeDocumentation('forum.write')
   @ApiBearerAuth('MindAuthBearer')
   likeMap(@Param('id') id: string, @Req() req: any) { this.assertPhoneVerified(req.user); return this.gameContent.toggleLike('map', id, req.user.id, true); }
   @Delete('maps/:id/like') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 60, window: 60 })
+  @OAuthScopeDocumentation('forum.write')
   @ApiBearerAuth('MindAuthBearer')
   unlikeMap(@Param('id') id: string, @Req() req: any) { this.assertPhoneVerified(req.user); return this.gameContent.toggleLike('map', id, req.user.id, false); }
 
   @Post(':type/:id/favorite') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 60, window: 60 })
+  @OAuthScopeDocumentation('forum.write')
   @ApiBearerAuth('MindAuthBearer')
   favorite(@Param('type') type: string, @Param('id') id: string, @Req() req: any) { this.assertPhoneVerified(req.user); return this.gameContent.toggleFavorite(this.parseType(type), id, req.user.id, true); }
   @Delete(':type/:id/favorite') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 60, window: 60 })
+  @OAuthScopeDocumentation('forum.write')
   @ApiBearerAuth('MindAuthBearer')
   unfavorite(@Param('type') type: string, @Param('id') id: string, @Req() req: any) { this.assertPhoneVerified(req.user); return this.gameContent.toggleFavorite(this.parseType(type), id, req.user.id, false); }
   private parseType(value: string): GameResourceType { if (value === 'blueprint' || value === 'map') return value; throw new BadRequestException('无效的资源类型'); }
 
-  @Get('me') @UseGuards(GameContentRequiredAuthGuard)
+  @Get('me') @UseGuards(GameContentRequiredAuthGuard) @OAuthScopeDocumentation('resource.read')
   @ApiBearerAuth('MindAuthBearer')
   me(@Req() req: any) { return this.gameContent.me(req.user); }
-  @Get('me/favorites') @UseGuards(GameContentRequiredAuthGuard)
+  @Get('me/favorites') @UseGuards(GameContentRequiredAuthGuard) @OAuthScopeDocumentation('resource.read')
   @ApiBearerAuth('MindAuthBearer')
   myFavorites(@Req() req: any, @Query('limit') limit?: string) { return this.gameContent.favoritesFor(req.user.id, Number(limit) || 20); }
-  @Get('me/resources') @UseGuards(GameContentRequiredAuthGuard)
+  @Get('me/resources') @UseGuards(GameContentRequiredAuthGuard) @OAuthScopeDocumentation('resource.read')
   @ApiBearerAuth('MindAuthBearer')
   myResources(@Req() req: any, @Query('limit') limit?: string) { return this.gameContent.myResources(req.user.id, Number(limit) || 20); }
 

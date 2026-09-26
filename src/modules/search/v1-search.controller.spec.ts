@@ -7,8 +7,14 @@ jest.mock('@nestjs/common', () => ({
   Req: decorator,
   UseGuards: decorator,
   SetMetadata: decorator,
+  applyDecorators: (...decorators: Array<(...args: any[]) => unknown>) => (...args: any[]) => {
+    for (const apply of decorators) apply(...args);
+  },
 }));
-jest.mock('@nestjs/swagger', () => ({ ApiTags: decorator }));
+jest.mock('@nestjs/swagger', () => ({
+  ApiTags: decorator, ApiBearerAuth: decorator, ApiExtension: decorator,
+  ApiForbiddenResponse: decorator, ApiUnauthorizedResponse: decorator,
+}));
 jest.mock('../../common/guards/jwt-auth.guard', () => ({ JwtAuthGuard: class JwtAuthGuard {} }));
 jest.mock('../../common/guards/oauth-scope.guard', () => ({ OAuthScopeGuard: class OAuthScopeGuard {} }));
 jest.mock('./search.service', () => ({ SearchService: class SearchService {} }));

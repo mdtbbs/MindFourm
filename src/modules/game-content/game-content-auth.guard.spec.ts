@@ -49,4 +49,14 @@ describe('GameContentAuthGuard', () => {
     const guard = new GameContentAuthGuard(auth as any, { assertUserNotBanned: jest.fn() } as any, { getBoolean: jest.fn().mockResolvedValue(true) } as any);
     await expect(guard.canActivate(context({ headers: { authorization: 'Bearer token' }, path: '/v1/game-content/maps', method: 'GET' }))).rejects.toMatchObject({ code: 'INSUFFICIENT_SCOPE' });
   });
+
+  it('keeps public metadata readable with a valid OAuth token that has no resource scope', async () => {
+    const user = { id: 1, phone_verified: true };
+    const auth = { resolveMindAuthBearer: jest.fn().mockResolvedValue({ user, context: { source: 'mindauth_oauth', scopes: [] } }) };
+    const guard = new GameContentAuthGuard(auth as any, { assertUserNotBanned: jest.fn() } as any, { getBoolean: jest.fn().mockResolvedValue(true) } as any);
+    const req = { headers: { authorization: 'Bearer token' }, path: '/v1/game-content/meta', method: 'GET' };
+
+    await expect(guard.canActivate(context(req))).resolves.toBe(true);
+    expect(req.user).toBe(user);
+  });
 });

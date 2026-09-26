@@ -1,7 +1,7 @@
-import { Body, Controller, Delete, HttpStatus, Optional, Param, ParseIntPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, HttpStatus, Optional, Param, ParseIntPipe, Post, Put, Req } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { getClientIp, getClientRegion } from '../../../common/utils/client-context.util';
 import { CreatePostDto } from '../../posts/dto/create-post.dto';
 import { UpdatePostDto } from '../../posts/dto/update-post.dto';
@@ -9,8 +9,6 @@ import { PostsService } from '../../posts/posts.service';
 import { CreateReplyDto } from '../../replies/dto/create-reply.dto';
 import { UpdateReplyDto } from '../../replies/dto/update-reply.dto';
 import { RepliesService } from '../../replies/replies.service';
-import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
 import { SettingsService } from '../../settings/settings.service';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 
@@ -23,8 +21,6 @@ import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 @ApiV1()
 @ApiTags('v1-thread-writes')
 @Controller('v1/threads')
-@UseGuards(JwtAuthGuard, OAuthScopeGuard)
-@RequireOAuthScopes('forum.write')
 export class ThreadWriteV1Controller {
   constructor(
     private readonly posts: PostsService,
@@ -33,6 +29,7 @@ export class ThreadWriteV1Controller {
   ) {}
 
   @Post()
+  @OAuthProtected('forum.write')
   @ApiCreatedResponse({ description: 'Thread created. It can be pending moderation.' })
   async createThread(@Body() dto: CreatePostDto, @Req() req: any) {
     await this.assertWritesEnabled();
@@ -44,6 +41,7 @@ export class ThreadWriteV1Controller {
   }
 
   @Put(':id')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Thread updated by its owner or staff.' })
   async updateThread(
     @Param('id', ParseIntPipe) id: number,
@@ -56,6 +54,7 @@ export class ThreadWriteV1Controller {
   }
 
   @Delete(':id')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Thread soft-deleted by its owner or staff.' })
   async deleteThread(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     await this.assertWritesEnabled();
@@ -64,6 +63,7 @@ export class ThreadWriteV1Controller {
   }
 
   @Post(':id/replies')
+  @OAuthProtected('forum.write')
   @ApiCreatedResponse({ description: 'Reply created. It can be pending moderation.' })
   async createReply(
     @Param('id', ParseIntPipe) threadId: number,
@@ -79,6 +79,7 @@ export class ThreadWriteV1Controller {
   }
 
   @Put(':threadId/replies/:replyId')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Reply updated by its owner or staff.' })
   async updateReply(
     @Param('threadId', ParseIntPipe) _threadId: number,
@@ -92,6 +93,7 @@ export class ThreadWriteV1Controller {
   }
 
   @Delete(':threadId/replies/:replyId')
+  @OAuthProtected('forum.write')
   @ApiOkResponse({ description: 'Reply soft-deleted by its owner or staff.' })
   async deleteReply(
     @Param('threadId', ParseIntPipe) _threadId: number,

@@ -1,16 +1,14 @@
-import { Controller, Get, Param, ParseIntPipe, Query, HttpStatus, Req, UseGuards, Optional } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Query, HttpStatus, Req, Optional } from '@nestjs/common';
 import { ApiTags, ApiOkResponse, ApiQuery } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { ThreadReadAdapterService, V1ThreadDto } from '../thread-read-adapter.service';
 import { PostsService } from '../../posts/posts.service';
 import { QueryThreadsV1Dto } from './query-threads-v1.dto';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { OptionalAuth } from '../../../common/decorators/public.decorator';
 import { LikesService } from '../../likes/likes.service';
 import { BookmarksService } from '../../bookmarks/bookmarks.service';
-import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
+import { OAuthOptionalProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { SearchService } from '../../search/search.service';
 
 @ApiV1()
@@ -27,8 +25,7 @@ export class ThreadsV1Controller {
 
   @Get()
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('forum.read')
+  @OAuthOptionalProtected('forum.read')
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'offset', required: false, type: Number })
   @ApiQuery({ name: 'category_id', required: false, type: Number })
@@ -76,8 +73,7 @@ export class ThreadsV1Controller {
 
   @Get(':id')
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('forum.read')
+  @OAuthOptionalProtected('forum.read')
   @ApiOkResponse({ description: 'Thread detail' })
   async getThread(@Param('id', new ParseIntPipe()) id: number, @Req() req?: any): Promise<V1ThreadDto | unknown> {
     // Existing tests and isolated adapter consumers retain the old minimal form;
@@ -119,8 +115,7 @@ export class ThreadsV1Controller {
 
   @Get(':id/replies')
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('forum.read')
+  @OAuthOptionalProtected('forum.read')
   @ApiOkResponse({ description: 'Independently paginated replies for a published thread.' })
   async getReplies(
     @Param('id', ParseIntPipe) id: number,

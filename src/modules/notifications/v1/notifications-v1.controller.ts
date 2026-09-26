@@ -1,11 +1,9 @@
-import { Controller, Get, Param, ParseIntPipe, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, ParseIntPipe, Put, Query, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { NotificationsService } from '../notifications.service';
 import { QueryPostPageDto } from '../../posts/dto/query-post-lists.dto';
-import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
 import { SettingsService } from '../../settings/settings.service';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { HttpStatus } from '@nestjs/common';
@@ -13,12 +11,11 @@ import { HttpStatus } from '@nestjs/common';
 @ApiV1()
 @ApiTags('v1-notifications')
 @Controller('v1/notifications')
-@UseGuards(JwtAuthGuard, OAuthScopeGuard)
-@RequireOAuthScopes('notification.read')
 export class NotificationsV1Controller {
   constructor(private readonly notifications: NotificationsService, private readonly settings: SettingsService) {}
 
   @Get()
+  @OAuthProtected('notification.read')
   @ApiOkResponse({ description: 'Current user notifications, newest first.' })
   async list(@Req() req: any, @Query() query: QueryPostPageDto) {
     await this.assertEnabled();
@@ -34,9 +31,11 @@ export class NotificationsV1Controller {
   }
 
   @Get('unread-count')
+  @OAuthProtected('notification.read')
   async unreadCount(@Req() req: any) { await this.assertEnabled(); return { count: await this.notifications.getUnreadCount(req.user.id) }; }
 
   @Put(':id/read')
+  @OAuthProtected('notification.read')
   async markRead(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     await this.assertEnabled();
     await this.notifications.markAsRead(id, req.user.id);
@@ -44,6 +43,7 @@ export class NotificationsV1Controller {
   }
 
   @Put('read-all')
+  @OAuthProtected('notification.read')
   async markAllRead(@Req() req: any) {
     await this.assertEnabled();
     await this.notifications.markAllAsRead(req.user.id);

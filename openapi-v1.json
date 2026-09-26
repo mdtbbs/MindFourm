@@ -4,34 +4,62 @@
     "/v1/notifications": {
       "get": {
         "operationId": "NotificationsV1Controller_list",
+        "x-required-scopes": [
+          "notification.read"
+        ],
         "parameters": [],
         "responses": {
           "200": {
             "description": "Current user notifications, newest first."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-notifications"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/notifications/unread-count": {
       "get": {
         "operationId": "NotificationsV1Controller_unreadCount",
+        "x-required-scopes": [
+          "notification.read"
+        ],
         "parameters": [],
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-notifications"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/notifications/{id}/read": {
       "put": {
         "operationId": "NotificationsV1Controller_markRead",
+        "x-required-scopes": [
+          "notification.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -43,60 +71,104 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-notifications"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/notifications/read-all": {
       "put": {
         "operationId": "NotificationsV1Controller_markAllRead",
+        "x-required-scopes": [
+          "notification.read"
+        ],
         "parameters": [],
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-notifications"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/search": {
       "get": {
         "operationId": "SearchV1Controller_unified",
+        "x-required-scopes": [
+          "forum.read"
+        ],
         "parameters": [],
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-search"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/search/posts": {
       "get": {
         "operationId": "SearchV1Controller_posts",
+        "x-required-scopes": [
+          "forum.read"
+        ],
         "parameters": [],
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-search"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/resources": {
       "get": {
         "operationId": "ResourcesV1Controller_listResources",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "limit",
@@ -126,14 +198,26 @@
         "responses": {
           "200": {
             "description": "Public resource list"
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-resources"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "post": {
         "operationId": "ResourcesV1WriteController_create",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -196,6 +280,12 @@
         "responses": {
           "201": {
             "description": "Submitted to the existing resource moderation lifecycle."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -211,6 +301,9 @@
     "/v1/resources/{id}/manifest": {
       "get": {
         "operationId": "ResourcesV1Controller_getManifest",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -224,16 +317,28 @@
         "responses": {
           "200": {
             "description": "Launcher and in-game resource manifest"
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-resources"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/resources/{id}/preview": {
       "get": {
         "operationId": "ResourcesV1Controller_getPreview",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -245,18 +350,27 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-resources"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/resources/{resourceId}/versions/{versionId}/files/{fileId}/download": {
       "get": {
         "operationId": "ResourcesV1Controller_downloadFile",
+        "x-oauth-scopes-if-bearer": [
+          "resource.download"
+        ],
         "parameters": [
           {
             "name": "resourceId",
@@ -284,18 +398,27 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.download"
           }
         },
         "tags": [
           "v1-resources"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/resources/{id}": {
       "get": {
         "operationId": "ResourcesV1Controller_getResource",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -309,16 +432,28 @@
         "responses": {
           "200": {
             "description": "Resource detail"
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-resources"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/resources/drafts/preview": {
       "post": {
         "operationId": "ResourcesV1WriteController_previewDraft",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -353,6 +488,12 @@
         "responses": {
           "201": {
             "description": "A private, short-lived, user-bound parsed resource draft."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -368,6 +509,9 @@
     "/v1/resources/drafts": {
       "post": {
         "operationId": "ResourcesV1WriteController_createUploadDraft",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -395,6 +539,12 @@
         "responses": {
           "201": {
             "description": "Creates a durable owner-bound upload draft in quarantine."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -410,6 +560,9 @@
     "/v1/resources/drafts/{draftId}": {
       "get": {
         "operationId": "ResourcesV1WriteController_getUploadDraft",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "draftId",
@@ -423,6 +576,12 @@
         "responses": {
           "200": {
             "description": "Owner-only draft metadata; quarantine paths are never returned."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -436,6 +595,9 @@
       },
       "patch": {
         "operationId": "ResourcesV1WriteController_updateUploadDraft",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "draftId",
@@ -449,6 +611,12 @@
         "responses": {
           "200": {
             "description": "Updates editable resource draft metadata."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -462,6 +630,9 @@
       },
       "delete": {
         "operationId": "ResourcesV1WriteController_deleteUploadDraft",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "draftId",
@@ -475,6 +646,12 @@
         "responses": {
           "200": {
             "description": "Deletes an owner-bound quarantine draft and its private files."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -490,6 +667,9 @@
     "/v1/resources/drafts/{draftId}/submit": {
       "post": {
         "operationId": "ResourcesV1WriteController_submitUploadDraft",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "draftId",
@@ -503,6 +683,12 @@
         "responses": {
           "201": {
             "description": "Submits an owner-bound resource draft to existing forum moderation."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -518,6 +704,9 @@
     "/v1/resources/drafts/{draftId}/preview": {
       "get": {
         "operationId": "ResourcesV1WriteController_draftPreview",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "draftId",
@@ -531,6 +720,12 @@
         "responses": {
           "200": {
             "description": "Private preview image for the authenticated submitter."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
@@ -591,14 +786,25 @@
     "/v1/uploads/images": {
       "post": {
         "operationId": "UploadsV1Controller_image",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
@@ -714,14 +920,28 @@
     "/v1/me": {
       "get": {
         "operationId": "UsersV1Controller_getMe",
+        "x-required-scopes": [
+          "profile"
+        ],
         "parameters": [],
         "responses": {
           "200": {
             "description": "Authenticated viewer profile with stable first-party fields."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-users"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
@@ -751,6 +971,9 @@
     "/v1/me/profile": {
       "put": {
         "operationId": "UsersV1Controller_updateMe",
+        "x-required-scopes": [
+          "profile"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -763,32 +986,54 @@
           }
         },
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-users"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/me/avatar": {
       "post": {
         "operationId": "UsersV1Controller_uploadAvatar",
+        "x-required-scopes": [
+          "profile"
+        ],
         "parameters": [],
         "responses": {
-          "201": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-users"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/me/bookmarks": {
       "get": {
         "operationId": "BookmarksV1Controller_list",
+        "x-required-scopes": [
+          "forum.read"
+        ],
         "parameters": [
           {
             "name": "page",
@@ -810,16 +1055,30 @@
         "responses": {
           "200": {
             "description": "The current user's bookmarked thread summaries."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-bookmarks"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/messages": {
       "get": {
         "operationId": "MessagesV1Controller_conversations",
+        "x-required-scopes": [
+          "message.read"
+        ],
         "parameters": [
           {
             "name": "cursor",
@@ -845,14 +1104,28 @@
         "responses": {
           "200": {
             "description": "Cursor-paginated direct message conversations."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-messages"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "post": {
         "operationId": "MessagesV1Controller_send",
+        "x-required-scopes": [
+          "message.write"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -867,30 +1140,55 @@
         "responses": {
           "201": {
             "description": "Message sent using the existing block and notification policy."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-messages"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/messages/unread-count": {
       "get": {
         "operationId": "MessagesV1Controller_unreadCount",
+        "x-required-scopes": [
+          "message.read"
+        ],
         "parameters": [],
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-messages"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/messages/{userId}": {
       "get": {
         "operationId": "MessagesV1Controller_conversation",
+        "x-required-scopes": [
+          "message.read"
+        ],
         "parameters": [
           {
             "name": "userId",
@@ -924,16 +1222,30 @@
         "responses": {
           "200": {
             "description": "Cursor-paginated direct conversation. Reading marks incoming messages as read."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-messages"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/reports": {
       "post": {
         "operationId": "ReportsV1Controller_create",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -946,18 +1258,29 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-reports"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/reports/mine": {
       "get": {
         "operationId": "ReportsV1Controller_mine",
+        "x-required-scopes": [
+          "forum.read"
+        ],
         "parameters": [
           {
             "name": "page",
@@ -977,18 +1300,29 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-reports"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/threads": {
       "get": {
         "operationId": "ThreadsV1Controller_listThreads",
+        "x-oauth-scopes-if-bearer": [
+          "forum.read"
+        ],
         "parameters": [
           {
             "name": "category_id",
@@ -1018,14 +1352,26 @@
         "responses": {
           "200": {
             "description": "List of threads"
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：forum.read"
           }
         },
         "tags": [
           "v1-threads"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "post": {
         "operationId": "ThreadWriteV1Controller_createThread",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1040,16 +1386,30 @@
         "responses": {
           "201": {
             "description": "Thread created. It can be pending moderation."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-writes"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/threads/{id}": {
       "get": {
         "operationId": "ThreadsV1Controller_getThread",
+        "x-oauth-scopes-if-bearer": [
+          "forum.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1063,14 +1423,26 @@
         "responses": {
           "200": {
             "description": "Thread detail"
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：forum.read"
           }
         },
         "tags": [
           "v1-threads"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "put": {
         "operationId": "ThreadWriteV1Controller_updateThread",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1094,14 +1466,28 @@
         "responses": {
           "200": {
             "description": "Thread updated by its owner or staff."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-writes"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "delete": {
         "operationId": "ThreadWriteV1Controller_deleteThread",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1115,16 +1501,30 @@
         "responses": {
           "200": {
             "description": "Thread soft-deleted by its owner or staff."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-writes"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/threads/{id}/replies": {
       "get": {
         "operationId": "ThreadsV1Controller_getReplies",
+        "x-oauth-scopes-if-bearer": [
+          "forum.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1138,14 +1538,26 @@
         "responses": {
           "200": {
             "description": "Independently paginated replies for a published thread."
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：forum.read"
           }
         },
         "tags": [
           "v1-threads"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "post": {
         "operationId": "ThreadWriteV1Controller_createReply",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1169,16 +1581,30 @@
         "responses": {
           "201": {
             "description": "Reply created. It can be pending moderation."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-writes"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/threads/{id}/like": {
       "put": {
         "operationId": "ThreadInteractionsV1Controller_like",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1192,14 +1618,28 @@
         "responses": {
           "200": {
             "description": "Thread is liked; safe to repeat."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-interactions"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "delete": {
         "operationId": "ThreadInteractionsV1Controller_unlike",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1213,16 +1653,30 @@
         "responses": {
           "200": {
             "description": "Thread is not liked; safe to repeat."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-interactions"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/threads/{id}/bookmark": {
       "put": {
         "operationId": "ThreadInteractionsV1Controller_bookmark",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1236,14 +1690,28 @@
         "responses": {
           "200": {
             "description": "Thread is bookmarked; safe to repeat."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-interactions"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "delete": {
         "operationId": "ThreadInteractionsV1Controller_removeBookmark",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1257,16 +1725,30 @@
         "responses": {
           "200": {
             "description": "Thread is not bookmarked; safe to repeat."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-interactions"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/threads/{threadId}/replies/{replyId}": {
       "put": {
         "operationId": "ThreadWriteV1Controller_updateReply",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "threadId",
@@ -1298,14 +1780,28 @@
         "responses": {
           "200": {
             "description": "Reply updated by its owner or staff."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-writes"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "delete": {
         "operationId": "ThreadWriteV1Controller_deleteReply",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "threadId",
@@ -1327,16 +1823,30 @@
         "responses": {
           "200": {
             "description": "Reply soft-deleted by its owner or staff."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
           }
         },
         "tags": [
           "v1-thread-writes"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/feedback": {
       "post": {
         "operationId": "FeedbackV1Controller_submit",
+        "x-oauth-scopes-if-bearer": [
+          "forum.write"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -1349,12 +1859,18 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：forum.write"
           }
         },
         "tags": [
           "v1-feedback"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
@@ -1555,6 +2071,9 @@
     "/v1/game-content/blueprints": {
       "get": {
         "operationId": "GameContentController_listBlueprints",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "q",
@@ -1645,14 +2164,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       },
       "post": {
         "operationId": "GameContentController_createBlueprint",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "summary": "Submit a blueprint through the existing resource moderation flow",
         "parameters": [],
         "requestBody": {
@@ -1666,8 +2197,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：resource.upload"
           }
         },
         "tags": [
@@ -1683,6 +2214,9 @@
     "/v1/game-content/maps": {
       "get": {
         "operationId": "GameContentController_listMaps",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "q",
@@ -1773,16 +2307,28 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/blueprints/{id}": {
       "get": {
         "operationId": "GameContentController_blueprintDetail",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1803,16 +2349,28 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/maps/{id}": {
       "get": {
         "operationId": "GameContentController_mapDetail",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1833,16 +2391,28 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/blueprints/{id}/code": {
       "get": {
         "operationId": "GameContentController_blueprintCode",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1863,16 +2433,28 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/maps/{id}/download": {
       "get": {
         "operationId": "GameContentController_mapDownload",
+        "x-oauth-scopes-if-bearer": [
+          "resource.download"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1884,18 +2466,27 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.download"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/maps/{id}/download/file": {
       "get": {
         "operationId": "GameContentController_mapDownloadFile",
+        "x-oauth-scopes-if-bearer": [
+          "resource.download"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1907,18 +2498,27 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.download"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/blueprints/{id}/preview": {
       "get": {
         "operationId": "GameContentController_blueprintPreview",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1930,18 +2530,27 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/maps/{id}/preview": {
       "get": {
         "operationId": "GameContentController_mapPreview",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -1953,18 +2562,27 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/feed": {
       "get": {
         "operationId": "GameContentController_feed",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "type",
@@ -1991,16 +2609,28 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/search": {
       "get": {
         "operationId": "GameContentController_search",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "q",
@@ -2104,30 +2734,51 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/tags": {
       "get": {
         "operationId": "GameContentController_tags",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
         "parameters": [],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
         },
         "tags": [
           "v1-game-content"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
     "/v1/game-content/maps/uploads": {
       "post": {
         "operationId": "GameContentController_beginMapUpload",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -2163,6 +2814,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "需要 OAuth scope：resource.upload"
           }
         },
         "tags": [
@@ -2178,6 +2832,9 @@
     "/v1/game-content/maps/uploads/{uploadId}/complete": {
       "post": {
         "operationId": "GameContentController_completeMapUpload",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "uploadId",
@@ -2199,8 +2856,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：resource.upload"
           }
         },
         "tags": [
@@ -2216,6 +2873,9 @@
     "/v1/game-content/maps/uploads/{uploadId}": {
       "get": {
         "operationId": "GameContentController_uploadSession",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "uploadId",
@@ -2236,6 +2896,9 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "需要 OAuth scope：resource.upload"
           }
         },
         "tags": [
@@ -2251,6 +2914,9 @@
     "/v1/game-content/maps/uploads/{uploadId}/preview": {
       "get": {
         "operationId": "GameContentController_uploadSessionPreview",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
         "parameters": [
           {
             "name": "uploadId",
@@ -2262,8 +2928,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：resource.upload"
           }
         },
         "tags": [
@@ -2279,6 +2945,9 @@
     "/v1/game-content/blueprints/{id}/like": {
       "post": {
         "operationId": "GameContentController_likeBlueprint",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2290,8 +2959,8 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：forum.write"
           }
         },
         "tags": [
@@ -2305,6 +2974,9 @@
       },
       "delete": {
         "operationId": "GameContentController_unlikeBlueprint",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2316,8 +2988,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：forum.write"
           }
         },
         "tags": [
@@ -2333,6 +3005,9 @@
     "/v1/game-content/maps/{id}/like": {
       "post": {
         "operationId": "GameContentController_likeMap",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2344,8 +3019,8 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：forum.write"
           }
         },
         "tags": [
@@ -2359,6 +3034,9 @@
       },
       "delete": {
         "operationId": "GameContentController_unlikeMap",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "id",
@@ -2370,8 +3048,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：forum.write"
           }
         },
         "tags": [
@@ -2387,6 +3065,9 @@
     "/v1/game-content/{type}/{id}/favorite": {
       "post": {
         "operationId": "GameContentController_favorite",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "type",
@@ -2406,8 +3087,8 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：forum.write"
           }
         },
         "tags": [
@@ -2421,6 +3102,9 @@
       },
       "delete": {
         "operationId": "GameContentController_unfavorite",
+        "x-required-scopes": [
+          "forum.write"
+        ],
         "parameters": [
           {
             "name": "type",
@@ -2440,8 +3124,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：forum.write"
           }
         },
         "tags": [
@@ -2457,10 +3141,13 @@
     "/v1/game-content/me": {
       "get": {
         "operationId": "GameContentController_me",
+        "x-required-scopes": [
+          "resource.read"
+        ],
         "parameters": [],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：resource.read"
           }
         },
         "tags": [
@@ -2476,6 +3163,9 @@
     "/v1/game-content/me/favorites": {
       "get": {
         "operationId": "GameContentController_myFavorites",
+        "x-required-scopes": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "limit",
@@ -2487,8 +3177,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：resource.read"
           }
         },
         "tags": [
@@ -2504,6 +3194,9 @@
     "/v1/game-content/me/resources": {
       "get": {
         "operationId": "GameContentController_myResources",
+        "x-required-scopes": [
+          "resource.read"
+        ],
         "parameters": [
           {
             "name": "limit",
@@ -2515,8 +3208,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": ""
+          "403": {
+            "description": "需要 OAuth scope：resource.read"
           }
         },
         "tags": [

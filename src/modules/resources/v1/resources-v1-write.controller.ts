@@ -2,14 +2,12 @@ import {
   BadRequestException, Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Req, Res, UploadedFile,
   UseGuards, UseInterceptors, ValidationPipe,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { unlink } from 'fs/promises';
 import { ApiV1, RawHttpResponse } from '../../../common/decorators/api-v1.decorator';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
-import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
+import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { RateLimit } from '../../../common/decorators/rate-limit.decorator';
 import { assertSafeUploadedFile } from '../../../common/utils/upload-safety.util';
 import { getClientIp } from '../../../common/utils/client-context.util';
@@ -27,9 +25,6 @@ import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourcePreviewDraftInterceptor
 @ApiV1()
 @ApiTags('v1-resource-uploads')
 @Controller('v1/resources')
-@UseGuards(JwtAuthGuard, OAuthScopeGuard)
-@RequireOAuthScopes('resource.upload')
-@ApiBearerAuth('MindAuthBearer')
 export class ResourcesV1WriteController {
   constructor(
     private readonly resources: ResourcesService,
@@ -40,6 +35,7 @@ export class ResourcesV1WriteController {
   ) {}
 
   @Post('drafts/preview')
+  @OAuthProtected('resource.upload')
   @UseInterceptors(resourcePreviewDraftInterceptor)
   @RateLimit({ max: 5, window: 60 })
   @ApiConsumes('multipart/form-data')
@@ -76,6 +72,7 @@ export class ResourcesV1WriteController {
   }
 
   @Post('drafts')
+  @OAuthProtected('resource.upload')
   @UseInterceptors(resourceUploadInterceptor)
   @RateLimit({ max: 5, window: 60 })
   @ApiConsumes('multipart/form-data')
@@ -101,6 +98,7 @@ export class ResourcesV1WriteController {
   }
 
   @Get('drafts/:draftId')
+  @OAuthProtected('resource.upload')
   @ApiParam({ name: 'draftId', type: 'string' })
   @ApiOkResponse({ description: 'Owner-only draft metadata; quarantine paths are never returned.' })
   async getUploadDraft(@Param('draftId') draftId: string, @Req() req: any) {
@@ -109,6 +107,7 @@ export class ResourcesV1WriteController {
   }
 
   @Patch('drafts/:draftId')
+  @OAuthProtected('resource.upload')
   @ApiParam({ name: 'draftId', type: 'string' })
   @ApiOkResponse({ description: 'Updates editable resource draft metadata.' })
   async updateUploadDraft(@Param('draftId') draftId: string, @Body() rawBody: Record<string, any>, @Req() req: any) {
@@ -118,6 +117,7 @@ export class ResourcesV1WriteController {
   }
 
   @Delete('drafts/:draftId')
+  @OAuthProtected('resource.upload')
   @ApiParam({ name: 'draftId', type: 'string' })
   @ApiOkResponse({ description: 'Deletes an owner-bound quarantine draft and its private files.' })
   async deleteUploadDraft(@Param('draftId') draftId: string, @Req() req: any) {
@@ -127,6 +127,7 @@ export class ResourcesV1WriteController {
   }
 
   @Post('drafts/:draftId/submit')
+  @OAuthProtected('resource.upload')
   @ApiParam({ name: 'draftId', type: 'string' })
   @ApiCreatedResponse({ description: 'Submits an owner-bound resource draft to existing forum moderation.' })
   async submitUploadDraft(@Param('draftId') draftId: string, @Body() rawBody: Record<string, any>, @Req() req: any) {
@@ -135,6 +136,7 @@ export class ResourcesV1WriteController {
   }
 
   @Get('drafts/:draftId/preview')
+  @OAuthProtected('resource.upload')
   @RawHttpResponse()
   @ApiParam({ name: 'draftId', type: 'string' })
   @ApiOkResponse({ description: 'Private preview image for the authenticated submitter.' })
@@ -146,6 +148,7 @@ export class ResourcesV1WriteController {
   }
 
   @Post()
+  @OAuthProtected('resource.upload')
   @UseInterceptors(resourceUploadInterceptor)
   @RateLimit({ max: 5, window: 60 })
   @ApiConsumes('multipart/form-data')

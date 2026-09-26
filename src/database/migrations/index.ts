@@ -55,6 +55,7 @@ import { GameContentDurability1720000060000 } from './1720000060000-GameContentD
 import { UpgradeDownloadEvents1720000070000 } from './1720000070000-UpgradeDownloadEvents';
 import { AddCanonicalTiptapContent1720000080000 } from './1720000080000-AddCanonicalTiptapContent';
 import { CreateResourceUploadDrafts1720000090000 } from './1720000090000-CreateResourceUploadDrafts';
+import { AllowUsersWithoutEmail1720000100000 } from './1720000100000-AllowUsersWithoutEmail';
 
 /**
  * Migrations in run order.
@@ -121,4 +122,5 @@ export const migrations = [
   UpgradeDownloadEvents1720000070000,
   AddCanonicalTiptapContent1720000080000,
   CreateResourceUploadDrafts1720000090000,
+  AllowUsersWithoutEmail1720000100000,
 ];

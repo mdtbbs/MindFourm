@@ -30,9 +30,25 @@ try {
   ];
   const missing = required.filter((route) => !paths.includes(route));
   const outsideV1 = paths.filter((route) => route !== '/v1' && !route.startsWith('/v1/'));
+  const securedWithoutScopes = [];
+  for (const [route, operations] of Object.entries(generated.paths || {})) {
+    for (const [method, operation] of Object.entries(operations || {})) {
+      if (!['get', 'post', 'put', 'patch', 'delete'].includes(method)) continue;
+      if (operation.security?.length) {
+        const allowsAnonymous = operation.security.some((requirement) => Object.keys(requirement || {}).length === 0);
+        const scopeMetadata = allowsAnonymous
+          ? operation['x-oauth-scopes-if-bearer']
+          : operation['x-required-scopes'];
+        if (!Array.isArray(scopeMetadata) || !scopeMetadata.length) {
+          securedWithoutScopes.push(`${method.toUpperCase()} ${route}`);
+        }
+      }
+    }
+  }
   if (!paths.length) throw new Error('OpenAPI paths must not be empty');
   if (missing.length) throw new Error(`Required V1 routes missing from OpenAPI: ${missing.join(', ')}`);
   if (outsideV1.length) throw new Error(`Non-V1 paths leaked into the public spec: ${outsideV1.join(', ')}`);
+  if (securedWithoutScopes.length) throw new Error(`OAuth-protected V1 operations need x-required-scopes: ${securedWithoutScopes.join(', ')}`);
   if (JSON.stringify(canonical(committed)) !== JSON.stringify(canonical(generated))) {
     throw new Error('openapi-v1.json has drift; run npm run openapi:export and commit the generated file');
   }

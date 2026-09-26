@@ -1,7 +1,7 @@
-import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req } from '@nestjs/common';
 import { ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { BookmarksService } from '../bookmarks.service';
 
 /**
@@ -14,11 +14,11 @@ import { BookmarksService } from '../bookmarks.service';
 @ApiV1()
 @ApiTags('v1-bookmarks')
 @Controller('v1/me/bookmarks')
-@UseGuards(JwtAuthGuard)
 export class BookmarksV1Controller {
   constructor(private readonly bookmarks: BookmarksService) {}
 
   @Get()
+  @OAuthProtected('forum.read')
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiOkResponse({ description: 'The current user\'s bookmarked thread summaries.' })

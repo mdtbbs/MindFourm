@@ -36,6 +36,7 @@ import { joinMindAuthApiUrl } from './mindauth-url.util';
  */
 const MINDAUTH_TIMEOUT_MS = 8000;
 const mindAuthHttp = axios.create({ timeout: MINDAUTH_TIMEOUT_MS });
+const MINDAUTH_OAUTH_CACHE_TTL_SECONDS = 30;
 
 /**
  * Digest a session token for the audit trail.
@@ -48,6 +49,10 @@ const mindAuthHttp = axios.create({ timeout: MINDAUTH_TIMEOUT_MS });
  */
 function hashSessionToken(sessionToken: string): string {
   return crypto.createHash('sha256').update(sessionToken).digest('hex');
+}
+
+function hashMindAuthBearer(accessToken: string): string {
+  return crypto.createHash('sha256').update(accessToken).digest('hex');
 }
 
 function toMobileAuthUser(user: User) {
@@ -314,8 +319,19 @@ export class AuthService {
   /** Validate opaque MindAuth Bearers with the server-only confidential resource-server client. */
   async resolveMindAuthBearer(accessToken: string): Promise<{ user: User; context: ClientAuthContext }> {
     try {
-      const token = await this.introspectMindAuthToken(accessToken);
+      let token: any;
+      let identity: Awaited<ReturnType<AuthService['getUserInfo']>> | null = null;
+      const cached = await this.readMindAuthBearerCache(accessToken);
+      if (cached) {
+        token = cached.token;
+        identity = cached.identity;
+      } else {
+        token = await this.introspectMindAuthToken(accessToken);
+      }
       if (token?.active !== true || !token.sub || !token.client_id) throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: '访问令牌无效或已过期' });
+      if (token.exp && Number(token.exp) <= Math.floor(Date.now() / 1000)) {
+        throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: '访问令牌无效或已过期' });
+      }
       const scopes = String(token.scope || '').split(/\s+/).filter(Boolean);
       // Existing server-owned Native Auth tokens carry this legacy marker. Keep
       // their Game Content path working while new OAuth clients request explicit
@@ -325,14 +341,15 @@ export class AuthService {
           if (!scopes.includes(legacyScope)) scopes.push(legacyScope);
         }
       }
-      const identity = await this.getUserInfo(accessToken);
+      if (!identity) identity = await this.getUserInfo(accessToken);
       if (!Number.isSafeInteger(identity.id) || identity.id !== Number(token.sub)) {
         throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: 'MindAuth 身份信息不一致' });
       }
+      if (!cached) await this.writeMindAuthBearerCache(accessToken, token, identity);
       let user = await this.usersRepository.findOne({ where: { mindauth_id: identity.id } });
       if (!user) {
-        if (!scopes.includes('profile') || !identity.username || !scopes.includes('email') || !identity.email) {
-          throw new ForbiddenException({ code: 'INSUFFICIENT_SCOPE', message: '首次使用 MDTBBS 需要 profile 和 email scope' });
+        if (!scopes.includes('profile') || !identity.username) {
+          throw new ForbiddenException({ code: 'INSUFFICIENT_SCOPE', message: '首次使用 MDTBBS 需要 profile scope' });
         }
         user = await this.getOrCreateUser(identity);
       } else if (scopes.includes('profile') && identity.username) {
@@ -350,6 +367,57 @@ export class AuthService {
       if (error instanceof UnauthorizedException || error instanceof ForbiddenException) throw error;
       this.logger.warn('MindAuth Bearer introspection failed');
       throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: '访问令牌无效或认证服务暂不可用' });
+    }
+  }
+
+  private async readMindAuthBearerCache(accessToken: string): Promise<{
+    token: { active: boolean; sub: string; client_id: string; scope?: string; client_type?: string; party_type?: string; exp?: number };
+    identity: Awaited<ReturnType<AuthService['getUserInfo']>>;
+  } | null> {
+    if (typeof this.redisService?.get !== 'function') return null;
+    const key = `mindauth:oauth-introspection:${hashMindAuthBearer(accessToken)}`;
+    try {
+      const value = await this.redisService.get(key);
+      if (!value) return null;
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      if (parsed?.token?.active !== true || !parsed.token.sub || !parsed.token.client_id
+        || !Number.isSafeInteger(parsed.identity?.id)) return null;
+      if (parsed.token.exp && Number(parsed.token.exp) <= Math.floor(Date.now() / 1000)) {
+        await this.redisService.del(key).catch(() => undefined);
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  private async writeMindAuthBearerCache(accessToken: string, token: any, identity: Awaited<ReturnType<AuthService['getUserInfo']>>): Promise<void> {
+    if (typeof this.redisService?.set !== 'function') return;
+    const key = `mindauth:oauth-introspection:${hashMindAuthBearer(accessToken)}`;
+    const value = {
+      token: {
+        active: token.active === true,
+        sub: String(token.sub),
+        client_id: String(token.client_id),
+        scope: String(token.scope || ''),
+        ...(token.client_type ? { client_type: token.client_type } : {}),
+        ...(token.party_type ? { party_type: token.party_type } : {}),
+        ...(Number.isFinite(Number(token.exp)) ? { exp: Number(token.exp) } : {}),
+      },
+      identity: {
+        id: identity.id,
+        username: identity.username,
+        email: identity.email,
+        avatar_url: identity.avatar_url,
+        phone_verified: identity.phone_verified,
+        phone_verified_at: identity.phone_verified_at,
+      },
+    };
+    try {
+      await this.redisService.set(key, JSON.stringify(value), MINDAUTH_OAUTH_CACHE_TTL_SECONDS);
+    } catch {
+      // Cache failure must not turn a valid MindAuth bearer into an API error.
     }
   }
 
@@ -384,7 +452,7 @@ export class AuthService {
   async getUserInfo(accessToken: string): Promise<{
     id: number;
     username: string;
-    email: string;
+    email?: string | null;
     avatar_url: string;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;
@@ -401,7 +469,7 @@ export class AuthService {
       return {
         id: Number(response.data.id ?? response.data.sub),
         username: response.data.username ?? response.data.name,
-        email: response.data.email,
+        email: response.data.email || null,
         avatar_url: response.data.avatar_url,
         phone_verified: response.data.phone_verified === true,
         phone_verified_at: response.data.phone_verified_at ?? null,
@@ -426,7 +494,7 @@ export class AuthService {
   async getOrCreateUser(mindauthUser: {
     id: number;
     username: string;
-    email: string;
+    email?: string | null;
     avatar_url: string;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;
@@ -444,7 +512,7 @@ export class AuthService {
       user = this.usersRepository.create({
         mindauth_id: mindauthUser.id,
         username: mindauthUser.username,
-        email: mindauthUser.email,
+        email: mindauthUser.email || null,
         avatar_url: localAvatarUrl,
         role: 'user',
         phone_verified: !!mindauthUser.phone_verified,
@@ -527,7 +595,7 @@ export class AuthService {
     id?: number;
     mindauth_id?: number;
     username?: string;
-    email?: string;
+    email?: string | null;
     avatar_url?: string | null;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;
@@ -650,7 +718,7 @@ export class AuthService {
   private async getUserInfoForPhoneSync(accessToken: string, refreshToken?: string): Promise<{
     id: number;
     username: string;
-    email: string;
+    email?: string | null;
     avatar_url: string;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;

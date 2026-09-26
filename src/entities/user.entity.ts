@@ -30,8 +30,8 @@ export class User {
   @Column({ length: 255 })
   username: string;
 
-  @Column({ length: 255 })
-  email: string;
+  @Column({ length: 255, nullable: true })
+  email: string | null;
 
   @Column({ length: 50, default: 'user' })
   role: string;

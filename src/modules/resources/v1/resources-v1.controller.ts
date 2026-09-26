@@ -1,4 +1,4 @@
-import { Controller, Get, Param, HttpStatus, Query, Res, StreamableFile, NotFoundException, UseGuards, Optional } from '@nestjs/common';
+import { Controller, Get, Param, HttpStatus, Query, Res, StreamableFile, NotFoundException, Optional } from '@nestjs/common';
 import { Response } from 'express';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
@@ -8,11 +8,9 @@ import { ApiV1, RawHttpResponse } from '../../../common/decorators/api-v1.decora
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { OptionalAuth } from '../../../common/decorators/public.decorator';
 import { RateLimit } from '../../../common/decorators/rate-limit.decorator';
-import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { assertSafeRedirectUrl } from '../../../common/utils/safe-url.util';
 import { attachmentContentDisposition } from '../../../common/utils/content-disposition.util';
-import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
-import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
+import { OAuthOptionalProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { ResourcePreviewService } from '../resource-preview.service';
 import { CapabilitiesService } from '../../capabilities/capabilities.service';
 import { ResourceReadAdapterService, V1ResourceDto } from '../resource-read-adapter.service';
@@ -40,8 +38,7 @@ export class ResourcesV1Controller {
 
   @Get()
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('resource.read')
+  @OAuthOptionalProtected('resource.read')
   @ApiOkResponse({ description: 'Public resource list' })
   async listResources(@Query('limit') limit?: string, @Query('offset') offset?: string, @Query('q') query?: string) {
     await this.assertEnabled();
@@ -50,8 +47,7 @@ export class ResourcesV1Controller {
 
   @Get(':id/manifest')
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('resource.read')
+  @OAuthOptionalProtected('resource.read')
   @ApiParam({ name: 'id', type: 'string' })
   @ApiOkResponse({ description: 'Launcher and in-game resource manifest' })
   async getManifest(@Param('id') id: string): Promise<V1ResourceManifest> {
@@ -64,8 +60,7 @@ export class ResourcesV1Controller {
   @Get(':id/preview')
   @RawHttpResponse()
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('resource.read')
+  @OAuthOptionalProtected('resource.read')
   async getPreview(@Param('id') id: string, @Res() res: Response) {
     await this.assertEnabled();
     const resource = await this.resourceReadAdapter.getPublicResourceEntityByPublicId(id);
@@ -79,8 +74,7 @@ export class ResourcesV1Controller {
   @Get(':resourceId/versions/:versionId/files/:fileId/download')
   @RawHttpResponse()
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('resource.download')
+  @OAuthOptionalProtected('resource.download')
   @RateLimit({ max: 60, window: 60 })
   async downloadFile(
     @Param('resourceId') resourceId: string,
@@ -124,8 +118,7 @@ export class ResourcesV1Controller {
 
   @Get(':id')
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
-  @RequireOAuthScopes('resource.read')
+  @OAuthOptionalProtected('resource.read')
   @ApiParam({ name: 'id', type: 'string' })
   @ApiOkResponse({ description: 'Resource detail' })
   async getResource(@Param('id') id: string): Promise<V1ResourceDetail> {
