@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Award,
   FileText,
@@ -35,6 +35,7 @@ function userDisplayName(user: Pick<User, 'id' | 'username'> | UserProfile): str
 }
 
 export default function AdminUsersPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialSearch = searchParams?.get('search') ?? '';
   const initialOpen = Number(searchParams?.get('open') || 0) || null;
@@ -42,8 +43,8 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const currentPage = Number(searchParams?.get('page')) || 1;
   const [search, setSearch] = useState(initialSearch);
   const [searchQuery, setSearchQuery] = useState(initialSearch);
 
@@ -61,7 +62,7 @@ export default function AdminUsersPage() {
     setError(null);
     try {
       const result = await adminApi.getUsers({
-        page,
+        page: currentPage,
         limit: PAGE_SIZE,
         search: searchQuery || undefined,
       });
@@ -72,7 +73,7 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, searchQuery]);
+  }, [currentPage, searchQuery]);
 
   useEffect(() => {
     void fetchUsers();
@@ -142,8 +143,9 @@ export default function AdminUsersPage() {
 
   const submitSearch = (event: React.FormEvent) => {
     event.preventDefault();
-    setSearchQuery(search.trim());
-    setPage(1);
+    const next = search.trim();
+    setSearchQuery(next);
+    router.push(next ? `/admin/users?search=${encodeURIComponent(next)}` : '/admin/users');
   };
 
   const updateRole = async (role: Exclude<UserRole, 'guest'>) => {
@@ -200,7 +202,7 @@ export default function AdminUsersPage() {
               onClick={() => {
                 setSearch('');
                 setSearchQuery('');
-                setPage(1);
+                router.push('/admin/users');
               }}
             >
               清除
@@ -280,7 +282,12 @@ export default function AdminUsersPage() {
         ) : null}
       </div>
 
-      <Pagination currentPage={page} totalPages={totalPages} basePath="/admin/users" />
+      <Pagination
+        currentPage={currentPage}
+        totalPages={totalPages}
+        basePath="/admin/users"
+        queryParams={searchQuery ? { search: searchQuery } : {}}
+      />
 
       {selectedId ? (
         <>
