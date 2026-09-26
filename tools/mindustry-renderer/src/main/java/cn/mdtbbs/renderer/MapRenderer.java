@@ -8,14 +8,18 @@ import arc.graphics.Pixmap;
 import arc.graphics.PixmapIO;
 import arc.util.serialization.JsonReader;
 import arc.util.serialization.JsonValue;
+import arc.util.serialization.Json;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import mindustry.Vars;
 import mindustry.core.Platform;
+import mindustry.core.Version;
 import mindustry.ctype.ContentType;
 import mindustry.game.Schematic;
 import mindustry.game.Schematics;
 import mindustry.io.MapIO;
+import mindustry.io.SaveIO;
+import mindustry.io.SaveMeta;
 import mindustry.maps.Map;
 import mindustry.net.Net;
 import mindustry.world.Block;
@@ -216,6 +220,7 @@ public final class MapRenderer {
 
     private static void renderMap(HttpExchange exchange, Path input, String hash) throws IOException {
         Map map = MapIO.createMap(new Fi(input.toFile()), true);
+        SaveMeta storedMeta = SaveIO.getMeta(new Fi(input.toFile()));
         // In v160.2 this reads the saved preview_map tile graph itself (floor,
         // overlay, blocks and building team colors); it does not depend on the
         // subsequently loaded global World. Keep preview generation before the
@@ -231,16 +236,18 @@ public final class MapRenderer {
         // its tile graph in the bundled runtime.
         boolean tilesLoaded = false;
         try { MapIO.loadMap(map); tilesLoaded = true; } catch (Throwable ignored) { /* header-only map */ }
-        send(exchange, 200, result(mapMetadata(map, tilesLoaded), key));
+        send(exchange, 200, result(mapMetadata(map, tilesLoaded, storedMeta), key));
     }
 
     private static void renderSchematic(HttpExchange exchange, Path input, String hash) throws IOException {
         List<String> unknownBlocks = unknownSchematicBlocks(input);
         Schematic schematic = Schematics.read(new Fi(input.toFile()));
+        byte[] header = Files.readAllBytes(input);
+        int formatVersion = header.length > 4 ? header[4] & 0xff : -1;
         BufferedImage image = renderSchematicImage(schematic);
         String key = previewKey("schematic", hash);
         if (!ImageIO.write(image, "png", target(key).toFile())) throw new IOException("PNG writer unavailable");
-        send(exchange, 200, result(schematicMetadata(schematic, unknownBlocks), key));
+        send(exchange, 200, result(schematicMetadata(schematic, unknownBlocks, formatVersion), key));
     }
 
     static BufferedImage renderSchematicImage(Schematic schematic) {
@@ -267,10 +274,10 @@ public final class MapRenderer {
     /**
      * MapIO exposes the map header and Rules object without exposing the tile
      * grid.  Report only values that come from those objects.  In particular,
-     * build 1 is the default used by older readers when the file carries no
-     * reliable Mindustry build marker, so it is deliberately returned as null.
+     * Runtime defaults are never treated as file metadata. The saved build is
+     * read from SaveMeta.tags and remains null when the file has no such tag.
      */
-    private static String mapMetadata(Map map, boolean tilesLoaded) {
+    static String mapMetadata(Map map, boolean tilesLoaded, SaveMeta storedMeta) {
         mindustry.game.Rules rules = null;
         try { rules = map.rules(); } catch (Throwable ignored) { /* optional map rules */ }
         String planet = rules != null && rules.planet != null ? rules.planet.name : "";
@@ -284,7 +291,8 @@ public final class MapRenderer {
         String bannedBlocks = rules == null ? "[]" : contentNames(rules.bannedBlocks);
         String bannedUnits = rules == null ? "[]" : unitNames(rules.bannedUnits);
         String tileMetadata = mapTileMetadata(map, tilesLoaded);
-        String build = map.build > 1 ? Integer.toString(map.build) : "null";
+        boolean hasStoredBuild = storedMeta != null && storedMeta.tags != null && storedMeta.tags.containsKey("build") && storedMeta.build > 0;
+        String build = hasStoredBuild ? Integer.toString(storedMeta.build) : "null";
         return "{" +
             "\"name\":" + quote(map.tags.get("name", "")) +
             ",\"author\":" + quote(map.tags.get("author", "")) +
@@ -293,7 +301,10 @@ public final class MapRenderer {
             ",\"height\":" + map.height +
             ",\"spawns\":" + map.spawns +
             ",\"version\":" + map.version +
+            ",\"save_format_version\":" + map.version +
             ",\"build\":" + build +
+            ",\"map_build_metadata\":{\"stored_game_build\":" + build + ",\"source\":" + quote(hasStoredBuild ? "file_metadata" : "unknown") + "}" +
+            ",\"parser_runtime\":{\"mindustry_build\":" + Version.build + ",\"renderer_version\":" + quote(VERSION) + "}" +
             ",\"planet\":" + quote(planet) +
             ",\"game_modes\":" + stringArray(mode) +
             ",\"teams\":" + stringArray(teams) +
@@ -350,10 +361,14 @@ public final class MapRenderer {
     }
 
     private static String schematicMetadata(Schematic schematic) {
-        return schematicMetadata(schematic, List.of());
+        return schematicMetadata(schematic, List.of(), -1);
     }
 
     private static String schematicMetadata(Schematic schematic, List<String> unknownBlocks) {
+        return schematicMetadata(schematic, unknownBlocks, -1);
+    }
+
+    static String schematicMetadata(Schematic schematic, List<String> unknownBlocks, int formatVersion) {
         LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
         StringBuilder positions = new StringBuilder("[");
         boolean firstPosition = true;
@@ -400,6 +415,7 @@ public final class MapRenderer {
         float production = finite(schematic.powerProduction());
         float consumption = finite(schematic.powerConsumption());
         float net = finite(production - consumption);
+        MindustryCompatibilityRegistry.Inference compatibility = MindustryCompatibilityRegistry.infer(schematic, unknownBlocks, formatVersion > 0);
         return "{" +
             "\"name\":" + quote(schematic.name()) +
             ",\"description\":" + quote(schematic.description()) +
@@ -419,6 +435,13 @@ public final class MapRenderer {
             ",\"tags\":" + labels +
             ",\"labels\":" + labels +
             ",\"mod_dependencies\":" + stringArray(dependency) +
+            ",\"unknown_content\":" + stringArray(unknownBlocks) +
+            ",\"schematic_format_version\":" + (formatVersion > 0 ? formatVersion : "null") +
+            ",\"parser_runtime\":{\"mindustry_build\":" + Version.build + ",\"renderer_version\":" + quote(VERSION) + "}" +
+            ",\"compatibility\":{\"minimum_supported_build\":" + (compatibility.minimumSupportedBuild() == null ? "null" : compatibility.minimumSupportedBuild())
+                + ",\"source\":" + quote(compatibility.source()) + ",\"confidence\":" + quote(compatibility.confidence()) + "}" +
+            ",\"structure_hash\":" + quote(SchematicFingerprint.exact(schematic)) +
+            ",\"normalized_structure_hash\":" + quote(SchematicFingerprint.normalized(schematic)) +
             "}";
     }
 
@@ -433,8 +456,8 @@ public final class MapRenderer {
     /**
      * Computes a schematic's theoretical, full-load rates from the official
      * v160.2 Block/consumer definitions already loaded by this renderer. The
-     * game stores craft times and continuous consumer values in ticks; convert
-     * them to seconds here so persisted metadata has one stable unit.
+     * game stores craft times in ticks and liquid flow values per tick; convert
+     * those rates to seconds here so persisted metadata has one stable unit.
      */
     static String productionAnalysis(Schematic schematic) {
         return productionAnalysis(schematic, List.of());
@@ -539,7 +562,7 @@ public final class MapRenderer {
                 for (Object stack : arrayField(block, "outputLiquids")) {
                     Object content = field(stack, "liquid");
                     String contentId = stringField(content, "name", "unknown");
-                    addRate(liquids, liquidNames, contentId, localized(content, contentId), numberField(stack, "amount", 0d) * craftsPerSecond, false, 0);
+                    addRate(liquids, liquidNames, contentId, localized(content, contentId), numberField(stack, "amount", 0d) * 60d, false, 0);
                 }
             } else if (separator) {
                 Object[] results = arrayField(block, "results");
@@ -787,8 +810,9 @@ public final class MapRenderer {
 
     private static String configValue(Object config) {
         if (config == null) return "null";
-        if (config instanceof Number || config instanceof Boolean) return String.valueOf(config);
-        return quote(String.valueOf(config));
+        if (config instanceof String) return quote((String)config);
+        try { return new Json().toJson(config); }
+        catch (Throwable ignored) { return quote(String.valueOf(config)); }
     }
 
     private static float finite(float value) { return Float.isFinite(value) ? value : 0f; }
@@ -804,6 +828,17 @@ public final class MapRenderer {
             if (!first) result.append(',');
             first = false;
             result.append(quote(item.trim()));
+        }
+        return result.append(']').toString();
+    }
+
+    private static String stringArray(List<String> values) {
+        StringBuilder result = new StringBuilder("[");
+        boolean first = true;
+        for (String value : values) {
+            if (!first) result.append(',');
+            first = false;
+            result.append(quote(value));
         }
         return result.append(']').toString();
     }

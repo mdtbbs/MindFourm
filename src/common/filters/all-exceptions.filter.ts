@@ -36,6 +36,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         success: false,
         ...(code ? { code } : {}),
         message,
+        ...(typeof exceptionResponse === 'object' && exceptionResponse !== null && (exceptionResponse as any).existing_resource
+          ? { existing_resource: (exceptionResponse as any).existing_resource } : {}),
+        ...(typeof exceptionResponse === 'object' && exceptionResponse !== null && (exceptionResponse as any).existing_resources
+          ? { existing_resources: (exceptionResponse as any).existing_resources } : {}),
       });
       return;
     }
@@ -87,9 +91,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }
       }
 
-      response.status(status).json(
-        apiV1Error(code, typeof message === 'string' ? message : String(message), retryable, details, requestId),
-      );
+      const errorBody = apiV1Error(code, typeof message === 'string' ? message : String(message), retryable, details, requestId);
+      if (structured.existing_resource) (errorBody.error as any).existing_resource = structured.existing_resource;
+      if (structured.existing_resources) (errorBody.error as any).existing_resources = structured.existing_resources;
+      response.status(status).json(errorBody);
       return;
     }
 

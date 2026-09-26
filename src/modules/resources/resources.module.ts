@@ -35,6 +35,7 @@ import { NavigationModule } from '../navigation/navigation.module';
 import { ResourcePreviewService } from './resource-preview.service';
 import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
 import { ResourcesV1WriteController } from './v1/resources-v1-write.controller';
+import { ResourceDuplicateService } from './resource-duplicate.service';
 
 @Module({
   imports: [
@@ -46,8 +47,8 @@ import { ResourcesV1WriteController } from './v1/resources-v1-write.controller';
     NavigationModule,
     TypeOrmModule.forFeature([Resource, ResourceUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription]),
   ],
-  providers: [OAuthScopeGuard, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
   controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController],
-  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourcePreviewService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
 })
 export class ResourcesModule {}

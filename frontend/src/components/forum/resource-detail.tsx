@@ -44,8 +44,6 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     : {};
   const isMap = resource.resource_kind === 'map';
   const isSchematic = resource.resource_kind === 'schematic';
-  const renderedBuild = typeof rendererMetadata.build === 'number' && rendererMetadata.build > 1
-    ? rendererMetadata.build : null;
   const displayTags = [...new Set([
     ...(metadata?.tags || []),
     ...(Array.isArray(rendererMetadata.tags) ? rendererMetadata.tags.filter((item): item is string => typeof item === 'string') : []),
@@ -57,10 +55,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const downloadUrl = resourceApi.download(resource.id);
   const primaryVersion = resource.versions?.[0];
   const primaryChecksum = primaryVersion?.checksum || resource.content_hash;
-  const displayedSupportedVersions = useMemo(() => {
-    if (metadata?.supported_versions?.length) return metadata.supported_versions;
-    return renderedBuild === null ? [] : [`Build ${renderedBuild}`];
-  }, [metadata?.supported_versions, renderedBuild]);
+  const displayedSupportedVersions = metadata?.supported_versions || [];
   const displayedCompatibility = metadata?.compatibility || [];
   const quickFacts = resourceCardFacts(resource).slice(0, 4);
   const downloadExtension = resourceFileExtension(primaryVersion?.file_name || resource.file_name);
@@ -187,7 +182,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             <ResourceGallery title={resource.title} images={gallery} index={galleryIndex} contain={isMap || isSchematic} onSelect={setGalleryIndex} />
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
-                {resource.category_name && <Link href={`/resources?category_id=${resource.category_id}`} className="text-[var(--primary)] hover:underline">{resource.category_name}</Link>}
+                {resource.category_name && <Link href={`/resources?category_id=${resource.category_id}`} className="text-[var(--primary)] hover:underline">专题：{resource.category_name}</Link>}
                 {resource.resource_kind && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{resourceKindLabel(resource.resource_kind)}</span>}
                 {(primaryVersion?.version || resource.version) && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">资源版本 {primaryVersion?.version || resource.version}</span>}
                 <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-[var(--text-secondary)]">{resourceStatusLabel(resource.status)}</span>
@@ -238,6 +233,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         resource={resource}
         supportedVersions={displayedSupportedVersions}
         compatibility={displayedCompatibility}
+        hideVersionSupport={isMap || isSchematic}
         isAuthenticated={isAuthenticated}
         userRating={userRating}
         checksum={primaryChecksum || null}

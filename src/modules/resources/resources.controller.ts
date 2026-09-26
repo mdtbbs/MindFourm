@@ -18,6 +18,7 @@ import {
   BadRequestException,
   NotFoundException,
   ValidationPipe,
+  Redirect,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -52,6 +53,8 @@ import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { ResourcePreviewService } from './resource-preview.service';
+import { RESOURCE_KINDS } from './resource-kind-registry';
+import { ResourceDuplicateService } from './resource-duplicate.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -144,6 +147,7 @@ export class ResourcesController {
     private readonly resourceLifecycleService: ResourceLifecycleService,
     private readonly subscriptionsService: ResourceSubscriptionsService,
     private readonly resourcePreviewService: ResourcePreviewService,
+    private readonly duplicateService: ResourceDuplicateService,
   ) {}
 
   @Get()
@@ -159,6 +163,30 @@ export class ResourcesController {
   @Get('filter-options')
   async getFilterOptions() {
     return this.resourcesService.getFilterOptions();
+  }
+
+  @Get('kinds')
+  async listKinds() {
+    return RESOURCE_KINDS;
+  }
+
+  @Get('topics')
+  async listTopics() {
+    return this.categoryService.getPublicCategories();
+  }
+
+  @Post('duplicates/check')
+  @UseGuards(JwtAuthGuard)
+  async checkDuplicate(@Body() body: { content_hash?: string; structure_hash?: string; normalized_structure_hash?: string; resource_kind?: string; source_url?: string; title?: string }) {
+    if (body.content_hash && !/^[a-f0-9]{64}$/i.test(body.content_hash)) throw new BadRequestException('SHA-256 格式无效');
+    return this.duplicateService.inspect({
+      contentHash: body.content_hash?.toLowerCase(),
+      structureHash: body.structure_hash?.toLowerCase(),
+      normalizedStructureHash: body.normalized_structure_hash?.toLowerCase(),
+      resourceKind: body.resource_kind,
+      sourceUrl: body.source_url,
+      title: body.title,
+    });
   }
 
   @Get('content-metadata')
@@ -238,6 +266,28 @@ export class ResourcesController {
   @Roles('admin', 'moderator')
   async getAdminList(@Query() query: QueryResourcesDto) {
     return this.resourcesService.getList(query, { scope: 'admin' });
+  }
+
+  @Get('admin/:sourceId/merge-preview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async previewMerge(
+    @Param('sourceId', ParseIntPipe) sourceId: number,
+    @Query('target_id', ParseIntPipe) targetId: number,
+  ) {
+    return this.resourcesService.previewResourceMerge(sourceId, targetId);
+  }
+
+  @Post('admin/:sourceId/merge')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async mergeResource(
+    @Param('sourceId', ParseIntPipe) sourceId: number,
+    @Body() body: { target_id: number },
+    @Req() req: any,
+  ) {
+    if (!Number.isInteger(Number(body.target_id)) || Number(body.target_id) <= 0) throw new BadRequestException('目标资源 ID 无效');
+    return this.resourcesService.mergeResource(sourceId, Number(body.target_id), Number(req.user.id));
   }
 
   @Get('my')
@@ -320,9 +370,12 @@ export class ResourcesController {
   }
 
   @Get(':id')
+  @Redirect()
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
   async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const canonicalId = await this.resourcesService.findMergedResourceTarget(id);
+    if (canonicalId) return { url: `/api/resources/${canonicalId}`, statusCode: 301 };
     return this.resourcesService.getByIdWithVersions(id, req?.user);
   }
 
@@ -422,6 +475,7 @@ export class ResourcesController {
         forbidNonWhitelisted: true,
         transform: true,
       }).transform(rawBody, { type: 'body', metatype: CreateResourceDto });
+      const idempotencyKey = req.headers?.['idempotency-key'];
       const schematicCode = body.schematic_code?.trim();
       const previewDraftId = body.preview_draft_id?.trim();
       if (body.resource_type === 'external' && file) {
@@ -446,6 +500,8 @@ export class ResourcesController {
       const resource = await this.resourcesService.create(body, userId, storedFile, {
         ipAddress: getClientIp(req),
         rendererDraft,
+        idempotencyKey,
+        idempotencyPayload: body,
       });
       await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });
       return resource;

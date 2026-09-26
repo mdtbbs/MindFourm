@@ -1,5 +1,6 @@
-import { IsOptional, IsNumber, IsString, Max, Min, MaxLength } from 'class-validator';
+import { IsOptional, IsNumber, IsString, IsIn, Max, Min, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
+import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
 
 export class QueryResourcesDto {
   @IsOptional()
@@ -72,6 +73,7 @@ export class QueryResourcesDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(RESOURCE_KIND_VALUES)
   @MaxLength(50)
   resource_kind?: string;
 

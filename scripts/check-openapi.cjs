@@ -25,7 +25,9 @@ try {
   const paths = Object.keys(generated.paths || {});
   const required = [
     '/v1/capabilities', '/v1/me', '/v1/threads', '/v1/threads/{id}',
-    '/v1/threads/{id}/replies', '/v1/resources', '/v1/resources/{id}/manifest',
+    '/v1/threads/{id}/replies', '/v1/resources', '/v1/resources/kinds',
+    '/v1/resources/topics', '/v1/resources/drafts/preview', '/v1/resources/drafts',
+    '/v1/resources/drafts/{draftId}/submit', '/v1/resources/{id}/manifest',
     '/v1/notifications', '/v1/messages',
   ];
   const missing = required.filter((route) => !paths.includes(route));

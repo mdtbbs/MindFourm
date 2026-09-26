@@ -22,12 +22,14 @@ const MINDAUTH_BASE = process.env.NEXT_PUBLIC_MINDAUTH_URL || 'http://localhost:
 class ApiRequestError extends Error {
   status: number;
   code?: string;
+  existingResource?: { id: number | null; public_id?: string | null; title: string; status: string; url: string } | null;
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource']) {
     super(message);
     this.name = 'ApiRequestError';
     this.status = status;
     this.code = code;
+    this.existingResource = existingResource;
   }
 }
 
@@ -273,10 +275,13 @@ async function request<T>(
   if (!res.ok) {
     let message = `Request failed: ${res.status}`;
     let code: string | undefined;
+    let existingResource: ApiRequestError['existingResource'];
     try {
       const data = await res.json();
-      if (data?.message) message = data.message;
-      if (data?.code) code = data.code;
+      const errorBody = data?.error || data;
+      if (errorBody?.message) message = errorBody.message;
+      if (errorBody?.code) code = errorBody.code;
+      existingResource = errorBody?.existing_resource || errorBody?.details?.[0]?.existing_resource;
     } catch {
       // Response body is not JSON, use default message
     }
@@ -290,7 +295,7 @@ async function request<T>(
       }
     }
 
-    throw new ApiRequestError(message, res.status, code);
+    throw new ApiRequestError(message, res.status, code, existingResource);
   }
 
   let data: unknown;
@@ -1157,6 +1162,10 @@ export const messageApi = {
 
 // Resource APIs
 export const resourceApi = {
+  checkDuplicate: (input: { content_hash?: string; structure_hash?: string; normalized_structure_hash?: string; resource_kind?: string; source_url?: string; title?: string }) =>
+    request<{ exact: boolean; structure: boolean; normalized: boolean; existing_resources: Array<{ id: number | null; public_id: string | null; title: string; status: string; url: string }>; similar_resources?: Array<{ id: number | null; public_id: string | null; title: string; status: string; url: string }> }>('/api/resources/duplicates/check', {
+      method: 'POST', body: JSON.stringify(input), skipCache: true,
+    }),
   getFilterOptions: () => request<{ supported_versions: string[]; compatibility: string[]; planets: string[] }>('/api/resources/filter-options'),
   list: (params?: { cursor?: string; limit?: number; category_id?: number; search?: string; sort?: string; tag?: string; supported_version?: string; compatibility?: string; resource_kind?: string; planet?: string; block?: string; width?: number; height?: number }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
@@ -1172,13 +1181,14 @@ export const resourceApi = {
     request<Resource[]>(`/api/resources/${id}/related?limit=${limit}`),
   download: (id: number, versionId?: number | null) =>
     `${API_BASE}/api/resources/${id}/download${versionId ? `?version_id=${versionId}` : ''}`,
-  upload: (formData: FormData) =>
+  upload: (formData: FormData, idempotencyKey?: string) =>
     request<Resource>('/api/resources', {
       method: 'POST',
       body: formData,
+      ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {}),
     }),
   previewDraft: (formData: FormData) =>
-    request<{ id: string; preview_url: string; metadata: Record<string, unknown> | null; parser_version: string | null; expires_at: string }>('/api/resources/drafts/preview', {
+    request<{ id: string; preview_url: string; metadata: Record<string, unknown> | null; parser_version: string | null; expires_at: string; duplicate: { exact: boolean; structure: boolean; normalized: boolean; existing_resources: Array<{ id: number | null; public_id: string | null; title: string; status: string; url: string }>; similar_resources?: Array<{ id: number | null; public_id: string | null; title: string; status: string; url: string }> } | null }>('/api/resources/drafts/preview', {
       method: 'POST',
       body: formData,
     }),
@@ -1300,6 +1310,22 @@ export const resourceAdminApi = {
   delete: (id: number) => {
     clearCache();
     return request<void>(`/api/resources/${id}/admin`, { method: 'DELETE' });
+  },
+  previewMerge: (sourceId: number, targetId: number) =>
+    request<{
+      source: { id: number; title: string; status: string };
+      target: { id: number; title: string; status: string };
+      source_counts: Record<string, number>;
+      target_counts: Record<string, number>;
+      version_name_collisions: number;
+      policy: Record<string, string>;
+    }>(`/api/resources/admin/${sourceId}/merge-preview?target_id=${targetId}`),
+  merge: (sourceId: number, targetId: number) => {
+    clearCache();
+    return request<{ source_id: number; target_id: number; status: string; migrated_counts: Record<string, number> }>(`/api/resources/admin/${sourceId}/merge`, {
+      method: 'POST',
+      body: JSON.stringify({ target_id: targetId }),
+    });
   },
 };
 

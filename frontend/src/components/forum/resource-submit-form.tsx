@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { ClipboardPaste, ExternalLink, Loader2, Map, Upload } from 'lucide-react';
@@ -44,6 +44,11 @@ export default function ResourceSubmitForm() {
   const [schematicCode, setSchematicCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkingFileDuplicates, setCheckingFileDuplicates] = useState(false);
+  const [duplicateNotice, setDuplicateNotice] = useState<{ exact: boolean; existing_resources: Array<{ id: number | null; title: string; url: string }>; similar_resources?: Array<{ id: number | null; title: string; url: string }> } | null>(null);
+  const submissionKey = useRef<{ fingerprint: string; key: string } | null>(null);
+  const fileHash = useRef<{ file: File; hash: string } | null>(null);
+  const duplicateCheckSequence = useRef(0);
   const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
   const draft = useDraft('resource');
   const saveDraft = draft.save;
@@ -110,6 +115,32 @@ export default function ResourceSubmitForm() {
     if (isForumManagedKind && resourceType !== 'upload') setResourceType('upload');
   }, [isForumManagedKind, resourceType]);
 
+  const checkSelectedFile = async (selectedFile: File | null) => {
+    const sequence = ++duplicateCheckSequence.current;
+    fileHash.current = null;
+    setDuplicateNotice(null);
+    setError(null);
+    if (!selectedFile) {
+      setCheckingFileDuplicates(false);
+      return;
+    }
+    setCheckingFileDuplicates(true);
+    try {
+      const digest = await crypto.subtle.digest('SHA-256', await selectedFile.arrayBuffer());
+      const hash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      if (sequence !== duplicateCheckSequence.current) return;
+      fileHash.current = { file: selectedFile, hash };
+      const duplicate = await resourceApi.checkDuplicate({ content_hash: hash, resource_kind: resourceKind, title: title.trim() });
+      if (sequence !== duplicateCheckSequence.current) return;
+      setDuplicateNotice(duplicate);
+      if (duplicate.exact) setError('这个文件已经提交过了。请先查看已有资源；如资源归属有误，请联系管理处理。');
+    } catch (cause) {
+      if (sequence === duplicateCheckSequence.current) setError(cause instanceof Error ? cause.message : '无法检查文件是否重复');
+    } finally {
+      if (sequence === duplicateCheckSequence.current) setCheckingFileDuplicates(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -167,11 +198,37 @@ export default function ResourceSubmitForm() {
         formData.append('file', file);
       }
 
-      const resource = await resourceApi.upload(formData);
+      let contentHash: string | undefined;
+      if (file) {
+        if (fileHash.current?.file === file) contentHash = fileHash.current.hash;
+        else {
+          const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+          contentHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+        }
+      }
+      const duplicate = await resourceApi.checkDuplicate({
+        ...(contentHash ? { content_hash: contentHash } : {}),
+        resource_kind: resourceKind,
+        ...(resourceType === 'external' ? { source_url: externalUrl.trim() } : {}),
+        title: title.trim(),
+      });
+      setDuplicateNotice(duplicate);
+      if (duplicate.exact) {
+        setError('检测到相同文件或来源的资源。请先查看已有资源，避免重复提交。');
+        return;
+      }
+      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), categoryId, isPublic });
+      if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
+        submissionKey.current = { fingerprint, key: crypto.randomUUID() };
+      }
+
+      const resource = await resourceApi.upload(formData, submissionKey.current.key);
       draft.clear();
       showSuccess('资源提交成功！');
       router.push(`/resources/${resource.id}`);
     } catch (err) {
+      const existingResource = (err as { existingResource?: { id: number | null; title: string; url: string } | null }).existingResource;
+      if (existingResource) setDuplicateNotice({ exact: true, existing_resources: [existingResource] });
       setError(err instanceof Error ? err.message : '提交失败');
     } finally {
       setIsSubmitting(false);
@@ -200,6 +257,10 @@ export default function ResourceSubmitForm() {
           {error}
         </div>
       )}
+      {duplicateNotice && (duplicateNotice.exact || duplicateNotice.similar_resources?.length) && <div className={`rounded-[var(--radius)] border p-3 text-sm ${duplicateNotice.exact ? 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200' : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'}`}>
+        <p className="font-medium">{duplicateNotice.exact ? '发现重复资源' : '发现标题或来源相近的资源'}</p>
+        <ul className="mt-2 space-y-1">{[...duplicateNotice.existing_resources, ...(duplicateNotice.similar_resources || [])].map((item) => <li key={`${item.id}-${item.title}`}><a className="underline underline-offset-2" href={item.url || `/resources/${item.id}`} target="_blank" rel="noreferrer">{item.title} · #{item.id}</a></li>)}</ul>
+      </div>}
 
       {!isForumManagedKind ? (
         <div className="space-y-2">
@@ -280,7 +341,7 @@ export default function ResourceSubmitForm() {
       )}
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-[var(--text-secondary)]">资源分类 *</label>
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">资源类型 *</label>
         <select
           value={resourceKind}
           onChange={(event) => {
@@ -337,7 +398,7 @@ export default function ResourceSubmitForm() {
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">分类</label>
+        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">专题 / 用途</label>
         <select
           data-testid="resource-category-select"
           value={categoryId ?? ''}
@@ -353,6 +414,7 @@ export default function ResourceSubmitForm() {
               </option>
             ))}
         </select>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">专题用于说明玩法或用途，不会改变资源类型。</p>
       </div>
 
       <div className="space-y-2">
@@ -433,7 +495,7 @@ export default function ResourceSubmitForm() {
               data-testid="resource-file-input"
               type="file"
               accept={resourceKind === 'map' ? '.msav' : resourceKind === 'schematic' ? '.msch' : '.zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif'}
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              onChange={(e) => { const selectedFile = e.target.files?.[0] || null; setFile(selectedFile); void checkSelectedFile(selectedFile); }}
               className="hidden"
             />
           </label>
@@ -467,12 +529,12 @@ export default function ResourceSubmitForm() {
         <button
           data-testid="resource-submit-button"
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || checkingFileDuplicates || Boolean(duplicateNotice?.exact)}
           className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {resourceType === 'external' ? <ExternalLink className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-          {isSubmitting ? '提交中...' : '提交资源'}
+          {checkingFileDuplicates ? '正在检查文件…' : isSubmitting ? '提交中...' : '提交资源'}
         </button>
         {draft.lastSavedAt && hasDraftContent && (
           <span className="self-center text-xs text-[var(--text-muted)]">已保存到此设备</span>

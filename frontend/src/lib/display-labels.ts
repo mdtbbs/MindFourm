@@ -24,17 +24,7 @@ export function resourceTypeLabel(type?: string | null): string {
   return RESOURCE_TYPE_LABELS[type] || type;
 }
 
-export const RESOURCE_KINDS = [
-  { value: "mod", label: "Mod", showInNavigation: true },
-  { value: "map", label: "地图", showInNavigation: true },
-  { value: "schematic", label: "蓝图", showInNavigation: true },
-  { value: "save", label: "存档", showInNavigation: false },
-  { value: "game_version", label: "游戏版本", showInNavigation: false },
-  { value: "server_plugin", label: "服务器插件", showInNavigation: false },
-  { value: "development_tool", label: "工具", showInNavigation: true },
-  { value: "texture_ui", label: "材质与界面", showInNavigation: false },
-  { value: "other", label: "其他", showInNavigation: false },
-] as const;
+export const RESOURCE_KINDS = resourceKinds;
 
 export const RESOURCE_KIND_LABELS: Record<string, string> = Object.fromEntries(
   RESOURCE_KINDS.map(({ value, label }) => [value, label]),
@@ -44,3 +34,4 @@ export function resourceKindLabel(kind?: string | null): string {
   if (!kind) return "资源";
   return RESOURCE_KIND_LABELS[kind] || "其他";
 }
+import resourceKinds from '../../../src/common/resource-kinds.json';

@@ -115,6 +115,7 @@ import { ServiceAccount } from './service-account.entity';
 import { ContentRelation } from './content-relation.entity';
 import { DownloadEvent } from './download-event.entity';
 import { GameContentUploadSession } from './game-content-upload-session.entity';
+import { ResourceSubmissionIdempotency } from './resource-submission-idempotency.entity';
 
 /** Base forum, content and shared platform entities. */
 export const coreEntities = [
@@ -131,6 +132,7 @@ export const coreEntities = [
   Attachment,
   Resource,
   ResourceUploadDraft,
+  ResourceSubmissionIdempotency,
   ResourceCategory,
   ResourceVersion,
   PostLike,

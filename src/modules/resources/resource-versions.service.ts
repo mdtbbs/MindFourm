@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { Resource } from '@entities/resource.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
-import { ResourceFileMeta } from './resources.service';
+import { ResourceFileMeta, ResourcesService } from './resources.service';
+import { ResourceDuplicateService } from './resource-duplicate.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -17,6 +18,8 @@ export class ResourceVersionService {
     private versionRepository: Repository<ResourceVersion>,
     @InjectRepository(Resource)
     private resourceRepository: Repository<Resource>,
+    private readonly resourcesService: ResourcesService,
+    private readonly duplicateService: ResourceDuplicateService,
   ) {}
 
   private normalizeVersion(version: ResourceVersion) {
@@ -85,6 +88,18 @@ export class ResourceVersionService {
       throw new BadRequestException('该版本已存在');
     }
 
+    const duplicate = await this.duplicateService.inspect({
+      contentHash: file.content_hash,
+      resourceKind: resource.resource_kind,
+      sourceUrl: resource.source_url,
+      title: resource.title,
+    });
+    if (duplicate.exact) throw new ConflictException({
+      code: 'RESOURCE_DUPLICATE',
+      message: '这个文件已经提交过了。',
+      existing_resource: duplicate.existing_resources[0],
+    });
+
     const content = dto.content?.trim() || undefined;
     const version = this.versionRepository.create({
       resource_id: dto.resource_id,
@@ -104,29 +119,31 @@ export class ResourceVersionService {
       content_html: content ? parseMarkdown(content) : undefined,
     });
 
-    const saved = await this.versionRepository.save(version);
-    await this.versionRepository.manager.save(ResourceFile, {
-      public_id: randomUUID(),
-      resource_version_id: saved.id,
-      role: 'primary',
-      delivery_mode: 'managed',
-      original_filename: file.file_name,
-      mime_type: file.mime_type,
-      size_bytes: file.file_size,
-      hash_algorithm: 'sha256',
-      content_hash: file.content_hash,
-      integrity_status: 'verified',
-      storage_backend: 'local',
-      storage_key: file.file_path,
-      external_url: null,
-      availability_status: 'available',
-      sort_order: 0,
+    const saved = await this.versionRepository.manager.transaction(async (manager) => {
+      await this.resourcesService.claimResourceVersionHash(manager, file.content_hash, resource.id);
+      const created = await manager.save(ResourceVersion, version);
+      await manager.save(ResourceFile, {
+        public_id: randomUUID(),
+        resource_version_id: created.id,
+        role: 'primary',
+        delivery_mode: 'managed',
+        original_filename: file.file_name,
+        mime_type: file.mime_type,
+        size_bytes: file.file_size,
+        hash_algorithm: 'sha256',
+        content_hash: file.content_hash,
+        integrity_status: 'verified',
+        storage_backend: 'local',
+        storage_key: file.file_path,
+        external_url: null,
+        availability_status: 'available',
+        sort_order: 0,
+      });
+      // Any new binary changes the reviewed release surface. Keep the whole
+      // resource unavailable until staff approves this version again.
+      if (resource.status === 'approved') await manager.update(Resource, resource.id, { status: 'pending' });
+      return created;
     });
-    // Any new binary changes the reviewed release surface. Keep the whole
-    // resource unavailable until staff approves this version again.
-    if (resource.status === 'approved') {
-      await this.resourceRepository.update(resource.id, { status: 'pending' });
-    }
     return this.normalizeVersion(saved);
   }
 
@@ -165,5 +182,6 @@ export class ResourceVersionService {
 
     await this.deleteStoredFile(version.file_path);
     await this.versionRepository.delete(id);
+    if (version.content_hash) await this.resourcesService.releaseContentHashClaim(version.content_hash);
   }
 }

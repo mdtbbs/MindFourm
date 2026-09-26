@@ -141,6 +141,8 @@ function createService(overrides: {
   resourceRepository?: Record<string, jest.Mock>;
   categoryService?: Partial<Record<keyof ResourceCategoryService, jest.Mock>>;
   contentSafety?: { assess: jest.Mock; recordFlag: jest.Mock };
+  transactionManager?: Record<string, any>;
+  dataSource?: Record<string, jest.Mock>;
 } = {}) {
   const defaultQb = {
     where: jest.fn().mockReturnThis(),
@@ -180,11 +182,13 @@ function createService(overrides: {
       if (Array.isArray(value)) return value;
       return { id: 1, ...(value as Record<string, unknown>) };
     }),
+    ...overrides.transactionManager,
   };
   const dataSource = {
     query: jest.fn().mockResolvedValue([]),
     transaction: jest.fn().mockImplementation(async (callback: (manager: typeof transactionManager) => unknown) =>
       callback(transactionManager)),
+    ...overrides.dataSource,
   };
   const contentSafety = overrides.contentSafety;
 
@@ -213,6 +217,68 @@ function createService(overrides: {
     defaultQb,
   };
 }
+
+describe('ResourcesService - admin merge', () => {
+  it('moves published collision attachments to the canonical version, preserves interactions, and records the merge', async () => {
+    const source = {
+      id: 11, status: 'published', is_public: 1, title: 'Source', metadata_json: { tags: ['source'] },
+      rating_count: 1, rating_sum: 4, download_count: 10, view_count: 20,
+      merged_into_resource_id: null, file_path: null, content_hash: null, mfl_file_id: null, external_url: null,
+    };
+    const target = {
+      id: 12, status: 'published', is_public: 1, title: 'Canonical', metadata_json: { tags: ['target'] },
+      rating_count: 1, rating_sum: 5, download_count: 3, view_count: 7,
+      merged_into_resource_id: null, file_path: null, content_hash: null, mfl_file_id: null, external_url: null,
+    };
+    const tables = [
+      'resource_comments', 'resource_favorites', 'resource_likes', 'resource_ratings', 'resource_subscriptions',
+      'resource_attributions', 'resource_versions', 'resource_files', 'download_events', 'resource_version_dependencies',
+      'resource_version_compatibilities', 'content_relations', 'knowledge_articles', 'game_content_upload_sessions',
+      'resource_media_links', 'resource_content_hash_claims', 'resource_structure_hash_claims', 'resources',
+    ].map((table_name) => ({ table_name }));
+    const versionSelects: number[] = [];
+    const manager = {
+      query: jest.fn(async (sql: string, params: any[] = []) => {
+        if (sql.includes('SELECT * FROM resources WHERE id IN')) return [source, target];
+        if (sql.includes('information_schema.tables')) return tables;
+        if (sql.includes('SELECT id, version, status FROM resource_versions WHERE resource_id = ? ORDER BY id')) {
+          versionSelects.push(Number(params[0]));
+          return [{ id: 101, version: '1.0.0', status: 'published' }, { id: 102, version: '2.0.0', status: 'published' }];
+        }
+        if (sql.includes('SELECT id, version, status FROM resource_versions WHERE resource_id = ?')) {
+          versionSelects.push(Number(params[0]));
+          return [{ id: 201, version: '1.0.0', status: 'published' }];
+        }
+        if (sql.includes('SELECT COUNT(*)') && sql.includes('COALESCE(SUM(rating)')) return [{ count: 2, total: 9 }];
+        if (sql.includes('SELECT COUNT(*)')) return [{ count: 1 }];
+        return { affectedRows: 1 };
+      }),
+      createQueryBuilder: jest.fn(() => ({
+        update: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      })),
+    };
+    const { service } = createService({
+      transactionManager: manager,
+      dataSource: { transaction: jest.fn((callback: (manager: any) => unknown) => callback(manager)) },
+    });
+
+    const result = await service.mergeResource(11, 12, 99);
+
+    expect(versionSelects).toEqual([11, 12]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_comments SET resource_id = ?'), [12, 11]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_files'), [201, 101]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE download_events SET version_id = ?'), [201, 101]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining("status = 'merged'"), [12, 11]);
+    expect(result).toMatchObject({ source_id: 11, target_id: 12, status: 'merged', migrated_counts: { version_collisions: 1 } });
+    expect(result.version_collision_mappings).toEqual([{ source_version_id: 101, target_version_id: 201, attachments_migrated: true }]);
+    const log = manager.query.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO resource_merge_logs'));
+    expect(JSON.parse(log[1][3])).toMatchObject({
+      preview_counts: expect.any(Object),
+      version_collision_mappings: [{ source_version_id: 101, target_version_id: 201, attachments_migrated: true }],
+    });
+  });
+});
 
 describe('ResourcesService - Public Visibility', () => {
   it('records high-risk resource submissions for moderation audit', async () => {

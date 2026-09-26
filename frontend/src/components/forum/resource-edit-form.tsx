@@ -131,7 +131,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">分类</label>
+        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">专题 / 用途</label>
         <select
           value={categoryId ?? ''}
           onChange={(e) => setCategoryId(e.target.value ? parseInt(e.target.value, 10) : null)}

@@ -11,7 +11,7 @@ import { resolveBrand } from '@/lib/theme/brand';
 import {
   LayoutDashboard, Settings, Megaphone, Palette, Search, FileText, Tag,
   AlertTriangle, Flag, BellRing, FileCheck, Clock, Ban, Trash2, FolderTree, Users, ScrollText,
-  Package, AlertCircle, FolderOpen, ToggleLeft, Mail, KeyRound, FileEdit,
+  Package, AlertCircle, FolderOpen, ToggleLeft, Mail, KeyRound, FileEdit, GitMerge,
   UsersRound, Coins, Puzzle, TrendingUp, Award, ShoppingBag, PanelLeft, Gauge
 } from 'lucide-react';
 import AdminGuard from '@/components/admin/admin-guard';
@@ -88,6 +88,7 @@ const navGroups: SidebarGroup[] = [
       { key: 'resources', label: '资源管理', icon: <Package size={16} />, href: '/admin/resources', roles: ['admin', 'moderator'] },
       { key: 'resources-moderation', label: '资源审批', icon: <AlertCircle size={16} />, href: '/admin/resources/moderation', roles: ['admin', 'moderator'] },
       { key: 'resource-categories', label: '类别管理', icon: <FolderOpen size={16} />, href: '/admin/resources/categories', roles: ['admin'] },
+      { key: 'resource-merge', label: '重复资源合并', icon: <GitMerge size={16} />, href: '/admin/resources/merge', roles: ['admin'] },
     ],
   },
 ];

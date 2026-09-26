@@ -33,10 +33,10 @@ export default function ContentNavigation({
           <span>{section.label}</span><ChevronDown className={`h-3.5 w-3.5 transition-transform duration-[var(--motion-fast)] ${isCollapsed ? '-rotate-90' : ''}`} />
         </button> : <h2 className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{section.label}</h2>)}
         {!isCollapsed && <div className="space-y-0.5">{section.items.map((item, index) => {
-          const active = item.id.startsWith('resource-category-')
-            ? pathname === '/resources' && search.get('category_id') === item.href.split('category_id=')[1]
+          const active = item.id.startsWith('resource-kind-')
+            ? pathname === '/resources' && search.get('resource_kind') === item.href.split('resource_kind=')[1]
             : item.id === 'all-resources'
-              ? pathname === '/resources' && !search.get('category_id')
+              ? pathname === '/resources' && !search.get('resource_kind')
               : item.href === '/' ? pathname === '/' : pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon ? getIconComponent(item.icon) : null;
           const startsGroup = item.groupLabel && section.items[index - 1]?.groupLabel !== item.groupLabel;

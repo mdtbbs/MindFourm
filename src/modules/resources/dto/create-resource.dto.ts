@@ -3,6 +3,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TiptapDocumentDto } from '../../../common/dto/tiptap-document.dto';
+import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
 
 export class CreateResourceCompatibilityDto {
   @IsOptional()
@@ -36,7 +37,7 @@ export class CreateResourceDto {
 
   /** Classification is intentionally distinct from upload/external delivery. */
   @IsOptional()
-  @IsIn(['mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'other'])
+  @IsIn(RESOURCE_KIND_VALUES)
   resource_kind?: string;
 
   /**
@@ -54,6 +55,11 @@ export class CreateResourceDto {
   @IsString()
   @MaxLength(64)
   preview_draft_id?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  duplicate_note?: string;
 
   /** Must be a real http(s) URL — see UpdateResourceDto for why. */
   @IsOptional()

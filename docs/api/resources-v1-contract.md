@@ -123,3 +123,94 @@ as a trust decision.
 - Do not execute or inspect Mod code on the API server; Mod uploads are parsed
   as bounded archives and their manifest is treated as untrusted input.
 - A failed preview must not make an approved original file appear unavailable.
+
+## Resource kinds, topics, and compatibility provenance
+
+`resource_kind` is the canonical content identity and comes from the shared
+registry. Read the current registry instead of maintaining a client-side copy:
+
+```text
+GET /api/v1/resources/kinds
+GET /api/v1/resources/topics
+```
+
+Kinds drive the primary resource navigation and submission type. Topics are
+optional secondary use/category filters. During migration, the legacy
+`category_id` query remains accepted as a topic filter; it does not change the
+resource kind. The legacy `resource_type` continues to describe delivery
+(`upload` or `external`) and is not a substitute for `resource_kind`.
+
+Renderer facts and publisher declarations remain distinct. Compatibility rows
+include their provenance and confidence when available (for example,
+`file_metadata`, `inferred`, `user_declared`, `verified`, or `admin_verified`). A renderer build is
+the parser runtime and must not be shown as the build stored in a map save.
+Map metadata reports the stored game build only when the save contains it, and
+reports the save format version separately. Schematic compatibility is an
+inference from known content and format facts, not a promise that the blueprint
+will load in every release.
+
+## Duplicate detection and safe submission retries
+
+The authenticated legacy web client may preflight a file or schematic through:
+
+```text
+POST /api/resources/duplicates/check
+```
+
+V1 upload clients receive the same duplicate findings from draft preview and
+draft creation:
+
+```text
+POST /api/v1/resources/drafts/preview
+POST /api/v1/resources/drafts
+```
+
+The result distinguishes an exact file SHA-256 match, an exact schematic
+structure match, and a rotation/mirror-normalized schematic candidate. An exact
+file match is a hard duplicate and final submission returns HTTP 409 with
+`RESOURCE_DUPLICATE`. An exact schematic structure match requires a non-empty
+`duplicate_note`, which is stored with the new resource for moderator review.
+The normalized match is advisory and never blocks submission. Similar title or
+source URL matches are also suggestions only.
+
+Duplicate results only expose resources that the caller may see. A private or
+pending match is returned as a generic match with no title, public ID, or
+numeric ID. Clients must not use duplicate detection as an authorization or
+visibility oracle.
+
+For a final create or draft submit, clients may send an `Idempotency-Key`
+header. Keys are scoped to the authenticated account and retained for 24 hours.
+Retry the exact same request with the same key after a timeout to replay the
+first result. Reusing a key with a different payload returns HTTP 409
+`IDEMPOTENCY_KEY_REUSED`; a concurrent request with the same key can return
+`IDEMPOTENCY_IN_PROGRESS`. A changed request must use a new key.
+
+## Administrative duplicate merge
+
+The web administration API provides a preview and an explicit merge action:
+
+```text
+GET  /api/resources/admin/{sourceId}/merge-preview?target_id={targetId}
+POST /api/resources/admin/{sourceId}/merge
+```
+
+These numeric-ID routes are admin-only and are not part of public V1. Preview
+reports relationships that can be transferred and version collisions. The
+merge transaction transfers eligible history and associations to the target.
+Non-colliding versions move intact. A colliding version never overwrites the
+target; available attachments move as supplementary files only when both
+versions are already published. Other colliding release records stay on the
+source and their ID mapping is written to the merge audit. A legacy root file
+or external link fills an empty target field. The merge records an audit entry
+and keeps the source as a merged alias. Reads of the
+source resolve to the canonical target. Duplicate discovery never merges or
+deletes resources automatically; moderators must review and initiate a merge.
+The legacy numeric resource route returns HTTP 301. A V1 detail lookup for a
+merged `public_id` also returns HTTP 301 with a `Location` header and a body
+containing `merged`, `canonical_public_id`, and `redirect_url`.
+
+Historical duplicate groups can be inspected with
+`npm run report:resource-duplicates` after applying the integrity migration.
+The command is read-only, includes root resources and active version/file
+hashes, reports exact and normalized schematic fingerprints, and never changes
+or merges existing rows.

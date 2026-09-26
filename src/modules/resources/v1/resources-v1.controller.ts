@@ -3,7 +3,7 @@ import { Response } from 'express';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { ApiTags, ApiOkResponse, ApiParam } from '@nestjs/swagger';
+import { ApiTags, ApiOkResponse, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { ApiV1, RawHttpResponse } from '../../../common/decorators/api-v1.decorator';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { OptionalAuth } from '../../../common/decorators/public.decorator';
@@ -15,6 +15,8 @@ import { ResourcePreviewService } from '../resource-preview.service';
 import { CapabilitiesService } from '../../capabilities/capabilities.service';
 import { ResourceReadAdapterService, V1ResourceDto } from '../resource-read-adapter.service';
 import { V1ResourceDetail, V1ResourceManifest } from './resources-v1.dto';
+import { RESOURCE_KINDS } from '../resource-kind-registry';
+import { ResourceCategoryService } from '../resource-categories.service';
 
 /**
  * V1 Resource read endpoints.
@@ -34,6 +36,7 @@ export class ResourcesV1Controller {
     private readonly capabilitiesService: CapabilitiesService,
     private readonly resourceReadAdapter: ResourceReadAdapterService,
     @Optional() private readonly resourcePreviewService?: ResourcePreviewService,
+    @Optional() private readonly categoryService?: ResourceCategoryService,
   ) {}
 
   @Get()
@@ -43,6 +46,24 @@ export class ResourcesV1Controller {
   async listResources(@Query('limit') limit?: string, @Query('offset') offset?: string, @Query('q') query?: string) {
     await this.assertEnabled();
     return this.resourceReadAdapter.listResourcesV1({ limit: Number(limit) || 20, offset: Number(offset) || 0, search: query });
+  }
+
+  @Get('kinds')
+  @OptionalAuth()
+  @OAuthOptionalProtected('resource.read')
+  @ApiOkResponse({ description: 'Canonical resource_kind registry shared with the web resource center.' })
+  async listKinds() {
+    await this.assertEnabled();
+    return RESOURCE_KINDS;
+  }
+
+  @Get('topics')
+  @OptionalAuth()
+  @OAuthOptionalProtected('resource.read')
+  @ApiOkResponse({ description: 'Active topic/use categories. These are a secondary filter and do not replace resource_kind.' })
+  async listTopics() {
+    await this.assertEnabled();
+    return this.categoryService?.getPublicCategories() || [];
   }
 
   @Get(':id/manifest')
@@ -121,11 +142,19 @@ export class ResourcesV1Controller {
   @OAuthOptionalProtected('resource.read')
   @ApiParam({ name: 'id', type: 'string' })
   @ApiOkResponse({ description: 'Resource detail' })
-  async getResource(@Param('id') id: string): Promise<V1ResourceDetail> {
+  @ApiResponse({ status: HttpStatus.MOVED_PERMANENTLY, description: 'Merged resource; Location points to the canonical resource and the response data contains its public ID.', schema: { type: 'object', properties: { data: { type: 'object', properties: { merged: { type: 'boolean' }, canonical_public_id: { type: 'string' }, redirect_url: { type: 'string' } } }, meta: { type: 'object' } } } })
+  async getResource(@Param('id') id: string, @Res({ passthrough: true }) res?: Response): Promise<V1ResourceDetail | { merged: true; canonical_public_id: string; redirect_url: string }> {
     await this.assertEnabled();
 
     const resource = await this.resourceReadAdapter.getResourceByPublicId(id);
     if (!resource) {
+      const canonicalPublicId = await (this.resourceReadAdapter as any).getMergedCanonicalPublicId?.(id);
+      if (canonicalPublicId) {
+        const redirectUrl = `/api/v1/resources/${canonicalPublicId}`;
+        res?.status(HttpStatus.MOVED_PERMANENTLY);
+        res?.setHeader('Location', redirectUrl);
+        return { merged: true, canonical_public_id: canonicalPublicId, redirect_url: redirectUrl };
+      }
       throw new ApiV1Exception(
         'RESOURCE_NOT_FOUND',
         HttpStatus.NOT_FOUND,

@@ -1,4 +1,5 @@
 import { mergeResourceQuery } from './query';
+import { RESOURCE_KINDS as resourceKinds } from '../display-labels';
 
 test('resource filter updates preserve existing URL query compatibility', () => {
   const result = new URLSearchParams(mergeResourceQuery(
@@ -8,4 +9,13 @@ test('resource filter updates preserve existing URL query compatibility', () => 
   for (const key of ['category_id', 'sort', 'supported_version', 'compatibility', 'planet']) expect(result.has(key)).toBe(true);
   expect(result.get('resource_kind')).toBe('schematic');
   expect(result.has('tag')).toBe(false);
+});
+
+test('canonical resource kinds are the single primary taxonomy and legacy topic filters remain compatible', () => {
+  expect(resourceKinds.map(({ value }) => value)).toEqual([
+    'mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'other',
+  ]);
+  const query = new URLSearchParams(mergeResourceQuery('category_id=12', { resource_kind: 'map' }));
+  expect(query.get('category_id')).toBe('12');
+  expect(query.get('resource_kind')).toBe('map');
 });

@@ -1,6 +1,7 @@
 import type { Category, ResourceCategory } from '@/types';
 import { buildSidebarNavigation, type SidebarNavigationItem } from './sidebar-navigation';
 import { groupForumCategories } from './forum-categories';
+import resourceKinds from '../../../../src/common/resource-kinds.json';
 
 export type ContentNavigationItem = {
   id: string;
@@ -58,28 +59,16 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
 
   const sections: ContentNavigationSection[] = [{ id: 'global', label: 'MDTBBS', items: globalItems }];
   if (context.mode === 'resources' && featureEnabled(context.settings, 'feature_resources_enabled')) {
-    const activeCategories = context.resourceCategories.filter((category) => category.is_active);
-    const activeIds = new Set(activeCategories.map((category) => category.id));
-    const roots = activeCategories.filter((category) => !category.parent_id || !activeIds.has(category.parent_id));
-    const categoriesByParent = new Map<number, ResourceCategory[]>();
-    activeCategories.forEach((category) => {
-      if (category.parent_id && activeIds.has(category.parent_id)) {
-        const children = categoriesByParent.get(category.parent_id) || [];
-        children.push(category);
-        categoriesByParent.set(category.parent_id, children);
-      }
-    });
     sections.push({
       id: 'context', label: '资源浏览', collapsible: true,
       items: [
         { id: 'all-resources', label: '全部资源', href: '/resources', icon: 'Package', activeMatch: '/resources' },
-        ...roots.flatMap((category) => [category, ...(categoriesByParent.get(category.id) || [])]).map((category) => ({
-          id: `resource-category-${category.id}`,
-          label: category.name,
-          href: `/resources?category_id=${category.id}`,
-          icon: category.icon || undefined,
-          activeMatch: `/resources?category_id=${category.id}`,
-          indent: Boolean(category.parent_id),
+        ...resourceKinds.map((kind) => ({
+          id: `resource-kind-${kind.value}`,
+          label: kind.label,
+          href: `/resources?resource_kind=${kind.value}`,
+          icon: kind.value === 'map' ? 'Map' : kind.value === 'schematic' ? 'Boxes' : 'Package',
+          activeMatch: `/resources?resource_kind=${kind.value}`,
         })),
       ],
     });

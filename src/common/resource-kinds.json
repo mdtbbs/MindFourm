@@ -1,0 +1,11 @@
+[
+  { "value": "mod", "label": "Mod", "showInNavigation": true },
+  { "value": "map", "label": "地图", "showInNavigation": true },
+  { "value": "schematic", "label": "蓝图", "showInNavigation": true },
+  { "value": "save", "label": "存档", "showInNavigation": true },
+  { "value": "game_version", "label": "游戏版本", "showInNavigation": true },
+  { "value": "server_plugin", "label": "服务器插件", "showInNavigation": true },
+  { "value": "development_tool", "label": "工具", "showInNavigation": true },
+  { "value": "texture_ui", "label": "材质与界面", "showInNavigation": true },
+  { "value": "other", "label": "其他", "showInNavigation": true }
+]

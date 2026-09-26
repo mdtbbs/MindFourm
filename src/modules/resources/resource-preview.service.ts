@@ -8,6 +8,7 @@ import { Resource } from '@entities/resource.entity';
 import { ResourceStorageService, StoredResourceFile } from './resource-storage.service';
 import { ResourceUploadDraft } from '@entities/resource-upload-draft.entity';
 import { normalizeTiptapDocument } from '@common/utils/tiptap-content.util';
+import { ResourceDuplicateService, ResourceDuplicateResult } from './resource-duplicate.service';
 
 type RendererResult = {
   metadata?: Record<string, unknown>;
@@ -59,6 +60,7 @@ export class ResourcePreviewService {
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
     private readonly storage?: ResourceStorageService,
     @Optional() @InjectRepository(ResourceUploadDraft) private readonly uploadDrafts?: Repository<ResourceUploadDraft>,
+    @Optional() private readonly duplicates?: ResourceDuplicateService,
   ) {}
 
   supports(resource: Pick<Resource, 'resource_kind'>): boolean {
@@ -123,7 +125,7 @@ export class ResourcePreviewService {
    * short-lived, user-bound draft identifier.
    */
   async createDraft(userId: number, kind: 'map' | 'schematic', file: StoredResourceFile): Promise<{
-    id: string; preview_url: string; metadata: Record<string, unknown> | null; parser_version: string | null; expires_at: string;
+    id: string; preview_url: string; metadata: Record<string, unknown> | null; parser_version: string | null; expires_at: string; duplicate: ResourceDuplicateResult | null;
   }> {
     await this.pruneExpiredDrafts();
     if (!this.supports({ resource_kind: kind })) throw new BadRequestException('该资源类型不支持预览');
@@ -133,12 +135,19 @@ export class ResourcePreviewService {
 
     const rendered = await this.render({ resource_kind: kind, ...file });
     if (!rendered.preview) throw new BadRequestException('文件无法解析为有效的 Mindustry 地图或蓝图');
+    const metadata = this.safeMetadata(rendered.preview.metadata);
+    const duplicate = this.duplicates ? await this.duplicates.inspect({
+      contentHash: file.content_hash,
+      structureHash: typeof metadata?.structure_hash === 'string' ? metadata.structure_hash : null,
+      normalizedStructureHash: typeof metadata?.normalized_structure_hash === 'string' ? metadata.normalized_structure_hash : null,
+      resourceKind: kind,
+    }) : null;
 
     const id = randomUUID();
     const expiresAt = Date.now() + DRAFT_TTL_MS;
     const draft: PreviewDraft = {
       id, userId, kind, file, previewKey: rendered.preview.previewKey,
-      metadata: this.safeMetadata(rendered.preview.metadata),
+      metadata,
       parserVersion: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
       expiresAt,
       draftData: null,
@@ -152,9 +161,10 @@ export class ResourcePreviewService {
     return {
       id,
       preview_url: `/api/resources/drafts/${id}/preview`,
-      metadata: this.safeMetadata(rendered.preview.metadata),
+      metadata,
       parser_version: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
       expires_at: new Date(expiresAt).toISOString(),
+      duplicate,
     };
   }
 
@@ -168,7 +178,8 @@ export class ResourcePreviewService {
       parserVersion: null, expiresAt: Date.now() + DRAFT_TTL_MS, draftData: null,
     };
     await this.storeDraft(draft);
-    return this.publicDraft(draft);
+    const duplicate = this.duplicates ? await this.duplicates.inspect({ contentHash: file.content_hash, resourceKind: kind }) : null;
+    return { ...this.publicDraft(draft), duplicate };
   }
 
   async getDraft(userId: number, id: string) {

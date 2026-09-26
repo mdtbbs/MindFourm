@@ -1,6 +1,7 @@
 import { IsString, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TiptapDocumentDto } from '../../../common/dto/tiptap-document.dto';
+import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
 
 export class UpdateResourceDto {
   @IsOptional()
@@ -16,7 +17,7 @@ export class UpdateResourceDto {
   resource_type?: string;
 
   @IsOptional()
-  @IsIn(['mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'other'])
+  @IsIn(RESOURCE_KIND_VALUES)
   resource_kind?: string;
 
   /**

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, UnprocessableEntityException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, UnprocessableEntityException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, Like, LessThan, In } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -27,7 +27,9 @@ import { ResourceStorageService } from './resource-storage.service';
 import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { randomUUID } from 'crypto';
+import { createHash } from 'crypto';
 import { ConsumedResourcePreviewDraft, ResourcePreviewService } from './resource-preview.service';
+import { ResourceDuplicateService, RESOURCE_DUPLICATE_STATUSES } from './resource-duplicate.service';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -76,6 +78,7 @@ export class ResourcesService {
     private contentSafety?: ContentSafetyService,
     private resourceSubscriptionsService?: ResourceSubscriptionsService,
     private resourcePreviewService?: ResourcePreviewService,
+    @Optional() private resourceDuplicateService?: ResourceDuplicateService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -248,11 +251,39 @@ export class ResourcesService {
     dto: CreateResourceDto,
     userId: number,
     file?: ResourceFileMeta,
-    provenance: { ipAddress?: string; rendererDraft?: ConsumedResourcePreviewDraft; uploadSessionId?: string } = {},
+    provenance: { ipAddress?: string; rendererDraft?: ConsumedResourcePreviewDraft; uploadSessionId?: string; idempotencyKey?: string; idempotencyPayload?: unknown } = {},
   ): Promise<any> {
     const categoryId = this.toOptionalNumber((dto as any).category_id);
     const resourceType = this.normalizeResourceType(dto.resource_type);
     const resourceKind = dto.resource_kind || 'other';
+    const idempotencyKey = this.validateIdempotencyKey(provenance.idempotencyKey);
+    const payloadFingerprint = this.hashCanonical(provenance.idempotencyPayload ?? dto);
+    const requestFingerprint = this.hashCanonical({ payloadFingerprint, content_hash: file?.content_hash || null });
+
+    if (idempotencyKey) {
+      const replay = await this.findIdempotentSubmission(userId, idempotencyKey, payloadFingerprint, requestFingerprint);
+      if (replay) return replay;
+    }
+
+    const rendererMetadata = provenance.rendererDraft?.metadata || null;
+    const structureHash = typeof rendererMetadata?.structure_hash === 'string' ? rendererMetadata.structure_hash : null;
+    const normalizedStructureHash = typeof rendererMetadata?.normalized_structure_hash === 'string' ? rendererMetadata.normalized_structure_hash : null;
+    const duplicate = this.resourceDuplicateService ? await this.resourceDuplicateService.inspect({
+      contentHash: file?.content_hash,
+      structureHash,
+      normalizedStructureHash,
+      resourceKind,
+      sourceUrl: dto.source_url,
+      title: dto.title,
+    }) : null;
+    if (duplicate?.exact) throw this.duplicateConflict(duplicate.existing_resources[0]);
+    if (duplicate?.structure && !dto.duplicate_note?.trim()) {
+      throw new ConflictException({
+        code: 'RESOURCE_STRUCTURE_DUPLICATE',
+        message: '发现一个结构相同的蓝图。请说明用途或内容上的区别后继续提交。',
+        existing_resources: duplicate.existing_resources,
+      });
+    }
 
     const category = categoryId
       ? await this.categoryRepository.findOne({ where: { id: categoryId } })
@@ -303,6 +334,9 @@ export class ResourcesService {
       file_size: file?.file_size,
       mime_type: file?.mime_type,
       content_hash: file?.content_hash,
+      structure_hash: structureHash,
+      normalized_structure_hash: normalizedStructureHash,
+      duplicate_note: dto.duplicate_note?.trim() || null,
       external_url: resourceType === 'external' ? dto.external_url : undefined,
       version: dto.version,
       source_url: dto.source_url || null,
@@ -327,9 +361,44 @@ export class ResourcesService {
       metadata_json: (dto as any).metadata ? normalizeResourceMetadata((dto as any).metadata) : null,
     } as any) as unknown as Resource;
 
+    let replayed = false;
     const saved = await this.dataSource.transaction(async (manager) => {
+      if (idempotencyKey) {
+        await manager.query('DELETE FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ? AND expires_at <= NOW()', [userId, idempotencyKey]);
+        try {
+          await manager.query(`INSERT INTO resource_submission_idempotency
+            (user_id, idempotency_key, request_fingerprint, payload_fingerprint, resource_id, expires_at)
+            VALUES (?, ?, ?, ?, NULL, DATE_ADD(NOW(), INTERVAL 24 HOUR))`,
+          [userId, idempotencyKey, requestFingerprint, payloadFingerprint]);
+        } catch (error: any) {
+          if (!['ER_DUP_ENTRY', 1062].includes(error?.code) && error?.errno !== 1062) throw error;
+          const rows = await manager.query(`SELECT request_fingerprint, payload_fingerprint, resource_id
+            FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ? AND expires_at > NOW() FOR UPDATE`, [userId, idempotencyKey]);
+          const prior = rows?.[0];
+          if (!prior || prior.payload_fingerprint !== payloadFingerprint || prior.request_fingerprint !== requestFingerprint) {
+            throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', message: 'Idempotency-Key 已用于另一份资源请求。' });
+          }
+          if (prior.resource_id) {
+            const existing = await manager.findOne(Resource, { where: { id: Number(prior.resource_id) }, relations: ['user', 'category'] });
+            if (existing) { replayed = true; return existing; }
+            await manager.query('DELETE FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ?', [userId, idempotencyKey]);
+            await manager.query(`INSERT INTO resource_submission_idempotency
+              (user_id, idempotency_key, request_fingerprint, payload_fingerprint, resource_id, expires_at)
+              VALUES (?, ?, ?, ?, NULL, DATE_ADD(NOW(), INTERVAL 24 HOUR))`,
+            [userId, idempotencyKey, requestFingerprint, payloadFingerprint]);
+          } else {
+            throw new ConflictException({ code: 'IDEMPOTENCY_IN_PROGRESS', message: '相同的资源请求仍在处理中，请稍后使用相同 Idempotency-Key 重试。' });
+          }
+        }
+      }
+
       const resource = await manager.save(Resource, newResource);
+      if (file?.content_hash) await this.claimContentHash(manager, file.content_hash, resource.id);
+      if (structureHash) await this.claimStructureHash(manager, structureHash, resource.id, dto.duplicate_note?.trim() || '');
       await this.createInitialV2Aggregate(manager, resource, dto, userId, file, contentSource);
+      if (idempotencyKey) {
+        await manager.query('UPDATE resource_submission_idempotency SET resource_id = ? WHERE user_id = ? AND idempotency_key = ?', [resource.id, userId, idempotencyKey]);
+      }
       return resource;
     });
 
@@ -341,6 +410,8 @@ export class ResourcesService {
     if (!finalResult) {
       throw new NotFoundException('资源不存在');
     }
+
+    if (replayed) return this.normalizeOneResource(finalResult);
 
     if (this.contentSafety) {
       await this.contentSafety.recordFlag({
@@ -429,7 +500,21 @@ export class ResourcesService {
         sort_order: 0,
       }));
 
-      const compatibility = dto.compatibility || [];
+      const compatibility: Array<{
+        min_version_value?: string;
+        max_version_value?: string;
+        channel?: string;
+        notes?: string;
+        provenance: 'user_declared' | 'inferred';
+        confidence: 'low' | 'medium' | 'high' | null;
+      }> = (dto.compatibility || []).map((item) => ({ ...item, provenance: 'user_declared', confidence: null }));
+      const renderer = (resource.renderer_metadata_json || {}) as Record<string, any>;
+      const inferred = renderer.compatibility?.minimum_supported_build;
+      const inferredBuild = inferred === null || inferred === undefined ? NaN : Number(inferred);
+      if (Number.isFinite(inferredBuild) && inferredBuild > 0) compatibility.push({
+        min_version_value: String(inferredBuild), max_version_value: undefined, channel: undefined,
+        notes: '基于蓝图内容自动推测', provenance: 'inferred', confidence: renderer.compatibility.confidence || 'low',
+      });
       if (compatibility.length) {
         await manager.save(ResourceVersionCompatibility, compatibility.map((item) => manager.create(ResourceVersionCompatibility, {
           resource_version_id: release.id,
@@ -438,8 +523,123 @@ export class ResourcesService {
           max_version_value: item.max_version_value?.trim() || null,
           channel: item.channel?.trim() || null,
           notes: item.notes?.trim() || null,
+          provenance: item.provenance || 'user_declared',
+          confidence: item.confidence || null,
         })));
       }
+  }
+
+  async findIdempotentReplay(userId: number, key: string | undefined, dto: Record<string, unknown>): Promise<any | null> {
+    const normalizedKey = this.validateIdempotencyKey(key);
+    if (!normalizedKey) return null;
+    const payloadFingerprint = this.hashCanonical(dto);
+    const rows = await this.dataSource.query(`SELECT request_fingerprint, payload_fingerprint, resource_id
+      FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ? AND expires_at > NOW()`, [userId, normalizedKey]);
+    const prior = rows?.[0];
+    if (!prior) return null;
+    if (prior.payload_fingerprint !== payloadFingerprint) {
+      throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', message: 'Idempotency-Key 已用于另一份资源请求。' });
+    }
+    if (!prior.resource_id) return null;
+    const existing = await this.getByIdWithVersions(Number(prior.resource_id), { id: userId, role: 'user' });
+    if (existing) return existing;
+    await this.dataSource.query('DELETE FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ? AND resource_id = ?', [userId, key, Number(prior.resource_id)]);
+    return null;
+  }
+
+  private validateIdempotencyKey(key?: string): string | null {
+    if (!key) return null;
+    const value = key.trim();
+    if (!/^[\x21-\x7e]{1,128}$/.test(value)) throw new BadRequestException('Idempotency-Key 格式无效');
+    return value;
+  }
+
+  private hashCanonical(value: unknown): string {
+    const canonical = (input: any): any => {
+      if (Array.isArray(input)) return input.map(canonical);
+      if (input && typeof input === 'object') return Object.fromEntries(Object.keys(input).sort().map((key) => [key, canonical(input[key])]));
+      return input;
+    };
+    return createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
+  }
+
+  private async findIdempotentSubmission(userId: number, key: string, payloadFingerprint: string, requestFingerprint: string): Promise<any | null> {
+    const rows = await this.dataSource.query(`SELECT request_fingerprint, payload_fingerprint, resource_id
+      FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ? AND expires_at > NOW()`, [userId, key]);
+    const prior = rows?.[0];
+    if (!prior) return null;
+    if (prior.payload_fingerprint !== payloadFingerprint || prior.request_fingerprint !== requestFingerprint) {
+      throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', message: 'Idempotency-Key 已用于另一份资源请求。' });
+    }
+    if (!prior.resource_id) return null;
+    const existing = await this.getByIdWithVersions(Number(prior.resource_id), { id: userId, role: 'user' });
+    if (existing) return existing;
+    await this.dataSource.query('DELETE FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ? AND resource_id = ?', [userId, key, Number(prior.resource_id)]);
+    return null;
+  }
+
+  private duplicateConflict(existing?: { id: number | null; public_id?: string | null; title: string; status: string; url: string; is_public?: number; category_visible?: boolean }): ConflictException {
+    const visible = existing && existing.id !== null
+      && (existing.is_public === undefined || Number(existing.is_public) === 1)
+      && existing.category_visible !== false
+      && ['approved', 'published'].includes(existing.status);
+    return new ConflictException({
+      code: 'RESOURCE_DUPLICATE',
+      message: '这个文件已经提交过了。',
+      existing_resource: visible ? { id: existing.id, public_id: existing.public_id || null, title: existing.title, status: existing.status, url: existing.url } : {
+        id: null, public_id: null, title: '已有资源正在审核或不可见', status: 'pending', url: '/resources',
+      },
+    });
+  }
+
+  async claimResourceVersionHash(manager: EntityManager, contentHash: string, resourceId: number): Promise<void> {
+    return this.claimContentHash(manager, contentHash, resourceId, false);
+  }
+
+  private async claimContentHash(manager: EntityManager, contentHash: string, resourceId: number, allowSameResource = true): Promise<void> {
+    try {
+      await manager.query('INSERT INTO resource_content_hash_claims (content_hash, resource_id) VALUES (?, ?)', [contentHash, resourceId]);
+      return;
+    } catch (error: any) {
+      if (!['ER_DUP_ENTRY', 1062].includes(error?.code) && error?.errno !== 1062) throw error;
+    }
+    const rows = await manager.query(`SELECT c.resource_id, r.public_id, r.title, r.status, r.is_public,
+        (r.category_id IS NULL OR category.is_active = 1) AS category_visible
+      FROM resource_content_hash_claims c
+      INNER JOIN resources r ON r.id = c.resource_id
+      LEFT JOIN resource_categories category ON category.id = r.category_id
+      WHERE c.content_hash = ? AND r.deleted_at IS NULL AND r.status IN ('pending','pending_review','approved','published') FOR UPDATE`, [contentHash]);
+    const existing = rows?.[0];
+    if (existing && (Number(existing.resource_id) !== resourceId || !allowSameResource)) throw this.duplicateConflict({
+      id: Number(existing.resource_id), public_id: existing.public_id || null, is_public: Number(existing.is_public),
+      category_visible: Number(existing.category_visible) === 1,
+      title: existing.title, status: existing.status, url: `/resources/${existing.resource_id}`,
+    });
+    await manager.query('UPDATE resource_content_hash_claims SET resource_id = ? WHERE content_hash = ?', [resourceId, contentHash]);
+  }
+
+  private async claimStructureHash(manager: EntityManager, structureHash: string, resourceId: number, duplicateNote: string): Promise<void> {
+    await manager.query('INSERT IGNORE INTO resource_structure_hash_claims (structure_hash, resource_id) VALUES (?, ?)', [structureHash, resourceId]);
+    await manager.query('SELECT resource_id FROM resource_structure_hash_claims WHERE structure_hash = ? FOR UPDATE', [structureHash]);
+    const rows = await manager.query(`SELECT id, public_id, title, status, is_public FROM resources
+      WHERE structure_hash = ? AND id <> ? AND deleted_at IS NULL AND merged_into_resource_id IS NULL
+        AND status IN ('pending','pending_review','approved','published') ORDER BY id ASC LIMIT 1 FOR UPDATE`, [structureHash, resourceId]);
+    const existing = rows?.[0];
+    if (!existing) {
+      await manager.query('UPDATE resource_structure_hash_claims SET resource_id = ? WHERE structure_hash = ?', [resourceId, structureHash]);
+      return;
+    }
+    await manager.query('UPDATE resource_structure_hash_claims SET resource_id = ? WHERE structure_hash = ?', [Number(existing.id), structureHash]);
+    if (duplicateNote.trim()) return;
+    const visible = Number(existing.is_public) === 1 && ['approved', 'published'].includes(existing.status);
+    const reference = visible
+      ? { id: Number(existing.id), public_id: existing.public_id || null, title: existing.title, status: existing.status, url: `/resources/${existing.id}` }
+      : { id: null, public_id: null, title: '已有资源正在审核或不可见', status: 'pending', url: '/resources' };
+    throw new ConflictException({
+      code: 'RESOURCE_STRUCTURE_DUPLICATE',
+      message: '发现一个结构相同的蓝图。请说明用途或内容上的区别后继续提交。',
+      existing_resources: [reference],
+    });
   }
 
   private normalizeCredits(values: string[] | undefined): string[] {
@@ -864,8 +1064,260 @@ export class ResourcesService {
       where: { resource_id: id },
       order: { created_at: 'DESC' },
     });
+    const compatibilities = versions.length ? await this.dataSource.query(
+      `SELECT resource_version_id, runtime, min_version_value, max_version_value, channel, notes, provenance, confidence
+       FROM resource_version_compatibilities WHERE resource_version_id IN (${versions.map(() => '?').join(',')})
+       ORDER BY id ASC`, versions.map(({ id: versionId }) => versionId),
+    ) : [];
+    const byVersion = new Map<number, any[]>();
+    for (const item of compatibilities || []) {
+      const versionId = Number(item.resource_version_id);
+      const rows = byVersion.get(versionId) || [];
+      rows.push({ runtime: item.runtime, min_version_value: item.min_version_value, max_version_value: item.max_version_value,
+        channel: item.channel, notes: item.notes, provenance: item.provenance, confidence: item.confidence });
+      byVersion.set(versionId, rows);
+    }
+    return this.normalizeOneResource(resource, versions.map((version) => ({ ...version,
+      compatibility: byVersion.get(version.id) || [],
+    } as ResourceVersion)));
+  }
 
-    return this.normalizeOneResource(resource, versions);
+  async findMergedResourceTarget(id: number): Promise<number | null> {
+    let current = id;
+    const visited = new Set<number>([id]);
+    for (let depth = 0; depth < 12; depth += 1) {
+      const rows = await this.dataSource.query('SELECT merged_into_resource_id FROM resources WHERE id = ? LIMIT 1', [current]);
+      const next = Number(rows?.[0]?.merged_into_resource_id || 0);
+      if (!next) return current === id ? null : current;
+      if (visited.has(next)) throw new ConflictException('资源合并关系存在循环');
+      visited.add(next);
+      current = next;
+    }
+    throw new ConflictException('资源合并链超过安全深度');
+  }
+
+  private async resourceMergeCounts(query: (sql: string, params?: any[]) => Promise<any[]>, resourceId: number) {
+    const tables = [
+      'resource_comments', 'resource_favorites', 'resource_likes', 'resource_ratings',
+      'resource_subscriptions', 'resource_attributions', 'resource_versions', 'resource_files',
+      'download_events', 'resource_version_dependencies', 'content_relations',
+      'knowledge_articles', 'game_content_upload_sessions', 'resource_media_links', 'resource_content_hash_claims', 'resource_structure_hash_claims',
+      'resources',
+    ];
+    const presentRows = await query(`SELECT table_name FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name IN (${tables.map(() => '?').join(',')})`, tables);
+    const present = new Set((presentRows || []).map((row) => String(row.table_name)));
+    const counts: Record<string, number> = {};
+    const count = async (name: string, sql: string, params: any[] = [resourceId], resultKey = name) => {
+      if (!present.has(name)) { counts[resultKey] = 0; return; }
+      const rows = await query(sql, params);
+      counts[resultKey] = Number(rows?.[0]?.count || 0);
+    };
+    await Promise.all([
+      count('resource_comments', 'SELECT COUNT(*) AS count FROM resource_comments WHERE resource_id = ?'),
+      count('resource_favorites', 'SELECT COUNT(*) AS count FROM resource_favorites WHERE resource_id = ?'),
+      count('resource_likes', 'SELECT COUNT(*) AS count FROM resource_likes WHERE resource_id = ?'),
+      count('resource_ratings', 'SELECT COUNT(*) AS count FROM resource_ratings WHERE resource_id = ?'),
+      count('resource_subscriptions', 'SELECT COUNT(*) AS count FROM resource_subscriptions WHERE resource_id = ?'),
+      count('resource_attributions', 'SELECT COUNT(*) AS count FROM resource_attributions WHERE resource_id = ?'),
+      count('resource_versions', 'SELECT COUNT(*) AS count FROM resource_versions WHERE resource_id = ?'),
+      count('resource_files', 'SELECT COUNT(*) AS count FROM resource_files f JOIN resource_versions v ON v.id = f.resource_version_id WHERE v.resource_id = ?'),
+      count('download_events', 'SELECT COUNT(*) AS count FROM download_events WHERE resource_id = ?'),
+      count('resource_version_dependencies', 'SELECT COUNT(*) AS count FROM resource_version_dependencies d JOIN resource_versions v ON v.id = d.resource_version_id WHERE v.resource_id = ?'),
+      count('content_relations', `SELECT COUNT(*) AS count FROM content_relations
+        WHERE (target_type = 'resource' AND target_id = CAST(? AS CHAR)) OR (source_type = 'resource' AND source_id = ?)`, [resourceId, resourceId]),
+      count('knowledge_articles', 'SELECT COUNT(*) AS count FROM knowledge_articles WHERE related_resource_id = ?'),
+      count('game_content_upload_sessions', 'SELECT COUNT(*) AS count FROM game_content_upload_sessions WHERE resource_id = ?'),
+      count('resource_media_links', 'SELECT COUNT(*) AS count FROM resource_media_links WHERE resource_id = ?'),
+      count('resources', `SELECT COUNT(*) AS count FROM resources
+        WHERE id = ? AND (file_path IS NOT NULL OR content_hash IS NOT NULL OR mfl_file_id IS NOT NULL OR external_url IS NOT NULL)`, [resourceId], 'legacy_root_file'),
+    ]);
+    return counts;
+  }
+
+  async previewResourceMerge(sourceId: number, targetId: number) {
+    if (sourceId === targetId) throw new BadRequestException('来源资源和目标资源不能相同');
+    const [source, target] = await Promise.all([
+      this.resourceRepository.findOne({ where: { id: sourceId } }),
+      this.resourceRepository.findOne({ where: { id: targetId } }),
+    ]);
+    if (!source || !target) throw new NotFoundException('来源或目标资源不存在');
+    if (source.merged_into_resource_id) throw new ConflictException({ code: 'RESOURCE_ALREADY_MERGED', canonical_id: source.merged_into_resource_id });
+    if (target.merged_into_resource_id) throw new ConflictException({ code: 'MERGE_TARGET_IS_NOT_CANONICAL', canonical_id: target.merged_into_resource_id });
+    const sourcePublic = Number(source.is_public) === 1 && PUBLIC_RESOURCE_STATUSES.includes(source.status as any);
+    const targetPublic = Number(target.is_public) === 1 && PUBLIC_RESOURCE_STATUSES.includes(target.status as any);
+    if (sourcePublic && !targetPublic) throw new BadRequestException('公开资源只能合并到另一个公开资源，避免旧链接失效');
+    const [sourceCounts, targetCounts] = await Promise.all([
+      this.resourceMergeCounts((sql, params) => this.dataSource.query(sql, params), sourceId),
+      this.resourceMergeCounts((sql, params) => this.dataSource.query(sql, params), targetId),
+    ]);
+    const versions = await this.dataSource.query(`SELECT COUNT(*) AS count FROM resource_versions sv
+      INNER JOIN resource_versions tv ON tv.resource_id = ? AND tv.version = sv.version
+      WHERE sv.resource_id = ?`, [targetId, sourceId]);
+    return {
+      source: { id: source.id, title: source.title, status: source.status },
+      target: { id: target.id, title: target.title, status: target.status },
+      source_counts: sourceCounts,
+      target_counts: targetCounts,
+      version_name_collisions: Number(versions?.[0]?.count || 0),
+      policy: {
+        interactions: '按用户去重后合并到目标资源',
+        colliding_versions: '不覆盖目标版本；仅在来源和目标版本都已发布时，把可用来源附件并入为补充文件',
+        canonical_metadata: '目标标题与已有字段优先，空字段从来源补齐',
+        source_record: '保留来源资源并标记为 merged，旧详情 API 返回永久重定向',
+      },
+    };
+  }
+
+  async mergeResource(sourceId: number, targetId: number, adminUserId: number) {
+    if (sourceId === targetId) throw new BadRequestException('来源资源和目标资源不能相同');
+    return this.dataSource.transaction(async (manager) => {
+      const locked = await manager.query('SELECT * FROM resources WHERE id IN (?, ?) ORDER BY id FOR UPDATE', [sourceId, targetId]);
+      const source = locked.find((row: any) => Number(row.id) === sourceId);
+      const target = locked.find((row: any) => Number(row.id) === targetId);
+      if (!source || !target) throw new NotFoundException('来源或目标资源不存在');
+      if (source.deleted_at || target.deleted_at) throw new NotFoundException('来源或目标资源不存在');
+      if (source.merged_into_resource_id) throw new ConflictException({ code: 'RESOURCE_ALREADY_MERGED', canonical_id: source.merged_into_resource_id });
+      if (target.merged_into_resource_id) throw new ConflictException({ code: 'MERGE_TARGET_IS_NOT_CANONICAL', canonical_id: target.merged_into_resource_id });
+      const sourcePublic = Number(source.is_public) === 1 && PUBLIC_RESOURCE_STATUSES.includes(source.status as any);
+      const targetPublic = Number(target.is_public) === 1 && PUBLIC_RESOURCE_STATUSES.includes(target.status as any);
+      if (sourcePublic && !targetPublic) throw new ConflictException({ code: 'MERGE_TARGET_MUST_BE_PUBLIC', message: '公开资源只能合并到另一个公开资源，避免旧链接失效。' });
+
+      const tableRows = await manager.query(`SELECT table_name FROM information_schema.tables
+        WHERE table_schema = DATABASE()`, []);
+      const present = new Set((tableRows || []).map((row: any) => String(row.table_name)));
+      const counts = await this.resourceMergeCounts((sql, params) => manager.query(sql, params), sourceId);
+      const migrated: Record<string, number> = { preview: 0, version_collisions: 0 };
+      const safely = async (table: string, sql: string, params: any[]) => {
+        if (!present.has(table)) return 0;
+        const result = await manager.query(sql, params);
+        const changed = Number(result?.affectedRows ?? result?.raw?.affectedRows ?? 0);
+        migrated[table] = (migrated[table] || 0) + changed;
+        return changed;
+      };
+      migrated.preview = Object.values(counts).reduce((sum, value) => sum + value, 0);
+
+      for (const [table, columns] of [
+        ['resource_favorites', 'user_id, created_at'],
+        ['resource_likes', 'user_id, created_at'],
+      ] as Array<[string, string]>) {
+        await safely(table, `INSERT IGNORE INTO ${table} (resource_id, ${columns}) SELECT ?, ${columns} FROM ${table} WHERE resource_id = ?`, [targetId, sourceId]);
+        await safely(table, `DELETE FROM ${table} WHERE resource_id = ?`, [sourceId]);
+      }
+      await safely('resource_subscriptions', `INSERT IGNORE INTO resource_subscriptions (resource_id, user_id, notification_level, created_at)
+        SELECT ?, user_id, notification_level, created_at FROM resource_subscriptions WHERE resource_id = ?`, [targetId, sourceId]);
+      await safely('resource_subscriptions', 'DELETE FROM resource_subscriptions WHERE resource_id = ?', [sourceId]);
+      await safely('resource_ratings', `INSERT IGNORE INTO resource_ratings (resource_id, user_id, rating, created_at, updated_at)
+        SELECT ?, user_id, rating, created_at, updated_at FROM resource_ratings WHERE resource_id = ?`, [targetId, sourceId]);
+      await safely('resource_ratings', 'DELETE FROM resource_ratings WHERE resource_id = ?', [sourceId]);
+      await safely('resource_comments', 'UPDATE resource_comments SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+      await safely('resource_attributions', 'UPDATE resource_attributions SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+      await safely('resource_media_links', 'UPDATE resource_media_links SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+      await safely('knowledge_articles', 'UPDATE knowledge_articles SET related_resource_id = ? WHERE related_resource_id = ?', [targetId, sourceId]);
+      await safely('game_content_upload_sessions', 'UPDATE game_content_upload_sessions SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+
+      const sourceVersions = present.has('resource_versions')
+        ? await manager.query('SELECT id, version, status FROM resource_versions WHERE resource_id = ? ORDER BY id', [sourceId]) : [];
+      const targetVersions = present.has('resource_versions')
+        ? await manager.query('SELECT id, version, status FROM resource_versions WHERE resource_id = ?', [targetId]) : [];
+      const targetVersionByName = new Map<string, { id: number; status: string | null }>(targetVersions.map((row: any) => [String(row.version), { id: Number(row.id), status: row.status || null }]));
+      const versionIdMap = new Map<number, number>();
+      const moveIds: number[] = [];
+      const versionCollisionMappings: Array<{ source_version_id: number; target_version_id: number; attachments_migrated: boolean }> = [];
+      for (const versionRow of sourceVersions) {
+        const oldId = Number(versionRow.id);
+        const existing = targetVersionByName.get(String(versionRow.version));
+        if (existing) {
+          versionIdMap.set(oldId, existing.id);
+          migrated.version_collisions += 1;
+          const canMigratePublishedEvidence = source.status === 'approved' || source.status === 'published'
+            ? versionRow.status === 'published' && existing.status === 'published'
+            : false;
+          let attachmentsMigrated = false;
+          if (canMigratePublishedEvidence && present.has('resource_files')) {
+            attachmentsMigrated = await safely('resource_files', `UPDATE resource_files
+              SET resource_version_id = ?, role = CASE WHEN role = 'primary' THEN 'supplementary' ELSE role END,
+                  sort_order = 1000000 + id
+              WHERE resource_version_id = ? AND availability_status = 'available'`, [existing.id, oldId]) > 0;
+            if (present.has('resource_version_dependencies')) {
+              await safely('resource_version_dependencies', 'UPDATE resource_version_dependencies SET resource_version_id = ? WHERE resource_version_id = ?', [existing.id, oldId]);
+            }
+            if (present.has('resource_version_compatibilities')) {
+              await safely('resource_version_compatibilities', 'UPDATE resource_version_compatibilities SET resource_version_id = ? WHERE resource_version_id = ?', [existing.id, oldId]);
+            }
+          }
+          versionCollisionMappings.push({ source_version_id: oldId, target_version_id: existing.id, attachments_migrated: attachmentsMigrated });
+        } else {
+          versionIdMap.set(oldId, oldId);
+          targetVersionByName.set(String(versionRow.version), { id: oldId, status: versionRow.status || null });
+          moveIds.push(oldId);
+        }
+      }
+      if (moveIds.length) {
+        await safely('resource_versions', `UPDATE resource_versions SET resource_id = ? WHERE id IN (${moveIds.map(() => '?').join(',')})`, [targetId, ...moveIds]);
+      }
+      if (present.has('download_events')) {
+        for (const [oldVersionId, canonicalVersionId] of versionIdMap) {
+          if (oldVersionId !== canonicalVersionId) await safely('download_events', 'UPDATE download_events SET version_id = ? WHERE version_id = ?', [canonicalVersionId, oldVersionId]);
+        }
+        await safely('download_events', 'UPDATE download_events SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+      }
+      await safely('resource_version_dependencies', `UPDATE resource_version_dependencies SET target_resource_id = ? WHERE target_resource_id = ?`, [targetId, sourceId]);
+      if (present.has('content_relations')) {
+        await safely('content_relations', `INSERT IGNORE INTO content_relations (source_type, source_id, target_type, target_id, relation_type, created_at)
+          SELECT source_type, source_id, target_type, ?, relation_type, created_at FROM content_relations
+          WHERE target_type = 'resource' AND target_id = CAST(? AS CHAR)`, [String(targetId), sourceId]);
+        await safely('content_relations', `DELETE FROM content_relations WHERE target_type = 'resource' AND target_id = CAST(? AS CHAR)`, [sourceId]);
+        await safely('content_relations', `INSERT IGNORE INTO content_relations (source_type, source_id, target_type, target_id, relation_type, created_at)
+          SELECT source_type, ?, target_type, target_id, relation_type, created_at FROM content_relations
+          WHERE source_type = 'resource' AND source_id = ?`, [targetId, sourceId]);
+        await safely('content_relations', `DELETE FROM content_relations WHERE source_type = 'resource' AND source_id = ?`, [sourceId]);
+      }
+
+      const parseJson = (value: any) => {
+        if (!value) return {};
+        if (typeof value === 'string') { try { return JSON.parse(value); } catch { return {}; } }
+        return typeof value === 'object' ? value : {};
+      };
+      const sourceMetadata = parseJson(source.metadata_json);
+      const targetMetadata = parseJson(target.metadata_json);
+      const mergedMetadata = { ...sourceMetadata, ...targetMetadata };
+      if (Array.isArray(sourceMetadata.tags) || Array.isArray(targetMetadata.tags)) {
+        mergedMetadata.tags = [...new Set([...(sourceMetadata.tags || []), ...(targetMetadata.tags || [])].filter((tag: unknown) => typeof tag === 'string'))];
+      }
+      const filledFields: Record<string, any> = {};
+      for (const field of ['description', 'summary', 'resource_kind', 'resource_type', 'file_name', 'file_path', 'file_size', 'mime_type', 'content_hash', 'use_mfl', 'mfl_file_id', 'mfl_download_url', 'homepage_url', 'source_url', 'license', 'external_url', 'renderer_status', 'renderer_error_code', 'renderer_preview_key', 'renderer_parser_version', 'renderer_metadata_json', 'category_id']) {
+        if ((target[field] === null || target[field] === undefined || target[field] === '') && source[field] !== null && source[field] !== undefined && source[field] !== '') filledFields[field] = source[field];
+      }
+      if (target.latest_published_version_id == null && source.latest_published_version_id != null) {
+        filledFields.latest_published_version_id = versionIdMap.get(Number(source.latest_published_version_id)) || null;
+      }
+      const ratingRows = present.has('resource_ratings')
+        ? await manager.query('SELECT COUNT(*) AS count, COALESCE(SUM(rating), 0) AS total FROM resource_ratings WHERE resource_id = ?', [targetId]) : [];
+      const ratingCount = Number(ratingRows?.[0]?.count ?? Number(target.rating_count || 0) + Number(source.rating_count || 0));
+      const ratingSum = Number(ratingRows?.[0]?.total ?? Number(target.rating_sum || 0) + Number(source.rating_sum || 0));
+      const updates = {
+        ...filledFields,
+        metadata_json: JSON.stringify(mergedMetadata),
+        download_count: Number(target.download_count || 0) + Number(source.download_count || 0),
+        view_count: Number(target.view_count || 0) + Number(source.view_count || 0),
+        rating_count: ratingCount,
+        rating_sum: ratingSum,
+        rating_average: ratingCount ? Math.round((ratingSum / ratingCount) * 100) / 100 : 0,
+      };
+      await manager.createQueryBuilder().update('resources').set(updates).where('id = :id', { id: targetId }).execute();
+      if (present.has('resource_content_hash_claims')) {
+        await safely('resource_content_hash_claims', 'UPDATE resource_content_hash_claims SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+      }
+      if (present.has('resource_structure_hash_claims')) {
+        await safely('resource_structure_hash_claims', 'UPDATE resource_structure_hash_claims SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+      }
+      await manager.query(`UPDATE resources SET status = 'merged', is_public = 0, visibility = 'private', merged_into_resource_id = ?, updated_at = NOW()
+        WHERE id = ?`, [targetId, sourceId]);
+      await manager.query(`INSERT INTO resource_merge_logs (source_resource_id, target_resource_id, admin_user_id, migrated_counts)
+        VALUES (?, ?, ?, ?)`, [sourceId, targetId, adminUserId, JSON.stringify({ ...migrated, preview_counts: counts, version_collision_mappings: versionCollisionMappings })]);
+      return { source_id: sourceId, target_id: targetId, status: 'merged', migrated_counts: migrated, version_collision_mappings: versionCollisionMappings };
+    });
   }
 
   async getRelatedResources(id: number, limit = 6): Promise<any[]> {
@@ -1246,6 +1698,44 @@ export class ResourcesService {
     }
 
     await this.resourceRepository.softDelete(resource.id);
+    if (resource.content_hash) await this.releaseContentHashClaim(resource.content_hash);
+    if (resource.structure_hash) await this.releaseStructureHashClaim(resource.structure_hash);
+  }
+
+  async releaseContentHashClaim(contentHash: string): Promise<void> {
+    const rows = await this.dataSource.query(`SELECT MIN(resource_id) AS id FROM (
+      SELECT r.id AS resource_id FROM resources r
+        WHERE r.content_hash = ? AND r.deleted_at IS NULL AND r.status IN ('pending','pending_review','approved','published')
+          AND r.merged_into_resource_id IS NULL
+      UNION ALL
+      SELECT rv.resource_id FROM resource_versions rv INNER JOIN resources r ON r.id = rv.resource_id
+        WHERE rv.content_hash = ? AND (rv.status IS NULL OR rv.status IN ('pending','pending_review','published'))
+          AND r.deleted_at IS NULL AND r.status IN ('pending','pending_review','approved','published') AND r.merged_into_resource_id IS NULL
+      UNION ALL
+      SELECT rv.resource_id FROM resource_files rf INNER JOIN resource_versions rv ON rv.id = rf.resource_version_id
+        INNER JOIN resources r ON r.id = rv.resource_id
+        WHERE rf.content_hash = ? AND rf.availability_status = 'available'
+          AND (rv.status IS NULL OR rv.status IN ('pending','pending_review','published'))
+          AND r.deleted_at IS NULL AND r.status IN ('pending','pending_review','approved','published') AND r.merged_into_resource_id IS NULL
+    ) active_hash_owners`, [contentHash, contentHash, contentHash]);
+    const activeId = rows?.[0]?.id;
+    if (activeId) {
+      await this.dataSource.query('UPDATE resource_content_hash_claims SET resource_id = ? WHERE content_hash = ?', [Number(activeId), contentHash]);
+    } else {
+      await this.dataSource.query('DELETE FROM resource_content_hash_claims WHERE content_hash = ?', [contentHash]);
+    }
+  }
+
+  private async releaseStructureHashClaim(structureHash: string): Promise<void> {
+    const rows = await this.dataSource.query(`SELECT MIN(id) AS id FROM resources
+      WHERE structure_hash = ? AND deleted_at IS NULL AND merged_into_resource_id IS NULL
+        AND status IN ('pending','pending_review','approved','published')`, [structureHash]);
+    const activeId = rows?.[0]?.id;
+    if (activeId) {
+      await this.dataSource.query('UPDATE resource_structure_hash_claims SET resource_id = ? WHERE structure_hash = ?', [Number(activeId), structureHash]);
+    } else {
+      await this.dataSource.query('DELETE FROM resource_structure_hash_claims WHERE structure_hash = ?', [structureHash]);
+    }
   }
 
   private async promoteResourceFile(filePath: string | null | undefined): Promise<string | null | undefined> {
@@ -1308,7 +1798,28 @@ export class ResourcesService {
       } else if (status === RESOURCE_STATUS_APPROVED) {
         updateData.reject_reason = null;
       }
-      await this.resourceRepository.update(id, updateData);
+      if (status !== RESOURCE_STATUS_REJECTED && existingResource.content_hash) {
+        const conflicting = await this.resourceRepository.createQueryBuilder('resource')
+          .leftJoinAndSelect('resource.category', 'category')
+          .where('resource.content_hash = :contentHash', { contentHash: existingResource.content_hash })
+          .andWhere('resource.id <> :id', { id })
+          .andWhere('resource.status IN (:...statuses)', { statuses: RESOURCE_DUPLICATE_STATUSES })
+          .andWhere('resource.deleted_at IS NULL')
+          .andWhere('resource.merged_into_resource_id IS NULL')
+          .orderBy('resource.id', 'ASC').getOne();
+        if (conflicting) throw this.duplicateConflict({ id: conflicting.id, public_id: conflicting.public_id, title: conflicting.title, status: conflicting.status, is_public: Number(conflicting.is_public), category_visible: !conflicting.category_id || Number(conflicting.category?.is_active) === 1, url: `/resources/${conflicting.id}` });
+      }
+      await this.dataSource.transaction(async (manager) => {
+        await manager.update(Resource, id, updateData);
+        if (status !== RESOURCE_STATUS_REJECTED && existingResource.content_hash) {
+          await this.claimContentHash(manager, existingResource.content_hash, id);
+        }
+        if (status !== RESOURCE_STATUS_REJECTED && existingResource.structure_hash) {
+          await this.claimStructureHash(manager, existingResource.structure_hash, id, existingResource.duplicate_note || '');
+        }
+      });
+      if (status === RESOURCE_STATUS_REJECTED && existingResource.content_hash) await this.releaseContentHashClaim(existingResource.content_hash);
+      if (status === RESOURCE_STATUS_REJECTED && existingResource.structure_hash) await this.releaseStructureHashClaim(existingResource.structure_hash);
       await this.syncLatestV2ReleaseStatus(id, status);
 
       // Sync approval status to MFL if applicable

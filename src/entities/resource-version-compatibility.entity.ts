@@ -33,6 +33,12 @@ export class ResourceVersionCompatibility {
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 
+  @Column({ type: 'varchar', length: 32, default: 'user_declared' })
+  provenance: 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified';
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  confidence: 'low' | 'medium' | 'high' | null;
+
   @CreateDateColumn()
   created_at: Date;
 

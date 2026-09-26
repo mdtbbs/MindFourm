@@ -2,7 +2,7 @@ import {
   BadRequestException, Body, Controller, Delete, Get, HttpStatus, Param, Patch, Post, Req, Res, UploadedFile,
   UseGuards, UseInterceptors, ValidationPipe,
 } from '@nestjs/common';
-import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiOkResponse, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { unlink } from 'fs/promises';
 import { ApiV1, RawHttpResponse } from '../../../common/decorators/api-v1.decorator';
@@ -21,6 +21,21 @@ import { CreateResourcePreviewDraftDto } from '../dto/create-resource-preview-dr
 import { CreateResourceUploadDraftDto } from '../dto/create-resource-upload-draft.dto';
 import { UpdateResourceUploadDraftDto } from '../dto/update-resource-upload-draft.dto';
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourcePreviewDraftInterceptor, resourceUploadInterceptor } from '../resources.controller';
+import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
+
+const duplicateResponseSchema = {
+  type: 'object', required: ['exact', 'structure', 'normalized', 'existing_resources'],
+  properties: {
+    exact: { type: 'boolean', description: 'Exact file SHA-256 match; final submit is rejected with RESOURCE_DUPLICATE.' },
+    structure: { type: 'boolean', description: 'Exact schematic structure match; submit needs duplicate_note.' },
+    normalized: { type: 'boolean', description: 'Rotation/mirror normalized match; advisory only.' },
+    existing_resources: { type: 'array', items: { type: 'object', properties: {
+      id: { type: 'integer', nullable: true }, public_id: { type: 'string', nullable: true },
+      title: { type: 'string' }, status: { type: 'string' }, url: { type: 'string' },
+    } } },
+    similar_resources: { type: 'array', items: { type: 'object' } },
+  },
+};
 
 @ApiV1()
 @ApiTags('v1-resource-uploads')
@@ -44,7 +59,10 @@ export class ResourcesV1WriteController {
     schematic_code: { type: 'string', maxLength: 29360128 },
     file: { type: 'string', format: 'binary' },
   } } })
-  @ApiCreatedResponse({ description: 'A private, short-lived, user-bound parsed resource draft.' })
+  @ApiCreatedResponse({ description: 'A private parsed draft and duplicate findings.', schema: { type: 'object', properties: {
+    id: { type: 'string' }, preview_url: { type: 'string' }, parser_version: { type: 'string', nullable: true },
+    metadata: { type: 'object', nullable: true }, duplicate: duplicateResponseSchema,
+  } } })
   async previewDraft(@Body() rawBody: Record<string, any>, @UploadedFile() file: Express.Multer.File | undefined, @Req() req: any) {
     let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
     try {
@@ -77,9 +95,11 @@ export class ResourcesV1WriteController {
   @RateLimit({ max: 5, window: 60 })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['resource_kind', 'file'], properties: {
-    resource_kind: { type: 'string' }, file: { type: 'string', format: 'binary' },
+    resource_kind: { type: 'string', enum: RESOURCE_KIND_VALUES }, file: { type: 'string', format: 'binary' },
   } } })
-  @ApiCreatedResponse({ description: 'Creates a durable owner-bound upload draft in quarantine.' })
+  @ApiCreatedResponse({ description: 'Creates a durable owner-bound upload draft in quarantine and returns exact duplicate findings.', schema: { type: 'object', properties: {
+    id: { type: 'string' }, resource_kind: { type: 'string', enum: RESOURCE_KIND_VALUES }, expires_at: { type: 'string', format: 'date-time' }, duplicate: duplicateResponseSchema,
+  } } })
   async createUploadDraft(@Body() rawBody: Record<string, any>, @UploadedFile() file: Express.Multer.File | undefined, @Req() req: any) {
     let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
     try {
@@ -128,11 +148,15 @@ export class ResourcesV1WriteController {
 
   @Post('drafts/:draftId/submit')
   @OAuthProtected('resource.upload')
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'ASCII key scoped to the authenticated user. Reuse it unchanged to replay the first submission result for 24 hours.' })
   @ApiParam({ name: 'draftId', type: 'string' })
   @ApiCreatedResponse({ description: 'Submits an owner-bound resource draft to existing forum moderation.' })
   async submitUploadDraft(@Param('draftId') draftId: string, @Body() rawBody: Record<string, any>, @Req() req: any) {
+    const idempotencyKey = req.headers?.['idempotency-key'];
+    const replay = await this.resources.findIdempotentReplay(req.user.id, idempotencyKey, { ...rawBody, preview_draft_id: draftId });
+    if (replay) return this.submittedResource(replay);
     const draft = await this.previews.getDraft(req.user.id, draftId);
-    return this.create({ ...draft.draft, ...rawBody, resource_type: 'upload', resource_kind: draft.resource_kind, preview_draft_id: draftId }, undefined, req);
+    return this.create({ ...draft.draft, ...rawBody, resource_type: 'upload', resource_kind: draft.resource_kind, preview_draft_id: draftId }, undefined, req, { ...rawBody, preview_draft_id: draftId });
   }
 
   @Get('drafts/:draftId/preview')
@@ -152,22 +176,38 @@ export class ResourcesV1WriteController {
   @UseInterceptors(resourceUploadInterceptor)
   @RateLimit({ max: 5, window: 60 })
   @ApiConsumes('multipart/form-data')
+  @ApiHeader({ name: 'Idempotency-Key', required: false, description: 'ASCII key scoped to the authenticated user. Same key and request replay the original result for 24 hours; a changed payload returns IDEMPOTENCY_KEY_REUSED.' })
+  @ApiResponse({ status: 409, description: 'RESOURCE_DUPLICATE, RESOURCE_STRUCTURE_DUPLICATE, IDEMPOTENCY_KEY_REUSED, or IDEMPOTENCY_IN_PROGRESS.', schema: {
+    type: 'object', properties: { error: { type: 'object', properties: {
+      code: { type: 'string', enum: ['RESOURCE_DUPLICATE', 'RESOURCE_STRUCTURE_DUPLICATE', 'IDEMPOTENCY_KEY_REUSED', 'IDEMPOTENCY_IN_PROGRESS'] },
+      message: { type: 'string' }, existing_resource: { type: 'object', nullable: true }, existing_resources: { type: 'array', items: { type: 'object' } },
+    } } },
+  } })
   @ApiBody({ schema: { type: 'object', required: ['title', 'resource_type', 'version'], properties: {
     title: { type: 'string' }, resource_type: { type: 'string', enum: ['upload', 'external'] },
-    resource_kind: { type: 'string' }, version: { type: 'string' }, description: { type: 'string' },
+    resource_kind: { type: 'string', enum: RESOURCE_KIND_VALUES }, version: { type: 'string' }, description: { type: 'string' },
+    duplicate_note: { type: 'string', maxLength: 2000, description: 'Required when an exact schematic structure already exists; stored with the resource.' },
+    compatibility: { type: 'array', description: 'Publisher-declared compatibility. Renderer facts remain separate and cannot be overwritten.' },
     content: { type: 'string', description: 'Legacy Markdown projection; kept for compatibility.' },
     content_json: { type: 'object', description: 'Canonical Tiptap/ProseMirror document. Submitted as a JSON string in multipart requests.' },
     preview_draft_id: { type: 'string' }, schematic_code: { type: 'string' }, external_url: { type: 'string', format: 'uri' },
     file: { type: 'string', format: 'binary' },
   } } })
-  @ApiCreatedResponse({ description: 'Submitted to the existing resource moderation lifecycle.' })
-  async create(@Body() rawBody: Record<string, any>, @UploadedFile() file: Express.Multer.File | undefined, @Req() req: any) {
+  @ApiCreatedResponse({ description: 'Submitted to moderation; same Idempotency-Key and request replay this result.', schema: { type: 'object', properties: {
+    public_id: { type: 'string' }, title: { type: 'string' }, status: { type: 'string' }, created_at: { type: 'string', format: 'date-time', nullable: true },
+  } } })
+  async create(@Body() rawBody: Record<string, any>, @UploadedFile() file: Express.Multer.File | undefined, @Req() req: any, idempotencyPayload?: unknown) {
     let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
     let rendererDraft: ConsumedResourcePreviewDraft | undefined;
     try {
       await this.assertEnabled(req.user);
       const body = await this.validate(rawBody, CreateResourceDto);
       const userId = req.user.id;
+      const idempotencyKey = req.headers?.['idempotency-key'];
+      if (body.preview_draft_id) {
+        const replay = await this.resources.findIdempotentReplay(userId, idempotencyKey, (idempotencyPayload || body) as Record<string, unknown>);
+        if (replay) return this.submittedResource(replay);
+      }
       const schematicCode = body.schematic_code?.trim();
       const previewDraftId = body.preview_draft_id?.trim();
       if (body.resource_type === 'external' && file) throw new BadRequestException('外链资源不能同时上传本站托管文件');
@@ -181,19 +221,26 @@ export class ResourcesV1WriteController {
       } else storedFile = schematicCode
           ? await this.storage.storePastedSchematic(schematicCode)
           : await this.storage.storeIncoming(file);
-      const resource = await this.resources.create(body, userId, storedFile, { ipAddress: getClientIp(req), rendererDraft });
-      return {
-        public_id: resource.public_id,
-        title: resource.title,
-        status: resource.status,
-        created_at: resource.created_at?.toISOString?.() ?? null,
-      };
+      const resource = await this.resources.create(body, userId, storedFile, {
+        ipAddress: getClientIp(req), rendererDraft, idempotencyKey,
+        idempotencyPayload: idempotencyPayload || body,
+      });
+      return this.submittedResource(resource);
     } catch (error) {
       await cleanupUploadedFile(file);
       if (storedFile?.file_path) await unlink(storedFile.file_path).catch(() => undefined);
       if (rendererDraft) await this.previews.discardConsumedDraft(rendererDraft);
       throw error;
     }
+  }
+
+  private submittedResource(resource: any) {
+    return {
+      public_id: resource.public_id,
+      title: resource.title,
+      status: resource.status,
+      created_at: resource.created_at?.toISOString?.() ?? (typeof resource.created_at === 'string' ? resource.created_at : null),
+    };
   }
 
   private async assertEnabled(user: any) {

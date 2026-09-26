@@ -20,8 +20,12 @@ fi
 rm -rf "$classes_dir"
 mkdir -p "$classes_dir" "$releases_dir"
 chmod 755 "$runtime_dir" "$releases_dir"
-javac --release 17 -cp "$server_jar" -d "$classes_dir" \
-  "$renderer_dir/src/main/java/cn/mdtbbs/renderer/MapRenderer.java"
+mapfile -d '' -t java_sources < <(find "$renderer_dir/src/main/java" -name '*.java' -type f -print0 | sort -z)
+if [[ "${#java_sources[@]}" -eq 0 ]]; then
+  printf 'No renderer Java sources found under %s\n' "$renderer_dir/src/main/java" >&2
+  exit 1
+fi
+javac --release 17 -cp "$server_jar" -d "$classes_dir" "${java_sources[@]}"
 if [[ -d "$renderer_dir/src/main/resources" ]]; then
   cp -R "$renderer_dir/src/main/resources/." "$classes_dir/"
 fi

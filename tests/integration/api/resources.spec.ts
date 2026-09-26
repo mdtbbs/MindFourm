@@ -25,6 +25,8 @@ jest.mock('@nestjs/common', () => ({
   Injectable: () => () => undefined,
   Controller: () => () => undefined,
   Get: () => () => undefined,
+  Redirect: () => () => undefined,
+  Redirect: () => () => undefined,
   Header: () => () => undefined,
   Post: () => () => undefined,
   Put: () => () => undefined,
@@ -273,6 +275,7 @@ function createController(overrides: {
     getHotResources: jest.fn().mockResolvedValue([]),
     getPublicByUserId: jest.fn().mockResolvedValue({ data: [], next_cursor: null, has_more: false }),
     getByIdWithVersions: jest.fn(),
+    findMergedResourceTarget: jest.fn().mockResolvedValue(null),
     getById: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
@@ -440,6 +443,18 @@ describe('Resources API - Category Visibility', () => {
   });
 
   describe('GET /resources/:id (single resource)', () => {
+    it('returns a permanent redirect for a merged resource alias', async () => {
+      const { controller, resourcesService } = createController({
+        resourcesService: { findMergedResourceTarget: jest.fn().mockResolvedValue(22) },
+      });
+
+      await expect(controller.getById(1, undefined)).resolves.toEqual({
+        url: '/api/resources/22',
+        statusCode: 301,
+      });
+      expect(resourcesService.getByIdWithVersions).not.toHaveBeenCalled();
+    });
+
     it('should deny access to resource in disabled category (404)', async () => {
       const { controller } = createController({
         resourcesService: {

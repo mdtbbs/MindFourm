@@ -511,6 +511,12 @@ export interface MindustryRendererMetadata {
   spawns?: number;
   version?: number;
   build?: number;
+  save_format_version?: number | null;
+  schematic_format_version?: number | null;
+  map_build_metadata?: { stored_game_build?: number | null; source?: string };
+  parser_runtime?: { mindustry_build?: number; renderer_version?: string };
+  compatibility?: { minimum_supported_build?: number | null; confidence?: 'low' | 'medium' | 'high'; unknown_content?: string[] };
+  structure_hashes?: { exact?: string; normalized?: string };
   planet?: string;
   game_modes?: string[];
   teams?: string[];
@@ -564,6 +570,15 @@ export interface ResourceVersion {
   release_notes_markdown?: string | null;
   published_at?: string | null;
   created_at: string;
+  compatibility?: Array<{
+    runtime: string;
+    min_version_value: string | null;
+    max_version_value: string | null;
+    channel: string | null;
+    notes: string | null;
+    provenance: 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified';
+    confidence: 'low' | 'medium' | 'high' | null;
+  }>;
 }
 
 // Resource Comments

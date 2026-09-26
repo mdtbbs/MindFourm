@@ -46,6 +46,20 @@ describe('ResourceLegacyProjectionService', () => {
 });
 
 describe('ResourceReadAdapterService', () => {
+  it('resolves the public canonical ID for a merged alias', async () => {
+    const resourceRepo = {
+      findOne: jest.fn()
+        .mockResolvedValueOnce({ id: 1, merged_into_resource_id: 2 })
+        .mockResolvedValueOnce({ id: 2, public_id: 'canonical-id', is_public: 1, status: 'published', merged_into_resource_id: null }),
+    };
+    const service = new ResourceReadAdapterService(
+      resourceRepo as any, {} as any, {} as any, {} as any,
+      new ResourceLegacyProjectionService(),
+    );
+
+    await expect(service.getMergedCanonicalPublicId('merged-id')).resolves.toBe('canonical-id');
+  });
+
   it('returns null for non-existent resources', async () => {
     const resourceRepo = { findOne: jest.fn().mockResolvedValue(null) };
     const service = new ResourceReadAdapterService(
@@ -79,7 +93,7 @@ describe('ResourceReadAdapterService', () => {
         latest_published_version_id: 10, download_count: 42,
         metadata_json: { tags: ['survival'], planets: ['serpulo'] },
         renderer_status: 'ready',
-        renderer_metadata_json: { width: 256, height: 128, spawns: 4 },
+        renderer_metadata_json: { width: 256, height: 128, spawns: 4, build: 160 },
       }),
     };
     const versionRepo = {
@@ -118,6 +132,7 @@ describe('ResourceReadAdapterService', () => {
     expect(result!.metadata.preview.status).toBe('ready');
     expect(result!.metadata.map?.width).toBe(256);
     expect(result!.metadata.map?.planets).toEqual(['serpulo']);
+    expect(result!.metadata.map?.stored_game_build).toBeNull();
     expect(result!.attributions).toHaveLength(1);
     expect(result!.attributions[0].role).toBe('submitter');
     expect(result!.latest_version).not.toBeNull();

@@ -218,7 +218,17 @@
         "x-required-scopes": [
           "resource.upload"
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "ASCII key scoped to the authenticated user. Same key and request replay the original result for 24 hours; a changed payload returns IDEMPOTENCY_KEY_REUSED.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -242,13 +252,33 @@
                     ]
                   },
                   "resource_kind": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "mod",
+                      "map",
+                      "schematic",
+                      "save",
+                      "game_version",
+                      "server_plugin",
+                      "development_tool",
+                      "texture_ui",
+                      "other"
+                    ]
                   },
                   "version": {
                     "type": "string"
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "duplicate_note": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "description": "Required when an exact schematic structure already exists; stored with the resource."
+                  },
+                  "compatibility": {
+                    "type": "array",
+                    "description": "Publisher-declared compatibility. Renderer facts remain separate and cannot be overwritten."
                   },
                   "content": {
                     "type": "string",
@@ -279,19 +309,133 @@
         },
         "responses": {
           "201": {
-            "description": "Submitted to the existing resource moderation lifecycle."
+            "description": "Submitted to moderation; same Idempotency-Key and request replay this result.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "public_id": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
           "403": {
             "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "409": {
+            "description": "RESOURCE_DUPLICATE, RESOURCE_STRUCTURE_DUPLICATE, IDEMPOTENCY_KEY_REUSED, or IDEMPOTENCY_IN_PROGRESS.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string",
+                          "enum": [
+                            "RESOURCE_DUPLICATE",
+                            "RESOURCE_STRUCTURE_DUPLICATE",
+                            "IDEMPOTENCY_KEY_REUSED",
+                            "IDEMPOTENCY_IN_PROGRESS"
+                          ]
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "existing_resource": {
+                          "type": "object",
+                          "nullable": true
+                        },
+                        "existing_resources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "tags": [
           "v1-resource-uploads"
         ],
         "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/kinds": {
+      "get": {
+        "operationId": "ResourcesV1Controller_listKinds",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Canonical resource_kind registry shared with the web resource center."
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          }
+        },
+        "tags": [
+          "v1-resources"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/topics": {
+      "get": {
+        "operationId": "ResourcesV1Controller_listTopics",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Active topic/use categories. These are a secondary filter and do not replace resource_kind."
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          }
+        },
+        "tags": [
+          "v1-resources"
+        ],
+        "security": [
+          {},
           {
             "MindAuthBearer": []
           }
@@ -433,6 +577,35 @@
           "200": {
             "description": "Resource detail"
           },
+          "301": {
+            "description": "Merged resource; Location points to the canonical resource and the response data contains its public ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "merged": {
+                          "type": "boolean"
+                        },
+                        "canonical_public_id": {
+                          "type": "string"
+                        },
+                        "redirect_url": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "403": {
             "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           }
@@ -487,7 +660,84 @@
         },
         "responses": {
           "201": {
-            "description": "A private, short-lived, user-bound parsed resource draft."
+            "description": "A private parsed draft and duplicate findings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "preview_url": {
+                      "type": "string"
+                    },
+                    "parser_version": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "duplicate": {
+                      "type": "object",
+                      "required": [
+                        "exact",
+                        "structure",
+                        "normalized",
+                        "existing_resources"
+                      ],
+                      "properties": {
+                        "exact": {
+                          "type": "boolean",
+                          "description": "Exact file SHA-256 match; final submit is rejected with RESOURCE_DUPLICATE."
+                        },
+                        "structure": {
+                          "type": "boolean",
+                          "description": "Exact schematic structure match; submit needs duplicate_note."
+                        },
+                        "normalized": {
+                          "type": "boolean",
+                          "description": "Rotation/mirror normalized match; advisory only."
+                        },
+                        "existing_resources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "public_id": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "similar_resources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
@@ -525,7 +775,18 @@
                 ],
                 "properties": {
                   "resource_kind": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "mod",
+                      "map",
+                      "schematic",
+                      "save",
+                      "game_version",
+                      "server_plugin",
+                      "development_tool",
+                      "texture_ui",
+                      "other"
+                    ]
                   },
                   "file": {
                     "type": "string",
@@ -538,7 +799,91 @@
         },
         "responses": {
           "201": {
-            "description": "Creates a durable owner-bound upload draft in quarantine."
+            "description": "Creates a durable owner-bound upload draft in quarantine and returns exact duplicate findings.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "resource_kind": {
+                      "type": "string",
+                      "enum": [
+                        "mod",
+                        "map",
+                        "schematic",
+                        "save",
+                        "game_version",
+                        "server_plugin",
+                        "development_tool",
+                        "texture_ui",
+                        "other"
+                      ]
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "duplicate": {
+                      "type": "object",
+                      "required": [
+                        "exact",
+                        "structure",
+                        "normalized",
+                        "existing_resources"
+                      ],
+                      "properties": {
+                        "exact": {
+                          "type": "boolean",
+                          "description": "Exact file SHA-256 match; final submit is rejected with RESOURCE_DUPLICATE."
+                        },
+                        "structure": {
+                          "type": "boolean",
+                          "description": "Exact schematic structure match; submit needs duplicate_note."
+                        },
+                        "normalized": {
+                          "type": "boolean",
+                          "description": "Rotation/mirror normalized match; advisory only."
+                        },
+                        "existing_resources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "integer",
+                                "nullable": true
+                              },
+                              "public_id": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "title": {
+                                "type": "string"
+                              },
+                              "status": {
+                                "type": "string"
+                              },
+                              "url": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        },
+                        "similar_resources": {
+                          "type": "array",
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
@@ -675,6 +1020,15 @@
             "name": "draftId",
             "required": true,
             "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "ASCII key scoped to the authenticated user. Reuse it unchanged to replay the first submission result for 24 hours.",
+            "required": false,
             "schema": {
               "type": "string"
             }

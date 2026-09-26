@@ -5,6 +5,7 @@ import { ResourceVersion } from './resource-version.entity';
 
 @Entity('resource_files')
 @Index('idx_resource_files_version', ['resource_version'])
+@Index('idx_resource_files_hash_availability', ['content_hash', 'availability_status', 'resource_version_id'])
 export class ResourceFile {
   @PrimaryGeneratedColumn()
   id: number;

@@ -1,5 +1,5 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Unique,
+  Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Unique, Index,
 } from 'typeorm';
 import { Resource } from './resource.entity';
 
@@ -7,6 +7,7 @@ import { Resource } from './resource.entity';
 // silently creates a second row for the same version string and the version list
 // shows duplicates.
 @Unique('uq_resource_versions_resource_version', ['resource_id', 'version'])
+@Index('idx_resource_versions_hash_status', ['content_hash', 'status', 'resource_id'])
 @Entity('resource_versions')
 export class ResourceVersion {
   @PrimaryGeneratedColumn()

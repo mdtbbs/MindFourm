@@ -56,6 +56,7 @@ import { UpgradeDownloadEvents1720000070000 } from './1720000070000-UpgradeDownl
 import { AddCanonicalTiptapContent1720000080000 } from './1720000080000-AddCanonicalTiptapContent';
 import { CreateResourceUploadDrafts1720000090000 } from './1720000090000-CreateResourceUploadDrafts';
 import { AllowUsersWithoutEmail1720000100000 } from './1720000100000-AllowUsersWithoutEmail';
+import { ResourceIntegrityAndMerge1720000110000 } from './1720000110000-ResourceIntegrityAndMerge';
 
 /**
  * Migrations in run order.
@@ -123,4 +124,5 @@ export const migrations = [
   AddCanonicalTiptapContent1720000080000,
   CreateResourceUploadDrafts1720000090000,
   AllowUsersWithoutEmail1720000100000,
+  ResourceIntegrityAndMerge1720000110000,
 ];

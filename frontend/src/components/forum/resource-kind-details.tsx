@@ -79,11 +79,42 @@ export default function ResourceKindDetails({ resource }: { resource: Resource }
     ['禁用单位', Array.isArray(metadata.banned_units) ? metadata.banned_units.join('、') : ''],
     ['禁用方块', Array.isArray(metadata.banned_blocks) ? metadata.banned_blocks.join('、') : ''],
   ] as Array<[string, string]>).filter(([, value]) => value.length > 0);
+  const mapBuild = metadata.map_build_metadata && typeof metadata.map_build_metadata === 'object'
+    ? metadata.map_build_metadata as { stored_game_build?: unknown; save_format_version?: unknown }
+    : null;
+  const rendererCompatibility = metadata.compatibility && typeof metadata.compatibility === 'object'
+    ? metadata.compatibility as { minimum_supported_build?: unknown; confidence?: unknown; unknown_content?: unknown }
+    : null;
+  const compatibilityEvidence = (resource.versions || []).flatMap((version) => (version.compatibility || [])
+    .filter((item) => item.runtime === 'mindustry')
+    .map((item) => ({ ...item, version: version.version })));
+  const hasBuildEvidence = kind === 'map'
+    ? typeof mapBuild?.stored_game_build === 'number'
+    : typeof rendererCompatibility?.minimum_supported_build === 'number';
+  const evidenceLabel = (provenance: string) => provenance === 'admin_verified' || provenance === 'verified'
+    ? '社区验证' : provenance === 'user_declared' ? '投稿者标注' : provenance === 'file_metadata' ? '文件记录' : '自动推测';
+  const evidenceValue = (item: (typeof compatibilityEvidence)[number]) => {
+    const lower = item.min_version_value;
+    const upper = item.max_version_value;
+    if (lower && upper) return `${lower} 至 ${upper}`;
+    if (lower) return `≥ ${lower}`;
+    if (upper) return `≤ ${upper}`;
+    return item.channel || '未限定版本';
+  };
 
   if (!['map', 'schematic', 'mod', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'save'].includes(kind)) return null;
   return <section className="border-b border-[var(--border)] py-6">
     <h2 className="mb-5 text-lg font-semibold text-[var(--text)]">{title}</h2>
     <FactGrid resource={resource} />
+    {(kind === 'map' || kind === 'schematic') && (hasBuildEvidence || compatibilityEvidence.length > 0) && <section className="mt-5 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
+      <h3 className="text-sm font-semibold text-[var(--text)]">Mindustry Build 兼容信息</h3>
+      <dl className="mt-3 space-y-2 text-sm">
+        {kind === 'map' && typeof mapBuild?.stored_game_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">文件记录（存档元数据）</dt><dd className="text-[var(--text)]">Build {mapBuild.stored_game_build}</dd></div>}
+        {kind === 'schematic' && typeof rendererCompatibility?.minimum_supported_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">内容推测（{rendererCompatibility.confidence === 'medium' ? '中' : '低'}置信度）</dt><dd className="text-[var(--text)]">至少 Build {rendererCompatibility.minimum_supported_build}</dd></div>}
+        {compatibilityEvidence.filter((item) => item.provenance !== 'inferred' || !hasBuildEvidence).map((item, index) => <div key={`${item.version}-${item.provenance}-${index}`} className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{evidenceLabel(item.provenance)} · 资源版本 {item.version}</dt><dd className="text-[var(--text)]">{evidenceValue(item)}{item.confidence ? ` · ${item.confidence === 'high' ? '高' : item.confidence === 'medium' ? '中' : '低'}置信度` : ''}</dd></div>)}
+      </dl>
+      {kind === 'schematic' && Array.isArray(rendererCompatibility?.unknown_content) && rendererCompatibility.unknown_content.length > 0 && <p className="mt-3 text-xs text-[var(--text-muted)]">包含解析器未识别的内容，自动推测结果可能不完整。</p>}
+    </section>}
     {kind === 'map' && <>
       <dl className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
         {resource.metadata?.planets?.length ? <div className="flex justify-between gap-3"><dt className="text-[var(--text-muted)]">可用星球</dt><dd className="text-right text-[var(--text)]">{resource.metadata.planets.join('、')}</dd></div> : null}

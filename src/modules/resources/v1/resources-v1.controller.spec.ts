@@ -62,6 +62,24 @@ describe('ResourcesV1Controller', () => {
     expect(result.download_count).toBe(42);
   });
 
+  it('redirects merged public IDs to their canonical V1 resource', async () => {
+    const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true }) };
+    const adapter = {
+      getResourceByPublicId: jest.fn().mockResolvedValue(null),
+      getMergedCanonicalPublicId: jest.fn().mockResolvedValue('canonical-id'),
+    };
+    const response = { status: jest.fn(), setHeader: jest.fn() };
+    const controller = new ResourcesV1Controller(capabilities as any, adapter as any);
+
+    await expect(controller.getResource('old-id', response as any)).resolves.toEqual({
+      merged: true,
+      canonical_public_id: 'canonical-id',
+      redirect_url: '/api/v1/resources/canonical-id',
+    });
+    expect(response.status).toHaveBeenCalledWith(HttpStatus.MOVED_PERMANENTLY);
+    expect(response.setHeader).toHaveBeenCalledWith('Location', '/api/v1/resources/canonical-id');
+  });
+
   it('lists public resources through the same capability gate', async () => {
     const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true }) };
     const adapter = { listResourcesV1: jest.fn().mockResolvedValue({ items: [{ public_id: 'resource-2', title: 'Mod' }], pagination: { limit: 20, offset: 0, next_offset: null, has_more: false } }) };

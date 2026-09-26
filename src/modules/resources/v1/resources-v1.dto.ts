@@ -61,6 +61,8 @@ export type V1ManifestCompatibility = {
   max_version: string | null;
   channel: string | null;
   platform: string | null;
+  provenance: 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified';
+  confidence: 'low' | 'medium' | 'high' | null;
 };
 
 export type V1ManifestDependency = {
@@ -114,6 +116,10 @@ export type V1MapMetadata = {
   spawns: number | null;
   version: number | null;
   build: number | null;
+  save_format_version: number | null;
+  stored_game_build: number | null;
+  build_source: 'file_metadata' | 'unknown';
+  parser_runtime: Record<string, unknown>;
   planets: string[];
   game_modes: string[];
   tags: string[];
@@ -145,6 +151,15 @@ export type V1SchematicMetadata = {
   planet: string | null;
   labels: string[];
   required_mods: string[];
+  schematic_format_version: number | null;
+  parser_runtime: Record<string, unknown>;
+  compatibility_inference: {
+    minimum_supported_build: number | null;
+    source: 'inferred' | 'unknown';
+    confidence: 'low' | 'medium' | 'high';
+    unknown_content: string[];
+  };
+  structure_hashes: { exact: string | null; normalized: string | null };
 };
 
 export type V1ModMetadata = {

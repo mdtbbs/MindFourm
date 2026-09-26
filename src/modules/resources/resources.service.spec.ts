@@ -10,6 +10,11 @@ jest.mock('@nestjs/common', () => ({
   ForbiddenException: class ForbiddenException extends Error {},
   BadRequestException: class BadRequestException extends Error {},
   UnprocessableEntityException: class UnprocessableEntityException extends Error {},
+  ConflictException: class ConflictException extends Error {
+    response: any;
+    constructor(response: any) { super(response?.message || String(response)); this.response = response; }
+    getResponse() { return this.response; }
+  },
 }));
 
 jest.mock('@nestjs/typeorm', () => ({
@@ -71,6 +76,7 @@ jest.mock('./resource-subscriptions.service', () => ({
 }));
 
 import { ResourcesService } from './resources.service';
+import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
 
 function createService(overrides: {
   resourceRepository?: Record<string, jest.Mock>;
@@ -82,6 +88,7 @@ function createService(overrides: {
   mflClientService?: Record<string, jest.Mock>;
   resourceStorageService?: Record<string, jest.Mock>;
   resourcePreviewService?: Record<string, jest.Mock>;
+  resourceDuplicateService?: Record<string, jest.Mock>;
 } = {}) {
   const defaultQb = {
     where: jest.fn().mockReturnThis(),
@@ -94,6 +101,7 @@ function createService(overrides: {
     addOrderBy: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
+    getOne: jest.fn().mockResolvedValue(null),
     getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
   };
 
@@ -101,6 +109,8 @@ function createService(overrides: {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn(),
     update: jest.fn().mockResolvedValue(undefined),
+    query: jest.fn().mockResolvedValue([]),
+    query: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockImplementation((value: unknown) => value),
     save: jest.fn().mockImplementation(async (...args: unknown[]) => {
@@ -121,6 +131,7 @@ function createService(overrides: {
     })),
     findOne: jest.fn(),
     update: jest.fn().mockResolvedValue(undefined),
+    query: jest.fn().mockResolvedValue([]),
     ...overrides.manager,
   };
   const dataSource = {
@@ -171,6 +182,7 @@ function createService(overrides: {
     undefined,
     undefined,
     overrides.resourcePreviewService as any,
+    overrides.resourceDuplicateService as any,
   );
 
   return {
@@ -187,6 +199,42 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('keeps an unknown schematic minimum build unknown instead of persisting Build 0', async () => {
+    const { service, manager } = createService({
+      manager: {
+        save: jest.fn(async (_entity: unknown, value: unknown) => ({ id: 81, ...(value as Record<string, unknown>) })),
+      },
+    });
+    const resource = { id: 81, resource_type: 'upload', renderer_metadata_json: {
+      compatibility: { minimum_supported_build: null, source: 'unknown', confidence: 'low' },
+    } };
+
+    await (service as any).createInitialV2Aggregate(manager, resource, { version: '1.0.0' }, 9, undefined, undefined);
+
+    expect(manager.save.mock.calls.some(([entity]) => entity === ResourceVersionCompatibility)).toBe(false);
+  });
+
+  it('stores inferred and publisher-declared compatibility as separate evidence', async () => {
+    const { service, manager } = createService({
+      manager: {
+        save: jest.fn(async (_entity: unknown, value: unknown) => ({ id: 81, ...(value as Record<string, unknown>) })),
+      },
+    });
+    const resource = { id: 81, resource_type: 'upload', renderer_metadata_json: {
+      compatibility: { minimum_supported_build: 135, source: 'inferred', confidence: 'medium' },
+    } };
+
+    await (service as any).createInitialV2Aggregate(manager, resource, {
+      version: '1.0.0', compatibility: [{ min_version_value: '146', max_version_value: '160' }],
+    }, 9, undefined, undefined);
+
+    const compatibilities = manager.save.mock.calls.find(([entity]) => entity === ResourceVersionCompatibility)?.[1];
+    expect(compatibilities).toEqual(expect.arrayContaining([
+      expect.objectContaining({ min_version_value: '146', max_version_value: '160', provenance: 'user_declared' }),
+      expect.objectContaining({ min_version_value: '135', provenance: 'inferred', confidence: 'medium' }),
+    ]));
+  });
+
   it('sets featured only through the existing resource moderation service', async () => {
     const { service, resourceRepository } = createService();
     const resource = { id: 77, is_featured: 1, status: 'approved', is_public: 1, user: null, category: null };
@@ -343,8 +391,69 @@ describe('ResourcesService', () => {
     });
   });
 
+  it('returns the stable exact-file duplicate conflict before opening a create transaction', async () => {
+    const duplicate = { inspect: jest.fn().mockResolvedValue({
+      exact: true, structure: false, normalized: false,
+      existing_resources: [{ id: 19, public_id: 'existing', title: 'Existing pack', status: 'published', url: '/resources/19' }],
+    }) };
+    const { service, dataSource } = createService({ resourceDuplicateService: duplicate });
+
+    await expect(service.create({ title: 'Pack', resource_type: 'upload', resource_kind: 'mod', version: '1.0' } as any, 7, {
+      file_name: 'pack.zip', file_path: '/tmp/pack.zip', file_size: 10, mime_type: 'application/zip', content_hash: 'a'.repeat(64),
+    })).rejects.toMatchObject({ response: { code: 'RESOURCE_DUPLICATE', existing_resource: { id: 19, title: 'Existing pack' } } });
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('replays the same idempotency key for the same user and payload', async () => {
+    const resource = { id: 81, user_id: 7, title: 'Replay', status: 'pending', is_public: 0, user: null, category: null };
+    let service!: ResourcesService;
+    const keyQuery = jest.fn(async (sql: string) => sql.includes('resource_submission_idempotency')
+      ? [{ payload_fingerprint: (service as any).hashCanonical(payload), request_fingerprint: 'x', resource_id: 81 }]
+      : [{ resource_id: 81, comment_count: '2' }]);
+    const payload = { title: 'Replay', version: '1.0' };
+    const created = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue([]) },
+      dataSource: { query: keyQuery },
+    });
+    service = created.service;
+
+    await expect(service.findIdempotentReplay(7, 'key-1', payload)).resolves.toMatchObject({ id: 81, title: 'Replay', comment_count: 2 });
+    expect(keyQuery.mock.calls[0][1]).toEqual([7, 'key-1']);
+    expect(created.resourceRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 81 } }));
+  });
+
+  it('rejects reuse of an idempotency key with a different payload and scopes the lookup by user', async () => {
+    let service!: ResourcesService;
+    const keyQuery = jest.fn(async (sql: string) => sql.includes('resource_submission_idempotency')
+      ? [{ payload_fingerprint: (service as any).hashCanonical({ title: 'original' }), request_fingerprint: 'x', resource_id: 81 }]
+      : []);
+    const created = createService({ dataSource: { query: keyQuery } });
+    service = created.service;
+
+    await expect(service.findIdempotentReplay(7, 'shared-key', { title: 'changed' }))
+      .rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect(keyQuery.mock.calls[0][1]).toEqual([7, 'shared-key']);
+  });
+
+  it('releases a stale hash claim for a rejected resource but blocks an active pending claim without leaking its title', async () => {
+    const { service } = createService();
+    const manager = { query: jest.fn()
+      .mockRejectedValueOnce({ errno: 1062, code: 'ER_DUP_ENTRY' })
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce({ affectedRows: 1 }) };
+    await (service as any).claimContentHash(manager, 'b'.repeat(64), 90);
+    expect(manager.query).toHaveBeenLastCalledWith('UPDATE resource_content_hash_claims SET resource_id = ? WHERE content_hash = ?', [90, 'b'.repeat(64)]);
+
+    const activeManager = { query: jest.fn()
+      .mockRejectedValueOnce({ errno: 1062, code: 'ER_DUP_ENTRY' })
+      .mockResolvedValueOnce([{ resource_id: 44, public_id: 'secret-id', title: 'Private title', status: 'pending', is_public: 0 }]) };
+    await expect((service as any).claimContentHash(activeManager, 'c'.repeat(64), 91))
+      .rejects.toMatchObject({ response: { code: 'RESOURCE_DUPLICATE', existing_resource: { id: null, title: '已有资源正在审核或不可见' } } });
+  });
+
   it('publishes a moderation result notification when resource status changes', async () => {
-    const { service, resourceRepository, adminNotificationsService } = createService({
+    const { service, manager, adminNotificationsService } = createService({
       resourceRepository: {
         findOne: jest.fn()
           .mockResolvedValueOnce({
@@ -374,7 +483,7 @@ describe('ResourcesService', () => {
 
     await service.updateStatus(22, 'approved', { actorUsername: 'moderatorA' });
 
-    expect(resourceRepository.update).toHaveBeenCalledWith(22, {
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 22, {
       status: 'approved',
       reject_reason: null,
     });

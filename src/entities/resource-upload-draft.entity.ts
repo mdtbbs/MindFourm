@@ -2,6 +2,7 @@ import { Column, CreateDateColumn, Entity, Index, PrimaryColumn, UpdateDateColum
 
 /** Durable owner-bound quarantine record shared by the V1 and game-content upload facades. */
 @Index('idx_resource_upload_drafts_owner_expiry', ['user_id', 'expires_at'])
+@Index('idx_resource_upload_drafts_hash_expiry', ['content_hash', 'expires_at'])
 @Entity('resource_upload_drafts')
 export class ResourceUploadDraft {
   @PrimaryColumn({ type: 'char', length: 36 })

@@ -161,6 +161,25 @@ export class ResourceReadAdapterService {
     return this.getResourceV1(resource.id);
   }
 
+  async getMergedCanonicalPublicId(publicId: string): Promise<string | null> {
+    const source = await this.resourceRepo.findOne({ where: { public_id: publicId } });
+    if (!source?.merged_into_resource_id) return null;
+    let currentId = Number(source.merged_into_resource_id);
+    const visited = new Set<number>([Number(source.id)]);
+    for (let depth = 0; depth < 12; depth += 1) {
+      if (visited.has(currentId)) return null;
+      visited.add(currentId);
+      const target = await this.resourceRepo.findOne({ where: { id: currentId } });
+      if (!target) return null;
+      if (!target.merged_into_resource_id) {
+        if (!target.public_id || Number(target.is_public) !== 1 || !['approved', 'published'].includes(target.status)) return null;
+        return target.public_id;
+      }
+      currentId = Number(target.merged_into_resource_id);
+    }
+    return null;
+  }
+
   async getPublicResourceEntityByPublicId(publicId: string): Promise<Resource | null> {
     const resource = await this.resourceRepo.findOne({ where: { public_id: publicId } });
     if (!resource || (resource as any).deleted_at || !resource.is_public) return null;
@@ -219,6 +238,8 @@ export class ResourceReadAdapterService {
               max_version: item.max_version_value,
               channel: item.channel,
               platform: item.platform_key,
+              provenance: item.provenance,
+              confidence: item.confidence,
             })),
           dependencies: dependencies
             .filter((item) => item.resource_version_id === version.id)
@@ -323,6 +344,10 @@ export class ResourceReadAdapterService {
   }
 
   private mapMetadata(renderer: Record<string, unknown>, publisher: Record<string, unknown>): V1MapMetadata {
+    const buildMetadata = this.objectValue(renderer.map_build_metadata);
+    const storedBuild = buildMetadata.source === 'file_metadata'
+      ? this.buildValue(buildMetadata.stored_game_build)
+      : null;
     return {
       name: this.stringValue(renderer.name),
       author: this.stringValue(renderer.author),
@@ -331,7 +356,11 @@ export class ResourceReadAdapterService {
       height: this.numberValue(renderer.height),
       spawns: this.numberValue(renderer.spawns),
       version: this.numberValue(renderer.version),
-      build: this.buildValue(renderer.build),
+      build: storedBuild,
+      save_format_version: this.numberValue(renderer.save_format_version ?? renderer.version),
+      stored_game_build: storedBuild,
+      build_source: buildMetadata.source === 'file_metadata' && storedBuild !== null ? 'file_metadata' : 'unknown',
+      parser_runtime: this.objectValue(renderer.parser_runtime),
       planets: this.uniqueStrings([
         ...this.stringList(publisher.planets ?? publisher.planet),
         ...this.stringList(renderer.planet),
@@ -358,6 +387,10 @@ export class ResourceReadAdapterService {
   }
 
   private schematicMetadata(renderer: Record<string, unknown>, publisher: Record<string, unknown>): V1SchematicMetadata {
+    const compatibility = this.objectValue(renderer.compatibility);
+    const source = compatibility.source === 'inferred' ? 'inferred' : 'unknown';
+    const confidence = ['low', 'medium', 'high'].includes(String(compatibility.confidence))
+      ? compatibility.confidence as 'low' | 'medium' | 'high' : 'low';
     return {
       name: this.stringValue(renderer.name),
       description: this.stringValue(renderer.description),
@@ -374,6 +407,18 @@ export class ResourceReadAdapterService {
       planet: this.stringValue(renderer.planet),
       labels: this.stringList(renderer.labels),
       required_mods: this.stringList(renderer.mod_dependencies),
+      schematic_format_version: this.numberValue(renderer.schematic_format_version),
+      parser_runtime: this.objectValue(renderer.parser_runtime),
+      compatibility_inference: {
+        minimum_supported_build: this.numberValue(compatibility.minimum_supported_build),
+        source,
+        confidence,
+        unknown_content: this.stringList(renderer.unknown_content),
+      },
+      structure_hashes: {
+        exact: this.stringValue(renderer.structure_hash),
+        normalized: this.stringValue(renderer.normalized_structure_hash),
+      },
     };
   }
 

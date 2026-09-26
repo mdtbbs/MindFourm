@@ -1,11 +1,17 @@
 import {
-  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn,
+  Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, Index,
   DeleteDateColumn,
 } from 'typeorm';
 import { User } from './user.entity';
 import { ResourceCategory } from './resource-category.entity';
 import { ResourceVersion } from './resource-version.entity';
 
+@Index('idx_resources_content_hash_status', ['content_hash', 'status', 'deleted_at'])
+@Index('idx_resources_structure_hash_status', ['structure_hash', 'status', 'deleted_at'])
+@Index('idx_resources_normalized_hash_status', ['normalized_structure_hash', 'status', 'deleted_at'])
+@Index('idx_resources_merged_into', ['merged_into_resource_id'])
+@Index('idx_resources_kind_title_status', ['resource_kind', 'title', 'status', 'deleted_at'])
+@Index('idx_resources_kind_source_status', ['resource_kind', 'source_url', 'status', 'deleted_at'])
 @Entity('resources')
 export class Resource {
   @PrimaryGeneratedColumn()
@@ -37,6 +43,18 @@ export class Resource {
 
   @Column({ type: 'char', length: 64, nullable: true })
   content_hash: string | null;
+
+  @Column({ type: 'char', length: 64, nullable: true })
+  structure_hash: string | null;
+
+  @Column({ type: 'char', length: 64, nullable: true })
+  normalized_structure_hash: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  duplicate_note: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  merged_into_resource_id: number | null;
 
   @Column({ length: 500, nullable: true })
   external_url: string;
