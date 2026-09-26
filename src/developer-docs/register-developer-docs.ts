@@ -17,6 +17,7 @@ const PUBLIC_API_ORIGIN = `${PUBLIC_SITE}/api`;
 const NAV_ITEMS = [
   { href: '/api/v1/docs/quick-start', label: '快速开始' },
   { href: '/api/v1/docs/conventions', label: '通用约定' },
+  { href: '/api/v1/docs/oauth', label: 'OAuth / Public Client' },
   { href: '/api/v1/docs/authentication', label: '身份认证' },
   { href: '/api/v1/docs/first-party', label: 'First-party V1' },
   { href: '/api/v1/docs/game-content', label: 'Game Content' },
@@ -295,7 +296,8 @@ function renderHome(forumVersion: string): string {
       <a class="card" href="/api/v1/docs/quick-start"><strong>快速开始</strong><span>请求、响应、版本与错误处理。</span></a>
       <a class="card" href="/api/v1/docs/game-content"><strong>Game Content</strong><span>蓝图、地图、搜索、预览、下载与提交。</span></a>
       <a class="card" href="/api/v1/docs/resources"><strong>Resource V1</strong><span>资源、版本、Manifest 与文件。</span></a>
-      <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>Forum Mobile Bearer、MindAuth 与 External API Key。</span></a>
+      <a class="card" href="/api/v1/docs/oauth"><strong>OAuth / Public Client</strong><span>申请应用、PKCE、Scope、Token 刷新与撤销。</span></a>
+      <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>新客户端、旧版兼容和服务端凭证怎么选。</span></a>
       <a class="card" href="/api/v1/docs/external"><strong>External API</strong><span>机器人、同步服务和后台自动化。</span></a>
       <a class="card" href="/api/v1/reference"><strong>API Reference</strong><span>由当前 OpenAPI 契约生成的只读接口参考。</span></a>
     </div>
@@ -347,19 +349,91 @@ function guidePages(): Record<string, DocPage> {
     ${section('默认限流', `<p>无更严格声明时，默认读请求约 <code>1200 / 60s</code>，写请求约 <code>180 / 60s</code>。达到限制返回 HTTP 429，V1 错误码为 <code>RATE_LIMITED</code>。</p>`, 'rate-limit')}
   `;
 
+  const oauth = `
+    <div class="eyebrow">MindAuth</div><h1>OAuth / Public Client</h1>
+    <p class="lead">新做的桌面端、Android、Mindustry Mod、启动器和其他第三方客户端都走这一套。应用只拿公开的 <code>client_id</code>，不发 <code>client_secret</code>。</p>
+    ${section('先去哪里申请', `<p>登录 <a href="https://auth.mdtbbs.cn/developer">MindAuth 开发者中心</a> 创建应用，填写名称、说明、主页、Redirect URI 和需要的 scopes。应用通过审核后会得到 <code>client_id</code>。</p><p>注册账号仍在 <a href="https://auth.mdtbbs.cn/register">MindAuth</a> 完成。密码、验证码和风控都留在账号系统里，第三方客户端不应该自己接管这些东西。</p>`, 'apply')}
+    ${section('接入流程', '<ol><li>生成随机 <code>state</code> 和 PKCE <code>code_verifier</code>。</li><li>计算 <code>code_challenge = BASE64URL(SHA256(code_verifier))</code>。</li><li>用系统浏览器打开 MindAuth <code>/api/authorize</code>。</li><li>回调后先校验 <code>state</code>，再用授权码和原始 verifier 请求 <code>/api/token</code>。</li><li>拿到 access token 后，以 <code>Authorization: Bearer</code> 调用论坛 <code>/api/v1/*</code>。</li></ol>', 'flow')}
+    ${section('Redirect URI', `${table(['客户端', '写法', '要求'], [
+      ['Web 服务', inlineCode('https://example.com/oauth/callback'), 'HTTPS，必须与登记值完全匹配'],
+      ['原生应用', inlineCode('com.example.app:/oauth2redirect'), '使用应用自己的 scheme，不能用 javascript / file / intent'],
+      ['桌面 loopback', inlineCode('http://127.0.0.1:0/oauth/callback'), '只接受 127.0.0.1 或 [::1]；运行时端口可随机'],
+    ])}<p>不要登记 <code>localhost</code>、局域网地址、通配符回调，也不要在 callback 里放 fragment 或 userinfo。</p>`, 'redirect')}
+    ${section('发起授权', `${codeBlock(`https://auth.mdtbbs.cn/api/authorize
+  ?response_type=code
+  &client_id=YOUR_CLIENT_ID
+  &redirect_uri=REGISTERED_CALLBACK
+  &scope=openid%20profile%20forum.read
+  &state=RANDOM_STATE
+  &code_challenge=BASE64URL_SHA256
+  &code_challenge_method=S256`, 'text')}<p>每次登录都重新生成 state 和 verifier。不要复用上一次登录留下来的 PKCE 值。</p>`, 'authorize')}
+    ${section('换取 Token', `${codeBlock(`POST https://auth.mdtbbs.cn/api/token
+Content-Type: application/json
+
+{
+  "grant_type": "authorization_code",
+  "client_id": "YOUR_CLIENT_ID",
+  "code": "AUTHORIZATION_CODE",
+  "redirect_uri": "REGISTERED_CALLBACK",
+  "code_verifier": "ORIGINAL_VERIFIER"
+}`, 'http')}<p>Public Client 不发送 <code>client_secret</code>。授权码五分钟有效，只能使用一次，并且绑定 client、Redirect URI 和 PKCE challenge。</p>`, 'token')}
+    ${section('刷新与撤销', `${codeBlock(`POST https://auth.mdtbbs.cn/api/token
+Content-Type: application/json
+
+{
+  "grant_type": "refresh_token",
+  "client_id": "YOUR_CLIENT_ID",
+  "refresh_token": "CURRENT_REFRESH_TOKEN"
+}`, 'http')}${codeBlock(`POST https://auth.mdtbbs.cn/api/revoke
+Content-Type: application/json
+
+{
+  "client_id": "YOUR_CLIENT_ID",
+  "token": "TOKEN_TO_REVOKE"
+}`, 'http')}<p>Access token 当前有效期约一小时。Refresh token 会轮换，刷新成功后要立刻保存新的 refresh token，旧值不要继续使用。</p>`, 'refresh')}
+    ${section('Scopes', table(['Scope', '用来做什么'], [
+      [inlineCode('openid'), '稳定账号标识'],
+      [inlineCode('profile'), '基本资料'],
+      [inlineCode('email'), '邮箱和验证状态'],
+      [inlineCode('forum.read'), '读取论坛、帖子、回复和公开用户资料'],
+      [inlineCode('forum.write'), '发帖、回复、编辑以及相关写操作'],
+      [inlineCode('resource.read'), '读取资源'],
+      [inlineCode('resource.download'), '下载资源文件'],
+      [inlineCode('resource.upload'), '创建上传草稿并提交资源'],
+      [inlineCode('notification.read'), '读取、处理通知'],
+      [inlineCode('message.read'), '读取私信'],
+      [inlineCode('message.write'), '发送私信'],
+    ]), 'scopes')}
+    ${section('Scope 过了，还要看论坛权限', '<p>OAuth scope 只说明“这个客户端被允许请求什么”。真正执行操作时，论坛还会检查用户封禁、手机号验证、社区条款、版块权限、审核策略、站点开关和资源策略。</p><p>客户端启动后先请求 <code>GET /api/v1/capabilities</code>。登录后还可以读 <code>GET /api/v1/me</code> 里的 <code>permissions</code>，用来决定按钮要不要展示。接口本身仍会再次校验，不能把 permissions 当授权凭证。</p>', 'policy')}
+    ${section('常见失败', table(['错误', '通常是什么问题'], [
+      [inlineCode('invalid_client'), 'client_id 不存在、未批准、已停用，或 Confidential Client 缺少正确认证'],
+      [inlineCode('invalid_scope'), '申请了应用没有获批的 scope'],
+      [inlineCode('invalid_grant'), '授权码过期/已使用、redirect 不一致、PKCE verifier 错误，或 refresh token 已失效'],
+      [inlineCode('access_denied'), '用户在授权页拒绝了授权'],
+      [inlineCode('PHONE_VERIFICATION_REQUIRED'), 'OAuth 已成功，但当前论坛写操作要求先验证手机号'],
+      [inlineCode('TERMS_ACCEPTANCE_REQUIRED'), '需要先接受当前社区条款'],
+      [inlineCode('FEATURE_DISABLED'), '站点暂时关闭了对应能力'],
+      [inlineCode('THIRD_PARTY_ACCESS_DISABLED'), '例如第三方私信能力还没有开放'],
+    ]), 'errors')}
+    ${callout('warning', '客户端里不要塞服务器密钥', 'Public Client 里只应该出现 client_id。MindAuth 密码、External API Key、Forum 服务密钥和 client secret 都不应该进入 APK、Mod JAR、桌面发行包或网页 bundle。')}
+    ${section('自动发现', '<p>协议端点和当前 scopes 可以从 <a href="https://auth.mdtbbs.cn/.well-known/openid-configuration"><code>/.well-known/openid-configuration</code></a> 读取。MindAuth 当前提供 UserInfo，但 Public Client 不需要也不能调用服务端用的 token introspection。</p>', 'discovery')}
+  `;
+
   const authentication = `
     <div class="eyebrow">Security</div><h1>身份认证</h1>
-    <p class="lead">MDTBBS 存在多套凭证，它们面向不同客户端，不能相互替代。</p>
-    ${table(['场景', '凭证', '典型用途'], [
-      ['公开读取', '无需凭证', '蓝图、地图、公开资源、搜索'],
-      ['原生第一方客户端', 'Forum Mobile Bearer', '用户资料、帖子、书签等普通 V1'],
-      ['Game Content 身份操作', 'MindAuth access token', '上传、点赞、收藏、我的资源'],
-      ['机器人 / 同步服务', 'External API Key', '服务端集成'],
+    <p class="lead">新客户端优先使用 MindAuth Public Client OAuth。下面几套凭证还会保留一段时间，主要服务旧客户端、浏览器会话和服务端集成。</p>
+    ${table(['场景', '凭证', '说明'], [
+      ['公开读取', '无需凭证', '蓝图、地图、公开资源等允许匿名读取的接口'],
+      ['新桌面端 / Android / Mod / 启动器', 'MindAuth Public Client Bearer', 'Authorization Code + PKCE，推荐路径'],
+      ['旧版移动客户端', 'Forum Mobile Bearer', '兼容现有已发布客户端'],
+      ['浏览器论坛', 'forum_session Cookie', 'HttpOnly，同源 Web 使用'],
+      ['机器人 / 同步服务', 'External API Key', '只放服务端'],
     ])}
-    ${section('Forum Mobile Bearer', `<p>原生客户端使用 MindAuth native authorization code + PKCE，通过 <code>POST /api/v1/auth/mobile/exchange</code> 换取论坛自己的 access/refresh token。当前 access token 约 30 分钟，refresh token 约 90 天并采用轮换机制。</p>`, 'mobile')}
-    ${section('Game Content 的 MindAuth Bearer', `<p><code>/api/v1/game-content/*</code> 的身份操作使用 <code>Authorization: Bearer &lt;mindauth-access-token&gt;</code>。论坛通过 MindAuth userinfo 验证，不在本地解码该 token。</p>`, 'mindauth')}
-    ${section('External API Key', `${codeBlock('Authorization: Bearer mfk_live_xxx.yyy\n# 或\nX-API-Key: mfk_live_xxx.yyy', 'http')}<p>Key 带有 scopes、启停、过期、IP 白名单、限流和审计属性。</p>`, 'external-key')}
-    ${callout('warning', '不要把服务器密钥打进客户端', 'External API Key 不应出现在浏览器 JavaScript、Android APK、Mindustry Mod JAR、桌面客户端发行包或公开仓库中。')}
+    ${section('新客户端：MindAuth Public Client', '<p>先在 <a href="/api/v1/docs/oauth">OAuth / Public Client</a> 页面完成应用申请和 PKCE 登录。成功后，把 MindAuth access token 放到 <code>Authorization: Bearer &lt;token&gt;</code>。Forum 会在服务端校验 token 和 scopes，客户端自己不需要解析 opaque token。</p>', 'public-client')}
+    ${section('Forum Mobile Bearer（兼容）', `<p>现有 Android / 原生客户端仍可使用 MindAuth native authorization code + PKCE，通过 <code>POST /api/v1/auth/mobile/exchange</code> 换 Forum 自己的 access/refresh token。当前 access token 约 30 分钟，refresh token 约 90 天并轮换。</p><p>新项目没有兼容包袱时，不建议再从这条路径起步。</p>`, 'mobile')}
+    ${section('浏览器 forum_session', '<p>论坛 Web 登录后使用 HttpOnly <code>forum_session</code> Cookie。它适合同源网页和 SSR，客户端不要尝试读取、复制或把这个 Cookie 搬到别的应用里。</p>', 'session')}
+    ${section('External API Key', `${codeBlock('Authorization: Bearer mfk_live_xxx.yyy\n# 或\nX-API-Key: mfk_live_xxx.yyy', 'http')}<p>Key 带有 scopes、启停、过期、IP 白名单、限流、默认 actor 和审计属性，只适合机器人、同步服务和后台自动化。</p>`, 'external-key')}
+    ${callout('warning', '终端客户端只带自己的公开凭证', 'External API Key、Forum 内部服务密钥和 Confidential Client secret 都不应该出现在浏览器 JavaScript、APK、Mod JAR、桌面客户端发行包或公开仓库中。')}
   `;
 
   const firstParty = `
@@ -468,6 +542,7 @@ function guidePages(): Record<string, DocPage> {
   return {
     'quick-start': { title: '快速开始', description: 'MDTBBS API 快速开始', body: quickStart },
     conventions: { title: '通用约定', description: 'MDTBBS API 响应、兼容与限流约定', body: conventions },
+    oauth: { title: 'OAuth / Public Client', description: 'MindAuth Public Client OAuth、PKCE 与 scopes', body: oauth },
     authentication: { title: '身份认证', description: 'MDTBBS API 认证方式', body: authentication },
     'first-party': { title: 'First-party V1', description: 'MDTBBS First-party API V1', body: firstParty },
     'game-content': { title: 'Game Content', description: 'MDTBBS Game Content API', body: gameContent },
@@ -548,6 +623,77 @@ function renderParameters(operation: any): string {
   return `<h3>参数</h3>${table(['名称', '位置', '必填', '说明'], rows)}`;
 }
 
+function resolveSchema(document: OpenAPIObject, schema: any): any {
+  if (!schema?.$ref || typeof schema.$ref !== 'string') return schema;
+  const prefix = '#/components/schemas/';
+  if (!schema.$ref.startsWith(prefix)) return schema;
+  const name = schema.$ref.slice(prefix.length);
+  return (document.components?.schemas as Record<string, any> | undefined)?.[name] || schema;
+}
+
+function flattenObjectSchema(document: OpenAPIObject, schema: any): any {
+  const resolved = resolveSchema(document, schema);
+  if (!resolved?.allOf) return resolved;
+  const parts = resolved.allOf.map((part: any) => flattenObjectSchema(document, part)).filter(Boolean);
+  return {
+    ...resolved,
+    type: 'object',
+    properties: Object.assign({}, ...parts.map((part: any) => part.properties || {}), resolved.properties || {}),
+    required: [...new Set(parts.flatMap((part: any) => part.required || []).concat(resolved.required || []))],
+  };
+}
+
+function schemaType(document: OpenAPIObject, schema: any): string {
+  if (!schema) return 'unknown';
+  if (schema.$ref) return schema.$ref.split('/').pop() || 'object';
+  const resolved = resolveSchema(document, schema);
+  if (resolved?.type === 'array') return `${schemaType(document, resolved.items)}[]`;
+  const type = resolved?.type || (resolved?.properties ? 'object' : 'unknown');
+  return resolved?.format ? `${type} (${resolved.format})` : type;
+}
+
+function schemaNotes(document: OpenAPIObject, schema: any): string {
+  const resolved = resolveSchema(document, schema) || {};
+  const notes: string[] = [];
+  if (Array.isArray(resolved.enum)) notes.push(`可选：${resolved.enum.map((item: unknown) => String(item)).join(' / ')}`);
+  if (resolved.minLength != null) notes.push(`最短 ${resolved.minLength}`);
+  if (resolved.maxLength != null) notes.push(`最长 ${resolved.maxLength}`);
+  if (resolved.minimum != null) notes.push(`最小 ${resolved.minimum}`);
+  if (resolved.maximum != null) notes.push(`最大 ${resolved.maximum}`);
+  if (resolved.default != null) notes.push(`默认 ${String(resolved.default)}`);
+  if (resolved.description) notes.push(String(resolved.description));
+  return notes.join('；');
+}
+
+function renderRequestBody(document: OpenAPIObject, operation: any): string {
+  const requestBody = operation?.requestBody;
+  if (!requestBody) return '';
+
+  const content = requestBody.content || {};
+  const contentType = ['application/json', 'multipart/form-data', 'application/x-www-form-urlencoded']
+    .find((type) => content[type]) || Object.keys(content)[0];
+  if (!contentType) return '<h3>请求体</h3><p>该接口需要请求体，具体格式见 OpenAPI JSON。</p>';
+
+  const schema = flattenObjectSchema(document, content[contentType]?.schema);
+  if (!schema) return `<h3>请求体</h3><p>Content-Type：${inlineCode(contentType)}</p>`;
+
+  const properties = schema.properties || {};
+  const propertyEntries = Object.entries(properties);
+  if (!propertyEntries.length) {
+    return `<h3>请求体</h3><p>Content-Type：${inlineCode(contentType)}；类型：${inlineCode(schemaType(document, schema))}</p>`;
+  }
+
+  const required = new Set<string>(schema.required || []);
+  const rows = propertyEntries.map(([name, property]: [string, any]) => [
+    inlineCode(name),
+    inlineCode(schemaType(document, property)),
+    required.has(name) ? '是' : '否',
+    escapeHtml(schemaNotes(document, property)),
+  ]);
+
+  return `<h3>请求体</h3><p>Content-Type：${inlineCode(contentType)}</p>${table(['字段', '类型', '必填', '说明 / 限制'], rows)}`;
+}
+
 function renderResponses(operation: any): string {
   const responses = operation?.responses || {};
   const rows = Object.entries(responses).map(([status, response]: [string, any]) => [
@@ -579,7 +725,7 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
           <p class="endpoint-summary">${escapeHtml(operation.summary || operation.description || '公开 V1 接口')}</p>
           <div class="meta-line">${securityBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
           ${renderParameters(operation)}
-          ${operation.requestBody ? '<h3>请求体</h3><p>该接口包含请求体。完整 Schema 请以 OpenAPI JSON 为准。</p>' : ''}
+          ${renderRequestBody(document, operation)}
           ${renderResponses(operation)}
           <h3>代码示例</h3>
           ${codeTabs(samples)}
@@ -589,7 +735,7 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
 
   const body = `
     <div class="eyebrow">OpenAPI</div><h1>API Reference</h1>
-    <p class="lead">本页从运行时 First-party V1 OpenAPI 契约生成，仅用于查阅，不提供在线 Try it。路径统一以 <code>https://mdtbbs.cn/api</code> 为服务器根地址。</p>
+    <p class="lead">本页从运行时 First-party V1 OpenAPI 契约生成，不提供在线 Try it。路径统一以 <code>https://mdtbbs.cn/api</code> 为服务器根地址；请求体字段、必填项、枚举和常见长度限制会直接展开。</p>
     <input class="reference-filter" data-reference-filter type="search" placeholder="搜索路径、方法或说明…" aria-label="搜索 API">
     ${endpoints.join('')}
     ${callout('info', '需要完整 Schema？', '机器可读规范位于 <a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。')}
