@@ -716,14 +716,18 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
       if (!operation) continue;
       const samples = makeCodeSamples(method, path, operation);
       const securityBadge = hasSecurity(operation) ? '<span class="badge">Bearer 认证</span>' : '';
+      const requiredScopes = Array.isArray((operation as any)['x-required-scopes'])
+        ? (operation as any)['x-required-scopes'] as string[]
+        : [];
+      const scopeBadges = requiredScopes.map((scope) => `<span class="badge">scope: ${escapeHtml(scope)}</span>`).join('');
       endpoints.push(`
-        <article class="endpoint" data-endpoint-search="${escapeHtml(operationSearchText(method, path, operation))}">
+        <article class="endpoint" data-endpoint-search="${escapeHtml(operationSearchText(method, path, operation) + ' ' + requiredScopes.join(' '))}">
           <div class="endpoint-head">
             <span class="method ${method}">${method.toUpperCase()}</span>
             <span class="endpoint-path">/api${escapeHtml(path)}</span>
           </div>
           <p class="endpoint-summary">${escapeHtml(operation.summary || operation.description || '公开 V1 接口')}</p>
-          <div class="meta-line">${securityBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
+          <div class="meta-line">${securityBadge}${scopeBadges}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
           ${renderParameters(operation)}
           ${renderRequestBody(document, operation)}
           ${renderResponses(operation)}
