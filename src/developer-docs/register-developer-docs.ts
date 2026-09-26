@@ -708,6 +708,23 @@ function operationSearchText(method: string, path: string, operation: any): stri
     .filter(Boolean).join(' ').toLowerCase();
 }
 
+function referenceOAuthScope(method: string, path: string): string | null {
+  const upper = method.toUpperCase();
+  if (path.startsWith('/v1/messages')) return upper === 'POST' ? 'message.write' : 'message.read';
+  if (path.startsWith('/v1/notifications')) return 'notification.read';
+  if (path.startsWith('/v1/resources/drafts')) return 'resource.upload';
+  if (path.startsWith('/v1/resources')) {
+    if (path.includes('/download')) return 'resource.download';
+    return upper === 'GET' ? 'resource.read' : 'resource.upload';
+  }
+  if (path.startsWith('/v1/threads')) return upper === 'GET' ? 'forum.read' : 'forum.write';
+  if (path.startsWith('/v1/search')) return 'forum.read';
+  if (path === '/v1/me' && upper === 'GET') return 'profile';
+  if (path.startsWith('/v1/me/') && upper !== 'GET') return 'forum.write';
+  if (path.startsWith('/v1/uploads/')) return 'forum.write';
+  return null;
+}
+
 function renderReference(document: OpenAPIObject, forumVersion: string): string {
   const endpoints: string[] = [];
   for (const [path, pathItem] of Object.entries(document.paths || {})) {
@@ -716,18 +733,16 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
       if (!operation) continue;
       const samples = makeCodeSamples(method, path, operation);
       const securityBadge = hasSecurity(operation) ? '<span class="badge">Bearer 认证</span>' : '';
-      const requiredScopes = Array.isArray((operation as any)['x-required-scopes'])
-        ? (operation as any)['x-required-scopes'] as string[]
-        : [];
-      const scopeBadges = requiredScopes.map((scope) => `<span class="badge">scope: ${escapeHtml(scope)}</span>`).join('');
+      const oauthScope = referenceOAuthScope(method, path);
+      const scopeBadge = oauthScope ? `<span class="badge">OAuth scope: ${escapeHtml(oauthScope)}</span>` : '';
       endpoints.push(`
-        <article class="endpoint" data-endpoint-search="${escapeHtml(operationSearchText(method, path, operation) + ' ' + requiredScopes.join(' '))}">
+        <article class="endpoint" data-endpoint-search="${escapeHtml(operationSearchText(method, path, operation) + ' ' + (oauthScope || ''))}">
           <div class="endpoint-head">
             <span class="method ${method}">${method.toUpperCase()}</span>
             <span class="endpoint-path">/api${escapeHtml(path)}</span>
           </div>
           <p class="endpoint-summary">${escapeHtml(operation.summary || operation.description || '公开 V1 接口')}</p>
-          <div class="meta-line">${securityBadge}${scopeBadges}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
+          <div class="meta-line">${securityBadge}${scopeBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
           ${renderParameters(operation)}
           ${renderRequestBody(document, operation)}
           ${renderResponses(operation)}
