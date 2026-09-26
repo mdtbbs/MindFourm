@@ -51,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
   };
 
-  const faviconUrl = brand.faviconUrl || '/favicon.ico';
+  const faviconUrl = brand.faviconUrl || '/icon.png';
   meta.icons = {
     icon: faviconUrl,
     shortcut: faviconUrl,

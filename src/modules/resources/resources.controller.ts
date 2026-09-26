@@ -18,7 +18,6 @@ import {
   BadRequestException,
   NotFoundException,
   ValidationPipe,
-  Redirect,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -370,13 +369,17 @@ export class ResourcesController {
   }
 
   @Get(':id')
-  @Redirect()
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
-  async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+  async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
     const canonicalId = await this.resourcesService.findMergedResourceTarget(id);
-    if (canonicalId) return { url: `/api/resources/${canonicalId}`, statusCode: 301 };
-    return this.resourcesService.getByIdWithVersions(id, req?.user);
+    if (canonicalId) {
+      res.redirect(301, `/api/resources/${canonicalId}`);
+      return;
+    }
+
+    const resource = await this.resourcesService.getByIdWithVersions(id, req?.user);
+    res.json({ success: true, data: resource });
   }
 
   @Get(':id/related')
