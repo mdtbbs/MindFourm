@@ -67,7 +67,14 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
     const matched = staticResults
       .filter((item) => !term || item.haystack.includes(term))
       .slice(0, term ? 10 : 8)
-      .map(({ haystack: _haystack, ...item }) => item);
+      .map((item) => ({
+        key: item.key,
+        label: item.label,
+        description: item.description,
+        href: item.href,
+        icon: item.icon,
+        disabled: item.disabled,
+      }));
 
     if (!term) return matched;
 
