@@ -137,13 +137,17 @@ async function buildHeaders(
   try {
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('forum_session');
-    if (!sessionCookie) return existingHeaders;
+    if (!sessionCookie) {
+      return Object.keys(headersObj).length ? headersObj : undefined;
+    }
 
     const cookieHeader = `forum_session=${sessionCookie.value}`;
-    // Convert to a plain object and add the cookie
     headersObj['Cookie'] = cookieHeader;
     return headersObj;
   } catch {
-    return existingHeaders;
+    // Reading request cookies can fail during static/build contexts. Keep any
+    // caller-supplied headers and, critically, the internal API key instead of
+    // silently discarding them.
+    return Object.keys(headersObj).length ? headersObj : undefined;
   }
 }
