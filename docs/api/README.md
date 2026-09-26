@@ -187,4 +187,4 @@ V1 OpenAPI 必须只暴露 `/v1/*` 路径。部分 Nest module 同时包含 lega
 - `Game Content V1` 是专门给蓝图和地图客户端使用的体验型 API，包含搜索、Feed、收藏、点赞、上传和文件下载。
 - `External API` 是服务端机器人接口，不应把 API Key 放进 Mod、网页 bundle 或桌面客户端发行包。
 - 新客户端使用 MindAuth Authorization Code + PKCE S256；当前 Forum mobile exchange 和 Forum mobile JWT 继续作为兼容路径，不会因本次升级突然失效。
-- `notifications_v1` controller 在源码中存在，但当前没有纳入 exported First-party V1 OpenAPI，且 capability 默认是 `false`。客户端不要自行探测并依赖。
+- `notifications_v1` 已纳入 First-party V1 OpenAPI，默认 capability 为 `true`，并受 `feature_notifications_v1_enabled` 控制；SSE 目前仍为 `false`。
