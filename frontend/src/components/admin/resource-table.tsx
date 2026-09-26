@@ -1,95 +1,126 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { resourceAdminApi, resourceApi } from '@/lib/api/client';
-import { Resource, ResourceCategory } from '@/types';
-import { ExternalLink, Download, Eye, Star, Trash2 } from 'lucide-react';
+import type { Resource, ResourceCategory } from '@/types';
+import { Download, Eye, ExternalLink, Star, Trash2 } from 'lucide-react';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
 
+interface ResourceTableProps {
+  initialSearch?: string;
+}
+
 function formatSize(bytes: number): string {
-  if (!bytes) return '';
+  if (!bytes) return '—';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function ResourceTable() {
+function rendererLabel(resource: Resource): string {
+  if (!resource.renderer_status) return '—';
+  if (resource.renderer_status === 'ready') return '已解析';
+  if (resource.renderer_status === 'processing') return '解析中';
+  if (resource.renderer_status === 'failed') return '解析失败';
+  return resource.renderer_status;
+}
+
+export default function ResourceTable({ initialSearch = '' }: ResourceTableProps) {
   const [resources, setResources] = useState<Resource[]>([]);
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
   const [status, setStatus] = useState<string>('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [loading, setLoading] = useState(true);
-  // Swallowing the failure left the table showing "暂无资源", which is
-  // indistinguishable from genuinely having none.
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSearch(initialSearch);
+  }, [initialSearch]);
 
   const loadData = useCallback(() => {
     setLoading(true);
     setError(null);
+
     Promise.all([
-      resourceAdminApi.list({ limit: 50, status: status || undefined, search: search || undefined }),
+      resourceAdminApi.list({
+        limit: 50,
+        status: status || undefined,
+        search: search || undefined,
+      }),
       resourceApi.getCategories(),
-    ]).then(([resRes, cats]) => {
-      setResources(resRes.data || []);
-      setCategories(cats);
-    }).catch((err) => {
-      setError(err instanceof Error ? err.message : '加载资源失败');
-    }).finally(() => setLoading(false));
+    ])
+      .then(([resourceResult, categoryResult]) => {
+        setResources(resourceResult.data || []);
+        setCategories(categoryResult);
+      })
+      .catch((cause) => {
+        setError(cause instanceof Error ? cause.message : '加载资源失败');
+      })
+      .finally(() => setLoading(false));
   }, [search, status]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    const timer = window.setTimeout(loadData, 180);
+    return () => window.clearTimeout(timer);
+  }, [loadData]);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('确定删除此资源？')) return;
+  const handleDelete = async (resource: Resource) => {
+    const typed = window.prompt(
+      `删除资源会影响前台和第三方 API。请输入资源标题“${resource.title}”确认删除。`,
+    );
+    if (typed !== resource.title) return;
+
     try {
-      await resourceAdminApi.delete(id);
+      await resourceAdminApi.delete(resource.id);
       loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '删除失败');
     }
   };
 
-  const handleStatusChange = async (id: number, newStatus: string) => {
+  const handleStatusChange = async (resource: Resource, newStatus: string) => {
+    if (newStatus === resource.status) return;
+
     try {
-      await resourceAdminApi.updateStatus(id, newStatus);
+      await resourceAdminApi.updateStatus(resource.id, newStatus);
       loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '更新状态失败');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '更新状态失败');
     }
   };
 
-  const handleFeaturedChange = async (id: number, featured: boolean) => {
+  const handleFeaturedChange = async (resource: Resource, featured: boolean) => {
     try {
-      await resourceAdminApi.updateFeatured(id, featured);
+      await resourceAdminApi.updateFeatured(resource.id, featured);
       loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '更新精选状态失败');
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '更新精选状态失败');
     }
   };
 
-  if (loading && resources.length === 0) return <InlineLoading label="正在加载资源" className="min-h-32" />;
+  if (loading && resources.length === 0) {
+    return <InlineLoading label="正在加载资源" className="min-h-32" />;
+  }
 
   if (error && resources.length === 0) {
     return <ErrorState title="资源加载失败" description={error} onRetry={loadData} />;
   }
 
   return (
-    <div>
-      <div className="flex gap-3 mb-4">
-        {loading && resources.length > 0 ? <InlineLoading label="正在刷新资源" className="min-h-8" /> : null}
-        {error && resources.length > 0 ? <ErrorState title="刷新资源失败" description={error} onRetry={loadData} className="min-h-0 py-3" /> : null}
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
         <input
-          type="text"
+          type="search"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="搜索资源..."
-          className="flex-1 px-3 py-2 bg-surface-50 dark:bg-gray-700 border border-surface-200 dark:border-gray-600 rounded-lg text-sm"
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="搜索标题、作者或资源 ID"
+          className="min-w-[240px] flex-1 border border-surface-200 bg-white px-3 py-2 text-sm"
         />
         <select
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="px-3 py-2 bg-surface-50 dark:bg-gray-700 border border-surface-200 dark:border-gray-600 rounded-lg text-sm"
+          onChange={(event) => setStatus(event.target.value)}
+          className="border border-surface-200 bg-white px-3 py-2 text-sm"
         >
           <option value="">全部状态</option>
           <option value="approved">已通过</option>
@@ -98,72 +129,98 @@ export default function ResourceTable() {
         </select>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-surface-200 dark:border-gray-700 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-surface-200 dark:border-gray-700 bg-surface-50 dark:bg-gray-800">
-              <th className="text-left px-4 py-3 font-medium">标题</th>
-              <th className="text-left px-4 py-3 font-medium">类型</th>
-              <th className="text-left px-4 py-3 font-medium">版本</th>
-              <th className="text-left px-4 py-3 font-medium">类别</th>
-              <th className="text-left px-4 py-3 font-medium">大小</th>
-              <th className="text-left px-4 py-3 font-medium">下载</th>
-              <th className="text-left px-4 py-3 font-medium">浏览</th>
-              <th className="text-left px-4 py-3 font-medium">精选</th>
-              <th className="text-left px-4 py-3 font-medium">状态</th>
-              <th className="text-left px-4 py-3 font-medium">操作</th>
+      {loading && resources.length > 0 ? <InlineLoading label="正在刷新资源" className="min-h-8" /> : null}
+      {error && resources.length > 0 ? (
+        <ErrorState title="刷新资源失败" description={error} onRetry={loadData} className="min-h-0 py-3" />
+      ) : null}
+
+      <div className="overflow-x-auto border border-surface-200 bg-white">
+        <table className="min-w-[1120px] w-full text-sm">
+          <thead className="border-b border-surface-200 bg-surface-50 text-left text-xs text-surface-500">
+            <tr>
+              <th className="px-4 py-3 font-medium">资源</th>
+              <th className="px-4 py-3 font-medium">类型</th>
+              <th className="px-4 py-3 font-medium">版本</th>
+              <th className="px-4 py-3 font-medium">分类</th>
+              <th className="px-4 py-3 font-medium">文件</th>
+              <th className="px-4 py-3 font-medium">解析</th>
+              <th className="px-4 py-3 font-medium">数据</th>
+              <th className="px-4 py-3 font-medium">精选</th>
+              <th className="px-4 py-3 font-medium">状态</th>
+              <th className="px-4 py-3 text-right font-medium">操作</th>
             </tr>
           </thead>
-          <tbody>
-            {resources.map(r => (
-              <tr key={r.id} className="border-b border-surface-100 dark:border-gray-800 hover:bg-surface-50 dark:hover:bg-gray-800/50">
-                <td className="px-4 py-3 font-medium max-w-[200px] truncate">{r.title}</td>
-                <td className="px-4 py-3">
-                  {r.resource_type === 'external' ? (
-                    <span className="flex items-center gap-1"><ExternalLink className="w-3 h-3" /> 外链</span>
-                  ) : (
-                    <span>文件</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 font-mono text-xs">{r.version || '-'}</td>
-                <td className="px-4 py-3">{r.category_name || '-'}</td>
-                <td className="px-4 py-3">{formatSize(r.file_size) || '-'}</td>
-                <td className="px-4 py-3 flex items-center gap-1"><Download className="w-3 h-3" /> {r.download_count}</td>
-                <td className="px-4 py-3"><span className="inline-flex items-center gap-1"><Eye className="w-3 h-3" /> {Number(r.view_count) || 0}</span></td>
-                <td className="px-4 py-3">
-                  <button
-                    type="button"
-                    onClick={() => handleFeaturedChange(r.id, !(r.is_featured === true || r.is_featured === 1))}
-                    aria-label={r.is_featured === true || r.is_featured === 1 ? '取消精选' : '设为精选'}
-                    aria-pressed={r.is_featured === true || r.is_featured === 1}
-                    className={r.is_featured === true || r.is_featured === 1 ? 'text-amber-500 hover:text-amber-600' : 'text-surface-400 hover:text-amber-500'}
-                  >
-                    <Star className="w-4 h-4" fill={r.is_featured === true || r.is_featured === 1 ? 'currentColor' : 'none'} />
-                  </button>
-                </td>
-                <td className="px-4 py-3">
-                  <select
-                    value={r.status}
-                    onChange={(e) => handleStatusChange(r.id, e.target.value)}
-                    className="text-xs px-2 py-1 bg-surface-50 dark:bg-gray-700 border rounded"
-                  >
-                    <option value="approved">已通过</option>
-                    <option value="pending">待审批</option>
-                    <option value="rejected">已拒绝</option>
-                  </select>
-                </td>
-                <td className="px-4 py-3">
-                  <button onClick={() => handleDelete(r.id)} className="text-red-500 hover:text-red-700">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+          <tbody className="divide-y divide-surface-100">
+            {resources.map((resource) => {
+              const featured = resource.is_featured === true || resource.is_featured === 1;
+              return (
+                <tr key={resource.id} className="hover:bg-surface-50">
+                  <td className="max-w-[280px] px-4 py-3">
+                    <div className="truncate font-medium text-surface-900">{resource.title}</div>
+                    <div className="mt-1 flex items-center gap-2 text-[10px] text-surface-400">
+                      <span className="font-mono">#{resource.id}</span>
+                      <span>{resource.username || '未知作者'}</span>
+                      {resource.resource_type === 'external' ? <ExternalLink className="h-3 w-3" /> : null}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-surface-600">{resource.resource_kind || resource.resource_type}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-surface-600">{resource.version || '—'}</td>
+                  <td className="px-4 py-3 text-xs text-surface-600">
+                    {categories.find((category) => category.id === resource.category_id)?.name || resource.category_name || '—'}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-surface-500">{formatSize(resource.file_size)}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs ${resource.renderer_status === 'failed' ? 'text-red-600' : resource.renderer_status === 'processing' ? 'text-amber-600' : 'text-surface-600'}`}>
+                      {rendererLabel(resource)}
+                    </span>
+                    {resource.renderer_error_code ? <div className="mt-1 font-mono text-[9px] text-red-500">{resource.renderer_error_code}</div> : null}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-3 font-mono text-[10px] text-surface-500">
+                      <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />{resource.download_count}</span>
+                      <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" />{Number(resource.view_count) || 0}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => void handleFeaturedChange(resource, !featured)}
+                      aria-label={featured ? '取消精选' : '设为精选'}
+                      aria-pressed={featured}
+                      className={featured ? 'text-amber-500 hover:text-amber-600' : 'text-surface-400 hover:text-amber-500'}
+                    >
+                      <Star className="h-4 w-4" fill={featured ? 'currentColor' : 'none'} />
+                    </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    <select
+                      value={resource.status}
+                      onChange={(event) => void handleStatusChange(resource, event.target.value)}
+                      className="border border-surface-200 bg-white px-2 py-1 text-xs"
+                    >
+                      <option value="approved">已通过</option>
+                      <option value="pending">待审批</option>
+                      <option value="rejected">已拒绝</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(resource)}
+                      className="inline-flex p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+                      aria-label={`删除 ${resource.title}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-        {resources.length === 0 && (
-          <div className="p-8 text-center text-surface-500">暂无资源</div>
-        )}
+        {resources.length === 0 ? (
+          <div className="p-10 text-center text-sm text-surface-400">没有符合当前筛选条件的资源。</div>
+        ) : null}
       </div>
     </div>
   );
