@@ -23,7 +23,7 @@ const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
 
 interface ReplyEditorProps {
   postId: number;
-  onSubmit: (content: string, parentReplyId?: number) => Promise<Reply | void>;
+  onSubmit: (content: string, parentReplyId?: number, contentJson?: Record<string, unknown>) => Promise<Reply | void>;
   quoteReply?: Reply | null;
   replyToReply?: Reply | null;
   /** Clears the quote / reply-to target without submitting. */
@@ -38,6 +38,7 @@ export default function ReplyEditor({
   onCancelTarget,
 }: ReplyEditorProps) {
   const [content, setContent] = useState('');
+  const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export default function ReplyEditor({
   const draft = useDraft('reply', replyId ? `r-${replyId}` : `p-${postId}`);
   const loadDraft = draft.load;
   const saveDraft = draft.save;
-  useDraftAutoSave({ content }, draft.save, !!content && !isSubmitting);
+  useDraftAutoSave({ content, contentJson }, draft.save, !!content && !isSubmitting);
 
   // Restore the draft when the editor mounts or switches target (quote/reply-to).
   useEffect(() => {
@@ -59,13 +60,13 @@ export default function ReplyEditor({
   useEffect(() => {
     const persistBeforeLeave = (event: BeforeUnloadEvent) => {
       if (!content.trim() || isSubmitting) return;
-      saveDraft({ content });
+      saveDraft({ content, contentJson });
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', persistBeforeLeave);
     return () => window.removeEventListener('beforeunload', persistBeforeLeave);
-  }, [content, saveDraft, isSubmitting]);
+  }, [content, contentJson, saveDraft, isSubmitting]);
 
   useEffect(() => {
     if (content.trim() && recoverableDraft) setRecoverableDraft(null);
@@ -74,6 +75,8 @@ export default function ReplyEditor({
   const restoreDraft = () => {
     const savedContent = recoverableDraft?.values.content;
     if (typeof savedContent === 'string') setContent(savedContent);
+    const savedJson = recoverableDraft?.values.contentJson;
+    if (savedJson && typeof savedJson === 'object') setContentJson(savedJson as Record<string, unknown>);
     setRecoverableDraft(null);
   };
 
@@ -99,9 +102,11 @@ export default function ReplyEditor({
     try {
       const reply = await onSubmit(
         content,
-        quoteReply?.id || replyToReply?.id
+        quoteReply?.id || replyToReply?.id,
+        contentJson || undefined,
       );
       setContent('');
+      setContentJson(null);
       draft.clear();
       const msg = reply?.status === 'pending' ? '回复已提交，等待管理员审核' : '回复发布成功！';
       setSuccess(msg);
@@ -157,6 +162,8 @@ export default function ReplyEditor({
         <TiptapEditor
           value={content}
           onChange={setContent}
+          jsonValue={contentJson}
+          onJsonChange={setContentJson}
           ariaLabel="回复正文"
           placeholder="使用富文本编辑器编写回复，支持粘贴 / 拖放上传图片..."
           minHeight="120px"

@@ -37,7 +37,7 @@ jest.mock('typeorm', () => ({
 jest.mock('@entities/reply.entity', () => ({ Reply: class Reply {} }));
 jest.mock('@entities/post.entity', () => ({ Post: class Post {} }));
 jest.mock('@entities/user.entity', () => ({ User: class User {} }));
-jest.mock('@common/utils/markdown.util', () => ({ parseMarkdown: (value: string) => value }));
+jest.mock('@common/utils/markdown.util', () => ({ parseMarkdown: (value: string) => value, sanitize: (value: string) => value }));
 
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { RepliesService } from './replies.service';
@@ -161,9 +161,22 @@ describe('RepliesService.createReplyForPost', () => {
     const reply = await service.createReplyForPost(88, { content: 'hello' }, REPLIER_ID);
 
     expect(replyRepository.save).toHaveBeenCalledTimes(1);
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v6:88');
     expect(postActivityService.markPostActive).toHaveBeenCalledWith(88, expect.any(Date));
     expect(reply).toMatchObject({ post_id: 88, user_id: REPLIER_ID, status: 'published' });
+  });
+
+  it('persists validated Tiptap JSON and its safe HTML/Markdown projections', async () => {
+    const { service, replyRepository } = createService();
+    const document = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'rich reply', marks: [{ type: 'bold' }] }] }] };
+
+    await service.createReplyForPost(88, { content_json: document } as any, REPLIER_ID);
+
+    expect(replyRepository.create).toHaveBeenCalledWith(expect.objectContaining({
+      content: '**rich reply**',
+      content_json: document,
+      content_html: '<p><strong>rich reply</strong></p>',
+    }));
   });
 
   it('notifies the post author about a published reply from somebody else', async () => {

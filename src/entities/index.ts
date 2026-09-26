@@ -10,6 +10,7 @@ import { AdminNotification } from './admin-notification.entity';
 import { Message } from './message.entity';
 import { Attachment } from './attachment.entity';
 import { Resource } from './resource.entity';
+import { ResourceUploadDraft } from './resource-upload-draft.entity';
 import { ResourceCategory } from './resource-category.entity';
 import { ResourceVersion } from './resource-version.entity';
 import { PostLike } from './post-like.entity';
@@ -129,6 +130,7 @@ export const coreEntities = [
   Message,
   Attachment,
   Resource,
+  ResourceUploadDraft,
   ResourceCategory,
   ResourceVersion,
   PostLike,

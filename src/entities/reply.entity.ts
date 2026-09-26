@@ -29,6 +29,15 @@ export class Reply {
   @Column({ type: 'text', nullable: true })
   content_html: string;
 
+  /** Canonical allowlisted ProseMirror source; nullable for legacy imports and staged backfill. */
+  @Column({ type: 'json', nullable: true })
+  // TypeORM's QueryDeepPartialEntity treats JSON records as embedded relations;
+  // runtime validation belongs to the rich-text boundary utility instead.
+  content_json: any;
+
+  @Column({ type: 'text', nullable: true })
+  content_text: string | null;
+
   // Shares POST_STATUS' vocabulary — see REPLY_STATUS in common/utils/constants.
   @Column({ length: 50, default: 'published' })
   status: string;

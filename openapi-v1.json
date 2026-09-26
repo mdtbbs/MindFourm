@@ -1,293 +1,37 @@
 {
   "openapi": "3.0.0",
   "paths": {
-    "/resources": {
+    "/v1/notifications": {
       "get": {
-        "operationId": "ResourcesController_getList",
+        "operationId": "NotificationsV1Controller_list",
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "ResourcesController_create",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/hot": {
-      "get": {
-        "operationId": "ResourcesController_getHotResources",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/filter-options": {
-      "get": {
-        "operationId": "ResourcesController_getFilterOptions",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/content-metadata": {
-      "get": {
-        "operationId": "ResourcesController_getMindustryContentMetadata",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/user/{userId}": {
-      "get": {
-        "operationId": "ResourcesController_getUserResources",
-        "parameters": [
-          {
-            "name": "userId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/categories": {
-      "get": {
-        "operationId": "ResourcesController_listCategories",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "ResourcesController_createCategory",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateResourceCategoryDto"
-              }
-            }
+            "description": "Current user notifications, newest first."
           }
         },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
+        "tags": [
+          "v1-notifications"
+        ]
       }
     },
-    "/resources/categories/tree": {
+    "/v1/notifications/unread-count": {
       "get": {
-        "operationId": "ResourcesController_listCategoriesTree",
+        "operationId": "NotificationsV1Controller_unreadCount",
         "parameters": [],
         "responses": {
           "200": {
             "description": ""
-          }
-        }
-      }
-    },
-    "/resources/categories/admin": {
-      "get": {
-        "operationId": "ResourcesController_listAdminCategories",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/categories/{categoryId}": {
-      "put": {
-        "operationId": "ResourcesController_updateCategory",
-        "parameters": [
-          {
-            "name": "categoryId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateResourceCategoryDto"
-              }
-            }
           }
         },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "operationId": "ResourcesController_deleteCategory",
-        "parameters": [
-          {
-            "name": "categoryId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
+        "tags": [
+          "v1-notifications"
+        ]
       }
     },
-    "/resources/admin": {
-      "get": {
-        "operationId": "ResourcesController_getAdminList",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/my": {
-      "get": {
-        "operationId": "ResourcesController_getMyResources",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/drafts/preview": {
-      "post": {
-        "operationId": "ResourcesController_previewDraft",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/drafts/{draftId}/preview": {
-      "get": {
-        "operationId": "ResourcesController_getDraftPreview",
-        "parameters": [
-          {
-            "name": "draftId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/render-status": {
-      "get": {
-        "operationId": "ResourcesController_getRenderStatus",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/preview": {
-      "get": {
-        "operationId": "ResourcesController_getPreview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}": {
-      "get": {
-        "operationId": "ResourcesController_getById",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
+    "/v1/notifications/{id}/read": {
       "put": {
-        "operationId": "ResourcesController_update",
+        "operationId": "NotificationsV1Controller_markRead",
         "parameters": [
           {
             "name": "id",
@@ -298,468 +42,56 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateResourceDto"
-              }
-            }
+        "responses": {
+          "200": {
+            "description": ""
           }
         },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "operationId": "ResourcesController_delete",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
+        "tags": [
+          "v1-notifications"
+        ]
       }
     },
-    "/resources/{id}/related": {
-      "get": {
-        "operationId": "ResourcesController_getRelated",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/download": {
-      "get": {
-        "operationId": "ResourcesController_download",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/versions": {
-      "get": {
-        "operationId": "ResourcesController_getVersions",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "ResourcesController_addVersion",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/retry-preview": {
-      "post": {
-        "operationId": "ResourcesController_retryPreview",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/versions/{versionId}": {
-      "delete": {
-        "operationId": "ResourcesController_deleteVersion",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          },
-          {
-            "name": "versionId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/status": {
+    "/v1/notifications/read-all": {
       "put": {
-        "operationId": "ResourcesController_updateStatus",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/featured": {
-      "put": {
-        "operationId": "ResourcesController_setFeatured",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/admin": {
-      "delete": {
-        "operationId": "ResourcesController_adminDelete",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/admin/cleanup-storage": {
-      "post": {
-        "operationId": "ResourcesController_cleanupStorage",
+        "operationId": "NotificationsV1Controller_markAllRead",
         "parameters": [],
         "responses": {
-          "201": {
+          "200": {
             "description": ""
           }
-        }
+        },
+        "tags": [
+          "v1-notifications"
+        ]
       }
     },
-    "/resources/{id}/rating": {
-      "post": {
-        "operationId": "ResourcesController_upsertRating",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "operationId": "ResourcesController_deleteRating",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
+    "/v1/search": {
       "get": {
-        "operationId": "ResourcesController_getUserRating",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
+        "operationId": "SearchV1Controller_unified",
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
           }
-        }
+        },
+        "tags": [
+          "v1-search"
+        ]
       }
     },
-    "/resources/{id}/favorite": {
+    "/v1/search/posts": {
       "get": {
-        "operationId": "ResourcesController_getFavorite",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
+        "operationId": "SearchV1Controller_posts",
+        "parameters": [],
         "responses": {
           "200": {
             "description": ""
           }
-        }
-      },
-      "post": {
-        "operationId": "ResourcesController_addFavorite",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "operationId": "ResourcesController_removeFavorite",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/like": {
-      "get": {
-        "operationId": "ResourcesController_getLike",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "ResourcesController_addLike",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "operationId": "ResourcesController_removeLike",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/resources/{id}/subscription": {
-      "get": {
-        "operationId": "ResourcesController_getSubscription",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "ResourcesController_subscribe",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "operationId": "ResourcesController_unsubscribe",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
+        },
+        "tags": [
+          "v1-search"
+        ]
       }
     },
     "/v1/resources": {
@@ -798,6 +130,81 @@
         },
         "tags": [
           "v1-resources"
+        ]
+      },
+      "post": {
+        "operationId": "ResourcesV1WriteController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title",
+                  "resource_type",
+                  "version"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "resource_type": {
+                    "type": "string",
+                    "enum": [
+                      "upload",
+                      "external"
+                    ]
+                  },
+                  "resource_kind": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "Legacy Markdown projection; kept for compatibility."
+                  },
+                  "content_json": {
+                    "type": "object",
+                    "description": "Canonical Tiptap/ProseMirror document. Submitted as a JSON string in multipart requests."
+                  },
+                  "preview_draft_id": {
+                    "type": "string"
+                  },
+                  "schematic_code": {
+                    "type": "string"
+                  },
+                  "external_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Submitted to the existing resource moderation lifecycle."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
         ]
       }
     },
@@ -909,6 +316,233 @@
         ]
       }
     },
+    "/v1/resources/drafts/preview": {
+      "post": {
+        "operationId": "ResourcesV1WriteController_previewDraft",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "resource_kind"
+                ],
+                "properties": {
+                  "resource_kind": {
+                    "type": "string",
+                    "enum": [
+                      "map",
+                      "schematic"
+                    ]
+                  },
+                  "schematic_code": {
+                    "type": "string",
+                    "maxLength": 29360128
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "A private, short-lived, user-bound parsed resource draft."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/drafts": {
+      "post": {
+        "operationId": "ResourcesV1WriteController_createUploadDraft",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "resource_kind",
+                  "file"
+                ],
+                "properties": {
+                  "resource_kind": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Creates a durable owner-bound upload draft in quarantine."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/drafts/{draftId}": {
+      "get": {
+        "operationId": "ResourcesV1WriteController_getUploadDraft",
+        "parameters": [
+          {
+            "name": "draftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-only draft metadata; quarantine paths are never returned."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "ResourcesV1WriteController_updateUploadDraft",
+        "parameters": [
+          {
+            "name": "draftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Updates editable resource draft metadata."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "ResourcesV1WriteController_deleteUploadDraft",
+        "parameters": [
+          {
+            "name": "draftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletes an owner-bound quarantine draft and its private files."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/drafts/{draftId}/submit": {
+      "post": {
+        "operationId": "ResourcesV1WriteController_submitUploadDraft",
+        "parameters": [
+          {
+            "name": "draftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Submits an owner-bound resource draft to existing forum moderation."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/drafts/{draftId}/preview": {
+      "get": {
+        "operationId": "ResourcesV1WriteController_draftPreview",
+        "parameters": [
+          {
+            "name": "draftId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private preview image for the authenticated submitter."
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/capabilities": {
       "get": {
         "operationId": "CapabilitiesController_getCapabilities",
@@ -952,17 +586,6 @@
         "tags": [
           "v1-client"
         ]
-      }
-    },
-    "/uploads/images": {
-      "post": {
-        "operationId": "UploadsController_uploadInlineImage",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
       }
     },
     "/v1/uploads/images": {
@@ -1194,77 +817,118 @@
         ]
       }
     },
-    "/reports": {
+    "/v1/messages": {
+      "get": {
+        "operationId": "MessagesV1Controller_conversations",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor returned by the previous page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cursor-paginated direct message conversations."
+          }
+        },
+        "tags": [
+          "v1-messages"
+        ]
+      },
       "post": {
-        "operationId": "ReportsController_create",
+        "operationId": "MessagesV1Controller_send",
         "parameters": [],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateReportDto"
+                "$ref": "#/components/schemas/CreateMessageV1Dto"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Message sent using the existing block and notification policy."
           }
-        }
+        },
+        "tags": [
+          "v1-messages"
+        ]
       }
     },
-    "/reports/mine": {
+    "/v1/messages/unread-count": {
       "get": {
-        "operationId": "ReportsController_getMine",
+        "operationId": "MessagesV1Controller_unreadCount",
         "parameters": [],
         "responses": {
           "200": {
             "description": ""
           }
-        }
+        },
+        "tags": [
+          "v1-messages"
+        ]
       }
     },
-    "/admin/reports": {
+    "/v1/messages/{userId}": {
       "get": {
-        "operationId": "ReportsAdminController_list",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/admin/reports/{id}": {
-      "patch": {
-        "operationId": "ReportsAdminController_resolve",
+        "operationId": "MessagesV1Controller_conversation",
         "parameters": [
           {
-            "name": "id",
+            "name": "userId",
             "required": true,
             "in": "path",
             "schema": {
               "type": "number"
             }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResolveReportDto"
-              }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor returned by the previous page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "string"
             }
           }
-        },
+        ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Cursor-paginated direct conversation. Reading marks incoming messages as read."
           }
-        }
+        },
+        "tags": [
+          "v1-messages"
+        ]
       }
     },
     "/v1/reports": {
@@ -1458,6 +1122,60 @@
         ]
       }
     },
+    "/v1/threads/{id}/replies": {
+      "get": {
+        "operationId": "ThreadsV1Controller_getReplies",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Independently paginated replies for a published thread."
+          }
+        },
+        "tags": [
+          "v1-threads"
+        ]
+      },
+      "post": {
+        "operationId": "ThreadWriteV1Controller_createReply",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReplyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reply created. It can be pending moderation."
+          }
+        },
+        "tags": [
+          "v1-thread-writes"
+        ]
+      }
+    },
     "/v1/threads/{id}/like": {
       "put": {
         "operationId": "ThreadInteractionsV1Controller_like",
@@ -1546,39 +1264,6 @@
         ]
       }
     },
-    "/v1/threads/{id}/replies": {
-      "post": {
-        "operationId": "ThreadWriteV1Controller_createReply",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateReplyDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Reply created. It can be pending moderation."
-          }
-        },
-        "tags": [
-          "v1-thread-writes"
-        ]
-      }
-    },
     "/v1/threads/{threadId}/replies/{replyId}": {
       "put": {
         "operationId": "ThreadWriteV1Controller_updateReply",
@@ -1647,17 +1332,6 @@
         "tags": [
           "v1-thread-writes"
         ]
-      }
-    },
-    "/feedback": {
-      "post": {
-        "operationId": "FeedbackController_submit",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
       }
     },
     "/v1/feedback": {
@@ -2855,76 +2529,6 @@
         ]
       }
     },
-    "/lanlink/quick-code": {
-      "get": {
-        "operationId": "LanLinkQuickCodeController_status",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "LanLinkQuickCodeController_generate",
-        "parameters": [],
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      },
-      "delete": {
-        "operationId": "LanLinkQuickCodeController_disable",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/external/v1/lanlink/quick-code/validate": {
-      "post": {
-        "operationId": "ExternalLanLinkQuickCodeController_validate",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ValidateLanLinkQuickCodeDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/external/v1/lanlink/quick-code/users/{id}": {
-      "get": {
-        "operationId": "ExternalLanLinkQuickCodeController_userStatus",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        }
-      }
-    },
     "/v1/lanlink/rooms": {
       "get": {
         "operationId": "LanLinkRoomsV1Controller_list",
@@ -2955,13 +2559,18 @@
     }
   },
   "info": {
-    "title": "MDTBBS First-party API",
-    "description": "Stable V1 contract for MDTBBS first-party clients. Clients must call /api/v1/capabilities first and must not infer unavailable features from undocumented endpoints.",
+    "title": "MDTBBS Public Client API",
+    "description": "Stable V1 contract for web, official applications and third-party public clients. Use /api/v1/capabilities for feature discovery. External server integrations use the separate /api/external/v1 API key boundary. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
     "version": "1.0.0",
     "contact": {}
   },
   "tags": [],
-  "servers": [],
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Same-origin MindFourm API"
+    }
+  ],
   "components": {
     "securitySchemes": {
       "MindAuthBearer": {
@@ -2971,6 +2580,10 @@
       }
     },
     "schemas": {
+      "UpdateEmailPreferenceDto": {
+        "type": "object",
+        "properties": {}
+      },
       "CreateResourceCategoryDto": {
         "type": "object",
         "properties": {}
@@ -2999,6 +2612,43 @@
         "type": "object",
         "properties": {}
       },
+      "CreateMessageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateGroupChatDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "GroupMessageDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AddGroupChatMemberDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateGroupChatDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateMessageV1Dto": {
+        "type": "object",
+        "properties": {
+          "recipient_id": {
+            "type": "number",
+            "minimum": 1
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 5000
+          }
+        },
+        "required": [
+          "recipient_id",
+          "content"
+        ]
+      },
       "CreateReportDto": {
         "type": "object",
         "properties": {}
@@ -3007,21 +2657,158 @@
         "type": "object",
         "properties": {}
       },
+      "TiptapMarkDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "bold",
+              "italic",
+              "strike",
+              "underline",
+              "code",
+              "link"
+            ]
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Link marks accept href and optional title."
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "TiptapNodeDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "doc",
+              "paragraph",
+              "heading",
+              "blockquote",
+              "bulletList",
+              "orderedList",
+              "listItem",
+              "codeBlock",
+              "horizontalRule",
+              "table",
+              "tableRow",
+              "tableHeader",
+              "tableCell",
+              "text",
+              "hardBreak",
+              "image"
+            ]
+          },
+          "attrs": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Only attributes defined by the named node type are accepted."
+          },
+          "text": {
+            "type": "string",
+            "description": "Text for a text node."
+          },
+          "content": {
+            "description": "Child nodes in the allowlisted Tiptap schema.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TiptapNodeDto"
+            }
+          },
+          "marks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TiptapMarkDto"
+            }
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "TiptapDocumentDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "doc"
+            ]
+          },
+          "content": {
+            "description": "Root blocks; recursive node schema is bounded and validated by MindFourm.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TiptapNodeDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "content"
+        ]
+      },
       "CreatePostDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Legacy Markdown projection. May be omitted when content_json is supplied."
+          },
+          "content_json": {
+            "description": "Tiptap / ProseMirror JSON source. The server validates against its allowlisted schema.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TiptapDocumentDto"
+              }
+            ]
+          }
+        }
       },
       "UpdatePostDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "content_json": {
+            "description": "Tiptap / ProseMirror JSON source; takes precedence over content when supplied.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TiptapDocumentDto"
+              }
+            ]
+          }
+        }
       },
       "CreateReplyDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "content_json": {
+            "description": "Tiptap / ProseMirror JSON source. The server validates against its allowlisted schema.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TiptapDocumentDto"
+              }
+            ]
+          }
+        }
       },
       "UpdateReplyDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "content_json": {
+            "description": "Tiptap / ProseMirror JSON source; takes precedence over content when supplied.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TiptapDocumentDto"
+              }
+            ]
+          }
+        }
       },
       "CreateFeedbackV1Dto": {
         "type": "object",
@@ -3316,6 +3103,189 @@
           "icon"
         ]
       },
+      "GameContentProductionFlowDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          },
+          "rate": {
+            "type": "number",
+            "description": "Rate per second"
+          },
+          "estimated": {
+            "type": "boolean",
+            "description": "True when this is a long-run probability-weighted expectation"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "rate"
+        ]
+      },
+      "GameContentProductionItemStatDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string",
+            "nullable": true
+          },
+          "produced": {
+            "type": "number"
+          },
+          "consumed": {
+            "type": "number"
+          },
+          "net": {
+            "type": "number",
+            "description": "produced - consumed, per second"
+          },
+          "estimated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "produced",
+          "consumed",
+          "net"
+        ]
+      },
+      "GameContentProductionFlowsDto": {
+        "type": "object",
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentProductionFlowDto"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentProductionFlowDto"
+            }
+          },
+          "internal": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentProductionItemStatDto"
+            }
+          }
+        },
+        "required": [
+          "inputs",
+          "outputs",
+          "internal"
+        ]
+      },
+      "GameContentProductionPowerDto": {
+        "type": "object",
+        "properties": {
+          "generated": {
+            "type": "number",
+            "description": "Power generated per second"
+          },
+          "consumed": {
+            "type": "number",
+            "description": "Power consumed per second"
+          },
+          "net": {
+            "type": "number",
+            "description": "generated - consumed, per second"
+          }
+        },
+        "required": [
+          "generated",
+          "consumed",
+          "net"
+        ]
+      },
+      "GameContentProductionWarningDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "blockId": {
+            "type": "string"
+          },
+          "blockName": {
+            "type": "string"
+          },
+          "count": {
+            "type": "object",
+            "nullable": true,
+            "description": "null when official schematic decoding discards the unknown block placements"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "blockId",
+          "count"
+        ]
+      },
+      "GameContentProductionDto": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "theoretical"
+            ]
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "items": {
+            "$ref": "#/components/schemas/GameContentProductionFlowsDto"
+          },
+          "liquids": {
+            "$ref": "#/components/schemas/GameContentProductionFlowsDto"
+          },
+          "power": {
+            "$ref": "#/components/schemas/GameContentProductionPowerDto"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameContentProductionWarningDto"
+            }
+          }
+        },
+        "required": [
+          "mode",
+          "complete",
+          "available",
+          "items",
+          "liquids",
+          "power",
+          "warnings"
+        ]
+      },
       "GameContentLinksDto": {
         "type": "object",
         "properties": {
@@ -3400,6 +3370,15 @@
             "items": {
               "$ref": "#/components/schemas/GameContentBlueprintBlockDto"
             }
+          },
+          "production": {
+            "nullable": true,
+            "description": "Cached theoretical full-load production rates per second",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GameContentProductionDto"
+              }
+            ]
           },
           "links": {
             "$ref": "#/components/schemas/GameContentLinksDto"

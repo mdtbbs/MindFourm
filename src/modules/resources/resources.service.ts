@@ -12,7 +12,7 @@ import { User } from '@entities/user.entity';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { QueryResourcesDto } from './dto/query-resources.dto';
-import { parseMarkdown } from '@common/utils/markdown.util';
+import { resolveOptionalContentSource } from '@common/utils/tiptap-content.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
 import { PUBLIC_RESOURCE_STATUSES, RESOURCE_STATUS } from '@common/utils/constants';
@@ -277,12 +277,13 @@ export class ResourcesService {
       throw new BadRequestException('地图和蓝图只能使用本站托管文件，不能设置外链地址');
     }
 
-    const contentHtml = dto.content ? parseMarkdown(dto.content) : undefined;
+    const contentSource = resolveOptionalContentSource(dto.content, dto.content_json);
+    dto.content = contentSource?.content || undefined;
     const risk = this.contentSafety
       ? await this.contentSafety.assess(this.resourceSafetyText({
         title: dto.title,
         description: dto.description,
-        content: dto.content,
+        content: contentSource?.content,
         externalUrl: dto.external_url,
         fileName: file?.file_name,
       }))
@@ -306,8 +307,10 @@ export class ResourcesService {
       version: dto.version,
       source_url: dto.source_url || null,
       license: dto.license?.trim() || null,
-      content: dto.content,
-      content_html: contentHtml,
+      content: contentSource?.content || null,
+      content_html: contentSource?.content_html || null,
+      content_json: contentSource?.content_json || null,
+      content_text: contentSource?.content_text || null,
       category_id: categoryId,
       is_public: this.toTinyInt((dto as any).is_public, 1),
       status: RESOURCE_STATUS_PENDING,
@@ -322,11 +325,11 @@ export class ResourcesService {
       download_count: 0,
       use_mfl: 0,
       metadata_json: (dto as any).metadata ? normalizeResourceMetadata((dto as any).metadata) : null,
-    });
+    } as any) as unknown as Resource;
 
     const saved = await this.dataSource.transaction(async (manager) => {
       const resource = await manager.save(Resource, newResource);
-      await this.createInitialV2Aggregate(manager, resource, dto, userId, file);
+      await this.createInitialV2Aggregate(manager, resource, dto, userId, file, contentSource);
       return resource;
     });
 
@@ -376,6 +379,7 @@ export class ResourcesService {
     dto: CreateResourceDto,
     submitterUserId: number,
     file: ResourceFileMeta | undefined,
+    contentSource: ReturnType<typeof resolveOptionalContentSource>,
   ): Promise<void> {
       const release = await manager.save(ResourceVersion, manager.create(ResourceVersion, {
         resource_id: resource.id,
@@ -385,8 +389,8 @@ export class ResourcesService {
         version: dto.version.trim(),
         release_channel: 'stable',
         status: 'pending_review',
-        release_notes_markdown: dto.content?.trim() || null,
-        release_notes_html: dto.content?.trim() ? parseMarkdown(dto.content) : null,
+        release_notes_markdown: contentSource?.content.trim() || null,
+        release_notes_html: contentSource?.content_html || null,
         created_by_user_id: submitterUserId,
         file_path: file?.file_path || null,
         file_name: file?.file_name || null,
@@ -1037,6 +1041,12 @@ export class ResourcesService {
     userRole?: string,
     provenance: { ipAddress?: string } = {},
   ): Promise<any> {
+    const hasContentUpdate = dto.content !== undefined || dto.content_json !== undefined;
+    const contentSource = hasContentUpdate
+      ? resolveOptionalContentSource(dto.content, dto.content_json)
+      : undefined;
+    if (contentSource) dto.content = contentSource.content;
+
     const updateResult = await this.dataSource.transaction(async (manager) => {
       const resource = await manager.findOne(Resource, {
         where: { id },
@@ -1099,9 +1109,11 @@ export class ResourcesService {
         updateData.external_url = dto.external_url;
       }
       if (dto.version !== undefined) updateData.version = dto.version;
-      if (dto.content !== undefined) {
-        updateData.content = dto.content;
-        updateData.content_html = parseMarkdown(dto.content);
+      if (hasContentUpdate) {
+        updateData.content = contentSource?.content ?? null;
+        updateData.content_html = contentSource?.content_html ?? null;
+        updateData.content_json = contentSource?.content_json || null;
+        updateData.content_text = contentSource?.content_text || null;
       }
       if ((dto as any).category_id !== undefined) updateData.category_id = categoryId;
       if ((dto as any).is_public !== undefined) {
@@ -1111,14 +1123,14 @@ export class ResourcesService {
         updateData.metadata_json = mergeResourceMetadata(resource.metadata_json, (dto as any).metadata);
       }
 
-      const contentChanged = ['title', 'description', 'content', 'external_url'].some(
+      const contentChanged = ['title', 'description', 'content', 'content_json', 'external_url'].some(
         (field) => Object.prototype.hasOwnProperty.call(dto, field),
       );
       const risk = contentChanged && this.contentSafety
         ? await this.contentSafety.assess(this.resourceSafetyText({
           title: dto.title ?? resource.title,
           description: dto.description ?? resource.description,
-          content: dto.content ?? resource.content,
+          content: contentSource?.content ?? resource.content,
           externalUrl: dto.external_url ?? resource.external_url,
           fileName: resource.file_name,
         }))

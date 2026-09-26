@@ -3,6 +3,9 @@
  * 用法: node scripts/export-openapi.js
  */
 require('dotenv/config');
+// OpenAPI generation needs Nest's controller graph and TypeORM repository tokens,
+// but it must not connect to a database or run migrations just to export a spec.
+process.env.OPENAPI_EXPORT = 'true';
 const { NestFactory } = require('@nestjs/core');
 const { AppModule } = require('../dist/app.module');
 const { createV1OpenApiDocument } = require('../dist/openapi/v1-openapi');
@@ -24,7 +27,7 @@ async function exportOpenApi() {
   const document = createV1OpenApiDocument(app);
 
   // 输出路径
-  const outputPath = path.join(__dirname, '..', 'openapi-v1.json');
+  const outputPath = process.env.OPENAPI_OUTPUT_PATH || path.join(__dirname, '..', 'openapi-v1.json');
   fs.writeFileSync(outputPath, JSON.stringify(document, null, 2));
 
   console.log(`✅ OpenAPI V1 文档已导出到: ${outputPath}`);

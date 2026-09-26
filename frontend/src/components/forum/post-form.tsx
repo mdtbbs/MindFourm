@@ -36,6 +36,7 @@ export default function PostForm() {
   // Form fields
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
   const [categoryId, setCategoryId] = useState<string>('');
   const [tagsInput, setTagsInput] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
@@ -56,7 +57,7 @@ export default function PostForm() {
   // Draft
   const draft = useDraft('post');
   const saveDraft = draft.save;
-  const draftValues = useMemo(() => ({ title, content, categoryId, tagsInput, status }), [title, content, categoryId, tagsInput, status]);
+  const draftValues = useMemo(() => ({ title, content, contentJson, categoryId, tagsInput, status }), [title, content, contentJson, categoryId, tagsInput, status]);
   const hasDraftContent = Boolean(title.trim() || content.trim() || categoryId || tagsInput.trim() || status === 'draft');
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
@@ -99,6 +100,7 @@ export default function PostForm() {
     if (!saved) return;
     if (typeof saved.title === 'string') setTitle(saved.title);
     if (typeof saved.content === 'string') setContent(saved.content);
+    if (saved.contentJson && typeof saved.contentJson === 'object') setContentJson(saved.contentJson as Record<string, unknown>);
     if (typeof saved.categoryId === 'string') setCategoryId(saved.categoryId);
     if (typeof saved.tagsInput === 'string') setTagsInput(saved.tagsInput);
     if (saved.status === 'draft' || saved.status === 'published') setStatus(saved.status);
@@ -139,6 +141,7 @@ export default function PostForm() {
       const input: CreatePostInput = {
         title: title.trim(),
         content: content.trim(),
+        content_json: contentJson || undefined,
         category_id: categoryId ? Number(categoryId) : undefined,
         tags: parseTags(),
         status,
@@ -235,6 +238,8 @@ export default function PostForm() {
           <TiptapEditor
             value={content}
             onChange={setContent}
+            jsonValue={contentJson}
+            onJsonChange={setContentJson}
             testId="post-content-editor"
             ariaLabel="帖子正文"
             placeholder="使用富文本编辑器编写帖子内容，支持粘贴 / 拖放上传图片..."

@@ -153,3 +153,50 @@ describe('AuthService mobile refresh concurrency contract', () => {
     expect(sessionRepo.update).toHaveBeenCalledWith('session-a', expect.objectContaining({ revoked_at: expect.any(Date) }));
   });
 });
+
+describe('AuthService unified client principal resolver', () => {
+  const createService = () => new AuthService(
+    { findOne: jest.fn() } as any, {} as any, {} as any, {} as any,
+    { get: jest.fn() } as any, {} as any, {} as any, {} as any,
+    {} as any, {} as any, {} as any,
+  );
+
+  it('preserves first-party forum cookie and legacy mobile JWT compatibility', async () => {
+    const service = createService();
+    const user = { id: 3 } as any;
+    jest.spyOn(service, 'verifySession').mockResolvedValue(user);
+    const sessionRequest: any = { cookies: { forum_session: 'session' }, headers: {} };
+    await expect(service.resolveRequestUser(sessionRequest)).resolves.toBe(user);
+    expect(sessionRequest.authContext).toMatchObject({ source: 'forum_session', scopes: expect.arrayContaining(['forum.read', 'forum.write']) });
+
+    jest.spyOn(service, 'verifyMobileAccessToken').mockResolvedValue(user);
+    const mobileRequest: any = { cookies: {}, headers: { authorization: 'Bearer header.payload.signature' } };
+    await expect(service.resolveRequestUser(mobileRequest)).resolves.toBe(user);
+    expect(mobileRequest.authContext).toMatchObject({ source: 'forum_mobile_legacy' });
+  });
+
+  it('introspects opaque MindAuth Bearers server-side and maps only explicitly issued scopes', async () => {
+    const service = createService();
+    const user = { id: 8, mindauth_id: 22, phone_verified: true } as any;
+    const repository = (service as any).usersRepository;
+    jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue({ active: true, sub: '22', client_id: 'third-party', scope: 'openid forum.read', client_type: 'public', party_type: 'third_party' });
+    jest.spyOn(service, 'getUserInfo').mockResolvedValue({ id: 22, username: 'writer', email: '', avatar_url: '' });
+    jest.spyOn(service, 'getOrCreateUser').mockResolvedValue(user);
+    repository.findOne.mockResolvedValue(user);
+
+    const result = await service.resolveMindAuthBearer('opaque-value');
+
+    expect((service as any).introspectMindAuthToken).toHaveBeenCalledWith('opaque-value');
+    expect(result.user).toBe(user);
+    expect(result.context).toMatchObject({ source: 'mindauth_oauth', clientId: 'third-party', scopes: ['openid', 'forum.read'], clientType: 'public', partyType: 'third_party' });
+  });
+
+  it('requires profile and email scopes before creating a local forum identity', async () => {
+    const service = createService();
+    const repository = (service as any).usersRepository;
+    jest.spyOn(service as any, 'introspectMindAuthToken').mockResolvedValue({ active: true, sub: '22', client_id: 'public-app', scope: 'openid forum.read', client_type: 'public', party_type: 'third_party' });
+    jest.spyOn(service, 'getUserInfo').mockResolvedValue({ id: 22, username: 'writer', email: '', avatar_url: '' });
+    repository.findOne.mockResolvedValue(null);
+    await expect(service.resolveMindAuthBearer('opaque-value')).rejects.toMatchObject({ response: expect.objectContaining({ code: 'INSUFFICIENT_SCOPE' }) });
+  });
+});

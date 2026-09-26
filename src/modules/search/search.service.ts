@@ -147,7 +147,7 @@ export class SearchService {
 
   async searchPosts(
     query: string,
-    options: { page?: number; limit?: number; category?: string; sort?: string },
+    options: { page?: number; limit?: number; category?: string; categoryId?: number; sort?: string },
     viewer?: SearchViewer,
   ): Promise<{
     data: PostSummaryDto[];
@@ -174,6 +174,7 @@ export class SearchService {
         'p.content',
         'p.status',
         'p.is_pinned',
+        'p.is_locked',
         'p.view_count',
         'p.like_count',
         'p.created_at',
@@ -223,6 +224,9 @@ export class SearchService {
 
     if (options.category) {
       qb.andWhere('category.slug = :category', { category: options.category });
+    }
+    if (options.categoryId) {
+      qb.andWhere('category.id = :categoryId', { categoryId: options.categoryId });
     }
 
     if (options.sort === 'relevance') {

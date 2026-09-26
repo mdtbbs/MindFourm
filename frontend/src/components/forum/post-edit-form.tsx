@@ -40,6 +40,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
   const router = useRouter();
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
+  const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(post.content_json ?? null);
   const [categoryId, setCategoryId] = useState<number | undefined>(post.category_id ?? undefined);
   const [tagsInput, setTagsInput] = useState(
     (post.tags ?? []).map((tag) => tag.name).join(', '),
@@ -58,6 +59,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
   const dirty =
     title !== post.title
     || content !== post.content
+    || JSON.stringify(contentJson) !== JSON.stringify(post.content_json ?? null)
     || categoryId !== (post.category_id ?? undefined)
     || tagsInput !== (post.tags ?? []).map((tag) => tag.name).join(', ');
 
@@ -80,6 +82,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
       await postApi.update(post.id, {
         title: trimmedTitle,
         content,
+        content_json: contentJson || undefined,
         category_id: categoryId,
         tags: tagsInput
           .split(/[,，]+/)
@@ -149,6 +152,8 @@ export default function PostEditForm({ post }: PostEditFormProps) {
           <TiptapEditor
             value={content}
             onChange={setContent}
+            jsonValue={contentJson}
+            onJsonChange={setContentJson}
             testId="post-edit-content"
             id="post-content"
             ariaLabel="帖子正文"

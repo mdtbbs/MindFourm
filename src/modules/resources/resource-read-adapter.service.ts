@@ -34,6 +34,10 @@ export type V1ResourceDto = {
   id: number;
   title: string;
   summary: string;
+  content: string | null;
+  content_json: Record<string, unknown> | null;
+  content_html: string | null;
+  content_text: string | null;
   resource_kind: string | null;
   visibility: string;
   metadata: V1ResourceMetadata;
@@ -132,6 +136,10 @@ export class ResourceReadAdapterService {
       id: resource.id,
       title: resource.title,
       summary: resource.summary || resource.description || '',
+      content: resource.content || null,
+      content_json: resource.content_json || null,
+      content_html: resource.content_html || null,
+      content_text: resource.content_text || null,
       resource_kind: resource.resource_kind || null,
       visibility: resource.visibility || (resource.is_public ? 'public' : 'private'),
       metadata: this.buildMetadata(resource),
@@ -169,7 +177,14 @@ export class ResourceReadAdapterService {
     });
     const versionIds = versions.map((version) => version.id);
     if (versionIds.length === 0) {
-      return { resource_public_id: resource.public_id, resource_kind: resource.resource_kind || 'other', versions: [] };
+      return {
+        schema_version: 1,
+        type: resource.resource_kind || 'other',
+        resource: { public_id: resource.public_id, name: resource.title },
+        resource_public_id: resource.public_id,
+        resource_kind: resource.resource_kind || 'other',
+        versions: [],
+      };
     }
 
     const [files, dependencies, compatibilities] = await Promise.all([
@@ -182,6 +197,9 @@ export class ResourceReadAdapterService {
     const targetPublicIds = new Map(targetResources.map((target) => [target.id, target.public_id || null]));
 
     return {
+      schema_version: 1,
+      type: resource.resource_kind || 'other',
+      resource: { public_id: resource.public_id, name: resource.title },
       resource_public_id: resource.public_id,
       resource_kind: resource.resource_kind || 'other',
       versions: versions

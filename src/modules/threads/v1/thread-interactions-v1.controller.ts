@@ -4,11 +4,14 @@ import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { BookmarksService } from '../../bookmarks/bookmarks.service';
 import { LikesService } from '../../likes/likes.service';
+import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
+import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
 
 @ApiV1()
 @ApiTags('v1-thread-interactions')
 @Controller('v1/threads')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OAuthScopeGuard)
+@RequireOAuthScopes('forum.write')
 export class ThreadInteractionsV1Controller {
   constructor(
     private readonly likesService: LikesService,

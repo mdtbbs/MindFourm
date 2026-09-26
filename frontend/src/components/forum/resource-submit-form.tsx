@@ -37,6 +37,7 @@ export default function ResourceSubmitForm() {
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [isPublic, setIsPublic] = useState(true);
   const [content, setContent] = useState('');
+  const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
   const [externalUrl, setExternalUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [schematicSource, setSchematicSource] = useState<SchematicSource>('file');
@@ -47,8 +48,8 @@ export default function ResourceSubmitForm() {
   const draft = useDraft('resource');
   const saveDraft = draft.save;
   const draftValues = useMemo(
-    () => ({ resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl, schematicSource, schematicCode }),
-    [resourceType, resourceKind, title, version, description, categoryId, isPublic, content, externalUrl, schematicSource, schematicCode],
+    () => ({ resourceType, resourceKind, title, version, description, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode }),
+    [resourceType, resourceKind, title, version, description, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode],
   );
   const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl || schematicCode);
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
@@ -74,6 +75,7 @@ export default function ResourceSubmitForm() {
     if (typeof saved.categoryId === 'number') setCategoryId(saved.categoryId);
     if (typeof saved.isPublic === 'boolean') setIsPublic(saved.isPublic);
     if (typeof saved.content === 'string') setContent(saved.content);
+    if (saved.contentJson && typeof saved.contentJson === 'object') setContentJson(saved.contentJson as Record<string, unknown>);
     if (typeof saved.externalUrl === 'string') setExternalUrl(saved.externalUrl);
     if (saved.schematicSource === 'file' || saved.schematicSource === 'paste') setSchematicSource(saved.schematicSource);
     if (typeof saved.schematicCode === 'string') setSchematicCode(saved.schematicCode);
@@ -155,6 +157,7 @@ export default function ResourceSubmitForm() {
       if (categoryId) formData.append('category_id', String(categoryId));
       formData.append('is_public', isPublic ? '1' : '0');
       if (content.trim()) formData.append('content', content.trim());
+      if (contentJson) formData.append('content_json', JSON.stringify(contentJson));
 
       if (isSchematic && schematicSource === 'paste') {
         formData.append('schematic_code', schematicCode.trim());
@@ -357,6 +360,8 @@ export default function ResourceSubmitForm() {
         <TiptapEditor
           value={content}
           onChange={setContent}
+          jsonValue={contentJson}
+          onJsonChange={setContentJson}
           ariaLabel="资源正文"
           placeholder="使用富文本编辑器详细介绍资源内容、使用方式和注意事项，支持粘贴 / 拖放上传图片"
           minHeight="260px"

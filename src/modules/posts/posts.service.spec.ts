@@ -4,6 +4,8 @@ jest.mock('@nestjs/common', () => {
   class HttpException extends Error {}
   return {
     Injectable: decorator,
+    HttpException,
+    HttpStatus: { BAD_REQUEST: 400 },
     BadRequestException: class BadRequestException extends HttpException {},
     ForbiddenException: class ForbiddenException extends HttpException {},
     NotFoundException: class NotFoundException extends HttpException {},
@@ -48,7 +50,7 @@ jest.mock('@entities/tag.entity', () => ({ Tag: class Tag {} }));
 jest.mock('@entities/post-tag.entity', () => ({ PostTag: class PostTag {} }));
 jest.mock('@entities/reply.entity', () => ({ Reply: class Reply {} }));
 jest.mock('@entities/post-revision.entity', () => ({ PostRevision: class PostRevision {} }));
-jest.mock('@common/utils/markdown.util', () => ({ parseMarkdown: (value: string) => value }));
+jest.mock('@common/utils/markdown.util', () => ({ parseMarkdown: (value: string) => value, sanitize: (value: string) => value }));
 jest.mock('../../database/redis.service', () => ({ RedisService: class RedisService {} }));
 jest.mock('../points/points.service', () => ({ PointsService: class PointsService {} }));
 jest.mock('../groups/groups.service', () => ({ GroupsService: class GroupsService {} }));
@@ -306,9 +308,9 @@ describe('PostsService', () => {
       expect.objectContaining({ id: 88 }),
     );
     expect(redisService.set).toHaveBeenCalledWith(
-      // v5: the cached shape gained category presentation metadata, so entries written by
+      // v6: the cached shape gained canonical content_json, so entries written by
       // the previous deploy must not be read back as if they had them.
-      'post:detail:v5:88',
+      'post:detail:v6:88',
       JSON.stringify({
         id: 88,
         title: 'Detailed post',
@@ -549,7 +551,7 @@ describe('PostsService.setLocked', () => {
     const result = await service.setLocked(88, true, STAFF);
 
     expect(postRepository.update).toHaveBeenCalledWith(88, { is_locked: 1 });
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v5:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v6:88');
     // Just the flag: `pin` and `move` return the reloaded entity joined to `user`, which
     // carries the author's email out with it.
     expect(result).toEqual({ id: 88, is_locked: true });
@@ -622,7 +624,7 @@ describe('PostsService.setBestReply', () => {
         reply_id: 5,
       }),
     );
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v5:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v6:88');
   });
 
   it('lets a moderator mark a reply on someone else s post', async () => {
@@ -735,6 +737,25 @@ describe('PostsService.update revision history', () => {
       88,
       expect.objectContaining({ title: 'New title', edited_at: expect.any(Date) }),
     );
+  });
+
+  it('accepts rich-text JSON, stores its safe projections, and records the canonical content revision', async () => {
+    const manager = createManagerMock({ Post: EXISTING, Category: { id: 3 } });
+    const { service } = createService({ manager });
+    const document = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'JSON body' }] }] };
+
+    await service.update(88, { content_json: document } as any, AUTHOR.id, AUTHOR.role);
+
+    expect(manager.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'PostRevision' }),
+      expect.objectContaining({ post_id: 88, content: 'Original body' }),
+    );
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 88, expect.objectContaining({
+      content: 'JSON body',
+      content_html: '<p>JSON body</p>',
+      content_json: document,
+      edited_at: expect.any(Date),
+    }));
   });
 
   it('normalizes pasted Markdown heading markers before persisting a title', async () => {

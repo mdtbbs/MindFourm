@@ -46,4 +46,29 @@ describe('ThreadsV1Controller', () => {
 
     await expect(controller.getThread(1, {})).resolves.toMatchObject({ viewer: null });
   });
+
+  it('routes q through the existing SearchService and retains list-array compatibility', async () => {
+    const adapter = { listThreadsV1: jest.fn(), countThreadsV1: jest.fn() };
+    const search = { searchPosts: jest.fn().mockResolvedValue({
+      data: [{ id: 8, user_id: 5, category_id: 3, title: 'Needle', slug: 'needle', status: 'published', is_pinned: false, is_locked: true, view_count: 10, reply_count: 2, created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-02'), author_name: 'writer', author_avatar_url: '/a.png', category_name: 'General', category_slug: 'general', excerpt: 'Found it' }],
+      pagination: { page: 2, limit: 10, total: 11, totalPages: 2 },
+    }) };
+    const controller = new ThreadsV1Controller(adapter as any, undefined, undefined, undefined, search as any);
+
+    const result = await controller.listThreads({ q: 'needle', page: 2, limit: 10, category_id: 3 } as any, { user: { id: 1 } });
+
+    expect(search.searchPosts).toHaveBeenCalledWith('needle', { page: 2, limit: 10, categoryId: 3, sort: undefined }, { id: 1 });
+    expect(Array.isArray(result)).toBe(true);
+    expect(result[0]).toMatchObject({ author: { username: 'writer' }, category: { name: 'General' }, excerpt: 'Found it', is_locked: true });
+    expect((result as any).__v1Pagination).toMatchObject({ page: 2, has_more: false });
+  });
+
+  it('adds a separately paginated reply endpoint while preserving detail replies', async () => {
+    const adapter = { getThreadV1: jest.fn().mockResolvedValue({ id: 3, status: 'published' }) };
+    const posts = { getReplies: jest.fn().mockResolvedValue({ data: [{ id: 14, user_id: 2 }], total: 3, page: 2, limit: 1, totalPages: 3 }) };
+    const controller = new ThreadsV1Controller(adapter as any, posts as any);
+    const result = await controller.getReplies(3, '2', '1', { user: { id: 2 } });
+    expect(result).toEqual([{ id: 14, user_id: 2, is_owner: true }]);
+    expect((result as any).__v1Pagination).toMatchObject({ page: 2, total_pages: 3, has_more: true });
+  });
 });

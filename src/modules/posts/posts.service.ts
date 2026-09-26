@@ -36,7 +36,7 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
 import { PostDetailDto, PostDetailReply, PostDetailService } from './post-detail.service';
 import { PostSummaryDto, PostSummaryService } from './post-summary.service';
-import { parseMarkdown } from '@common/utils/markdown.util';
+import { resolveContentSource } from '@common/utils/tiptap-content.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
 import {
@@ -54,7 +54,7 @@ import { normalizePostTitle } from '@common/utils/post-title.util';
 export class PostsService {
   // v5: category presentation metadata joined the detail payload. Reusing v4
   // would leave breadcrumbs without the board colour until cache expiry.
-  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v5:';
+  private static readonly POST_DETAIL_CACHE_PREFIX = 'post:detail:v6:';
 
   constructor(
     @InjectRepository(Post)
@@ -96,15 +96,20 @@ export class PostsService {
     dto.title = normalizePostTitle(dto.title);
     if (!dto.title) throw new BadRequestException('标题不能为空');
 
-    // Parse markdown to HTML
-    const contentHtml = parseMarkdown(dto.content);
+    // JSON is the canonical rich-text source for updated clients. Markdown remains
+    // a compatibility projection used by existing services and older clients.
+    const contentSource = resolveContentSource(dto.content, dto.content_json);
+    const content = contentSource.content;
+    dto.content = content;
+    dto.content_json = contentSource.content_json as unknown as CreatePostDto['content_json'];
+    const contentHtml = contentSource.content_html;
 
     // Resolved up front: this reads the settings table (and its cache) through a
     // different repository and contributes nothing to the write below, so it has no
     // business holding the write transaction open.
     const requestedStatus = dto.status || 'published';
     const risk = this.contentSafety
-      ? await this.contentSafety.assess(`${dto.title}\n${dto.content}`)
+      ? await this.contentSafety.assess(`${dto.title}\n${content}`)
       : { score: 0, rules: [], mustReview: false };
     const requiresApproval = requestedStatus === 'published'
       && (risk.mustReview || await this.settingsService.getBoolean('require_post_approval', true));
@@ -134,8 +139,10 @@ export class PostsService {
         source: provenance.source || 'USER',
         title: dto.title,
         slug: await this.resolveUniquePostSlug(manager, dto.title),
-        content: dto.content,
+        content,
         content_html: contentHtml,
+        content_json: contentSource.content_json,
+        content_text: contentSource.content_text,
         status: requiresApproval ? 'pending' : requestedStatus,
         is_pinned: 0,
         view_count: 0,
@@ -192,7 +199,7 @@ export class PostsService {
         item_type: 'post',
         item_id: post.id,
         title: post.title,
-        content: dto.content,
+        content,
         author_username: authorUsername || `#${userId}`,
         action_url: '/admin/content/moderation?type=posts',
       }).catch((err) =>
@@ -206,9 +213,9 @@ export class PostsService {
     );
 
     // Handle @mentions in post content (only for published posts)
-    if (post.status === 'published' && dto.content) {
+    if (post.status === 'published' && content) {
       this.notificationsService.notifyMentionedUsers(
-        dto.content,
+        content,
         post.id,
         userId,
         undefined, // replyId - not applicable for posts
@@ -249,6 +256,8 @@ export class PostsService {
         title: true,
         content: true,
         content_html: true,
+        content_json: true,
+        content_text: true,
         status: true,
         is_pinned: true,
         is_locked: true,
@@ -595,6 +604,14 @@ export class PostsService {
       dto = hookCtx.dto;
     }
 
+    const contentSource = dto.content !== undefined || dto.content_json !== undefined
+      ? resolveContentSource(dto.content, dto.content_json)
+      : null;
+    if (contentSource) {
+      dto.content = contentSource.content;
+      dto.content_json = contentSource.content_json as unknown as UpdatePostDto['content_json'];
+    }
+
     const result = await this.dataSource.transaction(async (manager) => {
       // Find existing post
       const post = await manager.findOne(Post, {
@@ -612,12 +629,6 @@ export class PostsService {
 
       if (!isOwner && !canEditAny) {
         throw new ForbiddenException('无权限编辑此帖子');
-      }
-
-      // Parse markdown if content changed
-      let contentHtml = post.content_html;
-      if (dto.content) {
-        contentHtml = parseMarkdown(dto.content);
       }
 
       // Validate category if changing
@@ -644,8 +655,12 @@ export class PostsService {
           updateData.slug = await this.resolveUniquePostSlug(manager, title);
         }
       }
-      if (dto.content) updateData.content = dto.content;
-      if (dto.content !== undefined) updateData.content_html = contentHtml;
+      if (contentSource) {
+        updateData.content = contentSource.content;
+        updateData.content_html = contentSource.content_html;
+        updateData.content_json = contentSource.content_json;
+        updateData.content_text = contentSource.content_text;
+      }
       if (dto.category_id !== undefined) updateData.category_id = dto.category_id;
       if (dto.required_group_id !== undefined) updateData.required_group_id = dto.required_group_id;
       if (dto.post_type) updateData.post_type = dto.post_type;
@@ -993,6 +1008,8 @@ export class PostsService {
       parent_reply_id: true,
       content: true,
       content_html: true,
+      content_json: true,
+      content_text: true,
       status: true,
       like_count: true,
       created_at: true,

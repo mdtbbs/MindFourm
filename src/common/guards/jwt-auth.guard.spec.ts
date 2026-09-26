@@ -7,6 +7,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AuthService } from '../../modules/auth/auth.service';
 import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
+import { ALLOW_BANNED_USER_KEY } from '../decorators/allow-banned-user.decorator';
 
 function createContext(method: string, sessionToken?: string) {
   const request: any = {
@@ -33,7 +34,7 @@ describe('JwtAuthGuard phone verification', () => {
       verifySession: jest.fn().mockResolvedValue(user),
     } as unknown as jest.Mocked<AuthService>;
     const reflector = {
-      getAllAndOverride: jest.fn().mockReturnValue(isPublic),
+      getAllAndOverride: jest.fn((key: string) => key === 'isPublic' ? isPublic : false),
     } as unknown as jest.Mocked<Reflector>;
     const bansService = {
       assertUserNotBanned: jest.fn().mockResolvedValue(undefined),
@@ -43,6 +44,7 @@ describe('JwtAuthGuard phone verification', () => {
       guard: new JwtAuthGuard(authService, reflector, bansService),
       authService,
       bansService,
+      reflector,
     };
   }
 
@@ -95,5 +97,15 @@ describe('JwtAuthGuard phone verification', () => {
     (guard as any).reflector.getAllAndOverride.mockImplementation((key: string) => key === SKIP_PHONE_VERIFICATION_KEY);
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
+  });
+
+  it('allows only explicitly marked self-service reads to resolve a banned user', async () => {
+    const { guard, bansService, reflector } = createGuard({ id: 1, phone_verified: true });
+    const { context, request } = createContext('GET', 'session-token');
+    reflector.getAllAndOverride.mockImplementation((key: string) => key === ALLOW_BANNED_USER_KEY);
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.user).toMatchObject({ id: 1 });
+    expect(bansService.assertUserNotBanned).not.toHaveBeenCalled();
   });
 });

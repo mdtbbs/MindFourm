@@ -54,7 +54,7 @@ import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { ResourcePreviewService } from './resource-preview.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
-const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
+export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_RESOURCE_EXTENSIONS = new Set([
   '.zip',
   '.rar',
@@ -107,8 +107,8 @@ function createResourceFileInterceptor() {
   });
 }
 
-const resourceUploadInterceptor = createResourceFileInterceptor();
-const resourcePreviewDraftInterceptor = createResourceFileInterceptor();
+export const resourceUploadInterceptor = createResourceFileInterceptor();
+export const resourcePreviewDraftInterceptor = createResourceFileInterceptor();
 
 function normalizeCategoryBody(body: any): any {
   const normalized: Record<string, unknown> = {
@@ -126,7 +126,7 @@ function normalizeCategoryBody(body: any): any {
   return normalized;
 }
 
-async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
+export async function cleanupUploadedFile(file?: Express.Multer.File): Promise<void> {
   if (!file?.path) return;
   await fs.unlink(file.path).catch(() => undefined);
 }
@@ -411,7 +411,12 @@ export class ResourcesController {
   ) {
     const userId = req.user.id;
     let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>>;
+    let rendererDraft;
     try {
+      if (typeof rawBody.content_json === 'string') {
+        try { rawBody = { ...rawBody, content_json: JSON.parse(rawBody.content_json) }; }
+        catch { throw new BadRequestException('content_json 必须是合法 JSON'); }
+      }
       const body = await new ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
@@ -432,19 +437,22 @@ export class ResourcesController {
         throw new BadRequestException('已生成预览的资源不能再次上传文件或粘贴蓝图代码');
       }
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
-      storedFile = previewDraftId
-        ? await this.resourcePreviewService.takeDraft(userId, previewDraftId, body.resource_kind || '')
-        : schematicCode
+      if (previewDraftId) {
+        rendererDraft = await this.resourcePreviewService.consumeDraft(userId, previewDraftId, body.resource_kind || '');
+        storedFile = rendererDraft.file;
+      } else storedFile = schematicCode
         ? await this.resourceStorageService.storePastedSchematic(schematicCode)
         : await this.resourceStorageService.storeIncoming(file);
       const resource = await this.resourcesService.create(body, userId, storedFile, {
         ipAddress: getClientIp(req),
+        rendererDraft,
       });
       await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });
       return resource;
     } catch (error) {
       await cleanupUploadedFile(file);
       if (storedFile?.file_path) await fs.unlink(storedFile.file_path).catch(() => undefined);
+      if (rendererDraft) await this.resourcePreviewService.discardConsumedDraft(rendererDraft);
       throw error;
     }
   }

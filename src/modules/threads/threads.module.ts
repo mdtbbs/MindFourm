@@ -9,11 +9,14 @@ import { BookmarksModule } from '../bookmarks/bookmarks.module';
 import { ThreadInteractionsV1Controller } from './v1/thread-interactions-v1.controller';
 import { ThreadWriteV1Controller } from './v1/thread-write-v1.controller';
 import { RepliesModule } from '../replies/replies.module';
+import { SearchModule } from '../search/search.module';
+import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Post]), PostsModule, RepliesModule, LikesModule, BookmarksModule],
+  imports: [TypeOrmModule.forFeature([Post]), PostsModule, RepliesModule, LikesModule, BookmarksModule, SearchModule, SettingsModule],
   controllers: [ThreadsV1Controller, ThreadInteractionsV1Controller, ThreadWriteV1Controller],
-  providers: [ThreadReadAdapterService],
+  providers: [ThreadReadAdapterService, OAuthScopeGuard],
   exports: [ThreadReadAdapterService],
 })
 export class ThreadsModule {}

@@ -36,6 +36,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
   const [categoryId, setCategoryId] = useState<number | null>(resource.category_id || null);
   const [isPublic, setIsPublic] = useState(resource.is_public !== false);
   const [content, setContent] = useState(resource.content || '');
+  const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(resource.content_json || null);
   const [externalUrl, setExternalUrl] = useState(resource.external_url || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +68,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         category_id: categoryId,
         is_public: isPublic,
         content: content.trim() || null,
+        content_json: contentJson,
       };
 
       if (version.trim()) {
@@ -151,6 +153,8 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         <TiptapEditor
           value={content}
           onChange={setContent}
+          jsonValue={contentJson}
+          onJsonChange={setContentJson}
           ariaLabel="资源正文"
           placeholder="使用富文本编辑器详细介绍资源内容、使用方式和注意事项，支持粘贴 / 拖放上传图片"
           minHeight="260px"

@@ -8,15 +8,19 @@ import { GroupChat } from '@entities/group-chat.entity';
 import { GroupChatMember } from '@entities/group-chat-member.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UserBlocksModule } from '../user-blocks/user-blocks.module';
+import { MessagesV1Controller } from './v1/messages-v1.controller';
+import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Message, User, GroupChat, GroupChatMember]),
     NotificationsModule,
     UserBlocksModule,
+    SettingsModule,
   ],
-  controllers: [MessagesController, GroupChatsController],
-  providers: [MessagesService],
+  controllers: [MessagesController, GroupChatsController, MessagesV1Controller],
+  providers: [MessagesService, OAuthScopeGuard],
   exports: [MessagesService],
 })
 export class MessagesModule {}

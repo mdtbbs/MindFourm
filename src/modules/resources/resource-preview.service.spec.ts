@@ -158,4 +158,28 @@ describe('ResourcePreviewService', () => {
     await expect(service.resolveContentMetadata(['copper'], ['battery']))
       .resolves.toEqual({ items: {}, blocks: {}, liquids: {} });
   });
+
+  it('persists generic upload drafts across service instances and binds them to the owner', async () => {
+    let row: any = null;
+    const uploadDrafts = {
+      find: jest.fn().mockResolvedValue([]),
+      save: jest.fn(async (value: any) => { row = { ...value }; return row; }),
+      findOne: jest.fn(async ({ where }: any) => row?.id === where.id && row?.user_id === where.user_id ? row : null),
+      update: jest.fn(async (_where: any, value: any) => { row = { ...row, ...value }; return { affected: 1 }; }),
+      delete: jest.fn(async (where: any) => {
+        if (row?.id !== where.id || (where.user_id !== undefined && row.user_id !== where.user_id)) return { affected: 0 };
+        row = null;
+        return { affected: 1 };
+      }),
+    };
+    const service = new ResourcePreviewService({ update: jest.fn() } as any, { removeManaged: jest.fn() } as any, uploadDrafts as any);
+    const file = { file_path: '/private/quarantine/mod.zip', file_name: 'mod.zip', file_size: 12, mime_type: 'application/zip', content_hash: 'a'.repeat(64) };
+    const draft = await service.createUploadDraft(17, 'mod', file);
+
+    expect(uploadDrafts.save).toHaveBeenCalledWith(expect.objectContaining({ user_id: 17, resource_kind: 'mod', file_path: file.file_path, preview_key: null }));
+    await expect(service.getDraft(18, draft.id)).rejects.toThrow('预览草稿不存在或已过期');
+    await expect(service.updateDraft(17, draft.id, { title: 'Approved draft title' })).resolves.toMatchObject({ draft: { title: 'Approved draft title' } });
+    await expect(service.consumeDraft(17, draft.id, 'mod')).resolves.toMatchObject({ file, previewKey: null });
+    expect(uploadDrafts.delete).toHaveBeenCalled();
+  });
 });

@@ -1,11 +1,13 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import { readFile, unlink } from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { Resource } from '@entities/resource.entity';
 import { ResourceStorageService, StoredResourceFile } from './resource-storage.service';
+import { ResourceUploadDraft } from '@entities/resource-upload-draft.entity';
+import { normalizeTiptapDocument } from '@common/utils/tiptap-content.util';
 
 type RendererResult = {
   metadata?: Record<string, unknown>;
@@ -25,17 +27,18 @@ type RenderAttempt = { preview: RenderedPreview | null; errorCode: string };
 type PreviewDraft = {
   id: string;
   userId: number;
-  kind: 'map' | 'schematic';
+  kind: string;
   file: StoredResourceFile;
-  previewKey: string;
+  previewKey: string | null;
   metadata: Record<string, unknown> | null;
   parserVersion: string | null;
   expiresAt: number;
+  draftData: Record<string, unknown> | null;
 };
 
 export type ConsumedResourcePreviewDraft = {
   file: StoredResourceFile;
-  previewKey: string;
+  previewKey: string | null;
   metadata: Record<string, unknown> | null;
   parserVersion: string | null;
 };
@@ -55,6 +58,7 @@ export class ResourcePreviewService {
   constructor(
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
     private readonly storage?: ResourceStorageService,
+    @Optional() @InjectRepository(ResourceUploadDraft) private readonly uploadDrafts?: Repository<ResourceUploadDraft>,
   ) {}
 
   supports(resource: Pick<Resource, 'resource_kind'>): boolean {
@@ -132,12 +136,19 @@ export class ResourcePreviewService {
 
     const id = randomUUID();
     const expiresAt = Date.now() + DRAFT_TTL_MS;
-    this.drafts.set(id, {
+    const draft: PreviewDraft = {
       id, userId, kind, file, previewKey: rendered.preview.previewKey,
       metadata: this.safeMetadata(rendered.preview.metadata),
       parserVersion: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
       expiresAt,
-    });
+      draftData: null,
+    };
+    try {
+      await this.storeDraft(draft);
+    } catch (error) {
+      await this.removePreviewKey(draft.previewKey);
+      throw error;
+    }
     return {
       id,
       preview_url: `/api/resources/drafts/${id}/preview`,
@@ -147,8 +158,44 @@ export class ResourcePreviewService {
     };
   }
 
+  /** Generic resource files use the same durable quarantine draft without a game renderer. */
+  async createUploadDraft(userId: number, kind: string, file: StoredResourceFile) {
+    if (!/^[a-z][a-z0-9_]{1,49}$/.test(kind)) throw new BadRequestException('资源类型格式不正确');
+    await this.pruneExpiredDrafts();
+    await this.makeRoomForDraft(userId);
+    const draft: PreviewDraft = {
+      id: randomUUID(), userId, kind, file, previewKey: null, metadata: null,
+      parserVersion: null, expiresAt: Date.now() + DRAFT_TTL_MS, draftData: null,
+    };
+    await this.storeDraft(draft);
+    return this.publicDraft(draft);
+  }
+
+  async getDraft(userId: number, id: string) {
+    return this.publicDraft(await this.requireDraft(userId, id));
+  }
+
+  async updateDraft(userId: number, id: string, draftData: Record<string, unknown>) {
+    const draft = await this.requireDraft(userId, id);
+    if (draftData.content_json !== undefined) {
+      draftData = { ...draftData, content_json: normalizeTiptapDocument(draftData.content_json) };
+    }
+    draft.draftData = { ...(draft.draftData || {}), ...draftData };
+    if (this.uploadDrafts) await this.uploadDrafts.update({ id, user_id: userId }, { draft_json: draft.draftData as any });
+    else this.drafts.set(id, draft);
+    return this.publicDraft(draft);
+  }
+
+  async deleteUserDraft(userId: number, id: string): Promise<void> {
+    const draft = await this.requireDraft(userId, id);
+    if (this.uploadDrafts) await this.uploadDrafts.delete({ id, user_id: userId });
+    else this.drafts.delete(id);
+    await this.cleanupDraftFiles(draft);
+  }
+
   async readDraftPreview(userId: number, id: string): Promise<Buffer> {
     const draft = await this.requireDraft(userId, id);
+    if (!draft.previewKey) throw new NotFoundException('预览尚未生成');
     try {
       return await readFile(path.resolve(this.previewRoot, draft.previewKey));
     } catch {
@@ -163,12 +210,15 @@ export class ResourcePreviewService {
   async consumeDraft(userId: number, id: string, kind: string): Promise<ConsumedResourcePreviewDraft> {
     const draft = await this.requireDraft(userId, id);
     if (draft.kind !== kind) throw new BadRequestException('预览草稿与资源类型不匹配');
-    this.drafts.delete(id);
+    if (this.uploadDrafts) {
+      const deleted = await this.uploadDrafts.delete({ id, user_id: userId, expires_at: MoreThan(new Date()) });
+      if (!deleted.affected) throw new NotFoundException('预览草稿不存在或已过期');
+    } else this.drafts.delete(id);
     return { file: draft.file, previewKey: draft.previewKey, metadata: draft.metadata, parserVersion: draft.parserVersion };
   }
 
   async discardConsumedDraft(draft: ConsumedResourcePreviewDraft): Promise<void> {
-    if (!this.isValidPreviewKey(draft.previewKey)) return;
+    if (!draft.previewKey || !this.isValidPreviewKey(draft.previewKey)) return;
     await unlink(path.resolve(this.previewRoot, draft.previewKey)).catch(() => undefined);
   }
 
@@ -344,6 +394,11 @@ export class ResourcePreviewService {
 
   private async requireDraft(userId: number, id: string): Promise<PreviewDraft> {
     await this.pruneExpiredDrafts();
+    if (this.uploadDrafts) {
+      const row = await this.uploadDrafts.findOne({ where: { id, user_id: userId, expires_at: MoreThan(new Date()) } });
+      if (!row) throw new NotFoundException('预览草稿不存在或已过期');
+      return this.fromUploadDraft(row);
+    }
     const draft = this.drafts.get(id);
     if (!draft || draft.userId !== userId) throw new NotFoundException('预览草稿不存在或已过期');
     return draft;
@@ -351,6 +406,12 @@ export class ResourcePreviewService {
 
   private async pruneExpiredDrafts(): Promise<void> {
     const now = Date.now();
+    if (this.uploadDrafts) {
+      const expired = await this.uploadDrafts.find({ where: { expires_at: LessThanOrEqual(new Date(now)) }, take: 250 });
+      for (const row of expired) await this.cleanupDraftFiles(this.fromUploadDraft(row));
+      if (expired.length) await this.uploadDrafts.delete(expired.map(({ id }) => id));
+      return;
+    }
     for (const [id, draft] of this.drafts) {
       if (draft.expiresAt > now) continue;
       await this.deleteDraft(id, draft);
@@ -359,6 +420,19 @@ export class ResourcePreviewService {
 
   /** Keep previews disposable: replacing a file should never strand a user at a draft quota. */
   private async makeRoomForDraft(userId: number): Promise<void> {
+    if (this.uploadDrafts) {
+      const active = await this.uploadDrafts.find({
+        where: { user_id: userId, expires_at: MoreThan(new Date()) },
+        order: { created_at: 'ASC' },
+        take: MAX_DRAFTS_PER_USER,
+      });
+      if (active.length >= MAX_DRAFTS_PER_USER) {
+        const oldest = active[0];
+        await this.uploadDrafts.delete({ id: oldest.id, user_id: userId });
+        await this.cleanupDraftFiles(this.fromUploadDraft(oldest));
+      }
+      return;
+    }
     const ownDrafts = [...this.drafts.values()]
       .filter((draft) => draft.userId === userId)
       .sort((left, right) => left.expiresAt - right.expiresAt);
@@ -370,7 +444,71 @@ export class ResourcePreviewService {
 
   private async deleteDraft(id: string, draft: PreviewDraft): Promise<void> {
     this.drafts.delete(id);
+    if (this.uploadDrafts) await this.uploadDrafts.delete({ id });
+    await this.cleanupDraftFiles(draft);
+  }
+
+  private async storeDraft(draft: PreviewDraft): Promise<void> {
+    if (!this.uploadDrafts) {
+      this.drafts.set(draft.id, draft);
+      return;
+    }
+    await this.uploadDrafts.save({
+      id: draft.id,
+      user_id: draft.userId,
+      resource_kind: draft.kind,
+      file_path: draft.file.file_path,
+      file_name: draft.file.file_name,
+      file_size: draft.file.file_size,
+      mime_type: draft.file.mime_type,
+      content_hash: draft.file.content_hash,
+      preview_key: draft.previewKey,
+      metadata_json: draft.metadata,
+      parser_version: draft.parserVersion,
+      draft_json: draft.draftData,
+      expires_at: new Date(draft.expiresAt),
+    });
+  }
+
+  private fromUploadDraft(row: ResourceUploadDraft): PreviewDraft {
+    return {
+      id: row.id,
+      userId: row.user_id,
+      kind: row.resource_kind,
+      file: {
+        file_path: row.file_path,
+        file_name: row.file_name,
+        file_size: Number(row.file_size),
+        mime_type: row.mime_type,
+        content_hash: row.content_hash,
+      },
+      previewKey: row.preview_key,
+      metadata: row.metadata_json || null,
+      parserVersion: row.parser_version || null,
+      expiresAt: new Date(row.expires_at).getTime(),
+      draftData: row.draft_json || null,
+    };
+  }
+
+  private publicDraft(draft: PreviewDraft) {
+    return {
+      id: draft.id,
+      resource_kind: draft.kind,
+      file_name: draft.file.file_name,
+      file_size: draft.file.file_size,
+      content_hash: draft.file.content_hash,
+      preview_url: draft.previewKey ? `/api/resources/drafts/${draft.id}/preview` : null,
+      metadata: draft.metadata,
+      parser_version: draft.parserVersion,
+      draft: draft.draftData,
+      expires_at: new Date(draft.expiresAt).toISOString(),
+    };
+  }
+
+  private async cleanupDraftFiles(draft: PreviewDraft): Promise<void> {
     if (this.storage) await this.storage.removeManaged(draft.file.file_path).catch(() => undefined);
     else await unlink(draft.file.file_path).catch(() => undefined);
+    await this.removePreviewKey(draft.previewKey);
   }
+
 }

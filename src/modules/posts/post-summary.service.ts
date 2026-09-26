@@ -26,6 +26,7 @@ export interface PostSummaryDto {
   excerpt: string;
   status: string;
   is_pinned: boolean;
+  is_locked: boolean;
   view_count: number;
   reply_count: number;
   like_count: number;
@@ -93,6 +94,7 @@ export class PostSummaryService {
       excerpt: this.buildExcerpt(post.content),
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
+      is_locked: Boolean(post.is_locked),
       view_count: post.view_count,
       reply_count: replyCount,
       like_count: post.like_count,

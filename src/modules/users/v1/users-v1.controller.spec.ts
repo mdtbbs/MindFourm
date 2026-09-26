@@ -15,7 +15,8 @@ describe('UsersV1Controller', () => {
         email: 'not-exposed@example.test',
       }),
     };
-    const controller = new UsersV1Controller(users as any);
+    const permissionResolver = { resolve: jest.fn().mockResolvedValue({ thread_create: { allowed: true, reason: null } }) };
+    const controller = new UsersV1Controller(users as any, permissionResolver as any);
 
     await expect(controller.getMe({ user: { id: 7 } })).resolves.toEqual({
       id: 7,
@@ -25,6 +26,8 @@ describe('UsersV1Controller', () => {
       bio: null,
       role: 'user',
       phone_verified: true,
+      verification: { phone: true },
+      permissions: { thread_create: { allowed: true, reason: null } },
       created_at: '2026-08-29T00:00:00.000Z',
     });
   });
@@ -35,7 +38,8 @@ describe('UsersV1Controller', () => {
       created_at: new Date('2026-08-29T00:00:00.000Z'),
     };
     const users = { updateProfile: jest.fn().mockResolvedValue(saved) };
-    const controller = new UsersV1Controller(users as any);
+    const permissionResolver = { resolve: jest.fn().mockResolvedValue({ thread_create: { allowed: false, reason: 'FEATURE_DISABLED' } }) };
+    const controller = new UsersV1Controller(users as any, permissionResolver as any);
 
     await expect(controller.updateMe({ user: { id: 7 } }, { username: 'renamed', bio: '简介' })).resolves.toMatchObject({
       id: 7, username: 'renamed', bio: '简介', phone_verified: false,
@@ -48,7 +52,7 @@ describe('UsersV1Controller', () => {
       id: 9, username: 'public-user', avatar_url: '/avatar.png', avatar_status: 'approved', bio: '公开简介', role: 'user',
       post_count: 3, reply_count: 5, created_at: new Date('2026-08-29T00:00:00.000Z'), email: 'hidden@example.test',
     }) };
-    const controller = new UsersV1Controller(users as any);
+    const controller = new UsersV1Controller(users as any, {} as any);
 
     await expect(controller.getPublic(9)).resolves.toEqual({
       id: 9, username: 'public-user', avatar_url: '/avatar.png', avatar_status: 'approved', bio: '公开简介', role: 'user',

@@ -13,6 +13,7 @@ import { Post } from '../../entities/post.entity';
 import { Reply } from '../../entities/reply.entity';
 import { EmailLog } from '../../entities/email-log.entity';
 import { SettingsModule } from '../settings/settings.module';
+import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SettingsModule } from '../settings/settings.module';
     SettingsModule,
   ],
   providers: [
+    OAuthScopeGuard,
     NotificationsService,
     NotificationStreamService,
     EmailService,

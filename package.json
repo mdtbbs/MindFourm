@@ -8,6 +8,8 @@
     "build": "npm run build:backend && npm run build:frontend",
     "build:production": "npm run build && npm run build:renderer",
     "build:renderer": "bash tools/mindustry-renderer/build-renderer.sh",
+    "openapi:export": "npm run build:backend && node scripts/export-openapi.js",
+    "openapi:check": "node scripts/check-openapi.cjs",
     "build:backend": "nest build",
     "build:frontend": "cd frontend && npm run build",
     "start": "node dist/main",
@@ -28,6 +30,7 @@
     "test:e2e:report": "playwright show-report",
     "audit:resources": "npm run build:backend && node dist/scripts/resource-migration-audit.js",
     "backfill:resources-v2": "npm run build:backend && node dist/scripts/resource-v2-backfill.js",
+    "backfill:content-json": "npm run build:backend && node dist/scripts/content-json-backfill.js",
     "probe:mindauth": "npm run build:backend && node dist/scripts/mindauth-capability-probe.js",
     "mock:mindauth": "npm run build:backend && node dist/scripts/mindauth-mock.js",
     "benchmark:search": "npm run build:backend && node dist/scripts/chinese-search-benchmark.js"

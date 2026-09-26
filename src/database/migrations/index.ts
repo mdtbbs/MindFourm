@@ -53,6 +53,8 @@ import { CreateSearchAudits1720000058000 } from './1720000058000-CreateSearchAud
 import { CreateContentRelations1720000059000 } from './1720000059000-CreateContentRelations';
 import { GameContentDurability1720000060000 } from './1720000060000-GameContentDurability';
 import { UpgradeDownloadEvents1720000070000 } from './1720000070000-UpgradeDownloadEvents';
+import { AddCanonicalTiptapContent1720000080000 } from './1720000080000-AddCanonicalTiptapContent';
+import { CreateResourceUploadDrafts1720000090000 } from './1720000090000-CreateResourceUploadDrafts';
 
 /**
  * Migrations in run order.
@@ -117,4 +119,6 @@ export const migrations = [
   CreateContentRelations1720000059000,
   GameContentDurability1720000060000,
   UpgradeDownloadEvents1720000070000,
+  AddCanonicalTiptapContent1720000080000,
+  CreateResourceUploadDrafts1720000090000,
 ];

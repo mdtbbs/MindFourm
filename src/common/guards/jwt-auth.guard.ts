@@ -6,6 +6,7 @@ import { IS_PUBLIC_KEY, IS_OPTIONAL_AUTH_KEY } from '../decorators/public.decora
 import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
 import { AuthService } from '../../modules/auth/auth.service';
 import { BansService } from '../../modules/bans/bans.service';
+import { ALLOW_BANNED_USER_KEY } from '../decorators/allow-banned-user.decorator';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -41,7 +42,11 @@ export class JwtAuthGuard implements CanActivate {
     // Enforced here rather than in the global BanGuard, which runs before any user
     // is resolved. Applies to optional-auth routes too: a banned user should not
     // get the authenticated view of a public page.
-    await this.bansService.assertUserNotBanned(user.id);
+    const allowBannedUser = this.reflector.getAllAndOverride<boolean>(ALLOW_BANNED_USER_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!allowBannedUser) await this.bansService.assertUserNotBanned(user.id);
 
     request.user = user;
     const skipPhoneVerification = this.reflector.getAllAndOverride<boolean>(SKIP_PHONE_VERIFICATION_KEY, [

@@ -21,6 +21,11 @@ export type V1ResourceDetail = {
   public_id: string;
   title: string;
   summary: string;
+  content: string | null;
+  content_format: 'tiptap_json';
+  content_json: Record<string, unknown> | null;
+  content_html: string | null;
+  content_text: string | null;
   resource_kind: string;
   visibility: string;
   metadata: V1ResourceMetadata;
@@ -30,6 +35,9 @@ export type V1ResourceDetail = {
 };
 
 export type V1ResourceManifest = {
+  schema_version: 1;
+  type: string;
+  resource: { public_id: string; name: string };
   resource_public_id: string;
   resource_kind: string;
   versions: V1ManifestVersion[];

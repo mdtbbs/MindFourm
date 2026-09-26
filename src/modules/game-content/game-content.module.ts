@@ -14,9 +14,10 @@ import { GameContentService } from './game-content.service';
 import { GameContentAuthGuard, GameContentRequiredAuthGuard } from './game-content-auth.guard';
 import { GameContentCacheInterceptor } from './game-content-cache.interceptor';
 import { GameContentUploadSessionService } from './game-content-upload-session.service';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-  imports: [ResourcesModule, DownloadsModule, TypeOrmModule.forFeature([Resource, ResourceLike, ResourceFavorite, ResourceVersion, ResourceFile, DownloadEvent, GameContentUploadSession])],
+  imports: [ResourcesModule, DownloadsModule, SettingsModule, TypeOrmModule.forFeature([Resource, ResourceLike, ResourceFavorite, ResourceVersion, ResourceFile, DownloadEvent, GameContentUploadSession])],
   controllers: [GameContentController],
   providers: [GameContentService, GameContentAuthGuard, GameContentRequiredAuthGuard, GameContentCacheInterceptor, GameContentUploadSessionService],
 })

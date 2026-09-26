@@ -54,6 +54,7 @@ export default function ReplyActions({
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(reply.content);
+  const [draftJson, setDraftJson] = useState<Record<string, unknown> | null>(reply.content_json ?? null);
   const [busy, setBusy] = useState(false);
 
   const isStaff = user?.role === 'admin' || user?.role === 'moderator';
@@ -69,7 +70,7 @@ export default function ReplyActions({
 
     setBusy(true);
     try {
-      const updatedReply = await replyApi.update(reply.id, trimmed);
+      const updatedReply = await replyApi.update(reply.id, trimmed, draftJson || undefined);
       showSuccess('回复已更新');
       setEditing(false);
       window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'update', reply: updatedReply } }));
@@ -118,6 +119,8 @@ export default function ReplyActions({
             testId={`reply-edit-input-${reply.id}`}
             value={draft}
             onChange={setDraft}
+            jsonValue={draftJson}
+            onJsonChange={setDraftJson}
             ariaLabel="编辑回复正文"
             placeholder="输入回复内容…"
             minHeight="120px"
@@ -134,6 +137,7 @@ export default function ReplyActions({
               disabled={busy}
               onClick={() => {
                 setDraft(reply.content);
+                setDraftJson(reply.content_json ?? null);
                 setEditing(false);
               }}
             >

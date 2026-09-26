@@ -2,7 +2,7 @@
 
 本目录是 MindFourm 当前 API 的开发者入口。
 
-如果你正在做 Web、Android、桌面客户端、Mindustry Mod 或其他第一方客户端，优先使用 `/api/v1/*`。
+如果你正在做 Web、Android、桌面客户端、Mindustry Mod、Xenon Launcher 或其他第三方客户端，使用 MindAuth Authorization Code + PKCE 后调用 `/api/v1/*`。Xenon 没有专属鉴权分支。
 如果你正在做机器人、同步服务或后台自动化，使用 `/api/external/v1/*`。
 除非你正在维护论坛本体，否则不要把未文档化的 `/api/*` legacy 路由当成长期稳定契约。
 
@@ -10,7 +10,7 @@
 
 | 层级 | 基础路径 | 面向对象 | 稳定性 |
 | --- | --- | --- | --- |
-| First-party V1 | `/api/v1` | Web、Android、桌面端、Mindustry Mod | 稳定契约 |
+| Public Client V1 | `/api/v1` | Web、官方客户端、Mindustry Mod、第三方启动器 | 稳定契约；scope 与论坛策略共同控制 |
 | External API | `/api/external/v1` | QQ/Discord/Telegram 机器人、同步服务、服务端集成 | 受 scope 约束的服务端契约 |
 | Legacy / internal | `/api/*` | 论坛现有前端、后台、历史兼容代码 | 不承诺给第三方长期兼容 |
 | Service callbacks | 例如 `/api/service-api/*`、`/api/auto-post/*` | 受信任服务间调用 | 私有部署契约 |
@@ -32,6 +32,7 @@
 仓库内文档：
 
 - [First-party V1 参考](./first-party-v1.md)
+- [Public Client 快速接入](./public-client-v1.md)
 - [认证与凭证](./authentication.md)
 - [Game Content V1](./game-content-v1.md)
 - [Resource V1 契约](./resources-v1-contract.md)
@@ -108,7 +109,9 @@
 | --- | --- |
 | 浏览器论坛会话 | `forum_session` Cookie |
 | Android / 第一方移动端 | Forum mobile Bearer token |
-| Game Content Mod API | MindAuth access token，`Authorization: Bearer ...` |
+| Public Client V1 | MindAuth Public Client access token，`Authorization: Bearer ...`；服务端 introspection 并按 scopes 校验 |
+| Existing Android clients | Forum mobile Bearer token（兼容路径，逐步迁移到 MindAuth Public Client） |
+| Browser forum session | `forum_session` Cookie（第一方兼容） |
 | External API | External API Key，Bearer 或 `X-API-Key` |
 | 受信服务间调用 | 对应服务私钥头，例如 `X-Service-Key` |
 
@@ -124,17 +127,7 @@
 GET /api/v1/capabilities
 ```
 
-当前能力模型包括：
-
-- `resource_read`
-- `resource_files`
-- `download_grants`
-- `device_auth`
-- `notifications_v1`
-- `notices_v1`
-- `forge_preview`
-- `minimum_supported_client_version`
-- `recommended_client_version`
+能力以嵌套对象表达 forum、resources、notifications、messages、game_content 与 client 状态。已发布的扁平字段（例如 `resource_read`、`resource_files`、`download_grants`、`notifications_v1`）暂时保留为兼容别名。具体字段见 [Public Client V1 接入指南](./public-client-v1.md#capability-discovery)。
 
 能力为 `false` 时，客户端应隐藏或禁用依赖功能，而不是尝试调用未启用接口。
 
@@ -190,8 +183,8 @@ V1 OpenAPI 必须只暴露 `/v1/*` 路径。部分 Nest module 同时包含 lega
 
 以下内容容易混淆，但现在不是同一件事：
 
-- `Resources V1` 是通用资源读取/manifest 契约。
+- `Resources V1` 是通用资源读取、manifest 和持久化上传草稿契约。
 - `Game Content V1` 是专门给蓝图和地图客户端使用的体验型 API，包含搜索、Feed、收藏、点赞、上传和文件下载。
 - `External API` 是服务端机器人接口，不应把 API Key 放进 Mod、网页 bundle 或桌面客户端发行包。
-- `Mobile Auth V1` 使用 MindAuth native authorization code exchange，不是用户名密码直传到论坛。
+- 新客户端使用 MindAuth Authorization Code + PKCE S256；当前 Forum mobile exchange 和 Forum mobile JWT 继续作为兼容路径，不会因本次升级突然失效。
 - `notifications_v1` controller 在源码中存在，但当前没有纳入 exported First-party V1 OpenAPI，且 capability 默认是 `false`。客户端不要自行探测并依赖。

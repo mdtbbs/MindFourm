@@ -49,6 +49,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
   const [content, setContent] = useState('');
+  const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [isPublic, setIsPublic] = useState(true);
   const [file, setFile] = useState<File | null>(null);
@@ -61,14 +62,15 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const draft = useDraft('resource-workbench', kind);
-  const draftValues = useMemo(() => ({ title, version, description, content, categoryId, isPublic, schematicSource, schematicCode }), [title, version, description, content, categoryId, isPublic, schematicSource, schematicCode]);
+  const draftValues = useMemo(() => ({ title, version, description, content, contentJson, categoryId, isPublic, schematicSource, schematicCode }), [title, version, description, content, contentJson, categoryId, isPublic, schematicSource, schematicCode]);
   const hasDraftContent = Boolean(title || version || description || content || schematicCode);
   const draftResource: Resource | null = preview ? {
     id: 0, user_id: 0, title: title || (kind === 'map' ? '未命名地图' : '未命名蓝图'),
     description: description || null, resource_type: 'upload', resource_kind: kind, integrity: null,
     file_name: file?.name || null, file_path: null, file_size: file?.size || 0, mime_type: null,
     content_hash: null, external_url: null, version: version || null, content: content || null,
-    content_html: null, category_id: categoryId, category_name: categories.find((item) => item.id === categoryId)?.name || null,
+    content_html: null, content_json: contentJson, content_text: null,
+    category_id: categoryId, category_name: categories.find((item) => item.id === categoryId)?.name || null,
     category_icon: null, download_count: 0, slug: null, is_public: isPublic, status: 'preview',
     use_mfl: false, mfl_download_url: null, username: '你', avatar_url: null,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
@@ -94,6 +96,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
     if (typeof values.version === 'string') setVersion(values.version);
     if (typeof values.description === 'string') setDescription(values.description);
     if (typeof values.content === 'string') setContent(values.content);
+    if (values.contentJson && typeof values.contentJson === 'object') setContentJson(values.contentJson as Record<string, unknown>);
     if (typeof values.categoryId === 'number') setCategoryId(values.categoryId);
     if (typeof values.isPublic === 'boolean') setIsPublic(values.isPublic);
     if (values.schematicSource === 'file' || values.schematicSource === 'paste') setSchematicSource(values.schematicSource);
@@ -174,6 +177,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       formData.append('is_public', isPublic ? '1' : '0');
       if (description.trim()) formData.append('description', description.trim());
       if (content.trim()) formData.append('content', content.trim());
+      if (contentJson) formData.append('content_json', JSON.stringify(contentJson));
       if (categoryId) formData.append('category_id', String(categoryId));
       const resource = await resourceApi.upload(formData);
       draft.clear();
@@ -248,7 +252,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
               {categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">详细说明</label>
-            <div className="mt-1"><TiptapEditor value={content} onChange={setContent} ariaLabel="资源详细说明" placeholder="可说明版本、玩法、使用步骤和注意事项" minHeight="180px" imageUpload testId="workbench-resource-content" /></div>
+            <div className="mt-1"><TiptapEditor value={content} onChange={setContent} jsonValue={contentJson} onJsonChange={setContentJson} ariaLabel="资源详细说明" placeholder="可说明版本、玩法、使用步骤和注意事项" minHeight="180px" imageUpload testId="workbench-resource-content" /></div>
             <label className="mt-4 flex items-center gap-2 text-sm text-[var(--text)]"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />审核通过后公开发布</label>
           </div>
         </section>

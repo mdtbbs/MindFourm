@@ -21,8 +21,8 @@ export default function ReplyForm({ postId, onReplyCreated }: ReplyFormProps) {
   const { quoteReply, replyToReply } = useReplyComposeTarget(postId);
   const clearComposeTarget = useReplyComposeStore((state) => state.clear);
 
-  const handleSubmit = async (content: string, parentReplyId?: number) => {
-    const reply = await replyApi.create(postId, { content, parent_reply_id: parentReplyId });
+  const handleSubmit = async (content: string, parentReplyId?: number, contentJson?: Record<string, unknown>) => {
+    const reply = await replyApi.create(postId, { content, content_json: contentJson, parent_reply_id: parentReplyId });
     clearComposeTarget();
     onReplyCreated?.(reply);
   };

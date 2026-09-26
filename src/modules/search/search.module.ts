@@ -18,6 +18,7 @@ import { SearchAuditController } from './search-audit.controller';
 import { SettingsService } from '../settings/settings.service';
 import { SearchProviderRegistry } from './search-provider.registry';
 import { ContentRelation } from '@entities/content-relation.entity';
+import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ContentRelation } from '@entities/content-relation.entity';
   ],
   controllers: [SearchController, SearchV1Controller, SearchAuditController],
   providers: [
+    OAuthScopeGuard,
     SearchService,
     SearchProviderRegistry,
     PostSummaryService,

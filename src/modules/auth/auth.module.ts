@@ -15,6 +15,7 @@ import { PointsModule } from '../points/points.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ServiceApiModule } from '../service-api/service-api.module';
 import { SettingsModule } from '../settings/settings.module';
+import { OAuthScopeGuard } from '@common/guards/oauth-scope.guard';
 
 @Global()
 @Module({
@@ -26,10 +27,10 @@ import { SettingsModule } from '../settings/settings.module';
     ServiceApiModule,
     SettingsModule,
   ],
-  providers: [AuthService],
+  providers: [AuthService, OAuthScopeGuard],
   // The E2E session shortcut is only routable when explicitly enabled via
   // ENABLE_TEST_AUTH; see test-auth.util.ts for why this is opt-in.
   controllers: [AuthController, ...(isTestAuthEnabled() ? [TestAuthController] : [])],
-  exports: [AuthService, TypeOrmModule],
+  exports: [AuthService, OAuthScopeGuard, TypeOrmModule],
 })
 export class AuthModule {}

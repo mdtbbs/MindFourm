@@ -169,6 +169,7 @@ describe('SearchService', () => {
       'p.content',
       'p.status',
       'p.is_pinned',
+      'p.is_locked',
       'p.view_count',
       'p.like_count',
       'p.created_at',

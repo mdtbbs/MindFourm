@@ -2,6 +2,7 @@ import {
   IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, IsArray, ValidateNested, MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { TiptapDocumentDto } from '../../../common/dto/tiptap-document.dto';
 
 export class CreateResourceCompatibilityDto {
   @IsOptional()
@@ -67,6 +68,11 @@ export class CreateResourceDto {
   @IsOptional()
   @IsString()
   content?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TiptapDocumentDto)
+  content_json?: TiptapDocumentDto;
 
   @IsOptional()
   @Type(() => Number)

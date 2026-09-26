@@ -1,14 +1,23 @@
 plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id("org.jetbrains.kotlin.plugin.compose"); id("org.jetbrains.kotlin.plugin.serialization"); id("com.google.dagger.hilt.android"); kotlin("kapt") }
+val mindAuthBaseUrl = (providers.gradleProperty("mdtbbsMindAuthBaseUrl").orNull ?: "https://auth.mdtbbs.cn/").let { if (it.endsWith('/')) it else "$it/" }
+val oauthScopes = providers.gradleProperty("mdtbbsOauthScopes").orNull
+  ?: "openid profile email forum.read forum.write resource.read resource.download resource.upload notification.read message.read message.write"
 android { namespace = "cn.mdtbbs.android"; compileSdk = 35
   defaultConfig {
     applicationId = "cn.mdtbbs.android"; minSdk = 26; targetSdk = 35; versionCode = 100; versionName = "0.1.0"
     buildConfigField("String", "API_BASE_URL", "\"${providers.gradleProperty("mdtbbsApiBaseUrl").orNull ?: "https://mdtbbs.cn/"}\"")
-    // Deliberately empty until MindAuth registers and deploys the verified HTTPS App Link.
-    buildConfigField("String", "OAUTH_REDIRECT_URI", "\"${providers.gradleProperty("mdtbbsOauthRedirectUri").orNull.orEmpty()}\"")
-    buildConfigField("String", "OAUTH_AUTHORIZATION_ENDPOINT", "\"${providers.gradleProperty("mdtbbsOauthAuthorizationEndpoint").orNull.orEmpty()}\"")
-    buildConfigField("String", "OAUTH_CLIENT_ID", "\"${providers.gradleProperty("mdtbbsOauthClientId").orNull.orEmpty()}\"")
-    buildConfigField("String", "NATIVE_AUTH_BASE_URL", "\"${providers.gradleProperty("mdtbbsNativeAuthBaseUrl").orNull ?: "https://auth.mdtbbs.cn/"}\"")
+    // This exact public-client redirect must also be registered and approved in MindAuth.
+    buildConfigField("String", "OAUTH_REDIRECT_URI", "\"mdtbbs://oauth/callback\"")
+    buildConfigField("String", "OAUTH_API_BASE_URL", "\"$mindAuthBaseUrl\"")
+    buildConfigField("String", "OAUTH_AUTHORIZATION_ENDPOINT", "\"${providers.gradleProperty("mdtbbsOauthAuthorizationEndpoint").orNull ?: "${mindAuthBaseUrl}api/authorize"}\"")
+    buildConfigField("String", "OAUTH_CLIENT_ID", "\"${providers.gradleProperty("mdtbbsOauthClientId").orNull ?: "mdtbbs_android_public"}\"")
+    buildConfigField("String", "OAUTH_SCOPES", "\"$oauthScopes\"")
+    buildConfigField("String", "MINDAUTH_REGISTRATION_URL", "\"${providers.gradleProperty("mdtbbsMindAuthRegistrationUrl").orNull ?: "${mindAuthBaseUrl}register"}\"")
+    buildConfigField("String", "NATIVE_AUTH_BASE_URL", "\"${providers.gradleProperty("mdtbbsNativeAuthBaseUrl").orNull ?: mindAuthBaseUrl}\"")
     buildConfigField("String", "NATIVE_AUTH_CLIENT_ID", "\"${providers.gradleProperty("mdtbbsNativeAuthClientId").orNull ?: "mdtbbs_android"}\"")
+    manifestPlaceholders["mdtbbsOauthScheme"] = "mdtbbs"
+    manifestPlaceholders["mdtbbsOauthHost"] = "oauth"
+    manifestPlaceholders["mdtbbsOauthPath"] = "/callback"
   }
   buildFeatures { compose = true; buildConfig = true }
   compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

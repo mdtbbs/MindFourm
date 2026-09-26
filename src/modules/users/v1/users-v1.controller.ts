@@ -6,6 +6,10 @@ import { UsersService } from '../users.service';
 import { UpdateProfileDto } from '../dto/update-profile.dto';
 import { avatarUploadInterceptor, cleanupUploadedFile } from '../users.controller';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
+import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
+import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
+import { V1PermissionResolverService } from './v1-permission-resolver.service';
+import { AllowBannedUser } from '../../../common/decorators/allow-banned-user.decorator';
 
 export type V1MeDto = {
   id: number;
@@ -15,6 +19,8 @@ export type V1MeDto = {
   bio: string | null;
   role: string;
   phone_verified: boolean;
+  verification: { phone: boolean };
+  permissions: Awaited<ReturnType<V1PermissionResolverService['resolve']>>;
   created_at: string;
 };
 
@@ -22,16 +28,18 @@ export type V1MeDto = {
 @ApiTags('v1-users')
 @Controller('v1')
 export class UsersV1Controller {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService, private readonly permissionResolver: V1PermissionResolverService) {}
 
   @Get('me')
-  @UseGuards(JwtAuthGuard)
+  @AllowBannedUser()
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('profile')
   @ApiOkResponse({ description: 'Authenticated viewer profile with stable first-party fields.' })
   async getMe(@Req() req: any): Promise<V1MeDto> {
     const userId = req.user?.id;
     if (!userId) throw new UnauthorizedException('Not authenticated');
     const user = await this.usersService.getById(userId);
-    return this.toMe(user);
+    return this.toMe(user, req.authContext);
   }
 
   @Get('users/:id')
@@ -47,29 +55,34 @@ export class UsersV1Controller {
   }
 
   @Put('me/profile')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('forum.write')
   async updateMe(@Req() req: any, @Body() dto: UpdateProfileDto): Promise<V1MeDto> {
     if (!req.user?.id) throw new UnauthorizedException('Not authenticated');
-    return this.toMe(await this.usersService.updateProfile(req.user.id, dto));
+    return this.toMe(await this.usersService.updateProfile(req.user.id, dto), req.authContext);
   }
 
   @Post('me/avatar')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('forum.write')
   @UseInterceptors(avatarUploadInterceptor)
   async uploadAvatar(@Req() req: any, @UploadedFile() file?: Express.Multer.File): Promise<V1MeDto> {
     if (!req.user?.id) { await cleanupUploadedFile(file); throw new UnauthorizedException('Not authenticated'); }
     if (!file) throw new BadRequestException('没有收到头像图片');
     try {
       await assertSafeUploadedFile(file, 2 * 1024 * 1024);
-      return this.toMe(await this.usersService.updateAvatar(req.user.id, `/uploads/avatars/${file.filename}`));
+    return this.toMe(await this.usersService.updateAvatar(req.user.id, `/uploads/avatars/${file.filename}`), req.authContext);
     } catch (error) {
       await cleanupUploadedFile(file);
       throw error;
     }
   }
 
-  private toMe(user: any): V1MeDto {
+  private async toMe(user: any, authContext?: any): Promise<V1MeDto> {
     return { id: user.id, username: user.username, avatar_url: user.avatar_url || null, avatar_status: user.avatar_status,
-      bio: user.bio || null, role: user.role, phone_verified: !!user.phone_verified, created_at: user.created_at.toISOString() };
+      bio: user.bio || null, role: user.role, phone_verified: !!user.phone_verified,
+      verification: { phone: !!user.phone_verified },
+      permissions: await this.permissionResolver.resolve(user, authContext),
+      created_at: user.created_at.toISOString() };
   }
 }

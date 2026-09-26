@@ -20,7 +20,10 @@ export interface PostDetailReply {
   user_id: number;
   parent_reply_id: number | null;
   content: string;
+  content_format: 'tiptap_json';
   content_html: string | null;
+  content_json: Record<string, unknown> | null;
+  content_text: string | null;
   status: string;
   like_count: number;
   created_at: Date;
@@ -42,7 +45,10 @@ export interface PostDetailDto {
   slug: string | null;
   title: string;
   content: string;
+  content_format: 'tiptap_json';
   content_html: string | null;
+  content_json: Record<string, unknown> | null;
+  content_text: string | null;
   status: string;
   is_pinned: boolean;
   is_locked: boolean;
@@ -103,7 +109,10 @@ export class PostDetailService {
       slug: post.slug ?? null,
       title: post.title,
       content: post.content,
+      content_format: 'tiptap_json',
       content_html: post.content_html || null,
+      content_json: post.content_json || null,
+      content_text: post.content_text || null,
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
       is_locked: Boolean(post.is_locked),
@@ -138,7 +147,10 @@ export class PostDetailService {
       user_id: reply.user_id,
       parent_reply_id: reply.parent_reply_id ?? null,
       content: reply.content,
+      content_format: 'tiptap_json',
       content_html: reply.content_html || null,
+      content_json: reply.content_json || null,
+      content_text: reply.content_text || null,
       status: reply.status,
       like_count: reply.like_count,
       created_at: reply.created_at,

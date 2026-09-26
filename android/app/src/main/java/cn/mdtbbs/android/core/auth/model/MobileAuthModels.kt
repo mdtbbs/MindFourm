@@ -9,8 +9,8 @@ data class MobileAuthUser(
 )
 
 data class AuthenticatedSession(
-    val sessionId: String,
-    val user: MobileAuthUser,
+    val sessionId: String?,
+    val user: MobileAuthUser?,
     val accessTokenExpiresInSeconds: Long,
 )
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Param, ParseIntPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, HttpStatus, Optional, Param, ParseIntPipe, Post, Put, Req, UseGuards } from '@nestjs/common';
 import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -9,6 +9,10 @@ import { PostsService } from '../../posts/posts.service';
 import { CreateReplyDto } from '../../replies/dto/create-reply.dto';
 import { UpdateReplyDto } from '../../replies/dto/update-reply.dto';
 import { RepliesService } from '../../replies/replies.service';
+import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
+import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
+import { SettingsService } from '../../settings/settings.service';
+import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 
 /**
  * First-party Android write transport.  The underlying post/reply services are
@@ -19,16 +23,19 @@ import { RepliesService } from '../../replies/replies.service';
 @ApiV1()
 @ApiTags('v1-thread-writes')
 @Controller('v1/threads')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OAuthScopeGuard)
+@RequireOAuthScopes('forum.write')
 export class ThreadWriteV1Controller {
   constructor(
     private readonly posts: PostsService,
     private readonly replies: RepliesService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   @Post()
   @ApiCreatedResponse({ description: 'Thread created. It can be pending moderation.' })
   async createThread(@Body() dto: CreatePostDto, @Req() req: any) {
+    await this.assertWritesEnabled();
     const post = await this.posts.create(dto, req.user.id, {
       ipAddress: getClientIp(req),
       locationLabel: getClientRegion(req),
@@ -43,6 +50,7 @@ export class ThreadWriteV1Controller {
     @Body() dto: UpdatePostDto,
     @Req() req: any,
   ) {
+    await this.assertWritesEnabled();
     const post = await this.posts.update(id, dto, req.user.id, req.user.role);
     return this.threadWriteDto(post);
   }
@@ -50,6 +58,7 @@ export class ThreadWriteV1Controller {
   @Delete(':id')
   @ApiOkResponse({ description: 'Thread soft-deleted by its owner or staff.' })
   async deleteThread(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    await this.assertWritesEnabled();
     await this.posts.softDelete(id, req.user.id, req.user.role);
     return { deleted: true };
   }
@@ -61,6 +70,7 @@ export class ThreadWriteV1Controller {
     @Body() dto: CreateReplyDto,
     @Req() req: any,
   ) {
+    await this.assertWritesEnabled();
     const reply = await this.replies.createReplyForPost(threadId, dto, req.user.id, {
       ipAddress: getClientIp(req),
       locationLabel: getClientRegion(req),
@@ -76,7 +86,8 @@ export class ThreadWriteV1Controller {
     @Body() dto: UpdateReplyDto,
     @Req() req: any,
   ) {
-    const reply = await this.replies.update(replyId, dto.content, req.user.id, req.user.role);
+    await this.assertWritesEnabled();
+    const reply = await this.replies.update(replyId, dto.content, req.user.id, req.user.role, dto.content_json);
     return this.replyWriteDto(reply);
   }
 
@@ -87,6 +98,7 @@ export class ThreadWriteV1Controller {
     @Param('replyId', ParseIntPipe) replyId: number,
     @Req() req: any,
   ) {
+    await this.assertWritesEnabled();
     await this.replies.softDelete(replyId, req.user.id, req.user.role);
     return { deleted: true };
   }
@@ -96,6 +108,11 @@ export class ThreadWriteV1Controller {
       id: post.id,
       public_id: null,
       title: post.title,
+      content: post.content,
+      content_format: 'tiptap_json',
+      content_html: post.content_html ?? null,
+      content_json: post.content_json ?? null,
+      content_text: post.content_text ?? null,
       status: post.status,
       created_at: post.created_at?.toISOString?.() ?? null,
       updated_at: post.updated_at?.toISOString?.() ?? null,
@@ -108,10 +125,19 @@ export class ThreadWriteV1Controller {
       post_id: reply.post_id,
       parent_reply_id: reply.parent_reply_id ?? null,
       content: reply.content,
+      content_format: 'tiptap_json',
       content_html: reply.content_html ?? null,
+      content_json: reply.content_json ?? null,
+      content_text: reply.content_text ?? null,
       status: reply.status,
       created_at: reply.created_at?.toISOString?.() ?? null,
       updated_at: reply.updated_at?.toISOString?.() ?? null,
     };
+  }
+
+  private async assertWritesEnabled() {
+    if (this.settings && !await this.settings.getBoolean('feature_public_api_forum_write_enabled', true)) {
+      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭 Public Client 论坛写入', false);
+    }
   }
 }

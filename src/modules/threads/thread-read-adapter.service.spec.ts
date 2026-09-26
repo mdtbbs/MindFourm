@@ -18,7 +18,9 @@ describe('ThreadReadAdapterService', () => {
       id: 1, title: 'Test Thread', slug: 'test-thread', status: 'published',
       is_pinned: 0, is_locked: 0, view_count: 100, reply_count: 5,
       created_at: new Date('2026-01-01'), updated_at: new Date('2026-01-02'),
-      category_id: 3, user_id: 42, deleted_at: null,
+      category_id: 3, user_id: 42, deleted_at: null, content: 'A **useful** post',
+      user: { id: 42, username: 'writer', avatar_url: '/avatar.png' },
+      category: { id: 3, name: 'General', slug: 'general' },
     };
     const repo = { findOne: jest.fn().mockResolvedValue(post) };
     const service = new ThreadReadAdapterService(repo as any);
@@ -28,26 +30,44 @@ describe('ThreadReadAdapterService', () => {
     expect(result!.id).toBe(1);
     expect(result!.title).toBe('Test Thread');
     expect(result!.view_count).toBe(100);
+    expect(result!.author).toEqual({ id: 42, username: 'writer', avatar_url: '/avatar.png' });
+    expect(result!.category).toEqual({ id: 3, name: 'General', slug: 'general' });
+    expect(result!.excerpt).toContain('useful');
   });
 
-  it('lists published threads', async () => {
+  it('loads enriched published threads with joined author and category projections', async () => {
     const posts = [
-      { id: 1, title: 'Thread 1', slug: 't1', status: 'published', is_pinned: 0, is_locked: 0, view_count: 0, reply_count: 0, created_at: new Date(), updated_at: new Date(), category_id: null, user_id: 1, deleted_at: null },
+      { id: 1, title: 'Thread 1', slug: 't1', status: 'published', is_pinned: 0, is_locked: 0, view_count: 0, reply_count: 0, created_at: new Date(), updated_at: new Date(), category_id: null, user_id: 1, deleted_at: null, content: 'Body', user: { id: 1, username: 'one', avatar_url: null }, category: null },
     ];
-    const repo = { find: jest.fn().mockResolvedValue(posts) };
+    const query = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue(posts),
+    };
+    const repo = { createQueryBuilder: jest.fn().mockReturnValue(query) };
     const service = new ThreadReadAdapterService(repo as any);
 
     const result = await service.listThreadsV1({ limit: 10 });
     expect(result).toHaveLength(1);
-    expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'published', source: 'USER' } }));
+    expect(query.leftJoinAndSelect).toHaveBeenCalledWith('post.user', 'author');
+    expect(query.leftJoinAndSelect).toHaveBeenCalledWith('post.category', 'category');
+    expect(query.andWhere).toHaveBeenCalledWith('post.source = :source', { source: 'USER' });
+    expect(result[0].author?.username).toBe('one');
   });
 
   it('keeps a requested category as an independent board', async () => {
-    const repo = { find: jest.fn().mockResolvedValue([]) };
+    const query = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([]),
+    };
+    const repo = { createQueryBuilder: jest.fn().mockReturnValue(query) };
     const service = new ThreadReadAdapterService(repo as any);
 
     await service.listThreadsV1({ limit: 20, categoryId: 7 });
 
-    expect(repo.find).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'published', category_id: 7 } }));
+    expect(query.andWhere).toHaveBeenCalledWith('post.category_id = :categoryId', { categoryId: 7 });
   });
 });

@@ -50,6 +50,9 @@ interface TiptapEditorProps {
   value: string;
   /** Called with the current Markdown string whenever content changes. */
   onChange: (markdown: string) => void;
+  /** Canonical Tiptap / ProseMirror source used by new API writes. */
+  jsonValue?: Record<string, unknown> | null;
+  onJsonChange?: (document: Record<string, unknown>) => void;
   placeholder?: string;
   /** CSS min-height for the editor area. */
   minHeight?: string;
@@ -85,6 +88,8 @@ interface FailedImageUpload {
 export default function TiptapEditor({
   value,
   onChange,
+  jsonValue,
+  onJsonChange,
   placeholder = "输入正文内容…",
   minHeight = "200px",
   compact = false,
@@ -148,13 +153,14 @@ export default function TiptapEditor({
       TableHeader,
       CodeBlockLowlight.configure({ lowlight: createLowlight(common) }),
     ],
-    content: normalizeEditorContent(value),
+    content: jsonValue || normalizeEditorContent(value),
     onUpdate({ editor: e }) {
       internalUpdateRef.current = true;
       const md = normalizeEditorContent(
         (e.storage as any).markdown?.getMarkdown() ?? "",
       );
       onChange(md);
+      onJsonChange?.(e.getJSON() as Record<string, unknown>);
       setSourceValue(md);
       // Reset on next tick so external changes can be detected again
       queueMicrotask(() => {
@@ -205,16 +211,21 @@ export default function TiptapEditor({
       onChange(normalizedValue);
       setSourceValue(normalizedValue);
       lastExternalValueRef.current = normalizedValue;
-      return;
-    }
-    if (value === lastExternalValueRef.current) return;
-    lastExternalValueRef.current = value;
-    const currentMd = (editor.storage as any).markdown?.getMarkdown() ?? "";
-    if (value !== currentMd) {
-      editor.commands.setContent(normalizedValue);
+    } else if (value !== lastExternalValueRef.current) {
+      lastExternalValueRef.current = value;
+      const currentMd = (editor.storage as any).markdown?.getMarkdown() ?? "";
+      if (!jsonValue && value !== currentMd) editor.commands.setContent(normalizedValue);
       setSourceValue(normalizedValue);
     }
-  }, [value, editor, onChange]);
+    if (jsonValue) {
+      const serialized = JSON.stringify(jsonValue);
+      const current = JSON.stringify(editor.getJSON());
+      if (serialized !== current) {
+        editor.commands.setContent(jsonValue);
+        setSourceValue((editor.storage as any).markdown?.getMarkdown() ?? normalizeEditorContent(value));
+      }
+    }
+  }, [value, jsonValue, editor, onChange]);
 
   /* ── Image upload ────────────────────────────────────── */
 
@@ -399,6 +410,7 @@ export default function TiptapEditor({
         (editor.storage as any).markdown?.getMarkdown() ?? "",
       );
       onChange(md);
+      onJsonChange?.(editor.getJSON() as Record<string, unknown>);
       lastExternalValueRef.current = md;
     } else {
       // Switching to source: grab current markdown
@@ -406,7 +418,7 @@ export default function TiptapEditor({
       setSourceValue(md);
     }
     setSourceMode((v) => !v);
-  }, [editor, sourceMode, sourceValue, onChange]);
+  }, [editor, sourceMode, sourceValue, onChange, onJsonChange]);
 
   /* ── Link dialog ─────────────────────────────────────── */
 

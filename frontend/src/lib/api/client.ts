@@ -501,11 +501,11 @@ export const replyApi = {
       body: JSON.stringify(input),
     });
   },
-  update: (id: number, content: string) => {
+  update: (id: number, content: string, contentJson?: Record<string, unknown>) => {
     clearCache();
     return request<Reply>(`/api/replies/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, content_json: contentJson }),
     });
   },
   delete: (id: number) => {

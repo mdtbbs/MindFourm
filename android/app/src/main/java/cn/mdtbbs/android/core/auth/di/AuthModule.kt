@@ -40,6 +40,10 @@ object AuthModule {
         // This intentionally bare client prevents refresh from entering the normal authenticator chain.
         .client(OkHttpClient.Builder().addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("X-Client-Platform", "android").header("X-Client-Version", BuildConfig.VERSION_CODE.toString()).build()) }.build())
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build().create(MobileAuthApi::class.java)
+    @Provides @Singleton fun publicOAuthApi(json: Json): PublicOAuthApi = Retrofit.Builder().baseUrl(BuildConfig.OAUTH_API_BASE_URL)
+        // Public OAuth token calls use a bare client: no Forum bearer or refresh authenticator.
+        .client(OkHttpClient.Builder().addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("X-Client-Platform", "android").header("X-Client-Version", BuildConfig.VERSION_CODE.toString()).build()) }.build())
+        .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build().create(PublicOAuthApi::class.java)
     @Provides @Singleton fun nativeAuthApi(json: Json): NativeAuthApi = Retrofit.Builder().baseUrl(BuildConfig.NATIVE_AUTH_BASE_URL)
         .client(OkHttpClient.Builder()
             .addInterceptor { chain -> chain.proceed(chain.request().newBuilder().header("X-Client-Platform", "android").header("X-Client-Version", BuildConfig.VERSION_CODE.toString()).build()) }
@@ -47,9 +51,16 @@ object AuthModule {
             .build())
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build().create(NativeAuthApi::class.java)
     @Provides @Singleton fun gateway(api: MobileAuthApi, access: AccessTokenStore): MobileAuthGateway = RetrofitMobileAuthGateway(api, access)
+    @Provides @Singleton fun publicOAuthGateway(api: PublicOAuthApi): PublicOAuthGateway = RetrofitPublicOAuthGateway(api, BuildConfig.OAUTH_CLIENT_ID)
     @Provides @Singleton fun nativeGateway(api: NativeAuthApi, access: AccessTokenStore): NativeAuthGateway = RetrofitNativeAuthGateway(api, access)
-    @Provides @Singleton fun authRepository(gateway: MobileAuthGateway, nativeGateway: NativeAuthGateway, access: AccessTokenStore, refresh: RefreshTokenStore, pending: AuthPendingStore): AuthRepository = AuthRepository(
-        MobileAuthConfiguration(BuildConfig.OAUTH_AUTHORIZATION_ENDPOINT, BuildConfig.OAUTH_CLIENT_ID, BuildConfig.OAUTH_REDIRECT_URI, android.os.Build.MODEL.take(128)), gateway, access, refresh, pending, PkceGenerator(), nativeGateway, BuildConfig.NATIVE_AUTH_CLIENT_ID,
+    @Provides @Singleton fun authRepository(gateway: MobileAuthGateway, nativeGateway: NativeAuthGateway, oauthGateway: PublicOAuthGateway, access: AccessTokenStore, refresh: RefreshTokenStore, pending: AuthPendingStore): AuthRepository = AuthRepository(
+        config = MobileAuthConfiguration(
+            BuildConfig.OAUTH_AUTHORIZATION_ENDPOINT, BuildConfig.OAUTH_CLIENT_ID, BuildConfig.OAUTH_REDIRECT_URI,
+            android.os.Build.MODEL.take(128), BuildConfig.OAUTH_SCOPES, BuildConfig.MINDAUTH_REGISTRATION_URL,
+        ),
+        gateway = gateway, accessTokens = access, refreshTokens = refresh, pendingStore = pending,
+        pkce = PkceGenerator(), nativeGateway = nativeGateway, nativeClientId = BuildConfig.NATIVE_AUTH_CLIENT_ID,
+        publicOAuthGateway = oauthGateway,
     )
     @Provides @Singleton fun authCoordinator(repository: AuthRepository): AuthCoordinator = AuthCoordinator(repository, BuildConfig.OAUTH_REDIRECT_URI)
 

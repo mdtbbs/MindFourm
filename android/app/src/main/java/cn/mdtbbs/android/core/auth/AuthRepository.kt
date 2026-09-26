@@ -19,6 +19,8 @@ data class MobileAuthConfiguration(
     val clientId: String,
     val redirectUri: String,
     val deviceName: String,
+    val scopes: String = "openid profile email forum.read forum.write resource.read resource.download resource.upload notification.read message.read message.write",
+    val registrationUrl: String = "",
 )
 
 class AuthRepository(
@@ -31,11 +33,17 @@ class AuthRepository(
     private val nativeGateway: NativeAuthGateway? = null,
     private val nativeClientId: String = "mdtbbs_android",
     private val nowEpochMs: () -> Long = System::currentTimeMillis,
+    private val publicOAuthGateway: PublicOAuthGateway? = null,
 ) {
     private val refreshMutex = Mutex()
     private val mutableState = MutableStateFlow<AuthState>(AuthState.Restoring)
     val state: StateFlow<AuthState> = mutableState.asStateFlow()
     private var nativePending: NativePending? = null
+
+    val supportsPublicOAuth: Boolean
+        get() = publicOAuthGateway != null && configurationFailure() == null
+
+    fun registrationUrl(): String? = config.registrationUrl.toHttpsUriOrNull()?.toString()
 
     /** Creates a short-lived in-memory PKCE binding for every native sign-in attempt. */
     suspend fun createTransaction(postLoginDestination: String? = null): AuthTransaction {
@@ -102,8 +110,13 @@ class AuthRepository(
             if (!callback.error.isNullOrBlank() || callback.code.isBlank()) {
                 mutableState.value = AuthState.AuthenticationFailed(AuthFailure.InvalidCallback); return null
             }
-            val response = gateway.exchange(callback.code, pending.codeVerifier, pending.redirectUri, config.deviceName)
-            install(response)
+            val publicGateway = publicOAuthGateway
+            val response = if (publicGateway != null) {
+                publicGateway.exchange(callback.code, pending.codeVerifier, pending.redirectUri)
+            } else {
+                gateway.exchange(callback.code, pending.codeVerifier, pending.redirectUri, config.deviceName)
+            }
+            install(response, publicOAuth = publicGateway != null)
             return pending.postLoginDestination
         } catch (error: IOException) {
             mutableState.value = AuthState.AuthenticationFailed(AuthFailure.Network); return null
@@ -127,7 +140,15 @@ class AuthRepository(
 
     suspend fun logout() {
         val authenticated = (mutableState.value as? AuthState.Authenticated)?.session
-        try { if (authenticated != null) gateway.logout(authenticated.sessionId) } finally { clearLocalSession() }
+        val storedRefresh = refreshTokens.read()
+        try {
+            if (storedRefresh?.startsWith(PUBLIC_OAUTH_REFRESH_PREFIX) == true) {
+                val rawRefresh = storedRefresh.removePrefix(PUBLIC_OAUTH_REFRESH_PREFIX)
+                publicOAuthGateway?.revoke(rawRefresh, accessTokens.current())
+            } else if (authenticated?.sessionId != null) {
+                gateway.logout(authenticated.sessionId)
+            }
+        } finally { clearLocalSession() }
     }
 
     suspend fun clearLocalSession() {
@@ -135,7 +156,12 @@ class AuthRepository(
     }
 
     private suspend fun refreshInternal(refresh: String): AuthRefreshOutcome = try {
-        install(gateway.refresh(refresh)); AuthRefreshOutcome.Refreshed
+        val isPublicOAuth = refresh.startsWith(PUBLIC_OAUTH_REFRESH_PREFIX)
+        val response = if (isPublicOAuth) {
+            val rawRefresh = refresh.removePrefix(PUBLIC_OAUTH_REFRESH_PREFIX)
+            (publicOAuthGateway ?: throw IllegalStateException("Public OAuth is not configured")).refresh(rawRefresh)
+        } else gateway.refresh(refresh)
+        install(response, publicOAuth = isPublicOAuth); AuthRefreshOutcome.Refreshed
     } catch (_: IOException) {
         // A transient outage must not destroy a valid 90-day refresh credential.
         mutableState.value = AuthState.AuthenticationFailed(AuthFailure.Network); AuthRefreshOutcome.RetryLater
@@ -143,9 +169,10 @@ class AuthRepository(
         clearLocalSession(); AuthRefreshOutcome.Unauthenticated
     }
 
-    private suspend fun install(response: MobileTokenResponse) {
+    private suspend fun install(response: MobileTokenResponse, publicOAuth: Boolean = false) {
         // Rotation is durable before publishing the access token. If this fails, no stale R0 remains usable.
-        try { refreshTokens.replace(response.refreshToken) } catch (error: Exception) { clearLocalSession(); throw error }
+        val storedRefresh = if (publicOAuth) "$PUBLIC_OAUTH_REFRESH_PREFIX${response.refreshToken}" else response.refreshToken
+        try { refreshTokens.replace(storedRefresh) } catch (error: Exception) { clearLocalSession(); throw error }
         accessTokens.update(response.accessToken)
         mutableState.value = AuthState.Authenticated(response.session)
     }
@@ -189,7 +216,7 @@ class AuthRepository(
 
     private fun configurationFailure(): AuthFailure.Configuration? = when {
         config.authorizationEndpoint.toHttpsUriOrNull() == null -> AuthFailure.Configuration("OAuth authorization endpoint is not configured as HTTPS")
-        config.redirectUri.toHttpsUriOrNull() == null -> AuthFailure.Configuration("Verified HTTPS App Link redirect URI is not configured")
+        config.redirectUri.toRegisteredRedirectOrNull() == null -> AuthFailure.Configuration("Registered OAuth redirect URI is not configured")
         config.clientId.isBlank() -> AuthFailure.Configuration("OAuth client id is not configured")
         else -> null
     }
@@ -197,13 +224,23 @@ class AuthRepository(
         val separator = if (config.authorizationEndpoint.contains('?')) '&' else '?'
         val query = listOf(
             "response_type" to "code", "client_id" to config.clientId, "redirect_uri" to config.redirectUri,
+            "scope" to config.scopes,
             "code_challenge" to challenge, "code_challenge_method" to "S256", "state" to pending.state, "nonce" to pending.nonce,
         ).joinToString("&") { (key, value) -> "$key=${URLEncoder.encode(value, Charsets.UTF_8.name())}" }
         return "${config.authorizationEndpoint}$separator$query"
     }
     private fun String.toHttpsUriOrNull(): URI? = runCatching { URI(this).takeIf { it.scheme == "https" && !it.host.isNullOrBlank() } }.getOrNull()
+    private fun String.toRegisteredRedirectOrNull(): URI? = runCatching {
+        URI(this).takeIf { uri ->
+            (uri.scheme == "https" && !uri.host.isNullOrBlank()) ||
+                (uri.scheme == "mdtbbs" && uri.host == "oauth" && uri.path == "/callback" && uri.rawQuery == null && uri.rawFragment == null)
+        }
+    }.getOrNull()
     private fun Exception.safeMessage() = message?.take(200) ?: "Authentication request failed"
-    private companion object { const val PENDING_MAX_AGE_MS = 10 * 60 * 1000L }
+    private companion object {
+        const val PENDING_MAX_AGE_MS = 10 * 60 * 1000L
+        const val PUBLIC_OAUTH_REFRESH_PREFIX = "oauth-v1:"
+    }
 }
 
 sealed interface AuthRefreshOutcome {

@@ -36,6 +36,39 @@ class AuthRepositoryTest {
         assertTrue(repository.state.value is AuthState.Authenticated); assertNull(pending.value)
     }
 
+    @Test fun `public client callback exchanges directly with MindAuth and tags the rotating refresh token`() = runTest {
+        val pending = FakePendingStore(); val forumGateway = FakeGateway(); val oauth = FakePublicOAuthGateway()
+        val access = InMemoryAccessTokenStore(); val refresh = FakeRefreshStore()
+        val repository = AuthRepository(
+            MobileAuthConfiguration("https://auth.example/api/authorize", "android-public", "mdtbbs://oauth/callback", "Test", "openid profile email forum.read forum.write"),
+            forumGateway, access, refresh, pending, PkceGenerator(), publicOAuthGateway = oauth,
+        )
+
+        val request = repository.startLogin("thread/20")
+        assertTrue(request.authorizationUrl.contains("code_challenge_method=S256"))
+        assertTrue(request.authorizationUrl.contains("scope=openid+profile+email+forum.read+forum.write"))
+        val callbackState = pending.value!!
+        assertEquals("thread/20", repository.handleCallback(AuthCallback("oauth-code", callbackState.state)))
+        assertEquals(1, oauth.exchangeCalls); assertEquals(0, forumGateway.exchangeCalls)
+        assertEquals("oauth-v1:refresh-1", refresh.value); assertEquals("oauth-access", access.current())
+    }
+
+    @Test fun `public OAuth restore rotates through MindAuth and logout revokes access and refresh`() = runTest {
+        val oauth = FakePublicOAuthGateway(); val access = InMemoryAccessTokenStore().apply { update("old-access") }
+        val refresh = FakeRefreshStore("oauth-v1:old-refresh")
+        val repository = AuthRepository(
+            MobileAuthConfiguration("https://auth.example/api/authorize", "android-public", "mdtbbs://oauth/callback", "Test"),
+            FakeGateway(), access, refresh, FakePendingStore(), PkceGenerator(), publicOAuthGateway = oauth,
+        )
+
+        repository.restoreSession()
+        assertEquals(1, oauth.refreshCalls); assertEquals("oauth-v1:refresh-1", refresh.value)
+        assertEquals("oauth-access", access.current())
+        repository.logout()
+        assertEquals("refresh-1", oauth.revokedRefresh); assertEquals("oauth-access", oauth.revokedAccess)
+        assertNull(refresh.value); assertNull(access.current())
+    }
+
     @Test fun `transient refresh failure retains durable refresh credential`() = runTest {
         val refresh = FakeRefreshStore("refresh-1"); val gateway = FakeGateway(refreshFailure = java.io.IOException())
         val repository = repository(FakePendingStore(), gateway, InMemoryAccessTokenStore(), refresh)
@@ -135,4 +168,15 @@ private class FakeGateway(private val refreshFailure: Exception? = null) : Mobil
     override suspend fun refresh(refreshToken: String): MobileTokenResponse { refreshFailure?.let { throw it }; return response() }
     override suspend fun logout(sessionId: String) = Unit
     private fun response() = MobileTokenResponse("access-1", 1800, "refresh-1", AuthenticatedSession("session", MobileAuthUser(1, "user", null, null, true), 1800))
+}
+
+private class FakePublicOAuthGateway : PublicOAuthGateway {
+    var exchangeCalls = 0; var refreshCalls = 0; var revokedRefresh: String? = null; var revokedAccess: String? = null
+    override suspend fun exchange(code: String, codeVerifier: String, redirectUri: String): MobileTokenResponse {
+        exchangeCalls++; assertEquals("oauth-code", code); assertEquals("mdtbbs://oauth/callback", redirectUri)
+        return response()
+    }
+    override suspend fun refresh(refreshToken: String): MobileTokenResponse { refreshCalls++; assertEquals("old-refresh", refreshToken); return response() }
+    override suspend fun revoke(refreshToken: String, accessToken: String?) { revokedRefresh = refreshToken; revokedAccess = accessToken }
+    private fun response() = MobileTokenResponse("oauth-access", 3600, "refresh-1", AuthenticatedSession(null, null, 3600))
 }

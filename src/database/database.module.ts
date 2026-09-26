@@ -24,6 +24,10 @@ import { RedisModule } from './redis.module';
         // under ts-node and from the compiled `dist/` output.
         migrations,
         migrationsRun: true,
+        // The OpenAPI exporter scans controller decorators without touching the
+        // database. TypeORM still provides inert repository tokens in that mode,
+        // while ordinary application startup always initializes the data source.
+        manualInitialization: process.env.OPENAPI_EXPORT === 'true',
         // MySQL commits DDL implicitly, so an 'all'-mode wrapper transaction could
         // not roll a failed batch back regardless; per-migration scope at least
         // keeps each data migration's UPDATEs atomic. Individual migrations opt out

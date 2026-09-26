@@ -10,6 +10,7 @@ jest.mock('@nestjs/common', () => ({
 }));
 jest.mock('@nestjs/swagger', () => ({ ApiTags: decorator }));
 jest.mock('../../common/guards/jwt-auth.guard', () => ({ JwtAuthGuard: class JwtAuthGuard {} }));
+jest.mock('../../common/guards/oauth-scope.guard', () => ({ OAuthScopeGuard: class OAuthScopeGuard {} }));
 jest.mock('./search.service', () => ({ SearchService: class SearchService {} }));
 jest.mock('./dto/search-query.dto', () => ({ SearchQueryDto: class SearchQueryDto {} }));
 

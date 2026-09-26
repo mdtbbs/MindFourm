@@ -21,6 +21,7 @@ import 'reflect-metadata';
 const decorator = () => () => undefined;
 
 jest.mock('@nestjs/common', () => ({
+  HttpException: class HttpException extends Error {},
   Injectable: () => () => undefined,
   Controller: () => () => undefined,
   Get: () => () => undefined,
@@ -41,7 +42,7 @@ jest.mock('@nestjs/common', () => ({
   BadRequestException: class BadRequestException extends Error {},
   NotFoundException: class NotFoundException extends Error {},
   ValidationPipe: class ValidationPipe {},
-  HttpStatus: { OK: 200, NOT_FOUND: 404 },
+  HttpStatus: { OK: 200, NOT_FOUND: 404, BAD_REQUEST: 400 },
   Optional: decorator,
   Inject: decorator,
   SetMetadata: decorator,
@@ -54,6 +55,8 @@ jest.mock('@nestjs/common', () => ({
     verbose() {}
   },
 }));
+
+jest.mock('@nestjs/swagger', () => new Proxy({}, { get: () => () => decorator() }));
 
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,

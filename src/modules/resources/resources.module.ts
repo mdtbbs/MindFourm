@@ -6,6 +6,7 @@ import { ResourceVersionService } from './resource-versions.service';
 import { MflClientService } from './mfl-client.service';
 import { ResourcesController } from './resources.controller';
 import { Resource } from '@entities/resource.entity';
+import { ResourceUploadDraft } from '@entities/resource-upload-draft.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceRating } from '@entities/resource-rating.entity';
@@ -32,6 +33,8 @@ import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { NavigationModule } from '../navigation/navigation.module';
 import { ResourcePreviewService } from './resource-preview.service';
+import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
+import { ResourcesV1WriteController } from './v1/resources-v1-write.controller';
 
 @Module({
   imports: [
@@ -41,10 +44,10 @@ import { ResourcePreviewService } from './resource-preview.service';
     SettingsModule,
     LogsModule,
     NavigationModule,
-    TypeOrmModule.forFeature([Resource, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription]),
+    TypeOrmModule.forFeature([Resource, ResourceUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription]),
   ],
-  providers: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
-  controllers: [ResourcesController, ResourcesV1Controller],
+  providers: [OAuthScopeGuard, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController],
   exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourcePreviewService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
 })
 export class ResourcesModule {}

@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { TiptapDocumentDto } from '../../../common/dto/tiptap-document.dto';
 
 export class UpdateResourceDto {
   @IsOptional()
@@ -37,6 +38,11 @@ export class UpdateResourceDto {
   @IsOptional()
   @IsString()
   content?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => TiptapDocumentDto)
+  content_json?: TiptapDocumentDto;
 
   @IsOptional()
   @Type(() => Number)

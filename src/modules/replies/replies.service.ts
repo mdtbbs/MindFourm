@@ -8,7 +8,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { EventBusService } from '../plugins/event-bus.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
-import { parseMarkdown } from '../../common/utils/markdown.util';
+import { resolveContentSource } from '../../common/utils/tiptap-content.util';
 import { PointsService } from '../points/points.service';
 import { SettingsService } from '../settings/settings.service';
 import { RedisService } from '../../database/redis.service';
@@ -41,11 +41,13 @@ export class RepliesService {
     userId: number,
     provenance: { ipAddress?: string; locationLabel?: string | null } = {},
   ): Promise<Reply> {
-    const { content, parent_reply_id } = dto;
-
     // Execute "before" hook
     let modifiedDto = await this.eventBus.execute('reply.create', { ...dto, postId, userId });
     dto = modifiedDto;
+    const contentSource = resolveContentSource(dto.content, dto.content_json);
+    const content = contentSource.content;
+    dto.content = content;
+    const parent_reply_id = dto.parent_reply_id;
 
     // Validate post exists and is published
     const post = await this.postRepository.findOne({
@@ -88,8 +90,7 @@ export class RepliesService {
       }
     }
 
-    // Parse markdown to HTML
-    const contentHtml = parseMarkdown(content);
+    const contentHtml = contentSource.content_html;
 
     // Get current user for response
     const user = await this.userRepository.findOne({
@@ -112,6 +113,8 @@ export class RepliesService {
       parent_reply_id: parent_reply_id,
       content,
       content_html: contentHtml,
+      content_json: contentSource.content_json,
+      content_text: contentSource.content_text,
       status: requiresApproval ? REPLY_STATUS.pending : REPLY_STATUS.published,
       like_count: 0,
       ip_address: provenance.ipAddress || null,
@@ -215,7 +218,7 @@ export class RepliesService {
     return reply;
   }
 
-  async update(id: number, content: string, userId: number, userRole?: string): Promise<Reply> {
+  async update(id: number, content: string | undefined, userId: number, userRole?: string, contentJson?: unknown): Promise<Reply> {
     const reply = await this.replyRepository.findOne({
       where: { id },
     });
@@ -233,12 +236,13 @@ export class RepliesService {
       throw new ForbiddenException('Cannot update deleted reply');
     }
 
-    // Parse markdown to HTML
-    const contentHtml = parseMarkdown(content);
+    const contentSource = resolveContentSource(content, contentJson);
 
     // Update reply
-    reply.content = content;
-    reply.content_html = contentHtml;
+    reply.content = contentSource.content;
+    reply.content_html = contentSource.content_html;
+    reply.content_json = contentSource.content_json;
+    reply.content_text = contentSource.content_text;
     reply.updated_at = new Date();
 
     const saved = await this.replyRepository.save(reply);
@@ -274,7 +278,7 @@ export class RepliesService {
 
   private async invalidatePostCache(postId: number): Promise<void> {
     await this.redisService.del(`post:${postId}`);
-    await this.redisService.del(`post:detail:v4:${postId}`);
+    await this.redisService.del(`post:detail:v6:${postId}`);
     await this.redisService.del(`post_view:${postId}`);
   }
 }

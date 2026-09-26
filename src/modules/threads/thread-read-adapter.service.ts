@@ -24,6 +24,9 @@ export type V1ThreadDto = {
   updated_at: string;
   category_id: number | null;
   user_id: number;
+  author: { id: number; username: string; avatar_url: string | null } | null;
+  category: { id: number; name: string; slug: string | null } | null;
+  excerpt: string;
 };
 
 @Injectable()
@@ -34,7 +37,7 @@ export class ThreadReadAdapterService {
   ) {}
 
   async getThreadV1(postId: number): Promise<V1ThreadDto | null> {
-    const post = await this.postRepo.findOne({ where: { id: postId } });
+    const post = await this.postRepo.findOne({ where: { id: postId }, relations: ['user', 'category'] });
     if (!post || (post as any).deleted_at) return null;
     if (post.status !== 'published') return null;
 
@@ -52,6 +55,9 @@ export class ThreadReadAdapterService {
       updated_at: post.updated_at?.toISOString() || '',
       category_id: post.category_id || null,
       user_id: post.user_id,
+      author: post.user ? { id: post.user.id, username: post.user.username, avatar_url: post.user.avatar_url || null } : null,
+      category: post.category ? { id: post.category.id, name: post.category.name, slug: post.category.slug || null } : null,
+      excerpt: this.excerpt(post.content),
     };
   }
 
@@ -60,18 +66,16 @@ export class ThreadReadAdapterService {
     categoryId?: number;
     offset?: number;
   }): Promise<V1ThreadDto[]> {
-    const where: any = { status: 'published' };
-    // A category route is an explicit board request. The default Android stream
-    // is community discussion and must not be flooded by integration updates.
-    if (params.categoryId) where.category_id = params.categoryId;
-    else where.source = 'USER';
-
-    const posts = await this.postRepo.find({
-      where,
-      order: { created_at: 'DESC' },
-      take: params.limit,
-      skip: params.offset || 0,
-    });
+    const posts = await this.postRepo.createQueryBuilder('post')
+      .leftJoinAndSelect('post.user', 'author')
+      .leftJoinAndSelect('post.category', 'category')
+      .where('post.status = :status', { status: 'published' })
+      .andWhere('post.deleted_at IS NULL')
+      .andWhere(params.categoryId ? 'post.category_id = :categoryId' : 'post.source = :source',
+        params.categoryId ? { categoryId: params.categoryId } : { source: 'USER' })
+      .orderBy('post.is_pinned', 'DESC')
+      .addOrderBy('post.created_at', 'DESC')
+      .take(params.limit).skip(params.offset || 0).getMany();
 
     return posts
       .filter(p => !(p as any).deleted_at)
@@ -89,6 +93,23 @@ export class ThreadReadAdapterService {
         updated_at: post.updated_at?.toISOString() || '',
         category_id: post.category_id || null,
         user_id: post.user_id,
+        author: post.user ? { id: post.user.id, username: post.user.username, avatar_url: post.user.avatar_url || null } : null,
+        category: post.category ? { id: post.category.id, name: post.category.name, slug: post.category.slug || null } : null,
+        excerpt: this.excerpt(post.content),
       }));
+  }
+
+  async countThreadsV1(categoryId?: number): Promise<number> {
+    const query = this.postRepo.createQueryBuilder('post')
+      .where('post.status = :status', { status: 'published' })
+      .andWhere('post.deleted_at IS NULL');
+    if (categoryId) query.andWhere('post.category_id = :categoryId', { categoryId });
+    else query.andWhere('post.source = :source', { source: 'USER' });
+    return query.getCount();
+  }
+
+  private excerpt(content: string | null | undefined): string {
+    const text = String(content || '').replace(/<[^>]*>/g, ' ').replace(/[#>*_~`-]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return text.length > 180 ? `${text.slice(0, 177)}...` : text;
   }
 }

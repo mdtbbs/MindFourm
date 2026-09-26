@@ -1,6 +1,8 @@
 const decorator = () => () => undefined;
 
 jest.mock('@nestjs/common', () => ({
+  HttpException: class HttpException extends Error {},
+  HttpStatus: { BAD_REQUEST: 400 },
   Injectable: () => () => undefined,
   Optional: () => () => undefined,
   Inject: () => () => undefined,

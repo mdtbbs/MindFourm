@@ -1,5 +1,6 @@
 import {
   HttpException,
+  ForbiddenException,
   HttpStatus,
   Injectable,
   Logger,
@@ -69,6 +70,20 @@ type LegalAcceptanceContext = {
   clientIp?: string | null;
   userAgent?: string | null;
 };
+
+export type ClientAuthContext = {
+  source: 'forum_session' | 'forum_mobile_legacy' | 'mindauth_oauth';
+  clientId?: string;
+  scopes: string[];
+  clientType?: 'public' | 'confidential';
+  partyType?: 'first_party' | 'third_party';
+};
+
+const LEGACY_FIRST_PARTY_SCOPES = [
+  'openid', 'profile', 'email', 'forum.read', 'forum.write',
+  'resource.read', 'resource.download', 'resource.upload',
+  'notification.read', 'message.read', 'message.write',
+];
 
 @Injectable()
 export class AuthService {
@@ -278,9 +293,75 @@ export class AuthService {
   }
 
   async resolveRequestUser(request: any): Promise<User | null> {
-    const token = request.cookies?.forum_session || this.extractBearerToken(request);
+    const sessionToken = request.cookies?.forum_session;
+    if (sessionToken) {
+      const user = await this.verifySession(sessionToken);
+      if (user) request.authContext = { source: 'forum_session', scopes: LEGACY_FIRST_PARTY_SCOPES } satisfies ClientAuthContext;
+      return user;
+    }
+    const token = this.extractBearerToken(request);
     if (!token) return null;
-    return token.includes('.') ? this.verifyMobileAccessToken(token) : this.verifySession(token);
+    if (token.includes('.')) {
+      const user = await this.verifyMobileAccessToken(token);
+      if (user) request.authContext = { source: 'forum_mobile_legacy', scopes: LEGACY_FIRST_PARTY_SCOPES } satisfies ClientAuthContext;
+      return user;
+    }
+    const resolved = await this.resolveMindAuthBearer(token);
+    request.authContext = resolved.context;
+    return resolved.user;
+  }
+
+  /** Validate opaque MindAuth Bearers with the server-only confidential resource-server client. */
+  async resolveMindAuthBearer(accessToken: string): Promise<{ user: User; context: ClientAuthContext }> {
+    try {
+      const token = await this.introspectMindAuthToken(accessToken);
+      if (token?.active !== true || !token.sub || !token.client_id) throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: '访问令牌无效或已过期' });
+      const scopes = String(token.scope || '').split(/\s+/).filter(Boolean);
+      // Existing server-owned Native Auth tokens carry this legacy marker. Keep
+      // their Game Content path working while new OAuth clients request explicit
+      // resource scopes; never infer grants from client_id or User-Agent alone.
+      if (token.party_type === 'first_party' && scopes.includes('game_content')) {
+        for (const legacyScope of ['resource.read', 'resource.download', 'resource.upload']) {
+          if (!scopes.includes(legacyScope)) scopes.push(legacyScope);
+        }
+      }
+      const identity = await this.getUserInfo(accessToken);
+      if (!Number.isSafeInteger(identity.id) || identity.id !== Number(token.sub)) {
+        throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: 'MindAuth 身份信息不一致' });
+      }
+      let user = await this.usersRepository.findOne({ where: { mindauth_id: identity.id } });
+      if (!user) {
+        if (!scopes.includes('profile') || !identity.username || !scopes.includes('email') || !identity.email) {
+          throw new ForbiddenException({ code: 'INSUFFICIENT_SCOPE', message: '首次使用 MDTBBS 需要 profile 和 email scope' });
+        }
+        user = await this.getOrCreateUser(identity);
+      } else if (scopes.includes('profile') && identity.username) {
+        user = await this.getOrCreateUser(identity);
+      }
+      return {
+        user,
+        context: {
+          source: 'mindauth_oauth', clientId: token.client_id, scopes,
+          clientType: token.client_type === 'public' ? 'public' : token.client_type === 'confidential' ? 'confidential' : undefined,
+          partyType: token.party_type === 'third_party' ? 'third_party' : token.party_type === 'first_party' ? 'first_party' : undefined,
+        },
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException || error instanceof ForbiddenException) throw error;
+      this.logger.warn('MindAuth Bearer introspection failed');
+      throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: '访问令牌无效或认证服务暂不可用' });
+    }
+  }
+
+  private async introspectMindAuthToken(accessToken: string): Promise<any> {
+    const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
+    const clientId = this.configService.get<string>('MINDAUTH_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('MINDAUTH_CLIENT_SECRET');
+    if (!mindauthUrl || !clientId || !clientSecret) throw new UnauthorizedException({ code: 'INVALID_TOKEN', message: '认证服务未配置' });
+    const response = await mindAuthHttp.post(joinMindAuthApiUrl(mindauthUrl, '/introspect'), {
+      token: accessToken, client_id: clientId, client_secret: clientSecret,
+    });
+    return response.data;
   }
 
   async listMobileSessions(userId: number) { return this.mobileSessionRepository.find({ where: { user_id: userId }, order: { created_at: 'DESC' }, select: ['id', 'device_name', 'ip_address', 'last_seen_at', 'created_at', 'revoked_at'] }); }
@@ -375,8 +456,8 @@ export class AuthService {
       });
     } else {
       // Update user info if changed
-      user.username = mindauthUser.username;
-      user.email = mindauthUser.email;
+      if (mindauthUser.username) user.username = mindauthUser.username;
+      if (mindauthUser.email) user.email = mindauthUser.email;
       if (mindauthUser.avatar_url) {
         // Download avatar locally when it changes from MindAuth
         user.avatar_url = await this.syncAvatarFromMindAuth(

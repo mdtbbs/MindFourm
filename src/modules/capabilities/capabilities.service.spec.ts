@@ -18,19 +18,25 @@ describe('CapabilitiesService', () => {
 
     const service = new CapabilitiesService(settings);
 
-    await expect(service.getCapabilities()).resolves.toEqual({
+    await expect(service.getCapabilities()).resolves.toMatchObject({
+      forum: { read: true, write: true, search: true, image_upload: true },
+      resources: { read: true, download: true, upload: true },
+      notifications: { read: true, sse: false },
+      messages: { available: true, third_party_access: false },
+      game_content: { maps: { read: true, download: true, upload: true }, schematics: { read: true, download: true, upload: true } },
+      client: { minimum_supported_version: null, recommended_version: null },
       resource_read: true,
-      resource_files: false,
-      download_grants: false,
+      resource_files: true,
+      download_grants: true,
       device_auth: false,
-      notifications_v1: false,
+      notifications_v1: true,
       notices_v1: true,
       forge_preview: false,
       blueprint_production_analysis: false,
       minimum_supported_client_version: null,
       recommended_client_version: null,
     });
-    expect(settings.getBoolean).toHaveBeenCalledWith('feature_resources_v1_read_enabled', false);
+    expect(settings.getBoolean).toHaveBeenCalledWith('feature_resources_v1_read_enabled', true);
   });
 
   it('advertises previews only when the forum-owned renderer is configured', async () => {

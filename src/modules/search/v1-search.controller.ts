@@ -5,6 +5,8 @@ import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RateLimit } from '../../common/decorators/rate-limit.decorator';
+import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
+import { RequireOAuthScopes } from '../../common/decorators/require-oauth-scopes.decorator';
 
 @ApiV1()
 @ApiTags('v1-search')
@@ -14,6 +16,8 @@ export class SearchV1Controller {
 
   @Get()
   @UseGuards(JwtAuthGuard)
+  @UseGuards(OAuthScopeGuard)
+  @RequireOAuthScopes('forum.read')
   @RateLimit({ max: 30, window: 60 })
   async unified(@Query() query: SearchQueryDto, @Req() req: any) {
     return this.search.withSearchAudit(req.user, query.q, async (normalized) => {
@@ -27,6 +31,8 @@ export class SearchV1Controller {
 
   @Get('posts')
   @UseGuards(JwtAuthGuard)
+  @UseGuards(OAuthScopeGuard)
+  @RequireOAuthScopes('forum.read')
   @RateLimit({ max: 30, window: 60 })
   async posts(@Query() query: SearchQueryDto, @Req() req: any) {
     return this.search.withSearchAudit(req.user, query.q, async (normalized) => {

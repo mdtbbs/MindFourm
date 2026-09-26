@@ -54,10 +54,17 @@ export class Resource {
   version: string;
 
   @Column({ type: 'text', nullable: true })
-  content: string;
+  content: string | null;
 
   @Column({ type: 'text', nullable: true })
-  content_html: string;
+  content_html: string | null;
+
+  /** Canonical allowlisted ProseMirror source for the long-form resource description. */
+  @Column({ type: 'json', nullable: true })
+  content_json: any;
+
+  @Column({ type: 'text', nullable: true })
+  content_text: string | null;
 
   @Column({ nullable: true })
   category_id: number;

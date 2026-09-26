@@ -11,6 +11,8 @@ import { RateLimit } from '../../../common/decorators/rate-limit.decorator';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { assertSafeRedirectUrl } from '../../../common/utils/safe-url.util';
 import { attachmentContentDisposition } from '../../../common/utils/content-disposition.util';
+import { OAuthScopeGuard } from '../../../common/guards/oauth-scope.guard';
+import { RequireOAuthScopes } from '../../../common/decorators/require-oauth-scopes.decorator';
 import { ResourcePreviewService } from '../resource-preview.service';
 import { CapabilitiesService } from '../../capabilities/capabilities.service';
 import { ResourceReadAdapterService, V1ResourceDto } from '../resource-read-adapter.service';
@@ -37,6 +39,9 @@ export class ResourcesV1Controller {
   ) {}
 
   @Get()
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('resource.read')
   @ApiOkResponse({ description: 'Public resource list' })
   async listResources(@Query('limit') limit?: string, @Query('offset') offset?: string, @Query('q') query?: string) {
     await this.assertEnabled();
@@ -44,6 +49,9 @@ export class ResourcesV1Controller {
   }
 
   @Get(':id/manifest')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('resource.read')
   @ApiParam({ name: 'id', type: 'string' })
   @ApiOkResponse({ description: 'Launcher and in-game resource manifest' })
   async getManifest(@Param('id') id: string): Promise<V1ResourceManifest> {
@@ -56,7 +64,8 @@ export class ResourcesV1Controller {
   @Get(':id/preview')
   @RawHttpResponse()
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('resource.read')
   async getPreview(@Param('id') id: string, @Res() res: Response) {
     await this.assertEnabled();
     const resource = await this.resourceReadAdapter.getPublicResourceEntityByPublicId(id);
@@ -70,7 +79,8 @@ export class ResourcesV1Controller {
   @Get(':resourceId/versions/:versionId/files/:fileId/download')
   @RawHttpResponse()
   @OptionalAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('resource.download')
   @RateLimit({ max: 60, window: 60 })
   async downloadFile(
     @Param('resourceId') resourceId: string,
@@ -79,6 +89,8 @@ export class ResourcesV1Controller {
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.assertEnabled();
+    const caps = await this.capabilitiesService.getCapabilities();
+    if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
     const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId);
     if (!target || target.file.availability_status !== 'available') {
       throw new NotFoundException('文件不存在或暂不可用');
@@ -111,6 +123,9 @@ export class ResourcesV1Controller {
   }
 
   @Get(':id')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard, OAuthScopeGuard)
+  @RequireOAuthScopes('resource.read')
   @ApiParam({ name: 'id', type: 'string' })
   @ApiOkResponse({ description: 'Resource detail' })
   async getResource(@Param('id') id: string): Promise<V1ResourceDetail> {
@@ -139,6 +154,11 @@ export class ResourcesV1Controller {
       public_id: dto.public_id || '',
       title: dto.title,
       summary: dto.summary,
+      content: dto.content,
+      content_format: 'tiptap_json',
+      content_json: dto.content_json,
+      content_html: dto.content_html,
+      content_text: dto.content_text,
       resource_kind: dto.resource_kind || 'other',
       visibility: dto.visibility,
       metadata: dto.metadata,

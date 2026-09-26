@@ -8,6 +8,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,6 +19,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import android.content.Intent
+import android.net.Uri
 import javax.inject.Inject
 
 sealed interface AuthUiState {
@@ -26,6 +30,8 @@ sealed interface AuthUiState {
     data class Ready(val methods: Set<String>) : AuthUiState
     data object Submitting : AuthUiState
     data object Authorized : AuthUiState
+    data class BrowserRequired(val authorizationUrl: String) : AuthUiState
+    data object BrowserLaunched : AuthUiState
     data class Error(val code: String) : AuthUiState
 }
 
@@ -34,13 +40,44 @@ class LoginViewModel @Inject constructor(private val auth: AuthRepository) : Vie
     private val mutableUi = MutableStateFlow<AuthUiState>(AuthUiState.Idle)
     val ui = mutableUi.asStateFlow()
     private var destination: String? = null
-    fun begin(postLoginDestination: String?) = viewModelScope.launch {
-        destination = postLoginDestination; mutableUi.value = AuthUiState.CreatingTransaction
-        runCatching { auth.createTransaction(postLoginDestination) }.fold(
-            { mutableUi.value = AuthUiState.Ready(it.availableMethods) },
-            { mutableUi.value = AuthUiState.Error(it.code()) },
+    val publicOAuthEnabled get() = auth.supportsPublicOAuth
+    fun registrationUrl() = auth.registrationUrl()
+
+    init {
+        viewModelScope.launch {
+            auth.state.collect { state ->
+                when (state) {
+                    is AuthState.Authenticated -> mutableUi.value = AuthUiState.Authorized
+                    is AuthState.AuthenticationFailed -> if (mutableUi.value is AuthUiState.BrowserLaunched) {
+                        mutableUi.value = AuthUiState.Error(state.reason.code())
+                    }
+                    else -> Unit
+                }
+            }
+        }
+    }
+
+    fun begin(postLoginDestination: String?) {
+        destination = postLoginDestination
+        if (publicOAuthEnabled) startBrowserLogin() else viewModelScope.launch {
+            mutableUi.value = AuthUiState.CreatingTransaction
+            runCatching { auth.createTransaction(postLoginDestination) }.fold(
+                { mutableUi.value = AuthUiState.Ready(it.availableMethods) },
+                { mutableUi.value = AuthUiState.Error(it.code()) },
+            )
+        }
+    }
+
+    fun startBrowserLogin() = viewModelScope.launch {
+        mutableUi.value = AuthUiState.CreatingTransaction
+        runCatching { auth.startLogin(destination) }.fold(
+            { mutableUi.value = AuthUiState.BrowserRequired(it.authorizationUrl) },
+            { mutableUi.value = AuthUiState.Error(it.message ?: "OAUTH_CONFIGURATION_ERROR") },
         )
     }
+
+    fun browserLaunched() { mutableUi.value = AuthUiState.BrowserLaunched }
+    fun browserLaunchFailed() { mutableUi.value = AuthUiState.Error("BROWSER_UNAVAILABLE") }
     fun password(login: String, password: String, complete: (String?) -> Unit) = viewModelScope.launch {
         mutableUi.value = AuthUiState.Submitting
         val result = auth.loginWithPassword(login, password)
@@ -63,20 +100,46 @@ class LoginViewModel @Inject constructor(private val auth: AuthRepository) : Vie
 
 @Composable fun LoginRoute(destination: String?, onComplete: (String?) -> Unit, onRegister: () -> Unit, onBack: () -> Unit, viewModel: LoginViewModel = hiltViewModel()) {
     val ui by viewModel.ui.collectAsState()
+    val context = LocalContext.current
+    var completionDelivered by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { viewModel.begin(destination) }
-    LoginScreen(ui, viewModel::password, viewModel::sendSms, viewModel::sms, { viewModel.qq(UnsupportedQqAuthProvider(), onComplete) }, onComplete, onRegister, onBack)
+    LaunchedEffect(ui) {
+        when (val current = ui) {
+            is AuthUiState.BrowserRequired -> runCatching {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(current.authorizationUrl)))
+            }.fold({ viewModel.browserLaunched() }, { viewModel.browserLaunchFailed() })
+            AuthUiState.Authorized -> if (!completionDelivered) {
+                completionDelivered = true
+                onComplete(destination)
+            }
+            else -> Unit
+        }
+    }
+    val openRegistration = {
+        val registrationUrl = viewModel.registrationUrl()
+        if (registrationUrl != null) runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(registrationUrl)))
+        }.onFailure { onRegister() } else onRegister()
+    }
+    LoginScreen(ui, viewModel.publicOAuthEnabled, viewModel::startBrowserLogin, viewModel::password, viewModel::sendSms,
+        viewModel::sms, { viewModel.qq(UnsupportedQqAuthProvider(), onComplete) }, onComplete, openRegistration, onBack)
 }
 
-@Composable fun LoginScreen(ui: AuthUiState, onPassword: (String, String, (String?) -> Unit) -> Unit, onSendSms: (String, (SmsChallenge?) -> Unit) -> Unit, onSms: (SmsChallenge, String, String, (String?) -> Unit) -> Unit, onQq: () -> Unit, onComplete: (String?) -> Unit, onRegister: () -> Unit, onBack: () -> Unit) {
+@Composable fun LoginScreen(ui: AuthUiState, publicOAuthEnabled: Boolean, onStartOAuth: () -> Unit, onPassword: (String, String, (String?) -> Unit) -> Unit, onSendSms: (String, (SmsChallenge?) -> Unit) -> Unit, onSms: (SmsChallenge, String, String, (String?) -> Unit) -> Unit, onQq: () -> Unit, onComplete: (String?) -> Unit, onRegister: () -> Unit, onBack: () -> Unit) {
     var smsMode by rememberSaveable { mutableStateOf(false) }; var login by rememberSaveable { mutableStateOf("") }; var password by rememberSaveable { mutableStateOf("") }; var showPassword by rememberSaveable { mutableStateOf(false) }
     var phone by rememberSaveable { mutableStateOf("") }; var code by rememberSaveable { mutableStateOf("") }; var challenge by remember { mutableStateOf<SmsChallenge?>(null) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(challenge?.retryAtEpochMs) { while (challenge != null && now < (challenge?.retryAtEpochMs ?: 0L)) { delay(1_000); now = System.currentTimeMillis() } }
-    val loading = ui is AuthUiState.CreatingTransaction || ui is AuthUiState.Submitting
+    val loading = ui is AuthUiState.CreatingTransaction || ui is AuthUiState.Submitting || ui is AuthUiState.BrowserRequired
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Spacer(Modifier.height(28.dp)); Text("MDTBBS", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary); Text("登录你的 MindAuth", style = MaterialTheme.typography.titleMedium)
         if (ui is AuthUiState.Error) Text(authErrorMessage(ui.code), color = MaterialTheme.colorScheme.error)
-        if (!smsMode) {
+        if (publicOAuthEnabled) {
+            if (ui is AuthUiState.BrowserLaunched) Text("请在系统浏览器完成 MindAuth 登录，然后返回 MDTBBS。")
+            Button(onStartOAuth, Modifier.fillMaxWidth(), enabled = !loading && ui !is AuthUiState.BrowserLaunched) {
+                if (loading) CircularProgressIndicator(Modifier.size(20.dp)) else Text("使用 MindAuth 登录")
+            }
+        } else if (!smsMode) {
             OutlinedTextField(login, { login = it }, Modifier.fillMaxWidth(), label = { Text("账号 / 手机号 / 邮箱") }, singleLine = true, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next))
             OutlinedTextField(password, { password = it }, Modifier.fillMaxWidth(), label = { Text("密码") }, singleLine = true, visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { TextButton({ showPassword = !showPassword }) { Text(if (showPassword) "隐藏" else "显示") } }, keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done))
             Button({ val value = password; password = ""; onPassword(login, value, onComplete) }, Modifier.fillMaxWidth(), enabled = !loading && login.isNotBlank() && password.isNotBlank()) { if (loading) CircularProgressIndicator(Modifier.size(20.dp)); else Text("登录") }
