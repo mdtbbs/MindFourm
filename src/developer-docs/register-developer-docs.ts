@@ -729,6 +729,31 @@ function referenceOAuthScope(method: string, path: string): string | null {
   return null;
 }
 
+function endpointUseCase(method: string, path: string, operation: any): string {
+  const upper = method.toUpperCase();
+  const summary = String(operation?.summary || operation?.description || '').toLowerCase();
+
+  if (path === '/v1/capabilities') return '客户端启动时先读这个接口，根据服务端能力决定哪些功能应该显示或关闭。';
+  if (path.includes('/game-content/blueprints') && upper === 'GET') return '用于游戏内蓝图库、启动器蓝图浏览、蓝图详情或复制流程。';
+  if (path.includes('/game-content/maps') && upper === 'GET') return '用于地图浏览器、地图选择器、启动器内容页以及地图下载前的详情读取。';
+  if (path === '/v1/game-content/search') return '用于把地图和蓝图放进同一个搜索框，适合游戏内或第三方客户端的统一搜索。';
+  if (path.startsWith('/v1/game-content') && ['POST', 'PUT', 'PATCH'].includes(upper)) return '用于登录后的地图或蓝图投稿、更新以及相关写操作。';
+  if (path.endsWith('/manifest')) return '用于启动器或资源管理器判断版本、依赖、文件 Hash 和可安装状态。';
+  if (path.includes('/resources/drafts')) return upper === 'GET' ? '用于投稿客户端恢复和查看尚未提交的资源草稿。' : '用于第三方投稿工具创建、编辑或提交资源草稿。';
+  if (path.startsWith('/v1/resources') && upper === 'GET') return '用于资源中心、启动器和第三方资源浏览器展示资源、版本、预览与文件信息。';
+  if (path.startsWith('/v1/resources') && upper !== 'GET') return '用于登录后的资源投稿、更新或其他资源写操作。';
+  if (path.startsWith('/v1/search')) return '用于论坛或第三方客户端里的站内搜索，可以做全局搜索框和搜索结果页。';
+  if (path.startsWith('/v1/notifications')) return '用于客户端通知中心、未读角标以及已读状态同步。';
+  if (path.startsWith('/v1/uploads/images')) return '用于编辑器、发帖或资源投稿时上传图片。';
+  if (path.startsWith('/v1/categories')) return '用于构建论坛分类导航、筛选器或发帖时的分类选择。';
+  if (path.includes('/me')) return '用于登录后读取当前账号信息、权限或与当前用户有关的状态。';
+  if (summary.includes('download') || path.includes('/download')) return '用于客户端在用户触发下载后获取资源文件或下载地址。';
+  if (upper === 'GET') return '用于读取该模块的数据，可作为列表、详情页或客户端状态展示的数据源。';
+  if (upper === 'POST') return '用于创建或触发该操作，通常放在用户明确提交、发布或执行动作之后。';
+  if (upper === 'PATCH' || upper === 'PUT') return '用于更新已有数据或状态，客户端应只在用户有对应权限时展示操作入口。';
+  if (upper === 'DELETE') return '用于删除或撤销已有内容，建议在客户端执行前做明确确认。';
+  return '用于对应模块的客户端集成。';
+}
 function renderReference(document: OpenAPIObject, forumVersion: string): string {
   const endpoints: string[] = [];
   for (const [path, pathItem] of Object.entries(document.paths || {})) {
@@ -746,26 +771,27 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
             <span class="endpoint-path">/api${escapeHtml(path)}</span>
           </div>
           <p class="endpoint-summary">${escapeHtml(operation.summary || operation.description || '公开 V1 接口')}</p>
+          <div class="use-case"><strong>能做什么：</strong>${escapeHtml(endpointUseCase(method, path, operation))}</div>
           <div class="meta-line">${securityBadge}${scopeBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
           ${renderParameters(operation)}
           ${renderRequestBody(document, operation)}
           ${renderResponses(operation)}
-          <h3>代码示例</h3>
+          <h3>调用示例</h3>
           ${codeTabs(samples)}
         </article>`);
     }
   }
 
   const body = `
-    <div class="eyebrow">OpenAPI</div><h1>API Reference</h1>
-    <p class="lead">本页从运行时 First-party V1 OpenAPI 契约生成，不提供在线 Try it。路径统一以 <code>https://mdtbbs.cn/api</code> 为服务器根地址；请求体字段、必填项、枚举和常见长度限制会直接展开。</p>
-    <input class="reference-filter" data-reference-filter type="search" placeholder="搜索路径、方法或说明…" aria-label="搜索 API">
+    <div class="eyebrow">OpenAPI</div><h1>API 参考</h1>
+    <p class="lead">本页从运行时 V1 OpenAPI 契约生成。每个接口会同时说明用途、认证要求、参数、响应和多语言调用方式，方便直接判断它适不适合你的项目。</p>
+    <input class="reference-filter" data-reference-filter type="search" placeholder="搜索接口路径、用途、方法或说明…" aria-label="搜索 API">
     ${endpoints.join('')}
     ${callout('info', '需要完整 Schema？', '机器可读规范位于 <a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。')}
   `;
 
   return commonShell({
-    title: 'API Reference',
+    title: 'API 参考',
     description: 'MDTBBS First-party V1 API Reference',
     body,
     forumVersion,
