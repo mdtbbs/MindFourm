@@ -17,13 +17,13 @@ const PUBLIC_API_ORIGIN = `${PUBLIC_SITE}/api`;
 const NAV_ITEMS = [
   { href: '/api/v1/docs/quick-start', label: '快速开始' },
   { href: '/api/v1/docs/conventions', label: '通用约定' },
-  { href: '/api/v1/docs/oauth', label: 'OAuth / Public Client' },
+  { href: '/api/v1/docs/oauth', label: '第三方客户端授权' },
   { href: '/api/v1/docs/authentication', label: '身份认证' },
-  { href: '/api/v1/docs/first-party', label: 'First-party V1' },
-  { href: '/api/v1/docs/game-content', label: 'Game Content' },
-  { href: '/api/v1/docs/resources', label: 'Resource V1' },
-  { href: '/api/v1/docs/external', label: 'External API' },
-  { href: '/api/v1/reference', label: 'API Reference' },
+  { href: '/api/v1/docs/first-party', label: '论坛 API' },
+  { href: '/api/v1/docs/game-content', label: '游戏内容 API' },
+  { href: '/api/v1/docs/resources', label: '资源中心 API' },
+  { href: '/api/v1/docs/external', label: '外部服务 API' },
+  { href: '/api/v1/reference', label: 'API 参考' },
 ];
 
 const METHOD_ORDER = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'] as const;
@@ -142,9 +142,9 @@ function commonShell(params: {
       backdrop-filter: blur(14px);
     }
     .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 720; letter-spacing: -0.02em; }
-    .brand-mark { width: 27px; height: 27px; border-radius: 8px; display: grid; place-items: center; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 800; }
+    .brand-mark { width: 27px; height: 27px; border-radius: 2px; display: grid; place-items: center; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 800; }
     .top-links { margin-left: auto; display: flex; gap: 16px; align-items: center; font-size: 14px; }
-    .version-pill { padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+    .version-pill { padding: 4px 9px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); }
     .layout {
       width: min(100%, var(--max));
       margin: 0 auto;
@@ -155,8 +155,8 @@ function commonShell(params: {
     }
     .sidebar { position: sticky; top: 86px; align-self: start; display: flex; flex-direction: column; gap: 3px; }
     .sidebar-title { margin: 0 0 10px 10px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .sidebar a { padding: 7px 10px; border-radius: 8px; color: var(--muted); font-size: 14px; }
-    .sidebar a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+    .sidebar a { padding: 8px 10px; border-radius: 2px; border-left: 2px solid transparent; color: var(--muted); font-size: 14px; }
+    .sidebar a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); border-left-color: var(--accent); font-weight: 700; }
     .content { min-width: 0; max-width: 900px; }
     .eyebrow { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
     h1 { margin: 8px 0 14px; font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -0.045em; }
@@ -166,22 +166,22 @@ function commonShell(params: {
     p { margin: 10px 0 16px; }
     ul, ol { padding-left: 22px; }
     code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: .92em; }
-    :not(pre) > code { padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
-    pre { overflow: auto; margin: 14px 0 22px; padding: 16px 18px; border-radius: 12px; background: var(--code); color: var(--code-text); line-height: 1.55; }
+    :not(pre) > code { padding: 2px 5px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); }
+    pre { overflow: auto; margin: 14px 0 22px; padding: 16px 18px; border-radius: 2px; background: var(--code); color: var(--code-text); line-height: 1.55; }
     pre code { font-size: 13px; }
-    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
-    .card { display: block; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); }
-    .card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); text-decoration: none; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 24px 0; border: 1px solid var(--border); background: var(--border); }
+    .card { display: block; min-height: 112px; padding: 18px; border: 0; border-radius: 0; background: var(--bg); color: var(--text); }
+    .card:hover { background: var(--surface); text-decoration: none; }
     .card strong { display: block; margin-bottom: 5px; }
     .card span { display: block; color: var(--muted); font-size: 14px; }
-    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0; }
-    .stat { padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 26px 0; border: 1px solid var(--border); background: var(--border); }
+    .stat { padding: 16px; border: 0; border-radius: 0; background: var(--bg); }
     .stat span { display: block; color: var(--muted); font-size: 12px; }
     .stat strong { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 15px; }
-    .callout { margin: 20px 0; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
+    .callout { margin: 20px 0; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 0; background: var(--accent-soft); }
     .callout.warning { border-left-color: #f79009; background: color-mix(in srgb, #f79009 10%, var(--bg)); }
     .callout p { margin: 5px 0 0; color: var(--muted); }
-    .table-wrap { overflow: auto; margin: 14px 0 24px; border: 1px solid var(--border); border-radius: 12px; }
+    .table-wrap { overflow: auto; margin: 14px 0 24px; border: 1px solid var(--border); border-radius: 0; }
     table { width: 100%; border-collapse: collapse; min-width: 620px; font-size: 14px; }
     th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
     th { background: var(--surface); color: var(--muted); font-size: 12px; }
@@ -189,22 +189,24 @@ function commonShell(params: {
     .toc { position: sticky; top: 86px; align-self: start; border-left: 1px solid var(--border); padding-left: 16px; display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
     .toc-title { margin-bottom: 4px; color: var(--muted); font-weight: 650; }
     .toc a { color: var(--muted); }
-    .endpoint { margin: 20px 0 28px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; }
+    .endpoint { margin: 10px 0; padding: 18px 18px 20px; border: 1px solid var(--border); border-radius: 0; background: var(--bg); }
     .endpoint-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .method { min-width: 62px; padding: 3px 8px; border-radius: 6px; color: white; text-align: center; font-size: 12px; font-weight: 800; }
+    .method { min-width: 62px; padding: 3px 8px; border-radius: 2px; color: white; text-align: center; font-size: 12px; font-weight: 800; }
     .method.get { background: var(--get); } .method.post { background: var(--post); } .method.put { background: var(--put); }
     .method.patch { background: var(--patch); } .method.delete { background: var(--delete); }
     .endpoint-path { overflow-wrap: anywhere; font-family: "SFMono-Regular", Consolas, monospace; font-weight: 650; }
     .endpoint-summary { margin: 9px 0 0; color: var(--muted); }
+    .use-case { margin: 12px 0 0; padding: 10px 12px; border-left: 2px solid var(--border); background: var(--surface); color: var(--muted); font-size: 14px; }
+    .use-case strong { color: var(--text); }
     .meta-line { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-    .badge { padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 12px; }
-    .code-example { margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .badge { padding: 3px 7px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); font-size: 12px; }
+    .code-example { margin-top: 16px; border: 1px solid var(--border); border-radius: 0; overflow: hidden; }
     .code-tabs { display: flex; gap: 2px; overflow-x: auto; padding: 8px; background: var(--surface); }
-    .code-tabs button { appearance: none; border: 0; border-radius: 7px; padding: 6px 9px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+    .code-tabs button { appearance: none; border: 0; border-radius: 2px; padding: 6px 9px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
     .code-tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
     .code-example pre { display: none; margin: 0; border-radius: 0; }
     .code-example pre[data-active="true"] { display: block; }
-    .reference-filter { width: 100%; margin: 10px 0 22px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; }
+    .reference-filter { width: 100%; margin: 10px 0 22px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 0; background: var(--bg); color: var(--text); font: inherit; }
     .footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
     @media (max-width: 1100px) {
       .layout { grid-template-columns: 210px minmax(0, 1fr); }
@@ -283,9 +285,9 @@ function setHtmlHeaders(res: any, nonceAwareHtml: string): void {
 
 function renderHome(forumVersion: string): string {
   const body = `
-    <div class="eyebrow">Developer Documentation</div>
+    <div class="eyebrow">开发者文档</div>
     <h1>MDTBBS API</h1>
-    <p class="lead">面向第三方工具、Mindustry Mod、桌面与移动客户端以及服务端集成的公开接口文档。这里仅展示承诺稳定的公开契约，不包含论坛内部、管理端或 Legacy 路由。</p>
+    <p class="lead">给第三方工具、Mindustry Mod、启动器、桌面与移动客户端以及服务端集成使用的公开接口。文档会说明每组接口能解决什么问题，并给出可以直接改进项目里的调用示例。</p>
     <div class="stat-grid">
       <div class="stat"><span>论坛版本</span><strong>${escapeHtml(forumVersion)}</strong></div>
       <div class="stat"><span>API 版本</span><strong>v${escapeHtml(API_V1_VERSION)}</strong></div>
@@ -294,12 +296,12 @@ function renderHome(forumVersion: string): string {
     ${callout('info', '从 Capability 开始', `客户端启动后建议先请求 ${inlineCode('GET /api/v1/capabilities')}，再根据服务端声明启用对应功能。`)}
     <div class="cards">
       <a class="card" href="/api/v1/docs/quick-start"><strong>快速开始</strong><span>请求、响应、版本与错误处理。</span></a>
-      <a class="card" href="/api/v1/docs/game-content"><strong>Game Content</strong><span>蓝图、地图、搜索、预览、下载与提交。</span></a>
-      <a class="card" href="/api/v1/docs/resources"><strong>Resource V1</strong><span>资源、版本、Manifest 与文件。</span></a>
-      <a class="card" href="/api/v1/docs/oauth"><strong>OAuth / Public Client</strong><span>申请应用、PKCE、Scope、Token 刷新与撤销。</span></a>
+      <a class="card" href="/api/v1/docs/game-content"><strong>游戏内容 API</strong><span>做游戏内蓝图库、地图浏览器、搜索、预览与上传。</span></a>
+      <a class="card" href="/api/v1/docs/resources"><strong>资源中心 API</strong><span>做启动器资源页、版本同步、安装与下载。</span></a>
+      <a class="card" href="/api/v1/docs/oauth"><strong>第三方客户端授权</strong><span>让桌面端、Android、Mod 和启动器安全登录论坛账号。</span></a>
       <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>新客户端、旧版兼容和服务端凭证怎么选。</span></a>
-      <a class="card" href="/api/v1/docs/external"><strong>External API</strong><span>机器人、同步服务和后台自动化。</span></a>
-      <a class="card" href="/api/v1/reference"><strong>API Reference</strong><span>由当前 OpenAPI 契约生成的只读接口参考。</span></a>
+      <a class="card" href="/api/v1/docs/external"><strong>外部服务 API</strong><span>给机器人、同步服务和后台自动化使用。</span></a>
+      <a class="card" href="/api/v1/reference"><strong>API 参考</strong><span>查参数、权限、响应、用途和多语言调用示例。</span></a>
     </div>
     ${section('最小示例', `${codeBlock(`curl "https://mdtbbs.cn/api/v1/game-content/maps?limit=10"`, 'bash')}<p>公开读取接口可以匿名调用。需要身份的接口会在对应文档中明确标记认证方式。</p>`)}
     ${section('公开边界', '<p><strong>First-party V1</strong> 使用 <code>/api/v1/*</code>；<strong>External API</strong> 使用 <code>/api/external/v1/*</code>。未在本开发者入口列出的 <code>/api/*</code>、管理端和服务间路由不属于第三方稳定契约。</p>')}
@@ -454,8 +456,10 @@ Content-Type: application/json
   `;
 
   const gameContent = `
-    <div class="eyebrow">Mindustry</div><h1>Game Content API</h1>
-    <p class="lead"><code>/api/v1/game-content</code> 是蓝图和地图的一等客户端 API，适合游戏内 Mod、桌面工具和移动端。</p>
+    <div class="eyebrow">Mindustry</div><h1>游戏内容 API</h1>
+    <p class="lead"><code>/api/v1/game-content</code> 提供蓝图和地图的浏览、搜索、预览、下载与上传能力，适合游戏内 Mod、启动器、桌面工具和移动端。</p>
+    ${section('能拿来做什么', '<ul><li><strong>游戏内资源浏览器：</strong>直接在 Mindustry Mod 里展示地图和蓝图。</li><li><strong>启动器内容页：</strong>搜索、筛选并预览社区地图和蓝图。</li><li><strong>地图管理器：</strong>读取详情后下载地图原文件。</li><li><strong>第三方投稿工具：</strong>登录后上传地图并完成提交。</li></ul>', 'use-cases')}
+    ${section('示例：做一个地图列表', `<p>这个请求适合“最新地图”、地图选择器和启动器内容页。拿到列表后，再用详情或下载接口继续处理。</p>${codeTabs(makeCodeSamples('GET', '/v1/game-content/maps?limit=20', {}))}`, 'example')}
     ${section('浏览与详情', table(['Method', 'Path', '说明'], [
       ['GET', inlineCode('/api/v1/game-content/meta'), '能力与上传限制'],
       ['GET', inlineCode('/api/v1/game-content/blueprints'), '蓝图列表'],
@@ -473,8 +477,10 @@ Content-Type: application/json
   `;
 
   const resources = `
-    <div class="eyebrow">Resources</div><h1>Resource API V1</h1>
-    <p class="lead">Resource V1 是论坛资源中心、未来启动器和游戏内客户端共用的稳定读取模型。</p>
+    <div class="eyebrow">Resources</div><h1>资源中心 API</h1>
+    <p class="lead">资源中心 API 是论坛资源页、启动器和其他客户端共用的稳定资源模型，覆盖资源详情、版本、Manifest、预览和文件下载。</p>
+    ${section('能拿来做什么', '<ul><li><strong>第三方启动器：</strong>展示 Mod、工具等资源并读取版本信息。</li><li><strong>自动更新：</strong>通过 Manifest、版本和文件 Hash 判断是否需要下载。</li><li><strong>资源管理器：</strong>展示详情、预览以及可安装文件。</li><li><strong>投稿客户端：</strong>通过 Draft 流程创建草稿、上传内容并提交。</li></ul>', 'use-cases')}
+    ${section('示例：读取资源列表', `<p>适合启动器首页、资源浏览页和搜索结果页。列表中的稳定 <code>public_id</code> 可以继续用于详情、Manifest 和下载流程。</p>${codeTabs(makeCodeSamples('GET', '/v1/resources?limit=20', {}))}`, 'example')}
     ${section('稳定身份', '<p><code>public_id</code> 是资源、版本与文件的外部稳定身份。数字数据库 ID 属于实现细节，不应由第三方客户端持久化。</p>', 'identity')}
     ${section('公开读取', table(['Method', 'Path', '说明'], [
       ['GET', inlineCode('/api/v1/resources'), '公开资源列表'],
@@ -542,12 +548,12 @@ Content-Type: application/json
   return {
     'quick-start': { title: '快速开始', description: 'MDTBBS API 快速开始', body: quickStart },
     conventions: { title: '通用约定', description: 'MDTBBS API 响应、兼容与限流约定', body: conventions },
-    oauth: { title: 'OAuth / Public Client', description: 'MindAuth Public Client OAuth、PKCE 与 scopes', body: oauth },
+    oauth: { title: '第三方客户端授权', description: 'MindAuth Public Client OAuth、PKCE 与 scopes', body: oauth },
     authentication: { title: '身份认证', description: 'MDTBBS API 认证方式', body: authentication },
-    'first-party': { title: 'First-party V1', description: 'MDTBBS First-party API V1', body: firstParty },
-    'game-content': { title: 'Game Content', description: 'MDTBBS Game Content API', body: gameContent },
-    resources: { title: 'Resource V1', description: 'MDTBBS Resource API V1', body: resources },
-    external: { title: 'External API', description: 'MDTBBS External API', body: external },
+    'first-party': { title: '论坛 API', description: 'MDTBBS First-party API V1', body: firstParty },
+    'game-content': { title: '游戏内容 API', description: 'MDTBBS 游戏内容 API', body: gameContent },
+    resources: { title: '资源中心 API', description: 'MDTBBS 资源中心 API', body: resources },
+    external: { title: '外部服务 API', description: 'MDTBBS External API', body: external },
   };
 }
 
@@ -725,6 +731,31 @@ function referenceOAuthScope(method: string, path: string): string | null {
   return null;
 }
 
+function endpointUseCase(method: string, path: string, operation: any): string {
+  const upper = method.toUpperCase();
+  const summary = String(operation?.summary || operation?.description || '').toLowerCase();
+
+  if (path === '/v1/capabilities') return '客户端启动时先读这个接口，根据服务端能力决定哪些功能应该显示或关闭。';
+  if (path.includes('/game-content/blueprints') && upper === 'GET') return '用于游戏内蓝图库、启动器蓝图浏览、蓝图详情或复制流程。';
+  if (path.includes('/game-content/maps') && upper === 'GET') return '用于地图浏览器、地图选择器、启动器内容页以及地图下载前的详情读取。';
+  if (path === '/v1/game-content/search') return '用于把地图和蓝图放进同一个搜索框，适合游戏内或第三方客户端的统一搜索。';
+  if (path.startsWith('/v1/game-content') && ['POST', 'PUT', 'PATCH'].includes(upper)) return '用于登录后的地图或蓝图投稿、更新以及相关写操作。';
+  if (path.endsWith('/manifest')) return '用于启动器或资源管理器判断版本、依赖、文件 Hash 和可安装状态。';
+  if (path.includes('/resources/drafts')) return upper === 'GET' ? '用于投稿客户端恢复和查看尚未提交的资源草稿。' : '用于第三方投稿工具创建、编辑或提交资源草稿。';
+  if (path.startsWith('/v1/resources') && upper === 'GET') return '用于资源中心、启动器和第三方资源浏览器展示资源、版本、预览与文件信息。';
+  if (path.startsWith('/v1/resources') && upper !== 'GET') return '用于登录后的资源投稿、更新或其他资源写操作。';
+  if (path.startsWith('/v1/search')) return '用于论坛或第三方客户端里的站内搜索，可以做全局搜索框和搜索结果页。';
+  if (path.startsWith('/v1/notifications')) return '用于客户端通知中心、未读角标以及已读状态同步。';
+  if (path.startsWith('/v1/uploads/images')) return '用于编辑器、发帖或资源投稿时上传图片。';
+  if (path.startsWith('/v1/categories')) return '用于构建论坛分类导航、筛选器或发帖时的分类选择。';
+  if (path.includes('/me')) return '用于登录后读取当前账号信息、权限或与当前用户有关的状态。';
+  if (summary.includes('download') || path.includes('/download')) return '用于客户端在用户触发下载后获取资源文件或下载地址。';
+  if (upper === 'GET') return '用于读取该模块的数据，可作为列表、详情页或客户端状态展示的数据源。';
+  if (upper === 'POST') return '用于创建或触发该操作，通常放在用户明确提交、发布或执行动作之后。';
+  if (upper === 'PATCH' || upper === 'PUT') return '用于更新已有数据或状态，客户端应只在用户有对应权限时展示操作入口。';
+  if (upper === 'DELETE') return '用于删除或撤销已有内容，建议在客户端执行前做明确确认。';
+  return '用于对应模块的客户端集成。';
+}
 function renderReference(document: OpenAPIObject, forumVersion: string): string {
   const endpoints: string[] = [];
   for (const [path, pathItem] of Object.entries(document.paths || {})) {
@@ -742,26 +773,27 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
             <span class="endpoint-path">/api${escapeHtml(path)}</span>
           </div>
           <p class="endpoint-summary">${escapeHtml(operation.summary || operation.description || '公开 V1 接口')}</p>
+          <div class="use-case"><strong>能做什么：</strong>${escapeHtml(endpointUseCase(method, path, operation))}</div>
           <div class="meta-line">${securityBadge}${scopeBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
           ${renderParameters(operation)}
           ${renderRequestBody(document, operation)}
           ${renderResponses(operation)}
-          <h3>代码示例</h3>
+          <h3>调用示例</h3>
           ${codeTabs(samples)}
         </article>`);
     }
   }
 
   const body = `
-    <div class="eyebrow">OpenAPI</div><h1>API Reference</h1>
-    <p class="lead">本页从运行时 First-party V1 OpenAPI 契约生成，不提供在线 Try it。路径统一以 <code>https://mdtbbs.cn/api</code> 为服务器根地址；请求体字段、必填项、枚举和常见长度限制会直接展开。</p>
-    <input class="reference-filter" data-reference-filter type="search" placeholder="搜索路径、方法或说明…" aria-label="搜索 API">
+    <div class="eyebrow">OpenAPI</div><h1>API 参考</h1>
+    <p class="lead">本页从运行时 V1 OpenAPI 契约生成。每个接口会同时说明用途、认证要求、参数、响应和多语言调用方式，方便直接判断它适不适合你的项目。</p>
+    <input class="reference-filter" data-reference-filter type="search" placeholder="搜索接口路径、用途、方法或说明…" aria-label="搜索 API">
     ${endpoints.join('')}
     ${callout('info', '需要完整 Schema？', '机器可读规范位于 <a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。')}
   `;
 
   return commonShell({
-    title: 'API Reference',
+    title: 'API 参考',
     description: 'MDTBBS First-party V1 API Reference',
     body,
     forumVersion,
