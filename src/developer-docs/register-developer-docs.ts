@@ -17,13 +17,13 @@ const PUBLIC_API_ORIGIN = `${PUBLIC_SITE}/api`;
 const NAV_ITEMS = [
   { href: '/api/v1/docs/quick-start', label: '快速开始' },
   { href: '/api/v1/docs/conventions', label: '通用约定' },
-  { href: '/api/v1/docs/oauth', label: 'OAuth / Public Client' },
+  { href: '/api/v1/docs/oauth', label: '第三方客户端授权' },
   { href: '/api/v1/docs/authentication', label: '身份认证' },
-  { href: '/api/v1/docs/first-party', label: 'First-party V1' },
-  { href: '/api/v1/docs/game-content', label: 'Game Content' },
-  { href: '/api/v1/docs/resources', label: 'Resource V1' },
-  { href: '/api/v1/docs/external', label: 'External API' },
-  { href: '/api/v1/reference', label: 'API Reference' },
+  { href: '/api/v1/docs/first-party', label: '论坛 API' },
+  { href: '/api/v1/docs/game-content', label: '游戏内容 API' },
+  { href: '/api/v1/docs/resources', label: '资源中心 API' },
+  { href: '/api/v1/docs/external', label: '外部服务 API' },
+  { href: '/api/v1/reference', label: 'API 参考' },
 ];
 
 const METHOD_ORDER = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'] as const;
@@ -283,9 +283,9 @@ function setHtmlHeaders(res: any, nonceAwareHtml: string): void {
 
 function renderHome(forumVersion: string): string {
   const body = `
-    <div class="eyebrow">Developer Documentation</div>
+    <div class="eyebrow">开发者文档</div>
     <h1>MDTBBS API</h1>
-    <p class="lead">面向第三方工具、Mindustry Mod、桌面与移动客户端以及服务端集成的公开接口文档。这里仅展示承诺稳定的公开契约，不包含论坛内部、管理端或 Legacy 路由。</p>
+    <p class="lead">给第三方工具、Mindustry Mod、启动器、桌面与移动客户端以及服务端集成使用的公开接口。文档会说明每组接口能解决什么问题，并给出可以直接改进项目里的调用示例。</p>
     <div class="stat-grid">
       <div class="stat"><span>论坛版本</span><strong>${escapeHtml(forumVersion)}</strong></div>
       <div class="stat"><span>API 版本</span><strong>v${escapeHtml(API_V1_VERSION)}</strong></div>
@@ -294,12 +294,12 @@ function renderHome(forumVersion: string): string {
     ${callout('info', '从 Capability 开始', `客户端启动后建议先请求 ${inlineCode('GET /api/v1/capabilities')}，再根据服务端声明启用对应功能。`)}
     <div class="cards">
       <a class="card" href="/api/v1/docs/quick-start"><strong>快速开始</strong><span>请求、响应、版本与错误处理。</span></a>
-      <a class="card" href="/api/v1/docs/game-content"><strong>Game Content</strong><span>蓝图、地图、搜索、预览、下载与提交。</span></a>
-      <a class="card" href="/api/v1/docs/resources"><strong>Resource V1</strong><span>资源、版本、Manifest 与文件。</span></a>
-      <a class="card" href="/api/v1/docs/oauth"><strong>OAuth / Public Client</strong><span>申请应用、PKCE、Scope、Token 刷新与撤销。</span></a>
+      <a class="card" href="/api/v1/docs/game-content"><strong>游戏内容 API</strong><span>做游戏内蓝图库、地图浏览器、搜索、预览与上传。</span></a>
+      <a class="card" href="/api/v1/docs/resources"><strong>资源中心 API</strong><span>做启动器资源页、版本同步、安装与下载。</span></a>
+      <a class="card" href="/api/v1/docs/oauth"><strong>第三方客户端授权</strong><span>让桌面端、Android、Mod 和启动器安全登录论坛账号。</span></a>
       <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>新客户端、旧版兼容和服务端凭证怎么选。</span></a>
-      <a class="card" href="/api/v1/docs/external"><strong>External API</strong><span>机器人、同步服务和后台自动化。</span></a>
-      <a class="card" href="/api/v1/reference"><strong>API Reference</strong><span>由当前 OpenAPI 契约生成的只读接口参考。</span></a>
+      <a class="card" href="/api/v1/docs/external"><strong>外部服务 API</strong><span>给机器人、同步服务和后台自动化使用。</span></a>
+      <a class="card" href="/api/v1/reference"><strong>API 参考</strong><span>查参数、权限、响应、用途和多语言调用示例。</span></a>
     </div>
     ${section('最小示例', `${codeBlock(`curl "https://mdtbbs.cn/api/v1/game-content/maps?limit=10"`, 'bash')}<p>公开读取接口可以匿名调用。需要身份的接口会在对应文档中明确标记认证方式。</p>`)}
     ${section('公开边界', '<p><strong>First-party V1</strong> 使用 <code>/api/v1/*</code>；<strong>External API</strong> 使用 <code>/api/external/v1/*</code>。未在本开发者入口列出的 <code>/api/*</code>、管理端和服务间路由不属于第三方稳定契约。</p>')}
@@ -454,8 +454,9 @@ Content-Type: application/json
   `;
 
   const gameContent = `
-    <div class="eyebrow">Mindustry</div><h1>Game Content API</h1>
-    <p class="lead"><code>/api/v1/game-content</code> 是蓝图和地图的一等客户端 API，适合游戏内 Mod、桌面工具和移动端。</p>
+    <div class="eyebrow">Mindustry</div><h1>游戏内容 API</h1>
+    <p class="lead"><code>/api/v1/game-content</code> 提供蓝图和地图的浏览、搜索、预览、下载与上传能力，适合游戏内 Mod、启动器、桌面工具和移动端。</p>
+    ${section('能拿来做什么', '<ul><li><strong>游戏内资源浏览器：</strong>直接在 Mindustry Mod 里展示地图和蓝图。</li><li><strong>启动器内容页：</strong>搜索、筛选并预览社区地图和蓝图。</li><li><strong>地图管理器：</strong>读取详情后下载地图原文件。</li><li><strong>第三方投稿工具：</strong>登录后上传地图并完成提交。</li></ul>', 'use-cases')}
     ${section('浏览与详情', table(['Method', 'Path', '说明'], [
       ['GET', inlineCode('/api/v1/game-content/meta'), '能力与上传限制'],
       ['GET', inlineCode('/api/v1/game-content/blueprints'), '蓝图列表'],
@@ -473,8 +474,9 @@ Content-Type: application/json
   `;
 
   const resources = `
-    <div class="eyebrow">Resources</div><h1>Resource API V1</h1>
-    <p class="lead">Resource V1 是论坛资源中心、未来启动器和游戏内客户端共用的稳定读取模型。</p>
+    <div class="eyebrow">Resources</div><h1>资源中心 API</h1>
+    <p class="lead">资源中心 API 是论坛资源页、启动器和其他客户端共用的稳定资源模型，覆盖资源详情、版本、Manifest、预览和文件下载。</p>
+    ${section('能拿来做什么', '<ul><li><strong>第三方启动器：</strong>展示 Mod、工具等资源并读取版本信息。</li><li><strong>自动更新：</strong>通过 Manifest、版本和文件 Hash 判断是否需要下载。</li><li><strong>资源管理器：</strong>展示详情、预览以及可安装文件。</li><li><strong>投稿客户端：</strong>通过 Draft 流程创建草稿、上传内容并提交。</li></ul>', 'use-cases')}
     ${section('稳定身份', '<p><code>public_id</code> 是资源、版本与文件的外部稳定身份。数字数据库 ID 属于实现细节，不应由第三方客户端持久化。</p>', 'identity')}
     ${section('公开读取', table(['Method', 'Path', '说明'], [
       ['GET', inlineCode('/api/v1/resources'), '公开资源列表'],
@@ -542,12 +544,12 @@ Content-Type: application/json
   return {
     'quick-start': { title: '快速开始', description: 'MDTBBS API 快速开始', body: quickStart },
     conventions: { title: '通用约定', description: 'MDTBBS API 响应、兼容与限流约定', body: conventions },
-    oauth: { title: 'OAuth / Public Client', description: 'MindAuth Public Client OAuth、PKCE 与 scopes', body: oauth },
+    oauth: { title: '第三方客户端授权', description: 'MindAuth Public Client OAuth、PKCE 与 scopes', body: oauth },
     authentication: { title: '身份认证', description: 'MDTBBS API 认证方式', body: authentication },
-    'first-party': { title: 'First-party V1', description: 'MDTBBS First-party API V1', body: firstParty },
-    'game-content': { title: 'Game Content', description: 'MDTBBS Game Content API', body: gameContent },
-    resources: { title: 'Resource V1', description: 'MDTBBS Resource API V1', body: resources },
-    external: { title: 'External API', description: 'MDTBBS External API', body: external },
+    'first-party': { title: '论坛 API', description: 'MDTBBS First-party API V1', body: firstParty },
+    'game-content': { title: '游戏内容 API', description: 'MDTBBS 游戏内容 API', body: gameContent },
+    resources: { title: '资源中心 API', description: 'MDTBBS 资源中心 API', body: resources },
+    external: { title: '外部服务 API', description: 'MDTBBS External API', body: external },
   };
 }
 
