@@ -17,12 +17,13 @@ const PUBLIC_API_ORIGIN = `${PUBLIC_SITE}/api`;
 const NAV_ITEMS = [
   { href: '/api/v1/docs/quick-start', label: '快速开始' },
   { href: '/api/v1/docs/conventions', label: '通用约定' },
+  { href: '/api/v1/docs/oauth', label: '第三方客户端授权' },
   { href: '/api/v1/docs/authentication', label: '身份认证' },
-  { href: '/api/v1/docs/first-party', label: 'First-party V1' },
-  { href: '/api/v1/docs/game-content', label: 'Game Content' },
-  { href: '/api/v1/docs/resources', label: 'Resource V1' },
-  { href: '/api/v1/docs/external', label: 'External API' },
-  { href: '/api/v1/reference', label: 'API Reference' },
+  { href: '/api/v1/docs/first-party', label: '论坛 API' },
+  { href: '/api/v1/docs/game-content', label: '游戏内容 API' },
+  { href: '/api/v1/docs/resources', label: '资源中心 API' },
+  { href: '/api/v1/docs/external', label: '外部服务 API' },
+  { href: '/api/v1/reference', label: 'API 参考' },
 ];
 
 const METHOD_ORDER = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head'] as const;
@@ -141,9 +142,9 @@ function commonShell(params: {
       backdrop-filter: blur(14px);
     }
     .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 720; letter-spacing: -0.02em; }
-    .brand-mark { width: 27px; height: 27px; border-radius: 8px; display: grid; place-items: center; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 800; }
+    .brand-mark { width: 27px; height: 27px; border-radius: 2px; display: grid; place-items: center; background: var(--text); color: var(--bg); font-size: 12px; font-weight: 800; }
     .top-links { margin-left: auto; display: flex; gap: 16px; align-items: center; font-size: 14px; }
-    .version-pill { padding: 4px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); }
+    .version-pill { padding: 4px 9px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); }
     .layout {
       width: min(100%, var(--max));
       margin: 0 auto;
@@ -154,8 +155,8 @@ function commonShell(params: {
     }
     .sidebar { position: sticky; top: 86px; align-self: start; display: flex; flex-direction: column; gap: 3px; }
     .sidebar-title { margin: 0 0 10px 10px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .sidebar a { padding: 7px 10px; border-radius: 8px; color: var(--muted); font-size: 14px; }
-    .sidebar a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 650; }
+    .sidebar a { padding: 8px 10px; border-radius: 2px; border-left: 2px solid transparent; color: var(--muted); font-size: 14px; }
+    .sidebar a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); border-left-color: var(--accent); font-weight: 700; }
     .content { min-width: 0; max-width: 900px; }
     .eyebrow { color: var(--accent); font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
     h1 { margin: 8px 0 14px; font-size: clamp(34px, 5vw, 54px); line-height: 1.08; letter-spacing: -0.045em; }
@@ -165,22 +166,22 @@ function commonShell(params: {
     p { margin: 10px 0 16px; }
     ul, ol { padding-left: 22px; }
     code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: .92em; }
-    :not(pre) > code { padding: 2px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
-    pre { overflow: auto; margin: 14px 0 22px; padding: 16px 18px; border-radius: 12px; background: var(--code); color: var(--code-text); line-height: 1.55; }
+    :not(pre) > code { padding: 2px 5px; border: 1px solid var(--border); border-radius: 2px; background: var(--surface); }
+    pre { overflow: auto; margin: 14px 0 22px; padding: 16px 18px; border-radius: 2px; background: var(--code); color: var(--code-text); line-height: 1.55; }
     pre code { font-size: 13px; }
-    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
-    .card { display: block; padding: 18px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); }
-    .card:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); text-decoration: none; }
+    .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 24px 0; border: 1px solid var(--border); background: var(--border); }
+    .card { display: block; min-height: 112px; padding: 18px; border: 0; border-radius: 0; background: var(--bg); color: var(--text); }
+    .card:hover { background: var(--surface); text-decoration: none; }
     .card strong { display: block; margin-bottom: 5px; }
     .card span { display: block; color: var(--muted); font-size: 14px; }
-    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0; }
-    .stat { padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 26px 0; border: 1px solid var(--border); background: var(--border); }
+    .stat { padding: 16px; border: 0; border-radius: 0; background: var(--bg); }
     .stat span { display: block; color: var(--muted); font-size: 12px; }
     .stat strong { display: block; margin-top: 4px; overflow-wrap: anywhere; font-size: 15px; }
-    .callout { margin: 20px 0; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 8px; background: var(--accent-soft); }
+    .callout { margin: 20px 0; padding: 14px 16px; border-left: 3px solid var(--accent); border-radius: 0; background: var(--accent-soft); }
     .callout.warning { border-left-color: #f79009; background: color-mix(in srgb, #f79009 10%, var(--bg)); }
     .callout p { margin: 5px 0 0; color: var(--muted); }
-    .table-wrap { overflow: auto; margin: 14px 0 24px; border: 1px solid var(--border); border-radius: 12px; }
+    .table-wrap { overflow: auto; margin: 14px 0 24px; border: 1px solid var(--border); border-radius: 0; }
     table { width: 100%; border-collapse: collapse; min-width: 620px; font-size: 14px; }
     th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
     th { background: var(--surface); color: var(--muted); font-size: 12px; }
@@ -188,22 +189,24 @@ function commonShell(params: {
     .toc { position: sticky; top: 86px; align-self: start; border-left: 1px solid var(--border); padding-left: 16px; display: flex; flex-direction: column; gap: 7px; font-size: 13px; }
     .toc-title { margin-bottom: 4px; color: var(--muted); font-weight: 650; }
     .toc a { color: var(--muted); }
-    .endpoint { margin: 20px 0 28px; padding: 18px; border: 1px solid var(--border); border-radius: 14px; }
+    .endpoint { margin: 10px 0; padding: 18px 18px 20px; border: 1px solid var(--border); border-radius: 0; background: var(--bg); }
     .endpoint-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .method { min-width: 62px; padding: 3px 8px; border-radius: 6px; color: white; text-align: center; font-size: 12px; font-weight: 800; }
+    .method { min-width: 62px; padding: 3px 8px; border-radius: 2px; color: white; text-align: center; font-size: 12px; font-weight: 800; }
     .method.get { background: var(--get); } .method.post { background: var(--post); } .method.put { background: var(--put); }
     .method.patch { background: var(--patch); } .method.delete { background: var(--delete); }
     .endpoint-path { overflow-wrap: anywhere; font-family: "SFMono-Regular", Consolas, monospace; font-weight: 650; }
     .endpoint-summary { margin: 9px 0 0; color: var(--muted); }
+    .use-case { margin: 12px 0 0; padding: 10px 12px; border-left: 2px solid var(--border); background: var(--surface); color: var(--muted); font-size: 14px; }
+    .use-case strong { color: var(--text); }
     .meta-line { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-    .badge { padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 12px; }
-    .code-example { margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .badge { padding: 3px 7px; border: 1px solid var(--border); border-radius: 2px; color: var(--muted); font-size: 12px; }
+    .code-example { margin-top: 16px; border: 1px solid var(--border); border-radius: 0; overflow: hidden; }
     .code-tabs { display: flex; gap: 2px; overflow-x: auto; padding: 8px; background: var(--surface); }
-    .code-tabs button { appearance: none; border: 0; border-radius: 7px; padding: 6px 9px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
+    .code-tabs button { appearance: none; border: 0; border-radius: 2px; padding: 6px 9px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 12px; }
     .code-tabs button[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
     .code-example pre { display: none; margin: 0; border-radius: 0; }
     .code-example pre[data-active="true"] { display: block; }
-    .reference-filter { width: 100%; margin: 10px 0 22px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); font: inherit; }
+    .reference-filter { width: 100%; margin: 10px 0 22px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 0; background: var(--bg); color: var(--text); font: inherit; }
     .footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
     @media (max-width: 1100px) {
       .layout { grid-template-columns: 210px minmax(0, 1fr); }
@@ -282,9 +285,9 @@ function setHtmlHeaders(res: any, nonceAwareHtml: string): void {
 
 function renderHome(forumVersion: string): string {
   const body = `
-    <div class="eyebrow">Developer Documentation</div>
+    <div class="eyebrow">开发者文档</div>
     <h1>MDTBBS API</h1>
-    <p class="lead">面向第三方工具、Mindustry Mod、桌面与移动客户端以及服务端集成的公开接口文档。这里仅展示承诺稳定的公开契约，不包含论坛内部、管理端或 Legacy 路由。</p>
+    <p class="lead">给第三方工具、Mindustry Mod、启动器、桌面与移动客户端以及服务端集成使用的公开接口。文档会说明每组接口能解决什么问题，并给出可以直接改进项目里的调用示例。</p>
     <div class="stat-grid">
       <div class="stat"><span>论坛版本</span><strong>${escapeHtml(forumVersion)}</strong></div>
       <div class="stat"><span>API 版本</span><strong>v${escapeHtml(API_V1_VERSION)}</strong></div>
@@ -293,11 +296,12 @@ function renderHome(forumVersion: string): string {
     ${callout('info', '从 Capability 开始', `客户端启动后建议先请求 ${inlineCode('GET /api/v1/capabilities')}，再根据服务端声明启用对应功能。`)}
     <div class="cards">
       <a class="card" href="/api/v1/docs/quick-start"><strong>快速开始</strong><span>请求、响应、版本与错误处理。</span></a>
-      <a class="card" href="/api/v1/docs/game-content"><strong>Game Content</strong><span>蓝图、地图、搜索、预览、下载与提交。</span></a>
-      <a class="card" href="/api/v1/docs/resources"><strong>Resource V1</strong><span>资源、版本、Manifest 与文件。</span></a>
-      <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>Forum Mobile Bearer、MindAuth 与 External API Key。</span></a>
-      <a class="card" href="/api/v1/docs/external"><strong>External API</strong><span>机器人、同步服务和后台自动化。</span></a>
-      <a class="card" href="/api/v1/reference"><strong>API Reference</strong><span>由当前 OpenAPI 契约生成的只读接口参考。</span></a>
+      <a class="card" href="/api/v1/docs/game-content"><strong>游戏内容 API</strong><span>做游戏内蓝图库、地图浏览器、搜索、预览与上传。</span></a>
+      <a class="card" href="/api/v1/docs/resources"><strong>资源中心 API</strong><span>做启动器资源页、版本同步、安装与下载。</span></a>
+      <a class="card" href="/api/v1/docs/oauth"><strong>第三方客户端授权</strong><span>让桌面端、Android、Mod 和启动器安全登录论坛账号。</span></a>
+      <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>新客户端、旧版兼容和服务端凭证怎么选。</span></a>
+      <a class="card" href="/api/v1/docs/external"><strong>外部服务 API</strong><span>给机器人、同步服务和后台自动化使用。</span></a>
+      <a class="card" href="/api/v1/reference"><strong>API 参考</strong><span>查参数、权限、响应、用途和多语言调用示例。</span></a>
     </div>
     ${section('最小示例', `${codeBlock(`curl "https://mdtbbs.cn/api/v1/game-content/maps?limit=10"`, 'bash')}<p>公开读取接口可以匿名调用。需要身份的接口会在对应文档中明确标记认证方式。</p>`)}
     ${section('公开边界', '<p><strong>First-party V1</strong> 使用 <code>/api/v1/*</code>；<strong>External API</strong> 使用 <code>/api/external/v1/*</code>。未在本开发者入口列出的 <code>/api/*</code>、管理端和服务间路由不属于第三方稳定契约。</p>')}
@@ -347,19 +351,91 @@ function guidePages(): Record<string, DocPage> {
     ${section('默认限流', `<p>无更严格声明时，默认读请求约 <code>1200 / 60s</code>，写请求约 <code>180 / 60s</code>。达到限制返回 HTTP 429，V1 错误码为 <code>RATE_LIMITED</code>。</p>`, 'rate-limit')}
   `;
 
+  const oauth = `
+    <div class="eyebrow">MindAuth</div><h1>OAuth / Public Client</h1>
+    <p class="lead">新做的桌面端、Android、Mindustry Mod、启动器和其他第三方客户端都走这一套。应用只拿公开的 <code>client_id</code>，不发 <code>client_secret</code>。</p>
+    ${section('先去哪里申请', `<p>登录 <a href="https://auth.mdtbbs.cn/developer">MindAuth 开发者中心</a> 创建应用，填写名称、说明、主页、Redirect URI 和需要的 scopes。应用通过审核后会得到 <code>client_id</code>。</p><p>注册账号仍在 <a href="https://auth.mdtbbs.cn/register">MindAuth</a> 完成。密码、验证码和风控都留在账号系统里，第三方客户端不应该自己接管这些东西。</p>`, 'apply')}
+    ${section('接入流程', '<ol><li>生成随机 <code>state</code> 和 PKCE <code>code_verifier</code>。</li><li>计算 <code>code_challenge = BASE64URL(SHA256(code_verifier))</code>。</li><li>用系统浏览器打开 MindAuth <code>/api/authorize</code>。</li><li>回调后先校验 <code>state</code>，再用授权码和原始 verifier 请求 <code>/api/token</code>。</li><li>拿到 access token 后，以 <code>Authorization: Bearer</code> 调用论坛 <code>/api/v1/*</code>。</li></ol>', 'flow')}
+    ${section('Redirect URI', `${table(['客户端', '写法', '要求'], [
+      ['Web 服务', inlineCode('https://example.com/oauth/callback'), 'HTTPS，必须与登记值完全匹配'],
+      ['原生应用', inlineCode('com.example.app:/oauth2redirect'), '使用应用自己的 scheme，不能用 javascript / file / intent'],
+      ['桌面 loopback', inlineCode('http://127.0.0.1:0/oauth/callback'), '只接受 127.0.0.1 或 [::1]；运行时端口可随机'],
+    ])}<p>不要登记 <code>localhost</code>、局域网地址、通配符回调，也不要在 callback 里放 fragment 或 userinfo。</p>`, 'redirect')}
+    ${section('发起授权', `${codeBlock(`https://auth.mdtbbs.cn/api/authorize
+  ?response_type=code
+  &client_id=YOUR_CLIENT_ID
+  &redirect_uri=REGISTERED_CALLBACK
+  &scope=openid%20profile%20forum.read
+  &state=RANDOM_STATE
+  &code_challenge=BASE64URL_SHA256
+  &code_challenge_method=S256`, 'text')}<p>每次登录都重新生成 state 和 verifier。不要复用上一次登录留下来的 PKCE 值。</p>`, 'authorize')}
+    ${section('换取 Token', `${codeBlock(`POST https://auth.mdtbbs.cn/api/token
+Content-Type: application/json
+
+{
+  "grant_type": "authorization_code",
+  "client_id": "YOUR_CLIENT_ID",
+  "code": "AUTHORIZATION_CODE",
+  "redirect_uri": "REGISTERED_CALLBACK",
+  "code_verifier": "ORIGINAL_VERIFIER"
+}`, 'http')}<p>Public Client 不发送 <code>client_secret</code>。授权码五分钟有效，只能使用一次，并且绑定 client、Redirect URI 和 PKCE challenge。</p>`, 'token')}
+    ${section('刷新与撤销', `${codeBlock(`POST https://auth.mdtbbs.cn/api/token
+Content-Type: application/json
+
+{
+  "grant_type": "refresh_token",
+  "client_id": "YOUR_CLIENT_ID",
+  "refresh_token": "CURRENT_REFRESH_TOKEN"
+}`, 'http')}${codeBlock(`POST https://auth.mdtbbs.cn/api/revoke
+Content-Type: application/json
+
+{
+  "client_id": "YOUR_CLIENT_ID",
+  "token": "TOKEN_TO_REVOKE"
+}`, 'http')}<p>Access token 当前有效期约一小时。Refresh token 会轮换，刷新成功后要立刻保存新的 refresh token，旧值不要继续使用。</p>`, 'refresh')}
+    ${section('Scopes', table(['Scope', '用来做什么'], [
+      [inlineCode('openid'), '稳定账号标识'],
+      [inlineCode('profile'), '基本资料'],
+      [inlineCode('email'), '邮箱和验证状态'],
+      [inlineCode('forum.read'), '读取论坛、帖子、回复和公开用户资料'],
+      [inlineCode('forum.write'), '发帖、回复、编辑以及相关写操作'],
+      [inlineCode('resource.read'), '读取资源'],
+      [inlineCode('resource.download'), '下载资源文件'],
+      [inlineCode('resource.upload'), '创建上传草稿并提交资源'],
+      [inlineCode('notification.read'), '读取、处理通知'],
+      [inlineCode('message.read'), '读取私信'],
+      [inlineCode('message.write'), '发送私信'],
+    ]), 'scopes')}
+    ${section('Scope 过了，还要看论坛权限', '<p>OAuth scope 只说明“这个客户端被允许请求什么”。真正执行操作时，论坛还会检查用户封禁、手机号验证、社区条款、版块权限、审核策略、站点开关和资源策略。</p><p>客户端启动后先请求 <code>GET /api/v1/capabilities</code>。登录后还可以读 <code>GET /api/v1/me</code> 里的 <code>permissions</code>，用来决定按钮要不要展示。接口本身仍会再次校验，不能把 permissions 当授权凭证。</p>', 'policy')}
+    ${section('常见失败', table(['错误', '通常是什么问题'], [
+      [inlineCode('invalid_client'), 'client_id 不存在、未批准、已停用，或 Confidential Client 缺少正确认证'],
+      [inlineCode('invalid_scope'), '申请了应用没有获批的 scope'],
+      [inlineCode('invalid_grant'), '授权码过期/已使用、redirect 不一致、PKCE verifier 错误，或 refresh token 已失效'],
+      [inlineCode('access_denied'), '用户在授权页拒绝了授权'],
+      [inlineCode('PHONE_VERIFICATION_REQUIRED'), 'OAuth 已成功，但当前论坛写操作要求先验证手机号'],
+      [inlineCode('TERMS_ACCEPTANCE_REQUIRED'), '需要先接受当前社区条款'],
+      [inlineCode('FEATURE_DISABLED'), '站点暂时关闭了对应能力'],
+      [inlineCode('THIRD_PARTY_ACCESS_DISABLED'), '例如第三方私信能力还没有开放'],
+    ]), 'errors')}
+    ${callout('warning', '客户端里不要塞服务器密钥', 'Public Client 里只应该出现 client_id。MindAuth 密码、External API Key、Forum 服务密钥和 client secret 都不应该进入 APK、Mod JAR、桌面发行包或网页 bundle。')}
+    ${section('自动发现', '<p>协议端点和当前 scopes 可以从 <a href="https://auth.mdtbbs.cn/.well-known/openid-configuration"><code>/.well-known/openid-configuration</code></a> 读取。MindAuth 当前提供 UserInfo，但 Public Client 不需要也不能调用服务端用的 token introspection。</p>', 'discovery')}
+  `;
+
   const authentication = `
     <div class="eyebrow">Security</div><h1>身份认证</h1>
-    <p class="lead">MDTBBS 存在多套凭证，它们面向不同客户端，不能相互替代。</p>
-    ${table(['场景', '凭证', '典型用途'], [
-      ['公开读取', '无需凭证', '蓝图、地图、公开资源、搜索'],
-      ['原生第一方客户端', 'Forum Mobile Bearer', '用户资料、帖子、书签等普通 V1'],
-      ['Game Content 身份操作', 'MindAuth access token', '上传、点赞、收藏、我的资源'],
-      ['机器人 / 同步服务', 'External API Key', '服务端集成'],
+    <p class="lead">新客户端优先使用 MindAuth Public Client OAuth。下面几套凭证还会保留一段时间，主要服务旧客户端、浏览器会话和服务端集成。</p>
+    ${table(['场景', '凭证', '说明'], [
+      ['公开读取', '无需凭证', '蓝图、地图、公开资源等允许匿名读取的接口'],
+      ['新桌面端 / Android / Mod / 启动器', 'MindAuth Public Client Bearer', 'Authorization Code + PKCE，推荐路径'],
+      ['旧版移动客户端', 'Forum Mobile Bearer', '兼容现有已发布客户端'],
+      ['浏览器论坛', 'forum_session Cookie', 'HttpOnly，同源 Web 使用'],
+      ['机器人 / 同步服务', 'External API Key', '只放服务端'],
     ])}
-    ${section('Forum Mobile Bearer', `<p>原生客户端使用 MindAuth native authorization code + PKCE，通过 <code>POST /api/v1/auth/mobile/exchange</code> 换取论坛自己的 access/refresh token。当前 access token 约 30 分钟，refresh token 约 90 天并采用轮换机制。</p>`, 'mobile')}
-    ${section('Game Content 的 MindAuth Bearer', `<p><code>/api/v1/game-content/*</code> 的身份操作使用 <code>Authorization: Bearer &lt;mindauth-access-token&gt;</code>。论坛通过 MindAuth userinfo 验证，不在本地解码该 token。</p>`, 'mindauth')}
-    ${section('External API Key', `${codeBlock('Authorization: Bearer mfk_live_xxx.yyy\n# 或\nX-API-Key: mfk_live_xxx.yyy', 'http')}<p>Key 带有 scopes、启停、过期、IP 白名单、限流和审计属性。</p>`, 'external-key')}
-    ${callout('warning', '不要把服务器密钥打进客户端', 'External API Key 不应出现在浏览器 JavaScript、Android APK、Mindustry Mod JAR、桌面客户端发行包或公开仓库中。')}
+    ${section('新客户端：MindAuth Public Client', '<p>先在 <a href="/api/v1/docs/oauth">OAuth / Public Client</a> 页面完成应用申请和 PKCE 登录。成功后，把 MindAuth access token 放到 <code>Authorization: Bearer &lt;token&gt;</code>。Forum 会在服务端校验 token 和 scopes，客户端自己不需要解析 opaque token。</p>', 'public-client')}
+    ${section('Forum Mobile Bearer（兼容）', `<p>现有 Android / 原生客户端仍可使用 MindAuth native authorization code + PKCE，通过 <code>POST /api/v1/auth/mobile/exchange</code> 换 Forum 自己的 access/refresh token。当前 access token 约 30 分钟，refresh token 约 90 天并轮换。</p><p>新项目没有兼容包袱时，不建议再从这条路径起步。</p>`, 'mobile')}
+    ${section('浏览器 forum_session', '<p>论坛 Web 登录后使用 HttpOnly <code>forum_session</code> Cookie。它适合同源网页和 SSR，客户端不要尝试读取、复制或把这个 Cookie 搬到别的应用里。</p>', 'session')}
+    ${section('External API Key', `${codeBlock('Authorization: Bearer mfk_live_xxx.yyy\n# 或\nX-API-Key: mfk_live_xxx.yyy', 'http')}<p>Key 带有 scopes、启停、过期、IP 白名单、限流、默认 actor 和审计属性，只适合机器人、同步服务和后台自动化。</p>`, 'external-key')}
+    ${callout('warning', '终端客户端只带自己的公开凭证', 'External API Key、Forum 内部服务密钥和 Confidential Client secret 都不应该出现在浏览器 JavaScript、APK、Mod JAR、桌面客户端发行包或公开仓库中。')}
   `;
 
   const firstParty = `
@@ -380,8 +456,10 @@ function guidePages(): Record<string, DocPage> {
   `;
 
   const gameContent = `
-    <div class="eyebrow">Mindustry</div><h1>Game Content API</h1>
-    <p class="lead"><code>/api/v1/game-content</code> 是蓝图和地图的一等客户端 API，适合游戏内 Mod、桌面工具和移动端。</p>
+    <div class="eyebrow">Mindustry</div><h1>游戏内容 API</h1>
+    <p class="lead"><code>/api/v1/game-content</code> 提供蓝图和地图的浏览、搜索、预览、下载与上传能力，适合游戏内 Mod、启动器、桌面工具和移动端。</p>
+    ${section('能拿来做什么', '<ul><li><strong>游戏内资源浏览器：</strong>直接在 Mindustry Mod 里展示地图和蓝图。</li><li><strong>启动器内容页：</strong>搜索、筛选并预览社区地图和蓝图。</li><li><strong>地图管理器：</strong>读取详情后下载地图原文件。</li><li><strong>第三方投稿工具：</strong>登录后上传地图并完成提交。</li></ul>', 'use-cases')}
+    ${section('示例：做一个地图列表', `<p>这个请求适合“最新地图”、地图选择器和启动器内容页。拿到列表后，再用详情或下载接口继续处理。</p>${codeTabs(makeCodeSamples('GET', '/v1/game-content/maps?limit=20', {}))}`, 'example')}
     ${section('浏览与详情', table(['Method', 'Path', '说明'], [
       ['GET', inlineCode('/api/v1/game-content/meta'), '能力与上传限制'],
       ['GET', inlineCode('/api/v1/game-content/blueprints'), '蓝图列表'],
@@ -399,8 +477,10 @@ function guidePages(): Record<string, DocPage> {
   `;
 
   const resources = `
-    <div class="eyebrow">Resources</div><h1>Resource API V1</h1>
-    <p class="lead">Resource V1 是论坛资源中心、未来启动器和游戏内客户端共用的稳定读取模型。</p>
+    <div class="eyebrow">Resources</div><h1>资源中心 API</h1>
+    <p class="lead">资源中心 API 是论坛资源页、启动器和其他客户端共用的稳定资源模型，覆盖资源详情、版本、Manifest、预览和文件下载。</p>
+    ${section('能拿来做什么', '<ul><li><strong>第三方启动器：</strong>展示 Mod、工具等资源并读取版本信息。</li><li><strong>自动更新：</strong>通过 Manifest、版本和文件 Hash 判断是否需要下载。</li><li><strong>资源管理器：</strong>展示详情、预览以及可安装文件。</li><li><strong>投稿客户端：</strong>通过 Draft 流程创建草稿、上传内容并提交。</li></ul>', 'use-cases')}
+    ${section('示例：读取资源列表', `<p>适合启动器首页、资源浏览页和搜索结果页。列表中的稳定 <code>public_id</code> 可以继续用于详情、Manifest 和下载流程。</p>${codeTabs(makeCodeSamples('GET', '/v1/resources?limit=20', {}))}`, 'example')}
     ${section('稳定身份', '<p><code>public_id</code> 是资源、版本与文件的外部稳定身份。数字数据库 ID 属于实现细节，不应由第三方客户端持久化。</p>', 'identity')}
     ${section('公开读取', table(['Method', 'Path', '说明'], [
       ['GET', inlineCode('/api/v1/resources'), '公开资源列表'],
@@ -468,11 +548,12 @@ function guidePages(): Record<string, DocPage> {
   return {
     'quick-start': { title: '快速开始', description: 'MDTBBS API 快速开始', body: quickStart },
     conventions: { title: '通用约定', description: 'MDTBBS API 响应、兼容与限流约定', body: conventions },
+    oauth: { title: '第三方客户端授权', description: 'MindAuth Public Client OAuth、PKCE 与 scopes', body: oauth },
     authentication: { title: '身份认证', description: 'MDTBBS API 认证方式', body: authentication },
-    'first-party': { title: 'First-party V1', description: 'MDTBBS First-party API V1', body: firstParty },
-    'game-content': { title: 'Game Content', description: 'MDTBBS Game Content API', body: gameContent },
-    resources: { title: 'Resource V1', description: 'MDTBBS Resource API V1', body: resources },
-    external: { title: 'External API', description: 'MDTBBS External API', body: external },
+    'first-party': { title: '论坛 API', description: 'MDTBBS First-party API V1', body: firstParty },
+    'game-content': { title: '游戏内容 API', description: 'MDTBBS 游戏内容 API', body: gameContent },
+    resources: { title: '资源中心 API', description: 'MDTBBS 资源中心 API', body: resources },
+    external: { title: '外部服务 API', description: 'MDTBBS External API', body: external },
   };
 }
 
@@ -548,6 +629,77 @@ function renderParameters(operation: any): string {
   return `<h3>参数</h3>${table(['名称', '位置', '必填', '说明'], rows)}`;
 }
 
+function resolveSchema(document: OpenAPIObject, schema: any): any {
+  if (!schema?.$ref || typeof schema.$ref !== 'string') return schema;
+  const prefix = '#/components/schemas/';
+  if (!schema.$ref.startsWith(prefix)) return schema;
+  const name = schema.$ref.slice(prefix.length);
+  return (document.components?.schemas as Record<string, any> | undefined)?.[name] || schema;
+}
+
+function flattenObjectSchema(document: OpenAPIObject, schema: any): any {
+  const resolved = resolveSchema(document, schema);
+  if (!resolved?.allOf) return resolved;
+  const parts = resolved.allOf.map((part: any) => flattenObjectSchema(document, part)).filter(Boolean);
+  return {
+    ...resolved,
+    type: 'object',
+    properties: Object.assign({}, ...parts.map((part: any) => part.properties || {}), resolved.properties || {}),
+    required: [...new Set(parts.flatMap((part: any) => part.required || []).concat(resolved.required || []))],
+  };
+}
+
+function schemaType(document: OpenAPIObject, schema: any): string {
+  if (!schema) return 'unknown';
+  if (schema.$ref) return schema.$ref.split('/').pop() || 'object';
+  const resolved = resolveSchema(document, schema);
+  if (resolved?.type === 'array') return `${schemaType(document, resolved.items)}[]`;
+  const type = resolved?.type || (resolved?.properties ? 'object' : 'unknown');
+  return resolved?.format ? `${type} (${resolved.format})` : type;
+}
+
+function schemaNotes(document: OpenAPIObject, schema: any): string {
+  const resolved = resolveSchema(document, schema) || {};
+  const notes: string[] = [];
+  if (Array.isArray(resolved.enum)) notes.push(`可选：${resolved.enum.map((item: unknown) => String(item)).join(' / ')}`);
+  if (resolved.minLength != null) notes.push(`最短 ${resolved.minLength}`);
+  if (resolved.maxLength != null) notes.push(`最长 ${resolved.maxLength}`);
+  if (resolved.minimum != null) notes.push(`最小 ${resolved.minimum}`);
+  if (resolved.maximum != null) notes.push(`最大 ${resolved.maximum}`);
+  if (resolved.default != null) notes.push(`默认 ${String(resolved.default)}`);
+  if (resolved.description) notes.push(String(resolved.description));
+  return notes.join('；');
+}
+
+function renderRequestBody(document: OpenAPIObject, operation: any): string {
+  const requestBody = operation?.requestBody;
+  if (!requestBody) return '';
+
+  const content = requestBody.content || {};
+  const contentType = ['application/json', 'multipart/form-data', 'application/x-www-form-urlencoded']
+    .find((type) => content[type]) || Object.keys(content)[0];
+  if (!contentType) return '<h3>请求体</h3><p>该接口需要请求体，具体格式见 OpenAPI JSON。</p>';
+
+  const schema = flattenObjectSchema(document, content[contentType]?.schema);
+  if (!schema) return `<h3>请求体</h3><p>Content-Type：${inlineCode(contentType)}</p>`;
+
+  const properties = schema.properties || {};
+  const propertyEntries = Object.entries(properties);
+  if (!propertyEntries.length) {
+    return `<h3>请求体</h3><p>Content-Type：${inlineCode(contentType)}；类型：${inlineCode(schemaType(document, schema))}</p>`;
+  }
+
+  const required = new Set<string>(schema.required || []);
+  const rows = propertyEntries.map(([name, property]: [string, any]) => [
+    inlineCode(name),
+    inlineCode(schemaType(document, property)),
+    required.has(name) ? '是' : '否',
+    escapeHtml(schemaNotes(document, property)),
+  ]);
+
+  return `<h3>请求体</h3><p>Content-Type：${inlineCode(contentType)}</p>${table(['字段', '类型', '必填', '说明 / 限制'], rows)}`;
+}
+
 function renderResponses(operation: any): string {
   const responses = operation?.responses || {};
   const rows = Object.entries(responses).map(([status, response]: [string, any]) => [
@@ -562,6 +714,48 @@ function operationSearchText(method: string, path: string, operation: any): stri
     .filter(Boolean).join(' ').toLowerCase();
 }
 
+function referenceOAuthScope(method: string, path: string): string | null {
+  const upper = method.toUpperCase();
+  if (path.startsWith('/v1/messages')) return upper === 'POST' ? 'message.write' : 'message.read';
+  if (path.startsWith('/v1/notifications')) return 'notification.read';
+  if (path.startsWith('/v1/resources/drafts')) return 'resource.upload';
+  if (path.startsWith('/v1/resources')) {
+    if (path.includes('/download')) return 'resource.download';
+    return upper === 'GET' ? 'resource.read' : 'resource.upload';
+  }
+  if (path.startsWith('/v1/threads')) return upper === 'GET' ? 'forum.read' : 'forum.write';
+  if (path.startsWith('/v1/search')) return 'forum.read';
+  if (path === '/v1/me' && upper === 'GET') return 'profile';
+  if (path.startsWith('/v1/me/') && upper !== 'GET') return 'forum.write';
+  if (path.startsWith('/v1/uploads/')) return 'forum.write';
+  return null;
+}
+
+function endpointUseCase(method: string, path: string, operation: any): string {
+  const upper = method.toUpperCase();
+  const summary = String(operation?.summary || operation?.description || '').toLowerCase();
+
+  if (path === '/v1/capabilities') return '客户端启动时先读这个接口，根据服务端能力决定哪些功能应该显示或关闭。';
+  if (path.includes('/game-content/blueprints') && upper === 'GET') return '用于游戏内蓝图库、启动器蓝图浏览、蓝图详情或复制流程。';
+  if (path.includes('/game-content/maps') && upper === 'GET') return '用于地图浏览器、地图选择器、启动器内容页以及地图下载前的详情读取。';
+  if (path === '/v1/game-content/search') return '用于把地图和蓝图放进同一个搜索框，适合游戏内或第三方客户端的统一搜索。';
+  if (path.startsWith('/v1/game-content') && ['POST', 'PUT', 'PATCH'].includes(upper)) return '用于登录后的地图或蓝图投稿、更新以及相关写操作。';
+  if (path.endsWith('/manifest')) return '用于启动器或资源管理器判断版本、依赖、文件 Hash 和可安装状态。';
+  if (path.includes('/resources/drafts')) return upper === 'GET' ? '用于投稿客户端恢复和查看尚未提交的资源草稿。' : '用于第三方投稿工具创建、编辑或提交资源草稿。';
+  if (path.startsWith('/v1/resources') && upper === 'GET') return '用于资源中心、启动器和第三方资源浏览器展示资源、版本、预览与文件信息。';
+  if (path.startsWith('/v1/resources') && upper !== 'GET') return '用于登录后的资源投稿、更新或其他资源写操作。';
+  if (path.startsWith('/v1/search')) return '用于论坛或第三方客户端里的站内搜索，可以做全局搜索框和搜索结果页。';
+  if (path.startsWith('/v1/notifications')) return '用于客户端通知中心、未读角标以及已读状态同步。';
+  if (path.startsWith('/v1/uploads/images')) return '用于编辑器、发帖或资源投稿时上传图片。';
+  if (path.startsWith('/v1/categories')) return '用于构建论坛分类导航、筛选器或发帖时的分类选择。';
+  if (path.includes('/me')) return '用于登录后读取当前账号信息、权限或与当前用户有关的状态。';
+  if (summary.includes('download') || path.includes('/download')) return '用于客户端在用户触发下载后获取资源文件或下载地址。';
+  if (upper === 'GET') return '用于读取该模块的数据，可作为列表、详情页或客户端状态展示的数据源。';
+  if (upper === 'POST') return '用于创建或触发该操作，通常放在用户明确提交、发布或执行动作之后。';
+  if (upper === 'PATCH' || upper === 'PUT') return '用于更新已有数据或状态，客户端应只在用户有对应权限时展示操作入口。';
+  if (upper === 'DELETE') return '用于删除或撤销已有内容，建议在客户端执行前做明确确认。';
+  return '用于对应模块的客户端集成。';
+}
 function renderReference(document: OpenAPIObject, forumVersion: string): string {
   const endpoints: string[] = [];
   for (const [path, pathItem] of Object.entries(document.paths || {})) {
@@ -570,33 +764,36 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
       if (!operation) continue;
       const samples = makeCodeSamples(method, path, operation);
       const securityBadge = hasSecurity(operation) ? '<span class="badge">Bearer 认证</span>' : '';
+      const oauthScope = referenceOAuthScope(method, path);
+      const scopeBadge = oauthScope ? `<span class="badge">OAuth scope: ${escapeHtml(oauthScope)}</span>` : '';
       endpoints.push(`
-        <article class="endpoint" data-endpoint-search="${escapeHtml(operationSearchText(method, path, operation))}">
+        <article class="endpoint" data-endpoint-search="${escapeHtml(operationSearchText(method, path, operation) + ' ' + (oauthScope || ''))}">
           <div class="endpoint-head">
             <span class="method ${method}">${method.toUpperCase()}</span>
             <span class="endpoint-path">/api${escapeHtml(path)}</span>
           </div>
           <p class="endpoint-summary">${escapeHtml(operation.summary || operation.description || '公开 V1 接口')}</p>
-          <div class="meta-line">${securityBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
+          <div class="use-case"><strong>能做什么：</strong>${escapeHtml(endpointUseCase(method, path, operation))}</div>
+          <div class="meta-line">${securityBadge}${scopeBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
           ${renderParameters(operation)}
-          ${operation.requestBody ? '<h3>请求体</h3><p>该接口包含请求体。完整 Schema 请以 OpenAPI JSON 为准。</p>' : ''}
+          ${renderRequestBody(document, operation)}
           ${renderResponses(operation)}
-          <h3>代码示例</h3>
+          <h3>调用示例</h3>
           ${codeTabs(samples)}
         </article>`);
     }
   }
 
   const body = `
-    <div class="eyebrow">OpenAPI</div><h1>API Reference</h1>
-    <p class="lead">本页从运行时 First-party V1 OpenAPI 契约生成，仅用于查阅，不提供在线 Try it。路径统一以 <code>https://mdtbbs.cn/api</code> 为服务器根地址。</p>
-    <input class="reference-filter" data-reference-filter type="search" placeholder="搜索路径、方法或说明…" aria-label="搜索 API">
+    <div class="eyebrow">OpenAPI</div><h1>API 参考</h1>
+    <p class="lead">本页从运行时 V1 OpenAPI 契约生成。每个接口会同时说明用途、认证要求、参数、响应和多语言调用方式，方便直接判断它适不适合你的项目。</p>
+    <input class="reference-filter" data-reference-filter type="search" placeholder="搜索接口路径、用途、方法或说明…" aria-label="搜索 API">
     ${endpoints.join('')}
     ${callout('info', '需要完整 Schema？', '机器可读规范位于 <a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。')}
   `;
 
   return commonShell({
-    title: 'API Reference',
+    title: 'API 参考',
     description: 'MDTBBS First-party V1 API Reference',
     body,
     forumVersion,
