@@ -13,6 +13,18 @@ import { resourceKindLabel } from '@/lib/display-labels';
 import { buildHybridParam, extractIdFromHybridParam } from '@/lib/seo/hybrid-param';
 
 const fetchResource = cache(async (id: number): Promise<Resource | null> => {
+  // Public resources should render without depending on the current user's
+  // MindAuth/session state. This keeps a stale or temporarily unavailable auth
+  // session from taking down a public resource detail page.
+  const publicResource = await fetchApiData<Resource | null>(`/api/resources/${id}`, {
+    init: { cache: 'no-store' },
+    fallback: null,
+    throwOnError: false,
+  });
+  if (publicResource) return publicResource;
+
+  // Owners and staff can still open non-public submissions through the
+  // authenticated fallback.
   return fetchApiData<Resource | null>(`/api/resources/${id}`, {
     init: { cache: 'no-store' },
     fallback: null,
