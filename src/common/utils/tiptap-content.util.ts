@@ -52,7 +52,7 @@ function normalizeAttrs(type: string, attrs: unknown): Record<string, unknown> |
   switch (type) {
     case 'heading': {
       const level = source.level ?? 1;
-      if (![1, 2, 3].includes(Number(level))) throw invalidJson();
+      if (![1, 2, 3, 4, 5, 6].includes(Number(level))) throw invalidJson();
       result.level = Number(level);
       break;
     }
@@ -236,7 +236,7 @@ function blockTokens(tokens: any[] = []): Record<string, unknown>[] {
         output.push({ type: 'paragraph', content: inlineTokens(token.tokens || [{ type: 'text', text: token.text || '' }]) });
         break;
       case 'heading':
-        output.push({ type: 'heading', attrs: { level: Math.min(3, Math.max(1, token.depth || 1)) }, content: inlineTokens(token.tokens || []) });
+        output.push({ type: 'heading', attrs: { level: Math.min(6, Math.max(1, token.depth || 1)) }, content: inlineTokens(token.tokens || []) });
         break;
       case 'blockquote': output.push({ type: 'blockquote', content: blockTokens(token.tokens || []) }); break;
       case 'list':
