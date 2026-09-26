@@ -371,14 +371,16 @@ export class ResourcesController {
   @Get(':id')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
-  async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
+  async getById(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res?: Response) {
     const canonicalId = await this.resourcesService.findMergedResourceTarget(id);
     if (canonicalId) {
+      if (!res) return { url: `/api/resources/${canonicalId}`, statusCode: 301 };
       res.redirect(301, `/api/resources/${canonicalId}`);
       return;
     }
 
     const resource = await this.resourcesService.getByIdWithVersions(id, req?.user);
+    if (!res) return resource;
     res.json({ success: true, data: resource });
   }
 
