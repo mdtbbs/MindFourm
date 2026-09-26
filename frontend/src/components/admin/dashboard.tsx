@@ -13,6 +13,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { adminApi, adminNotificationApi } from '@/lib/api/client';
+import { useAuth } from '@/lib/auth/context';
 import type { AdminLog, AdminStats } from '@/types';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import Alert from '@/components/ui/alert';
@@ -35,6 +36,8 @@ function formatAction(log: AdminLog): string {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [moderationPending, setModerationPending] = useState(0);
   const [notificationUnread, setNotificationUnread] = useState(0);
@@ -258,11 +261,13 @@ export default function Dashboard() {
               <dd className="font-mono text-xs text-surface-800">{stats?.zero_result_searches_7d ?? '—'}</dd>
             </div>
           </dl>
-          <div className="border-t border-surface-200 p-3">
-            <Link href="/admin/system/performance" className="text-xs font-medium text-primary-600 hover:underline">
-              查看完整性能数据 →
-            </Link>
-          </div>
+          {isAdmin ? (
+            <div className="border-t border-surface-200 p-3">
+              <Link href="/admin/system/performance" className="text-xs font-medium text-primary-600 hover:underline">
+                查看完整性能数据 →
+              </Link>
+            </div>
+          ) : null}
         </section>
       </div>
 
@@ -312,11 +317,13 @@ export default function Dashboard() {
             ))}
             {logs.length === 0 ? <div className="px-4 py-8 text-center text-sm text-surface-400">暂无操作记录</div> : null}
           </div>
-          <div className="border-t border-surface-200 p-3">
-            <Link href="/admin/logs" className="text-xs font-medium text-primary-600 hover:underline">
-              查看全部日志 →
-            </Link>
-          </div>
+          {isAdmin ? (
+            <div className="border-t border-surface-200 p-3">
+              <Link href="/admin/logs" className="text-xs font-medium text-primary-600 hover:underline">
+                查看全部日志 →
+              </Link>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>
