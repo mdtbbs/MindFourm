@@ -7,6 +7,9 @@ import { getHomeData, type HomeData, type HomeSection } from '@/lib/api/v1/home'
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
+import { siteProfile } from '@/config/site-profile';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +21,14 @@ const UNAVAILABLE_HOME: HomeData = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await fetchPublicSettings();
+  const [settings, locale] = await Promise.all([fetchPublicSettings(), getRequestLocale()]);
+  if (siteProfile.profile === 'mindustry-club') {
+    return generatePageMetadata({
+      title: siteProfile.branding.siteName,
+      description: translate(locale, 'home.intro'),
+      brandInfo: resolveBrand(settings), openGraphImage: settings.seo_og_image,
+    });
+  }
   return generatePageMetadata({
     title: '像素工厂中文论坛（Mindustry）- Mod、地图、蓝图与联机社区',
     description: 'MDTBBS 是面向 Mindustry（像素工厂）玩家的中文社区，提供 Mod、地图、蓝图、存档、游戏版本、联机交流、教程与资源分享。',
@@ -43,7 +53,48 @@ export default async function HomePage() {
     getHomeData({ signal: AbortSignal.timeout(4500), init: { cache: 'no-store' } }).catch(() => UNAVAILABLE_HOME),
   ]);
   const brand = resolveBrand(settings);
+  const locale = await getRequestLocale();
   const staleSections = [home.discussions, home.resources, home.news, home.notices, home.development.issues, home.development.pull_requests].filter((section) => section.state === 'stale').length;
+
+  if (siteProfile.profile === 'mindustry-club') {
+    const t = (key: string) => translate(locale, key);
+    return <main className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
+      <section className="border-b border-[var(--border)] pb-6">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{brand.siteName}</p>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry Club</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{t('home.intro')}</p>
+        <form action="/search" className="relative mt-5 max-w-2xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label={t('common.search')} placeholder={t('home.searchPlaceholder')} className="h-11 w-full rounded border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
+        <nav aria-label={t('home.quickLinks')} className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+          {[
+            { href: '/resources?resource_kind=mod', label: t('home.mods') },
+            { href: '/resources?resource_kind=map', label: t('home.maps') },
+            { href: '/resources?resource_kind=schematic', label: t('home.schematics') },
+            { href: '/game-servers', label: t('home.gameServers') },
+          ].map((entry) => <Link key={entry.href} href={entry.href} className="text-[var(--primary)] hover:underline">{entry.label} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
+        </nav>
+      </section>
+
+      {staleSections > 0 && <p role="status" className="mt-4 text-xs text-[var(--text-muted)]">{t('home.stale')}</p>}
+      <div className="mt-7 grid gap-8 lg:grid-cols-[minmax(0,1.7fr)_minmax(18rem,1fr)]">
+        <section>
+          <SectionHeading title={t('home.latestResources')} href="/resources" />
+          {home.resources.state === 'unavailable'
+            ? <p className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">{t('home.unavailable')} <Link href="/resources" className="ml-2 text-[var(--primary)] hover:underline">{t('home.reload')}</Link></p>
+            : home.resources.items.length
+              ? <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">{home.resources.items.map((resource) => <CompactResourceCard key={resource.id} resource={resource} />)}</div>
+              : <p className="border-y border-[var(--border)] py-5 text-sm text-[var(--text-muted)]">{t('home.noResources')}</p>}
+        </section>
+        <section>
+          <SectionHeading title={t('home.latestDiscussions')} href="/threads" />
+          {home.discussions.state === 'unavailable'
+            ? <p className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">{t('home.unavailable')} <Link href="/threads" className="ml-2 text-[var(--primary)] hover:underline">{t('home.reload')}</Link></p>
+            : home.discussions.items.length
+              ? <ThreadList posts={home.discussions.items} />
+              : <p className="border-y border-[var(--border)] py-5 text-sm text-[var(--text-muted)]">{t('home.noDiscussions')}</p>}
+        </section>
+      </div>
+    </main>;
+  }
 
   return (
     <main className="content-width-feed mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">

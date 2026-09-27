@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsArray, IsIn, IsObject } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsArray, IsIn, IsObject, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { TiptapDocumentDto } from '@common/dto/tiptap-document.dto';
 
@@ -11,6 +11,12 @@ export class CreatePostDto {
   @IsOptional()
   @IsString()
   content?: string;
+
+  @ApiPropertyOptional({ description: 'User-selected language tag for this post; use unknown when unavailable.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  content_language?: string;
 
   @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Tiptap / ProseMirror JSON source. The server validates against its allowlisted schema.' })
   @IsOptional()

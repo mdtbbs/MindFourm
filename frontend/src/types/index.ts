@@ -9,6 +9,8 @@ export interface User {
   role: UserRole;
   avatar_url?: string | null;
   bio?: string | null;
+  email_verified?: boolean;
+  preferred_locale?: string | null;
   phone_verified?: boolean;
   phone_verified_at?: string | null;
   createdAt: string;

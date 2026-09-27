@@ -74,6 +74,9 @@ export class Resource {
   @Column({ type: 'text', nullable: true })
   content: string | null;
 
+  @Column({ type: 'varchar', length: 16, default: 'unknown' })
+  content_language: string;
+
   @Column({ type: 'text', nullable: true })
   content_html: string | null;
 
@@ -154,6 +157,16 @@ export class Resource {
 
   @Column({ type: 'varchar', length: 100, nullable: true })
   license: string | null;
+
+  /** Origin fields are reserved for trusted manual import/sync tooling. They are not author-editable metadata. */
+  @Column({ type: 'varchar', length: 32, nullable: true })
+  origin_site: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  origin_resource_id: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  origin_url: string | null;
 
   @Column({ type: 'int', nullable: true })
   latest_published_version_id: number | null;

@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import Alert from '@/components/ui/alert';
 import { Loader2, ShieldCheck } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
+import { siteProfile } from '@/config/site-profile';
 
 const AUTH_CHECK_TIMEOUT_MS = 8_000;
 
@@ -33,17 +35,18 @@ async function postTerms(token: string | null, accepted: boolean): Promise<strin
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data?.message || `请求失败 (${response.status})`);
+    throw new Error(data?.message || `Request failed (${response.status})`);
   }
   const data = await response.json().catch(() => ({}));
   return typeof data?.redirectPath === 'string' ? data.redirectPath : '/';
 }
 
 export default function AcceptTermsPage() {
+  const { t } = useI18n();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
-  const [summary, setSummary] = useState<string>('使用本站前请阅读并同意我们的服务条款与隐私政策。');
+  const [summary, setSummary] = useState<string>(t('consent.summary'));
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export default function AcceptTermsPage() {
   useEffect(() => {
     // Pull the admin-configured summary line from public settings (best-effort;
     // if the fetch fails, the seeded default above is used).
+    if (siteProfile.profile !== 'mdtbbs') return;
     fetch('/api/settings')
       .then((res) => res.json())
       .then((data) => {
@@ -87,7 +91,7 @@ export default function AcceptTermsPage() {
       .catch(() => {
         setIsAuthenticated(false);
         setAuthChecked(true);
-        setError('登录状态检查超时或暂时不可用，请返回首页后重试。');
+        setError(t('consent.checkFailed'));
       })
       .finally(() => window.clearTimeout(timeout));
 
@@ -95,7 +99,7 @@ export default function AcceptTermsPage() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [token]);
+  }, [token, t]);
 
   const handleSubmit = useCallback(
     (accepted: boolean) => {
@@ -108,12 +112,12 @@ export default function AcceptTermsPage() {
         .then((redirectPath) => {
           window.location.href = redirectPath;
         })
-        .catch((err) => {
-          setError(err instanceof Error ? err.message : '请求失败，请重试');
+        .catch(() => {
+          setError(t('consent.submitFailed'));
           setSubmitting(false);
         });
     },
-    [token],
+    [token, t],
   );
 
   if (!authChecked) {
@@ -121,7 +125,7 @@ export default function AcceptTermsPage() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-card rounded-lg shadow-lg p-8 text-center">
           <Loader2 className="h-12 w-12 mx-auto text-muted-foreground mb-4 animate-spin" />
-          <p className="text-muted-foreground">加载中...</p>
+          <p className="text-muted-foreground">{t('consent.checking')}</p>
         </div>
       </div>
     );
@@ -136,10 +140,10 @@ export default function AcceptTermsPage() {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-card rounded-lg shadow-lg p-8 text-center">
           <ShieldCheck className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h1 className="text-xl font-bold mb-2">未登录</h1>
-          <p className="text-muted-foreground mb-6">请先登录后再接受条款。</p>
+          <h1 className="text-xl font-bold mb-2">{t('consent.title')}</h1>
+          <p className="text-muted-foreground mb-6">{t('consent.loginRequired')}</p>
           <Link href="/login">
-            <Button>返回登录</Button>
+            <Button>{t('consent.login')}</Button>
           </Link>
         </div>
       </div>
@@ -151,7 +155,7 @@ export default function AcceptTermsPage() {
       <div className="w-full max-w-lg bg-card rounded-lg shadow-lg p-8">
         <div className="text-center mb-6">
           <ShieldCheck className="h-12 w-12 mx-auto text-primary mb-3" />
-          <h1 className="text-2xl font-bold mb-2">请阅读并同意以下条款</h1>
+          <h1 className="text-2xl font-bold mb-2">{t('consent.title')}</h1>
           <p className="text-sm text-muted-foreground">{summary}</p>
         </div>
 
@@ -159,18 +163,18 @@ export default function AcceptTermsPage() {
 
         <div className="bg-surface-50 dark:bg-surface-900/50 rounded-lg p-4 mb-6 max-h-64 overflow-y-auto text-sm leading-relaxed">
           <p className="mb-2">
-            点击"我已阅读并同意"即表示你同意{' '}
+            {t('consent.termsIntro')}{' '}
             <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-              服务条款
+              {t('footer.terms')}
             </Link>
-            {' '}和{' '}
+            {' '}{t('consent.and')}{' '}
             <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium">
-              隐私政策
+              {t('footer.privacy')}
             </Link>
-            。
+            .
           </p>
           <p className="text-muted-foreground">
-            如果你不同意，可以点击"不同意"退出；你将无法继续使用本站。
+            {t('consent.disagree')}
           </p>
         </div>
 
@@ -181,7 +185,7 @@ export default function AcceptTermsPage() {
             onChange={(e) => setAgreed(e.target.checked)}
             className="h-4 w-4 rounded border-surface-300"
           />
-          <span>我已阅读并同意上述条款</span>
+          <span>{t('consent.checkbox')}</span>
         </label>
 
         <div className="flex gap-3">
@@ -191,7 +195,7 @@ export default function AcceptTermsPage() {
             onClick={() => handleSubmit(false)}
             disabled={submitting}
           >
-            不同意
+            {t('consent.decline')}
           </Button>
           <Button
             className="flex-1"
@@ -201,10 +205,10 @@ export default function AcceptTermsPage() {
             {submitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                处理中...
+                {t('consent.processing')}
               </>
             ) : (
-              '我已阅读并同意'
+              t('consent.accept')
             )}
           </Button>
         </div>

@@ -10,14 +10,15 @@ import {
   type FooterFriendlyLink,
 } from '@/lib/footer/footer-settings';
 import { useNavigation } from '@/lib/navigation/context';
+import { useI18n } from '@/i18n/provider';
 
 const FOOTER_LINKS = [
-  { href: '/links', label: '友情链接' },
-  { href: '/thanks', label: '鸣谢' },
-  { href: '/about', label: '关于我们' },
-  { href: '/terms', label: '服务条款' },
-  { href: '/privacy', label: '隐私政策' },
-  { href: '/feedback', label: '意见反馈' },
+  { href: '/links', key: 'footer.links' },
+  { href: '/thanks', key: 'footer.thanks' },
+  { href: '/about', key: 'footer.about' },
+  { href: '/terms', key: 'footer.terms' },
+  { href: '/privacy', key: 'footer.privacy' },
+  { href: '/feedback', key: 'footer.feedback' },
 ];
 
 function FooterAnchor({ href, children, className = '' }: { href: string; children: React.ReactNode; className?: string }) {
@@ -72,6 +73,7 @@ export default function Footer() {
   const pathname = usePathname();
   const settings = useSettings();
   const navigation = useNavigation();
+  const { t } = useI18n();
   const footer = getFooterSettings(settings);
   const showFriendlyLinks = pathname === '/';
   const featuredLinks = showFriendlyLinks ? navigation.links.slice(0, 3) : [];
@@ -82,9 +84,9 @@ export default function Footer() {
         {featuredLinks.length > 0 && (
           <section className="mb-5 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-3" aria-labelledby="footer-friendly-links">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <h2 id="footer-friendly-links" className="text-xs font-semibold text-[var(--text)]">友情链接</h2>
+              <h2 id="footer-friendly-links" className="text-xs font-semibold text-[var(--text)]">{t('footer.friendly')}</h2>
               <Link href="/links" className="text-xs font-medium text-[var(--primary)] hover:underline">
-                更多 →
+                {t('footer.more')} →
               </Link>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -95,10 +97,10 @@ export default function Footer() {
           </section>
         )}
 
-        <nav aria-label="页脚导航" className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-[var(--text-secondary)]">
+        <nav aria-label={t('footer.navigation')} className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-[var(--text-secondary)]">
           {FOOTER_LINKS.map((link) => (
             <Link key={link.href} href={link.href} className="hover:text-[var(--primary)] hover:underline">
-              {link.label}
+              {t(link.key)}
             </Link>
           ))}
         </nav>

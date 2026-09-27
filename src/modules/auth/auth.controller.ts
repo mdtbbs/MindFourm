@@ -37,6 +37,8 @@ function toAuthUser(user: User) {
     mindauth_id: user.mindauth_id,
     username: user.username,
     email: user.email,
+    email_verified: !!user.email_verified,
+    preferred_locale: user.preferred_locale || null,
     avatar_url: user.avatar_url,
     role: user.role,
     bio: user.bio,

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
 import { RedisService } from '../../database/redis.service';
@@ -14,12 +14,14 @@ import {
   DEFAULT_WELCOME_NOTIFICATION_BODY,
   DEFAULT_WELCOME_NOTIFICATION_TITLE,
   EMAIL_LAYOUT_TEMPLATE,
+  EMAIL_LAYOUT_TEMPLATE_EN,
   EMAIL_TEMPLATE_DEFAULTS,
   type EmailTemplateEventKey,
 } from './email.templates';
 import { SettingsService } from '../settings/settings.service';
 import { NotificationStreamService } from './notification-stream.service';
 import { TemplateService } from './template.service';
+import { SiteConfigService } from '../../config/site-profile';
 
 export interface NotificationView {
   id: number;
@@ -57,6 +59,7 @@ export class NotificationsService {
     private settingsService: SettingsService,
     private notificationStream: NotificationStreamService,
     private templateService: TemplateService,
+    @Optional() private readonly siteConfig?: SiteConfigService,
   ) {}
 
   /**
@@ -155,7 +158,7 @@ export class NotificationsService {
     const emailSettings = await this.settingsService.getByCategory('email');
     const siteName = await this.getSiteName();
     const variables = {
-      username: user.username || '用户',
+      username: user.username || (this.siteConfig?.current.profile === 'mindustry-club' ? 'there' : '用户'),
       site_name: siteName,
     };
 
@@ -201,7 +204,7 @@ export class NotificationsService {
       ...templateVars,
       action_url: actionUrl,
       action_label: actionLabel,
-      username: user.username || '用户',
+      username: user.username || (this.siteConfig?.current.profile === 'mindustry-club' ? 'there' : '用户'),
       site_name: siteName,
       preferences_url: `${frontendUrl}/settings`,
       year: new Date().getFullYear(),
@@ -211,7 +214,8 @@ export class NotificationsService {
     const bodyTemplate = emailSettings[templateConfig.bodySettingKey] || templateConfig.defaultBody;
     const subject = this.sanitizeHeaderValue(this.templateService.render(subjectTemplate, variables));
     const contentMarkdown = this.templateService.render(bodyTemplate, variables);
-    const html = this.templateService.render(EMAIL_LAYOUT_TEMPLATE, {
+    const layout = this.siteConfig?.current.profile === 'mindustry-club' ? EMAIL_LAYOUT_TEMPLATE_EN : EMAIL_LAYOUT_TEMPLATE;
+    const html = this.templateService.render(layout, {
       ...variables,
       content_html: parseMarkdown(contentMarkdown),
     });

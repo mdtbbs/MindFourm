@@ -13,9 +13,13 @@ import JsonLd from '@/components/seo/json-ld';
 import { buildBrandCssVariables, resolveBrand, resolveTitleSuffix } from '@/lib/theme/brand';
 import { NavigationProvider } from '@/lib/navigation/context';
 import { fetchNavigation } from '@/lib/navigation/server';
+import { getRequestLocale } from '@/i18n/server';
+import { getOpenGraphLocale } from '@/i18n';
+import { I18nProvider } from '@/i18n/provider';
+import { siteProfile } from '@/config/site-profile';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const settings = await fetchPublicSettings();
+  const [settings, locale] = await Promise.all([fetchPublicSettings(), getRequestLocale()]);
   const brand = resolveBrand(settings);
   const titleSuffix = resolveTitleSuffix(settings);
   const siteName = brand.siteName;
@@ -47,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title: siteName,
       description,
       url: '/',
-      locale: 'zh_CN',
+      locale: getOpenGraphLocale(locale),
     },
   };
 
@@ -101,16 +105,17 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [settings, navigation] = await Promise.all([
+  const [settings, navigation, locale] = await Promise.all([
     fetchPublicSettings(),
     fetchNavigation(),
+    getRequestLocale(),
   ]);
   const webSiteJsonLd = buildWebSiteJsonLd(settings);
   const brandStyle = buildBrandStyle(settings);
 
   return (
     <html
-      lang="zh-CN"
+      lang={locale}
       data-theme="light"
       suppressHydrationWarning
       style={brandStyle}
@@ -141,13 +146,13 @@ export default async function RootLayout({
           <ThemeProvider>
             <SettingsProvider initialSettings={settings}>
               <AuthProvider>
-                <LikeProvider>
-                  <ToastProvider>
-                    <PhoneVerificationProvider>
-                      {children}
-                    </PhoneVerificationProvider>
-                  </ToastProvider>
-                </LikeProvider>
+                <I18nProvider initialLocale={locale}>
+                  <LikeProvider>
+                    <ToastProvider>
+                      {siteProfile.features.phoneVerification ? <PhoneVerificationProvider>{children}</PhoneVerificationProvider> : children}
+                    </ToastProvider>
+                  </LikeProvider>
+                </I18nProvider>
               </AuthProvider>
             </SettingsProvider>
           </ThemeProvider>

@@ -23,6 +23,7 @@ import { CreateBlueprintDto, CompleteMapUploadDto, GameContentBlueprintCodeDto, 
 import { ResourceStorageService } from '../resources/resource-storage.service';
 import { GameContentCacheInterceptor } from './game-content-cache.interceptor';
 import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
+import { SiteConfigService } from '@config/site-profile';
 
 const MAP_INCOMING_DIR = resolve(process.env.RESOURCE_UPLOAD_ROOT || './uploads', '.quarantine/resources/.incoming');
 // Keep uploads within the current renderer's 20 MiB synchronous-input bound.
@@ -50,7 +51,7 @@ const mapFileInterceptor = FileInterceptor('file', {
 @UseInterceptors(GameContentCacheInterceptor)
 export class GameContentController {
   private readonly logger = new Logger(GameContentController.name);
-  constructor(private readonly gameContent: GameContentService, private readonly storage: ResourceStorageService) {}
+  constructor(private readonly gameContent: GameContentService, private readonly storage: ResourceStorageService, private readonly siteConfig?: SiteConfigService) {}
 
   @Get('meta')
   @Header('Cache-Control', 'public, max-age=300')
@@ -262,7 +263,12 @@ export class GameContentController {
   }
 
   private assertPhoneVerified(user: any) {
-    if (!user?.phone_verified) throw new BadRequestException({ code: 'PERMISSION_DENIED', message: '账号尚未满足发布条件' });
+    if (this.siteConfig?.current.verification.requireEmail !== false && !user?.email_verified) {
+      throw new BadRequestException({ code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email address before continuing.' });
+    }
+    if (this.siteConfig?.current.verification.requirePhoneForWrites !== false && !user?.phone_verified) {
+      throw new BadRequestException({ code: 'PHONE_VERIFICATION_REQUIRED', message: 'Verify your phone number before continuing.' });
+    }
   }
 
   @Post('blueprints/:id/like') @SkipPhoneVerification() @UseGuards(GameContentRequiredAuthGuard) @RateLimit({ max: 60, window: 60 })

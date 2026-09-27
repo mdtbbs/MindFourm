@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { registerPhoneVerificationHandler } from "@/lib/phone-verification/coordinator";
 import { useUserStore } from "@/store/user-store";
 import { useToastStore } from "@/store/toast-store";
+import { isSiteFeatureEnabled } from "@/config/site-profile";
 
 const NOTICE_ID = "phone-verification-required";
 const verifyUrl = (path: string) =>
@@ -23,6 +24,7 @@ export function PhoneVerificationProvider({
   const dismissToast = useToastStore((state) => state.dismissToast);
 
   useEffect(() => {
+    if (!isSiteFeatureEnabled('phoneVerification')) return;
     const go = () => {
       window.location.assign(
         verifyUrl(`${window.location.pathname}${window.location.search}`),
@@ -33,6 +35,10 @@ export function PhoneVerificationProvider({
     return () => registerPhoneVerificationHandler(null);
   }, []);
   useEffect(() => {
+    if (!isSiteFeatureEnabled('phoneVerification')) {
+      dismissToast(NOTICE_ID);
+      return;
+    }
     if (user && !user.phone_verified && pathname !== "/verify-phone")
       showPersistentToast(
         NOTICE_ID,
@@ -42,6 +48,7 @@ export function PhoneVerificationProvider({
     else dismissToast(NOTICE_ID);
   }, [dismissToast, pathname, showPersistentToast, user]);
   useEffect(() => {
+    if (!isSiteFeatureEnabled('phoneVerification')) return;
     const click = (event: Event) => {
       if (
         (event.target as HTMLElement | null)?.closest(

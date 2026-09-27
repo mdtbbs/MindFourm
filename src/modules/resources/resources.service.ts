@@ -30,6 +30,7 @@ import { randomUUID } from 'crypto';
 import { createHash } from 'crypto';
 import { ConsumedResourcePreviewDraft, ResourcePreviewService } from './resource-preview.service';
 import { ResourceDuplicateService, RESOURCE_DUPLICATE_STATUSES } from './resource-duplicate.service';
+import { SiteConfigService } from '@config/site-profile';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -79,6 +80,7 @@ export class ResourcesService {
     private resourceSubscriptionsService?: ResourceSubscriptionsService,
     private resourcePreviewService?: ResourcePreviewService,
     @Optional() private resourceDuplicateService?: ResourceDuplicateService,
+    @Optional() private siteConfig?: SiteConfigService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -319,6 +321,7 @@ export class ResourcesService {
         fileName: file?.file_name,
       }))
       : this.emptyContentRisk();
+    const requiresModeration = risk.mustReview || (this.siteConfig?.isEnabled('resourcePreModeration') ?? true);
 
     const newResource = this.resourceRepository.create({
       user_id: userId,
@@ -342,12 +345,13 @@ export class ResourcesService {
       source_url: dto.source_url || null,
       license: dto.license?.trim() || null,
       content: contentSource?.content || null,
+      content_language: dto.content_language?.trim() || 'unknown',
       content_html: contentSource?.content_html || null,
       content_json: contentSource?.content_json || null,
       content_text: contentSource?.content_text || null,
       category_id: categoryId,
       is_public: this.toTinyInt((dto as any).is_public, 1),
-      status: RESOURCE_STATUS_PENDING,
+      status: requiresModeration ? RESOURCE_STATUS_PENDING : RESOURCE_STATUS_APPROVED,
       ...(provenance.uploadSessionId ? { game_content_upload_session_id: provenance.uploadSessionId } : {}),
       ...(provenance.rendererDraft ? {
         renderer_status: 'ready' as const,
@@ -459,7 +463,8 @@ export class ResourcesService {
         // compatibility is represented below in ResourceVersionCompatibility.
         version: dto.version.trim(),
         release_channel: 'stable',
-        status: 'pending_review',
+        status: resource.status === RESOURCE_STATUS_APPROVED ? 'published' : 'pending_review',
+        ...(resource.status === RESOURCE_STATUS_APPROVED ? { published_at: new Date() } : {}),
         release_notes_markdown: contentSource?.content.trim() || null,
         release_notes_html: contentSource?.content_html || null,
         created_by_user_id: submitterUserId,
@@ -469,6 +474,9 @@ export class ResourcesService {
         mime_type: file?.mime_type || null,
         content_hash: file?.content_hash || null,
       } as Partial<ResourceVersion>));
+      if (resource.status === RESOURCE_STATUS_APPROVED) {
+        await manager.update(Resource, resource.id, { latest_published_version_id: release.id });
+      }
 
       const credits = [
         { role: 'submitter', subject_type: 'local_user', user_id: submitterUserId, display_name: null },
@@ -722,6 +730,7 @@ export class ResourcesService {
       limit = 20,
       category_id,
       search,
+      content_language,
       status,
       cursor,
       tag,
@@ -766,6 +775,10 @@ export class ResourcesService {
 
       if (search) {
         qb.andWhere('resource.title LIKE :search', { search: `%${escapeLike(search)}%` });
+      }
+
+      if (content_language?.trim()) {
+        qb.andWhere('resource.content_language = :contentLanguage', { contentLanguage: content_language.trim() });
       }
 
       if (resource_kind?.trim()) {
@@ -898,6 +911,10 @@ export class ResourcesService {
 
     if (search) {
       where.title = Like(`%${escapeLike(search)}%`);
+    }
+
+    if (content_language?.trim()) {
+      where.content_language = content_language.trim();
     }
 
     let cursorCondition: any = {};

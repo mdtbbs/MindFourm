@@ -272,8 +272,10 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 | Method | Endpoint | 认证 | 角色 |
 |--------|---------|------|------|
-| GET | `/api/v1/capabilities` | 🔒 需登录 | - |
+| GET | `/api/v1/capabilities` | 公开 | - |
 | GET | `/api/v1/client/config` | 🔒 需登录 | - |
+
+`GET /api/v1/capabilities` 包含公开的 `site` 与 `verification` 对象。`site.profile`、`default_locale`、`supported_locales` 和布尔 `features` 可用于客户端适配；`verification.email_required` 与 `phone_required_for_writes` 描述当前部署的社区写入要求。响应不包含密钥或其他私密配置。
 
 ### categories
 

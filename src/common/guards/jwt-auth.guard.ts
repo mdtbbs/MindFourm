@@ -1,9 +1,8 @@
 import {
-  Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException,
+  Injectable, CanActivate, ExecutionContext, UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IS_PUBLIC_KEY, IS_OPTIONAL_AUTH_KEY } from '../decorators/public.decorator';
-import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
 import { AuthService } from '../../modules/auth/auth.service';
 import { BansService } from '../../modules/bans/bans.service';
 import { ALLOW_BANNED_USER_KEY } from '../decorators/allow-banned-user.decorator';
@@ -49,29 +48,6 @@ export class JwtAuthGuard implements CanActivate {
     if (!allowBannedUser) await this.bansService.assertUserNotBanned(user.id);
 
     request.user = user;
-    const skipPhoneVerification = this.reflector.getAllAndOverride<boolean>(SKIP_PHONE_VERIFICATION_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    this.assertPhoneVerifiedForWrites(request, skipPhoneVerification);
     return true;
   }
-
-  private assertPhoneVerifiedForWrites(request: any, skipPhoneVerification = false): void {
-    if (skipPhoneVerification) {
-      return;
-    }
-    const method = String(request.method || '').toUpperCase();
-    if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      return;
-    }
-
-    if (!request.user?.phone_verified) {
-      throw new ForbiddenException({
-        code: 'PHONE_NOT_VERIFIED',
-        message: '请先验证手机号后再继续操作',
-      });
-    }
-  }
-
 }

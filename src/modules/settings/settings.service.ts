@@ -19,6 +19,8 @@ import {
 } from '@common/utils/sidebar-navigation.util';
 import { getDefaultSidebarNavigation } from '@common/utils/sidebar-navigation-defaults';
 import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
+import { SiteConfigService } from '../../config/site-profile';
+import { getSiteDefaultSettings } from './site-default-packs';
 import {
   DEFAULT_WELCOME_NOTIFICATION_BODY,
   DEFAULT_WELCOME_NOTIFICATION_TITLE,
@@ -436,6 +438,7 @@ export class SettingsService implements OnModuleInit {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
     @Optional() @Inject(NAVIGATION_INVALIDATOR) private readonly navigationService?: NavigationInvalidator,
+    @Optional() private readonly siteConfig?: SiteConfigService,
   ) {}
 
   async onModuleInit() {
@@ -575,7 +578,14 @@ export class SettingsService implements OnModuleInit {
       ]),
     ];
 
-    for (const setting of defaults) {
+    const profile = this.siteConfig?.current.profile || 'mdtbbs';
+    const siteDefaults = getSiteDefaultSettings(profile);
+    const localizedDefaults = defaults.map((setting) => ({
+      ...setting,
+      value: siteDefaults[setting.key] ?? setting.value,
+    }));
+
+    for (const setting of localizedDefaults) {
       await this.settingRepository.query(
         'INSERT IGNORE INTO settings (`key`, `value`, category, description) VALUES (?, ?, ?, ?)',
         [setting.key, setting.value, setting.category, setting.description],

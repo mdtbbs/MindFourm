@@ -80,6 +80,7 @@ cp .env.example .env
 ```
 
 关键配置：
+- `SITE_PROFILE` 与前端构建变量 `NEXT_PUBLIC_SITE_PROFILE` 必须一致。`mdtbbs` 保持中文站规则；`mindustry-club` 使用国际站语言、验证和功能策略。
 - `MINDAUTH_URL` - MindAuth 服务地址
 - `MINDAUTH_CLIENT_ID` / `MINDAUTH_CLIENT_SECRET` - OAuth 客户端信息
 - `EASYMANAGER_ENABLED` - EasyManager 集成开关，当前默认 `false`
@@ -87,6 +88,17 @@ cp .env.example .env
 - `MFL_BASE_URL` / `MFL_API_KEY` - MindFileList 文件托管集成
 - `MYSQL_*` - MySQL 数据库配置
 - `REDIS_*` - Redis 配置
+
+### 独立社区站点
+
+MindFourm 通过单一站点配置支持两个独立部署，不做运行时多租户。每个部署应使用各自的 MySQL 数据库、Redis 实例/逻辑库、上传目录和 OAuth Client：
+
+| 站点 | Profile | URL | 语言 | 社区写入验证 |
+|---|---|---|---|---|
+| MDTBBS | `mdtbbs` | `https://mdtbbs.cn` | 简体中文 | 邮箱 + 手机 |
+| Mindustry Club | `mindustry-club` | `https://mindustry.club` | English / Русский / 日本語 | 邮箱，不要求手机号 |
+
+Club 示例配置、MindAuth Client 设置和数据隔离要求见 [`docs/international-site-profiles.md`](docs/international-site-profiles.md)。两个站点的本地用户、内容、审核和文件互不共享；MindAuth 负责统一身份。
 
 ### 数据库
 

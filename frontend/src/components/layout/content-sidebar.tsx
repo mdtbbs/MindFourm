@@ -7,6 +7,7 @@ import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
 import ContentNavigation from '@/components/layout/content-navigation';
 import { contentNavigationCta } from '@/lib/navigation/content-navigation';
 import type { Category, ResourceCategory } from '@/types';
+import { useI18n } from '@/i18n/provider';
 
 export type ContentSidebarMode = 'forum' | 'resources';
 export const SIDEBAR_LAYOUT_CLASSES = {
@@ -32,11 +33,12 @@ export default function ContentSidebar({
   settings?: Record<string, string>; resourceCategories?: ResourceCategory[]; forumCategories?: Category[];
 }) {
   const navRef = useRef<HTMLElement>(null);
+  const { t } = useI18n();
   useEffect(() => { navRef.current?.scrollTo({ top: 0 }); }, [mode]);
   const cta = contentNavigationCta(mode, settings);
   return <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
-    <SidebarBrand siteName={siteName} subtitle={mode === 'resources' ? '资源中心' : sidebarTitle} logoUrl={logoUrl} sidebarLogoUrl={sidebarLogoUrl} />
-    <nav ref={navRef} data-testid="sidebar-nav" aria-label="站点导航" className={SIDEBAR_LAYOUT_CLASSES.nav}>
+    <SidebarBrand siteName={siteName} subtitle={mode === 'resources' ? t('resources.title') : sidebarTitle} logoUrl={logoUrl} sidebarLogoUrl={sidebarLogoUrl} />
+    <nav ref={navRef} data-testid="sidebar-nav" aria-label={t('navigation.siteNavigation')} className={SIDEBAR_LAYOUT_CLASSES.nav}>
       <ContentNavigation mode={mode} settings={settings} isAuthenticated={isAuthenticated} userId={userId} forumCategories={forumCategories} resourceCategories={resourceCategories} />
     </nav>
     {cta && <Link href={cta.href} className="mx-3 mb-3 flex shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--primary-dark)]"><Plus className="h-4 w-4" />{cta.label}</Link>}

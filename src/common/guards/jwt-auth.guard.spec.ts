@@ -2,7 +2,7 @@ jest.mock('../../modules/auth/auth.service', () => ({
   AuthService: class AuthService {},
 }));
 
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import type { AuthService } from '../../modules/auth/auth.service';
@@ -71,17 +71,11 @@ describe('JwtAuthGuard phone verification', () => {
     expect(request.user).toMatchObject({ id: 1, phone_verified: false });
   });
 
-  it('rejects write requests for users without verified phone', async () => {
+  it('leaves write eligibility to the site verification policy guard', async () => {
     const { guard } = createGuard({ id: 1, phone_verified: false });
-    const { context } = createContext('POST', 'session-token');
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(ForbiddenException);
-    await guard.canActivate(context).catch((err: ForbiddenException) => {
-      expect(err.getResponse()).toMatchObject({
-        code: 'PHONE_NOT_VERIFIED',
-        message: '请先验证手机号后再继续操作',
-      });
-    });
+    const { context, request } = createContext('POST', 'session-token');
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.user.phone_verified).toBe(false);
   });
 
   it('allows write requests for users with verified phone', async () => {

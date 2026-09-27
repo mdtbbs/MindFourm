@@ -29,6 +29,12 @@ export class QueryResourcesDto {
   @IsString()
   search?: string;
 
+  /** Exact declared language filter; content itself remains unrestricted. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  content_language?: string;
+
   @IsOptional()
   @IsString()
   status?: string;

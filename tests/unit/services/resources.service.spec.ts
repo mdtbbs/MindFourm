@@ -4,6 +4,8 @@ jest.mock('@nestjs/common', () => ({
   HttpException: class HttpException extends Error {},
   HttpStatus: { BAD_REQUEST: 400 },
   Injectable: () => () => undefined,
+  Global: () => () => undefined,
+  Module: () => () => undefined,
   Optional: () => () => undefined,
   Inject: () => () => undefined,
   NotFoundException: class NotFoundException extends Error {},
@@ -15,6 +17,8 @@ jest.mock('@nestjs/common', () => ({
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
+
+jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
 jest.mock('typeorm', () => ({
   Repository: class Repository {},

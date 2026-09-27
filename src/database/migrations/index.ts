@@ -57,6 +57,7 @@ import { AddCanonicalTiptapContent1720000080000 } from './1720000080000-AddCanon
 import { CreateResourceUploadDrafts1720000090000 } from './1720000090000-CreateResourceUploadDrafts';
 import { AllowUsersWithoutEmail1720000100000 } from './1720000100000-AllowUsersWithoutEmail';
 import { ResourceIntegrityAndMerge1720000110000 } from './1720000110000-ResourceIntegrityAndMerge';
+import { AddInternationalCommunityFields1720000120000 } from './1720000120000-AddInternationalCommunityFields';
 
 /**
  * Migrations in run order.
@@ -125,4 +126,5 @@ export const migrations = [
   CreateResourceUploadDrafts1720000090000,
   AllowUsersWithoutEmail1720000100000,
   ResourceIntegrityAndMerge1720000110000,
+  AddInternationalCommunityFields1720000120000,
 ];

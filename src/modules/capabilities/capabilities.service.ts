@@ -1,7 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { SettingsService } from '../settings/settings.service';
+import { SiteConfigService } from '../../config/site-profile';
 
 export type ClientCapabilities = {
+  site: {
+    profile: string;
+    name: string;
+    domain: string;
+    default_locale: string;
+    supported_locales: string[];
+    features: Readonly<Record<string, boolean>>;
+  };
+  verification: { email_required: boolean; phone_required_for_writes: boolean };
   forum: { read: boolean; write: boolean; search: boolean; image_upload: boolean };
   resources: { read: boolean; download: boolean; upload: boolean };
   notifications: { read: boolean; sse: boolean };
@@ -22,7 +32,7 @@ export type ClientCapabilities = {
 
 @Injectable()
 export class CapabilitiesService {
-  constructor(private readonly settingsService: SettingsService) {}
+  constructor(private readonly settingsService: SettingsService, private readonly siteConfig: SiteConfigService) {}
 
   async getCapabilities(): Promise<ClientCapabilities> {
     const [resourceRead, forumWrite, imageUpload, resourceDownload, resourceUpload,
@@ -37,6 +47,18 @@ export class CapabilitiesService {
       this.settingsService.getBoolean('feature_messages_third_party_access_enabled', false),
     ]);
     return {
+      site: {
+        profile: this.siteConfig.current.profile,
+        name: this.siteConfig.current.name,
+        domain: this.siteConfig.current.domain,
+        default_locale: this.siteConfig.current.localization.defaultLocale,
+        supported_locales: [...this.siteConfig.current.localization.supportedLocales],
+        features: this.siteConfig.current.features,
+      },
+      verification: {
+        email_required: this.siteConfig.current.verification.requireEmail,
+        phone_required_for_writes: this.siteConfig.current.verification.requirePhoneForWrites,
+      },
       forum: { read: true, write: forumWrite, search: true, image_upload: imageUpload },
       resources: { read: resourceRead, download: resourceRead && resourceDownload, upload: resourceUpload },
       notifications: { read: notifications, sse: false },

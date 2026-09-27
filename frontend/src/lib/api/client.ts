@@ -2,6 +2,7 @@ import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply,
 import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/response';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
+import { isSiteFeatureEnabled } from '@/config/site-profile';
 
 function normalizePublicApiBase(value: string | undefined): string {
   if (!value) return '';
@@ -287,7 +288,7 @@ async function request<T>(
     }
 
     const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(method).toUpperCase());
-    if (code === 'PHONE_NOT_VERIFIED' && isWrite && !options.skipPhoneVerificationRetry) {
+    if (code === 'PHONE_NOT_VERIFIED' && isSiteFeatureEnabled('phoneVerification') && isWrite && !options.skipPhoneVerificationRetry) {
       useToastStore.getState().showWarning('请先验证手机号，验证成功后会自动继续本次操作');
       const verified = await requestPhoneVerification();
       if (verified) {
@@ -906,7 +907,7 @@ export const userApi = {
   search: (q: string, limit: number = 10) =>
     request<Array<Pick<UserProfile, 'id' | 'username' | 'avatar_url'>>>(`/api/users/search${buildQueryString({ q, limit })}`),
   getMyProfile: () => request<UserProfile>('/api/users/me'),
-  updateProfile: (data: { username?: string; bio?: string }) =>
+  updateProfile: (data: { username?: string; bio?: string; preferred_locale?: string }) =>
     request<UserProfile>('/api/users/me/profile', {
       method: 'PUT',
       body: JSON.stringify(data),

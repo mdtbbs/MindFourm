@@ -4,6 +4,8 @@ jest.mock('@nestjs/common', () => ({
   HttpException: class HttpException extends Error {},
   HttpStatus: { BAD_REQUEST: 400 },
   Injectable: () => () => undefined,
+  Global: () => () => undefined,
+  Module: () => () => undefined,
   Optional: () => () => undefined,
   Inject: () => () => undefined,
   NotFoundException: class NotFoundException extends Error {},
@@ -20,6 +22,8 @@ jest.mock('@nestjs/common', () => ({
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
+
+jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
 jest.mock('typeorm', () => ({
   Repository: class Repository {},
@@ -294,6 +298,22 @@ describe('ResourcesService', () => {
       '(category.id IS NULL OR category.is_active = :categoryActive)',
       { categoryActive: 1 },
     );
+  });
+
+  it('filters public resources by declared content language without restricting other languages', async () => {
+    const { service, defaultQb } = createService();
+    await service.getList({ content_language: 'ja', limit: 20 } as any, { scope: 'public' });
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      'resource.content_language = :contentLanguage',
+      { contentLanguage: 'ja' },
+    );
+  });
+
+  it('allows anonymous reads of an approved public resource while preserving visibility checks', async () => {
+    const resource = { id: 27, status: 'published', is_public: 1, category_id: null, user: null, category: null };
+    const { service, resourceRepository } = createService({ resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) } });
+    await expect(service.getById(27)).resolves.toMatchObject({ id: 27, status: 'published' });
+    expect(resourceRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 27 } }));
   });
 
   it('filters public resources by safe metadata fields when requested', async () => {

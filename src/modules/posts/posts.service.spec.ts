@@ -265,6 +265,15 @@ describe('PostsService', () => {
     expect(listQueryBuilder.andWhere).toHaveBeenCalledWith('post.source = :source', { source: 'USER' });
   });
 
+  it('filters post lists by the author-declared content language', async () => {
+    const { service, listQueryBuilder } = createService();
+    await service.findAll({ page: 1, limit: 30, content_language: 'ja' });
+    expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'post.content_language = :contentLanguage',
+      { contentLanguage: 'ja' },
+    );
+  });
+
   it('omits configured homepage categories from a discussion stream without hiding uncategorised posts', async () => {
     const { service, listQueryBuilder } = createService();
 

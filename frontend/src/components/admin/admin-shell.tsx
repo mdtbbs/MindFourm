@@ -12,6 +12,7 @@ import {
 } from '@/lib/admin/navigation';
 import AdminNotificationBell from '@/components/admin/admin-notification-bell';
 import AdminCommandMenu from '@/components/admin/admin-command-menu';
+import { LocaleSwitcher } from '@/i18n/provider';
 
 interface AdminShellProps {
   siteName: string;
@@ -180,6 +181,7 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
           </div>
 
           <div className="admin-v2-topbar-actions">
+            <LocaleSwitcher admin />
             <button
               type="button"
               className="admin-v2-command-trigger"

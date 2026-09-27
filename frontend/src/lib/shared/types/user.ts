@@ -9,6 +9,7 @@ export interface User {
   bio?: string | null;
   mindauth_id?: number;
   email_verified?: boolean;
+  preferred_locale?: string | null;
   created_at?: string;
   updated_at?: string;
 }

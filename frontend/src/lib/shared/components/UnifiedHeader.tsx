@@ -28,6 +28,7 @@ export interface UnifiedHeaderProps {
   siteName?: string;
   siteTagline?: string;
   logoUrl?: string;
+  labels?: Partial<Record<'searchCommunity' | 'search' | 'switchToLight' | 'switchToDark' | 'theme' | 'menu' | 'notifications' | 'messages' | 'friends' | 'servers' | 'createPost' | 'profile' | 'bookmarks' | 'admin' | 'settings' | 'logout' | 'register' | 'login', string>>;
 
   user?: User | null;
   isAuthenticated?: boolean;
@@ -60,6 +61,7 @@ export function UnifiedHeader({
   siteName = "",
   siteTagline,
   logoUrl,
+  labels = {},
   user,
   isAuthenticated = false,
   serverCount = 0,
@@ -105,8 +107,8 @@ export function UnifiedHeader({
                 </div>
                 <input
                   type="text"
-                  placeholder="搜索帖子、资源、用户..."
-                  aria-label="搜索"
+                  placeholder={labels.searchCommunity || "搜索帖子、资源、用户..."}
+                  aria-label={labels.search || "搜索"}
                   className="w-full border-0 bg-[var(--bg-elevated)] py-2 pl-10 pr-4 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--primary)]"
                   onKeyDown={handleSearchKeyDown}
                 />
@@ -118,8 +120,8 @@ export function UnifiedHeader({
             <button
               onClick={toggleTheme}
               className="relative rounded-full p-2.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]"
-              title={theme === "dark" ? "切换到亮色模式" : "切换到暗色模式"}
-              aria-label="切换主题"
+              title={theme === "dark" ? (labels.switchToLight || "切换到亮色模式") : (labels.switchToDark || "切换到暗色模式")}
+              aria-label={labels.theme || "切换主题"}
             >
               <div className="relative z-10">
                 {theme === "dark" ? (
@@ -135,7 +137,7 @@ export function UnifiedHeader({
                 onClick={onMobileMenuClick}
                 data-testid="mobile-menu-button"
                 className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] lg:hidden"
-                aria-label="菜单"
+                aria-label={labels.menu || "菜单"}
               >
                 <Menu className="h-6 w-6" />
               </button>
@@ -145,7 +147,7 @@ export function UnifiedHeader({
               <Link
                 href="/search"
                 className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] lg:hidden"
-                aria-label="搜索"
+                aria-label={labels.search || "搜索"}
               >
                 <Search className="h-5 w-5" />
               </Link>
@@ -159,7 +161,7 @@ export function UnifiedHeader({
                       <Link
                         href="/notifications"
                         className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                        title="通知"
+                        title={labels.notifications || "通知"}
                       >
                         <span>
                           <Bell className="h-5 w-5" />
@@ -181,7 +183,7 @@ export function UnifiedHeader({
                     <Link
                       href="/messages"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                      title="私信"
+                      title={labels.messages || "私信"}
                     >
                       <span>
                         <Mail className="h-5 w-5" />
@@ -200,7 +202,7 @@ export function UnifiedHeader({
                     <Link
                       href="/friends"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                      title="好友"
+                      title={labels.friends || "好友"}
                     >
                       <span>
                         <Users className="h-5 w-5" />
@@ -218,7 +220,7 @@ export function UnifiedHeader({
 
                 {showServerCount && (
                   <div className="hidden text-sm text-[var(--text-muted)] md:block">
-                    服务器: <span>{serverCount}</span>
+                    {labels.servers || "服务器"}: <span>{serverCount}</span>
                   </div>
                 )}
 
@@ -232,7 +234,7 @@ export function UnifiedHeader({
                       <span>
                         <Plus className="h-4 w-4" />
                       </span>
-                      <span className="hidden sm:inline">发帖</span>
+                      <span className="hidden sm:inline">{labels.createPost || "发帖"}</span>
                     </Link>
                   </div>
                 )}
@@ -248,39 +250,39 @@ export function UnifiedHeader({
                         href={`/users/${user.id}`}
                         className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
                       >
-                        个人主页
+                        {labels.profile || "个人主页"}
                       </Link>
                       <Link
                         href="/messages"
                         className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
                       >
-                        私信
+                        {labels.messages || "私信"}
                       </Link>
                       <Link
                         href="/friends"
                         className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
                       >
-                        好友
+                        {labels.friends || "好友"}
                       </Link>
                       <Link
                         href="/bookmarks"
                         className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
                       >
-                        收藏
+                        {labels.bookmarks || "收藏"}
                       </Link>
                       {user.role === "admin" && (
                         <Link
                           href="/admin"
                           className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
                         >
-                          管理后台
+                          {labels.admin || "管理后台"}
                         </Link>
                       )}
                       <Link
                         href="/settings"
                         className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
                       >
-                        设置
+                        {labels.settings || "设置"}
                       </Link>
                       {onLogout && (
                         <button
@@ -289,7 +291,7 @@ export function UnifiedHeader({
                           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-[var(--bg-hover)]"
                         >
                           <LogOut className="h-4 w-4" />
-                          退出登录
+                          {labels.logout || "退出登录"}
                         </button>
                       )}
                     </div>
@@ -303,7 +305,7 @@ export function UnifiedHeader({
                     href="/register"
                     className="hidden bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] lg:inline-flex"
                   >
-                    注册
+                    {labels.register || "注册"}
                   </Link>
                 )}
                 {onLogin && (
@@ -311,7 +313,7 @@ export function UnifiedHeader({
                     href="/login"
                     className="hidden text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)] lg:inline-flex"
                   >
-                    登录
+                    {labels.login || "登录"}
                   </Link>
                 )}
               </div>
