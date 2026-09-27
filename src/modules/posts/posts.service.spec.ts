@@ -794,6 +794,16 @@ describe('PostsService.update revision history', () => {
     );
   });
 
+  it('allows the author to update the declared content language without creating a content revision', async () => {
+    const manager = createManagerMock({ Post: EXISTING });
+    const { service } = createService({ manager });
+
+    await service.update(88, { content_language: 'ja' }, AUTHOR.id, AUTHOR.role);
+
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 88, { content_language: 'ja' });
+    expect(manager.insert).not.toHaveBeenCalled();
+  });
+
   it('records nothing when the submitted title and body are identical to the stored ones', async () => {
     const manager = createManagerMock({ Post: EXISTING, Category: { id: 3 } });
     const { service } = createService({ manager });

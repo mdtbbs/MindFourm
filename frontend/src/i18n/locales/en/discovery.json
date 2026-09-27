@@ -1,0 +1,65 @@
+{
+  "searchPage": {
+    "title": "Search",
+    "loginRequired": "Sign in to search",
+    "loginDescription": "Search is available to signed-in accounts. Searches are recorded in the audit log.",
+    "login": "Sign in",
+    "blockedTitle": "This query cannot be searched",
+    "blockedDescription": "This search term does not meet the site's search rules. Try another term.",
+    "searchFailed": "Search failed",
+    "searchFailedDescription": "Search results are temporarily unavailable. Try again later.",
+    "backToSearch": "Back to search",
+    "results": "Search results",
+    "resultCount": "{count} results found",
+    "emptyResults": "No matching results found",
+    "enterQuery": "Enter a search term",
+    "users": "Members",
+    "resources": "Resources",
+    "posts": "Discussions",
+    "servers": "Servers",
+    "gameVersions": "Game versions",
+    "knowledgeBase": "Knowledge base",
+    "developerUpdates": "Developer updates",
+    "latest": "Latest",
+    "recentSearches": "Recent searches",
+    "clearHistory": "Clear",
+    "popularSearches": "Popular searches"
+  },
+  "notices": {
+    "title": "Community notices",
+    "updates": "Community updates",
+    "description": "Maintenance, events, and important rule changes are collected here.",
+    "pinned": "Pinned",
+    "viewDetails": "View notice details.",
+    "communityTeam": "Community team",
+    "readCount": "{count} views",
+    "empty": "There are no notices yet.",
+    "backHome": "Back to community home",
+    "lastUpdated": "Last updated: {date}",
+    "revisionHistory": "Revision history",
+    "related": "Related notices",
+    "backToNotices": "Back to notices",
+    "type": {
+      "system": "Community",
+      "maintenance": "Maintenance",
+      "event": "Event",
+      "policy": "Policy",
+      "release": "Release"
+    }
+  },
+  "categoriesPage": {
+    "title": "Categories",
+    "description": "Browse all discussion categories",
+    "header": "All categories",
+    "browseDescription": "Browse discussions by community, creation, gameplay, and site operations.",
+    "empty": "No categories yet",
+    "postCount": "{count} discussions",
+    "groups": { "community": "Community", "creation": "Creation", "game": "Game", "meta": "Site operations", "other": "Other" }
+  },
+  "contentLanguage": {
+    "label": "Content language",
+    "unknown": "Not specified",
+    "hint": "Choose the language used in this post or resource.",
+    "languages": { "en": "English", "ru": "Russian", "ja": "Japanese", "zh-CN": "Chinese (Simplified)", "es": "Spanish", "de": "German", "other": "Other" }
+  }
+}

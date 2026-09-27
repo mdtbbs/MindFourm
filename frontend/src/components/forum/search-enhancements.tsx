@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { searchApi } from '@/lib/api/client';
 import { Clock, TrendingUp } from 'lucide-react';
 import { SearchHistoryEntry } from '@/types';
+import { useI18n } from '@/i18n/provider';
 
 export default function SearchEnhancements() {
+  const { t } = useI18n();
   const router = useRouter();
   const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
   const [popular, setPopular] = useState<string[]>([]);
@@ -45,10 +47,10 @@ export default function SearchEnhancements() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Clock className="w-4 h-4" />
-              最近搜索
+              {t('searchPage.recentSearches')}
             </h3>
             <button onClick={handleClearHistory} className="text-xs text-muted-foreground hover:text-primary">
-              清空
+              {t('searchPage.clearHistory')}
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -69,7 +71,7 @@ export default function SearchEnhancements() {
         <div className="card p-5">
           <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
             <TrendingUp className="w-4 h-4" />
-            热门搜索
+            {t('searchPage.popularSearches')}
           </h3>
           <div className="flex flex-wrap gap-2">
             {popular.map((q, i) => (

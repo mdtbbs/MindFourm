@@ -553,6 +553,21 @@ describe('ResourcesService', () => {
     expect(manager.update).not.toHaveBeenCalled();
   });
 
+  it('allows a resource author to update its declared content language', async () => {
+    const existing = {
+      id: 23, user_id: 5, title: 'Blueprint', status: 'approved', resource_type: 'upload',
+      resource_kind: 'schematic', file_name: 'blueprint.msch', file_path: '/safe/blueprint.msch',
+      category_id: null, is_public: 1, user: { username: 'alice' }, category: null,
+    };
+    const { service, manager } = createService({
+      manager: { findOne: jest.fn().mockResolvedValue(existing) },
+    });
+
+    await service.update(23, 5, { content_language: 'ja' } as any, 'user');
+
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 23, { content_language: 'ja' });
+  });
+
   it('enqueues an approved map for forum-owned rendering', async () => {
     const preview = { supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
     const { service } = createService({

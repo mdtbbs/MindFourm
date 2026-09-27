@@ -1,0 +1,65 @@
+{
+  "searchPage": {
+    "title": "搜索",
+    "loginRequired": "请登录后搜索",
+    "loginDescription": "搜索功能仅对已登录账号开放；登录后每次搜索都会留存审计记录。",
+    "login": "登录",
+    "blockedTitle": "该关键词不可搜索",
+    "blockedDescription": "这个搜索词不符合站点的搜索规则，请更换关键词。",
+    "searchFailed": "搜索失败",
+    "searchFailedDescription": "暂时无法获取搜索结果，请稍后重试。",
+    "backToSearch": "返回搜索",
+    "results": "搜索结果",
+    "resultCount": "找到 {count} 条结果",
+    "emptyResults": "没有找到匹配的结果",
+    "enterQuery": "请输入搜索关键词",
+    "users": "用户",
+    "resources": "资源",
+    "posts": "帖子",
+    "servers": "服务器",
+    "gameVersions": "游戏版本",
+    "knowledgeBase": "知识库",
+    "developerUpdates": "开发动态",
+    "latest": "最新",
+    "recentSearches": "最近搜索",
+    "clearHistory": "清空",
+    "popularSearches": "热门搜索"
+  },
+  "notices": {
+    "title": "公告中心",
+    "updates": "社区动态",
+    "description": "论坛维护、活动和重要规则更新都会在这里保留。",
+    "pinned": "置顶",
+    "viewDetails": "查看公告详情。",
+    "communityTeam": "社区管理组",
+    "readCount": "{count} 次阅读",
+    "empty": "暂时没有公告。",
+    "backHome": "返回论坛首页",
+    "lastUpdated": "最后更新：{date}",
+    "revisionHistory": "更新记录",
+    "related": "相关推荐",
+    "backToNotices": "返回公告中心",
+    "type": {
+      "system": "社区",
+      "maintenance": "维护",
+      "event": "活动",
+      "policy": "规则",
+      "release": "发布"
+    }
+  },
+  "categoriesPage": {
+    "title": "分类",
+    "description": "浏览所有论坛板块",
+    "header": "所有板块",
+    "browseDescription": "按社区、创作、游戏和站务浏览讨论。",
+    "empty": "暂无板块",
+    "postCount": "{count} 个主题",
+    "groups": { "community": "社区", "creation": "创作", "game": "游戏", "meta": "站务", "other": "其他" }
+  },
+  "contentLanguage": {
+    "label": "内容语言",
+    "unknown": "不指定",
+    "hint": "选择帖子或资源正文使用的语言。",
+    "languages": { "en": "英语", "ru": "俄语", "ja": "日语", "zh-CN": "简体中文", "es": "西班牙语", "de": "德语", "other": "其他" }
+  }
+}

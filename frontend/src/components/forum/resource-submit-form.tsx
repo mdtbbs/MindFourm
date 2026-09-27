@@ -12,6 +12,7 @@ import { useToastStore } from '@/store/toast-store';
 import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
 import { useI18n } from '@/i18n/provider';
+import ContentLanguageSelect from '@/components/forum/content-language-select';
 
 type ResourceType = 'upload' | 'external';
 type SchematicSource = 'file' | 'paste';
@@ -31,6 +32,7 @@ export default function ResourceSubmitForm() {
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
+  const [contentLanguage, setContentLanguage] = useState('');
   const [categoryId, setCategoryId] = useState<number | null>(null);
   const [isPublic, setIsPublic] = useState(true);
   const [content, setContent] = useState('');
@@ -50,8 +52,8 @@ export default function ResourceSubmitForm() {
   const draft = useDraft('resource');
   const saveDraft = draft.save;
   const draftValues = useMemo(
-    () => ({ resourceType, resourceKind, title, version, description, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode }),
-    [resourceType, resourceKind, title, version, description, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode],
+    () => ({ resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode }),
+    [resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode],
   );
   const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl || schematicCode);
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
@@ -74,6 +76,7 @@ export default function ResourceSubmitForm() {
     if (typeof saved.title === 'string') setTitle(saved.title);
     if (typeof saved.version === 'string') setVersion(saved.version);
     if (typeof saved.description === 'string') setDescription(saved.description);
+    if (typeof saved.contentLanguage === 'string') setContentLanguage(saved.contentLanguage);
     if (typeof saved.categoryId === 'number') setCategoryId(saved.categoryId);
     if (typeof saved.isPublic === 'boolean') setIsPublic(saved.isPublic);
     if (typeof saved.content === 'string') setContent(saved.content);
@@ -179,6 +182,7 @@ export default function ResourceSubmitForm() {
       formData.append('title', title.trim());
       formData.append('resource_type', resourceType);
       formData.append('resource_kind', resourceKind);
+      formData.append('content_language', contentLanguage || 'unknown');
 
       formData.append('version', version.trim());
       if (description.trim()) formData.append('description', description.trim());
@@ -214,7 +218,7 @@ export default function ResourceSubmitForm() {
         setError(t('resourceSubmit.duplicateDetected'));
         return;
       }
-      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), categoryId, isPublic });
+      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), contentLanguage, categoryId, isPublic });
       if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
         submissionKey.current = { fingerprint, key: crypto.randomUUID() };
       }
@@ -383,6 +387,8 @@ export default function ResourceSubmitForm() {
         placeholder={t('resourceSubmit.versionPlaceholder')}
         maxLength={50}
       />
+
+      <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.shortDescription')}</label>

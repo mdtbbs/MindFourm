@@ -12,6 +12,7 @@ import { useDraft, useDraftAutoSave, type DraftSnapshot } from '@/hooks/use-draf
 import DraftRecovery from '@/components/ui/draft-recovery';
 import ResourceKindDetails from './resource-kind-details';
 import { useI18n } from '@/i18n/provider';
+import ContentLanguageSelect from '@/components/forum/content-language-select';
 
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
@@ -62,6 +63,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
+  const [contentLanguage, setContentLanguage] = useState('');
   const [duplicateNote, setDuplicateNote] = useState('');
   const [content, setContent] = useState('');
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
@@ -78,7 +80,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const [error, setError] = useState<string | null>(null);
   const submissionKey = useRef<{ fingerprint: string; key: string } | null>(null);
   const draft = useDraft('resource-workbench', kind);
-  const draftValues = useMemo(() => ({ title, version, description, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode }), [title, version, description, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode]);
+  const draftValues = useMemo(() => ({ title, version, description, contentLanguage, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode }), [title, version, description, contentLanguage, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode]);
   const hasDraftContent = Boolean(title || version || description || content || schematicCode);
   const draftResource: Resource | null = preview ? {
     id: 0, user_id: 0, title: title || t(kind === 'map' ? 'resourceWorkbench.unnamedMap' : 'resourceWorkbench.unnamedSchematic'),
@@ -111,6 +113,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
     if (typeof values.title === 'string') setTitle(values.title);
     if (typeof values.version === 'string') setVersion(values.version);
     if (typeof values.description === 'string') setDescription(values.description);
+    if (typeof values.contentLanguage === 'string') setContentLanguage(values.contentLanguage);
     if (typeof values.duplicateNote === 'string') setDuplicateNote(values.duplicateNote);
     if (typeof values.content === 'string') setContent(values.content);
     if (values.contentJson && typeof values.contentJson === 'object') setContentJson(values.contentJson as Record<string, unknown>);
@@ -198,6 +201,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       formData.append('version', version.trim() || t('resourceWorkbench.versionUnspecified'));
       formData.append('resource_type', 'upload');
       formData.append('resource_kind', kind);
+      formData.append('content_language', contentLanguage || 'unknown');
       formData.append('preview_draft_id', preview.id);
       formData.append('is_public', isPublic ? '1' : '0');
       if (description.trim()) formData.append('description', description.trim());
@@ -205,7 +209,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       if (duplicateNote.trim()) formData.append('duplicate_note', duplicateNote.trim());
       if (contentJson) formData.append('content_json', JSON.stringify(contentJson));
       if (categoryId) formData.append('category_id', String(categoryId));
-      const fingerprint = JSON.stringify({ preview: preview.id, title, version, description, duplicateNote, content, categoryId, isPublic });
+      const fingerprint = JSON.stringify({ preview: preview.id, title, version, description, contentLanguage, duplicateNote, content, categoryId, isPublic });
       if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
         submissionKey.current = { fingerprint, key: crypto.randomUUID() };
       }
@@ -274,6 +278,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label={kind === 'map' ? t('resourceWorkbench.mapName') : t('resourceWorkbench.schematicName')} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
               <Input label={t('resourceWorkbench.versionOptional')} value={version} onChange={(event) => setVersion(event.target.value)} placeholder={t('resourceWorkbench.versionUnspecified')} maxLength={50} />
+              <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
             </div>
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbench.shortDescription')}</label>
             <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={300} className="mt-1 min-h-24 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder={t('resourceWorkbench.shortDescriptionPlaceholder')} />

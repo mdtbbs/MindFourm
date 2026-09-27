@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, ValidateNested } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, ValidateNested, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TiptapDocumentDto } from '../../../common/dto/tiptap-document.dto';
 import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
@@ -35,6 +35,11 @@ export class UpdateResourceDto {
   @IsOptional()
   @IsString()
   version?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  content_language?: string;
 
   @IsOptional()
   @IsString()

@@ -16,6 +16,7 @@ import DraftRecovery from '@/components/ui/draft-recovery';
 import { Send, Save, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
 import { useI18n } from '@/i18n/provider';
+import ContentLanguageSelect from '@/components/forum/content-language-select';
 
 // TipTap editor is client-only (depends on document/window)
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
@@ -33,6 +34,7 @@ export default function PostForm() {
   // Form fields
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [contentLanguage, setContentLanguage] = useState('');
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
   const [categoryId, setCategoryId] = useState<string>('');
   const [tagsInput, setTagsInput] = useState('');
@@ -54,7 +56,7 @@ export default function PostForm() {
   // Draft
   const draft = useDraft('post');
   const saveDraft = draft.save;
-  const draftValues = useMemo(() => ({ title, content, contentJson, categoryId, tagsInput, status }), [title, content, contentJson, categoryId, tagsInput, status]);
+  const draftValues = useMemo(() => ({ title, content, contentJson, contentLanguage, categoryId, tagsInput, status }), [title, content, contentJson, contentLanguage, categoryId, tagsInput, status]);
   const hasDraftContent = Boolean(title.trim() || content.trim() || categoryId || tagsInput.trim() || status === 'draft');
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
@@ -97,6 +99,7 @@ export default function PostForm() {
     if (!saved) return;
     if (typeof saved.title === 'string') setTitle(saved.title);
     if (typeof saved.content === 'string') setContent(saved.content);
+    if (typeof saved.contentLanguage === 'string') setContentLanguage(saved.contentLanguage);
     if (saved.contentJson && typeof saved.contentJson === 'object') setContentJson(saved.contentJson as Record<string, unknown>);
     if (typeof saved.categoryId === 'string') setCategoryId(saved.categoryId);
     if (typeof saved.tagsInput === 'string') setTagsInput(saved.tagsInput);
@@ -138,6 +141,7 @@ export default function PostForm() {
       const input: CreatePostInput = {
         title: title.trim(),
         content: content.trim(),
+        content_language: contentLanguage || 'unknown',
         content_json: contentJson || undefined,
         category_id: categoryId ? Number(categoryId) : undefined,
         tags: parseTags(),
@@ -250,7 +254,7 @@ export default function PostForm() {
         </div>
 
         {/* ── Metadata row ──────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* Category */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
@@ -276,6 +280,8 @@ export default function PostForm() {
             />
             {availableTagNames && <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={availableTagNames}>{t('postForm.tagsAvailable', { tags: availableTagNames })}</p>}
           </div>
+
+          <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
 
           {/* Status */}
           <div>

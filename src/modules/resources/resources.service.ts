@@ -1578,6 +1578,7 @@ export class ResourcesService {
         updateData.external_url = dto.external_url;
       }
       if (dto.version !== undefined) updateData.version = dto.version;
+      if (dto.content_language !== undefined) updateData.content_language = dto.content_language.trim() || 'unknown';
       if (hasContentUpdate) {
         updateData.content = contentSource?.content ?? null;
         updateData.content_html = contentSource?.content_html ?? null;

@@ -8,6 +8,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { categoryApi, postApi } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import type { Category, Post } from '@/types';
+import ContentLanguageSelect from '@/components/forum/content-language-select';
 
 // TipTap editor is client-only
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
@@ -41,6 +42,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(post.content_json ?? null);
+  const [contentLanguage, setContentLanguage] = useState(post.content_language === 'unknown' ? '' : post.content_language || '');
   const [categoryId, setCategoryId] = useState<number | undefined>(post.category_id ?? undefined);
   const [tagsInput, setTagsInput] = useState(
     (post.tags ?? []).map((tag) => tag.name).join(', '),
@@ -60,6 +62,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
     title !== post.title
     || content !== post.content
     || JSON.stringify(contentJson) !== JSON.stringify(post.content_json ?? null)
+    || (contentLanguage || 'unknown') !== (post.content_language || 'unknown')
     || categoryId !== (post.category_id ?? undefined)
     || tagsInput !== (post.tags ?? []).map((tag) => tag.name).join(', ');
 
@@ -83,6 +86,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
         title: trimmedTitle,
         content,
         content_json: contentJson || undefined,
+        content_language: contentLanguage || 'unknown',
         category_id: categoryId,
         tags: tagsInput
           .split(/[,，]+/)
@@ -110,6 +114,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
       <h1 className="text-2xl font-semibold text-[var(--text)] mb-6">编辑帖子</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
         <div>
           <label htmlFor="post-title" className="block text-sm font-medium text-[var(--text)] mb-2">
             标题

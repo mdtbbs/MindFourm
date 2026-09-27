@@ -8,6 +8,7 @@ import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { Resource, ResourceCategory } from '@/types';
 import { useToastStore } from '@/store/toast-store';
+import ContentLanguageSelect from '@/components/forum/content-language-select';
 
 type ResourceType = 'upload' | 'external';
 
@@ -36,6 +37,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
   const [categoryId, setCategoryId] = useState<number | null>(resource.category_id || null);
   const [isPublic, setIsPublic] = useState(resource.is_public !== false);
   const [content, setContent] = useState(resource.content || '');
+  const [contentLanguage, setContentLanguage] = useState(resource.content_language === 'unknown' ? '' : resource.content_language || '');
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(resource.content_json || null);
   const [externalUrl, setExternalUrl] = useState(resource.external_url || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,6 +70,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         category_id: categoryId,
         is_public: isPublic,
         content: content.trim() || null,
+        content_language: contentLanguage || 'unknown',
         content_json: contentJson,
       };
 
@@ -116,6 +119,8 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         placeholder="例如 1.0、v2.0"
         maxLength={50}
       />
+
+      <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-[var(--text-secondary)]">短介绍</label>

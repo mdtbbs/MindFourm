@@ -23,13 +23,17 @@ import englishAccount from '../frontend/src/i18n/locales/en/account.json';
 import ruAccount from '../frontend/src/i18n/locales/ru/account.json';
 import jaAccount from '../frontend/src/i18n/locales/ja/account.json';
 import zhAccount from '../frontend/src/i18n/locales/zh-CN/account.json';
+import englishDiscovery from '../frontend/src/i18n/locales/en/discovery.json';
+import ruDiscovery from '../frontend/src/i18n/locales/ru/discovery.json';
+import jaDiscovery from '../frontend/src/i18n/locales/ja/discovery.json';
+import zhDiscovery from '../frontend/src/i18n/locales/zh-CN/discovery.json';
 
 const locales: Locale[] = ['en', 'ru', 'ja', 'zh-CN'];
 const catalogs: Record<Locale, Record<string, unknown>> = {
-  en: { ...enCommon, ...englishWorkflows, ...englishDiscussion, ...englishResources, ...englishActivity, ...englishAccount },
-  ru: { ...ruCommon, ...ruWorkflows, ...ruDiscussion, ...ruResources, ...ruActivity, ...ruAccount },
-  ja: { ...jaCommon, ...jaWorkflows, ...jaDiscussion, ...jaResources, ...jaActivity, ...jaAccount },
-  'zh-CN': { ...zhCommon, ...zhWorkflows, ...zhDiscussion, ...zhResources, ...zhActivity, ...zhAccount },
+  en: { ...enCommon, ...englishWorkflows, ...englishDiscussion, ...englishResources, ...englishActivity, ...englishAccount, ...englishDiscovery },
+  ru: { ...ruCommon, ...ruWorkflows, ...ruDiscussion, ...ruResources, ...ruActivity, ...ruAccount, ...ruDiscovery },
+  ja: { ...jaCommon, ...jaWorkflows, ...jaDiscussion, ...jaResources, ...jaActivity, ...jaAccount, ...jaDiscovery },
+  'zh-CN': { ...zhCommon, ...zhWorkflows, ...zhDiscussion, ...zhResources, ...zhActivity, ...zhAccount, ...zhDiscovery },
 };
 
 describe('community composition and resource-list translations', () => {
@@ -43,7 +47,7 @@ describe('community composition and resource-list translations', () => {
   }
 
   it.each(locales)('provides complete core workflow copy for %s', (locale) => {
-    const keys = [...messageKeys(enCommon), ...messageKeys(englishWorkflows), ...messageKeys(englishDiscussion), ...messageKeys(englishResources), ...messageKeys(englishActivity), ...messageKeys(englishAccount)]
+    const keys = [...messageKeys(enCommon), ...messageKeys(englishWorkflows), ...messageKeys(englishDiscussion), ...messageKeys(englishResources), ...messageKeys(englishActivity), ...messageKeys(englishAccount), ...messageKeys(englishDiscovery)]
       .filter((key) => !key.startsWith('admin'));
     for (const key of keys) {
       const message = key.split('.').reduce<unknown>((value, part) => value && typeof value === 'object'

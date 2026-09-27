@@ -672,6 +672,7 @@ export class PostsService {
         updateData.content_json = contentSource.content_json;
         updateData.content_text = contentSource.content_text;
       }
+      if (dto.content_language !== undefined) updateData.content_language = dto.content_language.trim() || 'unknown';
       if (dto.category_id !== undefined) updateData.category_id = dto.category_id;
       if (dto.required_group_id !== undefined) updateData.required_group_id = dto.required_group_id;
       if (dto.post_type) updateData.post_type = dto.post_type;
