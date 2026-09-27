@@ -1,0 +1,94 @@
+{
+  "profileEdit": {
+    "loadFailed": "Could not load your profile.",
+    "emptyName": "Display name cannot be empty.",
+    "saved": "Profile saved.",
+    "saveFailed": "Could not save your profile.",
+    "avatarPending": "Avatar uploaded and awaiting review.",
+    "avatarUpdated": "Avatar updated.",
+    "avatarRemoved": "Avatar removed.",
+    "retry": "Try again",
+    "back": "Back",
+    "title": "Edit profile",
+    "avatar": "Avatar",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Enter a display name",
+    "bio": "About you",
+    "bioPlaceholder": "Write a short introduction…",
+    "notificationSettings": "Notification settings",
+    "cancel": "Cancel",
+    "saving": "Saving…",
+    "save": "Save"
+  },
+  "userProfile": {
+    "homeTitle": "{name}'s profile",
+    "metaDescription": "{name}'s profile, discussions, and replies",
+    "avatarAlt": "{name}'s avatar",
+    "joined": "Joined {date}",
+    "stats": {
+      "posts": "Discussions",
+      "replies": "Replies",
+      "followers": "Followers",
+      "following": "Following",
+      "points": "Points"
+    },
+    "tabs": {
+      "posts": "Discussions",
+      "replies": "Replies",
+      "resources": "Resources",
+      "bookmarks": "Bookmarks",
+      "likes": "Likes"
+    },
+    "empty": {
+      "posts": "No discussions yet",
+      "replies": "No replies yet",
+      "resources": "No resources yet",
+      "bookmarks": "No bookmarks yet",
+      "likes": "No liked discussions yet"
+    },
+    "post": "discussion",
+    "unknownUser": "User #{id}",
+    "role": {
+      "admin": "Administrator",
+      "moderator": "Moderator",
+      "user": "Member"
+    }
+  },
+  "follow": {
+    "follow": "Follow",
+    "following": "Following",
+    "followFailed": "Could not follow this member.",
+    "unfollowFailed": "Could not unfollow this member."
+  },
+  "blockUser": {
+    "unknownUser": "User #{id}",
+    "blocked": "Blocked {name}",
+    "unblocked": "Unblocked {name}",
+    "cannotBlockStaff": "Administrators and moderators cannot be blocked.",
+    "userMissing": "This member does not exist or has been deleted.",
+    "cannotBlockSelf": "You cannot block yourself.",
+    "sessionExpired": "Your session expired. Sign in and try again.",
+    "operationFailed": "Could not complete the action. Try again.",
+    "unblockFailed": "Could not unblock this member. Try again.",
+    "block": "Block",
+    "unblock": "Unblock",
+    "dialogTitle": "Block {name}",
+    "close": "Close",
+    "description": "This member will not be able to send you messages. You can unblock them later in Settings → Block list.",
+    "reason": "Reason (optional, visible only to you)",
+    "reasonPlaceholder": "Add a private note for later",
+    "cancel": "Cancel",
+    "processing": "Working…",
+    "confirm": "Confirm block"
+  },
+  "avatarUploader": {
+    "imageOnly": "Choose an image file.",
+    "tooLarge": "Image must be 2 MB or smaller.",
+    "uploadFailed": "Could not upload the image.",
+    "deleteFailed": "Could not remove the image.",
+    "preview": "Avatar preview",
+    "upload": "Upload",
+    "remove": "Remove",
+    "formats": "JPEG, PNG, GIF, or WebP · up to 2 MB"
+  }
+}

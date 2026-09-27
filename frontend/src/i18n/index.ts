@@ -14,15 +14,23 @@ import enResources from './locales/en/resources.json';
 import ruResources from './locales/ru/resources.json';
 import jaResources from './locales/ja/resources.json';
 import zhCNResources from './locales/zh-CN/resources.json';
+import enActivity from './locales/en/activity.json';
+import ruActivity from './locales/ru/activity.json';
+import jaActivity from './locales/ja/activity.json';
+import zhCNActivity from './locales/zh-CN/activity.json';
+import enAccount from './locales/en/account.json';
+import ruAccount from './locales/ru/account.json';
+import jaAccount from './locales/ja/account.json';
+import zhCNAccount from './locales/zh-CN/account.json';
 import { siteProfile, type SiteLocale } from '@/config/site-profile';
 
 export type Locale = SiteLocale;
 export const localeNames: Record<Locale, string> = { 'zh-CN': '简体中文', en: 'English', ru: 'Русский', ja: '日本語' };
 const catalogs = {
-  en: { ...en, ...enWorkflows, ...enDiscussion, ...enResources },
-  ru: { ...ru, ...ruWorkflows, ...ruDiscussion, ...ruResources },
-  ja: { ...ja, ...jaWorkflows, ...jaDiscussion, ...jaResources },
-  'zh-CN': { ...zhCN, ...zhCNWorkflows, ...zhCNDiscussion, ...zhCNResources },
+  en: { ...en, ...enWorkflows, ...enDiscussion, ...enResources, ...enActivity, ...enAccount },
+  ru: { ...ru, ...ruWorkflows, ...ruDiscussion, ...ruResources, ...ruActivity, ...ruAccount },
+  ja: { ...ja, ...jaWorkflows, ...jaDiscussion, ...jaResources, ...jaActivity, ...jaAccount },
+  'zh-CN': { ...zhCN, ...zhCNWorkflows, ...zhCNDiscussion, ...zhCNResources, ...zhCNActivity, ...zhCNAccount },
 } as const;
 
 export function normalizeLocale(input?: string | null, supported: readonly string[] = siteProfile.localization.supportedLocales): Locale | null {

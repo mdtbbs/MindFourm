@@ -17,8 +17,14 @@ import { Medal } from '@/lib/shared';
 import FollowButton from '@/components/forum/follow-button';
 import BlockUserButton from '@/components/user/block-user-button';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
-import { roleLabel } from '@/lib/display-labels';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { getRequestLocale } from '@/i18n/server';
+import { getOpenGraphLocale, translate, type Locale } from '@/i18n';
+
+function localizedDate(value: string, locale: Locale, withTime = false): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(locale, withTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' }).format(date);
+}
 
 async function fetchUserProfile(userId: number): Promise<UserProfile | null> {
   return fetchApiData<UserProfile | null>(`/api/users/${userId}`, {
@@ -88,7 +94,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const userId = parseInt(id);
-  const profile = Number.isFinite(userId) ? await fetchUserProfile(userId) : null;
+  const [profile, locale] = await Promise.all([
+    Number.isFinite(userId) ? fetchUserProfile(userId) : Promise.resolve(null),
+    getRequestLocale(),
+  ]);
 
   if (!profile) {
     // Not in the page body: `loading.tsx` flushes a 200 shell before the body runs, and
@@ -99,10 +108,10 @@ export async function generateMetadata({
   const displayName = profile.username || `User #${profile.id}`;
   const description = profile.bio
     ? toMetaDescription(profile.bio)
-    : `${displayName} 的个人主页、帖子与回复`;
+    : translate(locale, 'userProfile.metaDescription', { name: displayName });
 
   return {
-    title: `${displayName} 的主页`,
+    title: translate(locale, 'userProfile.homeTitle', { name: displayName }),
     description,
     // Tab and pagination params fold onto the profile's single canonical URL.
     alternates: { canonical: `/users/${profile.id}` },
@@ -110,6 +119,7 @@ export async function generateMetadata({
       title: displayName,
       description,
       type: 'profile',
+      locale: getOpenGraphLocale(locale),
       url: `/users/${profile.id}`,
       images: profile.avatar_url ? [profile.avatar_url] : undefined,
     },
@@ -125,6 +135,8 @@ export default async function UserProfilePage({
 }) {
   const { id } = await params;
   const { page: pageStr, tab } = await searchParams;
+  const locale = await getRequestLocale();
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const userId = parseInt(id);
   const page = parseInt(pageStr || '1');
   const [profile, viewer] = await Promise.all([fetchUserProfile(userId), fetchViewer()]);
@@ -157,7 +169,9 @@ export default async function UserProfilePage({
       : Promise.resolve(createEmptyPaginatedResult<LikedPost>(20)),
   ]);
 
-  const displayName = profile.username || `User #${profile.id}`;
+  const displayName = profile.username || t('userProfile.unknownUser', { id: profile.id });
+  const roleKey = profile.role === 'admin' ? 'admin' : profile.role === 'moderator' ? 'moderator' : 'user';
+  const roleName = t(`userProfile.role.${roleKey}`);
   const roleVariant = profile.role === 'admin' ? 'warning' : profile.role === 'moderator' ? 'success' : 'default' as const;
 
   return (
@@ -185,17 +199,17 @@ export default async function UserProfilePage({
       <section className="mb-5 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)]">
         <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 md:flex-row md:items-start">
           <span className="flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-2xl font-semibold text-[var(--primary)] md:h-24 md:w-24">
-            {profile.avatar_url ? <img src={profile.avatar_url} alt={`${displayName} 的头像`} className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
+            {profile.avatar_url ? <img src={profile.avatar_url} alt={t('userProfile.avatarAlt', { name: displayName })} className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <h1 className="truncate text-2xl font-bold tracking-tight text-[var(--text)]">{displayName}</h1>
-                  <Badge variant={roleVariant}>{roleLabel(profile.role)}</Badge>
+                  <Badge variant={roleVariant}>{roleName}</Badge>
                 </div>
                 {profile.bio && <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{profile.bio}</p>}
-                <p className="mt-2 text-xs text-[var(--text-muted)]">UID {profile.id}{profile.created_at ? ` · 加入于 ${formatDate(profile.created_at)}` : ''}</p>
+                <p className="mt-2 text-xs text-[var(--text-muted)]">UID {new Intl.NumberFormat(locale).format(profile.id)}{profile.created_at ? ` · ${t('userProfile.joined', { date: localizedDate(profile.created_at, locale) })}` : ''}</p>
                 {profile.level && <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                   {profile.level.icon ? <img src={profile.level.icon} alt="" className="h-4 w-4" /> : <Star className="h-3.5 w-3.5" style={{ color: profile.level.color || 'var(--primary)' }} />}
                   <span>{profile.level.name}</span>
@@ -208,11 +222,11 @@ export default async function UserProfilePage({
               </div>
             </div>
             <div className="mt-5 grid grid-cols-3 divide-x divide-[var(--border)] border-y border-[var(--border)] sm:grid-cols-5">
-              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.post_count}</strong><span className="text-xs text-[var(--text-muted)]">主题</span></div>
-              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.reply_count}</strong><span className="text-xs text-[var(--text-muted)]">回复</span></div>
-              {profile.follower_count !== undefined && <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.follower_count}</strong><span className="text-xs text-[var(--text-muted)]">粉丝</span></div>}
-              {profile.following_count !== undefined && <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.following_count}</strong><span className="text-xs text-[var(--text-muted)]">关注</span></div>}
-              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{profile.total_points ?? 0}</strong><span className="text-xs text-[var(--text-muted)]">积分</span></div>
+              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{new Intl.NumberFormat(locale).format(profile.post_count)}</strong><span className="text-xs text-[var(--text-muted)]">{t('userProfile.stats.posts')}</span></div>
+              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{new Intl.NumberFormat(locale).format(profile.reply_count)}</strong><span className="text-xs text-[var(--text-muted)]">{t('userProfile.stats.replies')}</span></div>
+              {profile.follower_count !== undefined && <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{new Intl.NumberFormat(locale).format(profile.follower_count)}</strong><span className="text-xs text-[var(--text-muted)]">{t('userProfile.stats.followers')}</span></div>}
+              {profile.following_count !== undefined && <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{new Intl.NumberFormat(locale).format(profile.following_count)}</strong><span className="text-xs text-[var(--text-muted)]">{t('userProfile.stats.following')}</span></div>}
+              <div className="py-2.5 text-center"><strong className="block text-base text-[var(--text)]">{new Intl.NumberFormat(locale).format(profile.total_points ?? 0)}</strong><span className="text-xs text-[var(--text-muted)]">{t('userProfile.stats.points')}</span></div>
             </div>
           </div>
         </div>
@@ -229,7 +243,7 @@ export default async function UserProfilePage({
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
           >
-            帖子
+            {t('userProfile.tabs.posts')}
           </Link>
           <Link
             href={`/users/${userId}?tab=replies`}
@@ -239,7 +253,7 @@ export default async function UserProfilePage({
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
           >
-            回复
+            {t('userProfile.tabs.replies')}
           </Link>
           <Link
             href={`/users/${userId}?tab=resources`}
@@ -250,7 +264,7 @@ export default async function UserProfilePage({
             }`}
           >
             <Package className="w-4 h-4 inline mr-1" />
-            资源
+            {t('userProfile.tabs.resources')}
           </Link>
           {/* Own-profile only: these list the viewer's collections, not the owner's. */}
           {isOwnProfile && (
@@ -264,7 +278,7 @@ export default async function UserProfilePage({
                 }`}
               >
                 <Bookmark className="w-4 h-4 inline mr-1" />
-                收藏
+                {t('userProfile.tabs.bookmarks')}
               </Link>
               <Link
                 href={`/users/${userId}?tab=likes`}
@@ -275,7 +289,7 @@ export default async function UserProfilePage({
                 }`}
               >
                 <Heart className="w-4 h-4 inline mr-1" />
-                点赞
+                {t('userProfile.tabs.likes')}
               </Link>
             </>
           )}
@@ -287,7 +301,7 @@ export default async function UserProfilePage({
       {tabValue === 'posts' && (
         <>
           {postsResult.data.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-secondary)]">暂无帖子</div>
+            <div className="text-center py-12 text-[var(--text-secondary)]">{t('userProfile.empty.posts')}</div>
           ) : (
             <div className="space-y-3">
               <ThreadList posts={postsResult.data} />
@@ -304,17 +318,17 @@ export default async function UserProfilePage({
       {tabValue === 'replies' && (
         <>
           {repliesResult.data.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-secondary)]">暂无回复</div>
+            <div className="text-center py-12 text-[var(--text-secondary)]">{t('userProfile.empty.replies')}</div>
           ) : (
             <div className="space-y-3">
               {repliesResult.data.map((reply) => (
                 <div key={reply.id} className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4">
                   <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-2">
                     <Link href={`/posts/${reply.post_id}`} className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium">
-                      {reply.post_title || '帖子'}
+                      {reply.post_title || t('userProfile.post')}
                     </Link>
                     <span>·</span>
-                    <span>{formatDateTime(reply.created_at)}</span>
+                    <span>{localizedDate(reply.created_at, locale, true)}</span>
                   </div>
                   <MarkdownRenderer content={reply.content} mode="excerpt" className="line-clamp-3 text-sm text-[var(--text)]" />
                 </div>
@@ -332,7 +346,7 @@ export default async function UserProfilePage({
       {tabValue === 'resources' && (
         <>
           {resourcesResult.data.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-secondary)]">暂无资源</div>
+            <div className="text-center py-12 text-[var(--text-secondary)]">{t('userProfile.empty.resources')}</div>
           ) : (
             <div className="space-y-3">
               {resourcesResult.data.map((resource) => (
@@ -351,7 +365,7 @@ export default async function UserProfilePage({
       {tabValue === 'bookmarks' && (
         <>
           {bookmarksResult.data.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-secondary)]">暂无收藏</div>
+            <div className="text-center py-12 text-[var(--text-secondary)]">{t('userProfile.empty.bookmarks')}</div>
           ) : (
             <div className="space-y-3">
               {bookmarksResult.data.map((bookmark) => (
@@ -361,7 +375,7 @@ export default async function UserProfilePage({
                       {bookmark.title}
                     </Link>
                     <span className="text-sm text-[var(--text-secondary)]">
-                      {formatDate(bookmark.created_at)}
+                      {localizedDate(bookmark.created_at, locale)}
                     </span>
                   </div>
                   {bookmark.category_name && (
@@ -386,7 +400,7 @@ export default async function UserProfilePage({
       {tabValue === 'likes' && (
         <>
           {likesResult.data.length === 0 ? (
-            <div className="text-center py-12 text-[var(--text-secondary)]">暂无点赞</div>
+            <div className="text-center py-12 text-[var(--text-secondary)]">{t('userProfile.empty.likes')}</div>
           ) : (
             <div className="space-y-3">
               {likesResult.data.map((like) => (
@@ -396,7 +410,7 @@ export default async function UserProfilePage({
                       {like.title}
                     </Link>
                     <span className="text-sm text-[var(--text-secondary)]">
-                      {formatDate(like.created_at)}
+                      {localizedDate(like.created_at, locale)}
                     </span>
                   </div>
                   {like.category_name && (

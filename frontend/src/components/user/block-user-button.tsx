@@ -8,6 +8,7 @@ import { JsonRequestError } from '@/lib/api/request-json';
 import { BLOCK_REASON_MAX_LENGTH, isStaffRole, userBlockApi } from '@/lib/api/user-blocks';
 import { useUserStore } from '@/store/user-store';
 import { useToastStore } from '@/store/toast-store';
+import { useI18n } from '@/i18n/provider';
 
 interface BlockUserButtonProps {
   /** The user to block. */
@@ -50,6 +51,7 @@ export default function BlockUserButton({
   className = '',
   onChange,
 }: BlockUserButtonProps) {
+  const { t } = useI18n();
   const viewer = useUserStore((state) => state.user);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const showSuccess = useToastStore((state) => state.showSuccess);
@@ -121,7 +123,7 @@ export default function BlockUserButton({
   // there is nothing for a disabled control to explain.
   if (!isAuthenticated || viewer?.id === userId || isStaffRole(targetRole)) return null;
 
-  const displayName = username || `用户 #${userId}`;
+  const displayName = username || t('blockUser.unknownUser', { id: userId });
 
   const submitBlock = async () => {
     setSubmitting(true);
@@ -132,27 +134,27 @@ export default function BlockUserButton({
       setReason('');
       setOpen(false);
       triggerRef.current?.focus();
-      showSuccess(`已拉黑 ${displayName}`);
+      showSuccess(t('blockUser.blocked', { name: displayName }));
       onChange?.(true);
     } catch (err) {
       // Each status needs a different response from the user, so they must not collapse
       // into one generic failure message.
       if (err instanceof JsonRequestError) {
         if (err.status === 403) {
-          setError('不能拉黑管理员或版主');
+          setError(t('blockUser.cannotBlockStaff'));
         } else if (err.status === 404) {
-          setError('该用户不存在或已注销');
+          setError(t('blockUser.userMissing'));
         } else if (err.status === 400) {
-          setError(err.message || '不能拉黑自己');
+          setError(err.message || t('blockUser.cannotBlockSelf'));
         } else if (err.status === 401) {
-          setError('登录状态已过期，请重新登录后再试');
+          setError(t('blockUser.sessionExpired'));
         } else {
-          setError(err.message || '操作失败，请稍后重试');
+          setError(err.message || t('blockUser.operationFailed'));
         }
         setSubmitting(false);
         return;
       }
-      setError(err instanceof Error ? err.message : '操作失败，请稍后重试');
+      setError(err instanceof Error ? err.message : t('blockUser.operationFailed'));
     }
     setSubmitting(false);
   };
@@ -162,7 +164,7 @@ export default function BlockUserButton({
     try {
       await userBlockApi.unblock(userId);
       setBlocked(false);
-      showSuccess(`已取消拉黑 ${displayName}`);
+      showSuccess(t('blockUser.unblocked', { name: displayName }));
       onChange?.(false);
     } catch (err) {
       // 404 means the block is already gone — the button was simply out of date, so
@@ -171,7 +173,7 @@ export default function BlockUserButton({
         setBlocked(false);
         onChange?.(false);
       } else {
-        showError(err instanceof Error ? err.message : '取消拉黑失败，请稍后重试');
+        showError(err instanceof Error ? err.message : t('blockUser.unblockFailed'));
       }
     }
     setSubmitting(false);
@@ -192,7 +194,7 @@ export default function BlockUserButton({
         } ${className}`}
       >
         <UserX className="w-4 h-4" />
-        {blocked ? '取消拉黑' : '拉黑'}
+        {blocked ? t('blockUser.unblock') : t('blockUser.block')}
       </button>
 
       {open && (
@@ -211,12 +213,12 @@ export default function BlockUserButton({
           >
             <div className="flex items-start justify-between mb-4">
               <h2 id="block-user-dialog-title" className="text-lg font-semibold text-[var(--text)]">
-                拉黑 {displayName}
+                {t('blockUser.dialogTitle', { name: displayName })}
               </h2>
               <button
                 type="button"
                 onClick={close}
-                aria-label="关闭"
+                aria-label={t('blockUser.close')}
                 className="text-[var(--text-muted)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
               >
                 <X className="w-5 h-5" />
@@ -224,11 +226,11 @@ export default function BlockUserButton({
             </div>
 
             <p className="text-sm text-[var(--text-secondary)] mb-4">
-              拉黑后对方将无法向你发送私信。你可以随时在「设置 → 拉黑列表」中取消。
+              {t('blockUser.description')}
             </p>
 
             <label htmlFor="block-user-reason" className="block text-sm font-medium text-[var(--text)] mb-2">
-              原因（可选，仅自己可见）
+              {t('blockUser.reason')}
             </label>
             <textarea
               id="block-user-reason"
@@ -236,7 +238,7 @@ export default function BlockUserButton({
               onChange={(event) => setReason(event.target.value)}
               rows={3}
               maxLength={BLOCK_REASON_MAX_LENGTH}
-              placeholder="方便日后回顾为什么拉黑"
+              placeholder={t('blockUser.reasonPlaceholder')}
               className="w-full mb-1 px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
             />
             <p className="text-xs text-[var(--text-muted)] mb-4">
@@ -251,7 +253,7 @@ export default function BlockUserButton({
 
             <div className="flex justify-end gap-3">
               <Button type="button" variant="secondary" onClick={close} disabled={submitting}>
-                取消
+                {t('blockUser.cancel')}
               </Button>
               <Button
                 type="button"
@@ -260,7 +262,7 @@ export default function BlockUserButton({
                 disabled={submitting}
                 data-testid="block-user-submit"
               >
-                {submitting ? '处理中…' : '确认拉黑'}
+                {submitting ? t('blockUser.processing') : t('blockUser.confirm')}
               </Button>
             </div>
           </div>
