@@ -12,6 +12,7 @@ import { ResourceVersion } from './resource-version.entity';
 @Index('idx_resources_merged_into', ['merged_into_resource_id'])
 @Index('idx_resources_kind_title_status', ['resource_kind', 'title', 'status', 'deleted_at'])
 @Index('idx_resources_kind_source_status', ['resource_kind', 'source_url', 'status', 'deleted_at'])
+@Index('uq_resources_origin_identity', ['origin_site', 'origin_resource_id'], { unique: true })
 @Entity('resources')
 export class Resource {
   @PrimaryGeneratedColumn()

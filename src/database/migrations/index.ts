@@ -58,6 +58,7 @@ import { CreateResourceUploadDrafts1720000090000 } from './1720000090000-CreateR
 import { AllowUsersWithoutEmail1720000100000 } from './1720000100000-AllowUsersWithoutEmail';
 import { ResourceIntegrityAndMerge1720000110000 } from './1720000110000-ResourceIntegrityAndMerge';
 import { AddInternationalCommunityFields1720000120000 } from './1720000120000-AddInternationalCommunityFields';
+import { AddResourceOriginIdentity1720000130000 } from './1720000130000-AddResourceOriginIdentity';
 
 /**
  * Migrations in run order.
@@ -127,4 +128,5 @@ export const migrations = [
   AllowUsersWithoutEmail1720000100000,
   ResourceIntegrityAndMerge1720000110000,
   AddInternationalCommunityFields1720000120000,
+  AddResourceOriginIdentity1720000130000,
 ];

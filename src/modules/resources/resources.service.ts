@@ -253,7 +253,14 @@ export class ResourcesService {
     dto: CreateResourceDto,
     userId: number,
     file?: ResourceFileMeta,
-    provenance: { ipAddress?: string; rendererDraft?: ConsumedResourcePreviewDraft; uploadSessionId?: string; idempotencyKey?: string; idempotencyPayload?: unknown } = {},
+    provenance: {
+      ipAddress?: string;
+      rendererDraft?: ConsumedResourcePreviewDraft;
+      uploadSessionId?: string;
+      idempotencyKey?: string;
+      idempotencyPayload?: unknown;
+      origin?: { site: string; resourceId: string; url: string };
+    } = {},
   ): Promise<any> {
     const categoryId = this.toOptionalNumber((dto as any).category_id);
     const resourceType = this.normalizeResourceType(dto.resource_type);
@@ -261,6 +268,19 @@ export class ResourcesService {
     const idempotencyKey = this.validateIdempotencyKey(provenance.idempotencyKey);
     const payloadFingerprint = this.hashCanonical(provenance.idempotencyPayload ?? dto);
     const requestFingerprint = this.hashCanonical({ payloadFingerprint, content_hash: file?.content_hash || null });
+
+    if (provenance.origin) {
+      const existingOrigin = await this.resourceRepository.findOne({
+        where: { origin_site: provenance.origin.site, origin_resource_id: provenance.origin.resourceId },
+      });
+      if (existingOrigin) {
+        throw new ConflictException({
+          code: 'RESOURCE_ORIGIN_ALREADY_IMPORTED',
+          message: 'This source resource has already been imported.',
+          existing_resource_id: existingOrigin.id,
+        });
+      }
+    }
 
     if (idempotencyKey) {
       const replay = await this.findIdempotentSubmission(userId, idempotencyKey, payloadFingerprint, requestFingerprint);
@@ -319,7 +339,7 @@ export class ResourcesService {
         content: contentSource?.content,
         externalUrl: dto.external_url,
         fileName: file?.file_name,
-      }))
+      }), { actorId: userId, surface: 'resource' })
       : this.emptyContentRisk();
     const requiresModeration = risk.mustReview || (this.siteConfig?.isEnabled('resourcePreModeration') ?? true);
 
@@ -344,6 +364,9 @@ export class ResourcesService {
       version: dto.version,
       source_url: dto.source_url || null,
       license: dto.license?.trim() || null,
+      origin_site: provenance.origin?.site || null,
+      origin_resource_id: provenance.origin?.resourceId || null,
+      origin_url: provenance.origin?.url || null,
       content: contentSource?.content || null,
       content_language: dto.content_language?.trim() || 'unknown',
       content_html: contentSource?.content_html || null,
@@ -366,7 +389,9 @@ export class ResourcesService {
     } as any) as unknown as Resource;
 
     let replayed = false;
-    const saved = await this.dataSource.transaction(async (manager) => {
+    let saved: Resource;
+    try {
+      saved = await this.dataSource.transaction(async (manager) => {
       if (idempotencyKey) {
         await manager.query('DELETE FROM resource_submission_idempotency WHERE user_id = ? AND idempotency_key = ? AND expires_at <= NOW()', [userId, idempotencyKey]);
         try {
@@ -403,8 +428,18 @@ export class ResourcesService {
       if (idempotencyKey) {
         await manager.query('UPDATE resource_submission_idempotency SET resource_id = ? WHERE user_id = ? AND idempotency_key = ?', [resource.id, userId, idempotencyKey]);
       }
-      return resource;
-    });
+        return resource;
+      });
+    } catch (error: any) {
+      const duplicateEntry = error?.code === 'ER_DUP_ENTRY' || error?.errno === 1062;
+      if (provenance.origin && duplicateEntry && String(error?.message || '').includes('uq_resources_origin_identity')) {
+        throw new ConflictException({
+          code: 'RESOURCE_ORIGIN_ALREADY_IMPORTED',
+          message: 'This source resource has already been imported.',
+        });
+      }
+      throw error;
+    }
 
     const finalResult = await this.resourceRepository.findOne({
       where: { id: saved.id },
@@ -1097,6 +1132,20 @@ export class ResourcesService {
     return this.normalizeOneResource(resource, versions.map((version) => ({ ...version,
       compatibility: byVersion.get(version.id) || [],
     } as ResourceVersion)));
+  }
+
+  async getTransferExportData(id: number, viewer: { id: number; role: string }): Promise<any> {
+    const resource = await this.getByIdWithVersions(id, viewer);
+    const credits = await this.dataSource.query(
+      `SELECT role, display_name FROM resource_attributions
+       WHERE resource_id = ? AND role IN ('original_author', 'maintainer') ORDER BY sort_order ASC, id ASC`,
+      [id],
+    ) as Array<{ role: string; display_name: string | null }>;
+    return {
+      ...resource,
+      original_authors: credits.filter((item) => item.role === 'original_author').map((item) => item.display_name).filter(Boolean),
+      maintainers: credits.filter((item) => item.role === 'maintainer').map((item) => item.display_name).filter(Boolean),
+    };
   }
 
   async findMergedResourceTarget(id: number): Promise<number | null> {

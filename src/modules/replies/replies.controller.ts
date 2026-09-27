@@ -5,6 +5,7 @@ import { UpdateReplyDto } from './dto/update-reply.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
+import { RateLimit } from '@common/decorators/rate-limit.decorator';
 
 @Controller('posts/:postId/replies')
 export class RepliesController {
@@ -28,6 +29,7 @@ export class RepliesController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
+  @RateLimit({ max: 20, window: 60 })
   async createReply(
     @Param('postId') postId: number,
     @Body() dto: CreateReplyDto,

@@ -1316,6 +1316,12 @@ export const resourceAdminApi = {
     clearCache();
     return request<void>(`/api/resources/${id}/admin`, { method: 'DELETE' });
   },
+  exportManifest: (id: number) =>
+    request<ResourceTransferManifest>(`/api/resources/admin/${id}/export-manifest`, { skipCache: true }),
+  importManifest: (formData: FormData) => {
+    clearCache();
+    return request<{ resource: Resource }>('/api/resources/admin/import', { method: 'POST', body: formData });
+  },
   previewMerge: (sourceId: number, targetId: number) =>
     request<{
       source: { id: number; title: string; status: string };
@@ -1333,6 +1339,12 @@ export const resourceAdminApi = {
     });
   },
 };
+
+export interface ResourceTransferManifest {
+  format: 'mindustry-resource/v1';
+  origin: { site: 'mdtbbs' | 'mindustry-club'; resource_id: string; url: string };
+  resource: Record<string, unknown> & { title: string; resource_type: 'upload' | 'external'; file_name?: string };
+}
 
 // Server APIs (EasyManager integration)
 export const serverApi = {

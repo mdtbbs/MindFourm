@@ -109,7 +109,7 @@ export class PostsService {
     // business holding the write transaction open.
     const requestedStatus = dto.status || 'published';
     const risk = this.contentSafety
-      ? await this.contentSafety.assess(`${dto.title}\n${content}`)
+      ? await this.contentSafety.assess(`${dto.title}\n${content}`, { actorId: userId, surface: 'post' })
       : { score: 0, rules: [], mustReview: false };
     const requiresApproval = requestedStatus === 'published'
       && (risk.mustReview || await this.settingsService.getBoolean('require_post_approval', true));

@@ -322,7 +322,7 @@ describe('ResourcesService - Public Visibility', () => {
     } as any, 7, undefined, { ipAddress: '203.0.113.7' });
 
     expect(result.status).toBe('pending');
-    expect(contentSafety.assess).toHaveBeenCalledWith(expect.stringContaining('木马'));
+    expect(contentSafety.assess).toHaveBeenCalledWith(expect.stringContaining('木马'), { actorId: 7, surface: 'resource' });
     expect(contentSafety.recordFlag).toHaveBeenCalledWith({
       userId: 7,
       targetType: 'resource',

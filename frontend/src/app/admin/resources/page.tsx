@@ -7,8 +7,11 @@ import { FolderTree, ListChecks, Package } from 'lucide-react';
 import { adminApi } from '@/lib/api/client';
 import type { AdminStats } from '@/types';
 import ResourceTable from '@/components/admin/resource-table';
+import { useI18n } from '@/i18n/provider';
 
 export default function AdminResourcesPage() {
+  const { locale } = useI18n();
+  const english = locale !== 'zh-CN';
   const searchParams = useSearchParams();
   const initialSearch = searchParams?.get('search') ?? '';
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -25,6 +28,13 @@ export default function AdminResourcesPage() {
           <p className="mt-1 text-sm text-surface-500">统一查看资源状态、解析结果和关键运营数据。</p>
         </div>
         <div className="flex gap-2">
+          <Link
+            href="/admin/resources/import"
+            className="inline-flex items-center gap-2 border border-surface-200 bg-white px-3 py-2 text-sm text-surface-700 hover:bg-surface-50"
+          >
+            <Package className="h-4 w-4" />
+            {english ? 'Import resource' : '导入资源'}
+          </Link>
           <Link
             href="/admin/content/moderation?type=resources"
             className="inline-flex items-center gap-2 border border-surface-200 bg-white px-3 py-2 text-sm text-surface-700 hover:bg-surface-50"

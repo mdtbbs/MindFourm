@@ -424,6 +424,24 @@ describe('ResourcesService', () => {
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
+  it('prevents importing the same source resource twice', async () => {
+    const { service, dataSource, resourceRepository } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue({ id: 44 }) },
+    });
+
+    await expect(service.create({
+      title: 'Imported Mod', resource_type: 'external', external_url: 'https://example.org/mod', version: '1.0.0',
+    } as any, 7, undefined, {
+      origin: { site: 'mdtbbs', resourceId: '123', url: 'https://mdtbbs.cn/resources/123' },
+    })).rejects.toMatchObject({
+      response: { code: 'RESOURCE_ORIGIN_ALREADY_IMPORTED', existing_resource_id: 44 },
+    });
+    expect(resourceRepository.findOne).toHaveBeenCalledWith({
+      where: { origin_site: 'mdtbbs', origin_resource_id: '123' },
+    });
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
   it('replays the same idempotency key for the same user and payload', async () => {
     const resource = { id: 81, user_id: 7, title: 'Replay', status: 'pending', is_public: 0, user: null, category: null };
     let service!: ResourcesService;

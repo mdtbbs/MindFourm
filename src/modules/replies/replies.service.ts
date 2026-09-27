@@ -102,7 +102,7 @@ export class RepliesService {
     }
 
     const risk = this.contentSafety
-      ? await this.contentSafety.assess(content)
+      ? await this.contentSafety.assess(content, { actorId: userId, surface: 'reply' })
       : { score: 0, rules: [], mustReview: false };
     const requiresApproval = risk.mustReview || await this.settingsService.getBoolean('require_reply_approval', true);
 
