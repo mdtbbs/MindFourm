@@ -5,14 +5,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Command, ExternalLink, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
-import { roleLabel } from '@/lib/display-labels';
 import {
   resolveAdminLocation,
   type AdminNavSection,
 } from '@/lib/admin/navigation';
 import AdminNotificationBell from '@/components/admin/admin-notification-bell';
 import AdminCommandMenu from '@/components/admin/admin-command-menu';
-import { LocaleSwitcher } from '@/i18n/provider';
+import { LocaleSwitcher, useI18n } from '@/i18n/provider';
 
 interface AdminShellProps {
   siteName: string;
@@ -21,14 +20,23 @@ interface AdminShellProps {
 }
 
 export default function AdminShell({ siteName, sections, children }: AdminShellProps) {
+  const { t } = useI18n();
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
 
+  const localizedSections = useMemo(() => sections.map((section) => ({
+    ...section,
+    label: t(`adminNavigation.section.${section.key}`),
+    items: section.items.map((item) => ({
+      ...item,
+      label: t(`adminNavigation.item.${item.key}`),
+    })),
+  })), [sections, t]);
   const location = useMemo(
-    () => resolveAdminLocation(pathname ?? '/admin', sections),
-    [pathname, sections],
+    () => resolveAdminLocation(pathname ?? '/admin', localizedSections),
+    [pathname, localizedSections],
   );
 
   useEffect(() => {
@@ -65,7 +73,7 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
   return (
     <div className="admin-v2">
       <div className={`admin-v2-sidebar-stack ${mobileOpen ? 'is-open' : ''}`}>
-        <aside className="admin-v2-rail" aria-label="后台一级导航">
+        <aside className="admin-v2-rail" aria-label={t('adminShell.primaryNavigation')}>
           <Link href="/admin" className="admin-v2-brand" title={siteName}>
             {siteName.trim().charAt(0).toUpperCase() || 'M'}
           </Link>
@@ -90,16 +98,16 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
           </nav>
         </aside>
 
-        <aside className="admin-v2-secondary" aria-label={currentSection ? `${currentSection.label}导航` : '后台二级导航'}>
+        <aside className="admin-v2-secondary" aria-label={t('adminShell.secondaryNavigation')}>
           <div className="admin-v2-secondary-head">
             <div>
-              <strong>{currentSection?.label ?? '管理后台'}</strong>
+              <strong>{currentSection?.label ?? t('adminShell.defaultTitle')}</strong>
               <small>{siteName}</small>
             </div>
             <button
               type="button"
               className="admin-v2-mobile-close"
-              aria-label="关闭导航"
+              aria-label={t('adminShell.closeNavigation')}
               onClick={() => setMobileOpen(false)}
             >
               <X className="h-4 w-4" />
@@ -117,11 +125,11 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
                     type="button"
                     className="admin-v2-secondary-item is-disabled"
                     disabled
-                    title="该入口已经纳入 Admin 2.0 信息架构，等待对应后端能力接入"
+                    title={t('adminShell.disabledDescription')}
                   >
                     <Icon className="h-4 w-4" />
                     <span>{item.label}</span>
-                    <small>待接入</small>
+                    <small>{t('adminShell.waiting')}</small>
                   </button>
                 );
               }
@@ -143,7 +151,7 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
           <div className="admin-v2-secondary-footer">
             <Link href="/" target="_blank">
               <ExternalLink className="h-4 w-4" />
-              <span>返回论坛</span>
+              <span>{t('adminShell.forum')}</span>
             </Link>
           </div>
         </aside>
@@ -153,7 +161,7 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
         <button
           type="button"
           className="admin-v2-mobile-backdrop"
-          aria-label="关闭导航"
+          aria-label={t('adminShell.closeNavigation')}
           onClick={() => setMobileOpen(false)}
         />
       ) : null}
@@ -164,13 +172,13 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
             <button
               type="button"
               className="admin-v2-mobile-menu"
-              aria-label="打开导航"
+              aria-label={t('adminShell.openNavigation')}
               onClick={() => setMobileOpen(true)}
             >
               <Menu className="h-4 w-4" />
             </button>
             <div className="admin-v2-breadcrumb">
-              <span>{currentSection?.label ?? '管理后台'}</span>
+              <span>{currentSection?.label ?? t('adminShell.defaultTitle')}</span>
               {currentItem && currentItem.label !== currentSection?.label ? (
                 <>
                   <b>/</b>
@@ -188,15 +196,15 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
               onClick={() => setCommandOpen(true)}
             >
               <Command className="h-4 w-4" />
-              <span>搜索或执行命令</span>
+              <span>{t('adminShell.searchCommands')}</span>
               <kbd>Ctrl K</kbd>
             </button>
             <AdminNotificationBell />
             <div className="admin-v2-account">
-              <span>{user?.username || '管理员'}</span>
-              <small>{roleLabel(user?.role)}</small>
+              <span>{user?.username || t('adminShell.administrator')}</span>
+              <small>{user?.role ? t(`adminNavigation.role.${user.role}`) : t('adminNavigation.role.admin')}</small>
             </div>
-            <button type="button" className="admin-v2-icon-button" aria-label="退出登录" onClick={logout}>
+            <button type="button" className="admin-v2-icon-button" aria-label={t('adminShell.logout')} onClick={logout}>
               <LogOut className="h-4 w-4" />
             </button>
           </div>
@@ -208,7 +216,7 @@ export default function AdminShell({ siteName, sections, children }: AdminShellP
       <AdminCommandMenu
         open={commandOpen}
         onOpenChange={setCommandOpen}
-        sections={sections}
+        sections={localizedSections}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import Badge from '@/components/ui/badge';
 import { AdminNotification } from '@/types';
 import { useAdminNotificationStore } from '@/store/admin-notification-store';
 import { useToastStore } from '@/store/toast-store';
+import { useI18n } from '@/i18n/provider';
 
 const ADMIN_SSE_ENDPOINT = buildPublicApiUrl('/api/admin/notifications/events');
 function getLevelVariant(level: AdminNotification['level']) {
@@ -25,6 +26,7 @@ function getLevelVariant(level: AdminNotification['level']) {
 }
 
 export default function AdminNotificationBell() {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -127,7 +129,7 @@ export default function AdminNotificationBell() {
       <button
         onClick={handleOpen}
         className="relative p-2 text-[var(--text-secondary)] hover:text-[var(--text)] transition-colors"
-        aria-label={`后台通知${unreadCount > 0 ? `（${unreadCount} 条未读）` : ''}`}
+        aria-label={unreadCount > 0 ? t('adminNotification.ariaUnread', { count: unreadCount }) : t('adminNotification.aria')}
         aria-expanded={isOpen}
       >
         <Bell className={`w-5 h-5 ${justArrived ? 'animate-wiggle' : ''}`} />
@@ -142,10 +144,10 @@ export default function AdminNotificationBell() {
         <div className="absolute right-0 mt-2 w-96 overflow-hidden rounded-lg border border-surface-200 bg-white shadow-xl z-50">
           <div className="flex items-center justify-between border-b border-surface-100 px-4 py-3">
             <div>
-              <div className="font-medium text-surface-900">后台通知</div>
+              <div className="font-medium text-surface-900">{t('adminNotification.title')}</div>
               <div className="mt-1 flex items-center gap-2 text-xs text-surface-500">
                 <Radio className={`w-3.5 h-3.5 ${isConnected ? 'text-green-600' : 'text-surface-400'}`} />
-                {isConnected ? '实时连接已建立' : '实时连接未建立'}
+                {isConnected ? t('adminNotification.connected') : t('adminNotification.disconnected')}
               </div>
             </div>
             {unreadCount > 0 ? (
@@ -154,16 +156,16 @@ export default function AdminNotificationBell() {
                 className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
-                全部已读
+                {t('adminNotification.markAll')}
               </button>
             ) : null}
           </div>
 
           <div className="max-h-80 overflow-y-auto">
             {isLoading ? (
-              <div className="px-4 py-10 text-center text-sm text-surface-500">加载中...</div>
+              <div className="px-4 py-10 text-center text-sm text-surface-500">{t('adminNotification.loading')}</div>
             ) : notifications.length === 0 ? (
-              <div className="px-4 py-10 text-center text-sm text-surface-500">暂无后台通知</div>
+              <div className="px-4 py-10 text-center text-sm text-surface-500">{t('adminNotification.empty')}</div>
             ) : (
               notifications.map((notification) => (
                 <button
@@ -176,7 +178,7 @@ export default function AdminNotificationBell() {
                   <div className="flex items-start gap-3">
                     <div className="pt-0.5">
                       <Badge variant={getLevelVariant(notification.level)}>
-                        {notification.level}
+                        {t(`adminNotification.level.${notification.level}`)}
                       </Badge>
                     </div>
                     <div className="min-w-0 flex-1">
@@ -187,7 +189,7 @@ export default function AdminNotificationBell() {
                         </div>
                       ) : null}
                       <div className="mt-2 text-xs text-surface-400">
-                        {new Date(notification.created_at).toLocaleString('zh-CN')}
+                        {new Intl.DateTimeFormat(locale, { dateStyle: 'short', timeStyle: 'short' }).format(new Date(notification.created_at))}
                       </div>
                     </div>
                   </div>
@@ -197,7 +199,7 @@ export default function AdminNotificationBell() {
           </div>
 
           <div className="flex items-center justify-between bg-surface-50 px-4 py-3">
-            <span className="text-xs text-surface-500">最新 8 条后台通知</span>
+            <span className="text-xs text-surface-500">{t('adminNotification.latest')}</span>
             <button
               onClick={() => {
                 setIsOpen(false);
@@ -205,7 +207,7 @@ export default function AdminNotificationBell() {
               }}
               className="flex items-center gap-1 text-sm text-primary-600 hover:text-primary-700"
             >
-              通知中心
+              {t('adminNotification.center')}
               <ExternalLink className="w-3.5 h-3.5" />
             </button>
           </div>
