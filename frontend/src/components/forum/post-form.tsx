@@ -15,19 +15,16 @@ import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
 import { Send, Save, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
+import { useI18n } from '@/i18n/provider';
 
 // TipTap editor is client-only (depends on document/window)
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
-  loading: () => (
-    <div className="flex min-h-[200px] w-full items-center justify-center rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)]">
-      <Loader2 className="h-5 w-5 animate-spin text-[var(--text-muted)]" />
-      <span className="ml-2 text-sm text-[var(--text-muted)]">加载编辑器…</span>
-    </div>
-  ),
+  loading: () => null,
 });
 
 export default function PostForm() {
+  const { t } = useI18n();
   const { isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -125,8 +122,8 @@ export default function PostForm() {
 
   const validate = (): boolean => {
     let valid = true;
-    if (!title.trim()) { setTitleError('请输入标题'); valid = false; } else { setTitleError(''); }
-    if (!content.trim()) { setContentError('请输入内容'); valid = false; } else { setContentError(''); }
+    if (!title.trim()) { setTitleError(t('postForm.titleRequired')); valid = false; } else { setTitleError(''); }
+    if (!content.trim()) { setContentError(t('postForm.contentRequired')); valid = false; } else { setContentError(''); }
     return valid;
   };
 
@@ -148,11 +145,11 @@ export default function PostForm() {
       };
       const post = await postApi.create(input);
       draft.clear();
-      showSuccess(status === 'draft' ? '草稿已保存' : '帖子发布成功！');
+      showSuccess(status === 'draft' ? t('postForm.draftSaved') : t('postForm.published'));
       // Redirect to the new post page
       router.push(`/posts/${post.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '发帖失败，请重试');
+      setError(err instanceof Error ? err.message : t('postForm.submitFailed'));
       setIsSubmitting(false);
     }
   };
@@ -164,22 +161,22 @@ export default function PostForm() {
     return (
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
         <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-8">
-          <h2 className="text-xl font-bold text-[var(--text)] mb-3">加入讨论</h2>
+          <h2 className="text-xl font-bold text-[var(--text)] mb-3">{t('postForm.joinTitle')}</h2>
           <p className="text-sm text-[var(--text-muted)] mb-6">
-            登录后你可以发帖、回复、收藏、关注感兴趣的内容
+            {t('postForm.joinDescription')}
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <Link
               href={`/login?redirect=${encodeURIComponent(pathname || '/posts/new')}`}
               className="inline-flex items-center px-6 py-3 rounded-lg bg-[var(--primary)] text-white font-medium hover:opacity-90 transition-opacity"
             >
-              登录
+              {t('postForm.login')}
             </Link>
             <Link
               href="/"
               className="inline-flex items-center px-6 py-3 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text)] transition-colors"
             >
-              返回论坛
+              {t('postForm.backForum')}
             </Link>
           </div>
         </div>
@@ -188,7 +185,7 @@ export default function PostForm() {
   }
 
   const categoryOptions = [
-    { value: '', label: '选择分类（可选）' },
+    { value: '', label: t('postForm.optionalCategory') },
     ...categories.map(c => ({ value: String(c.id), label: c.name })),
   ];
 
@@ -199,9 +196,9 @@ export default function PostForm() {
 
       {/* ── Header ──────────────────────────────────── */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-[var(--text)]">发布新帖子</h1>
+        <h1 className="text-2xl font-bold text-[var(--text)]">{t('postForm.title')}</h1>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          使用富文本编辑器编写，支持粘贴 / 拖放上传图片
+          {t('postForm.help')}
         </p>
       </div>
 
@@ -225,7 +222,7 @@ export default function PostForm() {
             type="text"
             value={title}
             onChange={e => { setTitle(e.target.value); if (titleError) setTitleError(''); }}
-            placeholder="请输入帖子标题"
+            placeholder={t('postForm.titlePlaceholder')}
             maxLength={200}
             className={`w-full rounded-[var(--radius)] border bg-[var(--bg-card)] px-4 py-3 text-xl font-semibold text-[var(--text)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20
               ${titleError ? 'border-[var(--error)]' : 'border-[var(--border)]'}`}
@@ -241,8 +238,8 @@ export default function PostForm() {
             jsonValue={contentJson}
             onJsonChange={setContentJson}
             testId="post-content-editor"
-            ariaLabel="帖子正文"
-            placeholder="使用富文本编辑器编写帖子内容，支持粘贴 / 拖放上传图片..."
+            ariaLabel={t('postForm.bodyLabel')}
+            placeholder={t('postForm.bodyPlaceholder')}
             minHeight="280px"
             imageUpload
             className={contentError ? 'rounded-[var(--radius-card)] ring-1 ring-[var(--error)]' : ''}
@@ -257,7 +254,7 @@ export default function PostForm() {
           {/* Category */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-              分类
+              {t('postForm.category')}
             </label>
             <Select
               value={categoryId}
@@ -269,38 +266,34 @@ export default function PostForm() {
           {/* Tags */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-              标签
+              {t('postForm.tags')}
             </label>
             <Input
               value={tagsInput}
               onChange={e => setTagsInput(e.target.value)}
-              placeholder="逗号分隔"
+              placeholder={t('postForm.tagsPlaceholder')}
               maxLength={200}
             />
-            {availableTagNames && (
-              <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={availableTagNames}>
-                可用：{availableTagNames}
-              </p>
-            )}
+            {availableTagNames && <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={availableTagNames}>{t('postForm.tagsAvailable', { tags: availableTagNames })}</p>}
           </div>
 
           {/* Status */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-              状态
+              {t('postForm.status')}
             </label>
             <div className="flex gap-4 mt-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="status" value="published"
                   checked={status === 'published'} onChange={() => setStatus('published')}
                   className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
-                <span className="text-sm text-[var(--text-secondary)]">发布</span>
+                <span className="text-sm text-[var(--text-secondary)]">{t('postForm.publish')}</span>
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="status" value="draft"
                   checked={status === 'draft'} onChange={() => setStatus('draft')}
                   className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
-                <span className="text-sm text-[var(--text-secondary)]">草稿</span>
+                <span className="text-sm text-[var(--text-secondary)]">{t('postForm.draft')}</span>
               </label>
             </div>
           </div>
@@ -309,34 +302,34 @@ export default function PostForm() {
         {/* ── Actions ───────────────────────────────── */}
         <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 -mx-4 flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--bg-card)]/95 px-4 py-3 backdrop-blur lg:static lg:mx-0 lg:bg-transparent lg:px-0 lg:py-4 lg:backdrop-blur-none lg:bottom-auto">
           <Button type="button" variant="secondary" onClick={() => { if (hasDraftContent) draft.save(draftValues); router.back(); }}>
-            取消
+            {t('postForm.cancel')}
           </Button>
           <div className="flex gap-3 items-center">
             <Button type="button" variant="secondary"
-              onClick={() => { if (draft.save(draftValues)) showSuccess('已保存到此设备'); }}>
+              onClick={() => { if (draft.save(draftValues)) showSuccess(t('postForm.savedToDevice')); }}>
               <Save className="w-4 h-4 inline mr-1" />
-              存草稿
+              {t('postForm.saveToDevice')}
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
-                  提交中...
+                  {t('postForm.submitting')}
                 </>
               ) : status === 'draft' ? (
                 <>
                   <Save className="w-4 h-4 inline mr-1" />
-                  保存草稿
+                  {t('postForm.saveDraft')}
                 </>
               ) : (
                 <>
                   <Send className="w-4 h-4 inline mr-1" />
-                  发布帖子
+                  {t('postForm.publishPost')}
                 </>
               )}
             </Button>
             {draft.lastSavedAt && hasDraftContent && (
-              <span className="text-xs text-[var(--text-muted)]">已保存到此设备</span>
+              <span className="text-xs text-[var(--text-muted)]">{t('postForm.savedToDevice')}</span>
             )}
           </div>
         </div>

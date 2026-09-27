@@ -11,21 +11,18 @@ import { RESOURCE_KINDS } from '@/lib/display-labels';
 import { useToastStore } from '@/store/toast-store';
 import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
+import { useI18n } from '@/i18n/provider';
 
 type ResourceType = 'upload' | 'external';
 type SchematicSource = 'file' | 'paste';
 
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
-  loading: () => (
-    <div className="flex min-h-[160px] items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)]">
-      <Loader2 className="h-4 w-4 animate-spin text-[var(--text-muted)]" />
-      <span className="ml-2 text-xs text-[var(--text-muted)]">加载编辑器…</span>
-    </div>
-  ),
+  loading: () => null,
 });
 
 export default function ResourceSubmitForm() {
+  const { t } = useI18n();
   const router = useRouter();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
@@ -133,9 +130,9 @@ export default function ResourceSubmitForm() {
       const duplicate = await resourceApi.checkDuplicate({ content_hash: hash, resource_kind: resourceKind, title: title.trim() });
       if (sequence !== duplicateCheckSequence.current) return;
       setDuplicateNotice(duplicate);
-      if (duplicate.exact) setError('这个文件已经提交过了。请先查看已有资源；如资源归属有误，请联系管理处理。');
+      if (duplicate.exact) setError(t('resourceSubmit.duplicateExact'));
     } catch (cause) {
-      if (sequence === duplicateCheckSequence.current) setError(cause instanceof Error ? cause.message : '无法检查文件是否重复');
+      if (sequence === duplicateCheckSequence.current) setError(cause instanceof Error ? cause.message : t('resourceSubmit.duplicateCheckFailed'));
     } finally {
       if (sequence === duplicateCheckSequence.current) setCheckingFileDuplicates(false);
     }
@@ -145,32 +142,32 @@ export default function ResourceSubmitForm() {
     e.preventDefault();
 
     if (!resourceType) {
-      setError('请选择资源类型');
+      setError(t('resourceSubmit.chooseType'));
       return;
     }
 
     if (!title.trim()) {
-      setError('请填写标题');
+      setError(t('resourceSubmit.enterTitle'));
       return;
     }
 
     if (!version.trim()) {
-      setError('请填写资源版本');
+      setError(t('resourceSubmit.enterVersion'));
       return;
     }
 
     if (isSchematic && schematicSource === 'paste' && !schematicCode.trim()) {
-      setError('请粘贴从 Mindustry 复制的蓝图代码');
+      setError(t('resourceSubmit.pasteSchematic'));
       return;
     }
 
     if (resourceType === 'upload' && (!file && !(isSchematic && schematicSource === 'paste'))) {
-      setError('请选择要上传的文件');
+      setError(t('resourceSubmit.chooseFile'));
       return;
     }
 
     if (resourceType === 'external' && !externalUrl.trim()) {
-      setError('请填写外链地址');
+      setError(t('resourceSubmit.enterExternalUrl'));
       return;
     }
 
@@ -214,7 +211,7 @@ export default function ResourceSubmitForm() {
       });
       setDuplicateNotice(duplicate);
       if (duplicate.exact) {
-        setError('检测到相同文件或来源的资源。请先查看已有资源，避免重复提交。');
+        setError(t('resourceSubmit.duplicateDetected'));
         return;
       }
       const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), categoryId, isPublic });
@@ -224,12 +221,12 @@ export default function ResourceSubmitForm() {
 
       const resource = await resourceApi.upload(formData, submissionKey.current.key);
       draft.clear();
-      showSuccess('资源提交成功！');
+      showSuccess(t('resourceSubmit.success'));
       router.push(`/resources/${resource.id}`);
     } catch (err) {
       const existingResource = (err as { existingResource?: { id: number | null; title: string; url: string } | null }).existingResource;
       if (existingResource) setDuplicateNotice({ exact: true, existing_resources: [existingResource] });
-      setError(err instanceof Error ? err.message : '提交失败');
+      setError(err instanceof Error ? err.message : t('resourceSubmit.submitFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -258,13 +255,13 @@ export default function ResourceSubmitForm() {
         </div>
       )}
       {duplicateNotice && (duplicateNotice.exact || duplicateNotice.similar_resources?.length) && <div className={`rounded-[var(--radius)] border p-3 text-sm ${duplicateNotice.exact ? 'border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-200' : 'border-[var(--border)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]'}`}>
-        <p className="font-medium">{duplicateNotice.exact ? '发现重复资源' : '发现标题或来源相近的资源'}</p>
+        <p className="font-medium">{duplicateNotice.exact ? t('resourceSubmit.exactFound') : t('resourceSubmit.similarFound')}</p>
         <ul className="mt-2 space-y-1">{[...duplicateNotice.existing_resources, ...(duplicateNotice.similar_resources || [])].map((item) => <li key={`${item.id}-${item.title}`}><a className="underline underline-offset-2" href={item.url || `/resources/${item.id}`} target="_blank" rel="noreferrer">{item.title} · #{item.id}</a></li>)}</ul>
       </div>}
 
       {!isForumManagedKind ? (
         <div className="space-y-2">
-          <p className="text-sm font-medium text-[var(--text-secondary)]">资源类型 *</p>
+          <p className="text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.typeRequired')}</p>
           <div className="grid gap-3 sm:grid-cols-2">
           <label
             data-testid="resource-type-upload"
@@ -285,9 +282,9 @@ export default function ResourceSubmitForm() {
             <div className="flex items-start gap-3">
               <Upload className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
               <div>
-                <div className="text-sm font-medium text-[var(--text)]">文件</div>
+                <div className="text-sm font-medium text-[var(--text)]">{t('resourceSubmit.file')}</div>
                 <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                  上传压缩包、地图、存档、图片等文件资源
+                  {t('resourceSubmit.fileDescription')}
                 </p>
               </div>
             </div>
@@ -312,9 +309,9 @@ export default function ResourceSubmitForm() {
             <div className="flex items-start gap-3">
               <ExternalLink className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
               <div>
-                <div className="text-sm font-medium text-[var(--text)]">外链</div>
+                <div className="text-sm font-medium text-[var(--text)]">{t('resourceSubmit.external')}</div>
                 <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                  填写 GitHub、网盘、文档站等资源链接
+                  {t('resourceSubmit.externalDescription')}
                 </p>
               </div>
             </div>
@@ -329,11 +326,11 @@ export default function ResourceSubmitForm() {
           <div className="flex items-start gap-3">
             <Map className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
             <div>
-              <p className="text-sm font-semibold text-[var(--text)]">{isMap ? '地图提交' : '蓝图提交'}</p>
+              <p className="text-sm font-semibold text-[var(--text)]">{isMap ? t('resourceSubmit.mapSubmit') : t('resourceSubmit.schematicSubmit')}</p>
               <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
                 {isMap
-                  ? '地图会以本站托管的 .msav 文件提交，审核通过后生成预览图。'
-                  : '蓝图仅保存为本站托管的 .msch 文件：可上传文件，也可粘贴游戏中复制的蓝图代码。'}
+                  ? t('resourceSubmit.mapDescription')
+                  : t('resourceSubmit.schematicDescription')}
               </p>
             </div>
           </div>
@@ -341,7 +338,7 @@ export default function ResourceSubmitForm() {
       )}
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-[var(--text-secondary)]">资源类型 *</label>
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.kindRequired')}</label>
         <select
           value={resourceKind}
           onChange={(event) => {
@@ -358,38 +355,43 @@ export default function ResourceSubmitForm() {
           }}
           className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
         >
-          {RESOURCE_KINDS.map(({ value, label }) => <option key={value} value={value}>{value === 'map' || value === 'schematic' ? `${label}（专用工作台）` : label}</option>)}
+          {RESOURCE_KINDS.map(({ value, label }) => {
+            const translatedKey = `resourceList.resourceKind.${value}`;
+            const translatedLabel = t(translatedKey);
+            const kindName = translatedLabel === translatedKey ? label : translatedLabel;
+            return <option key={value} value={value}>{value === 'map' || value === 'schematic' ? `${kindName} (${t('resourceSubmit.dedicatedWorkspace')})` : kindName}</option>;
+          })}
         </select>
-        {(resourceKind === 'map' || resourceKind === 'schematic') && <p className="text-xs text-[var(--text-muted)]">{resourceKind === 'map' ? '地图仅接受 .msav 文件；审核通过后会自动生成预览图。' : '蓝图仅接受 .msch 文件；审核通过后会自动生成预览图。'}</p>}
+        {(resourceKind === 'map' || resourceKind === 'schematic') && <p className="text-xs text-[var(--text-muted)]">{resourceKind === 'map' ? t('resourceSubmit.mapOnly') : t('resourceSubmit.schematicOnly')}</p>}
       </div>
 
       <Input
         data-testid="resource-title-input"
-        label="标题 *"
+        label={t('resourceSubmit.titleLabel')}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="资源标题"
+        placeholder={t('resourceSubmit.titlePlaceholder')}
         required
         maxLength={200}
       />
 
       <Input
         data-testid="resource-version-input"
-        label="版本号"
+        label={t('resourceSubmit.versionLabel')}
         value={version}
         onChange={(e) => setVersion(e.target.value)}
-        placeholder="例如 1.0、v2.0"
+        placeholder={t('resourceSubmit.versionPlaceholder')}
         maxLength={50}
       />
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-[var(--text-secondary)]">短介绍</label>
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.shortDescription')}</label>
         <textarea
           data-testid="resource-description-input"
           value={description}
           onChange={(event) => setDescription(event.target.value)}
-          aria-label="资源短介绍"
-          placeholder="用几句话介绍资源，会显示在资源列表中。"
+          aria-label={t('resourceSubmit.shortDescriptionAria')}
+          placeholder={t('resourceSubmit.shortDescriptionPlaceholder')}
           maxLength={300}
           rows={3}
           className="w-full resize-y rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm leading-6 text-[var(--text)] placeholder:text-[var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
@@ -398,14 +400,14 @@ export default function ResourceSubmitForm() {
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">专题 / 用途</label>
+        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.topic')}</label>
         <select
           data-testid="resource-category-select"
           value={categoryId ?? ''}
           onChange={(e) => setCategoryId(e.target.value ? parseInt(e.target.value, 10) : null)}
           className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
         >
-          <option value="">不选择</option>
+          <option value="">{t('resourceSubmit.none')}</option>
           {categories
             .filter((category) => category.is_active)
             .map((category) => (
@@ -414,18 +416,18 @@ export default function ResourceSubmitForm() {
               </option>
             ))}
         </select>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">专题用于说明玩法或用途，不会改变资源类型。</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceSubmit.topicHelp')}</p>
       </div>
 
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-[var(--text-secondary)]">正文（长介绍）</label>
+        <label className="block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.longDescription')}</label>
         <TiptapEditor
           value={content}
           onChange={setContent}
           jsonValue={contentJson}
           onJsonChange={setContentJson}
-          ariaLabel="资源正文"
-          placeholder="使用富文本编辑器详细介绍资源内容、使用方式和注意事项，支持粘贴 / 拖放上传图片"
+          ariaLabel={t('resourceSubmit.resourceBody')}
+          placeholder={t('resourceSubmit.longDescriptionPlaceholder')}
           minHeight="260px"
           imageUpload
           testId="resource-content-input"
@@ -435,10 +437,10 @@ export default function ResourceSubmitForm() {
       {resourceType === 'external' && (
         <Input
           data-testid="resource-external-url-input"
-          label="外链地址 *"
+          label={t('resourceSubmit.externalUrl')}
           value={externalUrl}
           onChange={(e) => setExternalUrl(e.target.value)}
-          placeholder="https://github.com/... 或其他资源链接"
+          placeholder={t('resourceSubmit.externalUrlPlaceholder')}
           required
           type="url"
         />
@@ -446,7 +448,7 @@ export default function ResourceSubmitForm() {
 
       {isSchematic && (
         <div className="space-y-3 rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
-          <p className="text-sm font-medium text-[var(--text)]">蓝图来源 *</p>
+          <p className="text-sm font-medium text-[var(--text)]">{t('resourceSubmit.schematicSource')}</p>
           <div className="grid gap-2 sm:grid-cols-2">
             <button
               type="button"
@@ -455,7 +457,7 @@ export default function ResourceSubmitForm() {
               className={`rounded-lg border px-3 py-3 text-left text-sm ${schematicSource === 'file' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}
             >
               <Upload className="mb-1 h-4 w-4 text-[var(--primary)]" />
-              上传 .msch 文件
+              {t('resourceSubmit.uploadSchematic')}
             </button>
             <button
               type="button"
@@ -464,7 +466,7 @@ export default function ResourceSubmitForm() {
               className={`rounded-lg border px-3 py-3 text-left text-sm ${schematicSource === 'paste' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}
             >
               <ClipboardPaste className="mb-1 h-4 w-4 text-[var(--primary)]" />
-              粘贴游戏蓝图代码
+              {t('resourceSubmit.pasteSchematicLabel')}
             </button>
           </div>
           {schematicSource === 'paste' && (
@@ -474,10 +476,10 @@ export default function ResourceSubmitForm() {
                 value={schematicCode}
                 onChange={(event) => setSchematicCode(event.target.value)}
                 className="min-h-36 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-3 font-mono text-xs text-[var(--text)]"
-                placeholder="在 Mindustry 中复制蓝图后，将以 bXNja... 开头的代码粘贴到这里"
+                placeholder={t('resourceSubmit.schematicCodePlaceholder')}
                 spellCheck={false}
               />
-              <p className="text-xs text-[var(--text-muted)]">论坛会将代码转换为受审核的 .msch 附件；不会保存或跳转外链。</p>
+              <p className="text-xs text-[var(--text-muted)]">{t('resourceSubmit.schematicCodeHelp')}</p>
             </div>
           )}
         </div>
@@ -485,11 +487,11 @@ export default function ResourceSubmitForm() {
 
       {resourceType === 'upload' && (!isSchematic || schematicSource === 'file') && (
         <div>
-          <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{isMap ? '地图文件 (.msav) *' : isSchematic ? '蓝图文件 (.msch) *' : '文件 *'}</label>
+          <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{isMap ? t('resourceSubmit.mapFile') : isSchematic ? t('resourceSubmit.schematicFile') : t('resourceSubmit.fileRequired')}</label>
           <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-4">
             <Upload className="h-5 w-5 text-[var(--text-muted)]" />
             <span className="flex-1 truncate text-sm text-[var(--text)]">
-              {file?.name || (isMap ? '选择 .msav 地图文件' : isSchematic ? '选择 .msch 蓝图文件' : '选择要上传的文件')}
+              {file?.name || (isMap ? t('resourceSubmit.chooseMapFile') : isSchematic ? t('resourceSubmit.chooseSchematicFile') : t('resourceSubmit.chooseUploadFile'))}
             </span>
             <input
               data-testid="resource-file-input"
@@ -499,21 +501,21 @@ export default function ResourceSubmitForm() {
               className="hidden"
             />
           </label>
-          <p className="mt-1 text-xs text-[var(--text-muted)]">最大 50MB</p>
+          <p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceSubmit.maxFileSize')}</p>
 
         </div>
       )}
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">可见性</label>
+        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.visibility')}</label>
         <div className="flex gap-4">
           <label className="flex cursor-pointer items-center gap-2">
             <input type="radio" name="visibility" checked={isPublic} onChange={() => setIsPublic(true)} />
-            <span className="text-sm">公开</span>
+            <span className="text-sm">{t('resourceSubmit.public')}</span>
           </label>
           <label className="flex cursor-pointer items-center gap-2">
             <input type="radio" name="visibility" checked={!isPublic} onChange={() => setIsPublic(false)} />
-            <span className="text-sm">私有</span>
+            <span className="text-sm">{t('resourceSubmit.private')}</span>
           </label>
         </div>
       </div>
@@ -524,7 +526,7 @@ export default function ResourceSubmitForm() {
           onClick={() => { if (hasDraftContent) draft.save(draftValues); router.back(); }}
           className="rounded-[var(--radius)] bg-[var(--bg-elevated)] px-4 py-2 text-sm hover:bg-[var(--bg-card)]"
         >
-          取消
+          {t('resourceSubmit.cancel')}
         </button>
         <button
           data-testid="resource-submit-button"
@@ -534,10 +536,10 @@ export default function ResourceSubmitForm() {
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {resourceType === 'external' ? <ExternalLink className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
-          {checkingFileDuplicates ? '正在检查文件…' : isSubmitting ? '提交中...' : '提交资源'}
+          {checkingFileDuplicates ? t('resourceSubmit.checkingFile') : isSubmitting ? t('resourceSubmit.submitting') : t('resourceSubmit.submit')}
         </button>
         {draft.lastSavedAt && hasDraftContent && (
-          <span className="self-center text-xs text-[var(--text-muted)]">已保存到此设备</span>
+          <span className="self-center text-xs text-[var(--text-muted)]">{t('resourceSubmit.savedToDevice')}</span>
         )}
       </div>
     </form>

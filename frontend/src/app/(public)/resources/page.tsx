@@ -10,10 +10,11 @@ import { fetchPublicSettings } from "@/lib/settings/server";
 import { resolveBrand } from "@/lib/theme/brand";
 import { generatePageMetadata } from "@/lib/metadata";
 import { Resource, ResourceCategory } from "@/types";
+import { getRequestLocale } from "@/i18n/server";
+import { translate } from "@/i18n";
 
 export const revalidate = 60;
 
-const RESOURCES_DESCRIPTION = "浏览和下载社区贡献的资源、模组和工具";
 type ResourceFilterOptions = {
   supported_versions: string[];
   compatibility: string[];
@@ -27,12 +28,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const settings = await fetchPublicSettings();
   const brandInfo = resolveBrand(settings);
+  const locale = await getRequestLocale();
   const params = await searchParams;
   const hasFilter = Object.values(params).some((value) => Boolean(value));
 
   const metadata = generatePageMetadata({
-    title: "Mindustry 资源中心 - Mod、地图、蓝图、存档与版本下载",
-    description: "MDTBBS Mindustry 资源中心，浏览 Mod、地图、蓝图、存档、游戏版本与实用工具。",
+    title: translate(locale, 'resourceList.metaTitle'),
+    description: translate(locale, 'resourceList.metaDescription'),
     path: "/resources",
     brandInfo,
     openGraphImage: settings.seo_og_image,
@@ -113,7 +115,8 @@ export default async function ResourcesPage({
   }>;
 }) {
   const params = await searchParams;
-  const settings = await fetchPublicSettings();
+  const [settings, locale] = await Promise.all([fetchPublicSettings(), getRequestLocale()]);
+  const t = (key: string) => translate(locale, `resourceList.${key}`);
 
   const resourcesEnabled = settings.feature_resources_enabled !== "false";
 
@@ -123,10 +126,10 @@ export default async function ResourcesPage({
         <div className="panel-surface inline-block px-8 py-10">
           <AlertCircle className="mx-auto mb-4 h-10 w-10 text-[var(--muted-foreground)]" />
           <h2 className="mb-2 text-lg font-semibold text-[var(--foreground)]">
-            资源中心已关闭
+            {t('disabledTitle')}
           </h2>
           <p className="text-sm leading-6 text-[var(--muted-foreground)]">
-            管理员已关闭此功能，如需开启请联系管理员。
+            {t('disabledDescription')}
           </p>
         </div>
       </div>
@@ -139,9 +142,9 @@ export default async function ResourcesPage({
   } catch {
     return (
       <ErrorState
-        title="资源加载失败"
-        description="暂时无法获取资源列表，请稍后重试。"
-        action={{ label: "重新加载", href: "/resources" }}
+        title={t('loadFailed')}
+        description={t('loadDescription')}
+        action={{ label: t('reload'), href: "/resources" }}
       />
     );
   }
@@ -166,9 +169,9 @@ export default async function ResourcesPage({
       {/* Header */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-[var(--text)]">资源中心</h1>
+          <h1 className="text-2xl font-bold text-[var(--text)]">{t('title')}</h1>
           <p className="mt-1 text-sm text-[var(--text-muted)]">
-            浏览社区资源，快速查看版本、简介和下载信息。
+            {t('description')}
           </p>
         </div>
       </div>
@@ -194,12 +197,12 @@ export default async function ResourcesPage({
         {resources.length === 0 ? (
           <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] py-12 text-center">
             <FileText className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]" />
-            <p className="mb-4 text-[var(--text-muted)]">暂无资源</p>
+            <p className="mb-4 text-[var(--text-muted)]">{t('empty')}</p>
             <Link
               href="/resources/submit"
               className="inline-block rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"
             >
-              提交第一个资源
+              {t('submitFirst')}
             </Link>
           </div>
         ) : (

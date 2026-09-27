@@ -2,11 +2,20 @@ import en from './locales/en/common.json';
 import ru from './locales/ru/common.json';
 import ja from './locales/ja/common.json';
 import zhCN from './locales/zh-CN/common.json';
+import enWorkflows from './locales/en/community-workflows.json';
+import ruWorkflows from './locales/ru/community-workflows.json';
+import jaWorkflows from './locales/ja/community-workflows.json';
+import zhCNWorkflows from './locales/zh-CN/community-workflows.json';
 import { siteProfile, type SiteLocale } from '@/config/site-profile';
 
 export type Locale = SiteLocale;
 export const localeNames: Record<Locale, string> = { 'zh-CN': '简体中文', en: 'English', ru: 'Русский', ja: '日本語' };
-const catalogs = { en, ru, ja, 'zh-CN': zhCN } as const;
+const catalogs = {
+  en: { ...en, ...enWorkflows },
+  ru: { ...ru, ...ruWorkflows },
+  ja: { ...ja, ...jaWorkflows },
+  'zh-CN': { ...zhCN, ...zhCNWorkflows },
+} as const;
 
 export function normalizeLocale(input?: string | null, supported: readonly string[] = siteProfile.localization.supportedLocales): Locale | null {
   if (!input) return null;
