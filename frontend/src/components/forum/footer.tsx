@@ -11,6 +11,7 @@ import {
 } from '@/lib/footer/footer-settings';
 import { useNavigation } from '@/lib/navigation/context';
 import { useI18n } from '@/i18n/provider';
+import { siteProfile } from '@/config/site-profile';
 
 const FOOTER_LINKS = [
   { href: '/links', key: 'footer.links' },
@@ -19,6 +20,12 @@ const FOOTER_LINKS = [
   { href: '/terms', key: 'footer.terms' },
   { href: '/privacy', key: 'footer.privacy' },
   { href: '/feedback', key: 'footer.feedback' },
+];
+
+const CLUB_POLICY_LINKS = [
+  { href: '/community-guidelines', key: 'footer.communityGuidelines' },
+  { href: '/resource-rules', key: 'footer.resourceRules' },
+  { href: '/copyright', key: 'footer.takedown' },
 ];
 
 function FooterAnchor({ href, children, className = '' }: { href: string; children: React.ReactNode; className?: string }) {
@@ -98,7 +105,7 @@ export default function Footer() {
         )}
 
         <nav aria-label={t('footer.navigation')} className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-sm text-[var(--text-secondary)]">
-          {FOOTER_LINKS.map((link) => (
+          {[...FOOTER_LINKS, ...(siteProfile.profile === 'mindustry-club' ? CLUB_POLICY_LINKS : [])].map((link) => (
             <Link key={link.href} href={link.href} className="hover:text-[var(--primary)] hover:underline">
               {t(link.key)}
             </Link>

@@ -16,6 +16,7 @@ import { formatTime } from '@/lib/utils';
 import Link from 'next/link';
 import { Pin, Move, Trash2, Check, X, Pencil, Lock, Unlock } from 'lucide-react';
 import { postApi } from '@/lib/api/client';
+import { useI18n } from '@/i18n/provider';
 
 interface PostContentProps {
   post: Post;
@@ -38,6 +39,7 @@ export default function PostContent({
   onDelete,
 }: PostContentProps) {
   const router = useRouter();
+  const { t, locale } = useI18n();
   const { showSuccess, showError } = useToast();
   const canModerate = currentUserRole === 'moderator' || currentUserRole === 'admin';
   // The API authorises the write either way; this only decides whether to offer the link.
@@ -53,9 +55,9 @@ export default function PostContent({
       await postApi.setLocked(postId, next);
       setIsLocked(next);
       window.dispatchEvent(new CustomEvent('mdtbbs:post-lock-change', { detail: { postId, isLocked: next } }));
-      showSuccess(next ? '帖子已锁定，不再接受新回复' : '帖子已解锁');
+      showSuccess(next ? t('postDetail.lockSuccess') : t('postDetail.unlockSuccess'));
     } catch (err) {
-      showError(err instanceof Error ? err.message : '操作失败，请稍后重试');
+      showError(err instanceof Error ? err.message : t('postDetail.operationFailed'));
     }
     setLockPending(false);
   };
@@ -64,14 +66,14 @@ export default function PostContent({
 
   const handleDeleteForOwner = async () => {
     if (!postId || deleting) return;
-    if (!window.confirm('确定删除这篇帖子？删除后无法恢复。')) return;
+    if (!window.confirm(t('postDetail.deleteConfirm'))) return;
     setDeleting(true);
     try {
       await postApi.delete(postId);
-      showSuccess('帖子已删除');
+      showSuccess(t('postDetail.deleted'));
       router.push('/');
     } catch (err) {
-      showError(err instanceof Error ? err.message : '删除失败，请稍后重试');
+      showError(err instanceof Error ? err.message : t('postDetail.deleteFailed'));
       setDeleting(false);
     }
   };
@@ -87,9 +89,9 @@ export default function PostContent({
     try {
       await adminApi.approvePost(postId, 'post');
       router.refresh();
-      showSuccess('帖子已通过审核');
+      showSuccess(t('postDetail.approved'));
     } catch (err) {
-      showError(err instanceof Error ? err.message : '审核通过失败');
+      showError(err instanceof Error ? err.message : t('postDetail.approveFailed'));
     } finally {
       setModAction(null);
     }
@@ -101,10 +103,10 @@ export default function PostContent({
     try {
       await adminApi.rejectPost(postId, 'post', rejectReason || undefined);
       router.refresh();
-      showSuccess('帖子已驳回');
+      showSuccess(t('postDetail.rejected'));
       setShowRejectModal(false);
     } catch (err) {
-      showError(err instanceof Error ? err.message : '驳回失败');
+      showError(err instanceof Error ? err.message : t('postDetail.rejectFailed'));
     } finally {
       setModAction(null);
     }
@@ -129,10 +131,10 @@ export default function PostContent({
           />
 
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)] sm:justify-end">
-            <Badge variant="primary">楼主</Badge>
-            <span>发布于 <time dateTime={post.created_at} title={new Date(post.created_at).toLocaleString('zh-CN')}>{formatTime(post.created_at)}</time></span>
+            <Badge variant="primary">{t('postDetail.originalPoster')}</Badge>
+            <span>{t('postDetail.published')} <time dateTime={post.created_at} title={new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(post.created_at))}>{formatTime(post.created_at, locale)}</time></span>
             <span className="text-[var(--text-muted)]">|</span>
-            <span>{post.view_count} 浏览</span>
+            <span>{t('postDetail.views', { count: new Intl.NumberFormat(locale).format(post.view_count) })}</span>
           {post.edited_at && (
             <>
               <span className="text-[var(--text-muted)]">|</span>
@@ -144,10 +146,10 @@ export default function PostContent({
                   href={`/posts/${postId}/revisions`}
                   className="text-[var(--text-secondary)] hover:text-[var(--primary)]"
                 >
-                  已编辑于 <time dateTime={post.edited_at} title={new Date(post.edited_at).toLocaleString('zh-CN')}>{formatTime(post.edited_at)}</time>
+                  {t('postDetail.edited')} <time dateTime={post.edited_at} title={new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(post.edited_at))}>{formatTime(post.edited_at, locale)}</time>
                 </Link>
               ) : (
-                <span>已编辑于 {formatTime(post.edited_at)}</span>
+                <span>{t('postDetail.edited')} {formatTime(post.edited_at, locale)}</span>
               )}
             </>
           )}
@@ -155,7 +157,7 @@ export default function PostContent({
           {isLocked ? (
             <>
               <span className="text-[var(--text-muted)]">|</span>
-              <Badge variant="warning">已锁定</Badge>
+              <Badge variant="warning">{t('postDetail.locked')}</Badge>
             </>
           ) : null}
 
@@ -186,7 +188,7 @@ export default function PostContent({
         {post.status === 'pending' && canModerate && (
           <div className="flex items-center gap-2 mr-auto">
             <span className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider mr-1">
-              待审核
+              {t('postDetail.pending')}
             </span>
             <button
               onClick={handleApprove}
@@ -194,7 +196,7 @@ export default function PostContent({
               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
               <Check className="w-3.5 h-3.5" />
-              {modAction === 'approving' ? '处理中...' : '通过'}
+              {modAction === 'approving' ? t('postDetail.processing') : t('postDetail.approve')}
             </button>
             <button
               onClick={() => setShowRejectModal(true)}
@@ -202,7 +204,7 @@ export default function PostContent({
               className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
-              拒绝
+              {t('postDetail.reject')}
             </button>
           </div>
         )}
@@ -218,7 +220,7 @@ export default function PostContent({
             className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--primary)] transition-colors"
           >
             <Pencil className="w-4 h-4" />
-            编辑
+            {t('postDetail.edit')}
           </Link>
         )}
         {postId && !isOwner && (
@@ -236,12 +238,12 @@ export default function PostContent({
             {isLocked ? (
               <>
                 <Unlock className="w-4 h-4 mr-1" />
-                解锁
+                {t('postDetail.unlock')}
               </>
             ) : (
               <>
                 <Lock className="w-4 h-4 mr-1" />
-                锁定
+                {t('postDetail.lock')}
               </>
             )}
           </Button>
@@ -254,7 +256,7 @@ export default function PostContent({
             className="text-[var(--text-secondary)]"
           >
             <Pin className="w-4 h-4 mr-1" />
-            {post.is_pinned ? '取消置顶' : '置顶'}
+            {post.is_pinned ? t('postDetail.unpin') : t('postDetail.pin')}
           </Button>
         )}
         {canModerate && onMove && (
@@ -265,7 +267,7 @@ export default function PostContent({
             className="text-[var(--text-secondary)]"
           >
             <Move className="w-4 h-4 mr-1" />
-            移动
+            {t('postDetail.move')}
           </Button>
         )}
         {canModerate && onDelete && (
@@ -276,7 +278,7 @@ export default function PostContent({
             className="text-red-600 hover:text-red-700"
           >
             <Trash2 className="w-4 h-4 mr-1" />
-            删除
+            {t('postDetail.delete')}
           </Button>
         )}
         {isOwner && postId && !canModerate && (
@@ -288,7 +290,7 @@ export default function PostContent({
             className="text-red-600 hover:text-red-700"
           >
             <Trash2 className="w-4 h-4 mr-1" />
-            {deleting ? '删除中...' : '删除'}
+            {deleting ? t('postDetail.deleting') : t('postDetail.delete')}
           </Button>
         )}
       </div>
@@ -301,14 +303,14 @@ export default function PostContent({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-6 py-4 border-b border-[var(--border)]">
-              <h3 className="text-base font-semibold text-[var(--text)]">拒绝原因</h3>
-              <p className="text-xs text-[var(--text-muted)] mt-1">请填写拒绝此帖子的原因（可选）</p>
+              <h3 className="text-base font-semibold text-[var(--text)]">{t('postDetail.rejectReason')}</h3>
+              <p className="text-xs text-[var(--text-muted)] mt-1">{t('postDetail.rejectReasonOptional')}</p>
             </div>
             <div className="px-6 py-4">
               <textarea
                 value={rejectReason}
                 onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="例如：内容不符合社区规范..."
+                placeholder={t('postDetail.rejectPlaceholder')}
                 rows={4}
                 className="w-full px-3 py-2 text-sm border border-[var(--border)] bg-[var(--bg)] text-[var(--text)] focus:outline-none focus:border-[var(--primary)]"
                 autoFocus
@@ -319,14 +321,14 @@ export default function PostContent({
                 onClick={() => { setShowRejectModal(false); setRejectReason(''); }}
                 className="px-4 py-2 text-sm text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--bg-hover)] transition-colors"
               >
-                取消
+                {t('postDetail.cancel')}
               </button>
               <button
                 onClick={handleReject}
                 disabled={modAction === 'rejecting'}
                 className="px-4 py-2 text-sm text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
-                {modAction === 'rejecting' ? '处理中...' : '确认拒绝'}
+                {modAction === 'rejecting' ? t('postDetail.processing') : t('postDetail.confirmReject')}
               </button>
             </div>
           </div>

@@ -6,6 +6,9 @@ describe('site default packs', () => {
     expect(defaults.site_name).toBe('Mindustry Club');
     expect(defaults.footer_terms_content).toContain('Terms of Service');
     expect(defaults.footer_privacy_content).toContain('Privacy Policy');
+    expect(defaults.footer_community_guidelines_content).toContain('Community Guidelines');
+    expect(defaults.footer_resource_rules_content).toContain('Content & Resource Rules');
+    expect(defaults.footer_takedown_content).toContain('Copyright and Takedown Policy');
     expect(defaults.footer_terms_content).not.toContain('中华人民共和国');
     expect(defaults.footer_about_content).toContain('not affiliated with or endorsed by Anuken');
     expect(defaults.smtp_from).toBe('noreply@mindustry.club');

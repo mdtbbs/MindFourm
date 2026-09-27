@@ -6,12 +6,14 @@ import { bookmarkApi } from '@/lib/api/client';
 import Button from '@/components/ui/button';
 import Alert from '@/components/ui/alert';
 import { Bookmark, BookmarkCheck, Loader2 } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 interface BookmarkButtonProps {
   postId: number;
 }
 
 export default function BookmarkButton({ postId }: BookmarkButtonProps) {
+  const { t } = useI18n();
   const { user } = useAuth();
   const [bookmarked, setBookmarked] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -51,7 +53,7 @@ export default function BookmarkButton({ postId }: BookmarkButtonProps) {
       }
     } catch (err) {
       setBookmarked(previousState);
-      setError(err instanceof Error ? err.message : '操作失败');
+      setError(err instanceof Error ? err.message : t('bookmark.saveFailed'));
       setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
@@ -65,7 +67,7 @@ export default function BookmarkButton({ postId }: BookmarkButtonProps) {
         size="sm"
         onClick={handleToggle}
         disabled={loading || checking}
-        aria-label={bookmarked ? '取消收藏' : '收藏此帖'}
+        aria-label={bookmarked ? t('bookmark.remove') : t('bookmark.add')}
         aria-pressed={bookmarked}
         className={bookmarked ? 'text-amber-600' : 'text-surface-600'}
       >
@@ -76,7 +78,7 @@ export default function BookmarkButton({ postId }: BookmarkButtonProps) {
         ) : (
           <Bookmark className="w-4 h-4 mr-1" />
         )}
-        {bookmarked ? '已收藏' : '收藏'}
+        {bookmarked ? t('bookmark.saved') : t('bookmark.add')}
       </Button>
       {error && (
         <Alert type="error" message={error} />

@@ -6,15 +6,23 @@ import enWorkflows from './locales/en/community-workflows.json';
 import ruWorkflows from './locales/ru/community-workflows.json';
 import jaWorkflows from './locales/ja/community-workflows.json';
 import zhCNWorkflows from './locales/zh-CN/community-workflows.json';
+import enDiscussion from './locales/en/discussion.json';
+import ruDiscussion from './locales/ru/discussion.json';
+import jaDiscussion from './locales/ja/discussion.json';
+import zhCNDiscussion from './locales/zh-CN/discussion.json';
+import enResources from './locales/en/resources.json';
+import ruResources from './locales/ru/resources.json';
+import jaResources from './locales/ja/resources.json';
+import zhCNResources from './locales/zh-CN/resources.json';
 import { siteProfile, type SiteLocale } from '@/config/site-profile';
 
 export type Locale = SiteLocale;
 export const localeNames: Record<Locale, string> = { 'zh-CN': '简体中文', en: 'English', ru: 'Русский', ja: '日本語' };
 const catalogs = {
-  en: { ...en, ...enWorkflows },
-  ru: { ...ru, ...ruWorkflows },
-  ja: { ...ja, ...jaWorkflows },
-  'zh-CN': { ...zhCN, ...zhCNWorkflows },
+  en: { ...en, ...enWorkflows, ...enDiscussion, ...enResources },
+  ru: { ...ru, ...ruWorkflows, ...ruDiscussion, ...ruResources },
+  ja: { ...ja, ...jaWorkflows, ...jaDiscussion, ...jaResources },
+  'zh-CN': { ...zhCN, ...zhCNWorkflows, ...zhCNDiscussion, ...zhCNResources },
 } as const;
 
 export function normalizeLocale(input?: string | null, supported: readonly string[] = siteProfile.localization.supportedLocales): Locale | null {
@@ -47,6 +55,15 @@ export function translate(locale: Locale, key: string, values?: Record<string, s
   const message = read(catalogs[locale]) ?? read(catalogs.en) ?? key;
   if (typeof message !== 'string') return key;
   return Object.entries(values || {}).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), message);
+}
+
+/** Translate stable API error codes without asking clients to parse prose. */
+export function translateApiError(code: string | undefined, locale?: string | null): string | null {
+  if (!code) return null;
+  const resolved = normalizeLocale(locale, ['zh-CN', 'en', 'ru', 'ja']) || siteProfile.localization.defaultLocale;
+  const key = `errors.${code}`;
+  const message = translate(resolved, key);
+  return message === key ? null : message;
 }
 
 export function getOpenGraphLocale(locale: Locale): string {

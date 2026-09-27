@@ -3,6 +3,7 @@ import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/res
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
 import { isSiteFeatureEnabled } from '@/config/site-profile';
+import { normalizeLocale, translateApiError, translate } from '@/i18n';
 
 function normalizePublicApiBase(value: string | undefined): string {
   if (!value) return '';
@@ -287,9 +288,12 @@ async function request<T>(
       // Response body is not JSON, use default message
     }
 
+    const pageLocale = typeof document === 'undefined' ? undefined : document.documentElement.lang;
+    message = translateApiError(code, pageLocale) || message;
+
     const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(method).toUpperCase());
     if (code === 'PHONE_NOT_VERIFIED' && isSiteFeatureEnabled('phoneVerification') && isWrite && !options.skipPhoneVerificationRetry) {
-      useToastStore.getState().showWarning('请先验证手机号，验证成功后会自动继续本次操作');
+      useToastStore.getState().showWarning(translate(normalizeLocale(pageLocale, ['zh-CN', 'en', 'ru', 'ja']) || 'en', 'errors.phoneRetry'));
       const verified = await requestPhoneVerification();
       if (verified) {
         return request<T>(path, { ...options, skipPhoneVerificationRetry: true });

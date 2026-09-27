@@ -12,11 +12,17 @@ import { postApi, replyApi } from '@/lib/api/client';
 import { useToastStore } from '@/store/toast-store';
 import type { Reply } from '@/types';
 import { CheckCircle2, Loader2, Pencil, Quote, Reply as ReplyIcon, Trash2 } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
-  loading: () => <div className="min-h-[120px] rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 text-sm text-[var(--text-muted)]"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />加载编辑器…</div>,
+  loading: ReplyEditorLoading,
 });
+
+function ReplyEditorLoading() {
+  const { t } = useI18n();
+  return <div className="min-h-[120px] rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 text-sm text-[var(--text-muted)]"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />{t('replyActions.editorLoading')}</div>;
+}
 
 interface ReplyActionsProps {
   reply: Reply;
@@ -46,6 +52,7 @@ export default function ReplyActions({
   canAcceptAnswer = false,
   isBestReply = false,
 }: ReplyActionsProps) {
+  const { t } = useI18n();
   const quote = useReplyComposeStore((state) => state.quote);
   const replyTo = useReplyComposeStore((state) => state.replyTo);
   const { user } = useAuth();
@@ -64,18 +71,18 @@ export default function ReplyActions({
   const save = async () => {
     const trimmed = draft.trim();
     if (!trimmed) {
-      showError('回复内容不能为空');
+      showError(t('replyActions.empty'));
       return;
     }
 
     setBusy(true);
     try {
       const updatedReply = await replyApi.update(reply.id, trimmed, draftJson || undefined);
-      showSuccess('回复已更新');
+      showSuccess(t('replyActions.saved'));
       setEditing(false);
       window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'update', reply: updatedReply } }));
     } catch (err) {
-      showError(err instanceof Error ? err.message : '更新失败，请稍后重试');
+      showError(err instanceof Error ? err.message : t('replyActions.saveFailed'));
     }
     setBusy(false);
   };
@@ -85,24 +92,24 @@ export default function ReplyActions({
     try {
       // Passing null clears the mark; the API treats it as "no accepted answer".
       await postApi.setBestReply(postId, isBestReply ? null : reply.id);
-      showSuccess(isBestReply ? '已取消采纳' : '已采纳为答案');
+      showSuccess(isBestReply ? t('replyActions.unaccepted') : t('replyActions.accepted'));
       window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'best', replyId: isBestReply ? null : reply.id } }));
     } catch (err) {
-      showError(err instanceof Error ? err.message : '操作失败，请稍后重试');
+      showError(err instanceof Error ? err.message : t('replyActions.operationFailed'));
     }
     setBusy(false);
   };
 
   const remove = async () => {
-    if (!window.confirm('确定删除这条回复？删除后无法恢复。')) return;
+    if (!window.confirm(t('replyActions.deleteConfirm'))) return;
 
     setBusy(true);
     try {
       await replyApi.delete(reply.id);
-      showSuccess('回复已删除');
+      showSuccess(t('replyActions.deleted'));
       window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'delete', replyId: reply.id } }));
     } catch (err) {
-      showError(err instanceof Error ? err.message : '删除失败，请稍后重试');
+      showError(err instanceof Error ? err.message : t('replyActions.deleteFailed'));
     }
     setBusy(false);
   };
@@ -112,7 +119,7 @@ export default function ReplyActions({
       {editing && (
         <div className="px-4 pt-3">
           <label htmlFor={`reply-edit-${reply.id}`} className="sr-only">
-            编辑回复
+            {t('replyActions.editorLabel')}
           </label>
           <TiptapEditor
             id={`reply-edit-${reply.id}`}
@@ -121,15 +128,15 @@ export default function ReplyActions({
             onChange={setDraft}
             jsonValue={draftJson}
             onJsonChange={setDraftJson}
-            ariaLabel="编辑回复正文"
-            placeholder="输入回复内容…"
+            ariaLabel={t('replyActions.editorAria')}
+            placeholder={t('replyActions.placeholder')}
             minHeight="120px"
             compact
             imageUpload
           />
           <div className="flex items-center gap-2 mt-2 mb-1">
             <Button size="sm" onClick={save} disabled={busy} data-testid={`reply-edit-save-${reply.id}`}>
-              {busy ? '保存中…' : '保存'}
+              {busy ? t('replyActions.saving') : t('replyActions.save')}
             </Button>
             <Button
               size="sm"
@@ -141,7 +148,7 @@ export default function ReplyActions({
                 setEditing(false);
               }}
             >
-              取消
+              {t('replyActions.cancel')}
             </Button>
           </div>
         </div>
@@ -157,7 +164,7 @@ export default function ReplyActions({
           className="text-[var(--text-secondary)]"
         >
           <Quote className="w-4 h-4 mr-1" />
-          引用
+          {t('replyActions.quote')}
         </Button>
         <Button
           variant="ghost"
@@ -166,7 +173,7 @@ export default function ReplyActions({
           className="text-[var(--text-secondary)]"
         >
           <ReplyIcon className="w-4 h-4 mr-1" />
-          回复
+          {t('replyActions.reply')}
         </Button>
 
         {canAcceptAnswer && (
@@ -179,7 +186,7 @@ export default function ReplyActions({
             data-testid={`reply-accept-${reply.id}`}
           >
             <CheckCircle2 className="w-4 h-4 mr-1" />
-            {isBestReply ? '取消采纳' : '采纳为答案'}
+            {isBestReply ? t('replyActions.unaccept') : t('replyActions.accept')}
           </Button>
         )}
         {canModify && !editing && (
@@ -191,7 +198,7 @@ export default function ReplyActions({
             data-testid={`reply-edit-${reply.id}`}
           >
             <Pencil className="w-4 h-4 mr-1" />
-            编辑
+            {t('replyActions.edit')}
           </Button>
         )}
         {canModify && (
@@ -204,7 +211,7 @@ export default function ReplyActions({
             data-testid={`reply-delete-${reply.id}`}
           >
             <Trash2 className="w-4 h-4 mr-1" />
-            删除
+            {t('replyActions.delete')}
           </Button>
         )}
         {user != null && user.id !== reply.user_id && (
