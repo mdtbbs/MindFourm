@@ -11,6 +11,7 @@ import {
   UseGuards,
   ParseIntPipe,
   HttpStatus,
+  Optional,
 } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { PostRevisionsService } from './post-revisions.service';
@@ -34,6 +35,7 @@ import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
 import { SearchService } from '../search/search.service';
+import { CommunityChallengeService } from '../community-challenges/community-challenge.service';
 
 @Controller('posts')
 export class PostsController {
@@ -42,6 +44,7 @@ export class PostsController {
     private readonly postRevisionsService: PostRevisionsService,
     private readonly logsService: LogsService,
     private readonly searchService: SearchService,
+    @Optional() private readonly communityChallenge?: CommunityChallengeService,
   ) {}
 
   /**
@@ -152,8 +155,19 @@ export class PostsController {
   @RateLimit({ max: 10, window: 60 })
   async create(@Body() dto: CreatePostDto, @Req() req: any) {
     const userId = req.user.id;
+    const ipAddress = getClientIp(req);
+    if (dto.status !== 'draft') await this.communityChallenge?.enforceContentAction({
+      action: 'forum.post.create',
+      text: `${dto.title || ''}\n${dto.content || ''}`,
+      actorId: userId,
+      remoteIp: ipAddress,
+      proof: {
+        token: req.headers?.['x-forum-challenge-token'],
+        response: req.headers?.['x-forum-challenge-response'],
+      },
+    });
     const post = await this.postsService.create(dto, userId, {
-      ipAddress: getClientIp(req),
+      ipAddress,
       locationLabel: getClientRegion(req),
     });
     await this.logOperation(req, 'post.create', 'post', post?.id, {

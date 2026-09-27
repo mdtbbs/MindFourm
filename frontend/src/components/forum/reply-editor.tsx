@@ -9,21 +9,23 @@ import Alert from '@/components/ui/alert';
 import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
 import { useToastStore } from '@/store/toast-store';
+import { getCommunityChallenge, type CommunityChallengeDescriptor, type CommunityChallengeProof } from '@/lib/api/client';
+import CommunityChallengeDialog from '@/components/forum/community-challenge-dialog';
+import { useI18n } from '@/i18n/provider';
 
 // TipTap editor is client-only
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
   loading: () => (
-    <div className="w-full min-h-[120px] flex items-center justify-center border border-surface-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+    <div className="w-full min-h-[120px] flex items-center justify-center border border-surface-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800" aria-busy="true">
       <Loader2 className="w-4 h-4 animate-spin text-surface-400" />
-      <span className="ml-2 text-xs text-surface-400">加载编辑器…</span>
     </div>
   ),
 });
 
 interface ReplyEditorProps {
   postId: number;
-  onSubmit: (content: string, parentReplyId?: number, contentJson?: Record<string, unknown>) => Promise<Reply | void>;
+  onSubmit: (content: string, parentReplyId?: number, contentJson?: Record<string, unknown>, proof?: CommunityChallengeProof) => Promise<Reply | void>;
   quoteReply?: Reply | null;
   replyToReply?: Reply | null;
   /** Clears the quote / reply-to target without submitting. */
@@ -43,8 +45,11 @@ export default function ReplyEditor({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
+  const [challenge, setChallenge] = useState<CommunityChallengeDescriptor | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState<{ content: string; parentReplyId?: number; contentJson?: Record<string, unknown> } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const showSuccess = useToastStore((state) => state.showSuccess);
+  const { t } = useI18n();
 
   const replyId = quoteReply?.id ?? replyToReply?.id;
   const draft = useDraft('reply', replyId ? `r-${replyId}` : `p-${postId}`);
@@ -92,30 +97,51 @@ export default function ReplyEditor({
     containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [replyId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!content.trim()) return;
-
+  const submitReply = async (
+    input: { content: string; parentReplyId?: number; contentJson?: Record<string, unknown> },
+    proof?: CommunityChallengeProof,
+  ) => {
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
     try {
       const reply = await onSubmit(
-        content,
-        quoteReply?.id || replyToReply?.id,
-        contentJson || undefined,
+        input.content,
+        input.parentReplyId,
+        input.contentJson,
+        proof,
       );
       setContent('');
       setContentJson(null);
       draft.clear();
-      const msg = reply?.status === 'pending' ? '回复已提交，等待管理员审核' : '回复发布成功！';
+      setChallenge(null);
+      setPendingSubmission(null);
+      const msg = reply?.status === 'pending' ? t('replyEditor.pendingSuccess') : t('replyEditor.success');
       setSuccess(msg);
       showSuccess(msg);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '提交失败，请重试');
+      const requiredChallenge = getCommunityChallenge(err);
+      if (requiredChallenge) {
+        setChallenge(requiredChallenge);
+        setPendingSubmission(input);
+      } else {
+        setChallenge(null);
+        setError(err instanceof Error ? err.message : t('replyEditor.submitFailed'));
+      }
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!content.trim()) return;
+    void submitReply({ content, parentReplyId: quoteReply?.id || replyToReply?.id, contentJson: contentJson || undefined });
+  };
+
+  const verifyChallenge = (response: string) => {
+    if (!challenge || !pendingSubmission) return;
+    void submitReply(pendingSubmission, { token: challenge.token, response });
   };
 
   return (
@@ -125,7 +151,7 @@ export default function ReplyEditor({
     >
       <div className="px-4 py-3 bg-surface-50 dark:bg-gray-800 border-b border-surface-200 dark:border-gray-700">
         <h3 className="font-semibold text-surface-900 dark:text-gray-100">
-          {quoteReply ? '引用回复' : replyToReply ? '回复' : '发表回复'}
+          {quoteReply ? t('replyEditor.quoteTitle') : replyToReply ? t('replyEditor.replyTitle') : t('replyEditor.title')}
         </h3>
       </div>
 
@@ -133,7 +159,7 @@ export default function ReplyEditor({
         {(quoteReply || replyToReply) && (
           <div className="mb-4 flex items-start justify-between gap-3 p-3 bg-surface-50 dark:bg-gray-800 border-l-4 border-primary-500 text-sm text-surface-600 dark:text-gray-300">
             <span>
-              {quoteReply ? `引用 #${quoteReply.id} 的内容` : `回复 #${replyToReply!.id}`}
+              {quoteReply ? t('replyEditor.quoteTarget', { id: quoteReply.id }) : t('replyEditor.replyTarget', { id: replyToReply!.id })}
             </span>
             {onCancelTarget && (
               <button
@@ -141,7 +167,7 @@ export default function ReplyEditor({
                 onClick={onCancelTarget}
                 className="shrink-0 text-xs underline hover:text-surface-900 dark:hover:text-gray-100"
               >
-                取消
+                {t('replyEditor.cancel')}
               </button>
             )}
           </div>
@@ -164,8 +190,8 @@ export default function ReplyEditor({
           onChange={setContent}
           jsonValue={contentJson}
           onJsonChange={setContentJson}
-          ariaLabel="回复正文"
-          placeholder="使用富文本编辑器编写回复，支持粘贴 / 拖放上传图片..."
+          ariaLabel={t('replyEditor.bodyLabel')}
+          placeholder={t('replyEditor.placeholder')}
           minHeight="120px"
           compact
           imageUpload
@@ -173,7 +199,7 @@ export default function ReplyEditor({
 
         <div className="mt-4 flex items-center justify-end gap-3">
           {draft.lastSavedAt && content.trim() && (
-            <span className="text-xs text-surface-400">已自动保存到此设备</span>
+            <span className="text-xs text-surface-400">{t('replyEditor.savedOnDevice')}</span>
           )}
           <Button
             type="submit"
@@ -182,12 +208,13 @@ export default function ReplyEditor({
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />
-                提交中...
+                  {t('replyEditor.submitting')}
               </>
-            ) : '提交回复'}
+            ) : t('replyEditor.submit')}
           </Button>
         </div>
       </form>
+      {challenge && <CommunityChallengeDialog challenge={challenge} onCancel={() => { setChallenge(null); setPendingSubmission(null); }} onVerify={verifyChallenge} busy={isSubmitting} />}
     </div>
   );
 }

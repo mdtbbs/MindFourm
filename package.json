@@ -10,6 +10,7 @@
     "build:renderer": "bash tools/mindustry-renderer/build-renderer.sh",
     "openapi:export": "npm run build:backend && node scripts/export-openapi.js",
     "openapi:check": "node scripts/check-openapi.cjs",
+    "readiness:production": "node scripts/production-readiness.cjs",
     "build:backend": "nest build",
     "build:frontend": "cd frontend && npm run build",
     "start": "node dist/main",

@@ -42,7 +42,7 @@ export const mindustryClubSite: SiteConfiguration = {
   name: 'Mindustry Club',
   domain: 'mindustry.club',
   branding: { shortName: 'Mindustry Club', description: 'A community built by Mindustry players.' },
-  localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja'] },
+  localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja', 'zh-CN'] },
   verification: { requireEmail: true, requirePhoneForWrites: false },
   features: {
     resources: true, gameVersions: true, servers: false, serversDirectory: true,

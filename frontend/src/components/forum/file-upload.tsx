@@ -3,7 +3,8 @@
 import { useRef, useState } from 'react';
 import { attachmentApi } from '@/lib/api/client';
 import { Attachment } from '@/types';
-import { Paperclip, X } from 'lucide-react';
+import { Paperclip } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 interface FileUploadProps {
   postId?: number;
@@ -39,6 +40,7 @@ function hasAllowedExtension(name: string): boolean {
 }
 
 export default function FileUpload({ postId, replyId, onUploaded }: FileUploadProps) {
+  const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
     // post or reply. Images while composing belong in the rich-text editor,
     // which uses /api/uploads/images instead.
     if (postId === undefined && replyId === undefined) {
-      setError('请先保存帖子或回复后再上传附件；正文图片请使用编辑器中的图片按钮。');
+      setError(t('uploads.saveFirst'));
       if (inputRef.current) inputRef.current.value = '';
       return;
     }
@@ -68,8 +70,8 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
     if (validFiles.length === 0) {
       setError(
         rejectedSize.length > 0 && rejectedType.length === 0
-          ? `文件超过 10MB 上限：${rejectedSize.map((f) => f.name).join('、')}`
-          : '不支持的文件类型',
+          ? t('uploads.fileTooLarge', { files: rejectedSize.map((f) => f.name).join(', ') })
+          : t('uploads.unsupported'),
       );
       return;
     }
@@ -78,7 +80,7 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
     // Report partial rejections rather than silently dropping them.
     const skipped = [...rejectedType, ...rejectedSize];
     setError(
-      skipped.length > 0 ? `已跳过 ${skipped.map((f) => f.name).join('、')}` : null,
+      skipped.length > 0 ? t('uploads.skipped', { files: skipped.map((f) => f.name).join(', ') }) : null,
     );
     try {
       const formData = new FormData();
@@ -91,7 +93,7 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
       const result = await attachmentApi.upload(formData);
       onUploaded?.(result.attachments);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '上传失败');
+      setError(err instanceof Error ? err.message : t('uploads.failed'));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = '';
@@ -108,7 +110,7 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
           className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg border border-surface-300 dark:border-gray-600 text-surface-600 dark:text-gray-300 hover:bg-surface-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
         >
           <Paperclip className="w-4 h-4" />
-          {uploading ? '上传中...' : '上传附件'}
+          {uploading ? t('uploads.uploading') : t('uploads.upload')}
         </button>
         <input
           ref={inputRef}
@@ -119,7 +121,7 @@ export default function FileUpload({ postId, replyId, onUploaded }: FileUploadPr
           onChange={(e) => e.target.files && handleFiles(e.target.files)}
         />
         <span className="text-xs text-surface-400 dark:text-gray-500">
-          PNG, JPG, GIF, PDF, ZIP (最大 10MB)
+          {t('uploads.types')}
         </span>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}

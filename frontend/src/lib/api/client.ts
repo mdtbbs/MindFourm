@@ -25,14 +25,33 @@ class ApiRequestError extends Error {
   status: number;
   code?: string;
   existingResource?: { id: number | null; public_id?: string | null; title: string; status: string; url: string } | null;
+  challenge?: CommunityChallengeDescriptor;
 
-  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource']) {
+  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource'], challenge?: CommunityChallengeDescriptor) {
     super(message);
     this.name = 'ApiRequestError';
     this.status = status;
     this.code = code;
     this.existingResource = existingResource;
+    this.challenge = challenge;
   }
+}
+
+export type CommunityChallengeDescriptor = {
+  token: string;
+  action: string;
+  provider: 'development' | 'turnstile' | 'hcaptcha';
+  expires_in: number;
+  site_key?: string;
+  left?: number;
+  right?: number;
+};
+
+export type CommunityChallengeProof = { token: string; response: string };
+
+export function getCommunityChallenge(error: unknown): CommunityChallengeDescriptor | null {
+  if (!(error instanceof ApiRequestError) || error.code !== 'CHALLENGE_REQUIRED') return null;
+  return error.challenge || null;
 }
 
 type RequestOptions = RequestInit & {
@@ -278,12 +297,14 @@ async function request<T>(
     let message = `Request failed: ${res.status}`;
     let code: string | undefined;
     let existingResource: ApiRequestError['existingResource'];
+    let challenge: CommunityChallengeDescriptor | undefined;
     try {
       const data = await res.json();
       const errorBody = data?.error || data;
       if (errorBody?.message) message = errorBody.message;
       if (errorBody?.code) code = errorBody.code;
       existingResource = errorBody?.existing_resource || errorBody?.details?.[0]?.existing_resource;
+      challenge = errorBody?.details?.find?.((item: any) => item?.challenge)?.challenge;
     } catch {
       // Response body is not JSON, use default message
     }
@@ -300,7 +321,7 @@ async function request<T>(
       }
     }
 
-    throw new ApiRequestError(message, res.status, code, existingResource);
+    throw new ApiRequestError(message, res.status, code, existingResource, challenge);
   }
 
   let data: unknown;
@@ -440,11 +461,12 @@ export const postApi = {
       search: params?.search,
     })}`),
   getById: (id: number) => request<Post>(`/api/posts/${id}`),
-  create: (input: CreatePostInput) => {
+  create: (input: CreatePostInput, challenge?: CommunityChallengeProof) => {
     clearCache();
     return request<Post>('/api/posts', {
       method: 'POST',
       body: JSON.stringify(input),
+      ...(challenge ? { headers: { 'X-Forum-Challenge-Token': challenge.token, 'X-Forum-Challenge-Response': challenge.response } } : {}),
     });
   },
   update: (id: number, input: Partial<CreatePostInput>) => {
@@ -504,11 +526,12 @@ export const replyApi = {
       page: params?.page,
       limit: params?.limit,
     })}`),
-  create: (postId: number, input: CreateReplyInput) => {
+  create: (postId: number, input: CreateReplyInput, challenge?: CommunityChallengeProof) => {
     clearCache();
     return request<Reply>(`/api/posts/${postId}/replies`, {
       method: 'POST',
       body: JSON.stringify(input),
+      ...(challenge ? { headers: { 'X-Forum-Challenge-Token': challenge.token, 'X-Forum-Challenge-Response': challenge.response } } : {}),
     });
   },
   update: (id: number, content: string, contentJson?: Record<string, unknown>) => {

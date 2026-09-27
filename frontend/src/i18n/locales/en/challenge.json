@@ -1,0 +1,41 @@
+{
+  "challenge": {
+    "title": "One quick security check",
+    "description": "This action needs an extra check. Your draft will stay here.",
+    "mathPrompt": "What is {left} + {right}?",
+    "verify": "Continue",
+    "verifying": "Checking…",
+    "cancel": "Cancel",
+    "widgetUnavailable": "The security check could not load. Please try again."
+  },
+  "replyForm": {
+    "loading": "Preparing reply form",
+    "signInTitle": "Sign in to reply",
+    "signInDescription": "Sign in to reply, join the discussion and follow topics you care about.",
+    "signIn": "Sign in",
+    "browseMore": "Browse discussions",
+    "locked": "This discussion is locked and no longer accepts replies."
+  },
+  "replyEditor": {
+    "title": "Write a reply",
+    "replyTitle": "Reply",
+    "quoteTitle": "Quote a reply",
+    "quoteTarget": "Quoting reply #{id}",
+    "replyTarget": "Replying to #{id}",
+    "cancel": "Cancel",
+    "bodyLabel": "Reply content",
+    "placeholder": "Write your reply. You can paste or drop images to upload them…",
+    "savedOnDevice": "Saved on this device",
+    "submitting": "Submitting…",
+    "submit": "Post reply",
+    "success": "Reply posted.",
+    "pendingSuccess": "Reply submitted for review.",
+    "submitFailed": "Could not submit your reply. Please try again."
+  },
+  "errors": {
+    "CHALLENGE_REQUIRED": "Complete the security check to continue.",
+    "CHALLENGE_INVALID": "The security check did not pass. Please try again.",
+    "CHALLENGE_EXPIRED": "The security check expired or was already used. Submit again to get a new one.",
+    "CHALLENGE_PROVIDER_UNAVAILABLE": "The security check is temporarily unavailable. Please try again shortly."
+  }
+}

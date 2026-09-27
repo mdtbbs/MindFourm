@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Attachment } from '@/types';
 import { attachmentApi } from '@/lib/api/client';
 import { FileImage, FileText, Archive, Download, Loader2, Map } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 interface AttachmentListProps {
   attachments: Attachment[];
@@ -22,6 +23,7 @@ function formatSize(bytes: number): string {
 }
 
 export default function AttachmentList({ attachments }: AttachmentListProps) {
+  const { t } = useI18n();
   const [visibleAttachments, setVisibleAttachments] = useState(attachments);
 
   useEffect(() => {
@@ -76,12 +78,12 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
             <div key={`preview-${file.id}`} className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)]">
               {file.renderer_status === 'ready' ? (
                 <a href={attachmentApi.download(file.id)} target="_blank" rel="noopener noreferrer" className="block aspect-video bg-black/10">
-                  <img src={attachmentApi.preview(file.id)} alt={`${file.file_name} 预览`} className="h-full w-full object-cover" />
+                <img src={attachmentApi.preview(file.id)} alt={`${file.file_name} ${t('uploads.preview')}`} className="h-full w-full object-cover" />
                 </a>
               ) : (
                 <div className="flex aspect-video flex-col items-center justify-center gap-2 px-4 text-center text-sm text-[var(--text-muted)]">
                   {file.renderer_status === 'failed' ? <Map className="h-5 w-5" /> : <Loader2 className="h-5 w-5 animate-spin" />}
-                  <span>{file.renderer_status === 'failed' ? '地图/蓝图预览生成失败' : '正在生成地图/蓝图预览…'}</span>
+                  <span>{file.renderer_status === 'failed' ? t('uploads.previewFailed') : t('uploads.previewing')}</span>
                 </div>
               )}
               <a href={attachmentApi.download(file.id)} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--primary)]">
@@ -95,7 +97,7 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
       {/* File downloads */}
       {files.length > 0 && (
         <div className="bg-surface-50 dark:bg-gray-800 rounded-lg p-3 space-y-2">
-          <h4 className="text-sm font-medium text-surface-700 dark:text-gray-300">附件</h4>
+          <h4 className="text-sm font-medium text-surface-700 dark:text-gray-300">{t('uploads.attachments')}</h4>
           {files.map((f) => {
             const Icon = fileIcon(f.mime_type);
             return (

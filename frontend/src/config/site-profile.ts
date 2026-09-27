@@ -30,7 +30,7 @@ const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
   'mindustry-club': {
     profile: 'mindustry-club',
     branding: { siteName: 'Mindustry Club', shortName: 'Mindustry Club', description: 'A community built by Mindustry players.' },
-    localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja'] },
+    localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja', 'zh-CN'] },
     verification: { requireEmail: true, requirePhoneForWrites: false },
     features: { resources: true, servers: false, serversDirectory: true, serverApplications: false, gameVersions: true, lanlink: false, developerFeed: false, phoneVerification: false },
     navigation: [

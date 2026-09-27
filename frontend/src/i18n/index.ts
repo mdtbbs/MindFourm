@@ -26,15 +26,33 @@ import enDiscovery from './locales/en/discovery.json';
 import ruDiscovery from './locales/ru/discovery.json';
 import jaDiscovery from './locales/ja/discovery.json';
 import zhCNDiscovery from './locales/zh-CN/discovery.json';
+import enChallenge from './locales/en/challenge.json';
+import ruChallenge from './locales/ru/challenge.json';
+import jaChallenge from './locales/ja/challenge.json';
+import zhCNChallenge from './locales/zh-CN/challenge.json';
 import { siteProfile, type SiteLocale } from '@/config/site-profile';
 
 export type Locale = SiteLocale;
 export const localeNames: Record<Locale, string> = { 'zh-CN': '简体中文', en: 'English', ru: 'Русский', ja: '日本語' };
+function mergeCatalogs(...sources: Array<Record<string, unknown>>): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source)) {
+      const current = merged[key];
+      const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+        candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate);
+      merged[key] = isRecord(current) && isRecord(value)
+        ? mergeCatalogs(current, value)
+        : value;
+    }
+  }
+  return merged;
+}
 const catalogs = {
-  en: { ...en, ...enWorkflows, ...enDiscussion, ...enResources, ...enActivity, ...enAccount, ...enDiscovery },
-  ru: { ...ru, ...ruWorkflows, ...ruDiscussion, ...ruResources, ...ruActivity, ...ruAccount, ...ruDiscovery },
-  ja: { ...ja, ...jaWorkflows, ...jaDiscussion, ...jaResources, ...jaActivity, ...jaAccount, ...jaDiscovery },
-  'zh-CN': { ...zhCN, ...zhCNWorkflows, ...zhCNDiscussion, ...zhCNResources, ...zhCNActivity, ...zhCNAccount, ...zhCNDiscovery },
+  en: mergeCatalogs(en, enWorkflows, enDiscussion, enResources, enActivity, enAccount, enDiscovery, enChallenge),
+  ru: mergeCatalogs(ru, ruWorkflows, ruDiscussion, ruResources, ruActivity, ruAccount, ruDiscovery, ruChallenge),
+  ja: mergeCatalogs(ja, jaWorkflows, jaDiscussion, jaResources, jaActivity, jaAccount, jaDiscovery, jaChallenge),
+  'zh-CN': mergeCatalogs(zhCN, zhCNWorkflows, zhCNDiscussion, zhCNResources, zhCNActivity, zhCNAccount, zhCNDiscovery, zhCNChallenge),
 } as const;
 
 export function normalizeLocale(input?: string | null, supported: readonly string[] = siteProfile.localization.supportedLocales): Locale | null {

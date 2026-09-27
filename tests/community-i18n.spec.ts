@@ -27,13 +27,31 @@ import englishDiscovery from '../frontend/src/i18n/locales/en/discovery.json';
 import ruDiscovery from '../frontend/src/i18n/locales/ru/discovery.json';
 import jaDiscovery from '../frontend/src/i18n/locales/ja/discovery.json';
 import zhDiscovery from '../frontend/src/i18n/locales/zh-CN/discovery.json';
+import englishChallenge from '../frontend/src/i18n/locales/en/challenge.json';
+import ruChallenge from '../frontend/src/i18n/locales/ru/challenge.json';
+import jaChallenge from '../frontend/src/i18n/locales/ja/challenge.json';
+import zhChallenge from '../frontend/src/i18n/locales/zh-CN/challenge.json';
 
 const locales: Locale[] = ['en', 'ru', 'ja', 'zh-CN'];
+function mergeCatalogs(...sources: Array<Record<string, unknown>>): Record<string, unknown> {
+  const merged: Record<string, unknown> = {};
+  for (const source of sources) {
+    for (const [key, value] of Object.entries(source)) {
+      const current = merged[key];
+      const isRecord = (candidate: unknown): candidate is Record<string, unknown> =>
+        candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate);
+      merged[key] = isRecord(current) && isRecord(value)
+        ? mergeCatalogs(current, value)
+        : value;
+    }
+  }
+  return merged;
+}
 const catalogs: Record<Locale, Record<string, unknown>> = {
-  en: { ...enCommon, ...englishWorkflows, ...englishDiscussion, ...englishResources, ...englishActivity, ...englishAccount, ...englishDiscovery },
-  ru: { ...ruCommon, ...ruWorkflows, ...ruDiscussion, ...ruResources, ...ruActivity, ...ruAccount, ...ruDiscovery },
-  ja: { ...jaCommon, ...jaWorkflows, ...jaDiscussion, ...jaResources, ...jaActivity, ...jaAccount, ...jaDiscovery },
-  'zh-CN': { ...zhCommon, ...zhWorkflows, ...zhDiscussion, ...zhResources, ...zhActivity, ...zhAccount, ...zhDiscovery },
+  en: mergeCatalogs(enCommon, englishWorkflows, englishDiscussion, englishResources, englishActivity, englishAccount, englishDiscovery, englishChallenge),
+  ru: mergeCatalogs(ruCommon, ruWorkflows, ruDiscussion, ruResources, ruActivity, ruAccount, ruDiscovery, ruChallenge),
+  ja: mergeCatalogs(jaCommon, jaWorkflows, jaDiscussion, jaResources, jaActivity, jaAccount, jaDiscovery, jaChallenge),
+  'zh-CN': mergeCatalogs(zhCommon, zhWorkflows, zhDiscussion, zhResources, zhActivity, zhAccount, zhDiscovery, zhChallenge),
 };
 
 describe('community composition and resource-list translations', () => {
@@ -47,7 +65,7 @@ describe('community composition and resource-list translations', () => {
   }
 
   it.each(locales)('provides complete core workflow copy for %s', (locale) => {
-    const keys = [...messageKeys(enCommon), ...messageKeys(englishWorkflows), ...messageKeys(englishDiscussion), ...messageKeys(englishResources), ...messageKeys(englishActivity), ...messageKeys(englishAccount), ...messageKeys(englishDiscovery)]
+    const keys = [...messageKeys(enCommon), ...messageKeys(englishWorkflows), ...messageKeys(englishDiscussion), ...messageKeys(englishResources), ...messageKeys(englishActivity), ...messageKeys(englishAccount), ...messageKeys(englishDiscovery), ...messageKeys(englishChallenge)]
       .filter((key) => !key.startsWith('admin'));
     for (const key of keys) {
       const message = key.split('.').reduce<unknown>((value, part) => value && typeof value === 'object'
@@ -66,7 +84,7 @@ describe('community composition and resource-list translations', () => {
 });
 
 describe('site locale precedence', () => {
-  const clubLocales = ['en', 'ru', 'ja'] as const;
+  const clubLocales = ['en', 'ru', 'ja', 'zh-CN'] as const;
 
   it('uses an explicit language choice before account and browser preferences', () => {
     expect(resolveLocale({

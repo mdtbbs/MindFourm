@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth/context';
 import { notificationApi } from '@/lib/api/client';
 import Link from 'next/link';
+import { useI18n } from '@/i18n/provider';
 
 interface EmailPreferences {
   reply_email: boolean;
@@ -14,14 +15,15 @@ interface EmailPreferences {
 }
 
 const EMAIL_OPTIONS: { key: keyof EmailPreferences; label: string; description: string }[] = [
-  { key: 'reply_email', label: '新回复通知', description: '有人回复了你的帖子时发送邮件' },
-  { key: 'mention_email', label: '@提及通知', description: '有人 @提及 了你时发送邮件' },
-  { key: 'message_email', label: '私信通知', description: '收到新私信时发送邮件' },
-  { key: 'system_email', label: '系统通知', description: '系统重要通知（如举报处理结果）' },
-  { key: 'digest_email', label: '每周精选', description: '每周发送热门内容汇总' },
+  { key: 'reply_email', label: 'replyLabel', description: 'replyDescription' },
+  { key: 'mention_email', label: 'mentionLabel', description: 'mentionDescription' },
+  { key: 'message_email', label: 'messageLabel', description: 'messageDescription' },
+  { key: 'system_email', label: 'systemLabel', description: 'systemDescription' },
+  { key: 'digest_email', label: 'digestLabel', description: 'digestDescription' },
 ];
 
 export default function SettingsPage() {
+  const { t } = useI18n();
   const { user, isAuthenticated } = useAuth();
   const [preferences, setPreferences] = useState<EmailPreferences>({
     reply_email: true,
@@ -75,25 +77,25 @@ export default function SettingsPage() {
       <main className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-6">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link href="/" className="hover:text-primary">首页</Link>
+            <Link href="/" className="hover:text-primary">{t('emailSettings.home')}</Link>
             <span>/</span>
-            <span>设置</span>
+            <span>{t('emailSettings.settings')}</span>
           </nav>
         </div>
 
-        <h1 className="text-2xl font-bold mb-6">设置</h1>
+        <h1 className="text-2xl font-bold mb-6">{t('emailSettings.title')}</h1>
 
         {/* The block list had no entry point at all and was reachable only by typing the
             URL, which for a privacy control is the same as not shipping it. */}
         <nav className="mb-6 flex flex-wrap gap-2">
           <span className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm text-white">
-            通知设置
+            {t('emailSettings.notifications')}
           </span>
           <Link
             href="/settings/blocks"
             className="rounded-lg bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
           >
-            拉黑列表
+            {t('emailSettings.blockedUsers')}
           </Link>
         </nav>
 
@@ -104,7 +106,7 @@ export default function SettingsPage() {
         ) : (
           <div className="card p-6">
             <p className="text-sm text-muted-foreground mb-4">
-              配置接收邮件通知的偏好设置。所有通知都会保存在站内通知列表中，邮件作为额外提醒。
+              {t('emailSettings.description')}
             </p>
 
             <div className="space-y-4">
@@ -114,8 +116,8 @@ export default function SettingsPage() {
                   className="flex items-center justify-between py-3 border-b border-border/50 last:border-0"
                 >
                   <div>
-                    <div className="font-medium">{label}</div>
-                    <div className="text-sm text-muted-foreground">{description}</div>
+                    <div className="font-medium">{t(`emailSettings.${label}`)}</div>
+                    <div className="text-sm text-muted-foreground">{t(`emailSettings.${description}`)}</div>
                   </div>
                   <button
                     onClick={() => handleToggle(key)}
@@ -124,6 +126,7 @@ export default function SettingsPage() {
                     }`}
                     role="switch"
                     aria-checked={preferences[key]}
+                    aria-label={t(`emailSettings.${label}`)}
                   >
                     <span
                       className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -141,10 +144,10 @@ export default function SettingsPage() {
                 disabled={saving}
                 className="btn btn-primary"
               >
-                {saving ? '保存中...' : '保存设置'}
+                {saving ? t('emailSettings.saving') : t('emailSettings.save')}
               </button>
               {saved && (
-                <span className="text-sm text-success">已保存</span>
+                <span className="text-sm text-success">{t('emailSettings.saved')}</span>
               )}
             </div>
           </div>

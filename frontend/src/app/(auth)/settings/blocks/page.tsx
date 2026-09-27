@@ -9,10 +9,12 @@ import { formatTime } from '@/lib/utils';
 import { userBlockApi, type BlockedUserItem } from '@/lib/api/user-blocks';
 import { JsonRequestError } from '@/lib/api/request-json';
 import { useToastStore } from '@/store/toast-store';
+import { useI18n } from '@/i18n/provider';
 
 const PAGE_SIZE = 20;
 
 export default function BlockedUsersPage() {
+  const { locale, t } = useI18n();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const showError = useToastStore((state) => state.showError);
 
@@ -37,10 +39,10 @@ export default function BlockedUsersPage() {
       setTotalPages(res.pagination.totalPages);
       setTotal(res.pagination.total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载失败，请稍后重试');
+      setError(err instanceof Error ? err.message : t('blockedUsers.loadFailed'));
     }
     setLoading(false);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load(1);
@@ -50,7 +52,7 @@ export default function BlockedUsersPage() {
     setRemovingId(item.user.id);
     try {
       await userBlockApi.unblock(item.user.id);
-      showSuccess(`已取消拉黑 ${item.user.username || `用户 #${item.user.id}`}`);
+      showSuccess(t('blockedUsers.unblocked', { name: item.user.username || t('blockedUsers.anonymousUser', { id: item.user.id }) }));
       // Reloaded rather than spliced locally: removing the last row of a page would
       // otherwise leave the user looking at an empty page that still reports a total.
       await load(items.length === 1 && page > 1 ? page - 1 : page);
@@ -59,7 +61,7 @@ export default function BlockedUsersPage() {
         // Already gone — the list was stale, so refresh instead of reporting a failure.
         await load(page);
       } else {
-        showError(err instanceof Error ? err.message : '取消拉黑失败，请稍后重试');
+        showError(err instanceof Error ? err.message : t('blockedUsers.unblockFailed'));
       }
     }
     setRemovingId(null);
@@ -70,19 +72,19 @@ export default function BlockedUsersPage() {
       <main className="max-w-3xl mx-auto px-4 py-8">
         <nav className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-6">
           <Link href="/" className="hover:text-[var(--primary)]">
-            首页
+            {t('blockedUsers.home')}
           </Link>
           <span>/</span>
           <Link href="/settings" className="hover:text-[var(--primary)]">
-            设置
+            {t('blockedUsers.settings')}
           </Link>
           <span>/</span>
-          <span>拉黑列表</span>
+          <span>{t('blockedUsers.title')}</span>
         </nav>
 
-        <h1 className="text-2xl font-bold text-[var(--text)] mb-2">拉黑列表</h1>
+        <h1 className="text-2xl font-bold text-[var(--text)] mb-2">{t('blockedUsers.title')}</h1>
         <p className="text-sm text-[var(--text-secondary)] mb-6">
-          被拉黑的用户无法向你发送私信。{total > 0 && `共 ${total} 人。`}
+          {t('blockedUsers.description', { count: total > 0 ? t('blockedUsers.count', { count: total }) : '' })}
         </p>
 
         {loading ? (
@@ -97,15 +99,15 @@ export default function BlockedUsersPage() {
             <p className="text-sm text-[var(--error)] mb-4">{error}</p>
             <Button type="button" variant="outline" onClick={() => void load(page)}>
               <RotateCw className="w-4 h-4 mr-1" />
-              重试
+              {t('blockedUsers.retry')}
             </Button>
           </div>
         ) : items.length === 0 ? (
           <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-10 text-center">
             <UserX className="w-10 h-10 mx-auto mb-3 text-[var(--text-muted)]" />
-            <p className="text-[var(--text)] font-medium mb-1">还没有拉黑任何人</p>
+            <p className="text-[var(--text)] font-medium mb-1">{t('blockedUsers.emptyTitle')}</p>
             <p className="text-sm text-[var(--text-secondary)]">
-              在用户主页或帖子中可以拉黑对方，之后会出现在这里。
+              {t('blockedUsers.emptyDescription')}
             </p>
           </div>
         ) : (
@@ -135,17 +137,17 @@ export default function BlockedUsersPage() {
                     href={`/users/${item.user.id}`}
                     className="font-medium text-[var(--text)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded"
                   >
-                    {item.user.username || `用户 #${item.user.id}`}
+                    {item.user.username || t('blockedUsers.anonymousUser', { id: item.user.id })}
                   </Link>
                   <p className="text-xs text-[var(--text-muted)]">
                     <time dateTime={item.created_at} suppressHydrationWarning>
-                      {formatTime(item.created_at)}
+                      {formatTime(item.created_at, locale)}
                     </time>
-                    拉黑
+                    {t('blockedUsers.blockedOn')}
                   </p>
                   {item.reason && (
                     <p className="mt-1 text-sm text-[var(--text-secondary)] break-words">
-                      原因：{item.reason}
+                      {t('blockedUsers.reason', { value: item.reason })}
                     </p>
                   )}
                 </div>
@@ -158,7 +160,7 @@ export default function BlockedUsersPage() {
                   onClick={() => void unblock(item)}
                   data-testid={`unblock-${item.user.id}`}
                 >
-                  {removingId === item.user.id ? '处理中…' : '取消拉黑'}
+                  {removingId === item.user.id ? t('blockedUsers.processing') : t('blockedUsers.unblock')}
                 </Button>
               </li>
             ))}
@@ -168,7 +170,7 @@ export default function BlockedUsersPage() {
         {/* Self-contained paging: this list is fetched into component state, so the
             shared Pagination component's URL navigation would not move it. */}
         {!loading && !error && totalPages > 1 && (
-          <nav className="flex items-center justify-center gap-4 mt-6" aria-label="分页">
+          <nav className="flex items-center justify-center gap-4 mt-6" aria-label={t('blockedUsers.pagination')}>
             <Button
               type="button"
               variant="outline"
@@ -177,10 +179,10 @@ export default function BlockedUsersPage() {
               onClick={() => void load(page - 1)}
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
-              上一页
+              {t('blockedUsers.previous')}
             </Button>
             <span className="text-sm text-[var(--text-secondary)]" aria-live="polite">
-              第 {page} / {totalPages} 页
+              {t('blockedUsers.page', { page, total: totalPages })}
             </span>
             <Button
               type="button"
@@ -189,7 +191,7 @@ export default function BlockedUsersPage() {
               disabled={page >= totalPages}
               onClick={() => void load(page + 1)}
             >
-              下一页
+              {t('blockedUsers.next')}
               <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </nav>

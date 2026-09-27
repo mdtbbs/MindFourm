@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { resourceApi } from '@/lib/api/client';
 import { Resource } from '@/types';
 import { Download, Edit, ExternalLink, FileText, Loader2, Trash2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
+import { useI18n } from '@/i18n/provider';
 
 function formatSize(bytes: number): string {
   if (!bytes) return '';
@@ -15,15 +16,16 @@ function formatSize(bytes: number): string {
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const { t } = useI18n();
   const styles = {
     approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
     pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   };
   const labels = {
-    approved: '已通过',
-    pending: '审核中',
-    rejected: '已拒绝',
+    approved: t('myResources.approved'),
+    pending: t('myResources.pending'),
+    rejected: t('myResources.rejected'),
   };
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${styles[status as keyof typeof styles] || ''}`}>
@@ -33,6 +35,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function MyResourcesPage() {
+  const { t } = useI18n();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const showError = useToastStore((state) => state.showError);
   const [resources, setResources] = useState<Resource[]>([]);
@@ -40,28 +43,28 @@ export default function MyResourcesPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const loadResources = () => {
+  const loadResources = useCallback(() => {
     setLoading(true);
     setError(null);
     resourceApi.getMyResources({ limit: 50 })
       .then((res) => setResources(res.data || []))
-      .catch((err) => setError(err instanceof Error ? err.message : '加载失败'))
+      .catch((err) => setError(err instanceof Error ? err.message : t('myResources.loadFailed')))
       .finally(() => setLoading(false));
-  };
+  }, [t]);
 
   useEffect(() => {
     loadResources();
-  }, []);
+  }, [loadResources]);
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('确定删除这个资源？删除后无法恢复。')) return;
+    if (!window.confirm(t('myResources.deleteConfirm'))) return;
     setDeletingId(id);
     try {
       await resourceApi.delete(id);
-      showSuccess('资源已删除');
+      showSuccess(t('myResources.deleted'));
       loadResources();
     } catch (err) {
-      showError(err instanceof Error ? err.message : '删除失败');
+      showError(err instanceof Error ? err.message : t('myResources.deleteFailed'));
     } finally {
       setDeletingId(null);
     }
@@ -84,7 +87,7 @@ export default function MyResourcesPage() {
             onClick={loadResources}
             className="mt-4 text-sm text-[var(--primary)] hover:underline"
           >
-            重试
+            {t('myResources.retry')}
           </button>
         </div>
       </div>
@@ -95,26 +98,26 @@ export default function MyResourcesPage() {
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[var(--text)]">我的资源</h1>
-          <p className="mt-1 text-sm text-[var(--text-muted)]">管理你提交的资源</p>
+          <h1 className="text-2xl font-bold text-[var(--text)]">{t('myResources.title')}</h1>
+          <p className="mt-1 text-sm text-[var(--text-muted)]">{t('myResources.description')}</p>
         </div>
         <Link
           href="/resources/submit"
           className="inline-flex items-center rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)]"
         >
-          提交新资源
+          {t('myResources.submit')}
         </Link>
       </div>
 
       {resources.length === 0 ? (
         <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] py-12 text-center">
           <FileText className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]" />
-          <p className="mb-4 text-[var(--text-muted)]">你还没有提交任何资源</p>
+          <p className="mb-4 text-[var(--text-muted)]">{t('myResources.empty')}</p>
           <Link
             href="/resources/submit"
             className="inline-block rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]"
           >
-            提交第一个资源
+            {t('myResources.submitFirst')}
           </Link>
         </div>
       ) : (
@@ -122,12 +125,12 @@ export default function MyResourcesPage() {
           <table className="w-full text-sm">
             <thead className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">
               <tr>
-                <th className="text-left px-4 py-3 font-medium">标题</th>
-                <th className="text-left px-4 py-3 font-medium">类型</th>
-                <th className="text-left px-4 py-3 font-medium">状态</th>
-                <th className="text-left px-4 py-3 font-medium">下载</th>
-                <th className="text-left px-4 py-3 font-medium">大小</th>
-                <th className="text-left px-4 py-3 font-medium">操作</th>
+                <th className="text-left px-4 py-3 font-medium">{t('myResources.headingTitle')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('myResources.type')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('myResources.status')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('myResources.downloads')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('myResources.size')}</th>
+                <th className="text-left px-4 py-3 font-medium">{t('myResources.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -146,10 +149,10 @@ export default function MyResourcesPage() {
                   <td className="px-4 py-3 text-[var(--text-muted)]">
                     {r.resource_type === 'external' ? (
                       <span className="flex items-center gap-1">
-                        <ExternalLink className="h-3 w-3" /> 外链
+                        <ExternalLink className="h-3 w-3" /> {t('myResources.external')}
                       </span>
                     ) : (
-                      '文件'
+                      t('myResources.file')
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -169,7 +172,7 @@ export default function MyResourcesPage() {
                         href={`/resources/${r.id}/edit`}
                         className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--primary)] hover:bg-[var(--bg-elevated)]"
                       >
-                        <Edit className="h-3 w-3" /> 编辑
+                        <Edit className="h-3 w-3" /> {t('myResources.edit')}
                       </Link>
                       <button
                         onClick={() => handleDelete(r.id)}
@@ -181,7 +184,7 @@ export default function MyResourcesPage() {
                         ) : (
                           <Trash2 className="h-3 w-3" />
                         )}
-                        删除
+                        {t('myResources.delete')}
                       </button>
                     </div>
                   </td>

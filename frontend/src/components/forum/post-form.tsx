@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { useAuth } from '@/lib/auth/context';
-import { postApi, categoryApi, tagApi } from '@/lib/api/client';
+import { postApi, categoryApi, tagApi, getCommunityChallenge, type CommunityChallengeDescriptor, type CommunityChallengeProof } from '@/lib/api/client';
 import { CreatePostInput, Category, Tag } from '@/types';
 import Button from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,7 @@ import { Send, Save, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
 import { useI18n } from '@/i18n/provider';
 import ContentLanguageSelect from '@/components/forum/content-language-select';
+import CommunityChallengeDialog from '@/components/forum/community-challenge-dialog';
 
 // TipTap editor is client-only (depends on document/window)
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
@@ -43,6 +44,8 @@ export default function PostForm() {
   // UI state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<CommunityChallengeDescriptor | null>(null);
+  const [pendingSubmission, setPendingSubmission] = useState<CreatePostInput | null>(null);
 
   // Reference data
   const [categories, setCategories] = useState<Category[]>([]);
@@ -131,31 +134,48 @@ export default function PostForm() {
   };
 
   // ── Submit ───────────────────────────────────────────────
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitPost = async (input: CreatePostInput, proof?: CommunityChallengeProof) => {
     setError(null);
-    if (!validate()) return;
-
     setIsSubmitting(true);
     try {
-      const input: CreatePostInput = {
-        title: title.trim(),
-        content: content.trim(),
-        content_language: contentLanguage || 'unknown',
-        content_json: contentJson || undefined,
-        category_id: categoryId ? Number(categoryId) : undefined,
-        tags: parseTags(),
-        status,
-      };
-      const post = await postApi.create(input);
+      const post = await postApi.create(input, proof);
       draft.clear();
       showSuccess(status === 'draft' ? t('postForm.draftSaved') : t('postForm.published'));
       // Redirect to the new post page
       router.push(`/posts/${post.id}`);
     } catch (err) {
+      const requiredChallenge = getCommunityChallenge(err);
+      if (requiredChallenge) {
+        setPendingSubmission(input);
+        setChallenge(requiredChallenge);
+        setIsSubmitting(false);
+        return;
+      }
+      setChallenge(null);
       setError(err instanceof Error ? err.message : t('postForm.submitFailed'));
       setIsSubmitting(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!validate()) return;
+    const input: CreatePostInput = {
+      title: title.trim(),
+      content: content.trim(),
+      content_language: contentLanguage || 'unknown',
+      content_json: contentJson || undefined,
+      category_id: categoryId ? Number(categoryId) : undefined,
+      tags: parseTags(),
+      status,
+    };
+    void submitPost(input);
+  };
+
+  const verifyChallenge = (response: string) => {
+    if (!challenge || !pendingSubmission) return;
+    void submitPost(pendingSubmission, { token: challenge.token, response });
   };
 
   // The session probe is intentionally not a page-wide blocking state. A failed
@@ -340,6 +360,7 @@ export default function PostForm() {
           </div>
         </div>
       </form>
+      {challenge && <CommunityChallengeDialog challenge={challenge} onCancel={() => { setChallenge(null); setPendingSubmission(null); }} onVerify={verifyChallenge} busy={isSubmitting} />}
     </div>
   );
 }
