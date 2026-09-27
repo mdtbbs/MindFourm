@@ -14,11 +14,17 @@ import ResourceGallery from './resources/detail/resource-gallery';
 import ResourceActions from './resources/detail/resource-actions';
 import ResourceTabs, { type ResourceTab } from './resources/detail/resource-tabs';
 import ResourceAside from './resources/detail/resource-aside';
-import { resourceCardFacts, resourceFileExtension, resourceStatusLabel } from '@/lib/resources/presentation';
-import { resourceKindLabel } from '@/lib/display-labels';
+import { resourceCardFacts, resourceFileExtension } from '@/lib/resources/presentation';
 import { useI18n } from '@/i18n/provider';
 
 interface ResourceDetailProps { resource: Resource; }
+
+const RESOURCE_FACT_KEYS: Record<string, string> = {
+  '地图尺寸': 'mapSize', '模式': 'mode', '星球': 'planet', '出生点': 'spawns', '核心': 'cores',
+  '蓝图尺寸': 'schematicSize', '方块': 'blocks', '净功率': 'netPower', 'Mod 版本': 'modVersion',
+  '支持游戏版本': 'supportedGameVersions', '平台': 'platform', '游戏版本': 'gameVersion', '渠道': 'channel',
+  '资源版本': 'resourceVersion', '适用版本': 'compatibleVersions',
+};
 
 export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const { t, locale } = useI18n();
@@ -59,6 +65,11 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const displayedSupportedVersions = metadata?.supported_versions || [];
   const displayedCompatibility = metadata?.compatibility || [];
   const quickFacts = resourceCardFacts(resource).slice(0, 4);
+  const resourceKind = resource.resource_kind && ['map', 'schematic', 'mod', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'save'].includes(resource.resource_kind)
+    ? resource.resource_kind : 'other';
+  const statusKey = resource.status === 'approved' || resource.status === 'published' ? 'statusPublished'
+    : resource.status === 'pending' || resource.status === 'pending_review' ? 'statusPending'
+      : resource.status === 'rejected' ? 'statusRejected' : resource.status === 'archived' ? 'statusArchived' : 'statusUnknown';
   const downloadExtension = resourceFileExtension(primaryVersion?.file_name || resource.file_name);
   const downloadLabel = isSchematic || isMap
     ? downloadExtension ? t('resourceActions.download', { name: downloadExtension }) : t('resourceActions.downloadFile')
@@ -186,13 +197,13 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
                 {resource.category_name && <Link href={`/resources?category_id=${resource.category_id}`} className="text-[var(--primary)] hover:underline">{t('resourceDetail.category', { name: resource.category_name })}</Link>}
-                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{resourceKindLabel(resource.resource_kind)}</span>}
+                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t(`resourceKinds.${resourceKind}`)}</span>}
                 {(primaryVersion?.version || resource.version) && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceDetail.versionLabel', { version: primaryVersion?.version || resource.version || '' })}</span>}
-                <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-[var(--text-secondary)]">{resourceStatusLabel(resource.status)}</span>
+                <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-[var(--text-secondary)]">{t(`resourceDetail.${statusKey}`)}</span>
               </div>
               <h1 className="min-w-0 break-words text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
               <p className="mt-3 max-w-3xl line-clamp-3 text-base leading-7 text-[var(--text-secondary)]">{resource.description || t('resourceDetail.emptyDescription')}</p>
-              {quickFacts.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{quickFacts.map((fact) => <div key={fact.label} className="min-w-0 border-l-2 border-[var(--primary)]/40 pl-2.5"><dt className="text-xs text-[var(--text-muted)]">{fact.label}</dt><dd className="mt-0.5 truncate text-sm font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>}
+              {quickFacts.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{quickFacts.map((fact) => <div key={fact.label} className="min-w-0 border-l-2 border-[var(--primary)]/40 pl-2.5"><dt className="text-xs text-[var(--text-muted)]">{t(`resourceKindDetails.fact.${RESOURCE_FACT_KEYS[fact.label] || 'resourceVersion'}`)}</dt><dd className="mt-0.5 truncate text-sm font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>}
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
                 <Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 max-w-full items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span><span className="min-w-0 break-all">{resource.username || t('resourceDetail.unknownAuthor')}</span></Link>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(resource.updated_at || resource.created_at))} {t('resourceDetail.updated')}</span>
