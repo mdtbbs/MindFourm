@@ -6,11 +6,13 @@ import { fetchApiPaginated } from "@/lib/api/server-fetch";
 import type { PostListResponse } from "@/types";
 import Pagination from "@/components/ui/pagination";
 import { fetchPublicSettings } from "@/lib/settings/server";
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
-export const metadata: Metadata = {
-  title: "讨论",
-  description: "Mindustry 社区讨论区",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  return { title: translate(locale, 'threadsPage.title'), description: translate(locale, 'threadsPage.description') };
+}
 
 function parseFeaturedCategoryIds(value: string | undefined): number[] {
   if (!value) return [];
@@ -29,6 +31,8 @@ export default async function ThreadsPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const locale = await getRequestLocale();
+  const t = (key: string) => translate(locale, key);
   const params = await searchParams;
   const requestedPage = Number(params.page);
   const page =
@@ -52,9 +56,9 @@ export default async function ThreadsPage({
   } catch {
     return (
       <ErrorState
-        title="讨论列表加载失败"
-        description="请稍后再试。"
-        action={{ label: "重新加载", href: "/threads" }}
+        title={t('threadsPage.loadFailed')}
+        description={t('threadsPage.tryAgain')}
+        action={{ label: t('threadsPage.reload'), href: "/threads" }}
       />
     );
   }
@@ -62,9 +66,9 @@ export default async function ThreadsPage({
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 border-b border-[var(--border)] pb-4">
-        <h1 className="text-3xl font-semibold text-[var(--text)]">讨论</h1>
+        <h1 className="text-3xl font-semibold text-[var(--text)]">{t('threadsPage.title')}</h1>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          按最后活跃时间浏览社区讨论。
+          {t('threadsPage.sortDescription')}
         </p>
       </div>
       {threads.data.length > 0 ? (
@@ -79,9 +83,7 @@ export default async function ThreadsPage({
           />
         </>
       ) : (
-        <div className="border border-[var(--border)] p-8 text-center text-[var(--text-muted)]">
-          暂时没有讨论
-        </div>
+        <div className="border border-[var(--border)] p-8 text-center text-[var(--text-muted)]">{t('threadsPage.empty')}</div>
       )}
     </div>
   );

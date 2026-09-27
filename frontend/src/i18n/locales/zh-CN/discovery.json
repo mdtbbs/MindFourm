@@ -61,5 +61,41 @@
     "unknown": "不指定",
     "hint": "选择帖子或资源正文使用的语言。",
     "languages": { "en": "英语", "ru": "俄语", "ja": "日语", "zh-CN": "简体中文", "es": "西班牙语", "de": "德语", "other": "其他" }
+  },
+  "discoverPage": {
+    "title": "发现",
+    "description": "探索 Mindustry 社区的联机、资源和公告",
+    "intro": "从联机房间到社区资源和动态，找到值得参与的内容。",
+    "rooms": "联机房间",
+    "roomsDescription": "查看玩家公开的联机房间",
+    "resources": "资源中心",
+    "resourcesDescription": "浏览社区资源与工具",
+    "notices": "社区公告",
+    "noticesDescription": "查看最新公告和活动",
+    "summary": "资源：{resources} · 讨论：{discussions}"
+  },
+  "tagsPage": { "title": "标签", "description": "浏览所有讨论标签", "empty": "暂无标签。" },
+  "tagPage": {
+    "title": "标签：{tag}",
+    "pageTitle": "标签：{tag} · 第 {page} 页",
+    "description": "浏览带有“{tag}”标签的讨论和资源。",
+    "empty": "该标签下暂无讨论。"
+  },
+  "categoryPage": {
+    "description": "“{category}”板块下的讨论",
+    "pageTitle": "{category} · 第 {page} 页",
+    "categoryDescription": "浏览这个板块中的全部主题。",
+    "emptyTitle": "这里还没有主题",
+    "emptyDescription": "有什么想讨论的吗？成为第一个发布内容的人。",
+    "createPost": "发布主题"
+  },
+  "threadsPage": {
+    "title": "讨论",
+    "description": "Mindustry 社区讨论区",
+    "loadFailed": "讨论列表加载失败",
+    "tryAgain": "请稍后再试。",
+    "reload": "重新加载",
+    "sortDescription": "按最后活跃时间浏览社区讨论。",
+    "empty": "暂时没有讨论。"
   }
 }

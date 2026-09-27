@@ -61,5 +61,41 @@
     "unknown": "Not specified",
     "hint": "Choose the language used in this post or resource.",
     "languages": { "en": "English", "ru": "Russian", "ja": "Japanese", "zh-CN": "Chinese (Simplified)", "es": "Spanish", "de": "German", "other": "Other" }
+  },
+  "discoverPage": {
+    "title": "Discover",
+    "description": "Explore community rooms, resources, and notices",
+    "intro": "Find something to join, from multiplayer rooms to community resources and news.",
+    "rooms": "Multiplayer rooms",
+    "roomsDescription": "Browse public rooms shared by players",
+    "resources": "Resource center",
+    "resourcesDescription": "Browse community resources and tools",
+    "notices": "Community notices",
+    "noticesDescription": "Read the latest notices and events",
+    "summary": "Resources: {resources} · Discussions: {discussions}"
+  },
+  "tagsPage": { "title": "Tags", "description": "Browse all discussion tags", "empty": "There are no tags yet." },
+  "tagPage": {
+    "title": "Tag: {tag}",
+    "pageTitle": "Tag: {tag} · Page {page}",
+    "description": "Browse discussions and resources tagged {tag}.",
+    "empty": "There are no discussions under this tag yet."
+  },
+  "categoryPage": {
+    "description": "Discussions in {category}",
+    "pageTitle": "{category} · Page {page}",
+    "categoryDescription": "Browse all discussions in this category.",
+    "emptyTitle": "No discussions here yet",
+    "emptyDescription": "Start a conversation and be the first to post here.",
+    "createPost": "Start a discussion"
+  },
+  "threadsPage": {
+    "title": "Discussions",
+    "description": "Community discussions about Mindustry",
+    "loadFailed": "Could not load discussions",
+    "tryAgain": "Please try again in a moment.",
+    "reload": "Reload",
+    "sortDescription": "Browse discussions by recent activity.",
+    "empty": "There are no discussions yet."
   }
 }
