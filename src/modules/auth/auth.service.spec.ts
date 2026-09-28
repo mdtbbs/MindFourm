@@ -5,6 +5,7 @@ describe('AuthService phone status sync', () => {
   const createService = () => {
     const usersRepository = {
       findOne: jest.fn(),
+      save: jest.fn(async (value) => value),
     };
     const redisService = {
       hgetall: jest.fn(),
@@ -79,6 +80,31 @@ describe('AuthService phone status sync', () => {
     await expect(service.syncPhoneStatusFromSession('forum-session')).resolves.toBe(updated);
     expect((service as any).refreshAccessToken).toHaveBeenCalledWith('refresh-token');
     expect(service.getUserInfo).toHaveBeenLastCalledWith('new-access-token');
+  });
+
+  it('synchronizes email verification into the local forum user', async () => {
+    const { service, usersRepository } = createService();
+    const user = {
+      id: 7,
+      mindauth_id: 123,
+      username: 'test-user',
+      email: 'test@example.com',
+      email_verified: false,
+      phone_verified: true,
+      phone_verified_at: new Date(),
+      avatar_url: null,
+    };
+    usersRepository.findOne.mockResolvedValue(user);
+
+    const updated = await service.syncMindAuthUserData({
+      id: 123,
+      email: 'test@example.com',
+      email_verified: true,
+      phone_verified: true,
+    });
+
+    expect(updated?.email_verified).toBe(true);
+    expect(usersRepository.save).toHaveBeenCalledWith(expect.objectContaining({ email_verified: true }));
   });
 
   it('requires a live forum session', async () => {

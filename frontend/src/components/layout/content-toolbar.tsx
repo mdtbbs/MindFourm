@@ -4,7 +4,7 @@ import Link from "next/link";
 import { UnifiedHeader } from "@/lib/shared";
 import type { User } from "@/types";
 import NotificationDropdown from "@/components/forum/notification-dropdown";
-import { useI18n } from '@/i18n/provider';
+import { LocaleSwitcher, useI18n } from '@/i18n/provider';
 
 function UserMobileIdentity({
   siteName,
@@ -66,6 +66,7 @@ export default function ContentToolbar(props: {
       onSearch={props.onSearch}
       onMobileMenuClick={props.onOpenDrawer}
       notificationDropdownSlot={<NotificationDropdown />}
+      utilitySlot={<LocaleSwitcher className="hidden lg:block" />}
       topNavigationSlot={
         props.navigationMode ? (
           <UserMobileIdentity siteName={props.siteName} logoUrl={props.logoUrl} />

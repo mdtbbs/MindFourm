@@ -55,6 +55,12 @@ function hashMindAuthBearer(accessToken: string): string {
   return crypto.createHash('sha256').update(accessToken).digest('hex');
 }
 
+function normalizeVerificationFlag(value: unknown): boolean | undefined {
+  if (value === true || value === 1 || value === '1' || value === 'true') return true;
+  if (value === false || value === 0 || value === '0' || value === 'false') return false;
+  return undefined;
+}
+
 function toMobileAuthUser(user: User) {
   return { id: user.id, username: user.username, email: user.email, avatar_url: user.avatar_url, role: user.role, phone_verified: user.phone_verified };
 }
@@ -474,9 +480,9 @@ export class AuthService {
         id: Number(response.data.id ?? response.data.sub),
         username: response.data.username ?? response.data.name,
         email: response.data.email || null,
-        email_verified: response.data.email_verified === true || response.data.email_verified === 1,
+        email_verified: normalizeVerificationFlag(response.data.email_verified),
         avatar_url: response.data.avatar_url,
-        phone_verified: response.data.phone_verified === true,
+        phone_verified: normalizeVerificationFlag(response.data.phone_verified),
         phone_verified_at: response.data.phone_verified_at ?? null,
         preferred_locale: response.data.preferred_locale || null,
       };
@@ -491,9 +497,9 @@ export class AuthService {
           id: Number(response.data.id ?? response.data.sub),
           username: response.data.username ?? response.data.name,
           email: response.data.email || null,
-          email_verified: response.data.email_verified === true || response.data.email_verified === 1,
+          email_verified: normalizeVerificationFlag(response.data.email_verified),
           avatar_url: response.data.avatar_url,
-          phone_verified: response.data.phone_verified === true,
+          phone_verified: normalizeVerificationFlag(response.data.phone_verified),
           phone_verified_at: response.data.phone_verified_at ?? null,
           preferred_locale: response.data.preferred_locale || null,
         };
@@ -516,6 +522,9 @@ export class AuthService {
     phone_verified_at?: string | Date | null;
     preferred_locale?: string | null;
   }): Promise<User> {
+    const normalizedEmailVerified = normalizeVerificationFlag(mindauthUser.email_verified);
+    const normalizedPhoneVerified = normalizeVerificationFlag(mindauthUser.phone_verified);
+
     let user = await this.usersRepository.findOne({
       where: { mindauth_id: mindauthUser.id },
     });
@@ -530,10 +539,10 @@ export class AuthService {
         mindauth_id: mindauthUser.id,
         username: mindauthUser.username,
         email: mindauthUser.email || null,
-        email_verified: !!mindauthUser.email_verified,
+        email_verified: normalizedEmailVerified ?? false,
         avatar_url: localAvatarUrl,
         role: 'user',
-        phone_verified: !!mindauthUser.phone_verified,
+        phone_verified: normalizedPhoneVerified ?? false,
         phone_verified_at: mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : null,
         preferred_locale: mindauthUser.preferred_locale || null,
       });
@@ -545,7 +554,7 @@ export class AuthService {
       // Update user info if changed
       if (mindauthUser.username) user.username = mindauthUser.username;
       if (mindauthUser.email) user.email = mindauthUser.email;
-      if (typeof mindauthUser.email_verified === 'boolean') user.email_verified = mindauthUser.email_verified;
+      if (normalizedEmailVerified !== undefined) user.email_verified = normalizedEmailVerified;
       if (mindauthUser.preferred_locale) user.preferred_locale = mindauthUser.preferred_locale;
       if (mindauthUser.avatar_url) {
         // Download avatar locally when it changes from MindAuth
@@ -555,8 +564,13 @@ export class AuthService {
           user.avatar_url,
         );
       }
-      user.phone_verified = !!mindauthUser.phone_verified;
-      user.phone_verified_at = mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : user.phone_verified_at;
+      if (normalizedPhoneVerified !== undefined) {
+        user.phone_verified = normalizedPhoneVerified;
+        if (!normalizedPhoneVerified) user.phone_verified_at = null;
+      }
+      if (mindauthUser.phone_verified_at) {
+        user.phone_verified_at = new Date(mindauthUser.phone_verified_at);
+      }
       await this.usersRepository.save(user);
     }
 
@@ -597,8 +611,9 @@ export class AuthService {
         id: response.data.user.id,
         username: response.data.user.username,
         email: response.data.user.email,
+        email_verified: normalizeVerificationFlag(response.data.user.email_verified),
         avatar_url: response.data.user.avatar_url || '',
-        phone_verified: response.data.user.phone_verified,
+        phone_verified: normalizeVerificationFlag(response.data.user.phone_verified),
         phone_verified_at: response.data.user.phone_verified_at,
       };
 
@@ -617,6 +632,7 @@ export class AuthService {
     mindauth_id?: number;
     username?: string;
     email?: string | null;
+    email_verified?: boolean;
     avatar_url?: string | null;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;
@@ -633,6 +649,9 @@ export class AuthService {
 
     if (mindauthUser.username) user.username = mindauthUser.username;
     if (mindauthUser.email) user.email = mindauthUser.email;
+    if (typeof mindauthUser.email_verified === 'boolean') {
+      user.email_verified = mindauthUser.email_verified;
+    }
     if (mindauthUser.avatar_url) {
       user.avatar_url = await this.syncAvatarFromMindAuth(
         mindauthUser.avatar_url,
@@ -740,6 +759,7 @@ export class AuthService {
     id: number;
     username: string;
     email?: string | null;
+    email_verified?: boolean;
     avatar_url: string;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;

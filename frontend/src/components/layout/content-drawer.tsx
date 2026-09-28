@@ -10,7 +10,7 @@ import ContentNavigation from '@/components/layout/content-navigation';
 import { contentNavigationCta } from '@/lib/navigation/content-navigation';
 import type { Category, ResourceCategory } from '@/types';
 import type { ContentSidebarMode } from './content-sidebar';
-import { useI18n } from '@/i18n/provider';
+import { LocaleSwitcher, useI18n } from '@/i18n/provider';
 
 export const DRAWER_LAYOUT_CLASSES = {
   panel: 'absolute inset-y-0 left-0 flex w-[85vw] max-w-sm flex-col border-r border-[var(--border)] bg-[var(--bg-card)] shadow-xl',
@@ -52,6 +52,7 @@ export default function ContentDrawer({
         <ContentNavigation mode={mode} settings={settings} isAuthenticated={isAuthenticated} userId={userId} forumCategories={forumCategories} resourceCategories={resourceCategories} onNavigate={onClose} />
       </nav>
       {cta && <Link href={cta.href} onClick={onClose} className="mx-3 mb-3 flex shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-3 py-2.5 text-sm font-semibold text-white"><Plus className="h-4 w-4" />{cta.label}</Link>}
+      <LocaleSwitcher className="mx-3 mb-3 self-start" placement="up" />
       <div data-testid="mobile-drawer-user" className={DRAWER_LAYOUT_CLASSES.user}><SidebarUserPanel userName={userName} userMeta={userMeta} /></div>
     </motion.div>
   </motion.div>}</AnimatePresence>;

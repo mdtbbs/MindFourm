@@ -48,7 +48,7 @@ Each forum creates local users keyed by `mindauth_id`. Roles, bans, posts, repli
 | Policy | MDTBBS | Mindustry Club |
 |---|---|---|
 | UI locales | `zh-CN` | `en`, `ru`, `ja` |
-| Email required for community writes | yes | yes |
+| Email required for community writes | no | yes |
 | Phone required for community writes | yes | no |
 | Default resource moderation | yes | no; content-safety flags can still require review |
 | Server applications / LanLink / developer feed | enabled by existing profile | disabled |
@@ -58,6 +58,6 @@ Public `/api/v1/capabilities` reports profile, locales, features, and verificati
 
 ## Migrations and operations
 
-The international fields migration adds local `email_verified`, `preferred_locale`, and `content_language` columns. The previous local schema did not record an authoritative verification bit, so the migration does not infer verification from an email address or MindAuth link. Existing members can browse and sign in; their next MindAuth OAuth login syncs the authoritative email state before community writes are allowed. Plan a one-time reauthentication notice for members with existing forum sessions.
+The international fields migration adds local `email_verified`, `preferred_locale`, and `content_language` columns. The previous local schema did not record an authoritative verification bit, so the migration does not infer verification from an email address or MindAuth link. Existing members can browse and sign in; authenticated MindAuth session refreshes and OAuth logins sync the authoritative email state. MDTBBS community writes use phone verification, while Club community writes use email verification. Plan a one-time reauthentication notice for members with existing forum sessions.
 
 After migrations, check the capability payload and verify each profile with its own OAuth Client. For Club, confirm unauthenticated browsing and public downloads, and ensure the forum's MindAuth application has ecosystem `mindustry-club`. Never point both deployments at the same database, Redis keyspace, upload volume, or settings table.

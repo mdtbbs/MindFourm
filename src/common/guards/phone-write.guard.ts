@@ -42,6 +42,13 @@ export class PhoneWriteGuard implements CanActivate {
     await this.bansService.assertUserNotBanned(user.id);
     request.user = user;
 
+    // Administrators are already authenticated and authorized by route guards.
+    // Account verification gates are for community participation, not for
+    // blocking site owners from managing the forum or using normal features.
+    if (user.role === 'admin') {
+      return true;
+    }
+
     if (this.siteConfig.current.verification.requireEmail && !user.email_verified) {
       throw new ForbiddenException({
         code: 'EMAIL_VERIFICATION_REQUIRED',

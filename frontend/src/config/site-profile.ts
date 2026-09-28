@@ -16,7 +16,7 @@ const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
     profile: 'mdtbbs',
     branding: { siteName: 'MDTBBS', shortName: 'MDTBBS', description: 'Mindustry 中文社区' },
     localization: { defaultLocale: 'zh-CN', supportedLocales: ['zh-CN'] },
-    verification: { requireEmail: true, requirePhoneForWrites: true },
+    verification: { requireEmail: false, requirePhoneForWrites: true },
     features: { resources: true, servers: true, serversDirectory: true, serverApplications: true, gameVersions: true, lanlink: true, developerFeed: true, phoneVerification: true },
     navigation: [
       { key: 'home', href: '/', label: '首页' },
@@ -30,7 +30,7 @@ const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
   'mindustry-club': {
     profile: 'mindustry-club',
     branding: { siteName: 'Mindustry Club', shortName: 'Mindustry Club', description: 'A community built by Mindustry players.' },
-    localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja', 'zh-CN'] },
+    localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja'] },
     verification: { requireEmail: true, requirePhoneForWrites: false },
     features: { resources: true, servers: false, serversDirectory: true, serverApplications: false, gameVersions: true, lanlink: false, developerFeed: false, phoneVerification: false },
     navigation: [

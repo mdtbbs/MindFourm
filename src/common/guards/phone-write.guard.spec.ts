@@ -83,12 +83,19 @@ describe('PhoneWriteGuard', () => {
     });
   });
 
-  it('allows write requests for users with verified phone', async () => {
-    const { guard } = createGuard({ id: 1, phone_verified: true, email_verified: true });
+  it('allows MDTBBS writes with a verified phone even when email is unverified', async () => {
+    const { guard } = createGuard({ id: 1, role: 'user', phone_verified: true, email_verified: false });
     const { context, request } = createContext('DELETE', 'session-token');
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request.user).toMatchObject({ id: 1, phone_verified: true });
+    expect(request.user).toMatchObject({ id: 1, phone_verified: true, email_verified: false });
+  });
+
+  it('exempts administrators from email and phone verification on all writes', async () => {
+    const { guard } = createGuard({ id: 1, role: 'admin', phone_verified: false, email_verified: false });
+    const { context } = createContext('PUT', 'session-token');
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
   });
 
   it('allows Club writes without a phone and requires a verified email', async () => {

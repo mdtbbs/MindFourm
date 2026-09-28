@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
+import { Check, Globe2 } from 'lucide-react';
 import { localeNames, translate, type Locale } from './index';
 import { siteProfile } from '@/config/site-profile';
 import { userApi } from '@/lib/api/client';
@@ -64,12 +65,48 @@ export function useI18n(): LocaleContextValue {
   return value;
 }
 
-export function LocaleSwitcher({ className = '', admin = false }: { className?: string; admin?: boolean }) {
+export function LocaleSwitcher({
+  className = '',
+  admin = false,
+  placement = 'down',
+}: {
+  className?: string;
+  admin?: boolean;
+  placement?: 'up' | 'down';
+}) {
   const { locale, setLocale, t } = useI18n();
-  return <label className={`inline-flex items-center gap-2 text-sm ${className}`}>
-    <span className="sr-only">{t(admin ? 'admin.language' : 'common.language')}</span>
-    <select aria-label={t(admin ? 'admin.language' : 'common.language')} value={locale} onChange={(event) => setLocale(event.target.value as Locale)} className="min-h-9 rounded border border-[var(--border)] bg-[var(--bg-card)] px-2 text-[var(--text-secondary)]">
-      {(admin ? ['en', 'zh-CN'] : siteProfile.localization.supportedLocales).map((item) => <option key={item} value={item}>{localeNames[item as Locale]}</option>)}
-    </select>
-  </label>;
+  const supported = (admin ? ['en', 'zh-CN'] : siteProfile.localization.supportedLocales) as readonly Locale[];
+  if (supported.length <= 1) return null;
+
+  const label = t(admin ? 'admin.language' : 'common.language');
+  const menuPosition = placement === 'up' ? 'bottom-full mb-2' : 'top-full mt-2';
+
+  return (
+    <details className={`group relative ${className}`}>
+      <summary
+        className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-2.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text)] [&::-webkit-details-marker]:hidden"
+        aria-label={label}
+        title={label}
+      >
+        <Globe2 className="h-4 w-4" />
+        <span className="hidden xl:inline">{localeNames[locale]}</span>
+      </summary>
+      <div className={`absolute right-0 z-50 min-w-44 border border-[var(--border)] bg-[var(--bg-card)] p-1 shadow-lg ${menuPosition}`}>
+        {supported.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text)]"
+            onClick={(event) => {
+              setLocale(item);
+              event.currentTarget.closest('details')?.removeAttribute('open');
+            }}
+          >
+            <span>{localeNames[item]}</span>
+            {locale === item ? <Check className="h-4 w-4 text-[var(--primary)]" aria-hidden /> : null}
+          </button>
+        ))}
+      </div>
+    </details>
+  );
 }

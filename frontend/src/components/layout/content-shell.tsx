@@ -19,7 +19,7 @@ import ContentDrawer from "@/components/layout/content-drawer";
 import ContentToolbar from "@/components/layout/content-toolbar";
 import { useNavigation } from '@/lib/navigation/context';
 import MobileBottomNavigation from '@/components/layout/mobile-bottom-navigation';
-import { LocaleSwitcher, useI18n } from '@/i18n/provider';
+import { useI18n } from '@/i18n/provider';
 
 export default function ContentShell({
   children,
@@ -179,7 +179,6 @@ export default function ContentShell({
           onOpenDrawer={() => setMobileMenuOpen(true)}
           navigationMode={sidebarMode}
         />
-        <div className="flex justify-end border-b border-[var(--border)] px-4 py-1.5 lg:px-6"><LocaleSwitcher /></div>
         <AnnouncementBanner />
         <PrivacyNotice />
         <main id="main-content" data-theme-surface tabIndex={-1} className="min-w-0 flex-1">{children}</main>
