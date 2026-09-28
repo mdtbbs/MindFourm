@@ -47,6 +47,7 @@ export interface UnifiedHeaderProps {
   // Slots for custom content
   topNavigationSlot?: React.ReactNode;
   notificationDropdownSlot?: React.ReactNode;
+  utilitySlot?: React.ReactNode;
   mobileMenuSlot?: React.ReactNode;
 }
 
@@ -76,6 +77,7 @@ export function UnifiedHeader({
   onMobileMenuClick,
   topNavigationSlot,
   notificationDropdownSlot,
+  utilitySlot,
   mobileMenuSlot,
 }: UnifiedHeaderProps) {
   const { theme, toggle: toggleTheme } = useTheme();
@@ -117,6 +119,7 @@ export function UnifiedHeader({
           )}
 
           <div className="flex shrink-0 items-center space-x-1 sm:space-x-2">
+            {utilitySlot}
             <button
               onClick={toggleTheme}
               className="relative rounded-full p-2.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]"
