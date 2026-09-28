@@ -21,7 +21,7 @@ describe('CapabilitiesService', () => {
 
     await expect(service.getCapabilities()).resolves.toMatchObject({
       site: { profile: 'mdtbbs', default_locale: 'zh-CN', supported_locales: ['zh-CN'] },
-      verification: { email_required: true, phone_required_for_writes: true },
+      verification: { email_required: false, phone_required_for_writes: true },
       forum: { read: true, write: true, search: true, image_upload: true },
       resources: { read: true, download: true, upload: true },
       notifications: { read: true, sse: false },
