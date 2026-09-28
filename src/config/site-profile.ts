@@ -25,7 +25,7 @@ export const mdtbbsSite: SiteConfiguration = {
   domain: 'mdtbbs.cn',
   branding: { shortName: 'MDTBBS', description: 'Mindustry 中文社区' },
   localization: { defaultLocale: 'zh-CN', supportedLocales: ['zh-CN'] },
-  verification: { requireEmail: true, requirePhoneForWrites: true },
+  verification: { requireEmail: false, requirePhoneForWrites: true },
   features: {
     resources: true, gameVersions: true, servers: true, serversDirectory: true,
     serverApplications: true, lanlink: true, developerFeed: true, phoneVerification: true,
@@ -42,7 +42,7 @@ export const mindustryClubSite: SiteConfiguration = {
   name: 'Mindustry Club',
   domain: 'mindustry.club',
   branding: { shortName: 'Mindustry Club', description: 'A community built by Mindustry players.' },
-  localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja', 'zh-CN'] },
+  localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja'] },
   verification: { requireEmail: true, requirePhoneForWrites: false },
   features: {
     resources: true, gameVersions: true, servers: false, serversDirectory: true,
