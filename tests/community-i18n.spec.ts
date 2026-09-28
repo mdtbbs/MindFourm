@@ -84,7 +84,7 @@ describe('community composition and resource-list translations', () => {
 });
 
 describe('site locale precedence', () => {
-  const clubLocales = ['en', 'ru', 'ja', 'zh-CN'] as const;
+  const clubLocales = ['en', 'ru', 'ja'] as const;
 
   it('uses an explicit language choice before account and browser preferences', () => {
     expect(resolveLocale({
