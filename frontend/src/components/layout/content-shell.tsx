@@ -17,9 +17,9 @@ import PrivacyNotice from "@/components/legal/privacy-notice";
 import ContentSidebar from "@/components/layout/content-sidebar";
 import ContentDrawer from "@/components/layout/content-drawer";
 import ContentToolbar from "@/components/layout/content-toolbar";
-import { roleLabel } from "@/lib/display-labels";
 import { useNavigation } from '@/lib/navigation/context';
 import MobileBottomNavigation from '@/components/layout/mobile-bottom-navigation';
+import { LocaleSwitcher, useI18n } from '@/i18n/provider';
 
 export default function ContentShell({
   children,
@@ -27,6 +27,7 @@ export default function ContentShell({
   children: React.ReactNode;
 }) {
   const { user, isAuthenticated, logout } = useAuth();
+  const { locale, t } = useI18n();
   const settings = useSettings();
   const navigation = useNavigation();
   const brand = resolveBrand(settings);
@@ -97,7 +98,7 @@ export default function ContentShell({
     const clientId = process.env.NEXT_PUBLIC_MINDAUTH_CLIENT_ID || "forum";
     const redirectPath =
       `${window.location.pathname}${window.location.search}` || "/";
-    return `${mindauthUrl}/${endpoint}?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(redirectPath)}`;
+    return `${mindauthUrl}/${endpoint}?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(redirectPath)}&ui_locales=${encodeURIComponent(locale)}`;
   };
 
   const handleSearch = (query: string) => {
@@ -106,11 +107,7 @@ export default function ContentShell({
     }
   };
 
-  const userMeta = user?.role
-    ? `角色：${roleLabel(user.role)}`
-    : isAuthenticated
-      ? "已登录"
-      : "未登录";
+  const userMeta = isAuthenticated ? t('auth.signedIn') : t('auth.guest');
   // Admin lives in its own route layout. Every SiteShell page keeps this
   // sidebar, with resource pages merely changing which section is emphasised.
   const showDesktopSidebar = true;
@@ -121,7 +118,7 @@ export default function ContentShell({
         href="#main-content"
         className="fixed left-4 top-4 z-[100] -translate-y-16 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--primary)]"
       >
-        跳至主要内容
+        {t('common.skipToContent')}
       </a>
       {showDesktopSidebar && (
         <Suspense fallback={null}>
@@ -182,6 +179,7 @@ export default function ContentShell({
           onOpenDrawer={() => setMobileMenuOpen(true)}
           navigationMode={sidebarMode}
         />
+        <div className="flex justify-end border-b border-[var(--border)] px-4 py-1.5 lg:px-6"><LocaleSwitcher /></div>
         <AnnouncementBanner />
         <PrivacyNotice />
         <main id="main-content" data-theme-surface tabIndex={-1} className="min-w-0 flex-1">{children}</main>

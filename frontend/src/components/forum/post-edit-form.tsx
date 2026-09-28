@@ -8,16 +8,23 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { categoryApi, postApi } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import type { Category, Post } from '@/types';
+import ContentLanguageSelect from '@/components/forum/content-language-select';
+import { useI18n } from '@/i18n/provider';
 
 // TipTap editor is client-only
+function PostEditorLoading() {
+  const { t } = useI18n();
+  return (
+    <div role="status" className="w-full min-h-[18rem] flex items-center justify-center border border-[var(--border)] rounded-lg bg-[var(--bg-card)]">
+      <Loader2 className="w-5 h-5 animate-spin text-[var(--text-muted)]" />
+      <span className="ml-2 text-sm text-[var(--text-muted)]">{t('postEdit.editorLoading')}</span>
+    </div>
+  );
+}
+
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
-  loading: () => (
-    <div className="w-full min-h-[18rem] flex items-center justify-center border border-[var(--border)] rounded-lg bg-[var(--bg-card)]">
-      <Loader2 className="w-5 h-5 animate-spin text-[var(--text-muted)]" />
-      <span className="ml-2 text-sm text-[var(--text-muted)]">加载编辑器…</span>
-    </div>
-  ),
+  loading: PostEditorLoading,
 });
 
 interface PostEditFormProps {
@@ -37,10 +44,12 @@ interface PostEditFormProps {
  * make every author's edit fail.
  */
 export default function PostEditForm({ post }: PostEditFormProps) {
+  const { t } = useI18n();
   const router = useRouter();
   const [title, setTitle] = useState(post.title);
   const [content, setContent] = useState(post.content);
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(post.content_json ?? null);
+  const [contentLanguage, setContentLanguage] = useState(post.content_language === 'unknown' ? '' : post.content_language || '');
   const [categoryId, setCategoryId] = useState<number | undefined>(post.category_id ?? undefined);
   const [tagsInput, setTagsInput] = useState(
     (post.tags ?? []).map((tag) => tag.name).join(', '),
@@ -60,6 +69,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
     title !== post.title
     || content !== post.content
     || JSON.stringify(contentJson) !== JSON.stringify(post.content_json ?? null)
+    || (contentLanguage || 'unknown') !== (post.content_language || 'unknown')
     || categoryId !== (post.category_id ?? undefined)
     || tagsInput !== (post.tags ?? []).map((tag) => tag.name).join(', ');
 
@@ -69,11 +79,11 @@ export default function PostEditForm({ post }: PostEditFormProps) {
 
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setError('标题不能为空');
+      setError(t('postEdit.titleRequired'));
       return;
     }
     if (!content.trim()) {
-      setError('内容不能为空');
+      setError(t('postEdit.contentRequired'));
       return;
     }
 
@@ -83,6 +93,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
         title: trimmedTitle,
         content,
         content_json: contentJson || undefined,
+        content_language: contentLanguage || 'unknown',
         category_id: categoryId,
         tags: tagsInput
           .split(/[,，]+/)
@@ -92,7 +103,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
       router.push(`/posts/${post.id}`);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存失败，请稍后重试');
+      setError(err instanceof Error ? err.message : t('postEdit.saveFailed'));
       setSaving(false);
     }
   };
@@ -104,15 +115,16 @@ export default function PostEditForm({ post }: PostEditFormProps) {
         className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--primary)] mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
-        返回帖子
+        {t('postEdit.backToPost')}
       </Link>
 
-      <h1 className="text-2xl font-semibold text-[var(--text)] mb-6">编辑帖子</h1>
+      <h1 className="text-2xl font-semibold text-[var(--text)] mb-6">{t('postEdit.title')}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
         <div>
           <label htmlFor="post-title" className="block text-sm font-medium text-[var(--text)] mb-2">
-            标题
+            {t('postEdit.titleLabel')}
           </label>
           <input
             id="post-title"
@@ -126,7 +138,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
 
         <div>
           <label htmlFor="post-category" className="block text-sm font-medium text-[var(--text)] mb-2">
-            分类
+            {t('postEdit.category')}
           </label>
           <select
             id="post-category"
@@ -136,7 +148,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
             }
             className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
           >
-            <option value="">不设置分类</option>
+            <option value="">{t('postEdit.noCategory')}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
@@ -147,7 +159,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
 
         <div>
           <label htmlFor="post-content" className="block text-sm font-medium text-[var(--text)] mb-2">
-            内容
+            {t('postEdit.content')}
           </label>
           <TiptapEditor
             value={content}
@@ -156,8 +168,8 @@ export default function PostEditForm({ post }: PostEditFormProps) {
             onJsonChange={setContentJson}
             testId="post-edit-content"
             id="post-content"
-            ariaLabel="帖子正文"
-            placeholder="使用富文本编辑器编辑帖子内容..."
+            ariaLabel={t('postEdit.content')}
+            placeholder={t('postEdit.contentPlaceholder')}
             minHeight="18rem"
             imageUpload
           />
@@ -165,13 +177,13 @@ export default function PostEditForm({ post }: PostEditFormProps) {
 
         <div>
           <label htmlFor="post-tags" className="block text-sm font-medium text-[var(--text)] mb-2">
-            标签
+            {t('postEdit.tags')}
           </label>
           <input
             id="post-tags"
             value={tagsInput}
             onChange={(event) => setTagsInput(event.target.value)}
-            placeholder="逗号分隔"
+            placeholder={t('postEdit.tagsPlaceholder')}
             className="w-full px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
           />
         </div>
@@ -184,12 +196,12 @@ export default function PostEditForm({ post }: PostEditFormProps) {
 
         <div className="flex items-center gap-3">
           <Button type="submit" disabled={saving || !dirty} data-testid="post-edit-submit">
-            {saving ? '保存中…' : '保存修改'}
+            {saving ? t('postEdit.saving') : t('postEdit.save')}
           </Button>
           <Button type="button" variant="secondary" onClick={() => router.push(`/posts/${post.id}`)}>
-            取消
+            {t('postEdit.cancel')}
           </Button>
-          {!dirty && <span className="text-sm text-[var(--text-muted)]">尚未修改</span>}
+          {!dirty && <span className="text-sm text-[var(--text-muted)]">{t('postEdit.unchanged')}</span>}
         </div>
       </form>
     </div>

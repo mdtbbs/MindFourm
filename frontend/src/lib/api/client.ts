@@ -2,6 +2,8 @@ import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply,
 import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/response';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
+import { isSiteFeatureEnabled } from '@/config/site-profile';
+import { normalizeLocale, translateApiError, translate } from '@/i18n';
 
 function normalizePublicApiBase(value: string | undefined): string {
   if (!value) return '';
@@ -23,14 +25,33 @@ class ApiRequestError extends Error {
   status: number;
   code?: string;
   existingResource?: { id: number | null; public_id?: string | null; title: string; status: string; url: string } | null;
+  challenge?: CommunityChallengeDescriptor;
 
-  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource']) {
+  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource'], challenge?: CommunityChallengeDescriptor) {
     super(message);
     this.name = 'ApiRequestError';
     this.status = status;
     this.code = code;
     this.existingResource = existingResource;
+    this.challenge = challenge;
   }
+}
+
+export type CommunityChallengeDescriptor = {
+  token: string;
+  action: string;
+  provider: 'development' | 'turnstile' | 'hcaptcha';
+  expires_in: number;
+  site_key?: string;
+  left?: number;
+  right?: number;
+};
+
+export type CommunityChallengeProof = { token: string; response: string };
+
+export function getCommunityChallenge(error: unknown): CommunityChallengeDescriptor | null {
+  if (!(error instanceof ApiRequestError) || error.code !== 'CHALLENGE_REQUIRED') return null;
+  return error.challenge || null;
 }
 
 type RequestOptions = RequestInit & {
@@ -276,26 +297,31 @@ async function request<T>(
     let message = `Request failed: ${res.status}`;
     let code: string | undefined;
     let existingResource: ApiRequestError['existingResource'];
+    let challenge: CommunityChallengeDescriptor | undefined;
     try {
       const data = await res.json();
       const errorBody = data?.error || data;
       if (errorBody?.message) message = errorBody.message;
       if (errorBody?.code) code = errorBody.code;
       existingResource = errorBody?.existing_resource || errorBody?.details?.[0]?.existing_resource;
+      challenge = errorBody?.details?.find?.((item: any) => item?.challenge)?.challenge;
     } catch {
       // Response body is not JSON, use default message
     }
 
+    const pageLocale = typeof document === 'undefined' ? undefined : document.documentElement.lang;
+    message = translateApiError(code, pageLocale) || message;
+
     const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(method).toUpperCase());
-    if (code === 'PHONE_NOT_VERIFIED' && isWrite && !options.skipPhoneVerificationRetry) {
-      useToastStore.getState().showWarning('请先验证手机号，验证成功后会自动继续本次操作');
+    if (code === 'PHONE_NOT_VERIFIED' && isSiteFeatureEnabled('phoneVerification') && isWrite && !options.skipPhoneVerificationRetry) {
+      useToastStore.getState().showWarning(translate(normalizeLocale(pageLocale, ['zh-CN', 'en', 'ru', 'ja']) || 'en', 'errors.phoneRetry'));
       const verified = await requestPhoneVerification();
       if (verified) {
         return request<T>(path, { ...options, skipPhoneVerificationRetry: true });
       }
     }
 
-    throw new ApiRequestError(message, res.status, code, existingResource);
+    throw new ApiRequestError(message, res.status, code, existingResource, challenge);
   }
 
   let data: unknown;
@@ -435,11 +461,12 @@ export const postApi = {
       search: params?.search,
     })}`),
   getById: (id: number) => request<Post>(`/api/posts/${id}`),
-  create: (input: CreatePostInput) => {
+  create: (input: CreatePostInput, challenge?: CommunityChallengeProof) => {
     clearCache();
     return request<Post>('/api/posts', {
       method: 'POST',
       body: JSON.stringify(input),
+      ...(challenge ? { headers: { 'X-Forum-Challenge-Token': challenge.token, 'X-Forum-Challenge-Response': challenge.response } } : {}),
     });
   },
   update: (id: number, input: Partial<CreatePostInput>) => {
@@ -499,11 +526,12 @@ export const replyApi = {
       page: params?.page,
       limit: params?.limit,
     })}`),
-  create: (postId: number, input: CreateReplyInput) => {
+  create: (postId: number, input: CreateReplyInput, challenge?: CommunityChallengeProof) => {
     clearCache();
     return request<Reply>(`/api/posts/${postId}/replies`, {
       method: 'POST',
       body: JSON.stringify(input),
+      ...(challenge ? { headers: { 'X-Forum-Challenge-Token': challenge.token, 'X-Forum-Challenge-Response': challenge.response } } : {}),
     });
   },
   update: (id: number, content: string, contentJson?: Record<string, unknown>) => {
@@ -906,7 +934,7 @@ export const userApi = {
   search: (q: string, limit: number = 10) =>
     request<Array<Pick<UserProfile, 'id' | 'username' | 'avatar_url'>>>(`/api/users/search${buildQueryString({ q, limit })}`),
   getMyProfile: () => request<UserProfile>('/api/users/me'),
-  updateProfile: (data: { username?: string; bio?: string }) =>
+  updateProfile: (data: { username?: string; bio?: string; preferred_locale?: string }) =>
     request<UserProfile>('/api/users/me/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -1311,6 +1339,12 @@ export const resourceAdminApi = {
     clearCache();
     return request<void>(`/api/resources/${id}/admin`, { method: 'DELETE' });
   },
+  exportManifest: (id: number) =>
+    request<ResourceTransferManifest>(`/api/resources/admin/${id}/export-manifest`, { skipCache: true }),
+  importManifest: (formData: FormData) => {
+    clearCache();
+    return request<{ resource: Resource }>('/api/resources/admin/import', { method: 'POST', body: formData });
+  },
   previewMerge: (sourceId: number, targetId: number) =>
     request<{
       source: { id: number; title: string; status: string };
@@ -1328,6 +1362,12 @@ export const resourceAdminApi = {
     });
   },
 };
+
+export interface ResourceTransferManifest {
+  format: 'mindustry-resource/v1';
+  origin: { site: 'mdtbbs' | 'mindustry-club'; resource_id: string; url: string };
+  resource: Record<string, unknown> & { title: string; resource_type: 'upload' | 'external'; file_name?: string };
+}
 
 // Server APIs (EasyManager integration)
 export const serverApi = {

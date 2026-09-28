@@ -99,6 +99,8 @@ describe('AuthController', () => {
         mindauth_id: 123,
         username: 'test-user',
         email: 'test@example.com',
+        email_verified: false,
+        preferred_locale: null,
         avatar_url: '/avatar.png',
         role: 'user',
         bio: 'hello',

@@ -73,6 +73,11 @@ export class CreateResourceDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(16)
+  content_language?: string;
+
+  @IsOptional()
+  @IsString()
   content?: string;
 
   @IsOptional()

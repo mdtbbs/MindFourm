@@ -8,6 +8,8 @@ import { fetchApiData } from '@/lib/api/server-fetch';
 import { Resource, SearchResultResponse } from '@/types';
 import ErrorState from '@/components/ui/error-state';
 import EmptyState from '@/components/ui/empty-state';
+import { getRequestLocale } from '@/i18n/server';
+import { translate, type Locale } from '@/i18n';
 
 export const revalidate = 0;
 
@@ -19,10 +21,10 @@ export const revalidate = 0;
  * result page are still discovered. robots.txt disallows the path too; this covers
  * crawlers arriving from an external link regardless.
  */
-export const metadata: Metadata = {
-  title: '搜索',
-  robots: { index: false, follow: true },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  return { title: translate(locale, 'searchPage.title'), robots: { index: false, follow: true } };
+}
 
 type UnifiedSearchResult = {
   groups: {
@@ -62,6 +64,8 @@ export default async function SearchPage({
   searchParams: Promise<{ q?: string; page?: string }>;
 }) {
   const params = await searchParams;
+  const locale = await getRequestLocale();
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const query = params.q || '';
   let result: UnifiedSearchResult;
   try {
@@ -69,12 +73,12 @@ export default async function SearchPage({
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (message.includes('(401)')) {
-      return <ErrorState title="请登录后搜索" description="搜索功能仅对已登录账号开放；登录后每次搜索都会留存审计记录。" action={{ label: '登录', href: '/login?redirect=%2Fsearch' }} />;
+      return <ErrorState title={t('searchPage.loginRequired')} description={t('searchPage.loginDescription')} action={{ label: t('searchPage.login'), href: '/login?redirect=%2Fsearch' }} />;
     }
     if (message.includes('(400)')) {
-      return <ErrorState title="该关键词不可搜索" description="这个搜索词不符合站点的搜索规则，请更换关键词。" action={{ label: '返回搜索', href: '/search' }} />;
+      return <ErrorState title={t('searchPage.blockedTitle')} description={t('searchPage.blockedDescription')} action={{ label: t('searchPage.backToSearch'), href: '/search' }} />;
     }
-    return <ErrorState title="搜索失败" description="暂时无法获取搜索结果，请稍后重试。" action={{ label: '返回搜索', href: '/search' }} />;
+    return <ErrorState title={t('searchPage.searchFailed')} description={t('searchPage.searchFailedDescription')} action={{ label: t('searchPage.backToSearch'), href: '/search' }} />;
   }
 
   const totalResults = Object.values(result.total_by_type).reduce((total, count) => total + count, 0);
@@ -84,22 +88,22 @@ export default async function SearchPage({
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[var(--text)]">
-          搜索结果
+          {t('searchPage.results')}
           {query && <span className="ml-2 text-lg font-normal text-[var(--text-muted)]">&ldquo;{query}&rdquo;</span>}
         </h1>
         {totalResults > 0 && (
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            找到 {totalResults} 条结果
+            {t('searchPage.resultCount', { count: new Intl.NumberFormat(locale).format(totalResults) })}
           </p>
         )}
       </div>
 
       {totalResults === 0 ? (
-        <EmptyState title={query ? '没有找到匹配的结果' : '请输入搜索关键词'} className="border-0 bg-transparent" />
+        <EmptyState title={query ? t('searchPage.emptyResults') : t('searchPage.enterQuery')} className="border-0 bg-transparent" />
       ) : (
         <div className="space-y-6">
           {groups.users.length > 0 && (
-            <SearchSection title="用户" count={groups.users.length}>
+            <SearchSection title={t('searchPage.users')} count={groups.users.length} locale={locale}>
               <div className="grid gap-3 sm:grid-cols-2">
                 {groups.users.map((user) => <Link key={user.id} href={`/users/${user.id}`} className="border border-[var(--border)] p-3 hover:border-[var(--primary)]">
                   <div className="font-medium text-[var(--text)]">@{user.username}</div>
@@ -111,7 +115,7 @@ export default async function SearchPage({
           {groups.resources.length > 0 && (
             <div>
               <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">
-                资源 ({groups.resources.length})
+                {t('searchPage.resources')} ({new Intl.NumberFormat(locale).format(groups.resources.length)})
               </h2>
               <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">
                 {groups.resources.map((resource) => (
@@ -124,21 +128,21 @@ export default async function SearchPage({
           {groups.posts.length > 0 && (
             <div>
             <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">
-                帖子 ({groups.posts.length})
+                {t('searchPage.posts')} ({new Intl.NumberFormat(locale).format(groups.posts.length)})
               </h2>
               <ThreadList posts={groups.posts} />
             </div>
           )}
-          {groups.servers.length > 0 && <SearchSection title="服务器" count={groups.servers.length}>
+          {groups.servers.length > 0 && <SearchSection title={t('searchPage.servers')} count={groups.servers.length} locale={locale}>
             {groups.servers.map((server) => <SearchLink key={server.id} href="/servers" title={server.name} description={server.description} meta={server.status} />)}
           </SearchSection>}
-          {groups.game_versions.length > 0 && <SearchSection title="游戏版本" count={groups.game_versions.length}>
-            {groups.game_versions.map((version) => <SearchLink key={version.id} href={`/search?q=${encodeURIComponent(version.build || version.version_value)}`} title={version.display_name || version.build || version.version_value} description={version.channel || undefined} meta={version.is_latest ? '最新' : undefined} />)}
+          {groups.game_versions.length > 0 && <SearchSection title={t('searchPage.gameVersions')} count={groups.game_versions.length} locale={locale}>
+            {groups.game_versions.map((version) => <SearchLink key={version.id} href={`/search?q=${encodeURIComponent(version.build || version.version_value)}`} title={version.display_name || version.build || version.version_value} description={version.channel || undefined} meta={version.is_latest ? t('searchPage.latest') : undefined} />)}
           </SearchSection>}
-          {groups.wiki.length > 0 && <SearchSection title="知识库" count={groups.wiki.length}>
+          {groups.wiki.length > 0 && <SearchSection title={t('searchPage.knowledgeBase')} count={groups.wiki.length} locale={locale}>
             {groups.wiki.map((article) => <SearchLink key={article.id} href={`/search?q=${encodeURIComponent(article.title)}`} title={article.title} description={article.summary} meta={article.category || undefined} />)}
           </SearchSection>}
-          {groups.developer_feed.length > 0 && <SearchSection title="开发动态" count={groups.developer_feed.length}>
+          {groups.developer_feed.length > 0 && <SearchSection title={t('searchPage.developerUpdates')} count={groups.developer_feed.length} locale={locale}>
             {groups.developer_feed.map((entry) => <a key={entry.id} href={entry.source_url} rel="noreferrer" className="block border border-[var(--border)] p-3 hover:border-[var(--primary)]">
               <div className="font-medium text-[var(--text)]">{entry.summary || `${entry.repository} #${entry.external_id}`}</div>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">{entry.repository} · @{entry.author_login} · {entry.state}</p>
@@ -152,8 +156,8 @@ export default async function SearchPage({
   );
 }
 
-function SearchSection({ title, count, children }: { title: string; count: number; children: ReactNode }) {
-  return <section><h2 className="mb-3 text-lg font-semibold text-[var(--text)]">{title} ({count})</h2><div className="space-y-2">{children}</div></section>;
+function SearchSection({ title, count, children, locale }: { title: string; count: number; children: ReactNode; locale: Locale }) {
+  return <section><h2 className="mb-3 text-lg font-semibold text-[var(--text)]">{title} ({new Intl.NumberFormat(locale).format(count)})</h2><div className="space-y-2">{children}</div></section>;
 }
 
 function SearchLink({ href, title, description, meta }: { href: string; title: string; description?: string | null; meta?: string }) {

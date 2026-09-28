@@ -33,6 +33,12 @@ export class User {
   @Column({ type: 'varchar', length: 255, nullable: true })
   email: string | null;
 
+  @Column({ type: 'boolean', default: false })
+  email_verified: boolean;
+
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  preferred_locale: string | null;
+
   @Column({ length: 50, default: 'user' })
   role: string;
 

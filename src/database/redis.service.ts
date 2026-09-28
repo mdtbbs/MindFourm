@@ -144,6 +144,40 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /** Atomically consume a short-lived single-use value. */
+  async getAndDelete(key: string): Promise<string | null> {
+    return this.withFallback(
+      async () => this.client.eval(
+        "local value = redis.call('GET', KEYS[1]); if value then redis.call('DEL', KEYS[1]); end; return value",
+        1,
+        key,
+      ) as Promise<string | null>,
+      () => {
+        const value = this.fallback.get(key);
+        if (value !== null) this.fallback.del(key);
+        return value;
+      },
+    );
+  }
+
+  /** Atomic counter with a first-write expiry for bounded abuse signals. */
+  async incrementWithExpiry(key: string, ttlSeconds: number): Promise<number> {
+    const value = await this.withFallback(
+      () => this.client.eval(
+        "local value = redis.call('INCR', KEYS[1]); if value == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]); end; return value",
+        1,
+        key,
+        ttlSeconds,
+      ),
+      () => {
+        const count = this.fallback.incr(key);
+        if (count === 1) this.fallback.expire(key, ttlSeconds);
+        return count;
+      },
+    );
+    return Number(value);
+  }
+
   async exists(key: string): Promise<number> {
     return this.withFallback(
       () => this.client.exists(key),

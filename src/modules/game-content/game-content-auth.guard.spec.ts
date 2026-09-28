@@ -1,5 +1,6 @@
 import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { GameContentAuthGuard, GameContentRequiredAuthGuard } from './game-content-auth.guard';
+import { SiteConfigService } from '@config/site-profile';
 
 function context(request: any): ExecutionContext {
   return { switchToHttp: () => ({ getRequest: () => request }) } as any;
@@ -35,7 +36,16 @@ describe('GameContentAuthGuard', () => {
     await expect(guard.canActivate(context({ headers: { authorization: 'Bearer invalid' } }))).rejects.toBeInstanceOf(UnauthorizedException);
     const required = new GameContentRequiredAuthGuard({ checkNeedsTermsAcceptance: jest.fn().mockResolvedValue(false) } as any, { getBoolean: jest.fn().mockResolvedValue(true) } as any);
     await expect(required.canActivate(context({ user: null }))).rejects.toBeInstanceOf(UnauthorizedException);
-    await expect(required.canActivate(context({ user: { phone_verified: false } }))).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(required.canActivate(context({ method: 'POST', user: { email_verified: true, phone_verified: false } }))).rejects.toMatchObject({ response: { code: 'PHONE_VERIFICATION_REQUIRED' } });
+  });
+
+  it('allows Club community actions without a phone and still requires verified email', async () => {
+    const settings = { getBoolean: jest.fn().mockResolvedValue(true) } as any;
+    const auth = { checkNeedsTermsAcceptance: jest.fn().mockResolvedValue(false) } as any;
+    const club = new SiteConfigService({ get: jest.fn().mockReturnValue('mindustry-club') } as any);
+    const required = new GameContentRequiredAuthGuard(auth, settings, club);
+    await expect(required.canActivate(context({ method: 'POST', user: { email_verified: true, phone_verified: false } }))).resolves.toBe(true);
+    await expect(required.canActivate(context({ method: 'POST', user: { email_verified: false, phone_verified: false } }))).rejects.toMatchObject({ response: { code: 'EMAIL_VERIFICATION_REQUIRED' } });
   });
 
   it('keeps the forum terms acceptance requirement on write APIs', async () => {

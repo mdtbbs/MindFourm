@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { resourceCommentApi } from '@/lib/api/client';
 import type { ResourceComment } from '@/types';
 import { useAuth } from '@/store/user-store';
-import { MessageSquare, Heart, Reply as ReplyIcon, Edit, Trash2, Send } from 'lucide-react';
+import { Heart, Reply as ReplyIcon, Trash2, Send } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 interface ResourceCommentThreadProps {
   resourceId: number;
@@ -39,6 +40,7 @@ function buildCommentTree(comments: ResourceComment[]): CommentNode[] {
 }
 
 export default function ResourceCommentThread({ resourceId, currentUserId, onCountChange }: ResourceCommentThreadProps) {
+  const { t } = useI18n();
   const { user } = useAuth();
   const viewerId = currentUserId ?? user?.id;
   const viewerIsStaff = user?.role === 'admin' || user?.role === 'moderator';
@@ -95,7 +97,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除这条评论吗？')) return;
+    if (!confirm(t('resourceComments.deleteConfirm'))) return;
     try {
       await resourceCommentApi.delete(id);
       await loadComments();
@@ -107,7 +109,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
   const tree = buildCommentTree(comments);
 
   if (loading) {
-    return <div className="text-center text-muted-foreground py-8">加载评论中…</div>;
+    return <div role="status" className="text-center text-muted-foreground py-8">{t('resourceComments.loading')}</div>;
   }
 
   return (
@@ -115,13 +117,13 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
       {/* 评论表单 */}
       <div className="card p-4">
         <h3 className="text-lg font-bold mb-3">
-          {replyTo ? `回复 ${replyTo.username}` : '发表评论'}
+          {replyTo ? t('resourceComments.replyTo', { name: replyTo.username }) : t('resourceComments.new')}
         </h3>
         <div className="flex gap-2">
           <textarea
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
-            placeholder="写下你的评论…"
+            placeholder={t('resourceComments.placeholder')}
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm min-h-[80px] resize-y"
             rows={3}
           />
@@ -132,7 +134,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
               onClick={() => setReplyTo(null)}
               className="rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-muted"
             >
-              取消
+              {t('resourceComments.cancel')}
             </button>
           )}
           <button
@@ -141,7 +143,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
             className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50 flex items-center gap-2"
           >
             <Send className="w-4 h-4" />
-            {submitting ? '提交中…' : '发表'}
+            {submitting ? t('resourceComments.submitting') : t('resourceComments.submit')}
           </button>
         </div>
       </div>
@@ -149,7 +151,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
       {/* 评论列表 */}
       {tree.length === 0 ? (
         <div className="text-center text-muted-foreground py-8">
-          还没有评论，成为第一个评论的人吧！
+          {t('resourceComments.empty')}
         </div>
       ) : (
         <div className="space-y-4">
@@ -166,7 +168,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
           ))}
         </div>
       )}
-      {comments.length < total && <button type="button" onClick={loadMore} className="min-h-11 rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]">加载更多评论（{comments.length}/{total}）</button>}
+      {comments.length < total && <button type="button" onClick={loadMore} className="min-h-11 rounded-md border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]">{t('resourceComments.loadMore', { shown: comments.length, total })}</button>}
     </div>
   );
 }
@@ -186,6 +188,7 @@ function CommentNode({
   onReply: (id: number, username: string) => void;
   onDelete: (id: number) => void;
 }) {
+  const { locale, t } = useI18n();
   const canDelete = viewerIsStaff || currentUserId === node.user_id;
 
   return (
@@ -197,9 +200,9 @@ function CommentNode({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <span className="font-medium">{node.username || '匿名'}</span>
+              <span className="font-medium">{node.username || t('resourceComments.anonymous')}</span>
               <span className="text-xs text-muted-foreground">
-                {new Date(node.created_at).toLocaleString()}
+                {new Date(node.created_at).toLocaleString(({ en: 'en', ru: 'ru', ja: 'ja-JP', 'zh-CN': 'zh-CN' } as const)[locale])}
               </span>
             </div>
             <div className="text-sm whitespace-pre-wrap">{node.content}</div>
@@ -209,11 +212,11 @@ function CommentNode({
                 {node.upvote_count > 0 && <span>{node.upvote_count}</span>}
               </button>
               <button
-                onClick={() => onReply(node.id, node.username || '匿名')}
+                onClick={() => onReply(node.id, node.username || t('resourceComments.anonymous'))}
                 className="flex items-center gap-1 hover:text-primary"
               >
                 <ReplyIcon className="w-3 h-3" />
-                回复
+                {t('resourceComments.reply')}
               </button>
               {canDelete && (
                 <button
@@ -221,7 +224,7 @@ function CommentNode({
                   className="flex items-center gap-1 hover:text-red-500"
                 >
                   <Trash2 className="w-3 h-3" />
-                  删除
+                  {t('resourceComments.delete')}
                 </button>
               )}
             </div>

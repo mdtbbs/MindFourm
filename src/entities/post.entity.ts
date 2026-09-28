@@ -55,6 +55,9 @@ export class Post {
   @Column({ type: 'text' })
   content: string;
 
+  @Column({ type: 'varchar', length: 16, default: 'unknown' })
+  content_language: string;
+
   @Column({ type: 'text', nullable: true })
   content_html: string;
 

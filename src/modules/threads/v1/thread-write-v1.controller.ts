@@ -11,6 +11,7 @@ import { UpdateReplyDto } from '../../replies/dto/update-reply.dto';
 import { RepliesService } from '../../replies/replies.service';
 import { SettingsService } from '../../settings/settings.service';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
+import { CommunityChallengeService } from '../../community-challenges/community-challenge.service';
 
 /**
  * First-party Android write transport.  The underlying post/reply services are
@@ -26,6 +27,7 @@ export class ThreadWriteV1Controller {
     private readonly posts: PostsService,
     private readonly replies: RepliesService,
     @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly communityChallenge?: CommunityChallengeService,
   ) {}
 
   @Post()
@@ -33,8 +35,19 @@ export class ThreadWriteV1Controller {
   @ApiCreatedResponse({ description: 'Thread created. It can be pending moderation.' })
   async createThread(@Body() dto: CreatePostDto, @Req() req: any) {
     await this.assertWritesEnabled();
+    const ipAddress = getClientIp(req);
+    if (dto.status !== 'draft') await this.communityChallenge?.enforceContentAction({
+      action: 'forum.post.create',
+      text: `${dto.title || ''}\n${dto.content || ''}`,
+      actorId: req.user.id,
+      remoteIp: ipAddress,
+      proof: {
+        token: req.headers?.['x-forum-challenge-token'],
+        response: req.headers?.['x-forum-challenge-response'],
+      },
+    });
     const post = await this.posts.create(dto, req.user.id, {
-      ipAddress: getClientIp(req),
+      ipAddress,
       locationLabel: getClientRegion(req),
     });
     return this.threadWriteDto(post!);
@@ -71,8 +84,19 @@ export class ThreadWriteV1Controller {
     @Req() req: any,
   ) {
     await this.assertWritesEnabled();
+    const ipAddress = getClientIp(req);
+    await this.communityChallenge?.enforceContentAction({
+      action: 'forum.reply.create',
+      text: dto.content || '',
+      actorId: req.user.id,
+      remoteIp: ipAddress,
+      proof: {
+        token: req.headers?.['x-forum-challenge-token'],
+        response: req.headers?.['x-forum-challenge-response'],
+      },
+    });
     const reply = await this.replies.createReplyForPost(threadId, dto, req.user.id, {
-      ipAddress: getClientIp(req),
+      ipAddress,
       locationLabel: getClientRegion(req),
     });
     return this.replyWriteDto(reply);

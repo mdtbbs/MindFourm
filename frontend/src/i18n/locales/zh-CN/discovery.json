@@ -1,0 +1,101 @@
+{
+  "searchPage": {
+    "title": "搜索",
+    "loginRequired": "请登录后搜索",
+    "loginDescription": "搜索功能仅对已登录账号开放；登录后每次搜索都会留存审计记录。",
+    "login": "登录",
+    "blockedTitle": "该关键词不可搜索",
+    "blockedDescription": "这个搜索词不符合站点的搜索规则，请更换关键词。",
+    "searchFailed": "搜索失败",
+    "searchFailedDescription": "暂时无法获取搜索结果，请稍后重试。",
+    "backToSearch": "返回搜索",
+    "results": "搜索结果",
+    "resultCount": "找到 {count} 条结果",
+    "emptyResults": "没有找到匹配的结果",
+    "enterQuery": "请输入搜索关键词",
+    "users": "用户",
+    "resources": "资源",
+    "posts": "帖子",
+    "servers": "服务器",
+    "gameVersions": "游戏版本",
+    "knowledgeBase": "知识库",
+    "developerUpdates": "开发动态",
+    "latest": "最新",
+    "recentSearches": "最近搜索",
+    "clearHistory": "清空",
+    "popularSearches": "热门搜索"
+  },
+  "notices": {
+    "title": "公告中心",
+    "updates": "社区动态",
+    "description": "论坛维护、活动和重要规则更新都会在这里保留。",
+    "pinned": "置顶",
+    "viewDetails": "查看公告详情。",
+    "communityTeam": "社区管理组",
+    "readCount": "{count} 次阅读",
+    "empty": "暂时没有公告。",
+    "backHome": "返回论坛首页",
+    "lastUpdated": "最后更新：{date}",
+    "revisionHistory": "更新记录",
+    "related": "相关推荐",
+    "backToNotices": "返回公告中心",
+    "type": {
+      "system": "社区",
+      "maintenance": "维护",
+      "event": "活动",
+      "policy": "规则",
+      "release": "发布"
+    }
+  },
+  "categoriesPage": {
+    "title": "分类",
+    "description": "浏览所有论坛板块",
+    "header": "所有板块",
+    "browseDescription": "按社区、创作、游戏和站务浏览讨论。",
+    "empty": "暂无板块",
+    "postCount": "{count} 个主题",
+    "groups": { "community": "社区", "creation": "创作", "game": "游戏", "meta": "站务", "other": "其他" }
+  },
+  "contentLanguage": {
+    "label": "内容语言",
+    "unknown": "不指定",
+    "hint": "选择帖子或资源正文使用的语言。",
+    "languages": { "en": "英语", "ru": "俄语", "ja": "日语", "zh-CN": "简体中文", "es": "西班牙语", "de": "德语", "other": "其他" }
+  },
+  "discoverPage": {
+    "title": "发现",
+    "description": "探索 Mindustry 社区的联机、资源和公告",
+    "intro": "从联机房间到社区资源和动态，找到值得参与的内容。",
+    "rooms": "联机房间",
+    "roomsDescription": "查看玩家公开的联机房间",
+    "resources": "资源中心",
+    "resourcesDescription": "浏览社区资源与工具",
+    "notices": "社区公告",
+    "noticesDescription": "查看最新公告和活动",
+    "summary": "资源：{resources} · 讨论：{discussions}"
+  },
+  "tagsPage": { "title": "标签", "description": "浏览所有讨论标签", "empty": "暂无标签。" },
+  "tagPage": {
+    "title": "标签：{tag}",
+    "pageTitle": "标签：{tag} · 第 {page} 页",
+    "description": "浏览带有“{tag}”标签的讨论和资源。",
+    "empty": "该标签下暂无讨论。"
+  },
+  "categoryPage": {
+    "description": "“{category}”板块下的讨论",
+    "pageTitle": "{category} · 第 {page} 页",
+    "categoryDescription": "浏览这个板块中的全部主题。",
+    "emptyTitle": "这里还没有主题",
+    "emptyDescription": "有什么想讨论的吗？成为第一个发布内容的人。",
+    "createPost": "发布主题"
+  },
+  "threadsPage": {
+    "title": "讨论",
+    "description": "Mindustry 社区讨论区",
+    "loadFailed": "讨论列表加载失败",
+    "tryAgain": "请稍后再试。",
+    "reload": "重新加载",
+    "sortDescription": "按最后活跃时间浏览社区讨论。",
+    "empty": "暂时没有讨论。"
+  }
+}

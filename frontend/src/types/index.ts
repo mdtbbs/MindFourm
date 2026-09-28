@@ -9,6 +9,8 @@ export interface User {
   role: UserRole;
   avatar_url?: string | null;
   bio?: string | null;
+  email_verified?: boolean;
+  preferred_locale?: string | null;
   phone_verified?: boolean;
   phone_verified_at?: string | null;
   createdAt: string;
@@ -62,6 +64,7 @@ export interface PostSummary {
   slug?: string | null;
   title: string;
   excerpt: string;
+  content_language?: string;
   status: 'draft' | 'published' | 'pending' | 'deleted';
   is_pinned: boolean;
   view_count: number;
@@ -93,6 +96,7 @@ export interface Post {
   slug?: string | null;
   title: string;
   content: string;
+  content_language?: string;
   content_format?: 'tiptap_json';
   content_html: string | null;
   content_json?: Record<string, unknown> | null;
@@ -146,6 +150,7 @@ export interface PostListResponse {
 export interface CreatePostInput {
   title: string;
   content: string;
+  content_language?: string;
   content_format?: 'tiptap_json';
   content_json?: Record<string, unknown>;
   category_id?: number;
@@ -454,6 +459,7 @@ export interface Resource {
   external_url: string | null;
   version: string | null;
   content: string | null;
+  content_language?: string;
   content_html: string | null;
   content_json?: Record<string, unknown> | null;
   content_text?: string | null;

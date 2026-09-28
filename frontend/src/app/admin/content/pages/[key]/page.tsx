@@ -9,19 +9,26 @@ import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import MarkdownEditor from '@/components/ui/markdown-editor';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { siteProfile } from '@/config/site-profile';
 
-const PAGES: Record<string, { title: string; path: string; description: string }> = {
-  about: { title: '关于我们', path: '/about', description: '介绍站点和社区的内容' },
-  terms: { title: '服务条款', path: '/terms', description: '用户使用协议和规则' },
-  privacy: { title: '隐私政策', path: '/privacy', description: '数据收集和使用说明' },
-  thanks: { title: '鸣谢', path: '/thanks', description: '感谢贡献者和支持者' },
+const PAGES: Record<string, { title: string; path: string; description: string; settingKey: string }> = {
+  about: { title: '关于我们', path: '/about', description: '介绍站点和社区的内容', settingKey: 'footer_about_content' },
+  terms: { title: '服务条款', path: '/terms', description: '用户使用协议和规则', settingKey: 'footer_terms_content' },
+  privacy: { title: '隐私政策', path: '/privacy', description: '数据收集和使用说明', settingKey: 'footer_privacy_content' },
+  thanks: { title: '鸣谢', path: '/thanks', description: '感谢贡献者和支持者', settingKey: 'footer_thanks_content' },
+  'community-guidelines': { title: '社区准则', path: '/community-guidelines', description: '社区参与和行为规范', settingKey: 'footer_community_guidelines_content' },
+  'resource-rules': { title: '内容与资源规则', path: '/resource-rules', description: '资源发布、授权与恶意文件规则', settingKey: 'footer_resource_rules_content' },
+  takedown: { title: '版权与下架政策', path: '/copyright', description: '版权投诉与内容下架流程', settingKey: 'footer_takedown_content' },
 };
+const CLUB_PAGE_KEYS = new Set(['community-guidelines', 'resource-rules', 'takedown']);
 
 export default function PageEditPage() {
   const params = useParams();
   const router = useRouter();
   const pageKey = params.key as string;
-  const pageInfo = PAGES[pageKey];
+  const pageInfo = siteProfile.profile === 'mindustry-club' || !CLUB_PAGE_KEYS.has(pageKey)
+    ? PAGES[pageKey]
+    : undefined;
 
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [content, setContent] = useState('');
@@ -30,7 +37,7 @@ export default function PageEditPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const settingKey = pageInfo ? `footer_${pageKey}_content` : null;
+  const settingKey = pageInfo?.settingKey ?? null;
 
   const fetchContent = useCallback(async () => {
     if (!settingKey) return;

@@ -3,8 +3,10 @@
 import { useAuth } from '@/lib/auth/context';
 import Link from 'next/link';
 import { Settings } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 export default function ProfileEditLink({ userId }: { userId: number }) {
+  const { t } = useI18n();
   const { user } = useAuth();
   if (!user || user.id !== userId) return null;
 
@@ -14,7 +16,7 @@ export default function ProfileEditLink({ userId }: { userId: number }) {
       className="flex items-center gap-1 text-sm text-surface-500 hover:text-primary-600 transition-colors"
     >
       <Settings className="w-3.5 h-3.5" />
-      编辑资料
+      {t('profileEdit.title')}
     </Link>
   );
 }

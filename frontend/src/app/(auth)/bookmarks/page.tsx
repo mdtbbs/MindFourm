@@ -8,8 +8,10 @@ import { useAuth } from '@/lib/auth/context';
 import { BookmarkIcon, Trash2, ExternalLink, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { useI18n } from '@/i18n/provider';
 
 export default function BookmarksPage() {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
@@ -76,10 +78,10 @@ export default function BookmarksPage() {
       deleted: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
     };
     const labels: Record<string, string> = {
-      published: '已发布',
-      draft: '草稿',
-      pending: '待审核',
-      deleted: '已删除',
+      published: t('bookmarks.published'),
+      draft: t('bookmarks.draft'),
+      pending: t('bookmarks.statusPending'),
+      deleted: t('bookmarks.statusDeleted'),
     };
     return (
       <span className={`px-2 py-0.5 rounded text-xs ${styles[status] || styles.published}`}>
@@ -121,10 +123,10 @@ export default function BookmarksPage() {
         <div>
           <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100 flex items-center gap-2">
             <BookmarkIcon className="w-6 h-6" />
-            我的收藏
+            {t('bookmarks.title')}
           </h1>
           <p className="text-sm text-surface-500 dark:text-gray-400 mt-1">
-            共 {pagination.total} 个收藏
+            {t('bookmarks.count', { count: pagination.total })}
           </p>
         </div>
       </div>
@@ -142,7 +144,7 @@ export default function BookmarksPage() {
                 : 'bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300 hover:bg-surface-200 dark:hover:bg-gray-600'
             }`}
           >
-            {f === 'all' ? '全部' : f === 'published' ? '已发布' : '草稿'}
+            {t(f === 'all' ? 'bookmarks.all' : f === 'published' ? 'bookmarks.published' : 'bookmarks.draft')}
           </button>
         ))}
       </div>
@@ -150,9 +152,9 @@ export default function BookmarksPage() {
       {/* Breadcrumb */}
       <div className="mb-6">
         <nav className="flex items-center gap-2 text-sm text-surface-500 dark:text-gray-400">
-          <Link href="/" className="hover:text-[var(--primary)]">首页</Link>
+          <Link href="/" className="hover:text-[var(--primary)]">{t('bookmarks.home')}</Link>
           <span>/</span>
-          <span className="text-surface-700 dark:text-gray-200">我的收藏</span>
+          <span className="text-surface-700 dark:text-gray-200">{t('bookmarks.title')}</span>
         </nav>
       </div>
 
@@ -164,15 +166,15 @@ export default function BookmarksPage() {
       ) : bookmarks.length === 0 ? (
         <div className="text-center py-16">
           <BookmarkIcon className="w-12 h-12 mx-auto text-surface-300 dark:text-gray-600 mb-4" />
-          <p className="text-surface-400 dark:text-gray-500 mb-2">暂无收藏</p>
+          <p className="text-surface-400 dark:text-gray-500 mb-2">{t('bookmarks.empty')}</p>
           <p className="text-sm text-surface-500 dark:text-gray-400">
-            浏览帖子时点击收藏按钮即可添加到这里
+            {t('bookmarks.emptyHelp')}
           </p>
           <Link
             href="/"
             className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white rounded-lg hover:opacity-90 transition-opacity"
           >
-            去浏览帖子
+            {t('bookmarks.browse')}
             <ExternalLink className="w-4 h-4" />
           </Link>
         </div>
@@ -190,7 +192,7 @@ export default function BookmarksPage() {
                     href={`/posts/${bookmark.post_id}`}
                     className="block font-medium text-surface-900 dark:text-gray-100 hover:text-[var(--primary)] truncate mb-2"
                   >
-                    {bookmark.title || '(无标题)'}
+                    {bookmark.title || t('bookmarks.untitled')}
                   </Link>
 
                   {/* Meta */}
@@ -207,7 +209,7 @@ export default function BookmarksPage() {
                     )}
 
                     <span className="text-surface-400 dark:text-gray-500">
-                      收藏于 {new Date(bookmark.created_at).toLocaleDateString('zh-CN')}
+                      {t('bookmarks.savedOn', { date: new Date(bookmark.created_at).toLocaleDateString(({ en: 'en', ru: 'ru', ja: 'ja-JP', 'zh-CN': 'zh-CN' } as const)[locale]) })}
                     </span>
                   </div>
                 </div>
@@ -217,7 +219,7 @@ export default function BookmarksPage() {
                   <Link
                     href={`/posts/${bookmark.post_id}`}
                     className="p-2 text-surface-500 dark:text-gray-400 hover:text-[var(--primary)] hover:bg-surface-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                    title="查看帖子"
+                    title={t('bookmarks.view')}
                   >
                     <ExternalLink className="w-4 h-4" />
                   </Link>
@@ -226,7 +228,7 @@ export default function BookmarksPage() {
                     onClick={() => handleRemoveBookmark(bookmark.post_id)}
                     disabled={removing === bookmark.post_id}
                     className="p-2 text-surface-500 dark:text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors disabled:opacity-50"
-                    title="取消收藏"
+                    title={t('bookmarks.remove')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -246,11 +248,11 @@ export default function BookmarksPage() {
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300 hover:bg-surface-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="w-4 h-4" />
-            上一页
+            {t('bookmarks.previous')}
           </button>
 
           <span className="text-sm text-surface-500 dark:text-gray-400">
-            第 {pagination.page} / {pagination.totalPages} 页
+            {t('bookmarks.page', { page: pagination.page, total: pagination.totalPages })}
           </span>
 
           <button
@@ -258,7 +260,7 @@ export default function BookmarksPage() {
             disabled={pagination.page === pagination.totalPages}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-100 dark:bg-gray-700 text-surface-600 dark:text-gray-300 hover:bg-surface-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            下一页
+            {t('bookmarks.next')}
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

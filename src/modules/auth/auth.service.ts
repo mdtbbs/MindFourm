@@ -412,6 +412,8 @@ export class AuthService {
         avatar_url: identity.avatar_url,
         phone_verified: identity.phone_verified,
         phone_verified_at: identity.phone_verified_at,
+        email_verified: identity.email_verified,
+        preferred_locale: identity.preferred_locale,
       },
     };
     try {
@@ -453,9 +455,11 @@ export class AuthService {
     id: number;
     username: string;
     email?: string | null;
+    email_verified?: boolean;
     avatar_url: string;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;
+    preferred_locale?: string | null;
   }> {
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
 
@@ -470,9 +474,11 @@ export class AuthService {
         id: Number(response.data.id ?? response.data.sub),
         username: response.data.username ?? response.data.name,
         email: response.data.email || null,
+        email_verified: response.data.email_verified === true || response.data.email_verified === 1,
         avatar_url: response.data.avatar_url,
         phone_verified: response.data.phone_verified === true,
         phone_verified_at: response.data.phone_verified_at ?? null,
+        preferred_locale: response.data.preferred_locale || null,
       };
     } catch (error) {
       try {
@@ -481,7 +487,16 @@ export class AuthService {
             Authorization: `Bearer ${accessToken}`,
           },
         });
-        return response.data;
+        return {
+          id: Number(response.data.id ?? response.data.sub),
+          username: response.data.username ?? response.data.name,
+          email: response.data.email || null,
+          email_verified: response.data.email_verified === true || response.data.email_verified === 1,
+          avatar_url: response.data.avatar_url,
+          phone_verified: response.data.phone_verified === true,
+          phone_verified_at: response.data.phone_verified_at ?? null,
+          preferred_locale: response.data.preferred_locale || null,
+        };
       } catch {
         throw new UnauthorizedException('Failed to get user info from MindAuth');
       }
@@ -495,9 +510,11 @@ export class AuthService {
     id: number;
     username: string;
     email?: string | null;
+    email_verified?: boolean;
     avatar_url: string;
     phone_verified?: boolean;
     phone_verified_at?: string | Date | null;
+    preferred_locale?: string | null;
   }): Promise<User> {
     let user = await this.usersRepository.findOne({
       where: { mindauth_id: mindauthUser.id },
@@ -513,10 +530,12 @@ export class AuthService {
         mindauth_id: mindauthUser.id,
         username: mindauthUser.username,
         email: mindauthUser.email || null,
+        email_verified: !!mindauthUser.email_verified,
         avatar_url: localAvatarUrl,
         role: 'user',
         phone_verified: !!mindauthUser.phone_verified,
         phone_verified_at: mindauthUser.phone_verified_at ? new Date(mindauthUser.phone_verified_at) : null,
+        preferred_locale: mindauthUser.preferred_locale || null,
       });
       await this.usersRepository.save(user);
       this.notificationsService.sendWelcomeNotification(user.id).catch((error) => {
@@ -526,6 +545,8 @@ export class AuthService {
       // Update user info if changed
       if (mindauthUser.username) user.username = mindauthUser.username;
       if (mindauthUser.email) user.email = mindauthUser.email;
+      if (typeof mindauthUser.email_verified === 'boolean') user.email_verified = mindauthUser.email_verified;
+      if (mindauthUser.preferred_locale) user.preferred_locale = mindauthUser.preferred_locale;
       if (mindauthUser.avatar_url) {
         // Download avatar locally when it changes from MindAuth
         user.avatar_url = await this.syncAvatarFromMindAuth(

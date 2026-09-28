@@ -1,0 +1,94 @@
+{
+  "profileEdit": {
+    "loadFailed": "加载失败",
+    "emptyName": "昵称不能为空",
+    "saved": "资料已保存",
+    "saveFailed": "保存失败",
+    "avatarPending": "头像已上传，等待管理员审核",
+    "avatarUpdated": "头像已更新",
+    "avatarRemoved": "头像已删除",
+    "retry": "重试",
+    "back": "返回上一页",
+    "title": "编辑资料",
+    "avatar": "头像",
+    "displayName": "昵称",
+    "displayNamePlaceholder": "输入昵称",
+    "bio": "个人简介",
+    "bioPlaceholder": "介绍一下自己…",
+    "notificationSettings": "通知设置",
+    "cancel": "取消",
+    "saving": "保存中…",
+    "save": "保存"
+  },
+  "userProfile": {
+    "homeTitle": "{name} 的主页",
+    "metaDescription": "{name} 的个人主页、帖子与回复",
+    "avatarAlt": "{name} 的头像",
+    "joined": "加入于 {date}",
+    "stats": {
+      "posts": "主题",
+      "replies": "回复",
+      "followers": "粉丝",
+      "following": "关注",
+      "points": "积分"
+    },
+    "tabs": {
+      "posts": "帖子",
+      "replies": "回复",
+      "resources": "资源",
+      "bookmarks": "收藏",
+      "likes": "点赞"
+    },
+    "empty": {
+      "posts": "暂无帖子",
+      "replies": "暂无回复",
+      "resources": "暂无资源",
+      "bookmarks": "暂无收藏",
+      "likes": "暂无点赞"
+    },
+    "post": "帖子",
+    "unknownUser": "用户 #{id}",
+    "role": {
+      "admin": "管理员",
+      "moderator": "版主",
+      "user": "用户"
+    }
+  },
+  "follow": {
+    "follow": "关注",
+    "following": "已关注",
+    "followFailed": "关注失败",
+    "unfollowFailed": "取消关注失败"
+  },
+  "blockUser": {
+    "unknownUser": "用户 #{id}",
+    "blocked": "已拉黑 {name}",
+    "unblocked": "已取消拉黑 {name}",
+    "cannotBlockStaff": "不能拉黑管理员或版主",
+    "userMissing": "该用户不存在或已注销",
+    "cannotBlockSelf": "不能拉黑自己",
+    "sessionExpired": "登录状态已过期，请重新登录后再试",
+    "operationFailed": "操作失败，请稍后重试",
+    "unblockFailed": "取消拉黑失败，请稍后重试",
+    "block": "拉黑",
+    "unblock": "取消拉黑",
+    "dialogTitle": "拉黑 {name}",
+    "close": "关闭",
+    "description": "拉黑后对方将无法向你发送私信。你可以随时在“设置 → 拉黑列表”中取消。",
+    "reason": "原因（可选，仅自己可见）",
+    "reasonPlaceholder": "方便日后回顾为什么拉黑",
+    "cancel": "取消",
+    "processing": "处理中…",
+    "confirm": "确认拉黑"
+  },
+  "avatarUploader": {
+    "imageOnly": "请选择图片文件",
+    "tooLarge": "图片大小不能超过 2MB",
+    "uploadFailed": "上传失败",
+    "deleteFailed": "删除失败",
+    "preview": "头像预览",
+    "upload": "上传",
+    "remove": "删除",
+    "formats": "支持 JPEG、PNG、GIF、WebP，最大 2MB"
+  }
+}

@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { AuthService } from '../../modules/auth/auth.service';
 import { BansService } from '../../modules/bans/bans.service';
 import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
+import { SiteConfigService } from '../../config/site-profile';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -18,6 +19,7 @@ export class PhoneWriteGuard implements CanActivate {
     private authService: AuthService,
     private reflector: Reflector,
     private bansService: BansService,
+    private siteConfig: SiteConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -40,7 +42,14 @@ export class PhoneWriteGuard implements CanActivate {
     await this.bansService.assertUserNotBanned(user.id);
     request.user = user;
 
-    if (!user.phone_verified) {
+    if (this.siteConfig.current.verification.requireEmail && !user.email_verified) {
+      throw new ForbiddenException({
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        message: 'Verify your email address before continuing.',
+      });
+    }
+
+    if (this.siteConfig.current.verification.requirePhoneForWrites && !user.phone_verified) {
       throw new ForbiddenException({
         code: 'PHONE_NOT_VERIFIED',
         message: '请先验证手机号后再继续操作',

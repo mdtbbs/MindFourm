@@ -40,6 +40,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
           ? { existing_resource: (exceptionResponse as any).existing_resource } : {}),
         ...(typeof exceptionResponse === 'object' && exceptionResponse !== null && (exceptionResponse as any).existing_resources
           ? { existing_resources: (exceptionResponse as any).existing_resources } : {}),
+        ...(code === 'CHALLENGE_REQUIRED' && typeof exceptionResponse === 'object' && exceptionResponse !== null && (exceptionResponse as any).details
+          ? { details: (exceptionResponse as any).details } : {}),
       });
       return;
     }

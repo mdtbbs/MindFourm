@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { FileText } from 'lucide-react';
+import { siteProfile } from '@/config/site-profile';
 
 const PAGES = [
   {
@@ -28,7 +29,26 @@ const PAGES = [
     description: '/thanks 页面',
     settingKey: 'footer_thanks_content',
   },
+  {
+    key: 'community-guidelines',
+    title: '社区准则',
+    description: '/community-guidelines 页面',
+    settingKey: 'footer_community_guidelines_content',
+  },
+  {
+    key: 'resource-rules',
+    title: '内容与资源规则',
+    description: '/resource-rules 页面',
+    settingKey: 'footer_resource_rules_content',
+  },
+  {
+    key: 'takedown',
+    title: '版权与下架政策',
+    description: '/copyright 页面',
+    settingKey: 'footer_takedown_content',
+  },
 ];
+const CLUB_PAGE_KEYS = new Set(['community-guidelines', 'resource-rules', 'takedown']);
 
 export default function PagesListPage() {
   return (
@@ -41,7 +61,7 @@ export default function PagesListPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {PAGES.map((page) => (
+        {PAGES.filter((page) => siteProfile.profile === 'mindustry-club' || !CLUB_PAGE_KEYS.has(page.key)).map((page) => (
           <Link
             key={page.key}
             href={`/admin/content/pages/${page.key}`}

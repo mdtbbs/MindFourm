@@ -54,6 +54,9 @@ import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { ResourcePreviewService } from './resource-preview.service';
 import { RESOURCE_KINDS } from './resource-kind-registry';
 import { ResourceDuplicateService } from './resource-duplicate.service';
+import { SiteConfigService } from '@config/site-profile';
+import { buildResourceExportManifest, parseResourceImportManifest } from './resource-transfer.util';
+import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -147,6 +150,7 @@ export class ResourcesController {
     private readonly subscriptionsService: ResourceSubscriptionsService,
     private readonly resourcePreviewService: ResourcePreviewService,
     private readonly duplicateService: ResourceDuplicateService,
+    private readonly siteConfig: SiteConfigService,
   ) {}
 
   @Get()
@@ -265,6 +269,74 @@ export class ResourcesController {
   @Roles('admin', 'moderator')
   async getAdminList(@Query() query: QueryResourcesDto) {
     return this.resourcesService.getList(query, { scope: 'admin' });
+  }
+
+  @Get('admin/:id/export-manifest')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  async exportManifest(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    const resource = await this.resourcesService.getTransferExportData(id, req.user);
+    return buildResourceExportManifest(resource, this.siteConfig.current);
+  }
+
+  @Post('admin/import')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
+  @UseInterceptors(resourceUploadInterceptor)
+  @RateLimit({ max: 5, window: 60 })
+  async importManifest(
+    @Body() rawBody: Record<string, any>,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req() req: any,
+  ) {
+    let storedFile: Awaited<ReturnType<ResourceStorageService['storeIncoming']>> | undefined;
+    try {
+      const manifest = parseResourceImportManifest(rawBody.manifest, this.siteConfig.current.profile);
+      const payload = { ...manifest.resource } as Record<string, any>;
+      delete payload.file_name;
+      delete payload.file_download_url;
+      if (typeof payload.content_json === 'string') {
+        try { payload.content_json = JSON.parse(payload.content_json); }
+        catch { throw new BadRequestException('Manifest content_json must be valid JSON'); }
+      }
+      if (rawBody.category_id !== undefined && rawBody.category_id !== '') payload.category_id = rawBody.category_id;
+      if (rawBody.is_public !== undefined && rawBody.is_public !== '') payload.is_public = rawBody.is_public;
+
+      const dto = await new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }).transform(payload, { type: 'body', metatype: CreateResourceDto });
+      if (dto.resource_type === 'upload' && !file) {
+        throw new BadRequestException('Upload resources need a local file selected for import.');
+      }
+      if (dto.resource_type === 'external' && file) {
+        throw new BadRequestException('External resources must not include an uploaded file.');
+      }
+      if (dto.resource_type === 'external' && dto.external_url && !isSafeExternalUrl(dto.external_url)) {
+        throw new BadRequestException('The external resource URL must be a public HTTP or HTTPS address.');
+      }
+      if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
+      if (file) storedFile = await this.resourceStorageService.storeIncoming(file);
+
+      const resource = await this.resourcesService.create(dto, Number(req.user.id), storedFile, {
+        ipAddress: getClientIp(req),
+        origin: {
+          site: manifest.origin.site,
+          resourceId: manifest.origin.resource_id,
+          url: manifest.origin.url,
+        },
+      });
+      await this.logOperation(req, 'resource.import', resource.id, {
+        origin_site: manifest.origin.site,
+        origin_resource_id: manifest.origin.resource_id,
+      });
+      return { resource };
+    } catch (error) {
+      await cleanupUploadedFile(file);
+      if (storedFile?.file_path) await fs.unlink(storedFile.file_path).catch(() => undefined);
+      throw error;
+    }
   }
 
   @Get('admin/:sourceId/merge-preview')

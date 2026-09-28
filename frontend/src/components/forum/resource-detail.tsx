@@ -14,13 +14,20 @@ import ResourceGallery from './resources/detail/resource-gallery';
 import ResourceActions from './resources/detail/resource-actions';
 import ResourceTabs, { type ResourceTab } from './resources/detail/resource-tabs';
 import ResourceAside from './resources/detail/resource-aside';
-import { resourceCardFacts, resourceFileExtension, resourceStatusLabel } from '@/lib/resources/presentation';
-import { formatDate } from '@/lib/utils';
-import { resourceKindLabel } from '@/lib/display-labels';
+import { resourceCardFacts, resourceFileExtension } from '@/lib/resources/presentation';
+import { useI18n } from '@/i18n/provider';
 
 interface ResourceDetailProps { resource: Resource; }
 
+const RESOURCE_FACT_KEYS: Record<string, string> = {
+  '地图尺寸': 'mapSize', '模式': 'mode', '星球': 'planet', '出生点': 'spawns', '核心': 'cores',
+  '蓝图尺寸': 'schematicSize', '方块': 'blocks', '净功率': 'netPower', 'Mod 版本': 'modVersion',
+  '支持游戏版本': 'supportedGameVersions', '平台': 'platform', '游戏版本': 'gameVersion', '渠道': 'channel',
+  '资源版本': 'resourceVersion', '适用版本': 'compatibleVersions',
+};
+
 export default function ResourceDetail({ resource }: ResourceDetailProps) {
+  const { t, locale } = useI18n();
   const { isAuthenticated, user } = useAuth();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const [activeTab, setActiveTab] = useState<ResourceTab>('overview');
@@ -58,12 +65,19 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const displayedSupportedVersions = metadata?.supported_versions || [];
   const displayedCompatibility = metadata?.compatibility || [];
   const quickFacts = resourceCardFacts(resource).slice(0, 4);
+  const resourceKind = resource.resource_kind && ['map', 'schematic', 'mod', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'save'].includes(resource.resource_kind)
+    ? resource.resource_kind : 'other';
+  const statusKey = resource.status === 'approved' || resource.status === 'published' ? 'statusPublished'
+    : resource.status === 'pending' || resource.status === 'pending_review' ? 'statusPending'
+      : resource.status === 'rejected' ? 'statusRejected' : resource.status === 'archived' ? 'statusArchived' : 'statusUnknown';
   const downloadExtension = resourceFileExtension(primaryVersion?.file_name || resource.file_name);
-  const downloadLabel = isSchematic || isMap ? `下载${downloadExtension ? ` ${downloadExtension}` : '文件'}` : `下载 ${resource.version || primaryVersion?.version || '资源'}`;
+  const downloadLabel = isSchematic || isMap
+    ? downloadExtension ? t('resourceActions.download', { name: downloadExtension }) : t('resourceActions.downloadFile')
+    : t('resourceActions.download', { name: resource.version || primaryVersion?.version || t('resourceTabs.file') });
 
   const copyChecksum = async (checksum: string) => {
     await navigator.clipboard.writeText(checksum);
-    showSuccess('SHA-256 已复制');
+    showSuccess(t('resourceDetail.checksumCopied'));
   };
 
   const copySchematicCode = async () => {
@@ -72,7 +86,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       const response = await fetch(primaryVersion ? resourceApi.download(resource.id, primaryVersion.id) : downloadUrl, {
         credentials: 'include',
       });
-      if (!response.ok) throw new Error('蓝图文件暂时无法读取');
+      if (!response.ok) throw new Error(t('resourceDetail.schematicDownloadUnavailable'));
       const bytes = new Uint8Array(await response.arrayBuffer());
       let binary = '';
       const chunkSize = 0x8000;
@@ -80,7 +94,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
       }
       const code = btoa(binary);
-      if (!code.startsWith('bXNja')) throw new Error('文件不是可复制的 Mindustry 蓝图');
+      if (!code.startsWith('bXNja')) throw new Error(t('resourceDetail.notSchematic'));
       let copiedToClipboard = false;
       try {
         if (navigator.clipboard?.writeText) {
@@ -99,12 +113,12 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
         copiedToClipboard = document.execCommand('copy');
         textarea.remove();
       }
-      if (!copiedToClipboard) throw new Error('当前浏览器禁止访问剪贴板，请下载 .msch 文件导入');
+      if (!copiedToClipboard) throw new Error(t('resourceDetail.clipboardBlocked'));
       setSchematicCopied(true);
-      showSuccess('蓝图代码已复制，可直接在 Mindustry 中导入');
+      showSuccess(t('resourceDetail.schematicCopied'));
       window.setTimeout(() => setSchematicCopied(false), 2200);
     } catch (error) {
-      showSuccess(error instanceof Error ? error.message : '蓝图代码复制失败，请下载 .msch 文件导入');
+      showSuccess(error instanceof Error ? error.message : t('resourceDetail.schematicCopyFailed'));
     }
   };
 
@@ -125,45 +139,45 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   }, [resource.id, isAuthenticated]);
 
   const toggleFavorite = async () => {
-    if (!isAuthenticated) { showSuccess('请先登录后收藏资源'); return; }
+    if (!isAuthenticated) { showSuccess(t('resourceDetail.favoriteSignIn')); return; }
     setBusy(true);
     try {
       const result = favorite ? await resourceApi.removeFavorite(resource.id) : await resourceApi.addFavorite(resource.id);
       setFavorite(result.is_favorited);
       setFavoriteCount(result.favorite_count);
-    } catch (error) { showSuccess(error instanceof Error ? error.message : '收藏操作失败'); }
+    } catch (error) { showSuccess(error instanceof Error ? error.message : t('resourceDetail.favoriteFailed')); }
     setBusy(false);
   };
 
   const toggleLike = async () => {
-    if (!isAuthenticated) { showSuccess('请先登录后点赞'); return; }
+    if (!isAuthenticated) { showSuccess(t('resourceDetail.likeSignIn')); return; }
     setBusy(true);
     try {
       const result = liked ? await resourceApi.removeLike(resource.id) : await resourceApi.addLike(resource.id);
       setLiked(result.is_liked);
       setLikeCount(result.like_count);
-    } catch (error) { showSuccess(error instanceof Error ? error.message : '点赞操作失败'); }
+    } catch (error) { showSuccess(error instanceof Error ? error.message : t('resourceDetail.likeFailed')); }
     setBusy(false);
   };
 
   const toggleSubscription = async () => {
-    if (!isAuthenticated) { showSuccess('请先登录后订阅资源更新'); return; }
+    if (!isAuthenticated) { showSuccess(t('resourceDetail.subscribeSignIn')); return; }
     setBusy(true);
     try {
       const result = subscribed ? await resourceApi.unsubscribe(resource.id) : await resourceApi.subscribe(resource.id);
       setSubscribed(result.is_subscribed);
-      showSuccess(result.is_subscribed ? '已订阅资源更新' : '已取消订阅');
-    } catch (error) { showSuccess(error instanceof Error ? error.message : '订阅操作失败'); }
+      showSuccess(result.is_subscribed ? t('resourceDetail.subscribed') : t('resourceDetail.unsubscribed'));
+    } catch (error) { showSuccess(error instanceof Error ? error.message : t('resourceDetail.subscribeFailed')); }
     setBusy(false);
   };
 
   const rate = async (value: number) => {
-    if (!isAuthenticated) { showSuccess('请先登录后评分'); return; }
+    if (!isAuthenticated) { showSuccess(t('resourceDetail.rateSignIn')); return; }
     try {
       await resourceApi.upsertRating(resource.id, value);
       setUserRating(value);
-      showSuccess('评分已保存');
-    } catch (error) { showSuccess(error instanceof Error ? error.message : '评分失败'); }
+      showSuccess(t('resourceDetail.rated'));
+    } catch (error) { showSuccess(error instanceof Error ? error.message : t('resourceDetail.rateFailed')); }
   };
 
   const share = async () => {
@@ -182,21 +196,21 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
             <ResourceGallery title={resource.title} images={gallery} index={galleryIndex} contain={isMap || isSchematic} onSelect={setGalleryIndex} />
             <div className="min-w-0 flex-1">
               <div className="mb-3 flex flex-wrap items-center gap-2 text-sm text-[var(--text-muted)]">
-                {resource.category_name && <Link href={`/resources?category_id=${resource.category_id}`} className="text-[var(--primary)] hover:underline">专题：{resource.category_name}</Link>}
-                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{resourceKindLabel(resource.resource_kind)}</span>}
-                {(primaryVersion?.version || resource.version) && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">资源版本 {primaryVersion?.version || resource.version}</span>}
-                <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-[var(--text-secondary)]">{resourceStatusLabel(resource.status)}</span>
+                {resource.category_name && <Link href={`/resources?category_id=${resource.category_id}`} className="text-[var(--primary)] hover:underline">{t('resourceDetail.category', { name: resource.category_name })}</Link>}
+                {resource.resource_kind && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t(`resourceKinds.${resourceKind}`)}</span>}
+                {(primaryVersion?.version || resource.version) && <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceDetail.versionLabel', { version: primaryVersion?.version || resource.version || '' })}</span>}
+                <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-[var(--text-secondary)]">{t(`resourceDetail.${statusKey}`)}</span>
               </div>
               <h1 className="min-w-0 break-words text-3xl font-bold tracking-tight text-[var(--text)] sm:text-4xl">{resource.title}</h1>
-              <p className="mt-3 max-w-3xl line-clamp-3 text-base leading-7 text-[var(--text-secondary)]">{resource.description || '暂无简短介绍，查看下方完整资源说明。'}</p>
-              {quickFacts.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{quickFacts.map((fact) => <div key={fact.label} className="min-w-0 border-l-2 border-[var(--primary)]/40 pl-2.5"><dt className="text-xs text-[var(--text-muted)]">{fact.label}</dt><dd className="mt-0.5 truncate text-sm font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>}
+              <p className="mt-3 max-w-3xl line-clamp-3 text-base leading-7 text-[var(--text-secondary)]">{resource.description || t('resourceDetail.emptyDescription')}</p>
+              {quickFacts.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{quickFacts.map((fact) => <div key={fact.label} className="min-w-0 border-l-2 border-[var(--primary)]/40 pl-2.5"><dt className="text-xs text-[var(--text-muted)]">{t(`resourceKindDetails.fact.${RESOURCE_FACT_KEYS[fact.label] || 'resourceVersion'}`)}</dt><dd className="mt-0.5 truncate text-sm font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>}
               <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--text-muted)]">
-                <Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 max-w-full items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span><span className="min-w-0 break-all">{resource.username || '未知作者'}</span></Link>
-                <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{formatDate(resource.updated_at || resource.created_at)} 更新</span>
-                <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{resource.download_count || 0} 次下载</span>
+                <Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 max-w-full items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span><span className="min-w-0 break-all">{resource.username || t('resourceDetail.unknownAuthor')}</span></Link>
+                <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(resource.updated_at || resource.created_at))} {t('resourceDetail.updated')}</span>
+                <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{t('resourceDetail.downloads', { count: new Intl.NumberFormat(locale).format(resource.download_count || 0) })}</span>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">{displayTags.map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-secondary)]"><Tag className="h-3.5 w-3.5" />{tag}</span>)}</div>
-              {['map', 'schematic'].includes(resource.resource_kind || '') && resource.renderer_status !== 'ready' && <p className="mt-3 text-sm text-[var(--text-muted)]">{resource.renderer_status === 'processing' ? '正在生成官方 Mindustry 预览图…' : resource.renderer_status === 'failed' ? '预览生成失败，仍可下载原文件。' : '预览服务暂不可用，仍可下载原文件。'}</p>}
+              {['map', 'schematic'].includes(resource.resource_kind || '') && resource.renderer_status !== 'ready' && <p className="mt-3 text-sm text-[var(--text-muted)]">{resource.renderer_status === 'processing' ? t('resourceDetail.rendererProcessing') : resource.renderer_status === 'failed' ? t('resourceDetail.rendererFailed') : t('resourceDetail.rendererUnavailable')}</p>}
             </div>
           </div>
           <ResourceActions
@@ -242,6 +256,6 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       />
     </div>
 
-    {related.length > 0 && <section><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-bold text-[var(--text)]">相关推荐</h2><Link href="/resources" className="text-sm text-[var(--primary)] hover:underline">浏览更多资源</Link></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{related.map((item) => <Link key={item.id} href={`/resources/${item.slug ? `${item.id}-${item.slug}` : item.id}`} className="group rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--primary)]"><div className="flex gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Package className="h-5 w-5" /></div><div className="min-w-0"><h3 className="truncate font-semibold text-[var(--text)] group-hover:text-[var(--primary)]">{item.title}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{item.username || '未知作者'} · {item.download_count || 0} 次下载</p></div></div></Link>)}</div></section>}
+    {related.length > 0 && <section><div className="mb-4 flex items-center justify-between"><h2 className="text-xl font-bold text-[var(--text)]">{t('resourceDetail.related')}</h2><Link href="/resources" className="text-sm text-[var(--primary)] hover:underline">{t('resourceDetail.browseMore')}</Link></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{related.map((item) => <Link key={item.id} href={`/resources/${item.slug ? `${item.id}-${item.slug}` : item.id}`} className="group rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 transition hover:-translate-y-0.5 hover:border-[var(--primary)]"><div className="flex gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]"><Package className="h-5 w-5" /></div><div className="min-w-0"><h3 className="truncate font-semibold text-[var(--text)] group-hover:text-[var(--primary)]">{item.title}</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceDetail.unknownDownloads', { author: item.username || t('resourceDetail.unknownAuthor'), count: new Intl.NumberFormat(locale).format(item.download_count || 0) })}</p></div></div></Link>)}</div></section>}
   </div>;
 }

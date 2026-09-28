@@ -77,4 +77,16 @@ export const appConfig = () => ({
     jwtSecret: process.env.MOBILE_AUTH_JWT_SECRET || '',
     refreshHmacSecret: process.env.MOBILE_AUTH_REFRESH_HMAC_SECRET || '',
   },
+  communityChallenge: {
+    provider: process.env.COMMUNITY_CHALLENGE_PROVIDER || 'disabled',
+    ticketTtlSeconds: parseInt(process.env.COMMUNITY_CHALLENGE_TICKET_TTL_SECONDS || '180', 10),
+    turnstile: {
+      siteKey: process.env.COMMUNITY_CHALLENGE_TURNSTILE_SITE_KEY || '',
+      secretKey: process.env.COMMUNITY_CHALLENGE_TURNSTILE_SECRET_KEY || '',
+    },
+    hcaptcha: {
+      siteKey: process.env.COMMUNITY_CHALLENGE_HCAPTCHA_SITE_KEY || '',
+      secretKey: process.env.COMMUNITY_CHALLENGE_HCAPTCHA_SECRET_KEY || '',
+    },
+  },
 });

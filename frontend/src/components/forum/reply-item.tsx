@@ -7,6 +7,7 @@ import ReplyAttachmentList from '@/components/forum/reply-attachment-list';
 import { Check } from 'lucide-react';
 import { formatTime } from '@/lib/utils';
 import type { Reply } from '@/types';
+import { useI18n } from '@/i18n/provider';
 
 interface ReplyItemProps {
   reply: Reply;
@@ -42,6 +43,7 @@ export default function ReplyItem({
   isBestReply = false,
   isOriginalPoster = false,
 }: ReplyItemProps) {
+  const { t, locale } = useI18n();
   return (
     <div
       className={`bg-[var(--bg-card)] rounded-lg border overflow-hidden ${
@@ -63,7 +65,7 @@ export default function ReplyItem({
           {floor !== null ? (
             <span className="shrink-0 font-medium text-[var(--text)]">#{floor}</span>
           ) : (
-            <span className="shrink-0 text-xs text-[var(--text-muted)]">回复</span>
+            <span className="shrink-0 text-xs text-[var(--text-muted)]">{t('replyItem.reply')}</span>
           )}
           <AuthorLink
             userId={reply.user_id}
@@ -74,17 +76,17 @@ export default function ReplyItem({
             showMeta={!isNested}
             className="min-w-0"
           />
-          {isOriginalPoster && <span className="rounded bg-[var(--primary)]/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--primary)]">楼主</span>}
+          {isOriginalPoster && <span className="rounded bg-[var(--primary)]/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--primary)]">{t('replyItem.originalPoster')}</span>}
           <span className="text-[var(--text-muted)]">|</span>
           <time
             dateTime={reply.created_at}
-            title={new Date(reply.created_at).toLocaleString('zh-CN')}
+            title={new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(reply.created_at))}
             className="text-[var(--text-secondary)]"
             // Relative times differ between server and client render; the server value
             // is authoritative for the initial paint.
             suppressHydrationWarning
           >
-            {formatTime(reply.created_at)}
+            {formatTime(reply.created_at, locale)}
           </time>
           {reply.location_label && (
             <span className="text-xs text-[var(--text-muted)]">{reply.location_label}</span>
@@ -92,7 +94,7 @@ export default function ReplyItem({
           {isBestReply && (
             <span className="inline-flex items-center gap-1 rounded bg-[var(--success)] px-2 py-0.5 text-xs font-medium text-white">
               <Check className="h-3 w-3" />
-              已采纳
+              {t('replyItem.accepted')}
             </span>
           )}
         </div>

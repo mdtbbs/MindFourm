@@ -1,16 +1,19 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, Req, Optional } from '@nestjs/common';
 import { RepliesService } from './replies.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { UpdateReplyDto } from './dto/update-reply.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
+import { RateLimit } from '@common/decorators/rate-limit.decorator';
+import { CommunityChallengeService } from '../community-challenges/community-challenge.service';
 
 @Controller('posts/:postId/replies')
 export class RepliesController {
   constructor(
     private readonly repliesService: RepliesService,
     private readonly logsService: LogsService,
+    @Optional() private readonly communityChallenge?: CommunityChallengeService,
   ) {}
 
   @Get()
@@ -28,14 +31,26 @@ export class RepliesController {
 
   @UseGuards(JwtAuthGuard)
   @Post()
+  @RateLimit({ max: 20, window: 60 })
   async createReply(
     @Param('postId') postId: number,
     @Body() dto: CreateReplyDto,
     @Req() req: any,
   ) {
     const userId = req.user.id;
+    const ipAddress = getClientIp(req);
+    await this.communityChallenge?.enforceContentAction({
+      action: 'forum.reply.create',
+      text: dto.content || '',
+      actorId: userId,
+      remoteIp: ipAddress,
+      proof: {
+        token: req.headers?.['x-forum-challenge-token'],
+        response: req.headers?.['x-forum-challenge-response'],
+      },
+    });
     const reply = await this.repliesService.createReplyForPost(Number(postId), dto, userId, {
-      ipAddress: getClientIp(req),
+      ipAddress,
       locationLabel: getClientRegion(req),
     });
     await this.logOperation(req, 'reply.create', 'reply', reply.id, {

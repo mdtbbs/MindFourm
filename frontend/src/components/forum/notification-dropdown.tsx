@@ -22,8 +22,10 @@ import { Bell, CheckCheck, MessageSquare, AtSign, Heart, ExternalLink, Mail } fr
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { motion as motionTokens } from '@/lib/motion';
+import { useI18n } from '@/i18n/provider';
 
 export default function NotificationDropdown() {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -55,20 +57,20 @@ export default function NotificationDropdown() {
       window.clearTimeout(arrivalTimerRef.current);
       arrivalTimerRef.current = window.setTimeout(() => setJustArrived(false), 500);
 
-      const actorLabel = notification.actor_name || (notification.type === 'system' ? '系统' : '社区');
+      const actorLabel = notification.actor_name || (notification.type === 'system' ? t('notifications.system') : t('notifications.community'));
       const typeText =
-        notification.type === 'reply' ? '回复了你的帖子'
-          : notification.type === 'mention' ? '提到了你'
-          : notification.type === 'post_like' ? '点赞了你的帖子'
-          : notification.type === 'reply_like' ? '点赞了你的回复'
-          : notification.type === 'message' ? '给你发了私信'
-          : notification.type === 'best_answer' ? '将你的回复设为最佳答案'
-          : notification.type === 'system' ? '发送了系统通知'
-          : '发送了新通知';
+        notification.type === 'reply' ? t('notifications.reply')
+          : notification.type === 'mention' ? t('notifications.mention')
+          : notification.type === 'post_like' ? t('notifications.postLike')
+          : notification.type === 'reply_like' ? t('notifications.replyLike')
+          : notification.type === 'message' ? t('notifications.message')
+          : notification.type === 'best_answer' ? t('notifications.bestAnswer')
+          : notification.type === 'system' ? t('notifications.systemNotice')
+          : t('notifications.newNotice');
 
       showToast(`${actorLabel} ${typeText}`);
     },
-    [addNotification, showToast],
+    [addNotification, showToast, t],
   );
 
   // SSE real-time notifications
@@ -129,25 +131,25 @@ export default function NotificationDropdown() {
       : <Bell className="w-4 h-4" />;
 
   const typeText = (type: string) =>
-    type === 'reply' ? '回复了你的帖子'
-      : type === 'mention' ? '提到了你'
-      : type === 'post_like' ? '点赞了你的帖子'
-      : type === 'reply_like' ? '点赞了你的回复'
-      : type === 'message' ? '给你发了私信'
-      : type === 'best_answer' ? '将你的回复设为最佳答案'
-      : type === 'system' ? '系统通知'
-      : '通知';
+    type === 'reply' ? t('notifications.reply')
+      : type === 'mention' ? t('notifications.mention')
+      : type === 'post_like' ? t('notifications.postLike')
+      : type === 'reply_like' ? t('notifications.replyLike')
+      : type === 'message' ? t('notifications.message')
+      : type === 'best_answer' ? t('notifications.bestAnswer')
+      : type === 'system' ? t('notifications.systemNotice')
+      : t('notifications.newNotice');
 
   const actorLabel = (notification: Notification) =>
-    notification.type === 'system' ? null : (notification.actor_name || '社区');
+    notification.type === 'system' ? null : (notification.actor_name || t('notifications.community'));
 
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={handleOpen}
         className="relative p-2 text-surface-600 dark:text-gray-300 hover:text-primary-600 transition-colors"
-        title="通知"
-        aria-label={`通知 ${unreadCount > 0 ? `(${unreadCount}条未读)` : ''}`}
+        title={t('notifications.title')}
+        aria-label={`${t('notifications.title')} ${unreadCount > 0 ? `(${t('notifications.unread', { count: unreadCount })})` : ''}`}
         aria-expanded={isOpen}
       >
         {/* Animates once when the count rises, not continuously. Keying the class off
@@ -177,15 +179,15 @@ export default function NotificationDropdown() {
           transition={{ duration: reduceMotion ? 0 : motionTokens.fast, ease: motionTokens.easing }}
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-surface-100 dark:border-gray-700">
-            <span className="font-medium text-surface-900 dark:text-gray-100">通知</span>
+            <span className="font-medium text-surface-900 dark:text-gray-100">{t('notifications.title')}</span>
             {unreadCount > 0 && (
               <button
                 onClick={handleMarkAllRead}
                 className="text-xs text-primary-600 hover:text-primary-700 flex items-center gap-1"
-                aria-label="全部标记为已读"
+                aria-label={t('notifications.allReadLabel')}
               >
                 <CheckCheck className="w-3 h-3" />
-                全部已读
+                {t('notifications.allRead')}
               </button>
             )}
           </div>
@@ -196,7 +198,7 @@ export default function NotificationDropdown() {
                 <LoadingSpinner variant="orbital" size="md" />
               </div>
             ) : notifications.length === 0 ? (
-              <div className="py-8 text-center text-surface-400 dark:text-gray-500">暂无通知</div>
+              <div className="py-8 text-center text-surface-400 dark:text-gray-500">{t('notifications.empty')}</div>
             ) : (
               notifications.slice(0, 5).map((n) => (
                 <div
@@ -233,7 +235,7 @@ export default function NotificationDropdown() {
                         </p>
                       )}
                       <p className="text-xs text-surface-400 dark:text-gray-500 mt-1">
-                        {new Date(n.created_at).toLocaleString('zh-CN')}
+                        {new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(n.created_at))}
                       </p>
                     </div>
                   </div>
@@ -250,7 +252,7 @@ export default function NotificationDropdown() {
               }}
               className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
             >
-              查看全部通知
+              {t('notifications.viewAll')}
               <ExternalLink className="w-3 h-3" />
             </button>
           </div>

@@ -7,6 +7,7 @@
 'use client';
 
 import { ErrorBoundary } from '@/components/ui/error-boundary';
+import { useI18n } from '@/i18n/provider';
 
 export default function PublicError({
   error,
@@ -15,12 +16,13 @@ export default function PublicError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <ErrorBoundary
       error={error}
       reset={reset}
-      title="页面错误"
-      description="内容加载失败，请刷新页面重试。"
+      title={t('errors.pageError')}
+      description={t('errors.loadError')}
     />
   );
 }

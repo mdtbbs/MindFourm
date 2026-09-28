@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, CornerDownLeft, Search, UserRound, PackageSearch } from 'lucide-react';
 import type { AdminNavSection } from '@/lib/admin/navigation';
+import { useI18n } from '@/i18n/provider';
 
 interface AdminCommandMenuProps {
   open: boolean;
@@ -20,11 +21,12 @@ interface CommandResult {
   disabled?: boolean;
 }
 
-function normalize(value: string): string {
-  return value.trim().toLocaleLowerCase('zh-CN');
+function normalize(value: string, locale: string): string {
+  return value.trim().toLocaleLowerCase(locale);
 }
 
 export default function AdminCommandMenu({ open, onOpenChange, sections }: AdminCommandMenuProps) {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
@@ -51,7 +53,7 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
   }, [open, onOpenChange]);
 
   const results = useMemo<CommandResult[]>(() => {
-    const term = normalize(query);
+    const term = normalize(query, locale);
     const staticResults = sections.flatMap((section) =>
       section.items.map((item) => ({
         key: `${section.key}:${item.key}`,
@@ -60,7 +62,7 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
         href: item.href ?? '',
         icon: item.icon,
         disabled: item.disabled || !item.href,
-        haystack: normalize([section.label, item.label, ...(item.keywords ?? [])].join(' ')),
+        haystack: normalize([section.label, item.label, ...(item.keywords ?? [])].join(' '), locale),
       })),
     );
 
@@ -79,32 +81,34 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
     if (!term) return matched;
 
     const dynamic: CommandResult[] = [];
-    const userMatch = query.trim().match(/^用户\s+(.+)$/i);
+    const userCommand = t('adminShell.userCommand');
+    const userMatch = query.trim().match(new RegExp(`^${userCommand}\\s+(.+)$`, 'i'));
     if (userMatch?.[1]) {
       const value = userMatch[1].trim();
       dynamic.push({
         key: 'dynamic:user',
-        label: `搜索用户：${value}`,
-        description: '用户管理',
+        label: t('adminShell.searchUser', { value }),
+        description: t('adminShell.userManagement'),
         href: `/admin/users?search=${encodeURIComponent(value)}`,
         icon: UserRound,
       });
     }
 
-    const resourceMatch = query.trim().match(/^资源\s+(.+)$/i);
+    const resourceCommand = t('adminShell.resourceCommand');
+    const resourceMatch = query.trim().match(new RegExp(`^${resourceCommand}\\s+(.+)$`, 'i'));
     if (resourceMatch?.[1]) {
       const value = resourceMatch[1].trim();
       dynamic.push({
         key: 'dynamic:resource',
-        label: `搜索资源：${value}`,
-        description: '资源管理',
+        label: t('adminShell.searchResource', { value }),
+        description: t('adminShell.resourceManagement'),
         href: `/admin/resources?search=${encodeURIComponent(value)}`,
         icon: PackageSearch,
       });
     }
 
     return [...dynamic, ...matched].slice(0, 12);
-  }, [query, sections]);
+  }, [locale, query, sections, t]);
 
   const go = (result: CommandResult) => {
     if (result.disabled || !result.href) return;
@@ -120,7 +124,7 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
         className="admin-command-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label="后台命令菜单"
+        aria-label={t('adminShell.commandMenu')}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="admin-command-search">
@@ -135,15 +139,15 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
                 if (first) go(first);
               }
             }}
-            placeholder="搜索页面，或输入“用户 xxx”“资源 xxx”"
-            aria-label="搜索后台功能"
+            placeholder={t('adminShell.commandPlaceholder')}
+            aria-label={t('adminShell.searchFeature')}
           />
           <kbd>Esc</kbd>
         </div>
 
         <div className="admin-command-results">
           {results.length === 0 ? (
-            <div className="admin-command-empty">没有找到匹配的后台功能。</div>
+            <div className="admin-command-empty">{t('adminShell.noCommandResults')}</div>
           ) : (
             results.map((result, index) => {
               const Icon = result.icon;
@@ -158,7 +162,7 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
                   <Icon className="h-4 w-4" />
                   <span className="admin-command-result-copy">
                     <strong>{result.label}</strong>
-                    <small>{result.description}{result.disabled ? ' · 尚未接入' : ''}</small>
+                    <small>{result.description}{result.disabled ? t('adminShell.notConnected') : ''}</small>
                   </span>
                   {index === 0 && !result.disabled ? <CornerDownLeft className="h-3.5 w-3.5" /> : <ArrowRight className="h-3.5 w-3.5" />}
                 </button>
@@ -168,9 +172,9 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
         </div>
 
         <div className="admin-command-help">
-          <span>Ctrl/⌘ K 打开</span>
-          <span>Enter 前往</span>
-          <span>Esc 关闭</span>
+          <span>{t('adminShell.shortcutOpen')}</span>
+          <span>{t('adminShell.shortcutGo')}</span>
+          <span>{t('adminShell.shortcutClose')}</span>
         </div>
       </div>
     </div>

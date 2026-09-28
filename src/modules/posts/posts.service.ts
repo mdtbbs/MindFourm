@@ -109,7 +109,7 @@ export class PostsService {
     // business holding the write transaction open.
     const requestedStatus = dto.status || 'published';
     const risk = this.contentSafety
-      ? await this.contentSafety.assess(`${dto.title}\n${content}`)
+      ? await this.contentSafety.assess(`${dto.title}\n${content}`, { actorId: userId, surface: 'post' })
       : { score: 0, rules: [], mustReview: false };
     const requiresApproval = requestedStatus === 'published'
       && (risk.mustReview || await this.settingsService.getBoolean('require_post_approval', true));
@@ -133,6 +133,7 @@ export class PostsService {
       // Create the post
       const newPost = manager.create(Post, {
         user_id: userId,
+        content_language: dto.content_language?.trim() || 'unknown',
         category_id: dto.category_id,
         required_group_id: dto.required_group_id,
         post_type: dto.post_type || 'normal',
@@ -353,6 +354,7 @@ export class PostsService {
       status,
       user_id,
       search,
+      content_language,
       server_id,
       sort = 'created_at',
       order = 'DESC',
@@ -391,6 +393,10 @@ export class PostsService {
 
     if (search) {
       qb.andWhere('post.title LIKE :search', { search: `%${escapeLike(search)}%` });
+    }
+
+    if (content_language?.trim()) {
+      qb.andWhere('post.content_language = :contentLanguage', { contentLanguage: content_language.trim() });
     }
 
     // Status filtering: admins see published + pending; regular users see published + own pending
@@ -445,6 +451,7 @@ export class PostsService {
       exclude_category_ids,
       status,
       user_id,
+      content_language,
       server_id,
       cursor,
       sort = 'created_at',
@@ -472,6 +479,10 @@ export class PostsService {
 
     if (user_id) {
       qb.andWhere('post.user_id = :explicitUserId', { explicitUserId: user_id });
+    }
+
+    if (content_language?.trim()) {
+      qb.andWhere('post.content_language = :contentLanguage', { contentLanguage: content_language.trim() });
     }
 
     if (server_id) {
@@ -661,6 +672,7 @@ export class PostsService {
         updateData.content_json = contentSource.content_json;
         updateData.content_text = contentSource.content_text;
       }
+      if (dto.content_language !== undefined) updateData.content_language = dto.content_language.trim() || 'unknown';
       if (dto.category_id !== undefined) updateData.category_id = dto.category_id;
       if (dto.required_group_id !== undefined) updateData.required_group_id = dto.required_group_id;
       if (dto.post_type) updateData.post_type = dto.post_type;

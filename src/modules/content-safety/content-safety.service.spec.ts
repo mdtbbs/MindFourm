@@ -1,18 +1,52 @@
 import { ContentSafetyService } from './content-safety.service';
 
 describe('ContentSafetyService', () => {
-  const service = new ContentSafetyService(
-    { get: jest.fn().mockResolvedValue(''), getNumber: jest.fn().mockResolvedValue(3) } as any,
-    { log: jest.fn().mockResolvedValue(undefined) } as any,
-  );
+  const settings = {
+    get: jest.fn().mockResolvedValue(''),
+    getNumber: jest.fn(async (key: string) => ({
+      content_safety_review_threshold: 3,
+      content_safety_link_review_threshold: 8,
+      content_safety_duplicate_min_characters: 40,
+      content_safety_duplicate_window_seconds: 120,
+    } as Record<string, number>)[key] ?? null),
+  };
+  const logs = { log: jest.fn() };
 
-  it('forces review for built-in high-risk terms even when global moderation is disabled', async () => {
-    await expect(service.assess('免费博彩推广')).resolves.toMatchObject({ mustReview: true, rules: ['keyword:博彩'] });
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it('records only high-risk review decisions', async () => {
-    const risk = await service.assess('木马下载');
-    await service.recordFlag({ userId: 1, targetType: 'post', targetId: 2, risk, ipAddress: '2001:db8::1' });
-    expect((service as any).logs.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'content_safety.flagged', ip_address: '2001:db8::1' }));
+  it('holds repeated long submissions from the same account for review', async () => {
+    const redis = { setIfNotExists: jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false) };
+    const service = new ContentSafetyService(settings as any, logs as any, redis as any);
+    const text = 'A repeated community post with enough normalized characters to check.';
+
+    const first = await service.assess(text, { actorId: 17, surface: 'post' });
+    const repeated = await service.assess(text, { actorId: 17, surface: 'post' });
+
+    expect(first.mustReview).toBe(false);
+    expect(repeated).toMatchObject({ score: 3, rules: ['duplicate_recent'], mustReview: true });
+    expect(redis.setIfNotExists).toHaveBeenCalledWith(
+      expect.stringMatching(/^content-safety:recent:post:17:[a-f0-9]{64}$/),
+      '1',
+      120,
+    );
+  });
+
+  it('uses a configurable URL threshold and leaves ordinary link use alone', async () => {
+    const redis = { setIfNotExists: jest.fn() };
+    const thresholdSettings = {
+      ...settings,
+      getNumber: jest.fn(async (key: string) => key === 'content_safety_link_review_threshold'
+        ? 3
+        : settings.getNumber(key)),
+    };
+    const service = new ContentSafetyService(thresholdSettings as any, logs as any, redis as any);
+    const ordinary = await service.assess('Read https://example.org and https://example.net for details.');
+    const spam = await service.assess('https://one.example https://two.example https://three.example');
+
+    expect(ordinary.rules).not.toContain('excessive_links');
+    expect(spam.rules).toContain('excessive_links');
+    expect(redis.setIfNotExists).not.toHaveBeenCalled();
   });
 });

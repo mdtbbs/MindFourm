@@ -9,8 +9,10 @@ import Link from 'next/link';
 import EmptyState from '@/components/ui/empty-state';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
+import { useI18n } from '@/i18n/provider';
 
 export default function NotificationsPage() {
+  const { locale, t } = useI18n();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, totalPages: 1 });
   const [filter, setFilter] = useState<'all' | 'unread' | 'read'>('all');
@@ -23,16 +25,16 @@ export default function NotificationsPage() {
     setError(null);
     try {
       // The filter goes to the server. Fetching one page and filtering it here left the
-      // page count describing unfiltered rows, so "仅未读" showed an empty list whenever
+      // page count describing unfiltered rows, so "unread only" showed an empty list whenever
       // the unread items were past page one — while the bell still reported them.
       const res = await notificationApi.list({ page, limit: 50, filter });
       setNotifications(res.data);
       setPagination(res.pagination);
     } catch {
-      setError('通知加载失败,请稍后重试');
+      setError(t('notificationPage.loadError'));
     }
     setLoading(false);
-  }, [filter]);
+  }, [filter, t]);
 
   useEffect(() => {
     loadNotifications(1);
@@ -52,7 +54,7 @@ export default function NotificationsPage() {
         setNotifications(notifications.map(n => ({ ...n, is_read: true })));
       }
     } catch {
-      setActionError('标记已读失败,请稍后重试');
+      setActionError(t('notificationPage.markAllReadFailed'));
     }
   };
 
@@ -65,7 +67,7 @@ export default function NotificationsPage() {
         setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
       }
     } catch {
-      setActionError('标记已读失败,请稍后重试');
+      setActionError(t('notificationPage.markReadFailed'));
     }
   };
 
@@ -96,25 +98,25 @@ export default function NotificationsPage() {
   const typeText = (type: string) => {
     switch (type) {
       case 'reply':
-        return '回复了你的帖子';
+        return t('notificationPage.reply');
       case 'mention':
-        return '在帖子中提到了你';
+        return t('notificationPage.mention');
       case 'post_like':
-        return '点赞了你的帖子';
+        return t('notificationPage.postLike');
       case 'reply_like':
-        return '点赞了你的回复';
+        return t('notificationPage.replyLike');
       case 'message':
-        return '给你发了私信';
+        return t('notificationPage.message');
       case 'friend_request':
-        return '请求添加你为好友';
+        return t('notificationPage.friendRequest');
       case 'friend_accepted':
-        return '接受了你的好友请求';
+        return t('notificationPage.friendAccepted');
       case 'system':
-        return '系统通知';
+        return t('notificationPage.system');
       case 'best_answer':
-        return '将你的回复设为最佳答案';
+        return t('notificationPage.bestAnswer');
       default:
-        return '新通知';
+        return t('notificationPage.new');
     }
   };
 
@@ -122,7 +124,7 @@ export default function NotificationsPage() {
     if (notification.type === 'system') {
       return null;
     }
-    return notification.actor_name || '社区';
+    return notification.actor_name || t('notificationPage.community');
   };
 
   const renderContent = (notification: Notification) => {
@@ -154,13 +156,13 @@ export default function NotificationsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-[var(--text)]">通知</h1>
+        <h1 className="text-2xl font-bold text-[var(--text)]">{t('notificationPage.title')}</h1>
         <button
           onClick={handleMarkAllRead}
           className="inline-flex min-h-11 items-center gap-2 rounded-[var(--radius)] bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
         >
           <CheckCheck className="w-4 h-4" />
-          全部标记已读
+          {t('notificationPage.markAllRead')}
         </button>
       </div>
 
@@ -176,17 +178,17 @@ export default function NotificationsPage() {
                 : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
             }`}
           >
-            {f === 'all' ? '全部' : f === 'unread' ? '未读' : '已读'}
+            {t(`notificationPage.${f}`)}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <InlineLoading label="正在加载通知" className="min-h-[180px]" />
+        <InlineLoading label={t('notificationPage.loading')} className="min-h-[180px]" />
       ) : error ? (
-        <ErrorState title="通知加载失败" description={error} onRetry={() => void loadNotifications(pagination.page)} />
+        <ErrorState title={t('notificationPage.errorTitle')} description={error} onRetry={() => void loadNotifications(pagination.page)} />
       ) : notifications.length === 0 ? (
-        <EmptyState title={filter === 'unread' ? '没有未读通知' : filter === 'read' ? '没有已读通知' : '暂无通知'} />
+        <EmptyState title={filter === 'unread' ? t('notificationPage.emptyUnread') : filter === 'read' ? t('notificationPage.emptyRead') : t('notificationPage.emptyAll')} />
       ) : (
         <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
           {notifications.map(n => (
@@ -216,14 +218,14 @@ export default function NotificationsPage() {
                   )}
                   <div className="flex items-center justify-between mt-2">
                     <span className="text-xs text-[var(--text-muted)]">
-                      {new Date(n.created_at).toLocaleString('zh-CN')}
+                      {new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(n.created_at))}
                     </span>
                     {!n.is_read && (
                       <button
                         onClick={() => handleMarkRead(n.id)}
                         className="min-h-11 text-xs text-[var(--text-secondary)] hover:text-[var(--primary)]"
                       >
-                        标记已读
+                        {t('notificationPage.markRead')}
                       </button>
                     )}
                   </div>
@@ -237,7 +239,7 @@ export default function NotificationsPage() {
       {actionError && (
         <div className="mb-4 flex items-center justify-between gap-3 rounded-[var(--radius)] border border-[var(--error)]/30 bg-[var(--error)]/10 px-3 py-2 text-sm text-[var(--error)]" role="alert">
           <span>{actionError}</span>
-          <button type="button" onClick={() => setActionError(null)} className="font-medium underline">关闭</button>
+          <button type="button" onClick={() => setActionError(null)} className="font-medium underline">{t('notificationPage.close')}</button>
         </div>
       )}
 

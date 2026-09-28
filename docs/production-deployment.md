@@ -38,6 +38,8 @@ cp frontend/.env.local.example frontend/.env.production
 
 生产环境至少需要配置：
 
+`SITE_PROFILE` 必须是 `mdtbbs` 或 `mindustry-club`；前端构建时的 `NEXT_PUBLIC_SITE_PROFILE` 必须使用相同值。Profile 在一个部署生命周期内固定。Mindustry Club 和 MDTBBS 必须使用不同的数据库、Redis、`RESOURCE_UPLOAD_ROOT` 与 MindAuth OAuth Client。Club 专用示例、迁移影响和 MindAuth 配置见 [`international-site-profiles.md`](international-site-profiles.md)。
+
 ### 后端
 
 | 变量 | 说明 |

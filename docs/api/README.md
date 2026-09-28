@@ -1,5 +1,7 @@
 # MDTBBS API 文档
 
+管理员跨站资源导入/导出使用 legacy 管理接口，具体格式和文件处理流程见[跨站资源迁移文档](../resources-cross-site-transfer.md)。
+
 本目录是 MindFourm 当前 API 的开发者入口。
 
 如果你正在做 Web、Android、桌面客户端、Mindustry Mod、Xenon Launcher 或其他第三方客户端，使用 MindAuth Authorization Code + PKCE 后调用 `/api/v1/*`。Xenon 没有专属鉴权分支。

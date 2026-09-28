@@ -4,6 +4,7 @@ import Link from "next/link";
 import { UnifiedHeader } from "@/lib/shared";
 import type { User } from "@/types";
 import NotificationDropdown from "@/components/forum/notification-dropdown";
+import { useI18n } from '@/i18n/provider';
 
 function UserMobileIdentity({
   siteName,
@@ -12,6 +13,7 @@ function UserMobileIdentity({
   siteName: string;
   logoUrl?: string;
 }) {
+  const { t } = useI18n();
   return (
     <div className="flex min-w-0 items-center">
       <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold text-[var(--text)] lg:hidden">
@@ -36,6 +38,7 @@ export default function ContentToolbar(props: {
   onOpenDrawer: () => void;
   navigationMode?: 'forum' | 'resources';
 }) {
+  const { t } = useI18n();
   return (
     <UnifiedHeader
       showSearch
@@ -44,6 +47,15 @@ export default function ContentToolbar(props: {
       showMobileMenu
       siteName={props.siteName}
       logoUrl={props.logoUrl}
+      labels={{
+        searchCommunity: t('common.searchCommunity'), search: t('common.search'),
+        switchToLight: t('common.switchToLight'), switchToDark: t('common.switchToDark'),
+        theme: t('common.theme'), menu: t('common.menu'), notifications: t('navigation.notifications'),
+        messages: t('navigation.messages'), friends: t('navigation.friends'), servers: t('navigation.servers'),
+        createPost: t('forum.createPost'), profile: t('navigation.profile'), bookmarks: t('navigation.bookmarks'),
+        admin: t('navigation.admin'), settings: t('navigation.settings'), logout: t('navigation.logout'),
+        register: t('navigation.register'), login: t('navigation.login'),
+      }}
       user={props.user}
       isAuthenticated={props.isAuthenticated}
       unreadMessageCount={props.unreadMessageCount}

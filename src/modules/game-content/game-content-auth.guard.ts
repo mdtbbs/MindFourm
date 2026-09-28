@@ -3,6 +3,7 @@ import { AuthService } from '../auth/auth.service';
 import { BansService } from '../bans/bans.service';
 import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import { SettingsService } from '../settings/settings.service';
+import { SiteConfigService } from '@config/site-profile';
 
 /** Validates MindAuth access tokens through MindAuth userinfo; never decodes tokens locally. */
 @Injectable()
@@ -66,7 +67,11 @@ export class GameContentAuthGuard implements CanActivate {
 
 @Injectable()
 export class GameContentRequiredAuthGuard implements CanActivate {
-  constructor(private readonly auth: AuthService, private readonly settings: SettingsService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly settings: SettingsService,
+    private readonly siteConfig?: SiteConfigService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest();
@@ -85,7 +90,14 @@ export class GameContentRequiredAuthGuard implements CanActivate {
         throw new ApiV1Exception('INSUFFICIENT_SCOPE', HttpStatus.FORBIDDEN, '授权权限不足', false, [{ requiredScopes: [requiredScope] }]);
       }
     }
-    if (!req.user.phone_verified) throw new ForbiddenException({ code: 'PERMISSION_DENIED', message: '账号尚未满足发布条件' });
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      if ((this.siteConfig?.current.verification.requireEmail ?? true) && !req.user.email_verified) {
+        throw new ForbiddenException({ code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email address before continuing.' });
+      }
+      if ((this.siteConfig?.current.verification.requirePhoneForWrites ?? true) && !req.user.phone_verified) {
+        throw new ForbiddenException({ code: 'PHONE_VERIFICATION_REQUIRED', message: 'Verify your phone number before continuing.' });
+      }
+    }
     if (await this.auth.checkNeedsTermsAcceptance(req.user)) {
       throw new ApiV1Exception('TERMS_ACCEPTANCE_REQUIRED', HttpStatus.FORBIDDEN, '请先接受社区条款', false);
     }

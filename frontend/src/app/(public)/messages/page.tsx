@@ -9,8 +9,10 @@ import EmptyState from '@/components/ui/empty-state';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
 import Skeleton from '@/components/ui/skeleton';
+import { useI18n } from '@/i18n/provider';
 
 export default function MessagesPage() {
+  const { locale, t } = useI18n();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -24,12 +26,12 @@ export default function MessagesPage() {
       const response = await messageApi.getConversations();
       setConversations(response.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '私信加载失败，请稍后重试');
+      setError(err instanceof Error ? err.message : t('messages.loadFailed'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadConversations();
@@ -38,24 +40,24 @@ export default function MessagesPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">私信</h1>
-        {refreshing && <InlineLoading label="正在刷新" className="min-h-0 py-0" />}
+        <h1 className="text-2xl font-bold text-surface-900 dark:text-gray-100">{t('messages.title')}</h1>
+        {refreshing && <InlineLoading label={t('messages.refreshing')} className="min-h-0 py-0" />}
       </div>
 
       {loading ? (
-        <div className="space-y-2" aria-label="正在加载私信">
+        <div className="space-y-2" aria-label={t('messages.loadingList')}>
           {[1, 2, 3].map((item) => <Skeleton key={item} className="h-20 w-full" />)}
         </div>
       ) : error && conversations.length === 0 ? (
-        <ErrorState title="私信加载失败" description={error} onRetry={() => void loadConversations()} />
+        <ErrorState title={t('messages.errorTitle')} description={error} onRetry={() => void loadConversations()} />
       ) : conversations.length === 0 ? (
-        <EmptyState title="暂无私信" description="与社区成员的对话会显示在这里。" />
+        <EmptyState title={t('messages.empty')} description={t('messages.emptyDescription')} />
       ) : (
         <>
           {error && (
             <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
               <span>{error}</span>
-              <button type="button" onClick={() => void loadConversations(true)} className="font-medium underline">重试</button>
+              <button type="button" onClick={() => void loadConversations(true)} className="font-medium underline">{t('messages.retry')}</button>
             </div>
           )}
           <div className="space-y-2">
@@ -68,10 +70,10 @@ export default function MessagesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-surface-900 dark:text-gray-100">{conv.username}</span>
-                      <span className="text-xs text-surface-400 dark:text-gray-500">{formatTime(conv.last_at)}</span>
+                      <span className="text-xs text-surface-400 dark:text-gray-500">{formatTime(conv.last_at, locale)}</span>
                     </div>
                     <div className="flex items-center justify-between mt-1">
-                      <p className="text-sm text-surface-500 dark:text-gray-400 truncate">{conv.last_content?.slice(0, 80) || '暂无内容'}</p>
+                      <p className="text-sm text-surface-500 dark:text-gray-400 truncate">{conv.last_content?.slice(0, 80) || t('messages.noContent')}</p>
                       {conv.unread_count > 0 && <span className="ml-2 px-2 py-0.5 bg-primary-600 text-white text-xs rounded-full">{conv.unread_count}</span>}
                     </div>
                   </div>

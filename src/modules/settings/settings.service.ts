@@ -19,6 +19,8 @@ import {
 } from '@common/utils/sidebar-navigation.util';
 import { getDefaultSidebarNavigation } from '@common/utils/sidebar-navigation-defaults';
 import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
+import { SiteConfigService } from '../../config/site-profile';
+import { getSiteDefaultSettings } from './site-default-packs';
 import {
   DEFAULT_WELCOME_NOTIFICATION_BODY,
   DEFAULT_WELCOME_NOTIFICATION_TITLE,
@@ -260,6 +262,9 @@ export class SettingsService implements OnModuleInit {
     'footer_thanks_content',
     'footer_terms_content',
     'footer_privacy_content',
+    'footer_community_guidelines_content',
+    'footer_resource_rules_content',
+    'footer_takedown_content',
     'site_url',
     'maintenance_mode',
     'brand_primary',
@@ -368,6 +373,9 @@ export class SettingsService implements OnModuleInit {
       'footer_thanks_content',
       'footer_terms_content',
       'footer_privacy_content',
+      'footer_community_guidelines_content',
+      'footer_resource_rules_content',
+      'footer_takedown_content',
     ]),
     announce: new Set([
       'announce_enabled',
@@ -436,6 +444,7 @@ export class SettingsService implements OnModuleInit {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
     @Optional() @Inject(NAVIGATION_INVALIDATOR) private readonly navigationService?: NavigationInvalidator,
+    @Optional() private readonly siteConfig?: SiteConfigService,
   ) {}
 
   async onModuleInit() {
@@ -471,6 +480,9 @@ export class SettingsService implements OnModuleInit {
       { key: 'footer_thanks_content', value: DEFAULT_THANKS_CONTENT, category: 'footer', description: 'Thanks page Markdown content' },
       { key: 'footer_terms_content', value: DEFAULT_TERMS_CONTENT, category: 'footer', description: 'Terms page Markdown content' },
       { key: 'footer_privacy_content', value: DEFAULT_PRIVACY_CONTENT, category: 'footer', description: 'Privacy page Markdown content' },
+      { key: 'footer_community_guidelines_content', value: '', category: 'footer', description: 'Community Guidelines page Markdown content' },
+      { key: 'footer_resource_rules_content', value: '', category: 'footer', description: 'Content and Resource Rules page Markdown content' },
+      { key: 'footer_takedown_content', value: '', category: 'footer', description: 'Copyright and Takedown Policy page Markdown content' },
       { key: 'brand_primary', value: DEFAULT_BRAND_PRIMARY, category: 'basic', description: 'Global primary brand color' },
       { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
       { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
@@ -509,6 +521,17 @@ export class SettingsService implements OnModuleInit {
       { key: 'content_safety_keywords', value: '', category: 'moderation', description: 'Additional high-risk terms, comma or newline separated' },
       { key: 'search_blocked_keywords', value: '开户', category: 'moderation', description: 'Search terms rejected before search and excluded from popular searches' },
       { key: 'content_safety_review_threshold', value: '3', category: 'moderation', description: 'Risk score that always requires moderation' },
+      { key: 'content_safety_link_review_threshold', value: '8', category: 'moderation', description: 'URLs in one submission that trigger content risk review' },
+      { key: 'content_safety_duplicate_window_seconds', value: '120', category: 'moderation', description: 'Window for detecting repeated submissions by the same account' },
+      { key: 'content_safety_duplicate_min_characters', value: '40', category: 'moderation', description: 'Minimum normalized content length for repeat detection' },
+      { key: 'community_challenge_repeat_post_enabled', value: 'true', category: 'moderation', description: 'Require a community challenge after a user repeats a post within the configured window' },
+      { key: 'community_challenge_repeat_post_window_seconds', value: '120', category: 'moderation', description: 'Window for detecting repeated posts that trigger a challenge' },
+      { key: 'community_challenge_link_density_enabled', value: 'true', category: 'moderation', description: 'Require a community challenge for posts with high link density' },
+      { key: 'community_challenge_link_minimum_count', value: '4', category: 'moderation', description: 'Minimum URL count before link density can trigger a challenge' },
+      { key: 'community_challenge_link_density_per_1000', value: '8', category: 'moderation', description: 'Minimum URLs per 1000 characters for a link-density challenge' },
+      { key: 'community_challenge_reply_frequency_enabled', value: 'true', category: 'moderation', description: 'Require a community challenge after frequent replies' },
+      { key: 'community_challenge_reply_window_seconds', value: '60', category: 'moderation', description: 'Reply-frequency window used by community challenges' },
+      { key: 'community_challenge_reply_count_threshold', value: '5', category: 'moderation', description: 'Reply count within the window that triggers a challenge' },
       { key: 'admin_notifications_enabled', value: 'true', category: 'notifications', description: 'Enable admin notification inbox' },
       { key: 'admin_notifications_realtime_enabled', value: 'true', category: 'notifications', description: 'Enable real-time admin notification delivery' },
       { key: 'admin_notifications_recipient_roles', value: 'moderator,admin', category: 'notifications', description: 'Roles that receive admin notifications' },
@@ -575,7 +598,14 @@ export class SettingsService implements OnModuleInit {
       ]),
     ];
 
-    for (const setting of defaults) {
+    const profile = this.siteConfig?.current.profile || 'mdtbbs';
+    const siteDefaults = getSiteDefaultSettings(profile);
+    const localizedDefaults = defaults.map((setting) => ({
+      ...setting,
+      value: siteDefaults[setting.key] ?? setting.value,
+    }));
+
+    for (const setting of localizedDefaults) {
       await this.settingRepository.query(
         'INSERT IGNORE INTO settings (`key`, `value`, category, description) VALUES (?, ?, ?, ?)',
         [setting.key, setting.value, setting.category, setting.description],

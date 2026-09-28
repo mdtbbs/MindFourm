@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Image as ImageIcon } from 'lucide-react';
 import Alert from '@/components/ui/alert';
+import { useI18n } from '@/i18n/provider';
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024; // 2MB
 
@@ -13,6 +14,7 @@ interface AvatarUploaderProps {
 }
 
 export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: AvatarUploaderProps) {
+  const { t } = useI18n();
   const [preview, setPreview] = useState<string | null>(currentAvatar || null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,12 +29,12 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setError('请选择图片文件');
+      setError(t('avatarUploader.imageOnly'));
       return;
     }
 
     if (file.size > MAX_AVATAR_SIZE) {
-      setError('图片大小不能超过 2MB');
+      setError(t('avatarUploader.tooLarge'));
       return;
     }
 
@@ -46,7 +48,7 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
     try {
       await onUpload(file);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '上传失败');
+      setError(err instanceof Error ? err.message : t('avatarUploader.uploadFailed'));
       setPreview(currentAvatar || null);
     } finally {
       setUploading(false);
@@ -59,7 +61,7 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
       await onRemove();
       setPreview(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '删除失败');
+      setError(err instanceof Error ? err.message : t('avatarUploader.deleteFailed'));
     } finally {
       setUploading(false);
     }
@@ -69,7 +71,7 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
     <div className="flex flex-col items-center gap-3">
       <div className="relative w-24 h-24 rounded-full overflow-hidden bg-surface-100 border-2 border-surface-200">
         {preview ? (
-          <img src={preview} alt="头像预览" className="w-full h-full object-cover" />
+          <img src={preview} alt={t('avatarUploader.preview')} className="w-full h-full object-cover" />
         ) : (
           <div className="flex items-center justify-center h-full">
             <ImageIcon className="w-8 h-8 text-surface-400" />
@@ -100,7 +102,7 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
           className="px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 flex items-center gap-1"
         >
           <Upload className="w-3 h-3" />
-          上传
+          {t('avatarUploader.upload')}
         </button>
         {preview && (
           <button
@@ -110,13 +112,13 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
             className="px-3 py-1.5 text-sm bg-surface-100 text-surface-700 rounded-lg hover:bg-surface-200 disabled:opacity-50 flex items-center gap-1"
           >
             <X className="w-3 h-3" />
-            删除
+            {t('avatarUploader.remove')}
           </button>
         )}
       </div>
 
       {error && <Alert type="error" message={error} />}
-      <p className="text-xs text-surface-400">支持 JPEG、PNG、GIF、WebP，最大 2MB</p>
+      <p className="text-xs text-surface-400">{t('avatarUploader.formats')}</p>
     </div>
   );
 }

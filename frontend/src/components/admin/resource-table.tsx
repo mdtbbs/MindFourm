@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { resourceAdminApi, resourceApi } from '@/lib/api/client';
 import type { Resource, ResourceCategory } from '@/types';
-import { Download, Eye, ExternalLink, Star, Trash2 } from 'lucide-react';
+import { Download, Eye, ExternalLink, FileDown, Star, Trash2 } from 'lucide-react';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
+import { useI18n } from '@/i18n/provider';
 
 interface ResourceTableProps {
   initialSearch?: string;
@@ -27,6 +28,8 @@ function rendererLabel(resource: Resource): string {
 }
 
 export default function ResourceTable({ initialSearch = '' }: ResourceTableProps) {
+  const { locale } = useI18n();
+  const english = locale !== 'zh-CN';
   const [resources, setResources] = useState<Resource[]>([]);
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
   const [status, setStatus] = useState<string>('');
@@ -96,6 +99,21 @@ export default function ResourceTable({ initialSearch = '' }: ResourceTableProps
       loadData();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '更新精选状态失败');
+    }
+  };
+
+  const handleExport = async (resource: Resource) => {
+    try {
+      const manifest = await resourceAdminApi.exportManifest(resource.id);
+      const fileName = `${resource.title.replace(/[^\p{L}\p{N}._-]+/gu, '-').slice(0, 80) || 'resource'}.mindustry-resource.json`;
+      const objectUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' }));
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : (english ? 'Export failed.' : '导出失败。'));
     }
   };
 
@@ -204,14 +222,25 @@ export default function ResourceTable({ initialSearch = '' }: ResourceTableProps
                     </select>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(resource)}
-                      className="inline-flex p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
-                      aria-label={`删除 ${resource.title}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => void handleExport(resource)}
+                        className="inline-flex p-1 text-surface-500 hover:bg-surface-100 hover:text-surface-900"
+                        aria-label={english ? `Export ${resource.title}` : `导出 ${resource.title}`}
+                        title={english ? 'Export transfer manifest' : '导出迁移清单'}
+                      >
+                        <FileDown className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(resource)}
+                        className="inline-flex p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`${english ? 'Delete' : '删除'} ${resource.title}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

@@ -17,7 +17,9 @@ export type V1MeDto = {
   bio: string | null;
   role: string;
   phone_verified: boolean;
-  verification: { phone: boolean };
+  email_verified: boolean;
+  preferred_locale: string | null;
+  verification: { email: boolean; phone: boolean };
   permissions: Awaited<ReturnType<V1PermissionResolverService['resolve']>>;
   created_at: string;
 };
@@ -76,7 +78,8 @@ export class UsersV1Controller {
   private async toMe(user: any, authContext?: any): Promise<V1MeDto> {
     return { id: user.id, username: user.username, avatar_url: user.avatar_url || null, avatar_status: user.avatar_status,
       bio: user.bio || null, role: user.role, phone_verified: !!user.phone_verified,
-      verification: { phone: !!user.phone_verified },
+      email_verified: !!user.email_verified, preferred_locale: user.preferred_locale || null,
+      verification: { email: !!user.email_verified, phone: !!user.phone_verified },
       permissions: await this.permissionResolver.resolve(user, authContext),
       created_at: user.created_at.toISOString() };
   }

@@ -7,6 +7,7 @@ import { Bell, Heart, MoreHorizontal, Pencil, Share2, ThumbsUp } from 'lucide-re
 import ReportDialog from '../../report-dialog';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { motion as motionTokens } from '@/lib/motion';
+import { useI18n } from '@/i18n/provider';
 
 export default function ResourceOverflowMenu({
   resourceId, canManage, subscribed, copied, busy, onSubscribe, onShare,
@@ -16,6 +17,7 @@ export default function ResourceOverflowMenu({
   onSubscribe: () => void; onShare: () => void;
   favorite: boolean; favoriteCount: number; liked: boolean; likeCount: number; onFavorite: () => void; onLike: () => void;
 }) {
+  const { t } = useI18n();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
@@ -65,18 +67,18 @@ export default function ResourceOverflowMenu({
 
   const itemClass = 'flex min-h-11 w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]';
   return <>
-    <button ref={trigger} type="button" aria-haspopup="menu" aria-expanded={open} aria-label="更多资源操作" onClick={() => setOpen((value) => !value)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]">
-      <MoreHorizontal className="h-4 w-4" /><span>更多</span>
+    <button ref={trigger} type="button" aria-haspopup="menu" aria-expanded={open} aria-label={t('resourceOverflow.moreAria')} onClick={() => setOpen((value) => !value)} className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]">
+      <MoreHorizontal className="h-4 w-4" /><span>{t('resourceOverflow.more')}</span>
     </button>
     <AnimatePresence>
     {open && typeof document !== 'undefined' && createPortal(
-      <motion.div ref={menu} role="menu" aria-label="资源操作" style={{ position: 'fixed', top: position.top, left: position.left, visibility: position.ready ? 'visible' : 'hidden' }} className="z-50 grid min-w-52 gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-card)] p-2 shadow-lg" initial={reduceMotion ? false : { opacity: 0, y: 4, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.985 }} transition={{ duration: reduceMotion ? 0 : motionTokens.fast, ease: motionTokens.easing }}>
-        <button role="menuitem" type="button" disabled={busy} onClick={onFavorite} className={`${itemClass} sm:hidden`}><Heart className={`h-4 w-4 ${favorite ? 'fill-current text-rose-500' : ''}`} />{favorite ? '已收藏' : '收藏'} · {favoriteCount}</button>
-        <button role="menuitem" type="button" disabled={busy} onClick={onLike} className={`${itemClass} sm:hidden`}><ThumbsUp className="h-4 w-4" />{liked ? '已点赞' : '点赞'} · {likeCount}</button>
-        <button role="menuitem" type="button" disabled={busy} onClick={onSubscribe} className={itemClass}><Bell className="h-4 w-4" />{subscribed ? '取消订阅更新' : '订阅更新'}</button>
-        <button role="menuitem" type="button" onClick={onShare} className={itemClass}><Share2 className="h-4 w-4" />{copied ? '链接已复制' : '分享资源'}</button>
-        {canManage && <Link role="menuitem" href={`/resources/${resourceId}/edit`} onClick={() => setOpen(false)} className={itemClass}><Pencil className="h-4 w-4" />编辑资源</Link>}
-        <ReportDialog targetType="resource" targetId={resourceId} label="举报资源" triggerRole="menuitem" />
+      <motion.div ref={menu} role="menu" aria-label={t('resourceOverflow.menuAria')} style={{ position: 'fixed', top: position.top, left: position.left, visibility: position.ready ? 'visible' : 'hidden' }} className="z-50 grid min-w-52 gap-1 rounded-md border border-[var(--border)] bg-[var(--bg-card)] p-2 shadow-lg" initial={reduceMotion ? false : { opacity: 0, y: 4, scale: 0.985 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.985 }} transition={{ duration: reduceMotion ? 0 : motionTokens.fast, ease: motionTokens.easing }}>
+        <button role="menuitem" type="button" disabled={busy} onClick={onFavorite} className={`${itemClass} sm:hidden`}><Heart className={`h-4 w-4 ${favorite ? 'fill-current text-rose-500' : ''}`} />{favorite ? t('resourceOverflow.favorited') : t('resourceOverflow.favorite')} · {favoriteCount}</button>
+        <button role="menuitem" type="button" disabled={busy} onClick={onLike} className={`${itemClass} sm:hidden`}><ThumbsUp className="h-4 w-4" />{liked ? t('resourceOverflow.liked') : t('resourceOverflow.like')} · {likeCount}</button>
+        <button role="menuitem" type="button" disabled={busy} onClick={onSubscribe} className={itemClass}><Bell className="h-4 w-4" />{subscribed ? t('resourceOverflow.unsubscribe') : t('resourceOverflow.subscribe')}</button>
+        <button role="menuitem" type="button" onClick={onShare} className={itemClass}><Share2 className="h-4 w-4" />{copied ? t('resourceOverflow.copied') : t('resourceOverflow.share')}</button>
+        {canManage && <Link role="menuitem" href={`/resources/${resourceId}/edit`} onClick={() => setOpen(false)} className={itemClass}><Pencil className="h-4 w-4" />{t('resourceOverflow.edit')}</Link>}
+        <ReportDialog targetType="resource" targetId={resourceId} triggerRole="menuitem" />
       </motion.div>, document.body,
     )}
     </AnimatePresence>

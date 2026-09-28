@@ -19,6 +19,7 @@ import { SkipPhoneVerification } from '../../common/decorators/skip-phone-verifi
 import { ServiceAccountSelectorDto } from './dto/service-account-selector.dto';
 import { ServiceCreatePostDto } from './dto/service-create-post.dto';
 import { ServiceCreateReplyDto } from './dto/service-create-reply.dto';
+import { SiteConfigService } from '@config/site-profile';
 
 @Controller('service-api')
 @SkipPhoneVerification()
@@ -29,6 +30,7 @@ export class ServiceApiController {
     private userRepository: Repository<User>,
     private postsService: PostsService,
     private repliesService: RepliesService,
+    private siteConfig?: SiteConfigService,
   ) {}
 
   @Post('posts')
@@ -100,10 +102,13 @@ export class ServiceApiController {
       throw new NotFoundException('指定账号不存在');
     }
 
-    if (!user.phone_verified) {
+    if ((this.siteConfig?.current.verification.requireEmail ?? true) && !user.email_verified) {
+      throw new ForbiddenException({ code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email address before continuing.' });
+    }
+    if ((this.siteConfig?.current.verification.requirePhoneForWrites ?? true) && !user.phone_verified) {
       throw new ForbiddenException({
-        code: 'PHONE_NOT_VERIFIED',
-        message: '指定账号未验证手机号，不能执行写操作',
+        code: 'PHONE_VERIFICATION_REQUIRED',
+        message: 'Verify your phone number before continuing.',
       });
     }
 

@@ -6,6 +6,7 @@ import type { ReactionTargetType } from '@/lib/api/reactions';
 import { useReactionStore, useReactions } from '@/store/reaction-store';
 import { useUserStore } from '@/store/user-store';
 import { useToastStore } from '@/store/toast-store';
+import { useI18n } from '@/i18n/provider';
 
 interface ReactionBarProps {
   targetType: ReactionTargetType;
@@ -27,6 +28,7 @@ interface ReactionBarProps {
  * into one burst of requests. This component never fetches on its own.
  */
 export default function ReactionBar({ targetType, targetId, className = '' }: ReactionBarProps) {
+  const { t, locale } = useI18n();
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const showError = useToastStore((state) => state.showError);
   const showInfo = useToastStore((state) => state.showInfo);
@@ -70,14 +72,14 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
       // The bar stays visible and clickable while signed out — same call as LikeButton.
       // Hiding it would remove the only hint that reactions exist, and the counts
       // themselves are public.
-      showInfo('请登录后添加表情反应');
+      showInfo(t('reaction.signIn'));
       return;
     }
 
     try {
       await toggleReaction(targetType, targetId, emoji);
     } catch (err) {
-      showError(err instanceof Error ? err.message : '操作失败，请稍后重试');
+      showError(err instanceof Error ? err.message : t('reaction.operationFailed'));
     }
   };
 
@@ -107,8 +109,8 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
           type="button"
           onClick={() => void react(reaction.emoji)}
           aria-pressed={reaction.reacted}
-          aria-label={`${reaction.emoji} ${reaction.count} 个反应`}
-          title={reaction.reacted ? '取消这个反应' : '也用这个表情反应'}
+          aria-label={`${reaction.emoji} ${new Intl.NumberFormat(locale).format(reaction.count)} ${t('reaction.countLabel')}`}
+          title={reaction.reacted ? t('reaction.cancel') : t('reaction.react')}
           className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${
             reaction.reacted
               ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]'
@@ -126,8 +128,8 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
         onClick={() => (pickerOpen ? closePicker() : openPicker())}
         aria-expanded={pickerOpen}
         aria-controls={pickerId}
-        aria-label="添加表情反应"
-        title="添加表情反应"
+        aria-label={t('reaction.add')}
+        title={t('reaction.add')}
         data-testid={`reaction-add-${targetType}-${targetId}`}
         className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--bg)] p-1 text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
       >
@@ -139,7 +141,7 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
           ref={pickerRef}
           id={pickerId}
           role="group"
-          aria-label="选择表情"
+          aria-label={t('reaction.choose')}
           className="flex items-center gap-0.5 rounded-full border border-[var(--border)] bg-[var(--bg-card)] px-1.5 py-0.5"
         >
           {emojis.map((emoji) => (

@@ -5,8 +5,10 @@ import { useAuth } from '@/lib/auth/context';
 import { api } from '@/lib/api/client';
 import { useToastStore } from '@/store/toast-store';
 import { UserPlus, UserCheck } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 export default function FollowButton({ targetUserId }: { targetUserId: number }) {
+  const { t } = useI18n();
   const { user, isAuthenticated } = useAuth();
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -41,7 +43,7 @@ export default function FollowButton({ targetUserId }: { targetUserId: number })
       setIsFollowing(previous);
       useToastStore
         .getState()
-        .showError(err instanceof Error ? err.message : (previous ? '取消关注失败' : '关注失败'));
+        .showError(err instanceof Error ? err.message : t(previous ? 'follow.unfollowFailed' : 'follow.followFailed'));
     } finally {
       setLoading(false);
     }
@@ -60,12 +62,12 @@ export default function FollowButton({ targetUserId }: { targetUserId: number })
       {isFollowing ? (
         <>
           <UserCheck className="w-4 h-4" />
-          已关注
+          {t('follow.following')}
         </>
       ) : (
         <>
           <UserPlus className="w-4 h-4" />
-          关注
+          {t('follow.follow')}
         </>
       )}
     </button>

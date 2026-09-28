@@ -111,6 +111,10 @@ export class UsersService {
       user.bio = dto.bio;
     }
 
+    if (dto.preferred_locale !== undefined) {
+      user.preferred_locale = dto.preferred_locale;
+    }
+
     return this.userRepository.save(user);
   }
 

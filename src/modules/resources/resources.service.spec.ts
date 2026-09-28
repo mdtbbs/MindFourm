@@ -4,6 +4,8 @@ jest.mock('@nestjs/common', () => ({
   HttpException: class HttpException extends Error {},
   HttpStatus: { BAD_REQUEST: 400 },
   Injectable: () => () => undefined,
+  Global: () => () => undefined,
+  Module: () => () => undefined,
   Optional: () => () => undefined,
   Inject: () => () => undefined,
   NotFoundException: class NotFoundException extends Error {},
@@ -20,6 +22,8 @@ jest.mock('@nestjs/common', () => ({
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
+
+jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
 jest.mock('typeorm', () => ({
   Repository: class Repository {},
@@ -296,6 +300,22 @@ describe('ResourcesService', () => {
     );
   });
 
+  it('filters public resources by declared content language without restricting other languages', async () => {
+    const { service, defaultQb } = createService();
+    await service.getList({ content_language: 'ja', limit: 20 } as any, { scope: 'public' });
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      'resource.content_language = :contentLanguage',
+      { contentLanguage: 'ja' },
+    );
+  });
+
+  it('allows anonymous reads of an approved public resource while preserving visibility checks', async () => {
+    const resource = { id: 27, status: 'published', is_public: 1, category_id: null, user: null, category: null };
+    const { service, resourceRepository } = createService({ resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) } });
+    await expect(service.getById(27)).resolves.toMatchObject({ id: 27, status: 'published' });
+    expect(resourceRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 27 } }));
+  });
+
   it('filters public resources by safe metadata fields when requested', async () => {
     const { service, defaultQb } = createService();
 
@@ -401,6 +421,24 @@ describe('ResourcesService', () => {
     await expect(service.create({ title: 'Pack', resource_type: 'upload', resource_kind: 'mod', version: '1.0' } as any, 7, {
       file_name: 'pack.zip', file_path: '/tmp/pack.zip', file_size: 10, mime_type: 'application/zip', content_hash: 'a'.repeat(64),
     })).rejects.toMatchObject({ response: { code: 'RESOURCE_DUPLICATE', existing_resource: { id: 19, title: 'Existing pack' } } });
+    expect(dataSource.transaction).not.toHaveBeenCalled();
+  });
+
+  it('prevents importing the same source resource twice', async () => {
+    const { service, dataSource, resourceRepository } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue({ id: 44 }) },
+    });
+
+    await expect(service.create({
+      title: 'Imported Mod', resource_type: 'external', external_url: 'https://example.org/mod', version: '1.0.0',
+    } as any, 7, undefined, {
+      origin: { site: 'mdtbbs', resourceId: '123', url: 'https://mdtbbs.cn/resources/123' },
+    })).rejects.toMatchObject({
+      response: { code: 'RESOURCE_ORIGIN_ALREADY_IMPORTED', existing_resource_id: 44 },
+    });
+    expect(resourceRepository.findOne).toHaveBeenCalledWith({
+      where: { origin_site: 'mdtbbs', origin_resource_id: '123' },
+    });
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
@@ -531,6 +569,21 @@ describe('ResourcesService', () => {
     await expect(service.update(23, 5, { external_url: 'https://example.com/blueprint.msch' } as any, 'user'))
       .rejects.toThrow('不能设置外链地址');
     expect(manager.update).not.toHaveBeenCalled();
+  });
+
+  it('allows a resource author to update its declared content language', async () => {
+    const existing = {
+      id: 23, user_id: 5, title: 'Blueprint', status: 'approved', resource_type: 'upload',
+      resource_kind: 'schematic', file_name: 'blueprint.msch', file_path: '/safe/blueprint.msch',
+      category_id: null, is_public: 1, user: { username: 'alice' }, category: null,
+    };
+    const { service, manager } = createService({
+      manager: { findOne: jest.fn().mockResolvedValue(existing) },
+    });
+
+    await service.update(23, 5, { content_language: 'ja' } as any, 'user');
+
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 23, { content_language: 'ja' });
   });
 
   it('enqueues an approved map for forum-owned rendering', async () => {

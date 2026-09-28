@@ -1,0 +1,41 @@
+{
+  "challenge": {
+    "title": "完成一次安全验证",
+    "description": "此操作需要额外验证，已填写的内容会保留。",
+    "mathPrompt": "请计算 {left} + {right}：",
+    "verify": "继续",
+    "verifying": "正在验证…",
+    "cancel": "取消",
+    "widgetUnavailable": "安全验证加载失败，请重试。"
+  },
+  "replyForm": {
+    "loading": "正在准备回复表单",
+    "signInTitle": "登录后参与回复",
+    "signInDescription": "登录后可以回复帖子、参与讨论并关注感兴趣的话题。",
+    "signIn": "登录",
+    "browseMore": "浏览讨论",
+    "locked": "该讨论已锁定，不再接受新回复。"
+  },
+  "replyEditor": {
+    "title": "发表回复",
+    "replyTitle": "回复",
+    "quoteTitle": "引用回复",
+    "quoteTarget": "引用回复 #{id}",
+    "replyTarget": "回复 #{id}",
+    "cancel": "取消",
+    "bodyLabel": "回复正文",
+    "placeholder": "编写回复内容，可粘贴或拖放图片上传…",
+    "savedOnDevice": "已保存到此设备",
+    "submitting": "提交中…",
+    "submit": "提交回复",
+    "success": "回复发布成功。",
+    "pendingSuccess": "回复已提交，等待管理员审核。",
+    "submitFailed": "回复提交失败，请重试。"
+  },
+  "errors": {
+    "CHALLENGE_REQUIRED": "请完成安全验证后继续。",
+    "CHALLENGE_INVALID": "安全验证未通过，请重试。",
+    "CHALLENGE_EXPIRED": "验证已过期或已使用，请重新提交。",
+    "CHALLENGE_PROVIDER_UNAVAILABLE": "安全验证暂时不可用，请稍后重试。"
+  }
+}

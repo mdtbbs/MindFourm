@@ -14,6 +14,7 @@ import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { PrivacyModule } from './modules/privacy/privacy.module';
 import { SecurityModule } from './modules/security/security.module';
 import { ContentSafetyModule } from './modules/content-safety/content-safety.module';
+import { CommunityChallengesModule } from './modules/community-challenges/community-challenges.module';
 import { PerformanceTelemetryModule } from './common/performance/performance-telemetry.module';
 import { CommunityCoreModule } from './modules/community-core/community-core.module';
 import { MdtbbsDomainModule } from './modules/mdtbbs-domain/mdtbbs-domain.module';
@@ -27,6 +28,7 @@ import { MdtbbsDomainModule } from './modules/mdtbbs-domain/mdtbbs-domain.module
     PrivacyModule,
     SecurityModule,
     ContentSafetyModule,
+    CommunityChallengesModule,
     PerformanceTelemetryModule,
     // Avatars and public embeds are public by design. Private attachment and
     // resource files continue to be streamed through their visibility checks.

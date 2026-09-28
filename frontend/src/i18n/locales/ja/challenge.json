@@ -1,0 +1,41 @@
+{
+  "challenge": {
+    "title": "簡単なセキュリティ確認",
+    "description": "この操作には追加確認が必要です。入力内容は保持されます。",
+    "mathPrompt": "{left} + {right} はいくつですか？",
+    "verify": "続ける",
+    "verifying": "確認中…",
+    "cancel": "キャンセル",
+    "widgetUnavailable": "セキュリティ確認を読み込めませんでした。もう一度お試しください。"
+  },
+  "replyForm": {
+    "loading": "返信フォームを準備しています",
+    "signInTitle": "返信するにはログインしてください",
+    "signInDescription": "ログインすると、返信やディスカッションへの参加、トピックのフォローができます。",
+    "signIn": "ログイン",
+    "browseMore": "ディスカッションを見る",
+    "locked": "このディスカッションはロックされており、新しい返信はできません。"
+  },
+  "replyEditor": {
+    "title": "返信を書く",
+    "replyTitle": "返信",
+    "quoteTitle": "返信を引用",
+    "quoteTarget": "返信 #{id} を引用中",
+    "replyTarget": "#{id} への返信",
+    "cancel": "キャンセル",
+    "bodyLabel": "返信内容",
+    "placeholder": "返信を書いてください。画像を貼り付けるか、ドラッグしてアップロードできます…",
+    "savedOnDevice": "この端末に保存しました",
+    "submitting": "送信中…",
+    "submit": "返信を投稿",
+    "success": "返信を投稿しました。",
+    "pendingSuccess": "返信を審査に送信しました。",
+    "submitFailed": "返信を送信できませんでした。もう一度お試しください。"
+  },
+  "errors": {
+    "CHALLENGE_REQUIRED": "続けるにはセキュリティ確認を完了してください。",
+    "CHALLENGE_INVALID": "セキュリティ確認に失敗しました。もう一度お試しください。",
+    "CHALLENGE_EXPIRED": "確認の期限が切れたか、すでに使用されています。再送信してください。",
+    "CHALLENGE_PROVIDER_UNAVAILABLE": "セキュリティ確認は一時的に利用できません。しばらくしてからお試しください。"
+  }
+}

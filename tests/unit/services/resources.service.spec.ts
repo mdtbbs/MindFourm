@@ -4,6 +4,8 @@ jest.mock('@nestjs/common', () => ({
   HttpException: class HttpException extends Error {},
   HttpStatus: { BAD_REQUEST: 400 },
   Injectable: () => () => undefined,
+  Global: () => () => undefined,
+  Module: () => () => undefined,
   Optional: () => () => undefined,
   Inject: () => () => undefined,
   NotFoundException: class NotFoundException extends Error {},
@@ -15,6 +17,8 @@ jest.mock('@nestjs/common', () => ({
 jest.mock('@nestjs/typeorm', () => ({
   InjectRepository: () => () => undefined,
 }));
+
+jest.mock('@nestjs/config', () => ({ ConfigService: class ConfigService {} }));
 
 jest.mock('typeorm', () => ({
   Repository: class Repository {},
@@ -318,7 +322,7 @@ describe('ResourcesService - Public Visibility', () => {
     } as any, 7, undefined, { ipAddress: '203.0.113.7' });
 
     expect(result.status).toBe('pending');
-    expect(contentSafety.assess).toHaveBeenCalledWith(expect.stringContaining('木马'));
+    expect(contentSafety.assess).toHaveBeenCalledWith(expect.stringContaining('木马'), { actorId: 7, surface: 'resource' });
     expect(contentSafety.recordFlag).toHaveBeenCalledWith({
       userId: 7,
       targetType: 'resource',

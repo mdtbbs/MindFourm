@@ -1,14 +1,18 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Radio, Bell, Boxes } from "lucide-react";
 import { getDiscoverSummary } from "@/lib/api/v1/discover";
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
+import { siteProfile } from '@/config/site-profile';
 
-export const metadata: Metadata = {
-  title: "发现",
-  description: "探索 Mindustry 社区的联机、资源和公告",
-};
+export async function generateMetadata() {
+  const locale = await getRequestLocale();
+  return { title: translate(locale, 'discoverPage.title'), description: translate(locale, 'discoverPage.description') };
+}
 
 export default async function DiscoverPage() {
+  const locale = await getRequestLocale();
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   let summary;
   try {
     summary = await getDiscoverSummary();
@@ -19,31 +23,31 @@ export default async function DiscoverPage() {
     {
       href: "/lanlink",
       icon: Radio,
-      title: "联机房间",
-      description: "查看玩家公开的联机房间",
+      title: t('discoverPage.rooms'),
+      description: t('discoverPage.roomsDescription'),
     },
     {
       href: "/resources",
       icon: Boxes,
-      title: "资源中心",
-      description: "浏览社区资源与工具",
+      title: t('discoverPage.resources'),
+      description: t('discoverPage.resourcesDescription'),
     },
     {
       href: "/notices",
       icon: Bell,
-      title: "社区公告",
-      description: "查看最新公告和活动",
+      title: t('discoverPage.notices'),
+      description: t('discoverPage.noticesDescription'),
     },
   ];
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 border-b border-[var(--border)] pb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
-          Mindustry 社区
+          {siteProfile.branding.siteName}
         </p>
-        <h1 className="mt-2 text-3xl font-semibold text-[var(--text)]">发现</h1>
+        <h1 className="mt-2 text-3xl font-semibold text-[var(--text)]">{t('discoverPage.title')}</h1>
         <p className="mt-2 text-sm text-[var(--text-secondary)]">
-          从联机、资源到社区动态，找到下一件值得参与的事。
+          {t('discoverPage.intro')}
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -72,7 +76,7 @@ export default async function DiscoverPage() {
       </div>
       {summary && (
         <p className="mt-8 text-sm text-[var(--text-muted)]">
-          {summary.total_resources} 个资源 · {summary.total_threads} 个讨论
+          {t('discoverPage.summary', { resources: new Intl.NumberFormat(locale).format(summary.total_resources), discussions: new Intl.NumberFormat(locale).format(summary.total_threads) })}
         </p>
       )}
     </div>

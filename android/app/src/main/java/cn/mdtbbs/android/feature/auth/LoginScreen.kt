@@ -120,6 +120,7 @@ class LoginViewModel @Inject constructor(private val auth: AuthRepository) : Vie
         if (registrationUrl != null) runCatching {
             context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(registrationUrl)))
         }.onFailure { onRegister() } else onRegister()
+        Unit
     }
     LoginScreen(ui, viewModel.publicOAuthEnabled, viewModel::startBrowserLogin, viewModel::password, viewModel::sendSms,
         viewModel::sms, { viewModel.qq(UnsupportedQqAuthProvider(), onComplete) }, onComplete, openRegistration, onBack)

@@ -35,6 +35,7 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   // Treat an absent namespace as an empty configuration so validation reports
   // actionable missing-secret errors instead of throwing before it can report.
   const mobileAuth = config.mobileAuth || { jwtSecret: '', refreshHmacSecret: '' };
+  const communityChallenge = config.communityChallenge || { provider: 'disabled', turnstile: { siteKey: '', secretKey: '' }, hcaptcha: { siteKey: '', secretKey: '' } };
 
   const requireInProduction = (value: string | undefined, name: string, hint?: string) => {
     if (value) return;
@@ -100,6 +101,26 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   if (!config.automation.apiKey) {
     // Fails closed rather than opening the endpoint, so this is a warning.
     warnings.push('FORUM_API_KEY is not set — /api/service-api/* will reject every request');
+  }
+
+  // --- Community challenge provider ---
+  const challengeProvider = String(communityChallenge.provider || 'disabled').toLowerCase();
+  if (!['disabled', 'development', 'turnstile', 'hcaptcha'].includes(challengeProvider)) {
+    errors.push('COMMUNITY_CHALLENGE_PROVIDER must be disabled, development, turnstile, or hcaptcha');
+  }
+  if (isProduction && challengeProvider === 'development') {
+    errors.push('COMMUNITY_CHALLENGE_PROVIDER=development is not allowed in production');
+  }
+  if (challengeProvider === 'turnstile') {
+    requireInProduction(communityChallenge.turnstile?.siteKey, 'COMMUNITY_CHALLENGE_TURNSTILE_SITE_KEY');
+    requireInProduction(communityChallenge.turnstile?.secretKey, 'COMMUNITY_CHALLENGE_TURNSTILE_SECRET_KEY');
+  }
+  if (challengeProvider === 'hcaptcha') {
+    requireInProduction(communityChallenge.hcaptcha?.siteKey, 'COMMUNITY_CHALLENGE_HCAPTCHA_SITE_KEY');
+    requireInProduction(communityChallenge.hcaptcha?.secretKey, 'COMMUNITY_CHALLENGE_HCAPTCHA_SECRET_KEY');
+  }
+  if (isProduction && challengeProvider === 'disabled') {
+    warnings.push('Community challenges are disabled; risk-triggered CAPTCHA is inactive');
   }
 
   // --- Test authentication must never be reachable in production ---

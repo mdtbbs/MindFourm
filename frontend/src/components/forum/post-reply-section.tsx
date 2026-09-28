@@ -5,6 +5,7 @@ import Pagination from '@/components/ui/pagination';
 import ReplyThread, { buildReplyTree } from '@/components/forum/reply-thread';
 import ReplyFormWrapper from '@/components/forum/reply-form-wrapper';
 import type { Reply } from '@/types';
+import { useI18n } from '@/i18n/provider';
 
 interface ReplyPagination {
   total: number;
@@ -32,6 +33,7 @@ export default function PostReplySection({
   postOwnerId: number;
   initialLocked: boolean;
 }) {
+  const { t, locale } = useI18n();
   const [replies, setReplies] = useState(initialReplies);
   const [total, setTotal] = useState(pagination.total);
   const [activeBestReplyId, setActiveBestReplyId] = useState(bestReplyId);
@@ -69,10 +71,10 @@ export default function PostReplySection({
   };
 
   return (
-    <section className="mt-8 space-y-4" aria-label="回复">
-      <h2 className="text-lg font-semibold text-[var(--text)]">回复 ({total})</h2>
+    <section className="mt-8 space-y-4" aria-label={t('replySection.aria')}>
+      <h2 className="text-lg font-semibold text-[var(--text)]">{t('replySection.title', { count: new Intl.NumberFormat(locale).format(total) })}</h2>
       {replies.length === 0 ? (
-        <div className="py-8 text-center text-[var(--text-secondary)]">暂无回复，快来抢沙发吧</div>
+        <div className="py-8 text-center text-[var(--text-secondary)]">{t('replySection.empty')}</div>
       ) : (
         <ReplyThread
           nodes={buildReplyTree(replies, (pagination.page - 1) * pagination.limit)}

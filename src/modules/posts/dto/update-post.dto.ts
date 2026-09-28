@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsArray, IsIn, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsArray, IsIn, IsObject, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { TiptapDocumentDto } from '@common/dto/tiptap-document.dto';
 
@@ -10,6 +10,11 @@ export class UpdatePostDto {
   @IsOptional()
   @IsString()
   content?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  content_language?: string;
 
   @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Tiptap / ProseMirror JSON source; takes precedence over content when supplied.' })
   @IsOptional()

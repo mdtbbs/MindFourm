@@ -13,6 +13,8 @@ describe('UsersV1Controller', () => {
         phone_verified: true,
         created_at: new Date('2026-08-29T00:00:00.000Z'),
         email: 'not-exposed@example.test',
+        email_verified: true,
+        preferred_locale: 'en',
       }),
     };
     const permissionResolver = { resolve: jest.fn().mockResolvedValue({ thread_create: { allowed: true, reason: null } }) };
@@ -26,7 +28,9 @@ describe('UsersV1Controller', () => {
       bio: null,
       role: 'user',
       phone_verified: true,
-      verification: { phone: true },
+      email_verified: true,
+      preferred_locale: 'en',
+      verification: { email: true, phone: true },
       permissions: { thread_create: { allowed: true, reason: null } },
       created_at: '2026-08-29T00:00:00.000Z',
     });

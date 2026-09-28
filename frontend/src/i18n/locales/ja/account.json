@@ -1,0 +1,94 @@
+{
+  "profileEdit": {
+    "loadFailed": "プロフィールを読み込めませんでした。",
+    "emptyName": "表示名は空欄にできません。",
+    "saved": "プロフィールを保存しました。",
+    "saveFailed": "プロフィールを保存できませんでした。",
+    "avatarPending": "アバターをアップロードしました。確認をお待ちください。",
+    "avatarUpdated": "アバターを更新しました。",
+    "avatarRemoved": "アバターを削除しました。",
+    "retry": "再試行",
+    "back": "戻る",
+    "title": "プロフィールを編集",
+    "avatar": "アバター",
+    "displayName": "表示名",
+    "displayNamePlaceholder": "表示名を入力",
+    "bio": "自己紹介",
+    "bioPlaceholder": "簡単な自己紹介を書いてください…",
+    "notificationSettings": "通知設定",
+    "cancel": "キャンセル",
+    "saving": "保存中…",
+    "save": "保存"
+  },
+  "userProfile": {
+    "homeTitle": "{name} のプロフィール",
+    "metaDescription": "{name} のプロフィール、ディスカッション、返信",
+    "avatarAlt": "{name} のアバター",
+    "joined": "登録日: {date}",
+    "stats": {
+      "posts": "ディスカッション",
+      "replies": "返信",
+      "followers": "フォロワー",
+      "following": "フォロー中",
+      "points": "ポイント"
+    },
+    "tabs": {
+      "posts": "ディスカッション",
+      "replies": "返信",
+      "resources": "リソース",
+      "bookmarks": "ブックマーク",
+      "likes": "いいね"
+    },
+    "empty": {
+      "posts": "ディスカッションはまだありません",
+      "replies": "返信はまだありません",
+      "resources": "リソースはまだありません",
+      "bookmarks": "ブックマークはまだありません",
+      "likes": "いいねしたディスカッションはまだありません"
+    },
+    "post": "ディスカッション",
+    "unknownUser": "ユーザー #{id}",
+    "role": {
+      "admin": "管理者",
+      "moderator": "モデレーター",
+      "user": "メンバー"
+    }
+  },
+  "follow": {
+    "follow": "フォロー",
+    "following": "フォロー中",
+    "followFailed": "フォローできませんでした。",
+    "unfollowFailed": "フォローを解除できませんでした。"
+  },
+  "blockUser": {
+    "unknownUser": "ユーザー #{id}",
+    "blocked": "{name} をブロックしました",
+    "unblocked": "{name} のブロックを解除しました",
+    "cannotBlockStaff": "管理者とモデレーターはブロックできません。",
+    "userMissing": "ユーザーが見つからないか、削除されています。",
+    "cannotBlockSelf": "自分自身はブロックできません。",
+    "sessionExpired": "セッションの期限が切れました。再ログインしてください。",
+    "operationFailed": "操作できませんでした。もう一度お試しください。",
+    "unblockFailed": "ブロックを解除できませんでした。もう一度お試しください。",
+    "block": "ブロック",
+    "unblock": "ブロック解除",
+    "dialogTitle": "{name} をブロック",
+    "close": "閉じる",
+    "description": "相手はあなたにメッセージを送れなくなります。設定のブロックリストからいつでも解除できます。",
+    "reason": "理由（任意・自分のみ表示）",
+    "reasonPlaceholder": "後で確認できるようメモを残す",
+    "cancel": "キャンセル",
+    "processing": "処理中…",
+    "confirm": "ブロックを確定"
+  },
+  "avatarUploader": {
+    "imageOnly": "画像ファイルを選択してください。",
+    "tooLarge": "画像サイズは 2 MB 以下にしてください。",
+    "uploadFailed": "画像をアップロードできませんでした。",
+    "deleteFailed": "画像を削除できませんでした。",
+    "preview": "アバターのプレビュー",
+    "upload": "アップロード",
+    "remove": "削除",
+    "formats": "JPEG、PNG、GIF、WebP · 2 MB まで"
+  }
+}

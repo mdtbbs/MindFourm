@@ -1,4 +1,5 @@
 import { CapabilitiesService } from './capabilities.service';
+import { SiteConfigService } from '../../config/site-profile';
 
 describe('CapabilitiesService', () => {
   const previousRendererUrl = process.env.RESOURCE_RENDERER_URL;
@@ -16,9 +17,11 @@ describe('CapabilitiesService', () => {
       }),
     } as any;
 
-    const service = new CapabilitiesService(settings);
+    const service = new CapabilitiesService(settings, new SiteConfigService({ get: jest.fn().mockReturnValue(undefined) } as any));
 
     await expect(service.getCapabilities()).resolves.toMatchObject({
+      site: { profile: 'mdtbbs', default_locale: 'zh-CN', supported_locales: ['zh-CN'] },
+      verification: { email_required: true, phone_required_for_writes: true },
       forum: { read: true, write: true, search: true, image_upload: true },
       resources: { read: true, download: true, upload: true },
       notifications: { read: true, sse: false },
@@ -41,7 +44,7 @@ describe('CapabilitiesService', () => {
 
   it('advertises previews only when the forum-owned renderer is configured', async () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
-    const service = new CapabilitiesService({ getBoolean: jest.fn().mockResolvedValue(false), get: jest.fn() } as any);
+    const service = new CapabilitiesService({ getBoolean: jest.fn().mockResolvedValue(false), get: jest.fn() } as any, new SiteConfigService({ get: jest.fn().mockReturnValue(undefined) } as any));
     await expect(service.getCapabilities()).resolves.toEqual(expect.objectContaining({ forge_preview: true, blueprint_production_analysis: true }));
   });
 });

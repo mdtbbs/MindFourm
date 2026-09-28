@@ -2,11 +2,16 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { fetchApiData } from '@/lib/api/server-fetch';
 import type { Category } from '@/types';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
-export const metadata: Metadata = {
-  title: '页面不存在',
-  robots: { index: false, follow: true },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  return {
+    title: translate(locale, 'errors.notFound'),
+    robots: { index: false, follow: true },
+  };
+}
 
 async function fetchCategories(): Promise<Category[]> {
   return fetchApiData<Category[]>('/api/categories', {
@@ -24,35 +29,36 @@ async function fetchCategories(): Promise<Category[]> {
  * Copy is Chinese to match the rest of the UI, which was English here only.
  */
 export default async function NotFound() {
-  const categories = await fetchCategories();
+  const [categories, locale] = await Promise.all([fetchCategories(), getRequestLocale()]);
+  const t = (key: string) => translate(locale, key);
 
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-2xl flex-col justify-center px-4 py-16">
       <p className="mb-2 text-sm font-semibold tracking-widest text-[var(--text-muted)]">404</p>
-      <h1 className="mb-3 text-2xl font-bold text-[var(--text)]">页面不存在</h1>
+      <h1 className="mb-3 text-2xl font-bold text-[var(--text)]">{t('errors.notFound')}</h1>
       <p className="mb-6 text-[var(--text-secondary)]">
-        这个页面可能已被删除、尚未通过审核，或者链接有误。
+        {t('errors.notFoundDescription')}
       </p>
 
       <form action="/search" method="get" className="mb-8 flex gap-2">
         <input
           type="search"
           name="q"
-          placeholder="搜索帖子…"
-          aria-label="搜索帖子"
+          placeholder={t('errors.searchPosts')}
+          aria-label={t('errors.searchPosts')}
           className="flex-1 rounded border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--text)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         />
         <button
           type="submit"
           className="rounded bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         >
-          搜索
+          {t('common.search')}
         </button>
       </form>
 
       {categories.length > 0 && (
         <div className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold text-[var(--text)]">浏览分类</h2>
+          <h2 className="mb-3 text-sm font-semibold text-[var(--text)]">{t('errors.browseCategories')}</h2>
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => (
               <Link
@@ -68,7 +74,7 @@ export default async function NotFound() {
       )}
 
       <Link href="/" className="text-sm text-[var(--primary)] hover:underline">
-        ← 返回首页
+        ← {t('common.home')}
       </Link>
     </div>
   );

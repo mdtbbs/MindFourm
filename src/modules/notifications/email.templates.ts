@@ -51,6 +51,11 @@ export const EMAIL_LAYOUT_TEMPLATE = `<!DOCTYPE html>
 </body>
 </html>`;
 
+export const EMAIL_LAYOUT_TEMPLATE_EN = EMAIL_LAYOUT_TEMPLATE
+  .replace('此邮件由系统自动发送，请勿直接回复。', 'This email was sent automatically. Please do not reply.')
+  .replace('如需调整收件偏好，请前往', 'To change your notification preferences, visit')
+  .replace('通知设置', 'notification settings');
+
 export const DEFAULT_WELCOME_NOTIFICATION_TITLE = '欢迎来到 {{site_name}}';
 
 export const DEFAULT_WELCOME_NOTIFICATION_BODY = `你好，**{{username}}**！

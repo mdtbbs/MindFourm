@@ -1,6 +1,8 @@
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { unstable_noStore as noStore } from 'next/cache';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
 interface ConfiguredFooterPageProps {
   eyebrow: string;
@@ -30,7 +32,8 @@ export default async function ConfiguredFooterPage({
   // bake the fallback text into these otherwise static routes. These pages
   // are admin-authored, so always resolve their current setting at request time.
   noStore();
-  const settings = await fetchPublicSettings({ fresh: true });
+  const [settings, locale] = await Promise.all([fetchPublicSettings({ fresh: true }), getRequestLocale()]);
+  const tableOfContentsLabel = translate(locale, 'footer.tableOfContents');
   const content = settings[settingKey]?.trim();
   const renderedContent = content?.replace(/^#\s+/gm, '## ') || '';
   const tableOfContents = getTableOfContents(renderedContent);
@@ -44,8 +47,8 @@ export default async function ConfiguredFooterPage({
           {tableOfContents.length > 1 && (
             <aside className="mb-6 lg:mb-0">
               <details className="rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 lg:sticky lg:top-24 lg:block lg:border-0 lg:bg-transparent lg:p-0" open>
-                <summary className="cursor-pointer text-sm font-semibold text-[var(--text)] lg:list-none">本页目录</summary>
-                <nav aria-label="本页目录" className="mt-3 space-y-2 border-l border-[var(--border)] pl-3">
+                <summary className="cursor-pointer text-sm font-semibold text-[var(--text)] lg:list-none">{tableOfContentsLabel}</summary>
+                <nav aria-label={tableOfContentsLabel} className="mt-3 space-y-2 border-l border-[var(--border)] pl-3">
                   {tableOfContents.map((item, index) => <a key={`${item.id}-${index}`} href={`#${item.id}`} className="block text-sm leading-5 text-[var(--text-muted)] hover:text-[var(--primary)]">{item.title}</a>)}
                 </nav>
               </details>

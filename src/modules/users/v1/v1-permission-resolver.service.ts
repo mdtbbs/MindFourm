@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { SettingsService } from '../../settings/settings.service';
 import { AuthService } from '../../auth/auth.service';
 import { BansService } from '../../bans/bans.service';
+import { SiteConfigService } from '../../../config/site-profile';
 
 type Permission = { allowed: boolean; reason: string | null };
 
@@ -11,6 +12,7 @@ export class V1PermissionResolverService {
     private readonly settings: SettingsService,
     private readonly auth: AuthService,
     private readonly bans: BansService,
+    private readonly siteConfig: SiteConfigService,
   ) {}
 
   async resolve(user: any, authContext?: any): Promise<{
@@ -27,18 +29,20 @@ export class V1PermissionResolverService {
       this.auth.checkNeedsTermsAcceptance(user),
       this.bans.isActive('user', user.id),
     ]);
-    const gated = (featureEnabled: boolean, featureReason: string, needsPhone: boolean): Permission => {
+    const policy = this.siteConfig.current.verification;
+    const gated = (featureEnabled: boolean, featureReason: string): Permission => {
       if (isBanned) return { allowed: false, reason: 'USER_BANNED' };
       if (needsTerms) return { allowed: false, reason: 'TERMS_ACCEPTANCE_REQUIRED' };
       if (!featureEnabled) return { allowed: false, reason: featureReason };
-      if (needsPhone && !user.phone_verified) return { allowed: false, reason: 'PHONE_VERIFICATION_REQUIRED' };
+      if (policy.requireEmail && !user.email_verified) return { allowed: false, reason: 'EMAIL_VERIFICATION_REQUIRED' };
+      if (policy.requirePhoneForWrites && !user.phone_verified) return { allowed: false, reason: 'PHONE_VERIFICATION_REQUIRED' };
       return { allowed: true, reason: null };
     };
     const isThirdParty = authContext?.source === 'mindauth_oauth' && authContext.partyType !== 'first_party';
     return {
-      thread_create: gated(forumWrite, 'FEATURE_DISABLED', true),
-      reply_create: gated(forumWrite, 'FEATURE_DISABLED', true),
-      resource_upload: gated(resourceUpload, 'RESOURCE_UPLOAD_DISABLED', true),
+      thread_create: gated(forumWrite, 'FEATURE_DISABLED'),
+      reply_create: gated(forumWrite, 'FEATURE_DISABLED'),
+      resource_upload: gated(resourceUpload, 'RESOURCE_UPLOAD_DISABLED'),
       message_read: isBanned
         ? { allowed: false, reason: 'USER_BANNED' }
         : !messagesEnabled

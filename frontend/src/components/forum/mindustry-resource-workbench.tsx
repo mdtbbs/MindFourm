@@ -11,10 +11,12 @@ import { useToastStore } from '@/store/toast-store';
 import { useDraft, useDraftAutoSave, type DraftSnapshot } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
 import ResourceKindDetails from './resource-kind-details';
+import { useI18n } from '@/i18n/provider';
+import ContentLanguageSelect from '@/components/forum/content-language-select';
 
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
-  loading: () => <div className="min-h-32 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text-muted)]">加载编辑器…</div>,
+  loading: () => null,
 });
 
 type Kind = 'map' | 'schematic';
@@ -28,32 +30,40 @@ type DraftPreview = {
   duplicate: { exact: boolean; structure: boolean; normalized: boolean; existing_resources: Array<{ id: number | null; title: string; url: string; status: string }>; similar_resources?: Array<{ id: number | null; title: string; url: string; status: string }> } | null;
 };
 
-const copy: Record<Kind, { title: string; short: string; extension: string; action: string }> = {
-  map: { title: '地图提交工作台', short: '上传地图并在提交前检查缩略图和地图信息。', extension: '.msav', action: '提交地图审核' },
-  schematic: { title: '蓝图提交工作台', short: '上传蓝图文件，或粘贴游戏中复制的蓝图代码。', extension: '.msch', action: '提交蓝图审核' },
-};
-
-function displayMetadata(metadata: Record<string, unknown> | null): Array<[string, string]> {
+function displayMetadata(metadata: Record<string, unknown> | null, t: (key: string) => string, locale: string): Array<[string, string]> {
   if (!metadata) return [];
-  const labels: Record<string, string> = { name: '名称', author: '作者', width: '宽度', height: '高度', spawns: '出生点', blocks: '方块数', save_format_version: '存档文件格式', schematic_format_version: '蓝图文件格式', tags: '自动标签' };
+  const labels: Record<string, string> = {
+    name: t('resourceWorkbench.metadataName'), author: t('resourceWorkbench.metadataAuthor'),
+    width: t('resourceWorkbench.metadataWidth'), height: t('resourceWorkbench.metadataHeight'),
+    spawns: t('resourceWorkbench.metadataSpawns'), blocks: t('resourceWorkbench.metadataBlocks'),
+    save_format_version: t('resourceWorkbench.metadataSaveFormat'),
+    schematic_format_version: t('resourceWorkbench.metadataSchematicFormat'), tags: t('resourceWorkbench.metadataTags'),
+  };
   const entries = Object.entries(metadata)
     .filter(([key, value]) => labels[key] && (typeof value === 'string' || typeof value === 'number' || (key === 'tags' && Array.isArray(value))))
-    .map(([key, value]) => [labels[key], Array.isArray(value) ? value.join('、') : String(value)] as [string, string]);
+    .map(([key, value]) => [labels[key], Array.isArray(value) ? value.join(locale === 'ja' || locale === 'zh-CN' ? '、' : ', ') : String(value)] as [string, string]);
   const build = metadata.map_build_metadata as { stored_game_build?: unknown } | undefined;
-  if (typeof build?.stored_game_build === 'number') entries.push(['文件记录 Build', String(build.stored_game_build)]);
+  if (typeof build?.stored_game_build === 'number') entries.push([t('resourceWorkbench.metadataFileBuild'), String(build.stored_game_build)]);
   const compatibility = metadata.compatibility as { minimum_supported_build?: unknown } | undefined;
-  if (typeof compatibility?.minimum_supported_build === 'number') entries.push(['自动推测', `≥ Build ${compatibility.minimum_supported_build}`]);
+  if (typeof compatibility?.minimum_supported_build === 'number') entries.push([t('resourceWorkbench.metadataCompatibility'), `≥ Build ${compatibility.minimum_supported_build}`]);
   return entries;
 }
 
 export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
+  const { locale, t } = useI18n();
   const router = useRouter();
   const showSuccess = useToastStore((state) => state.showSuccess);
-  const text = copy[kind];
+  const text = {
+    title: t(kind === 'map' ? 'resourceWorkbench.titleMap' : 'resourceWorkbench.titleSchematic'),
+    short: t(kind === 'map' ? 'resourceWorkbench.shortMap' : 'resourceWorkbench.shortSchematic'),
+    extension: kind === 'map' ? '.msav' : '.msch',
+    action: t(kind === 'map' ? 'resourceWorkbench.actionMap' : 'resourceWorkbench.actionSchematic'),
+  };
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
+  const [contentLanguage, setContentLanguage] = useState('');
   const [duplicateNote, setDuplicateNote] = useState('');
   const [content, setContent] = useState('');
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
@@ -70,17 +80,17 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const [error, setError] = useState<string | null>(null);
   const submissionKey = useRef<{ fingerprint: string; key: string } | null>(null);
   const draft = useDraft('resource-workbench', kind);
-  const draftValues = useMemo(() => ({ title, version, description, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode }), [title, version, description, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode]);
+  const draftValues = useMemo(() => ({ title, version, description, contentLanguage, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode }), [title, version, description, contentLanguage, duplicateNote, content, contentJson, categoryId, isPublic, schematicSource, schematicCode]);
   const hasDraftContent = Boolean(title || version || description || content || schematicCode);
   const draftResource: Resource | null = preview ? {
-    id: 0, user_id: 0, title: title || (kind === 'map' ? '未命名地图' : '未命名蓝图'),
+    id: 0, user_id: 0, title: title || t(kind === 'map' ? 'resourceWorkbench.unnamedMap' : 'resourceWorkbench.unnamedSchematic'),
     description: description || null, resource_type: 'upload', resource_kind: kind, integrity: null,
     file_name: file?.name || null, file_path: null, file_size: file?.size || 0, mime_type: null,
     content_hash: null, external_url: null, version: version || null, content: content || null,
     content_html: null, content_json: contentJson, content_text: null,
     category_id: categoryId, category_name: categories.find((item) => item.id === categoryId)?.name || null,
     category_icon: null, download_count: 0, slug: null, is_public: isPublic, status: 'preview',
-    use_mfl: false, mfl_download_url: null, username: '你', avatar_url: null,
+    use_mfl: false, mfl_download_url: null, username: t('resourceWorkbench.you'), avatar_url: null,
     created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     metadata: { cover_image_url: preview.preview_url, gallery_images: [], tags: [], supported_versions: [], compatibility: [], planets: [], game_modes: [], required_mods: [], changelog: null },
     renderer_status: 'ready', renderer_metadata: preview.metadata, preview_url: preview.preview_url,
@@ -103,6 +113,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
     if (typeof values.title === 'string') setTitle(values.title);
     if (typeof values.version === 'string') setVersion(values.version);
     if (typeof values.description === 'string') setDescription(values.description);
+    if (typeof values.contentLanguage === 'string') setContentLanguage(values.contentLanguage);
     if (typeof values.duplicateNote === 'string') setDuplicateNote(values.duplicateNote);
     if (typeof values.content === 'string') setContent(values.content);
     if (values.contentJson && typeof values.contentJson === 'object') setContentJson(values.contentJson as Record<string, unknown>);
@@ -118,7 +129,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const selectFile = (candidate: File | undefined) => {
     if (!candidate) return;
     if (!candidate.name.toLowerCase().endsWith(text.extension)) {
-      setError(`仅支持 ${text.extension} 文件`);
+      setError(t('resourceWorkbench.unsupportedFile', { extension: text.extension }));
       return;
     }
     setFile(candidate);
@@ -128,11 +139,11 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
 
   const generatePreview = async () => {
     if (usePastedCode && !schematicCode.trim()) {
-      setError('请粘贴从 Mindustry 复制的蓝图代码');
+      setError(t('resourceWorkbench.codeRequired'));
       return;
     }
     if (!usePastedCode && !file) {
-      setError(`请选择 ${text.extension} 文件`);
+      setError(t('resourceWorkbench.fileRequired', { extension: text.extension }));
       return;
     }
     setIsPreviewing(true);
@@ -150,10 +161,10 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       if (!description.trim() && typeof parsed.description === 'string' && parsed.description.trim()) setDescription(parsed.description.trim());
       // This is the resource release label, not a guessed Mindustry build.
       // The renderer deliberately returns no build for files without a marker.
-      if (!version.trim()) setVersion('未标注');
+      if (!version.trim()) setVersion(t('resourceWorkbench.versionUnspecified'));
     } catch (err) {
       setPreview(null);
-      setError(err instanceof Error ? err.message : '预览生成失败');
+      setError(err instanceof Error ? err.message : t('resourceWorkbench.previewFailed'));
     } finally {
       setIsPreviewing(false);
     }
@@ -162,24 +173,24 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!title.trim()) {
-      setError('请填写标题');
+      setError(t('resourceWorkbench.titleRequired'));
       return;
     }
     if (!preview) {
-      setError('请先解析文件并生成预览');
+      setError(t('resourceWorkbench.needPreview'));
       return;
     }
     if (preview.duplicate?.exact) {
-      setError('这个文件已经提交过了。');
+      setError(t('resourceWorkbench.duplicateFile'));
       return;
     }
     if (preview.duplicate?.structure && !duplicateNote.trim()) {
-      setError('发现一个结构相同的蓝图，请说明用途或内容上的区别后再提交。');
+      setError(t('resourceWorkbench.duplicateStructure'));
       return;
     }
     if (Date.parse(preview.expires_at) <= Date.now()) {
       setPreview(null);
-      setError('预览已过期，请重新生成后提交。');
+      setError(t('resourceWorkbench.expired'));
       return;
     }
     setIsSubmitting(true);
@@ -187,9 +198,10 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
     try {
       const formData = new FormData();
       formData.append('title', title.trim());
-      formData.append('version', version.trim() || '未标注');
+      formData.append('version', version.trim() || t('resourceWorkbench.versionUnspecified'));
       formData.append('resource_type', 'upload');
       formData.append('resource_kind', kind);
+      formData.append('content_language', contentLanguage || 'unknown');
       formData.append('preview_draft_id', preview.id);
       formData.append('is_public', isPublic ? '1' : '0');
       if (description.trim()) formData.append('description', description.trim());
@@ -197,17 +209,17 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       if (duplicateNote.trim()) formData.append('duplicate_note', duplicateNote.trim());
       if (contentJson) formData.append('content_json', JSON.stringify(contentJson));
       if (categoryId) formData.append('category_id', String(categoryId));
-      const fingerprint = JSON.stringify({ preview: preview.id, title, version, description, duplicateNote, content, categoryId, isPublic });
+      const fingerprint = JSON.stringify({ preview: preview.id, title, version, description, contentLanguage, duplicateNote, content, categoryId, isPublic });
       if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
         submissionKey.current = { fingerprint, key: crypto.randomUUID() };
       }
       const resource = await resourceApi.upload(formData, submissionKey.current.key);
       submissionKey.current = null;
       draft.clear();
-      showSuccess(`${kind === 'map' ? '地图' : '蓝图'}已提交审核`);
+      showSuccess(t(kind === 'map' ? 'resourceWorkbench.successMap' : 'resourceWorkbench.successSchematic'));
       router.push(`/resources/${resource.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '提交失败，请重新生成预览后再试');
+      setError(err instanceof Error ? err.message : t('resourceWorkbench.submitFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -219,11 +231,11 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       {draft.saveError && <p role="status" className="mb-4 rounded-[var(--radius)] border border-[var(--warning)]/40 bg-[var(--warning)]/10 p-3 text-sm text-[var(--text-secondary)]">{draft.saveError}</p>}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-[var(--primary)]/10 px-3 py-1 text-xs font-medium text-[var(--primary)]"><ShieldCheck className="h-3.5 w-3.5" />论坛托管 · 审核后公开</p>
+          <p className="mb-2 inline-flex items-center gap-2 rounded-full bg-[var(--primary)]/10 px-3 py-1 text-xs font-medium text-[var(--primary)]"><ShieldCheck className="h-3.5 w-3.5" />{t('resourceWorkbench.hostedBadge')}</p>
           <h1 className="text-2xl font-bold text-[var(--text)]">{text.title}</h1>
-          <p className="mt-2 text-sm text-[var(--text-muted)]">{text.short} 不支持外链下载。</p>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">{text.short} {t('resourceWorkbench.noExternal')}</p>
         </div>
-        <p className="text-xs text-[var(--text-muted)]">先生成私有预览，再提交审核</p>
+        <p className="text-xs text-[var(--text-muted)]">{t('resourceWorkbench.privatePreview')}</p>
       </div>
 
       {error && <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600 dark:text-red-400">{error}</div>}
@@ -231,81 +243,82 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
         <section className="space-y-5 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-6">
           <div>
-            <h2 className="text-base font-semibold text-[var(--text)]">1. 选择内容并预览</h2>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">预览仅当前登录用户可见，30 分钟后自动失效。</p>
+            <h2 className="text-base font-semibold text-[var(--text)]">{t('resourceWorkbench.choosePreview')}</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.previewExpiry')}</p>
           </div>
 
           {kind === 'schematic' && (
             <div className="grid grid-cols-2 gap-2 rounded-lg bg-[var(--bg-elevated)] p-1">
-              <button type="button" onClick={() => { setSchematicSource('file'); setSchematicCode(''); resetPreview(); }} className={`rounded-md px-3 py-2 text-sm ${schematicSource === 'file' ? 'bg-[var(--bg-card)] font-medium text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}><Upload className="mr-1 inline h-4 w-4" />上传文件</button>
-              <button type="button" onClick={() => { setSchematicSource('paste'); setFile(null); resetPreview(); }} className={`rounded-md px-3 py-2 text-sm ${schematicSource === 'paste' ? 'bg-[var(--bg-card)] font-medium text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}><ClipboardPaste className="mr-1 inline h-4 w-4" />粘贴代码</button>
+              <button type="button" onClick={() => { setSchematicSource('file'); setSchematicCode(''); resetPreview(); }} className={`rounded-md px-3 py-2 text-sm ${schematicSource === 'file' ? 'bg-[var(--bg-card)] font-medium text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}><Upload className="mr-1 inline h-4 w-4" />{t('resourceWorkbench.uploadFile')}</button>
+              <button type="button" onClick={() => { setSchematicSource('paste'); setFile(null); resetPreview(); }} className={`rounded-md px-3 py-2 text-sm ${schematicSource === 'paste' ? 'bg-[var(--bg-card)] font-medium text-[var(--text)] shadow-sm' : 'text-[var(--text-muted)]'}`}><ClipboardPaste className="mr-1 inline h-4 w-4" />{t('resourceWorkbench.pasteCode')}</button>
             </div>
           )}
 
           {!usePastedCode ? (
             <label onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); selectFile(event.dataTransfer.files?.[0]); }} className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-5 text-center hover:border-[var(--primary)]/60">
               <Upload className="mb-2 h-7 w-7 text-[var(--primary)]" />
-              <span className="text-sm font-medium text-[var(--text)]">{file?.name || `选择 ${text.extension} 文件`}</span>
-              <span className="mt-1 text-xs text-[var(--text-muted)]">最大 20 MB，文件不会在提交审核前公开</span>
+              <span className="text-sm font-medium text-[var(--text)]">{file?.name || t('resourceWorkbench.selectExtensionFile', { extension: text.extension })}</span>
+              <span className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.maxUpload')}</span>
               <input type="file" accept={text.extension} className="hidden" onChange={(event) => selectFile(event.target.files?.[0])} />
             </label>
           ) : (
             <div>
-              <label className="mb-2 block text-sm font-medium text-[var(--text)]">游戏蓝图代码</label>
-              <textarea value={schematicCode} onChange={(event) => { setSchematicCode(event.target.value); resetPreview(); }} spellCheck={false} placeholder="在 Mindustry 中复制蓝图后，将以 bXNja... 开头的代码粘贴到这里" className="min-h-44 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 font-mono text-xs text-[var(--text)]" />
+              <label className="mb-2 block text-sm font-medium text-[var(--text)]">{t('resourceWorkbench.gameCode')}</label>
+              <textarea value={schematicCode} onChange={(event) => { setSchematicCode(event.target.value); resetPreview(); }} spellCheck={false} placeholder={t('resourceWorkbench.codePlaceholder')} className="min-h-44 w-full rounded-xl border border-[var(--border)] bg-[var(--bg-elevated)] p-3 font-mono text-xs text-[var(--text)]" />
             </div>
           )}
 
           <button type="button" onClick={generatePreview} disabled={isPreviewing} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
             {isPreviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileImage className="h-4 w-4" />}
-            {isPreviewing ? '正在解析并生成预览…' : '解析并生成预览'}
+            {isPreviewing ? t('resourceWorkbench.parseLoading') : t('resourceWorkbench.parseAction')}
           </button>
 
           <div className="border-t border-[var(--border)] pt-5">
-            <h2 className="mb-4 text-base font-semibold text-[var(--text)]">2. 补充资源信息</h2>
+            <h2 className="mb-4 text-base font-semibold text-[var(--text)]">{t('resourceWorkbench.detailsStep')}</h2>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input label={kind === 'map' ? '地图名称 *' : '蓝图名称 *'} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
-              <Input label="资源版本（可选）" value={version} onChange={(event) => setVersion(event.target.value)} placeholder="未标注" maxLength={50} />
+              <Input label={kind === 'map' ? t('resourceWorkbench.mapName') : t('resourceWorkbench.schematicName')} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
+              <Input label={t('resourceWorkbench.versionOptional')} value={version} onChange={(event) => setVersion(event.target.value)} placeholder={t('resourceWorkbench.versionUnspecified')} maxLength={50} />
+              <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
             </div>
-            <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">短介绍</label>
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={300} className="mt-1 min-h-24 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder="说明玩法、用途或使用方式（最多 300 字）" />
-            <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">专题 / 用途</label>
+            <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbench.shortDescription')}</label>
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={300} className="mt-1 min-h-24 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder={t('resourceWorkbench.shortDescriptionPlaceholder')} />
+            <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbench.topic')}</label>
             <select value={categoryId ?? ''} onChange={(event) => setCategoryId(event.target.value ? Number(event.target.value) : null)} className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]">
-              <option value="">不选择</option>
+              <option value="">{t('resourceWorkbench.none')}</option>
               {categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
             </select>
-            <p className="mt-1 text-xs text-[var(--text-muted)]">专题描述玩法或用途，不会改变地图或蓝图类型。</p>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.topicHelp')}</p>
             {preview?.duplicate?.structure && <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
-              <p className="text-sm font-medium text-[var(--text)]">发现一个结构相同的蓝图。</p>
-              <p className="mt-1 text-xs text-[var(--text-secondary)]">如果用途、说明或教程版本不同，请填写区别后继续。</p>
-              <textarea value={duplicateNote} onChange={(event) => setDuplicateNote(event.target.value)} maxLength={2000} required aria-label="与已有蓝图的区别" placeholder="说明与已有蓝图的区别" className="mt-2 min-h-20 w-full rounded border border-[var(--border)] bg-[var(--bg-card)] p-2 text-sm text-[var(--text)]" />
+              <p className="text-sm font-medium text-[var(--text)]">{t('resourceWorkbench.duplicateStructureTitle')}</p>
+              <p className="mt-1 text-xs text-[var(--text-secondary)]">{t('resourceWorkbench.duplicateStructureHelp')}</p>
+              <textarea value={duplicateNote} onChange={(event) => setDuplicateNote(event.target.value)} maxLength={2000} required aria-label={t('resourceWorkbench.duplicateDifference')} placeholder={t('resourceWorkbench.duplicateDifferencePlaceholder')} className="mt-2 min-h-20 w-full rounded border border-[var(--border)] bg-[var(--bg-card)] p-2 text-sm text-[var(--text)]" />
             </div>}
-            <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">详细说明</label>
-            <div className="mt-1"><TiptapEditor value={content} onChange={setContent} jsonValue={contentJson} onJsonChange={setContentJson} ariaLabel="资源详细说明" placeholder="可说明版本、玩法、使用步骤和注意事项" minHeight="180px" imageUpload testId="workbench-resource-content" /></div>
-            <label className="mt-4 flex items-center gap-2 text-sm text-[var(--text)]"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />审核通过后公开发布</label>
+            <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbench.detailedDescription')}</label>
+            <div className="mt-1"><TiptapEditor value={content} onChange={setContent} jsonValue={contentJson} onJsonChange={setContentJson} ariaLabel={t('resourceWorkbench.detailedAria')} placeholder={t('resourceWorkbench.detailedPlaceholder')} minHeight="180px" imageUpload testId="workbench-resource-content" /></div>
+            <label className="mt-4 flex items-center gap-2 text-sm text-[var(--text)]"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />{t('resourceWorkbench.publicAfterApproval')}</label>
           </div>
         </section>
 
         <aside className="h-fit rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:sticky sm:top-6">
-          <div className="mb-1 flex items-center justify-between"><h2 className="font-semibold text-[var(--text)]">最终详情页预览</h2>{preview && <span className="inline-flex items-center gap-1 text-xs text-[var(--success)]"><CheckCircle2 className="h-4 w-4" />已解析</span>}</div>
-          <p className="mb-4 text-xs text-[var(--text-muted)]">仅你可见 · 提交审核前预览正式详情页的信息结构</p>
+          <div className="mb-1 flex items-center justify-between"><h2 className="font-semibold text-[var(--text)]">{t('resourceWorkbench.finalPreview')}</h2>{preview && <span className="inline-flex items-center gap-1 text-xs text-[var(--success)]"><CheckCircle2 className="h-4 w-4" />{t('resourceWorkbench.parsed')}</span>}</div>
+          <p className="mb-4 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.onlyYouPreview')}</p>
           {preview ? (
             <>
-              {previewExpired && <div className="mb-3 flex items-center justify-between gap-3 rounded-[var(--radius)] bg-[var(--warning)]/10 p-3 text-xs text-[var(--text-secondary)]"><span>此预览已过期，需要重新生成。</span><button type="button" onClick={generatePreview} disabled={isPreviewing} className="shrink-0 font-medium text-[var(--primary)] underline">重新生成</button></div>}
-              {preview.duplicate?.exact && <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-[var(--text)]"><p>这个文件已经提交过了。</p>{preview.duplicate.existing_resources[0] && <a className="mt-1 inline-block text-[var(--primary)] underline" href={preview.duplicate.existing_resources[0].url}>查看已有资源：{preview.duplicate.existing_resources[0].title}</a>}<p className="mt-1 text-xs text-[var(--text-muted)]">如资源归属有误，请联系管理处理。</p></div>}
-              {preview.duplicate?.structure && !preview.duplicate.exact && <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-[var(--text)]">发现一个结构相同的蓝图；请填写用途或内容上的区别后继续。</div>}
-              {preview.duplicate?.normalized && !preview.duplicate.structure && <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text-secondary)]">发现一个旋转或镜像后高度相似的蓝图，你仍然可以继续提交。</div>}
-              <div className={`overflow-hidden rounded-xl bg-[#101419] ${kind === 'map' ? 'aspect-video' : 'aspect-square'}`}><img src={preview.preview_url} alt={`${kind === 'map' ? '地图' : '蓝图'}预览`} className="h-full w-full object-contain" /></div>
+              {previewExpired && <div className="mb-3 flex items-center justify-between gap-3 rounded-[var(--radius)] bg-[var(--warning)]/10 p-3 text-xs text-[var(--text-secondary)]"><span>{t('resourceWorkbench.previewExpired')}</span><button type="button" onClick={generatePreview} disabled={isPreviewing} className="shrink-0 font-medium text-[var(--primary)] underline">{t('resourceWorkbench.regenerate')}</button></div>}
+              {preview.duplicate?.exact && <div className="mb-3 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-[var(--text)]"><p>{t('resourceWorkbench.existingSubmitted')}</p>{preview.duplicate.existing_resources[0] && <a className="mt-1 inline-block text-[var(--primary)] underline" href={preview.duplicate.existing_resources[0].url}>{t('resourceWorkbench.viewExisting', { title: preview.duplicate.existing_resources[0].title })}</a>}<p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.ownershipError')}</p></div>}
+              {preview.duplicate?.structure && !preview.duplicate.exact && <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-[var(--text)]">{t('resourceWorkbench.structureDuplicate')}</div>}
+              {preview.duplicate?.normalized && !preview.duplicate.structure && <div className="mb-3 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text-secondary)]">{t('resourceWorkbench.similarDuplicate')}</div>}
+              <div className={`overflow-hidden rounded-xl bg-[#101419] ${kind === 'map' ? 'aspect-video' : 'aspect-square'}`}><img src={preview.preview_url} alt={t(kind === 'map' ? 'resourceWorkbench.mapPreview' : 'resourceWorkbench.schematicPreview')} className="h-full w-full object-contain" /></div>
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                {displayMetadata(preview.metadata).map(([label, value]) => <div key={label}><dt className="text-xs text-[var(--text-muted)]">{label}</dt><dd className="mt-0.5 break-words text-[var(--text)]">{value}</dd></div>)}
+                {displayMetadata(preview.metadata, t, locale).map(([label, value]) => <div key={label}><dt className="text-xs text-[var(--text-muted)]">{label}</dt><dd className="mt-0.5 break-words text-[var(--text)]">{value}</dd></div>)}
               </dl>
-              <p className="mt-4 text-xs text-[var(--text-muted)]">已验证文件格式。提交后仍需通过论坛审核才会公开。</p>
+              <p className="mt-4 text-xs text-[var(--text-muted)]">{t('resourceWorkbench.formatVerified')}</p>
               {draftResource && <div className="mt-6 border-t border-[var(--border)] pt-5"><h3 className="mb-3 text-sm font-semibold text-[var(--text)]">{draftResource.title}</h3>{draftResource.description && <p className="mb-4 text-sm leading-6 text-[var(--text-secondary)]">{draftResource.description}</p>}<ResourceKindDetails resource={draftResource} /></div>}
             </>
           ) : (
-            <div className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] p-6 text-center"><Map className="mb-3 h-8 w-8 text-[var(--text-muted)]" /><p className="text-sm text-[var(--text-muted)]">选择内容并生成预览后，这里会显示解析结果。</p></div>
+            <div className="flex aspect-square flex-col items-center justify-center rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-elevated)] p-6 text-center"><Map className="mb-3 h-8 w-8 text-[var(--text-muted)]" /><p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbench.chooseGenerate')}</p></div>
           )}
-          <button type="submit" disabled={!preview || previewExpired || isSubmitting || Boolean(preview?.duplicate?.exact) || Boolean(preview?.duplicate?.structure && !duplicateNote.trim())} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}{isSubmitting ? '正在提交…' : text.action}</button>
+          <button type="submit" disabled={!preview || previewExpired || isSubmitting || Boolean(preview?.duplicate?.exact) || Boolean(preview?.duplicate?.structure && !duplicateNote.trim())} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}{isSubmitting ? t('resourceWorkbench.submitting') : text.action}</button>
         </aside>
       </div>
     </form>

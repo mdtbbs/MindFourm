@@ -265,6 +265,15 @@ describe('PostsService', () => {
     expect(listQueryBuilder.andWhere).toHaveBeenCalledWith('post.source = :source', { source: 'USER' });
   });
 
+  it('filters post lists by the author-declared content language', async () => {
+    const { service, listQueryBuilder } = createService();
+    await service.findAll({ page: 1, limit: 30, content_language: 'ja' });
+    expect(listQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'post.content_language = :contentLanguage',
+      { contentLanguage: 'ja' },
+    );
+  });
+
   it('omits configured homepage categories from a discussion stream without hiding uncategorised posts', async () => {
     const { service, listQueryBuilder } = createService();
 
@@ -783,6 +792,16 @@ describe('PostsService.update revision history', () => {
       88,
       expect.not.objectContaining({ edited_at: expect.anything() }),
     );
+  });
+
+  it('allows the author to update the declared content language without creating a content revision', async () => {
+    const manager = createManagerMock({ Post: EXISTING });
+    const { service } = createService({ manager });
+
+    await service.update(88, { content_language: 'ja' }, AUTHOR.id, AUTHOR.role);
+
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 88, { content_language: 'ja' });
+    expect(manager.insert).not.toHaveBeenCalled();
   });
 
   it('records nothing when the submitted title and body are identical to the stored ones', async () => {

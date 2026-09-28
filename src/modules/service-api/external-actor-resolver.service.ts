@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from '@entities/user.entity';
 import { BansService } from '../bans/bans.service';
 import { ExternalApiKeyContext, hasExternalScope } from './external-api-scopes';
+import { SiteConfigService } from '@config/site-profile';
 
 export interface ExternalActorSelector {
   user_id?: number;
@@ -17,6 +18,7 @@ export class ExternalActorResolverService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private bansService: BansService,
+    private siteConfig?: SiteConfigService,
   ) {}
 
   async resolveWritableActor(
@@ -74,10 +76,14 @@ export class ExternalActorResolverService {
   }
 
   async assertWritable(user: User, apiKey: ExternalApiKeyContext): Promise<void> {
-    if (!user.phone_verified && !hasExternalScope(apiKey.scopes, 'users:bypass_phone_verification')) {
+    if ((this.siteConfig?.current.verification.requireEmail ?? true) && !user.email_verified) {
+      throw new ForbiddenException({ code: 'EMAIL_VERIFICATION_REQUIRED', message: 'Verify your email address before continuing.' });
+    }
+    if ((this.siteConfig?.current.verification.requirePhoneForWrites ?? true)
+      && !user.phone_verified && !hasExternalScope(apiKey.scopes, 'users:bypass_phone_verification')) {
       throw new ForbiddenException({
-        code: 'PHONE_NOT_VERIFIED',
-        message: '指定账号未验证手机号，不能执行写操作',
+        code: 'PHONE_VERIFICATION_REQUIRED',
+        message: 'Verify your phone number before continuing.',
       });
     }
   }

@@ -3808,6 +3808,10 @@
             "type": "string",
             "description": "Legacy Markdown projection. May be omitted when content_json is supplied."
           },
+          "content_language": {
+            "type": "string",
+            "description": "User-selected language tag for this post; use unknown when unavailable."
+          },
           "content_json": {
             "description": "Tiptap / ProseMirror JSON source. The server validates against its allowlisted schema.",
             "allOf": [

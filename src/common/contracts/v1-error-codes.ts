@@ -17,6 +17,26 @@ export type V1ErrorCodeDefinition = {
 };
 
 export const V1_ERROR_CODES: Record<string, V1ErrorCodeDefinition> = {
+  CHALLENGE_REQUIRED: {
+    code: 'CHALLENGE_REQUIRED', httpStatus: 428, retryable: true,
+    defaultMessage: '此操作需要完成一次安全验证。',
+    description: 'A risk rule requires a short-lived, action-bound community challenge before retrying the operation.',
+  },
+  CHALLENGE_INVALID: {
+    code: 'CHALLENGE_INVALID', httpStatus: 400, retryable: false,
+    defaultMessage: '挑战验证未通过，请重新提交。',
+    description: 'The submitted challenge response is invalid or belongs to another action.',
+  },
+  CHALLENGE_EXPIRED: {
+    code: 'CHALLENGE_EXPIRED', httpStatus: 410, retryable: false,
+    defaultMessage: '挑战已过期或已使用，请重新提交。',
+    description: 'The challenge ticket expired or has already been consumed.',
+  },
+  CHALLENGE_PROVIDER_UNAVAILABLE: {
+    code: 'CHALLENGE_PROVIDER_UNAVAILABLE', httpStatus: 503, retryable: true,
+    defaultMessage: '挑战验证暂时不可用，请稍后重试。',
+    description: 'The configured challenge provider could not complete server-side verification.',
+  },
   // --- Authentication & Authorization ---
   AUTH_REQUIRED: {
     code: 'AUTH_REQUIRED',

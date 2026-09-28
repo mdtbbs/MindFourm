@@ -1,0 +1,101 @@
+{
+  "searchPage": {
+    "title": "検索",
+    "loginRequired": "検索するにはログインしてください",
+    "loginDescription": "検索はログイン後に利用できます。検索履歴は監査ログに記録されます。",
+    "login": "ログイン",
+    "blockedTitle": "この検索語は使用できません",
+    "blockedDescription": "検索語がサイトの検索ルールに合いません。別の語句をお試しください。",
+    "searchFailed": "検索に失敗しました",
+    "searchFailedDescription": "検索結果を取得できません。しばらくしてからもう一度お試しください。",
+    "backToSearch": "検索に戻る",
+    "results": "検索結果",
+    "resultCount": "{count} 件見つかりました",
+    "emptyResults": "一致する結果はありません",
+    "enterQuery": "検索語を入力してください",
+    "users": "メンバー",
+    "resources": "リソース",
+    "posts": "ディスカッション",
+    "servers": "サーバー",
+    "gameVersions": "ゲーム バージョン",
+    "knowledgeBase": "ナレッジベース",
+    "developerUpdates": "開発者の更新",
+    "latest": "最新",
+    "recentSearches": "最近の検索",
+    "clearHistory": "消去",
+    "popularSearches": "人気の検索"
+  },
+  "notices": {
+    "title": "コミュニティのお知らせ",
+    "updates": "コミュニティの最新情報",
+    "description": "メンテナンス、イベント、大切なルールの変更をここに掲載します。",
+    "pinned": "固定",
+    "viewDetails": "お知らせの詳細を見る。",
+    "communityTeam": "コミュニティ運営",
+    "readCount": "閲覧 {count} 回",
+    "empty": "お知らせはまだありません。",
+    "backHome": "コミュニティ ホームに戻る",
+    "lastUpdated": "最終更新: {date}",
+    "revisionHistory": "更新履歴",
+    "related": "関連するお知らせ",
+    "backToNotices": "お知らせ一覧に戻る",
+    "type": {
+      "system": "コミュニティ",
+      "maintenance": "メンテナンス",
+      "event": "イベント",
+      "policy": "ポリシー",
+      "release": "リリース"
+    }
+  },
+  "categoriesPage": {
+    "title": "カテゴリ",
+    "description": "ディスカッションのカテゴリ一覧",
+    "header": "すべてのカテゴリ",
+    "browseDescription": "コミュニティ、創作、ゲーム、サイト運営のディスカッションを閲覧できます。",
+    "empty": "カテゴリはまだありません",
+    "postCount": "ディスカッション {count} 件",
+    "groups": { "community": "コミュニティ", "creation": "創作", "game": "ゲーム", "meta": "サイト運営", "other": "その他" }
+  },
+  "contentLanguage": {
+    "label": "コンテンツの言語",
+    "unknown": "指定しない",
+    "hint": "投稿またはリソースの言語を選択してください。",
+    "languages": { "en": "英語", "ru": "ロシア語", "ja": "日本語", "zh-CN": "中国語（簡体字）", "es": "スペイン語", "de": "ドイツ語", "other": "その他" }
+  },
+  "discoverPage": {
+    "title": "見つける",
+    "description": "ルーム、リソース、コミュニティのお知らせを探す",
+    "intro": "マルチプレイヤールームからコミュニティのリソースやニュースまで、参加できるものを見つけましょう。",
+    "rooms": "マルチプレイヤールーム",
+    "roomsDescription": "プレイヤーが公開したルームを見る",
+    "resources": "リソースセンター",
+    "resourcesDescription": "コミュニティのリソースやツールを見る",
+    "notices": "コミュニティのお知らせ",
+    "noticesDescription": "最新のお知らせやイベントを見る",
+    "summary": "リソース: {resources} · ディスカッション: {discussions}"
+  },
+  "tagsPage": { "title": "タグ", "description": "ディスカッションのタグ一覧", "empty": "タグはまだありません。" },
+  "tagPage": {
+    "title": "タグ: {tag}",
+    "pageTitle": "タグ: {tag} · {page} ページ",
+    "description": "タグ {tag} のディスカッションとリソースを表示します。",
+    "empty": "このタグのディスカッションはまだありません。"
+  },
+  "categoryPage": {
+    "description": "{category} のディスカッション",
+    "pageTitle": "{category} · {page} ページ",
+    "categoryDescription": "このカテゴリのディスカッション一覧です。",
+    "emptyTitle": "ディスカッションはまだありません",
+    "emptyDescription": "最初の投稿をして会話を始めましょう。",
+    "createPost": "ディスカッションを始める"
+  },
+  "threadsPage": {
+    "title": "ディスカッション",
+    "description": "Mindustry コミュニティのディスカッション",
+    "loadFailed": "ディスカッションを読み込めませんでした",
+    "tryAgain": "しばらくしてからもう一度お試しください。",
+    "reload": "再読み込み",
+    "sortDescription": "最近のアクティビティ順に表示します。",
+    "empty": "ディスカッションはまだありません。"
+  }
+}

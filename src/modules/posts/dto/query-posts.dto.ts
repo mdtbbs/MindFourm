@@ -1,4 +1,4 @@
-import { IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { POST_SOURCES, type PostSource } from '@entities/post.entity';
 
@@ -55,6 +55,12 @@ export class QueryPostsDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  /** Filter by the author's declared content language. Free-form BCP-47 style values are accepted. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  content_language?: string;
 
   @IsOptional()
   @Type(() => Number)
