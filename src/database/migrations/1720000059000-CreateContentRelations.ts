@@ -19,15 +19,16 @@ export class CreateContentRelations1720000059000 implements MigrationInterface {
         INDEX idx_content_relation_source (source_type, source_id, relation_type)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    // Expand first and retain the legacy column during the compatibility window.
-    await queryRunner.query(`
-      INSERT IGNORE INTO content_relations
-        (source_type, source_id, target_type, target_id, relation_type, created_at)
-      SELECT 'post', id, 'game_server', CAST(server_id AS CHAR), 'related', CURRENT_TIMESTAMP
-        FROM posts WHERE server_id IS NOT NULL
-    `);
     const posts = await queryRunner.getTable('posts');
     if (posts?.findColumnByName('server_id')) {
+      // Some installations never had the legacy column. Copy old links only
+      // when it exists, before removing it from schemas that still use it.
+      await queryRunner.query(`
+        INSERT IGNORE INTO content_relations
+          (source_type, source_id, target_type, target_id, relation_type, created_at)
+        SELECT 'post', id, 'game_server', CAST(server_id AS CHAR), 'related', CURRENT_TIMESTAMP
+          FROM posts WHERE server_id IS NOT NULL
+      `);
       if (posts.indices.some((index) => index.name === 'idx_posts_server_id')) {
         await queryRunner.dropIndex('posts', 'idx_posts_server_id');
       }
