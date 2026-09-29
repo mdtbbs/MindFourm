@@ -99,10 +99,12 @@ async function main() {
       connectTimeout: 5000,
       maxRetriesPerRequest: 0,
       enableOfflineQueue: false,
+      lazyConnect: true,
       retryStrategy: () => null,
     });
     redis.on('error', () => {});
     try {
+      await redis.connect();
       check('Configured Club Redis is reachable', (await redis.ping()) === 'PONG');
     } finally {
       redis.disconnect();
