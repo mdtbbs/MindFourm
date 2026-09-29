@@ -58,7 +58,7 @@
     "marked": "^12.0.2",
     "multer": "^2.3.0",
     "mysql2": "^3.24.3",
-    "nodemailer": "^9.0.3",
+    "nodemailer": "^10.0.2",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.0",
     "sanitize-html": "^2.17.7",
