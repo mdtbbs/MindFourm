@@ -10,6 +10,7 @@ export interface PresenceData {
 
 /** Redis key pattern for presence data. TTL is 120s; LanLink renews every 60s. */
 export const PRESENCE_KEY_PREFIX = 'presence:';
+export const LANLINK_PRESENCE_KEY_PREFIX = 'presence:lanlink:';
 export const PRESENCE_TTL_SECONDS = 120;
 
 /** Minimum interval between friend_presence SSE pushes for the same user (seconds). */
@@ -19,7 +20,15 @@ export function presenceKey(userId: number): string {
   return `${PRESENCE_KEY_PREFIX}${userId}`;
 }
 
+export function lanlinkPresenceKey(userId: number): string {
+  return `${LANLINK_PRESENCE_KEY_PREFIX}${userId}`;
+}
+
 export function parsePresenceUserId(key: string): number | null {
+  if (key.startsWith(LANLINK_PRESENCE_KEY_PREFIX)) {
+    const id = parseInt(key.slice(LANLINK_PRESENCE_KEY_PREFIX.length), 10);
+    return Number.isFinite(id) ? id : null;
+  }
   if (!key.startsWith(PRESENCE_KEY_PREFIX)) return null;
   const id = parseInt(key.slice(PRESENCE_KEY_PREFIX.length), 10);
   return Number.isFinite(id) ? id : null;

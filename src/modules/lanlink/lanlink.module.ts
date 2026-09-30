@@ -10,6 +10,7 @@ import {
   ExternalLanLinkQuickCodeController,
   LanLinkQuickCodeController,
 } from './lanlink-quick-code.controller';
+import { ExternalLanLinkOAuthController } from './external-lanlink-oauth.controller';
 import { LanLinkQuickCodeService } from './lanlink-quick-code.service';
 import { LanLinkRoomsService } from './lanlink-rooms.service';
 import { LanLinkRoomsV1Controller } from './lanlink-rooms-v1.controller';
@@ -21,7 +22,7 @@ import { LanLinkRoomsV1Controller } from './lanlink-rooms-v1.controller';
     AuthModule,
     ServiceApiModule,
   ],
-  controllers: [LanLinkQuickCodeController, ExternalLanLinkQuickCodeController, LanLinkRoomsV1Controller],
+  controllers: [LanLinkQuickCodeController, ExternalLanLinkQuickCodeController, ExternalLanLinkOAuthController, LanLinkRoomsV1Controller],
   providers: [LanLinkQuickCodeService, LanLinkRoomsService, ExternalApiKeyGuard],
   exports: [LanLinkQuickCodeService],
 })

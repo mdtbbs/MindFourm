@@ -40,7 +40,7 @@ export class ExternalPresenceController {
       return { ok: false, error: 'No valid user_ids provided' };
     }
 
-    const presences = await this.presenceService.getPresences(userIds);
+    const presences = await this.presenceService.getCompatiblePresences(userIds);
     const result: Record<string, PresenceData> = {};
     for (const [id, data] of presences.entries()) {
       result[String(id)] = data;
@@ -76,7 +76,7 @@ export class ExternalPresenceController {
       return { ok: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` };
     }
 
-    await this.presenceService.setPresence(id, {
+    await this.presenceService.setLanLinkPresence(id, {
       ...body,
       updated_at: body.updated_at || Date.now(),
     });
@@ -96,7 +96,7 @@ export class ExternalPresenceController {
       return { ok: false, error: 'Invalid userId' };
     }
 
-    await this.presenceService.deletePresence(id);
+    await this.presenceService.deleteLanLinkPresence(id);
     return { ok: true };
   }
 }

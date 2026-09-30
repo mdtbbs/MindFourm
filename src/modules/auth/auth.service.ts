@@ -88,6 +88,7 @@ export type ClientAuthContext = {
   scopes: string[];
   clientType?: 'public' | 'confidential';
   partyType?: 'first_party' | 'third_party';
+  expiresAt?: number;
 };
 
 const LEGACY_FIRST_PARTY_SCOPES = [
@@ -367,6 +368,7 @@ export class AuthService {
           source: 'mindauth_oauth', clientId: token.client_id, scopes,
           clientType: token.client_type === 'public' ? 'public' : token.client_type === 'confidential' ? 'confidential' : undefined,
           partyType: token.party_type === 'third_party' ? 'third_party' : token.party_type === 'first_party' ? 'first_party' : undefined,
+          expiresAt: Number.isSafeInteger(token.exp) ? Number(token.exp) : undefined,
         },
       };
     } catch (error) {

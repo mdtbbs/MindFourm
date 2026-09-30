@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Query,
@@ -9,11 +10,41 @@ import { ExternalScope } from '@common/decorators/external-scope.decorator';
 import { SkipPhoneVerification } from '@common/decorators/skip-phone-verification.decorator';
 import { FriendsService } from './friends.service';
 
+function parsePositiveIntegerQuery(value: string | undefined, field: string): number {
+  if (typeof value !== 'string' || !/^\d+$/.test(value)) {
+    throw new BadRequestException(`Invalid ${field}`);
+  }
+
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new BadRequestException(`Invalid ${field}`);
+  }
+
+  return parsed;
+}
+
 @Controller('external/v1/friends')
 @SkipPhoneVerification()
 @UseGuards(ExternalApiKeyGuard)
 export class ExternalFriendsController {
   constructor(private readonly friendsService: FriendsService) {}
+
+  /**
+   * GET /api/external/v1/friends/check?user_id=N&friend_id=N
+   * Checks an accepted friendship in either direction.
+   */
+  @Get('check')
+  @ExternalScope('friends:read')
+  async checkFriendship(
+    @Query('user_id') userId: string,
+    @Query('friend_id') friendId: string,
+  ) {
+    const user = parsePositiveIntegerQuery(userId, 'user_id');
+    const friend = parsePositiveIntegerQuery(friendId, 'friend_id');
+    const isFriend = await this.friendsService.areFriends(user, friend);
+
+    return { ok: true, is_friend: isFriend };
+  }
 
   /**
    * GET /api/external/v1/friends?user_id=N

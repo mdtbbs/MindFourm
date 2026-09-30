@@ -10,6 +10,7 @@ import {
   PRESENCE_TTL_SECONDS,
   PRESENCE_PUSH_COOLDOWN_SECONDS,
   presenceKey,
+  lanlinkPresenceKey,
   parsePresenceUserId,
 } from './presence.data';
 
@@ -63,6 +64,15 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     await this.redisService.del(key);
   }
 
+  /** Store LanLink's legacy room activity in its separate compatibility key. */
+  async setLanLinkPresence(userId: number, data: PresenceData): Promise<void> {
+    await this.redisService.set(lanlinkPresenceKey(userId), JSON.stringify(data), PRESENCE_TTL_SECONDS);
+  }
+
+  async deleteLanLinkPresence(userId: number): Promise<void> {
+    await this.redisService.del(lanlinkPresenceKey(userId));
+  }
+
   /**
    * Read presence data for a single user.
    */
@@ -112,6 +122,44 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     }
 
     return result;
+  }
+
+  /** Read LanLink's short-lived legacy activity without mixing its Redis key with OAuth Presence. */
+  async getLanLinkPresences(userIds: number[]): Promise<Map<number, PresenceData>> {
+    const result = new Map<number, PresenceData>();
+    if (userIds.length === 0) return result;
+    const keys = userIds.map((id) => lanlinkPresenceKey(id));
+    const client = this.redisService.getClient();
+    let values: (string | null)[];
+    try {
+      values = await client.mget(...keys);
+    } catch {
+      values = await Promise.all(keys.map((key) => this.redisService.get(key)));
+    }
+    for (let index = 0; index < userIds.length; index++) {
+      const raw = values[index];
+      if (!raw) continue;
+      try { result.set(userIds[index], JSON.parse(raw) as PresenceData); }
+      catch { /* Ignore malformed compatibility records. */ }
+    }
+    return result;
+  }
+
+  /** Return the newest visible source to existing External API callers. */
+  async getCompatiblePresences(userIds: number[]): Promise<Map<number, PresenceData>> {
+    const [current, lanlink] = await Promise.all([
+      this.getPresences(userIds),
+      this.getLanLinkPresences(userIds),
+    ]);
+    for (const userId of userIds) {
+      const currentValue = current.get(userId);
+      const lanlinkValue = lanlink.get(userId);
+      if (!lanlinkValue || lanlinkValue.status === 'offline') continue;
+      if (!currentValue || currentValue.status === 'offline' || lanlinkValue.updated_at > currentValue.updated_at) {
+        current.set(userId, lanlinkValue);
+      }
+    }
+    return current;
   }
 
   /**
