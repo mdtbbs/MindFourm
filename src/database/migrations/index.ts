@@ -59,6 +59,7 @@ import { AllowUsersWithoutEmail1720000100000 } from './1720000100000-AllowUsersW
 import { ResourceIntegrityAndMerge1720000110000 } from './1720000110000-ResourceIntegrityAndMerge';
 import { AddInternationalCommunityFields1720000120000 } from './1720000120000-AddInternationalCommunityFields';
 import { AddResourceOriginIdentity1720000130000 } from './1720000130000-AddResourceOriginIdentity';
+import { RichContentSchemaV21720000140000 } from './1720000140000-RichContentSchemaV2';
 
 /**
  * Migrations in run order.
@@ -129,4 +130,5 @@ export const migrations = [
   ResourceIntegrityAndMerge1720000110000,
   AddInternationalCommunityFields1720000120000,
   AddResourceOriginIdentity1720000130000,
+  RichContentSchemaV21720000140000,
 ];

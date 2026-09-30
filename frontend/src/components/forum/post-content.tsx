@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import RichContentRenderer from '@/components/ui/rich-content-renderer';
 import { useToast } from '@/lib/toast/context';
 import { Post, UserRole } from '@/types';
 import Badge from '@/components/ui/badge';
@@ -179,7 +179,7 @@ export default function PostContent({
 
       {/* Content */}
       <div className="min-h-[100px] px-5 py-6 text-[16px] leading-8 sm:px-6" data-testid="post-content">
-        <MarkdownRenderer content={post.content} className="text-[var(--text)]" />
+        <RichContentRenderer json={post.content_json} markdownFallback={post.content} className="text-[var(--text)]" />
       </div>
 
       {/* Actions */}

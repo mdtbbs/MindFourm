@@ -169,6 +169,8 @@ export class ExternalApiController {
       {
         title: body.title,
         content: body.content,
+        content_json: body.content_json,
+        content_schema_version: body.content_schema_version,
         category_id: body.category_id,
         server_id: body.server_id,
         required_group_id: body.required_group_id,
@@ -243,6 +245,8 @@ export class ExternalApiController {
       {
         title: body.title,
         content: body.content,
+        content_json: body.content_json,
+        content_schema_version: body.content_schema_version,
         category_id: body.category_id,
         server_id: body.server_id,
         required_group_id: body.required_group_id,
@@ -324,6 +328,8 @@ export class ExternalApiController {
       id,
       {
         content: body.content,
+        content_json: body.content_json,
+        content_schema_version: body.content_schema_version,
         parent_reply_id: body.parent_reply_id,
       },
       actor.id,
@@ -377,6 +383,8 @@ export class ExternalApiController {
       body.content,
       actor.id,
       "admin",
+      body.content_json,
+      body.content_schema_version,
     );
     await this.auditOperation(
       req,
@@ -564,6 +572,8 @@ export class ExternalApiController {
         external_url: body.external_url,
         version: body.version.trim(),
         content: body.content,
+        content_json: body.content_json,
+        content_schema_version: body.content_schema_version,
         category_id: body.category_id as any,
         is_public: body.is_public as any,
       },
@@ -631,6 +641,8 @@ export class ExternalApiController {
         external_url: body.external_url,
         version: body.version,
         content: body.content,
+        content_json: body.content_json,
+        content_schema_version: body.content_schema_version,
         category_id: body.category_id as any,
         is_public: body.is_public as any,
       },

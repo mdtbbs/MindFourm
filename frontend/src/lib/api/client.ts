@@ -1,4 +1,4 @@
-import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse, QuickCodeStatus, QuickCodeGenerateResponse, QuickCodeResetResponse, ResourceComment, ResourceCommentListResponse } from '@/types';
+import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, AttachmentDraft, CustomEmojiSummary, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse, QuickCodeStatus, QuickCodeGenerateResponse, QuickCodeResetResponse, ResourceComment, ResourceCommentListResponse } from '@/types';
 import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/response';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
@@ -461,19 +461,26 @@ export const postApi = {
       search: params?.search,
     })}`),
   getById: (id: number) => request<Post>(`/api/posts/${id}`),
+  getQuoteAvailability: (postId: number, replyId?: number) => request<{ available: true }>(
+    replyId === undefined
+      ? `/api/posts/${postId}/quote-availability`
+      : `/api/posts/${postId}/replies/${replyId}/quote-availability`,
+  ),
   create: (input: CreatePostInput, challenge?: CommunityChallengeProof) => {
     clearCache();
+    const payload = input.content_json ? { ...input, content_schema_version: input.content_schema_version ?? 2 } : input;
     return request<Post>('/api/posts', {
       method: 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
       ...(challenge ? { headers: { 'X-Forum-Challenge-Token': challenge.token, 'X-Forum-Challenge-Response': challenge.response } } : {}),
     });
   },
   update: (id: number, input: Partial<CreatePostInput>) => {
     clearCache();
+    const payload = input.content_json ? { ...input, content_schema_version: input.content_schema_version ?? 2 } : input;
     return request<Post>(`/api/posts/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
     });
   },
   delete: (id: number) => {
@@ -528,17 +535,18 @@ export const replyApi = {
     })}`),
   create: (postId: number, input: CreateReplyInput, challenge?: CommunityChallengeProof) => {
     clearCache();
+    const payload = input.content_json ? { ...input, content_schema_version: input.content_schema_version ?? 2 } : input;
     return request<Reply>(`/api/posts/${postId}/replies`, {
       method: 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
       ...(challenge ? { headers: { 'X-Forum-Challenge-Token': challenge.token, 'X-Forum-Challenge-Response': challenge.response } } : {}),
     });
   },
-  update: (id: number, content: string, contentJson?: Record<string, unknown>) => {
+  update: (id: number, content: string, contentJson?: Record<string, unknown>, contentSchemaVersion?: number) => {
     clearCache();
     return request<Reply>(`/api/replies/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ content, content_json: contentJson }),
+      body: JSON.stringify({ content, content_json: contentJson, content_schema_version: contentJson ? (contentSchemaVersion ?? 2) : undefined }),
     });
   },
   delete: (id: number) => {
@@ -1137,6 +1145,11 @@ export const likeApi = {
 
 // Attachment APIs
 export const attachmentApi = {
+  createDrafts: (formData: FormData) =>
+    request<{ drafts: AttachmentDraft[] }>('/api/attachments/drafts', {
+      method: 'POST',
+      body: formData,
+    }),
   upload: (formData: FormData) =>
     request<{ message: string; attachments: Attachment[] }>('/api/attachments/upload', {
       method: 'POST',
@@ -1146,9 +1159,15 @@ export const attachmentApi = {
     request<Attachment[]>(`/api/attachments/post/${postId}`),
   getByReply: (replyId: number) =>
     request<Attachment[]>(`/api/attachments/reply/${replyId}`),
+  getById: (id: number) =>
+    request<Attachment>(`/api/attachments/${id}`),
   download: (id: number) => `${API_BASE}/api/attachments/${id}/download`,
   preview: (id: number) => `${API_BASE}/api/attachments/${id}/preview`,
   renderStatus: (id: number) => request<Attachment>(`/api/attachments/${id}/render-status`),
+};
+
+export const customEmojiApi = {
+  listEnabled: () => request<CustomEmojiSummary[]>('/api/custom-emojis'),
 };
 
 export interface PublicImageUploadResult {

@@ -180,7 +180,8 @@ authTest.describe('Post Creation (Authenticated)', () => {
     }
 
     await authenticatedPage.getByRole('button', { name: '更多编辑工具' }).click();
-    await expect(authenticatedPage.getByTitle('Markdown 源码')).toBeVisible();
+    await expect(authenticatedPage.getByTestId('rich-task-list')).toBeVisible();
+    await expect(authenticatedPage.getByTitle('Markdown 源码')).toHaveCount(0);
   });
 
   authTest('should access new post page', async ({ authenticatedPage }) => {
@@ -193,10 +194,8 @@ authTest.describe('Post Creation (Authenticated)', () => {
     const titleInput = authenticatedPage.getByPlaceholder('请输入帖子标题');
     const contentInput = authenticatedPage.getByTestId('post-content-editor');
 
-    if (await titleInput.isVisible().catch(() => false)) {
-      authExpect(await titleInput.isVisible()).toBeTruthy();
-      authExpect(await contentInput.isVisible()).toBeTruthy();
-    }
+    await authExpect(titleInput).toBeVisible();
+    await authExpect(contentInput).toBeVisible();
   });
 
   authTest('should create a new post', async ({ authenticatedPage }) => {
@@ -209,21 +208,21 @@ authTest.describe('Post Creation (Authenticated)', () => {
     const titleInput = authenticatedPage.getByPlaceholder('请输入帖子标题');
     const contentInput = authenticatedPage.getByTestId('post-content-editor');
 
-    if (await titleInput.isVisible()) {
-      await titleInput.fill(uniqueTitle);
-      await contentInput.fill(content);
+    await authExpect(titleInput).toBeVisible();
+    await authExpect(contentInput).toBeVisible();
+    await titleInput.fill(uniqueTitle);
+    await contentInput.fill(content);
 
-      // Submit post
-      await authenticatedPage.click('[data-testid="publish-button"]');
+    // Submit post
+    await authenticatedPage.click('[data-testid="publish-button"]');
 
-      // Wait for redirect to post detail
-      await authenticatedPage.waitForURL(/posts\/\d+/, { timeout: 15000 });
+    // Wait for redirect to post detail
+    await authenticatedPage.waitForURL(/posts\/\d+/, { timeout: 15000 });
 
-      // Verify post was created
-      authExpect(authenticatedPage.url()).toContain('/posts/');
-      authExpect(await authenticatedPage.locator('h1').textContent()).toContain(uniqueTitle);
-      await authExpect(authenticatedPage.locator('[data-testid="post-content"] code')).toHaveText('inline code');
-    }
+    // Verify post was created
+    authExpect(authenticatedPage.url()).toContain('/posts/');
+    authExpect(await authenticatedPage.locator('h1').textContent()).toContain(uniqueTitle);
+    await authExpect(authenticatedPage.locator('[data-testid="post-content"] code')).toHaveText('inline code');
   });
 
   authTest('should auto-save draft', async ({ authenticatedPage }) => {
@@ -244,10 +243,9 @@ authTest.describe('Post Creation (Authenticated)', () => {
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Draft should be restored
-    if (await titleInput.isVisible().catch(() => false)) {
-      const titleValue = await titleInput.inputValue();
-      authExpect(titleValue).toContain('Draft Test Post');
-    }
+    await authExpect(titleInput).toBeVisible();
+    const titleValue = await titleInput.inputValue();
+    authExpect(titleValue).toContain('Draft Test Post');
   });
 
   authTest('should validate required fields', async ({ authenticatedPage }) => {
@@ -255,15 +253,13 @@ authTest.describe('Post Creation (Authenticated)', () => {
 
     // Try to submit empty post
     const publishButton = authenticatedPage.locator('[data-testid="publish-button"]');
-    if (await publishButton.isVisible().catch(() => false)) {
-      await publishButton.click();
+    await authExpect(publishButton).toBeVisible();
+    await publishButton.click();
 
-      // Should show validation error
-      const errorMessage = authenticatedPage.locator('[data-testid="error-message"]');
-      if (await errorMessage.isVisible().catch(() => false)) {
-        authExpect(await errorMessage.textContent()).toBeTruthy();
-      }
-    }
+    // Should show validation error
+    const errorMessage = authenticatedPage.locator('[data-testid="error-message"]');
+    await authExpect(errorMessage).toBeVisible();
+    authExpect(await errorMessage.textContent()).toBeTruthy();
   });
 });
 
@@ -301,12 +297,10 @@ authTest.describe('Post Interactions (Authenticated)', () => {
 
     // Find reply input
     const replyInput = authenticatedPage.locator('[data-testid="reply-input"]');
-    if (await replyInput.isVisible().catch(() => false)) {
-      await replyInput.fill('E2E Test Reply');
-      await authenticatedPage.click('[data-testid="submit-reply"]');
-
-      // Wait for reply to appear
-      await authenticatedPage.waitForTimeout(2000);
-    }
+    await authExpect(replyInput).toBeVisible();
+    const replyText = `E2E Test Reply ${Date.now()}`;
+    await replyInput.fill(replyText);
+    await authenticatedPage.getByTestId('submit-reply').click();
+    await authExpect(authenticatedPage.getByText(replyText, { exact: true })).toBeVisible({ timeout: 15000 });
   });
 });

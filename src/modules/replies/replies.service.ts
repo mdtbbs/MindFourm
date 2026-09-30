@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Reply } from '../../entities/reply.entity';
 import { Post } from '../../entities/post.entity';
 import { User } from '../../entities/user.entity';
@@ -8,13 +8,16 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AdminNotificationsService } from '../admin-notifications/admin-notifications.service';
 import { EventBusService } from '../plugins/event-bus.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
-import { resolveContentSource } from '../../common/utils/tiptap-content.util';
+import { collectDraftAttachmentTokens, collectTiptapMentionIds, replaceDraftAttachmentTokens, resolveContentSource } from '../../common/utils/tiptap-content.util';
 import { PointsService } from '../points/points.service';
 import { SettingsService } from '../settings/settings.service';
 import { RedisService } from '../../database/redis.service';
 import { REPLY_STATUS } from '../../common/utils/constants';
 import { ContentSafetyService } from '../content-safety/content-safety.service';
 import { PostActivityService } from '../posts/post-activity.service';
+import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
+import { AttachmentsService } from '../attachments/attachments.service';
+import { PostsService } from '../posts/posts.service';
 
 @Injectable()
 export class RepliesService {
@@ -33,6 +36,10 @@ export class RepliesService {
     private redisService: RedisService,
     private postActivityService: PostActivityService,
     private contentSafety?: ContentSafetyService,
+    @Optional() private customEmojis?: CustomEmojisService,
+    @Optional() private dataSource?: DataSource,
+    @Optional() private attachmentsService?: AttachmentsService,
+    @Optional() private postsService?: PostsService,
   ) {}
 
   async createReplyForPost(
@@ -44,7 +51,12 @@ export class RepliesService {
     // Execute "before" hook
     let modifiedDto = await this.eventBus.execute('reply.create', { ...dto, postId, userId });
     dto = modifiedDto;
-    const contentSource = resolveContentSource(dto.content, dto.content_json);
+    const richJsonWrite = dto.content_json !== undefined && dto.content_json !== null;
+    const canonicalJson = dto.content_json && this.customEmojis
+      ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, false, true)
+      : dto.content_json;
+    await this.canonicalizeMentionSnapshots(canonicalJson);
+    const contentSource = resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true });
     const content = contentSource.content;
     dto.content = content;
     const parent_reply_id = dto.parent_reply_id;
@@ -100,6 +112,7 @@ export class RepliesService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+    await this.postsService?.assertDocumentQuoteVisibility(contentSource.content_json, { id: userId, role: user.role });
 
     const risk = this.contentSafety
       ? await this.contentSafety.assess(content, { actorId: userId, surface: 'reply' })
@@ -115,13 +128,14 @@ export class RepliesService {
       content_html: contentHtml,
       content_json: contentSource.content_json,
       content_text: contentSource.content_text,
+      content_schema_version: contentSource.content_schema_version,
       status: requiresApproval ? REPLY_STATUS.pending : REPLY_STATUS.published,
       like_count: 0,
       ip_address: provenance.ipAddress || null,
       location_label: provenance.locationLabel || null,
     });
 
-    const savedReply = await this.replyRepository.save(newReply);
+    const savedReply = await this.saveReplyWithAttachments(newReply, contentSource.content_json, userId);
     if (savedReply.status === REPLY_STATUS.published) {
       await this.postActivityService.markPostActive(postId, savedReply.created_at || new Date());
     }
@@ -143,12 +157,13 @@ export class RepliesService {
     }
 
     if (savedReply.status === 'published') {
-      await this.notificationsService.notifyMentionedUsers(
-        content,
-        postId,
-        userId,
-        savedReply.id,
-      );
+      if (richJsonWrite) {
+        await this.notificationsService.notifyMentionedUserIds(
+          collectTiptapMentionIds(savedReply.content_json), postId, userId, content, savedReply.id,
+        );
+      } else {
+        await this.notificationsService.notifyMentionedUsers(content, postId, userId, savedReply.id);
+      }
 
       // Award points for creating reply
       await this.awardPointsForReply(savedReply.id, userId);
@@ -218,7 +233,7 @@ export class RepliesService {
     return reply;
   }
 
-  async update(id: number, content: string | undefined, userId: number, userRole?: string, contentJson?: unknown): Promise<Reply> {
+  async update(id: number, content: string | undefined, userId: number, userRole?: string, contentJson?: unknown, schemaVersion?: number): Promise<Reply> {
     const reply = await this.replyRepository.findOne({
       where: { id },
     });
@@ -236,16 +251,26 @@ export class RepliesService {
       throw new ForbiddenException('Cannot update deleted reply');
     }
 
-    const contentSource = resolveContentSource(content, contentJson);
-
-    // Update reply
+    const richJsonWrite = contentJson !== undefined && contentJson !== null;
+    const canonicalJson = contentJson && this.customEmojis
+      ? await this.customEmojis.canonicalizeDocument(contentJson, schemaVersion || 1, false, true)
+      : contentJson;
+    await this.canonicalizeMentionSnapshots(canonicalJson);
+    const previousMentionIds = reply.content_json ? collectTiptapMentionIds(reply.content_json) : [];
+    const contentSource = resolveContentSource(content, canonicalJson, schemaVersion, { allowDraftAttachments: true });
+    if (richJsonWrite) await this.postsService?.assertDocumentQuoteVisibility(contentSource.content_json, { id: userId, role: userRole || 'user' });
     reply.content = contentSource.content;
     reply.content_html = contentSource.content_html;
     reply.content_json = contentSource.content_json;
     reply.content_text = contentSource.content_text;
+    reply.content_schema_version = contentSource.content_schema_version;
     reply.updated_at = new Date();
 
-    const saved = await this.replyRepository.save(reply);
+    const saved = await this.saveReplyWithAttachments(reply, contentSource.content_json, userId);
+    if (richJsonWrite && saved.status === REPLY_STATUS.published) {
+      const added = collectTiptapMentionIds(saved.content_json).filter((mentionId) => !previousMentionIds.includes(mentionId));
+      if (added.length) await this.notificationsService.notifyMentionedUserIds(added, saved.post_id, userId, saved.content, saved.id);
+    }
     await this.invalidatePostCache(reply.post_id);
     return saved;
   }
@@ -280,5 +305,47 @@ export class RepliesService {
     await this.redisService.del(`post:${postId}`);
     await this.redisService.del(`post:detail:v6:${postId}`);
     await this.redisService.del(`post_view:${postId}`);
+  }
+
+  private async saveReplyWithAttachments(reply: Reply, document: Record<string, any>, userId: number): Promise<Reply> {
+    if (!this.dataSource) return this.replyRepository.save(reply);
+    return this.dataSource.transaction(async (manager: EntityManager) => {
+      const saved = await manager.save(Reply, reply);
+      let finalDocument = document;
+      if (this.attachmentsService) {
+        const tokens = collectDraftAttachmentTokens(document);
+        if (tokens.length) {
+          const bound = await this.attachmentsService.bindDraftsInTransaction(manager, tokens, userId, { type: 'reply', id: saved.id });
+          finalDocument = replaceDraftAttachmentTokens(document, bound);
+          const contentSource = resolveContentSource(undefined, finalDocument, 2);
+          await manager.update(Reply, saved.id, {
+            content: contentSource.content,
+            content_html: contentSource.content_html,
+            content_json: contentSource.content_json as any,
+            content_text: contentSource.content_text,
+            content_schema_version: contentSource.content_schema_version,
+          });
+          Object.assign(saved, contentSource);
+        }
+        await this.attachmentsService.assertDocumentAttachmentsInTransaction(manager, finalDocument, { type: 'reply', id: saved.id });
+      } else if (collectDraftAttachmentTokens(document).length) {
+        throw new BadRequestException({ code: 'ATTACHMENT_DRAFT_UNAVAILABLE' });
+      }
+      return saved;
+    });
+  }
+
+  private async canonicalizeMentionSnapshots(document: unknown): Promise<void> {
+    if (!document || typeof document !== 'object') return;
+    const ids = collectTiptapMentionIds(document);
+    if (!ids.length) return;
+    const users = await this.userRepository.find({ where: ids.map((id) => ({ id })), select: { id: true, username: true } });
+    const byId = new Map(users.map((user) => [user.id, user.username]));
+    for (const id of ids) if (!byId.has(id)) throw new BadRequestException({ code: 'INVALID_MENTION_USER', details: { userId: id } });
+    const visit = (node: Record<string, any>) => {
+      if (node.type === 'mention') node.attrs.username = byId.get(Number(node.attrs.userId));
+      for (const child of node.content || []) visit(child);
+    };
+    visit(document as Record<string, any>);
   }
 }

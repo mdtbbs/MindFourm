@@ -36,6 +36,7 @@ import { ResourcePreviewService } from './resource-preview.service';
 import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
 import { ResourcesV1WriteController } from './v1/resources-v1-write.controller';
 import { ResourceDuplicateService } from './resource-duplicate.service';
+import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ResourceDuplicateService } from './resource-duplicate.service';
     SettingsModule,
     LogsModule,
     NavigationModule,
+    CustomEmojisModule,
     TypeOrmModule.forFeature([Resource, ResourceUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription]),
   ],
   providers: [OAuthScopeGuard, ResourceDuplicateService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],

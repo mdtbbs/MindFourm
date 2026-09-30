@@ -23,6 +23,7 @@ export interface PostDetailReply {
   content_format: 'tiptap_json';
   content_html: string | null;
   content_json: Record<string, unknown> | null;
+  content_schema_version: number;
   content_text: string | null;
   status: string;
   like_count: number;
@@ -48,6 +49,7 @@ export interface PostDetailDto {
   content_format: 'tiptap_json';
   content_html: string | null;
   content_json: Record<string, unknown> | null;
+  content_schema_version: number;
   content_text: string | null;
   status: string;
   is_pinned: boolean;
@@ -112,6 +114,7 @@ export class PostDetailService {
       content_format: 'tiptap_json',
       content_html: post.content_html || null,
       content_json: post.content_json || null,
+      content_schema_version: post.content_schema_version || 2,
       content_text: post.content_text || null,
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
@@ -150,6 +153,7 @@ export class PostDetailService {
       content_format: 'tiptap_json',
       content_html: reply.content_html || null,
       content_json: reply.content_json || null,
+      content_schema_version: reply.content_schema_version || 2,
       content_text: reply.content_text || null,
       status: reply.status,
       like_count: reply.like_count,

@@ -1,10 +1,13 @@
 import {
   Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn,
+  Index,
 } from 'typeorm';
 import { Post } from './post.entity';
 import { Reply } from './reply.entity';
 import { User } from './user.entity';
 
+@Index('uq_attachments_draft_token_hash', ['draft_token_hash'], { unique: true })
+@Index('idx_attachments_draft_expiry', ['draft_expires_at'])
 @Entity('attachments')
 export class Attachment {
   @PrimaryGeneratedColumn()
@@ -37,7 +40,16 @@ export class Attachment {
   // New uploads remain in the non-public quarantine until a moderator accepts
   // them. Legacy rows are backfilled as approved by the migration.
   @Column({ type: 'varchar', length: 20, default: 'pending' })
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'draft' | 'pending' | 'approved' | 'rejected';
+
+  @Column({ type: 'char', length: 64, nullable: true })
+  draft_token_hash: string | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  draft_expires_at: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  draft_bound_at: Date | null;
 
   // MDT-Forge processing is asynchronous. The original attachment stays the
   // source of truth while these fields let post and reply UIs show a safe,

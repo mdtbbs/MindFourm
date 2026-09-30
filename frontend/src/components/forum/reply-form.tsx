@@ -28,7 +28,7 @@ export default function ReplyForm({ postId, onReplyCreated }: ReplyFormProps) {
   const clearComposeTarget = useReplyComposeStore((state) => state.clear);
 
   const handleSubmit = async (content: string, parentReplyId?: number, contentJson?: Record<string, unknown>, proof?: CommunityChallengeProof) => {
-    const reply = await replyApi.create(postId, { content, content_json: contentJson, parent_reply_id: parentReplyId }, proof);
+    const reply = await replyApi.create(postId, { content, content_json: contentJson, content_schema_version: contentJson ? 2 : undefined, parent_reply_id: parentReplyId }, proof);
     clearComposeTarget();
     onReplyCreated?.(reply);
   };

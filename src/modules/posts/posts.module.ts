@@ -23,6 +23,8 @@ import { PostDetailService } from './post-detail.service';
 import { PostRevisionsService } from './post-revisions.service';
 import { PostActivityService } from './post-activity.service';
 import { SearchModule } from '../search/search.module';
+import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
+import { AttachmentsModule } from '../attachments/attachments.module';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { SearchModule } from '../search/search.module';
     AdminNotificationsModule,
     SettingsModule,
     SearchModule,
+    CustomEmojisModule,
+    AttachmentsModule,
     LogsModule,
     TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision, ContentRelation]),
   ],

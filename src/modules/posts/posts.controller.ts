@@ -100,6 +100,24 @@ export class PostsController {
     });
   }
 
+  @Get(':postId/replies/:replyId/quote-availability')
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
+  async getReplyQuoteAvailability(
+    @Param('postId', ParseIntPipe) postId: number,
+    @Param('replyId', ParseIntPipe) replyId: number,
+    @Req() req: any,
+  ) {
+    return this.postsService.assertQuoteVisible(postId, req?.user, replyId);
+  }
+
+  @Get(':postId/quote-availability')
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
+  async getPostQuoteAvailability(@Param('postId', ParseIntPipe) postId: number, @Req() req: any) {
+    return this.postsService.assertQuoteVisible(postId, req?.user);
+  }
+
   /**
    * GET /api/posts/:id - Get post detail with replies
    */

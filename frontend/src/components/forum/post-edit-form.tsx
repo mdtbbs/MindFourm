@@ -93,6 +93,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
         title: trimmedTitle,
         content,
         content_json: contentJson || undefined,
+        content_schema_version: contentJson ? 2 : undefined,
         content_language: contentLanguage || 'unknown',
         category_id: categoryId,
         tags: tagsInput
@@ -166,7 +167,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
             onChange={setContent}
             jsonValue={contentJson}
             onJsonChange={setContentJson}
-            testId="post-edit-content"
+            testId="post-content-editor"
             id="post-content"
             ariaLabel={t('postEdit.content')}
             placeholder={t('postEdit.contentPlaceholder')}

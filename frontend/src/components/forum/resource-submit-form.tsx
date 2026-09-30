@@ -189,7 +189,10 @@ export default function ResourceSubmitForm() {
       if (categoryId) formData.append('category_id', String(categoryId));
       formData.append('is_public', isPublic ? '1' : '0');
       if (content.trim()) formData.append('content', content.trim());
-      if (contentJson) formData.append('content_json', JSON.stringify(contentJson));
+      if (contentJson) {
+        formData.append('content_json', JSON.stringify(contentJson));
+        formData.append('content_schema_version', '2');
+      }
 
       if (isSchematic && schematicSource === 'paste') {
         formData.append('schematic_code', schematicCode.trim());
@@ -432,6 +435,7 @@ export default function ResourceSubmitForm() {
           onChange={setContent}
           jsonValue={contentJson}
           onJsonChange={setContentJson}
+          context="resource"
           ariaLabel={t('resourceSubmit.resourceBody')}
           placeholder={t('resourceSubmit.longDescriptionPlaceholder')}
           minHeight="260px"

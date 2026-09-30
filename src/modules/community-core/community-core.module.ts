@@ -14,6 +14,7 @@ import { BookmarksV1Module } from '../bookmarks/v1/bookmarks-v1.module';
 import { LikesModule } from '../likes/likes.module';
 import { MessagesModule } from '../messages/messages.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
+import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
 import { AdminModule } from '../admin/admin.module';
 import { BansModule } from '../bans/bans.module';
 import { StatsModule } from '../stats/stats.module';
@@ -51,7 +52,7 @@ import { PortalModule } from '../portal/portal.module';
   imports: [
     AuthModule, MobileAuthV1Module, PostsModule, RepliesModule, UsersModule, UsersV1Module,
     CategoriesModule, TagsModule, NotificationsModule, AdminNotificationsModule, BookmarksModule,
-    BookmarksV1Module, LikesModule, MessagesModule, AttachmentsModule, AdminModule, BansModule,
+    BookmarksV1Module, LikesModule, MessagesModule, AttachmentsModule, CustomEmojisModule, AdminModule, BansModule,
     StatsModule, SettingsModule, LogsModule, PointsModule, LevelsModule, BadgesModule, FollowsModule,
     GroupsModule, ShopModule, RssModule, PluginsModule, SearchModule, ServiceApiModule, ReportsModule,
     UserBlocksModule, ReactionsModule, UploadsModule, FriendsModule, PresenceModule, CapabilitiesModule,

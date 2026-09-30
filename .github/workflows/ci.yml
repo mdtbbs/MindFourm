@@ -33,6 +33,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The Tiptap/backend contract suite loads the production editor extensions
+      # through Jest aliases into frontend/src and frontend/node_modules.
+      - name: Install frontend dependencies for editor contract tests
+        working-directory: frontend
+        run: npm ci
+
       - name: Build backend
         run: npm run build:backend
 

@@ -11,7 +11,7 @@ describe('ThreadWriteV1Controller', () => {
   it('projects a created thread without audit fields', async () => {
     posts.create.mockResolvedValue({ id: 12, title: 'hello', content: 'body', status: 'published', ip_address: '127.0.0.1', created_at: new Date('2026-01-02T03:04:05.000Z') });
     await expect(controller.createThread({ title: 'hello', content: 'body' }, req)).resolves.toEqual({
-      id: 12, public_id: null, title: 'hello', content: 'body', content_format: 'tiptap_json', content_html: null, content_json: null, content_text: null,
+      id: 12, public_id: null, title: 'hello', content: 'body', content_format: 'tiptap_json', content_schema_version: 2, content_html: null, content_json: null, content_text: null,
       status: 'published', created_at: '2026-01-02T03:04:05.000Z', updated_at: null,
     });
     expect(posts.create).toHaveBeenCalledWith({ title: 'hello', content: 'body' }, 7, expect.objectContaining({ ipAddress: '127.0.0.1' }));

@@ -1,6 +1,7 @@
 import {
-  IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, IsArray, ValidateNested, MaxLength,
+  IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, IsUrl, ValidateIf, IsArray, ValidateNested, IsObject, IsInt, Min, Max, MaxLength,
 } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { TiptapDocumentDto } from '../../../common/dto/tiptap-document.dto';
 import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
@@ -80,10 +81,14 @@ export class CreateResourceDto {
   @IsString()
   content?: string;
 
+  @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Rich Content Schema v2 source; Markdown is a compatibility projection.' })
   @IsOptional()
-  @ValidateNested()
-  @Type(() => TiptapDocumentDto)
-  content_json?: TiptapDocumentDto;
+  @IsObject()
+  content_json?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: [2] })
+  @IsOptional() @IsInt() @Min(1) @Max(2)
+  content_schema_version?: number;
 
   @IsOptional()
   @Type(() => Number)

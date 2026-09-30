@@ -97,9 +97,11 @@ MindFourm 对 opaque Bearer 的 introspection 与 UserInfo 身份信息使用 Re
 | POST | `/api/v1/threads/{id}/replies` | `forum.write` | 创建 reply |
 | POST | `/api/v1/uploads/images` | `forum.write` | 正文图片上传；还受图片上传站点开关控制 |
 
-Thread/reply/资源长描述提供兼容 Markdown/HTML 字段和 `content_format: "tiptap_json"`、`content_json`、`content_html`、`content_text`。JSON 是富文本的规范化存储格式；服务端会按允许的 ProseMirror 节点、marks、URL 和大小规则校验并重新生成安全 HTML。旧客户端可以继续使用 `content` Markdown 字段。
+Thread/reply/资源长描述提供兼容 Markdown/HTML 字段和 `content_format: "tiptap_json"`、`content_schema_version`、`content_json`、`content_html`、`content_text`。新客户端应写入 `content_schema_version: 2` 与 `content_json`；JSON 是正文的规范来源，Markdown `content` 只作为兼容、搜索、通知等投影。服务端会按版本校验 ProseMirror 节点、marks、URL 和属性，再重新生成安全 HTML。旧客户端可以继续只传 `content`，服务端会将 Markdown 转换为 v2 JSON。
 
-创建/更新内容时可发送 `content_json`；multipart Resource 请求把该字段编码成 JSON 字符串。写请求继续遵循手机号验证、条款、ban、分类权限、thread 锁定、审核和速率限制。帖子是否进入待审核由现有帖子服务决定。
+创建/更新内容时发送 `content_schema_version: 2` 和 `content_json`；multipart Resource 请求把 JSON 字段编码成字符串，并额外发送 `content_schema_version=2`。节点、marks、附件 draft、站点视频 provider 和安全规则见 [Rich Content Schema v2](./rich-content-schema-v2.md)。写请求继续遵循手机号验证、条款、ban、分类权限、thread 锁定、审核和速率限制。帖子是否进入待审核由现有帖子服务决定。
+
+旧客户端仍可只提交 Markdown `content`，服务端会在兼容路径中生成 v2 canonical JSON。该兼容输入不表示 Markdown 是新内容的 source of truth。
 
 ## 6. Resource V1
 

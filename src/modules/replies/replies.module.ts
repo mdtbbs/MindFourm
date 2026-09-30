@@ -12,6 +12,8 @@ import { SettingsModule } from '../settings/settings.module';
 import { LogsModule } from '../logs/logs.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { PostsModule } from '../posts/posts.module';
+import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
+import { AttachmentsModule } from '../attachments/attachments.module';
 
 @Module({
   imports: [
@@ -23,6 +25,8 @@ import { PostsModule } from '../posts/posts.module';
     LogsModule,
     AdminNotificationsModule,
     PostsModule,
+    CustomEmojisModule,
+    AttachmentsModule,
   ],
   providers: [RepliesService],
   controllers: [RepliesController, RepliesControllerMain],

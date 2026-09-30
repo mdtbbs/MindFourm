@@ -87,7 +87,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
     description: description || null, resource_type: 'upload', resource_kind: kind, integrity: null,
     file_name: file?.name || null, file_path: null, file_size: file?.size || 0, mime_type: null,
     content_hash: null, external_url: null, version: version || null, content: content || null,
-    content_html: null, content_json: contentJson, content_text: null,
+    content_html: null, content_json: contentJson, content_schema_version: contentJson ? 2 : 1, content_text: null,
     category_id: categoryId, category_name: categories.find((item) => item.id === categoryId)?.name || null,
     category_icon: null, download_count: 0, slug: null, is_public: isPublic, status: 'preview',
     use_mfl: false, mfl_download_url: null, username: t('resourceWorkbench.you'), avatar_url: null,
@@ -207,7 +207,10 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
       if (description.trim()) formData.append('description', description.trim());
       if (content.trim()) formData.append('content', content.trim());
       if (duplicateNote.trim()) formData.append('duplicate_note', duplicateNote.trim());
-      if (contentJson) formData.append('content_json', JSON.stringify(contentJson));
+      if (contentJson) {
+        formData.append('content_json', JSON.stringify(contentJson));
+        formData.append('content_schema_version', '2');
+      }
       if (categoryId) formData.append('category_id', String(categoryId));
       const fingerprint = JSON.stringify({ preview: preview.id, title, version, description, contentLanguage, duplicateNote, content, categoryId, isPublic });
       if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
@@ -294,7 +297,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
               <textarea value={duplicateNote} onChange={(event) => setDuplicateNote(event.target.value)} maxLength={2000} required aria-label={t('resourceWorkbench.duplicateDifference')} placeholder={t('resourceWorkbench.duplicateDifferencePlaceholder')} className="mt-2 min-h-20 w-full rounded border border-[var(--border)] bg-[var(--bg-card)] p-2 text-sm text-[var(--text)]" />
             </div>}
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbench.detailedDescription')}</label>
-            <div className="mt-1"><TiptapEditor value={content} onChange={setContent} jsonValue={contentJson} onJsonChange={setContentJson} ariaLabel={t('resourceWorkbench.detailedAria')} placeholder={t('resourceWorkbench.detailedPlaceholder')} minHeight="180px" imageUpload testId="workbench-resource-content" /></div>
+            <div className="mt-1"><TiptapEditor value={content} onChange={setContent} jsonValue={contentJson} onJsonChange={setContentJson} context="resource" ariaLabel={t('resourceWorkbench.detailedAria')} placeholder={t('resourceWorkbench.detailedPlaceholder')} minHeight="180px" imageUpload testId="workbench-resource-content" /></div>
             <label className="mt-4 flex items-center gap-2 text-sm text-[var(--text)]"><input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />{t('resourceWorkbench.publicAfterApproval')}</label>
           </div>
         </section>

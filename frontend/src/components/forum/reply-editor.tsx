@@ -12,6 +12,7 @@ import { useToastStore } from '@/store/toast-store';
 import { getCommunityChallenge, type CommunityChallengeDescriptor, type CommunityChallengeProof } from '@/lib/api/client';
 import CommunityChallengeDialog from '@/components/forum/community-challenge-dialog';
 import { useI18n } from '@/i18n/provider';
+import { projectRichContentToMarkdown } from '@/lib/tiptap/rich-content-projection';
 
 // TipTap editor is client-only
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
@@ -77,6 +78,20 @@ export default function ReplyEditor({
     if (content.trim() && recoverableDraft) setRecoverableDraft(null);
   }, [content, recoverableDraft]);
 
+  const quoteReplyId = quoteReply?.id;
+  useEffect(() => {
+    if (!quoteReplyId) return;
+    const document = {
+      type: 'doc',
+      content: [
+        { type: 'replyQuote', attrs: { postId, replyId: quoteReplyId } },
+        { type: 'paragraph', content: [] },
+      ],
+    };
+    setContentJson(document);
+    setContent(projectRichContentToMarkdown(document));
+  }, [postId, quoteReplyId]);
+
   const restoreDraft = () => {
     const savedContent = recoverableDraft?.values.content;
     if (typeof savedContent === 'string') setContent(savedContent);
@@ -136,7 +151,7 @@ export default function ReplyEditor({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim()) return;
-    void submitReply({ content, parentReplyId: quoteReply?.id || replyToReply?.id, contentJson: contentJson || undefined });
+    void submitReply({ content, parentReplyId: replyToReply?.id, contentJson: contentJson || undefined });
   };
 
   const verifyChallenge = (response: string) => {
@@ -195,6 +210,7 @@ export default function ReplyEditor({
           minHeight="120px"
           compact
           imageUpload
+          testId="reply-input"
         />
 
         <div className="mt-4 flex items-center justify-end gap-3">
@@ -203,6 +219,7 @@ export default function ReplyEditor({
           )}
           <Button
             type="submit"
+            data-testid="submit-reply"
             disabled={isSubmitting || !content.trim()}
           >
             {isSubmitting ? (

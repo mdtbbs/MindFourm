@@ -14,11 +14,13 @@ import { Reply } from '../../entities/reply.entity';
 import { EmailLog } from '../../entities/email-log.entity';
 import { SettingsModule } from '../settings/settings.module';
 import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
+import { UserBlocksModule } from '../user-blocks/user-blocks.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Notification, User, Post, Reply, EmailLog]),
     SettingsModule,
+    UserBlocksModule,
   ],
   providers: [
     OAuthScopeGuard,

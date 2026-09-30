@@ -31,6 +31,7 @@ import { Public } from '@common/decorators/public.decorator';
 import type { Request, Response } from 'express';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
+import { createHash, randomBytes } from 'crypto';
 
 const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -149,6 +150,66 @@ export class AttachmentsController {
     return { message: 'Files uploaded and awaiting moderation', attachments: results };
   }
 
+  /** Upload into the existing quarantine before a post/reply row exists. The
+   * opaque token is returned once; only its SHA-256 digest is persisted. */
+  @Post('drafts')
+  @UseGuards(JwtAuthGuard)
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      storage: diskStorage({
+        destination: './uploads/.quarantine/attachments/pending',
+        filename: (_req, file, callback) => {
+          callback(null, `${Date.now()}-${randomBytes(12).toString('hex')}${extname(file.originalname).toLowerCase()}`);
+        },
+      }),
+      limits: { fileSize: 10 * 1024 * 1024 },
+      fileFilter,
+    }),
+  )
+  async createDrafts(@UploadedFiles() files: Express.Multer.File[], @Req() req: Request) {
+    if (!files?.length) throw new BadRequestException('没有收到文件');
+    const userId = Number((req as any).user?.id);
+    if (!Number.isSafeInteger(userId) || userId < 1) {
+      await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => undefined)));
+      throw new BadRequestException('登录状态无效');
+    }
+    const created: Array<{ id: number; token: string; expiresAt: Date }> = [];
+    try {
+      await Promise.all(files.map((file) => assertSafeUploadedFile(file, 10 * 1024 * 1024)));
+      for (const file of files) {
+        const token = randomBytes(32).toString('base64url');
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        const row = await this.attachmentsService.createDraft({
+          user_id: userId,
+          file_name: file.originalname.slice(0, 255),
+          file_path: file.path,
+          file_size: file.size,
+          mime_type: file.mimetype,
+          draft_token_hash: createHash('sha256').update(token).digest('hex'),
+          draft_expires_at: expiresAt,
+        });
+        created.push({ id: row.id, token, expiresAt });
+      }
+      return {
+        drafts: created.map(({ id, token, expiresAt }, index) => ({
+          id,
+          token,
+          file_name: files[index].originalname.slice(0, 255),
+          file_size: files[index].size,
+          mime_type: files[index].mimetype,
+          expires_at: expiresAt.toISOString(),
+        })),
+      };
+    } catch (error) {
+      await this.attachmentsService.rollbackDrafts(created.map((draft) => draft.id), userId);
+      await Promise.all(files.filter((file) => !created.some((draft) => draft.id)).map((file) => fs.unlink(file.path).catch(() => undefined)));
+      // Files with rows are removed by rollbackDrafts; if a row failed to save,
+      // its path is still cleaned here.
+      await Promise.all(files.map((file) => fs.unlink(file.path).catch(() => undefined)));
+      throw error;
+    }
+  }
+
   @Post(':id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')
@@ -176,6 +237,24 @@ export class AttachmentsController {
   @Public()
   async getByReply(@Param('replyId', ParseIntPipe) replyId: number) {
     return this.attachmentsService.getByReplyId(replyId);
+  }
+
+  @Get(':id')
+  @Public()
+  async getPublicMetadata(@Param('id', ParseIntPipe) id: number) {
+    const attachment = await this.attachmentsService.getForDownload(id);
+    return {
+      id: attachment.id,
+      post_id: attachment.post_id,
+      reply_id: attachment.reply_id,
+      file_name: attachment.file_name,
+      file_size: attachment.file_size,
+      mime_type: attachment.mime_type,
+      renderer_status: attachment.renderer_status,
+      renderer_resource_id: attachment.renderer_resource_id,
+      renderer_error_code: attachment.renderer_error_code,
+      created_at: attachment.created_at,
+    };
   }
 
   @Get(':id/download')

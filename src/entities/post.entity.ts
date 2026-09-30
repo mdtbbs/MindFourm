@@ -67,6 +67,9 @@ export class Post {
   // runtime validation belongs to the rich-text boundary utility instead.
   content_json: any;
 
+  @Column({ type: 'tinyint', unsigned: true, default: 2 })
+  content_schema_version: number;
+
   @Column({ type: 'text', nullable: true })
   content_text: string | null;
 

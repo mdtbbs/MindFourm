@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -36,7 +37,7 @@ import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
 import { PostDetailDto, PostDetailReply, PostDetailService } from './post-detail.service';
 import { PostSummaryDto, PostSummaryService } from './post-summary.service';
-import { resolveContentSource } from '@common/utils/tiptap-content.util';
+import { collectDraftAttachmentTokens, collectTiptapMentionIds, replaceDraftAttachmentTokens, resolveContentSource } from '@common/utils/tiptap-content.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
 import {
@@ -49,6 +50,8 @@ import { generateSlug, makeUniqueSlug } from '@common/utils/url-slug.util';
 import { PostActor, isStaffActor } from './post-actor.util';
 import { ContentSafetyService } from '../content-safety/content-safety.service';
 import { normalizePostTitle } from '@common/utils/post-title.util';
+import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
+import { AttachmentsService } from '../attachments/attachments.service';
 
 @Injectable()
 export class PostsService {
@@ -80,6 +83,8 @@ export class PostsService {
     private postSummaryService: PostSummaryService,
     private postDetailService: PostDetailService,
     private contentSafety?: ContentSafetyService,
+    @Optional() private customEmojis?: CustomEmojisService,
+    @Optional() private attachmentsService?: AttachmentsService,
   ) {}
 
   /**
@@ -98,7 +103,13 @@ export class PostsService {
 
     // JSON is the canonical rich-text source for updated clients. Markdown remains
     // a compatibility projection used by existing services and older clients.
-    const contentSource = resolveContentSource(dto.content, dto.content_json);
+    const richJsonWrite = dto.content_json !== undefined && dto.content_json !== null;
+    const canonicalJson = dto.content_json && this.customEmojis
+      ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, false, true)
+      : dto.content_json;
+    await this.canonicalizeMentionSnapshots(canonicalJson);
+    const contentSource = resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true });
+    if (richJsonWrite) await this.assertDocumentQuoteVisibility(contentSource.content_json, await this.viewerFor(userId));
     const content = contentSource.content;
     dto.content = content;
     dto.content_json = contentSource.content_json as unknown as CreatePostDto['content_json'];
@@ -144,6 +155,7 @@ export class PostsService {
         content_html: contentHtml,
         content_json: contentSource.content_json,
         content_text: contentSource.content_text,
+        content_schema_version: contentSource.content_schema_version,
         status: requiresApproval ? 'pending' : requestedStatus,
         is_pinned: 0,
         view_count: 0,
@@ -154,6 +166,29 @@ export class PostsService {
       });
 
       const savedPost = await manager.save(newPost);
+
+      let finalContent = contentSource;
+      if (this.attachmentsService) {
+        const draftTokens = collectDraftAttachmentTokens(contentSource.content_json);
+        if (draftTokens.length) {
+          const bound = await this.attachmentsService.bindDraftsInTransaction(manager, draftTokens, userId, { type: 'post', id: savedPost.id });
+          const document = replaceDraftAttachmentTokens(contentSource.content_json, bound);
+          finalContent = resolveContentSource(undefined, document, 2);
+        }
+        await this.attachmentsService.assertDocumentAttachmentsInTransaction(manager, finalContent.content_json, { type: 'post', id: savedPost.id });
+      } else if (collectDraftAttachmentTokens(contentSource.content_json).length) {
+        throw new BadRequestException({ code: 'ATTACHMENT_DRAFT_UNAVAILABLE' });
+      }
+      if (finalContent !== contentSource) {
+        await manager.update(Post, savedPost.id, {
+          content: finalContent.content,
+          content_html: finalContent.content_html,
+          content_json: finalContent.content_json as any,
+          content_text: finalContent.content_text,
+          content_schema_version: finalContent.content_schema_version,
+        });
+        Object.assign(savedPost, finalContent);
+      }
 
       // Keep the generic content reference synchronized while the legacy
       // server_id API column remains in its compatibility window.
@@ -215,13 +250,10 @@ export class PostsService {
 
     // Handle @mentions in post content (only for published posts)
     if (post.status === 'published' && content) {
-      this.notificationsService.notifyMentionedUsers(
-        content,
-        post.id,
-        userId,
-        undefined, // replyId - not applicable for posts
-        [userId],  // skipUserIds - don't notify the author
-      ).catch((err) =>
+      const notify = richJsonWrite
+        ? this.notificationsService.notifyMentionedUserIds(collectTiptapMentionIds(post.content_json), post.id, userId, content, undefined, [userId])
+        : this.notificationsService.notifyMentionedUsers(content, post.id, userId, undefined, [userId]);
+      notify.catch((err) =>
         console.error('Post mention notification error:', err),
       );
     }
@@ -615,14 +647,21 @@ export class PostsService {
       dto = hookCtx.dto;
     }
 
+    const richJsonWrite = dto.content_json !== undefined && dto.content_json !== null;
+    const canonicalJson = dto.content_json && this.customEmojis
+      ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, false, true)
+      : dto.content_json;
+    await this.canonicalizeMentionSnapshots(canonicalJson);
     const contentSource = dto.content !== undefined || dto.content_json !== undefined
-      ? resolveContentSource(dto.content, dto.content_json)
+      ? resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true })
       : null;
     if (contentSource) {
+      if (richJsonWrite) await this.assertDocumentQuoteVisibility(contentSource.content_json, { id: userId, role: userRole });
       dto.content = contentSource.content;
       dto.content_json = contentSource.content_json as unknown as UpdatePostDto['content_json'];
     }
 
+    let newlyMentionedUserIds: number[] = [];
     const result = await this.dataSource.transaction(async (manager) => {
       // Find existing post
       const post = await manager.findOne(Post, {
@@ -633,6 +672,7 @@ export class PostsService {
       if (!post) {
         throw new NotFoundException('帖子不存在');
       }
+      const previousMentionIds = post.content_json ? collectTiptapMentionIds(post.content_json) : [];
 
       // Check ownership or admin/moderator permission
       const isOwner = post.user_id === userId;
@@ -667,10 +707,26 @@ export class PostsService {
         }
       }
       if (contentSource) {
-        updateData.content = contentSource.content;
-        updateData.content_html = contentSource.content_html;
-        updateData.content_json = contentSource.content_json;
-        updateData.content_text = contentSource.content_text;
+        let finalContent = contentSource;
+        if (this.attachmentsService) {
+          const draftTokens = collectDraftAttachmentTokens(contentSource.content_json);
+          if (draftTokens.length) {
+            const bound = await this.attachmentsService.bindDraftsInTransaction(manager, draftTokens, userId, { type: 'post', id });
+            finalContent = resolveContentSource(undefined, replaceDraftAttachmentTokens(contentSource.content_json, bound), 2);
+          }
+          await this.attachmentsService.assertDocumentAttachmentsInTransaction(manager, finalContent.content_json, { type: 'post', id });
+        } else if (collectDraftAttachmentTokens(contentSource.content_json).length) {
+          throw new BadRequestException({ code: 'ATTACHMENT_DRAFT_UNAVAILABLE' });
+        }
+        updateData.content = finalContent.content;
+        updateData.content_html = finalContent.content_html;
+        updateData.content_json = finalContent.content_json;
+        updateData.content_text = finalContent.content_text;
+        updateData.content_schema_version = finalContent.content_schema_version;
+        if (richJsonWrite) {
+          const nextMentionIds = collectTiptapMentionIds(finalContent.content_json);
+          newlyMentionedUserIds = nextMentionIds.filter((mentionId) => !previousMentionIds.includes(mentionId));
+        }
       }
       if (dto.content_language !== undefined) updateData.content_language = dto.content_language.trim() || 'unknown';
       if (dto.category_id !== undefined) updateData.category_id = dto.category_id;
@@ -742,12 +798,72 @@ export class PostsService {
     // a concurrent reader re-cache the pre-update row for the whole TTL.
     await this.invalidatePostCache(id);
 
+    if (result?.status === 'published' && newlyMentionedUserIds.length) {
+      await this.notificationsService.notifyMentionedUserIds(
+        newlyMentionedUserIds,
+        id,
+        userId,
+        result.content,
+        undefined,
+        [userId],
+      );
+    }
+
     // Execute "after" hook
     this.eventBus.execute('post.updated', { post: result, userId }).catch((err) =>
       console.error('post.updated hook error:', err),
     );
 
     return result;
+  }
+
+  private async canonicalizeMentionSnapshots(document: unknown): Promise<void> {
+    if (!document || typeof document !== 'object') return;
+    const ids = collectTiptapMentionIds(document);
+    if (!ids.length) return;
+    const users = await this.userRepository.find({ where: ids.map((id) => ({ id })), select: { id: true, username: true } });
+    const byId = new Map(users.map((user) => [user.id, user.username]));
+    for (const id of ids) if (!byId.has(id)) throw new BadRequestException({ code: 'INVALID_MENTION_USER', details: { userId: id } });
+    const visit = (node: Record<string, any>) => {
+      if (node.type === 'mention') node.attrs.username = byId.get(Number(node.attrs.userId));
+      for (const child of node.content || []) visit(child);
+    };
+    visit(document as Record<string, any>);
+  }
+
+  private async viewerFor(userId: number): Promise<{ id: number; role: string }> {
+    const user = await this.userRepository.findOne({ where: { id: userId }, select: { id: true, role: true } });
+    if (!user) throw new NotFoundException('用户不存在');
+    return { id: user.id, role: user.role };
+  }
+
+  async assertDocumentQuoteVisibility(document: unknown, viewer: { id: number; role: string }): Promise<void> {
+    if (!document || typeof document !== 'object') return;
+    const targets = new Map<string, { postId: number; replyId?: number }>();
+    const visit = (node: Record<string, any>) => {
+      if (node.type === 'postQuote') targets.set('p:' + node.attrs.postId, { postId: Number(node.attrs.postId) });
+      if (node.type === 'replyQuote') targets.set('r:' + node.attrs.postId + ':' + node.attrs.replyId, { postId: Number(node.attrs.postId), replyId: Number(node.attrs.replyId) });
+      for (const child of node.content || []) visit(child);
+    };
+    visit(document as Record<string, any>);
+    for (const target of targets.values()) await this.assertQuoteVisible(target.postId, viewer, target.replyId);
+  }
+
+  async assertQuoteVisible(postId: number, viewer?: { id: number; role: string }, replyId?: number): Promise<{ available: true }> {
+    const post = await this.postRepository.findOne({
+      where: { id: postId },
+      select: { id: true, user_id: true, status: true, required_group_id: true },
+    });
+    if (!post) throw new NotFoundException('引用的内容不可用');
+    await this.assertPostVisible(post, viewer);
+    if (replyId !== undefined) {
+      const reply = await this.replyRepository.findOne({
+        where: { id: replyId, post_id: postId },
+        select: { id: true, status: true },
+      });
+      if (!reply || reply.status !== REPLY_STATUS.published) throw new NotFoundException('引用的内容不可用');
+    }
+    return { available: true };
   }
 
   /**

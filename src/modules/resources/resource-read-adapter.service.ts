@@ -36,6 +36,7 @@ export type V1ResourceDto = {
   summary: string;
   content: string | null;
   content_json: Record<string, unknown> | null;
+  content_schema_version: number;
   content_html: string | null;
   content_text: string | null;
   resource_kind: string | null;
@@ -138,6 +139,7 @@ export class ResourceReadAdapterService {
       summary: resource.summary || resource.description || '',
       content: resource.content || null,
       content_json: resource.content_json || null,
+      content_schema_version: resource.content_schema_version || 2,
       content_html: resource.content_html || null,
       content_text: resource.content_text || null,
       resource_kind: resource.resource_kind || null,

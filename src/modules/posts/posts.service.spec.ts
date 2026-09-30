@@ -4,6 +4,7 @@ jest.mock('@nestjs/common', () => {
   class HttpException extends Error {}
   return {
     Injectable: decorator,
+    Optional: decorator,
     HttpException,
     HttpStatus: { BAD_REQUEST: 400 },
     BadRequestException: class BadRequestException extends HttpException {},
@@ -149,6 +150,7 @@ function createService(overrides: {
   const notificationsService = {
     create: jest.fn().mockResolvedValue(undefined),
     notifyMentionedUsers: jest.fn().mockResolvedValue(undefined),
+    notifyMentionedUserIds: jest.fn().mockResolvedValue(undefined),
     ...overrides.notificationsService,
   };
   const manager = overrides.manager ?? createManagerMock();

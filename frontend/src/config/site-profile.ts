@@ -3,17 +3,20 @@ export type SiteLocale = 'zh-CN' | 'en' | 'ru' | 'ja';
 
 export interface FrontendSiteProfile {
   profile: SiteProfile;
+  domain: string;
   branding: { siteName: string; shortName: string; description: string };
   localization: { defaultLocale: SiteLocale; supportedLocales: readonly SiteLocale[] };
   verification: { requireEmail: boolean; requirePhoneForWrites: boolean };
   features: Readonly<Record<string, boolean>>;
   navigation: readonly { key: string; href: string; label: string; feature?: string }[];
   portalSections: readonly string[];
+  videoProviders: readonly ('youtube' | 'bilibili' | 'douyin' | 'direct')[];
 }
 
 const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
   mdtbbs: {
     profile: 'mdtbbs',
+    domain: 'mdtbbs.cn',
     branding: { siteName: 'MDTBBS', shortName: 'MDTBBS', description: 'Mindustry 中文社区' },
     localization: { defaultLocale: 'zh-CN', supportedLocales: ['zh-CN'] },
     verification: { requireEmail: false, requirePhoneForWrites: true },
@@ -26,9 +29,11 @@ const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
       { key: 'wiki', href: '/wiki', label: '知识库' },
     ],
     portalSections: ['discussions', 'resources', 'news', 'notices', 'development', 'versions'],
+    videoProviders: ['bilibili', 'douyin', 'direct'],
   },
   'mindustry-club': {
     profile: 'mindustry-club',
+    domain: 'mindustry.club',
     branding: { siteName: 'Mindustry Club', shortName: 'Mindustry Club', description: 'A community built by Mindustry players.' },
     localization: { defaultLocale: 'en', supportedLocales: ['en', 'ru', 'ja'] },
     verification: { requireEmail: true, requirePhoneForWrites: false },
@@ -41,6 +46,7 @@ const profiles: Readonly<Record<SiteProfile, FrontendSiteProfile>> = {
       { key: 'wiki', href: '/wiki', label: 'Knowledge base' },
     ],
     portalSections: ['trending', 'resources', 'discussions', 'community'],
+    videoProviders: ['youtube', 'bilibili', 'direct'],
   },
 };
 
