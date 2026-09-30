@@ -19,13 +19,14 @@ import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import InlineLoading from '@/components/ui/inline-loading';
 
-type Filter = 'posts' | 'replies' | 'avatars' | 'resources';
+type Filter = 'all' | 'posts' | 'replies' | 'avatars' | 'resources';
 
 type QueueItem =
   | { kind: 'community'; key: string; data: ModerationItem }
   | { kind: 'resource'; key: string; data: Resource };
 
 const filters: Array<{ value: Filter; label: string }> = [
+  { value: 'all', label: '帖子、回复与头像' },
   { value: 'posts', label: '帖子' },
   { value: 'replies', label: '回复' },
   { value: 'avatars', label: '头像' },
@@ -33,7 +34,7 @@ const filters: Array<{ value: Filter; label: string }> = [
 ];
 
 function isFilter(value: string | null): value is Filter {
-  return value === 'posts' || value === 'replies' || value === 'avatars' || value === 'resources';
+  return value === 'all' || value === 'posts' || value === 'replies' || value === 'avatars' || value === 'resources';
 }
 
 function queueTitle(item: QueueItem): string {
@@ -51,7 +52,7 @@ function queueSummary(item: QueueItem): string {
 export default function ModerationPage() {
   const searchParams = useSearchParams();
   const queryFilter = searchParams?.get('type');
-  const [filter, setFilter] = useState<Filter>(isFilter(queryFilter) ? queryFilter : 'posts');
+  const [filter, setFilter] = useState<Filter>(isFilter(queryFilter) ? queryFilter : 'all');
   const [items, setItems] = useState<QueueItem[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [author, setAuthor] = useState<UserProfile | null>(null);

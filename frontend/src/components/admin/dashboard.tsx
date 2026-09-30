@@ -110,7 +110,7 @@ export default function Dashboard() {
     {
       label: '内容待审核',
       value: moderationPending,
-      href: '/admin/content/moderation',
+      href: '/admin/content/moderation?type=all',
       icon: ShieldCheck,
       tone: moderationPending > 0 ? 'text-amber-600' : 'text-surface-500',
     },

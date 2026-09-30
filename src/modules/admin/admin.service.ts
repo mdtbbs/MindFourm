@@ -251,7 +251,7 @@ export class AdminService {
   }
 
   /**
-   * Get moderation queue (pending posts and replies)
+   * Get pending moderation items, optionally merged across posts, replies, and avatars.
    */
   async getModerationQueue(type: string, page: number, limit: number): Promise<{
     data: any[];
@@ -262,7 +262,75 @@ export class AdminService {
   }> {
     const skip = (page - 1) * limit;
 
-    if (type === 'posts' || type === 'post' || type === 'all') {
+    if (type === 'all') {
+      // The dashboard badge is the sum of these three moderation queues, so the
+      // default workbench view must return the same set instead of posts only.
+      // Fetch each queue through the requested global offset, then merge by
+      // submission time before slicing the combined page.
+      const take = skip + limit;
+      const [posts, replies, avatars] = await Promise.all([
+        this.postRepository.findAndCount({
+          where: { status: 'pending' },
+          relations: ['user', 'category'],
+          order: { created_at: 'ASC' },
+          take,
+        }),
+        this.replyRepository.findAndCount({
+          where: { status: 'pending' },
+          relations: ['user', 'post'],
+          order: { created_at: 'ASC' },
+          take,
+        }),
+        this.userRepository.findAndCount({
+          where: { avatar_status: 'pending' },
+          order: { updated_at: 'ASC' },
+          take,
+        }),
+      ]);
+
+      const combined = [
+        ...posts[0].map((item) => ({
+          id: item.id,
+          item_type: 'post',
+          title: item.title,
+          content: item.content,
+          author_username: item.user?.username || '',
+          created_at: item.created_at,
+        })),
+        ...replies[0].map((item) => ({
+          id: item.id,
+          item_type: 'reply',
+          content: item.content,
+          author_username: item.user?.username || '',
+          created_at: item.created_at,
+          post_id: item.post_id,
+        })),
+        ...avatars[0].map((item) => ({
+          id: item.id,
+          item_type: 'avatar',
+          content: item.pending_avatar_url || '',
+          author_username: item.username || '',
+          created_at: item.updated_at,
+          avatar_url: item.pending_avatar_url,
+        })),
+      ].sort((left, right) => {
+        const dateOrder = left.created_at.getTime() - right.created_at.getTime();
+        if (dateOrder !== 0) return dateOrder;
+        const typeOrder = left.item_type.localeCompare(right.item_type);
+        return typeOrder || left.id - right.id;
+      });
+      const total = posts[1] + replies[1] + avatars[1];
+
+      return {
+        data: combined.slice(skip, skip + limit),
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    }
+
+    if (type === 'posts' || type === 'post') {
       const [data, total] = await this.postRepository.findAndCount({
         where: { status: 'pending' },
         relations: ['user', 'category'],
