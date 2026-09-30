@@ -1,11 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { EntityManager, In, IsNull, LessThan, MoreThan, Repository } from 'typeorm';
 import { Attachment } from '@entities/attachment.entity';
 import { Post } from '@entities/post.entity';
 import { Reply } from '@entities/reply.entity';
 import { mkdir, rename } from 'fs/promises';
+import { rm } from 'fs/promises';
 import * as path from 'path';
+import { createHash } from 'crypto';
 
 function storageRoots() {
   const approvedRoot = path.resolve('./uploads/attachments');
@@ -37,12 +39,113 @@ export class AttachmentsService {
     file_size: number;
     mime_type: string;
   }): Promise<Attachment> {
-    const attachment = this.attachmentRepository.create({
+    const attachment = {
       ...data,
       download_count: 0,
-      status: 'pending',
+      status: 'pending' as const,
+    };
+    return await this.attachmentRepository.save(attachment as unknown as Attachment);
+  }
+
+  async createDraft(data: {
+    user_id: number;
+    file_name: string;
+    file_path: string;
+    file_size: number;
+    mime_type: string;
+    draft_token_hash: string;
+    draft_expires_at: Date;
+  }): Promise<Attachment> {
+    const attachment = {
+      ...data,
+      post_id: null,
+      reply_id: null,
+      download_count: 0,
+      status: 'draft',
+      deleted_at: null,
+      draft_bound_at: null,
+    } as unknown as Attachment;
+    return this.attachmentRepository.save(attachment);
+  }
+
+  async bindDraftsInTransaction(
+    manager: EntityManager,
+    tokens: string[],
+    userId: number,
+    target: { type: 'post' | 'reply'; id: number },
+  ): Promise<Map<string, number>> {
+    if (!tokens.length) return new Map();
+    if (tokens.length > 5 || new Set(tokens).size !== tokens.length) throw new BadRequestException({ code: 'INVALID_ATTACHMENT_DRAFTS' });
+    const hashes = tokens.map((token) => createHash('sha256').update(token).digest('hex'));
+    const rows = await manager.createQueryBuilder(Attachment, 'attachment')
+      .where('attachment.draft_token_hash IN (:...hashes)', { hashes })
+      .andWhere('attachment.user_id = :userId', { userId })
+      .andWhere('attachment.status = :status', { status: 'draft' })
+      .andWhere('attachment.draft_expires_at > :now', { now: new Date() })
+      .andWhere('attachment.deleted_at IS NULL')
+      .andWhere('attachment.post_id IS NULL AND attachment.reply_id IS NULL')
+      .setLock('pessimistic_write')
+      .getMany();
+    if (rows.length !== tokens.length) throw new ConflictException({ code: 'ATTACHMENT_DRAFT_INVALID', message: '附件草稿无效、已过期或不属于当前用户。' });
+
+    const tokenIds = new Map<string, number>();
+    for (const row of rows) {
+      const bound = await manager.update(Attachment, {
+        id: row.id,
+        user_id: userId,
+        status: 'draft',
+        draft_token_hash: row.draft_token_hash,
+        draft_expires_at: MoreThan(new Date()),
+        post_id: IsNull(),
+        reply_id: IsNull(),
+        deleted_at: IsNull(),
+      }, {
+        ...(target.type === 'post' ? { post_id: target.id } : { reply_id: target.id }),
+        status: 'pending',
+        draft_token_hash: null,
+        draft_expires_at: null,
+        draft_bound_at: new Date(),
+      });
+      if (bound.affected !== 1) throw new ConflictException({ code: 'ATTACHMENT_DRAFT_ALREADY_BOUND' });
+      const index = hashes.indexOf(String(row.draft_token_hash));
+      tokenIds.set(tokens[index], row.id);
+    }
+    return tokenIds;
+  }
+
+  async assertDocumentAttachmentsInTransaction(
+    manager: EntityManager,
+    document: Record<string, any>,
+    target: { type: 'post' | 'reply'; id: number },
+  ): Promise<void> {
+    const ids = new Set<number>();
+    const visit = (node: Record<string, any>) => {
+      if (node.type === 'attachment' && Number.isSafeInteger(node.attrs?.attachmentId)) ids.add(Number(node.attrs.attachmentId));
+      for (const child of node.content || []) visit(child);
+    };
+    visit(document);
+    if (ids.size > 5) throw new BadRequestException({ code: 'ATTACHMENT_LIMIT_EXCEEDED', message: '每篇正文最多引用 5 个附件。' });
+    if (!ids.size) return;
+    const parentWhere = target.type === 'post' ? { post_id: target.id } : { reply_id: target.id };
+    const rows = await manager.find(Attachment, {
+      where: { id: In([...ids]), ...parentWhere, status: In(['pending', 'approved']), deleted_at: IsNull() } as any,
+      select: { id: true },
     });
-    return await this.attachmentRepository.save(attachment);
+    if (rows.length !== ids.size) throw new ForbiddenException({ code: 'ATTACHMENT_REFERENCE_FORBIDDEN' });
+  }
+
+  async expireDrafts(now = new Date()): Promise<Attachment[]> {
+    return this.attachmentRepository.find({ where: { status: 'draft', draft_expires_at: LessThan(now), deleted_at: IsNull() } });
+  }
+
+  async rollbackDrafts(ids: number[], userId: number): Promise<void> {
+    const rows = await this.attachmentRepository.find({ where: { id: In(ids), user_id: userId, status: 'draft' } });
+    const pendingRoot = storageRoots().pendingRoot;
+    for (const row of rows) {
+      const filePath = path.resolve(row.file_path);
+      if (isWithin(filePath, pendingRoot)) await rm(filePath, { force: true });
+      await this.attachmentRepository.delete({ id: row.id, status: 'draft' });
+    }
   }
 
   /**

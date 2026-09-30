@@ -23,6 +23,7 @@ export type V1ResourceDetail = {
   summary: string;
   content: string | null;
   content_format: 'tiptap_json';
+  content_schema_version: number;
   content_json: Record<string, unknown> | null;
   content_html: string | null;
   content_text: string | null;

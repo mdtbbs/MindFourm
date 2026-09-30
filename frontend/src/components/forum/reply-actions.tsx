@@ -77,7 +77,7 @@ export default function ReplyActions({
 
     setBusy(true);
     try {
-      const updatedReply = await replyApi.update(reply.id, trimmed, draftJson || undefined);
+      const updatedReply = await replyApi.update(reply.id, trimmed, draftJson || undefined, draftJson ? 2 : undefined);
       showSuccess(t('replyActions.saved'));
       setEditing(false);
       window.dispatchEvent(new CustomEvent('mdtbbs:reply-mutation', { detail: { postId, type: 'update', reply: updatedReply } }));

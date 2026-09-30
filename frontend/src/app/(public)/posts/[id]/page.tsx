@@ -12,6 +12,7 @@ import { toMetaDescription } from '@/lib/seo/description';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
 import { buildHybridParam, extractIdFromHybridParam } from '@/lib/seo/hybrid-param';
+import { omitEmbeddedAttachments } from '@/lib/tiptap/attachment-projection';
 
 // This page forwards cookies (each viewer sees a different moderation state), which
 // calls `cookies()` and forces dynamic rendering — so the `revalidate` export that
@@ -251,7 +252,7 @@ export default async function PostDetailPage({
         currentUserRole={post.current_user_role as UserRole | null}
         isOwner={post.is_owner ?? false}
       />
-      <AttachmentList attachments={attachments} />
+      <AttachmentList attachments={omitEmbeddedAttachments(attachments, post.content_json)} />
 
       <PostReplySection
         postId={postId}

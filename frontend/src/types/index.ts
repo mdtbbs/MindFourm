@@ -100,6 +100,7 @@ export interface Post {
   content_format?: 'tiptap_json';
   content_html: string | null;
   content_json?: Record<string, unknown> | null;
+  content_schema_version?: number;
   content_text?: string | null;
   status: 'draft' | 'published' | 'pending' | 'deleted';
   reject_reason?: string | null;
@@ -153,6 +154,7 @@ export interface CreatePostInput {
   content_language?: string;
   content_format?: 'tiptap_json';
   content_json?: Record<string, unknown>;
+  content_schema_version?: number;
   category_id?: number;
   tags?: string[];
   status?: 'draft' | 'published';
@@ -167,6 +169,7 @@ export interface Reply {
   content: string;
   content_html: string | null;
   content_json?: Record<string, unknown> | null;
+  content_schema_version?: number;
   content_text?: string | null;
   post_title?: string | null;
   status: 'active' | 'published' | 'pending' | 'deleted';
@@ -193,6 +196,7 @@ export interface ReplyListResponse {
 export interface CreateReplyInput {
   content: string;
   content_json?: Record<string, unknown>;
+  content_schema_version?: number;
   parent_reply_id?: number;
 }
 
@@ -408,16 +412,33 @@ export interface Attachment {
   id: number;
   post_id: number | null;
   reply_id: number | null;
-  user_id: number;
+  user_id?: number;
   file_name: string;
-  file_path: string;
+  file_path?: string;
   file_size: number;
   mime_type: string;
-  download_count: number;
+  download_count?: number;
   renderer_status?: string | null;
   renderer_resource_id?: string | null;
   renderer_error_code?: string | null;
   created_at: string;
+}
+
+export interface AttachmentDraft {
+  id: number;
+  token: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  expires_at: string;
+}
+
+export interface CustomEmojiSummary {
+  id: number;
+  name: string;
+  shortcode: string;
+  sort_order: number;
+  image_url: string;
 }
 
 // Messages
@@ -462,6 +483,7 @@ export interface Resource {
   content_language?: string;
   content_html: string | null;
   content_json?: Record<string, unknown> | null;
+  content_schema_version?: number;
   content_text?: string | null;
   category_id: number | null;
   category_name: string | null;

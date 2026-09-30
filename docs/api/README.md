@@ -35,6 +35,7 @@
 
 - [First-party V1 参考](./first-party-v1.md)
 - [Public Client 快速接入](./public-client-v1.md)
+- [Rich Content Schema v2](./rich-content-schema-v2.md)
 - [认证与凭证](./authentication.md)
 - [Game Content V1](./game-content-v1.md)
 - [Resource V1 契约](./resources-v1-contract.md)

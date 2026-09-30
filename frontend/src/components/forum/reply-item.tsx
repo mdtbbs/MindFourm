@@ -1,6 +1,6 @@
 'use client';
 
-import MarkdownRenderer from '@/components/ui/markdown-renderer';
+import RichContentRenderer from '@/components/ui/rich-content-renderer';
 import ReplyActions from '@/components/forum/reply-actions';
 import AuthorLink from '@/components/forum/author-link';
 import ReplyAttachmentList from '@/components/forum/reply-attachment-list';
@@ -46,6 +46,7 @@ export default function ReplyItem({
   const { t, locale } = useI18n();
   return (
     <div
+      data-testid="reply-item"
       className={`bg-[var(--bg-card)] rounded-lg border overflow-hidden ${
         // A ring rather than a background tint: the accepted answer has to stand out
         // without making its body text sit on a different surface from every other reply.
@@ -102,8 +103,8 @@ export default function ReplyItem({
 
       {/* Reply Content */}
       <div className={isNested ? 'px-3 py-3' : 'px-4 py-5'}>
-        <MarkdownRenderer content={reply.content} className="text-[var(--text)]" />
-        <ReplyAttachmentList replyId={reply.id} />
+        <RichContentRenderer json={reply.content_json} markdownFallback={reply.content} className="text-[var(--text)]" />
+        <ReplyAttachmentList replyId={reply.id} contentJson={reply.content_json} />
       </div>
 
       <ReplyActions

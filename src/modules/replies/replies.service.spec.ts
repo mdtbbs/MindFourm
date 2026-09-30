@@ -70,6 +70,7 @@ function createService(overrides: { post?: unknown; requiresApproval?: boolean }
   const notificationsService = {
     create: jest.fn().mockResolvedValue(undefined),
     notifyMentionedUsers: jest.fn().mockResolvedValue(undefined),
+    notifyMentionedUserIds: jest.fn().mockResolvedValue(undefined),
   };
   const adminNotificationsService = {
     publishModerationPending: jest.fn().mockResolvedValue(undefined),

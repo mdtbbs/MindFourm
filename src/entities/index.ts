@@ -9,6 +9,7 @@ import { Notification } from './notification.entity';
 import { AdminNotification } from './admin-notification.entity';
 import { Message } from './message.entity';
 import { Attachment } from './attachment.entity';
+import { CustomEmoji } from './custom-emoji.entity';
 import { Resource } from './resource.entity';
 import { ResourceUploadDraft } from './resource-upload-draft.entity';
 import { ResourceCategory } from './resource-category.entity';
@@ -130,6 +131,7 @@ export const coreEntities = [
   AdminNotification,
   Message,
   Attachment,
+  CustomEmoji,
   Resource,
   ResourceUploadDraft,
   ResourceSubmissionIdempotency,
@@ -233,7 +235,7 @@ export const entities = [...coreEntities, ...mdtbbsEntities];
 export {
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
   AdminNotification,
-  Message, Attachment, Resource, ResourceCategory, ResourceVersion,
+  Message, Attachment, CustomEmoji, Resource, ResourceCategory, ResourceVersion,
   PostLike, ReplyLike, Ban, Setting, OperationLog, SessionAudit,
   // Phase 1: Points
   PointLog, PointRule,

@@ -14,6 +14,8 @@ const ESM_ONLY_DEPS = [
   'domelementtype',
   'dom-serializer',
   'entities',
+  'lowlight',
+  'highlight.js',
 ];
 
 module.exports = {
@@ -46,5 +48,8 @@ module.exports = {
     '^@config/(.*)$': '<rootDir>/src/config/$1',
     '^@modules/(.*)$': '<rootDir>/src/modules/$1',
     '^@database/(.*)$': '<rootDir>/src/database/$1',
+    '^@tiptap/([^/]+)$': '<rootDir>/frontend/node_modules/@tiptap/$1',
+    '^lowlight$': '<rootDir>/frontend/node_modules/lowlight',
+    '^tiptap-markdown$': '<rootDir>/frontend/node_modules/tiptap-markdown',
   },
 };

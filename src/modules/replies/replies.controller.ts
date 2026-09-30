@@ -97,7 +97,7 @@ export class RepliesControllerMain {
     @Req() req: any,
   ) {
     const userId = req.user.id;
-    const reply = await this.repliesService.update(Number(id), dto.content, userId, req.user.role);
+    const reply = await this.repliesService.update(Number(id), dto.content, userId, req.user.role, dto.content_json, dto.content_schema_version);
     await this.logOperation(req, 'reply.update', 'reply', Number(id), { post_id: reply.post_id });
     return reply;
   }

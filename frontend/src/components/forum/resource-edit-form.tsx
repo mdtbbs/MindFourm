@@ -76,6 +76,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
         content: content.trim() || null,
         content_language: contentLanguage || 'unknown',
         content_json: contentJson,
+        content_schema_version: contentJson ? 2 : undefined,
       };
 
       if (version.trim()) {
@@ -164,6 +165,7 @@ export default function ResourceEditForm({ resource }: ResourceEditFormProps) {
           onChange={setContent}
           jsonValue={contentJson}
           onJsonChange={setContentJson}
+          context="resource"
           ariaLabel={t('resourceEdit.description')}
           placeholder={t('resourceEdit.descriptionPlaceholder')}
           minHeight="260px"

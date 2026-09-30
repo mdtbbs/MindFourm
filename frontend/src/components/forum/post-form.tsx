@@ -166,6 +166,7 @@ export default function PostForm() {
       content: content.trim(),
       content_language: contentLanguage || 'unknown',
       content_json: contentJson || undefined,
+      content_schema_version: contentJson ? 2 : undefined,
       category_id: categoryId ? Number(categoryId) : undefined,
       tags: parseTags(),
       status,
@@ -336,7 +337,7 @@ export default function PostForm() {
               <Save className="w-4 h-4 inline mr-1" />
               {t('postForm.saveToDevice')}
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} data-testid="publish-button">
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-4 h-4 inline mr-1 animate-spin" />

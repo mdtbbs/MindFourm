@@ -112,7 +112,7 @@ export class ThreadWriteV1Controller {
     @Req() req: any,
   ) {
     await this.assertWritesEnabled();
-    const reply = await this.replies.update(replyId, dto.content, req.user.id, req.user.role, dto.content_json);
+    const reply = await this.replies.update(replyId, dto.content, req.user.id, req.user.role, dto.content_json, dto.content_schema_version);
     return this.replyWriteDto(reply);
   }
 
@@ -136,6 +136,7 @@ export class ThreadWriteV1Controller {
       title: post.title,
       content: post.content,
       content_format: 'tiptap_json',
+      content_schema_version: post.content_schema_version ?? 2,
       content_html: post.content_html ?? null,
       content_json: post.content_json ?? null,
       content_text: post.content_text ?? null,
@@ -152,6 +153,7 @@ export class ThreadWriteV1Controller {
       parent_reply_id: reply.parent_reply_id ?? null,
       content: reply.content,
       content_format: 'tiptap_json',
+      content_schema_version: reply.content_schema_version ?? 2,
       content_html: reply.content_html ?? null,
       content_json: reply.content_json ?? null,
       content_text: reply.content_text ?? null,

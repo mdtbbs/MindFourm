@@ -467,6 +467,83 @@ body {
   box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 14%, transparent);
 }
 
+.tiptap-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.tiptap-select-label input[type="color"] {
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.tiptap-select-label select {
+  max-width: 115px;
+  color: var(--text);
+  background: var(--bg-card);
+  border: 0;
+}
+
+.tiptap-emoji-menu {
+  display: block;
+  width: min(320px, calc(100vw - 24px));
+}
+
+.tiptap-emoji-menu section { margin: 0 0 8px; }
+.tiptap-emoji-menu section > strong { display: block; padding: 3px 4px 5px; color: var(--text-muted); font-size: 11px; }
+.tiptap-emoji-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 2px; }
+.tiptap-emoji-grid button { min-height: 34px; font-size: 20px; background: transparent; border: 0; cursor: pointer; }
+.tiptap-emoji-grid button:hover { background: var(--bg-hover, rgba(0,0,0,.06)); }
+.tiptap-emoji-search { width: 100%; margin-bottom: 8px; padding: 6px 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); }
+.tiptap-emoji-empty { display: block; padding: 8px; color: var(--text-muted); font-size: 12px; }
+.tiptap-custom-emoji-option { display: inline-flex; align-items: center; gap: 5px; padding: 5px; color: var(--text); background: transparent; border: 0; cursor: pointer; }
+.tiptap-custom-emoji-option img { width: 24px; height: 24px; object-fit: contain; }
+
+.rich-content-renderer .rich-mention { display: inline; padding: 0 3px; color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); border-radius: 2px; text-decoration: none; }
+.rich-content-renderer .rich-custom-emoji { width: 1.5em; height: 1.5em; object-fit: contain; vertical-align: middle; }
+.rich-content-renderer .rich-spoiler { margin: .8em 0; border: 1px solid var(--border); padding: .4em .65em; }
+.rich-content-renderer .rich-spoiler summary { cursor: pointer; font-weight: 600; }
+.rich-content-renderer .rich-spoiler-content { padding-top: .5em; }
+.rich-content-renderer .rich-video-card { width: min(100%, 760px); margin: 1em auto; }
+.rich-content-renderer .rich-video-card iframe,.rich-content-renderer .rich-video-card video { width: 100%; aspect-ratio: 16 / 9; border: 0; background: #111; }
+.rich-content-renderer .rich-video-poster { display: flex; align-items: center; gap: 8px; width: min(100%, 760px); min-height: 72px; margin: 1em auto; padding: 16px; color: var(--text); background: var(--bg-elevated); border: 1px solid var(--border); text-align: left; cursor: pointer; }
+.rich-content-renderer .rich-attachment-card,.rich-content-renderer .rich-quote-card { margin: .8em 0; border: 1px solid var(--border); padding: 10px 12px; }
+.rich-content-renderer .rich-task-list { list-style: none; padding-left: 0; }
+.rich-content-renderer .rich-task-item { display: flex; gap: 8px; align-items: flex-start; }
+
+@media (max-width: 640px) {
+  .tiptap-wrapper { border-radius: 3px; }
+  .tiptap-toolbar { border-radius: 0; }
+  .tiptap-wrapper:focus-within .tiptap-toolbar {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--editor-visual-viewport-inset, 0px) + env(safe-area-inset-bottom, 0px));
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding: 7px 8px;
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+    background: var(--bg-card);
+    box-shadow: 0 -4px 14px color-mix(in srgb, var(--text) 12%, transparent);
+  }
+  .tiptap-wrapper:focus-within .tiptap-content { padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)); }
+  .tiptap-more-menu { position: fixed; top: auto; right: 8px; bottom: calc(52px + var(--editor-visual-viewport-inset, 0px) + env(safe-area-inset-bottom, 0px)); max-height: min(58vh, 420px); }
+  .tiptap-emoji-menu { left: 8px; right: 8px; width: auto; }
+}
+
 /* ── Content area ────────────────────────────────────── */
 
 .tiptap-content {
@@ -633,23 +710,6 @@ body {
 .tiptap-content .tiptap pre .hljs-meta,
 .tiptap-content .tiptap pre [class*="language-"] {
   /* Syntax highlighting tokens — lowlight provides the classes */
-}
-
-/* ── Source mode textarea ────────────────────────────── */
-
-.tiptap-source {
-  width: 100%;
-  padding: 12px 16px;
-  border: none;
-  outline: none;
-  resize: vertical;
-  background: var(--bg-card);
-  color: var(--text);
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 14px;
-  line-height: 1.6;
-  max-width: 100%;
-  box-sizing: border-box;
 }
 
 /* ── Status bar ──────────────────────────────────────── */

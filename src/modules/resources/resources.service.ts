@@ -31,6 +31,7 @@ import { createHash } from 'crypto';
 import { ConsumedResourcePreviewDraft, ResourcePreviewService } from './resource-preview.service';
 import { ResourceDuplicateService, RESOURCE_DUPLICATE_STATUSES } from './resource-duplicate.service';
 import { SiteConfigService } from '@config/site-profile';
+import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -81,6 +82,7 @@ export class ResourcesService {
     private resourcePreviewService?: ResourcePreviewService,
     @Optional() private resourceDuplicateService?: ResourceDuplicateService,
     @Optional() private siteConfig?: SiteConfigService,
+    @Optional() private customEmojis?: CustomEmojisService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -330,7 +332,10 @@ export class ResourcesService {
       throw new BadRequestException('地图和蓝图只能使用本站托管文件，不能设置外链地址');
     }
 
-    const contentSource = resolveOptionalContentSource(dto.content, dto.content_json);
+    const canonicalJson = dto.content_json && this.customEmojis
+      ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, true)
+      : dto.content_json;
+    const contentSource = resolveOptionalContentSource(dto.content, canonicalJson, dto.content_schema_version);
     dto.content = contentSource?.content || undefined;
     const risk = this.contentSafety
       ? await this.contentSafety.assess(this.resourceSafetyText({
@@ -372,6 +377,7 @@ export class ResourcesService {
       content_html: contentSource?.content_html || null,
       content_json: contentSource?.content_json || null,
       content_text: contentSource?.content_text || null,
+      content_schema_version: contentSource?.content_schema_version || 2,
       category_id: categoryId,
       is_public: this.toTinyInt((dto as any).is_public, 1),
       status: requiresModeration ? RESOURCE_STATUS_PENDING : RESOURCE_STATUS_APPROVED,
@@ -1560,8 +1566,11 @@ export class ResourcesService {
     provenance: { ipAddress?: string } = {},
   ): Promise<any> {
     const hasContentUpdate = dto.content !== undefined || dto.content_json !== undefined;
+    const canonicalJson = dto.content_json && this.customEmojis
+      ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, true)
+      : dto.content_json;
     const contentSource = hasContentUpdate
-      ? resolveOptionalContentSource(dto.content, dto.content_json)
+      ? resolveOptionalContentSource(dto.content, canonicalJson, dto.content_schema_version)
       : undefined;
     if (contentSource) dto.content = contentSource.content;
 
@@ -1633,6 +1642,7 @@ export class ResourcesService {
         updateData.content_html = contentSource?.content_html ?? null;
         updateData.content_json = contentSource?.content_json || null;
         updateData.content_text = contentSource?.content_text || null;
+        updateData.content_schema_version = contentSource?.content_schema_version || 2;
       }
       if ((dto as any).category_id !== undefined) updateData.category_id = categoryId;
       if ((dto as any).is_public !== undefined) {

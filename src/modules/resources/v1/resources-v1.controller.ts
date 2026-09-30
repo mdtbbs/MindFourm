@@ -178,6 +178,7 @@ export class ResourcesV1Controller {
       summary: dto.summary,
       content: dto.content,
       content_format: 'tiptap_json',
+      content_schema_version: dto.content_schema_version || 2,
       content_json: dto.content_json,
       content_html: dto.content_html,
       content_text: dto.content_text,

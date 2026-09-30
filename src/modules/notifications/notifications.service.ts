@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { FindOptionsWhere, In, Repository } from 'typeorm';
 import { RedisService } from '../../database/redis.service';
 import { NotificationReadFilter } from './dto/query-notifications.dto';
 import { parseMarkdown } from '../../common/utils/markdown.util';
@@ -22,6 +22,7 @@ import { SettingsService } from '../settings/settings.service';
 import { NotificationStreamService } from './notification-stream.service';
 import { TemplateService } from './template.service';
 import { SiteConfigService } from '../../config/site-profile';
+import { UserBlocksService } from '../user-blocks/user-blocks.service';
 
 export interface NotificationView {
   id: number;
@@ -60,6 +61,7 @@ export class NotificationsService {
     private notificationStream: NotificationStreamService,
     private templateService: TemplateService,
     @Optional() private readonly siteConfig?: SiteConfigService,
+    @Optional() private readonly userBlocks?: UserBlocksService,
   ) {}
 
   /**
@@ -480,6 +482,43 @@ export class NotificationsService {
       }
     }
 
+    return notifications;
+  }
+
+  /** Notify from validated schema-v2 mention identities, deduped by user id. */
+  async notifyMentionedUserIds(
+    userIds: number[],
+    postId: number,
+    actorId: number,
+    content: string,
+    replyId?: number,
+    skipUserIds: number[] = [],
+  ): Promise<Notification[]> {
+    const uniqueIds = [...new Set(userIds)].filter((id) => Number.isSafeInteger(id) && id > 0 && id !== actorId && !skipUserIds.includes(id));
+    if (!uniqueIds.length) return [];
+    const users = await this.userRepository.find({ where: { id: In(uniqueIds) }, select: { id: true } });
+    const notifications: Notification[] = [];
+    for (const user of users) {
+      if (this.userBlocks) {
+        const [actorBlockedRecipient, recipientBlockedActor] = await Promise.all([
+          this.userBlocks.isBlocked(actorId, user.id),
+          this.userBlocks.isBlocked(user.id, actorId),
+        ]);
+        if (actorBlockedRecipient || recipientBlockedActor) continue;
+      }
+      try {
+        notifications.push(await this.create({
+          user_id: user.id,
+          type: 'mention',
+          actor_id: actorId,
+          post_id: postId,
+          reply_id: replyId,
+          content,
+        }));
+      } catch (error) {
+        this.logger.warn(`Failed to notify mentioned user ${user.id}: ${(error as Error).message}`);
+      }
+    }
     return notifications;
   }
 

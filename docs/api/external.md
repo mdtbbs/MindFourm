@@ -171,9 +171,29 @@ X-Request-ID: <request-id>
 
 ---
 
-## 正文格式（Markdown 富文本）
+## 正文格式（Rich Content Schema v2）
 
-所有包含 `content` 字段的写接口（发帖、回复、资源说明等）均支持 **Markdown + GFM（GitHub Flavored Markdown）** 富文本格式。请求体中的 `content` 使用 Markdown 语法编写，后端通过 `marked` + `sanitize-html` 解析为安全的 HTML 后存储，前端以 `react-markdown` + `remark-gfm` 渲染。
+新客户端写帖子、回复或资源长描述时，应发送 `content_schema_version: 2` 和 `content_json`。JSON 是正文的规范来源；`content` Markdown 仅用于旧客户端兼容、搜索、摘要、通知、RSS 和纯文本降级。Markdown-only 请求仍通过兼容路径转换为 v2 JSON。
+
+```json
+{
+  "content_schema_version": 2,
+  "content_json": {
+    "type": "doc",
+    "content": [
+      { "type": "heading", "attrs": { "level": 2 }, "content": [{ "type": "text", "text": "标题" }] },
+      { "type": "paragraph", "content": [{ "type": "text", "text": "重点", "marks": [{ "type": "bold" }] }] },
+      { "type": "bulletList", "attrs": { "tight": true }, "content": [{ "type": "listItem", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "条目" }] }] }] }
+    ]
+  }
+}
+```
+
+支持的块节点：`paragraph`、`heading`、`blockquote`、`bulletList`、`orderedList`、`listItem`、`taskList`、`taskItem`、`codeBlock`、`horizontalRule`、`table`、`spoiler`、`video`、`attachment`、`postQuote`、`replyQuote`。行内节点：`text`、`hardBreak`、`image`、`mention`、`customEmoji`。Marks：bold、italic、strike、underline、code、link、textColor、highlight、fontSize、fontFamily、superscript、subscript。
+
+属性按节点严格校验。错误详情包含 JSON path、node、attribute 和 schema version；未知节点/mark 不会静默丢弃。资源描述拒绝 video、attachment、postQuote 和 replyQuote。视频 provider 随站点配置启用；附件引用必须属于当前帖子/回复并遵循现有审核流程；引用节点只存 ID，读取时重新检查权限。
+
+下方 Markdown 语法表描述的是兼容投影，无法表达 v2 的颜色、字号/字体、结构化引用、Mention、附件、视频和自定义表情。
 
 ### 支持的语法
 
@@ -337,7 +357,14 @@ Content-Type: application/json
 {
   "username": "alice",
   "title": "机器人同步的公告",
-  "content": "这是 **Markdown** 正文。",
+  "content_schema_version": 2,
+  "content_json": {
+    "type": "doc",
+    "content": [
+      { "type": "heading", "attrs": { "level": 2 }, "content": [{ "type": "text", "text": "本周公告" }] },
+      { "type": "paragraph", "content": [{ "type": "text", "text": "这是 " }, { "type": "text", "text": "Rich Content", "marks": [{ "type": "bold" }] }] }
+    ]
+  },
   "category_id": 1,
   "tags": ["公告", "机器人"],
   "status": "published"
@@ -375,7 +402,11 @@ Content-Type: application/json
 {
   "user_id": 45,
   "title": "更新后的标题",
-  "content": "更新后的正文",
+  "content_schema_version": 2,
+  "content_json": {
+    "type": "doc",
+    "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "更新后的正文" }] }]
+  },
   "tags": ["更新"]
 }
 ```
@@ -448,7 +479,11 @@ Content-Type: application/json
 ```json
 {
   "mindauth_id": 456,
-  "content": "机器人代用户回复",
+  "content_schema_version": 2,
+  "content_json": {
+    "type": "doc",
+    "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "机器人代用户回复" }] }]
+  },
   "parent_reply_id": 10
 }
 ```
@@ -522,7 +557,11 @@ Content-Type: application/json
   "resource_type": "external",
   "external_url": "https://example.com/map.zip",
   "version": "1.0.0",
-  "content": "资源说明，支持 Markdown",
+  "content_schema_version": 2,
+  "content_json": {
+    "type": "doc",
+    "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "资源长描述" }] }]
+  },
   "category_id": 2,
   "is_public": true
 }

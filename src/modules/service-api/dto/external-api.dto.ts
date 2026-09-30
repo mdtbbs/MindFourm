@@ -1,4 +1,6 @@
-import { IsArray, IsBoolean, IsDateString, IsIn, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { TiptapDocumentDto } from '@common/dto/tiptap-document.dto';
 import { ServiceAccountSelectorDto } from './service-account-selector.dto';
 
 export class CreateExternalApiKeyDto {
@@ -107,8 +109,18 @@ export class ExternalCreatePostDto extends ServiceAccountSelectorDto {
   @IsString()
   title: string;
 
+  @IsOptional()
   @IsString()
-  content: string;
+  content?: string;
+
+  @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Canonical Rich Content Schema v2 document. Submit with content_schema_version: 2; Markdown content is a legacy projection.' })
+  @IsOptional()
+  @IsObject()
+  content_json?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: [2] })
+  @IsOptional() @IsInt() @Min(1) @Max(2)
+  content_schema_version?: number;
 
   @IsOptional()
   @IsNumber()
@@ -155,6 +167,15 @@ export class ExternalUpdatePostDto extends ServiceAccountSelectorDto {
   @IsString()
   content?: string;
 
+  @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Canonical Rich Content Schema v2 document. Submit with content_schema_version: 2; Markdown content is a legacy projection.' })
+  @IsOptional()
+  @IsObject()
+  content_json?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: [2] })
+  @IsOptional() @IsInt() @Min(1) @Max(2)
+  content_schema_version?: number;
+
   @IsOptional()
   @IsNumber()
   category_id?: number;
@@ -182,8 +203,18 @@ export class ExternalUpdatePostDto extends ServiceAccountSelectorDto {
 }
 
 export class ExternalCreateReplyDto extends ServiceAccountSelectorDto {
+  @IsOptional()
   @IsString()
-  content: string;
+  content?: string;
+
+  @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Canonical Rich Content Schema v2 document. Submit with content_schema_version: 2; Markdown content is a legacy projection.' })
+  @IsOptional()
+  @IsObject()
+  content_json?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: [2] })
+  @IsOptional() @IsInt() @Min(1) @Max(2)
+  content_schema_version?: number;
 
   @IsOptional()
   @IsNumber()
@@ -191,8 +222,18 @@ export class ExternalCreateReplyDto extends ServiceAccountSelectorDto {
 }
 
 export class ExternalUpdateReplyDto extends ServiceAccountSelectorDto {
+  @IsOptional()
   @IsString()
-  content: string;
+  content?: string;
+
+  @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Canonical Rich Content Schema v2 document. Submit with content_schema_version: 2; Markdown content is a legacy projection.' })
+  @IsOptional()
+  @IsObject()
+  content_json?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: [2] })
+  @IsOptional() @IsInt() @Min(1) @Max(2)
+  content_schema_version?: number;
 }
 
 export class ExternalModeratePostDto extends ServiceAccountSelectorDto {
@@ -246,6 +287,15 @@ export class ExternalCreateResourceDto extends ServiceAccountSelectorDto {
   @IsString()
   content?: string;
 
+  @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Rich Content Schema v2 source for the long description.' })
+  @IsOptional()
+  @IsObject()
+  content_json?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: [2] })
+  @IsOptional() @IsInt() @Min(1) @Max(2)
+  content_schema_version?: number;
+
   @IsOptional()
   @IsNumber()
   category_id?: number;
@@ -279,6 +329,15 @@ export class ExternalUpdateResourceDto extends ServiceAccountSelectorDto {
   @IsOptional()
   @IsString()
   content?: string;
+
+  @ApiPropertyOptional({ type: () => TiptapDocumentDto, description: 'Rich Content Schema v2 source for the long description.' })
+  @IsOptional()
+  @IsObject()
+  content_json?: Record<string, unknown>;
+
+  @ApiPropertyOptional({ enum: [2] })
+  @IsOptional() @IsInt() @Min(1) @Max(2)
+  content_schema_version?: number;
 
   @IsOptional()
   @IsNumber()
