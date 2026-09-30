@@ -19,6 +19,24 @@ import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { PostsService } from '../posts/posts.service';
 
+type PublicReply = Omit<Reply, 'ip_address' | 'user'> & {
+  user: Pick<User, 'id' | 'username' | 'role' | 'avatar_url'> | null;
+};
+
+function toPublicReply(reply: Reply): PublicReply {
+  const { ip_address: _ipAddress, user, ...publicFields } = reply;
+  void _ipAddress;
+  return {
+    ...publicFields,
+    user: user ? {
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      avatar_url: user.avatar_url,
+    } : null,
+  };
+}
+
 @Injectable()
 export class RepliesService {
   constructor(
@@ -47,7 +65,7 @@ export class RepliesService {
     dto: CreateReplyDto,
     userId: number,
     provenance: { ipAddress?: string; locationLabel?: string | null } = {},
-  ): Promise<Reply> {
+  ): Promise<PublicReply> {
     // Execute "before" hook
     let modifiedDto = await this.eventBus.execute('reply.create', { ...dto, postId, userId });
     dto = modifiedDto;
@@ -185,14 +203,14 @@ export class RepliesService {
       console.error('reply.created hook error:', err),
     );
 
-    return savedReply;
+    return toPublicReply(savedReply);
   }
 
   async awardPointsForReply(replyId: number, userId: number): Promise<void> {
     await this.pointsService.awardPoints(userId, 'create_reply', 'reply', replyId);
   }
 
-  async getByPostId(postId: number, page: number = 1, limit: number = 20): Promise<{ data: Reply[]; total: number; page: number; totalPages: number }> {
+  async getByPostId(postId: number, page: number = 1, limit: number = 20): Promise<{ data: PublicReply[]; total: number; page: number; totalPages: number }> {
     const skip = (page - 1) * limit;
 
     const [replies, total] = await this.replyRepository.findAndCount({
@@ -209,14 +227,14 @@ export class RepliesService {
     });
 
     return {
-      data: replies,
+      data: replies.map(toPublicReply),
       total,
       page,
       totalPages: Math.ceil(total / limit),
     };
   }
 
-  async findById(id: number): Promise<Reply> {
+  async findById(id: number): Promise<PublicReply> {
     const reply = await this.replyRepository.findOne({
       where: { id },
       relations: ['user'],
@@ -230,10 +248,10 @@ export class RepliesService {
       throw new NotFoundException('Reply has been deleted');
     }
 
-    return reply;
+    return toPublicReply(reply);
   }
 
-  async update(id: number, content: string | undefined, userId: number, userRole?: string, contentJson?: unknown, schemaVersion?: number): Promise<Reply> {
+  async update(id: number, content: string | undefined, userId: number, userRole?: string, contentJson?: unknown, schemaVersion?: number): Promise<PublicReply> {
     const reply = await this.replyRepository.findOne({
       where: { id },
     });
@@ -272,7 +290,7 @@ export class RepliesService {
       if (added.length) await this.notificationsService.notifyMentionedUserIds(added, saved.post_id, userId, saved.content, saved.id);
     }
     await this.invalidatePostCache(reply.post_id);
-    return saved;
+    return toPublicReply(saved);
   }
 
   async softDelete(id: number, userId: number, userRole?: string): Promise<void> {
