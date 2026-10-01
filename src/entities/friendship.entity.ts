@@ -27,10 +27,10 @@ export class Friendship {
   @Column({ name: 'addressee_id' })
   addressee_id: number;
 
-  @Column({ type: 'int', asExpression: 'LEAST(requester_id, addressee_id)', generatedType: 'STORED', insert: false, update: false })
+  @Column({ type: 'int', asExpression: 'LEAST(requester_id, addressee_id)', generatedType: 'VIRTUAL', insert: false, update: false })
   pair_low: number;
 
-  @Column({ type: 'int', asExpression: 'GREATEST(requester_id, addressee_id)', generatedType: 'STORED', insert: false, update: false })
+  @Column({ type: 'int', asExpression: 'GREATEST(requester_id, addressee_id)', generatedType: 'VIRTUAL', insert: false, update: false })
   pair_high: number;
 
   @Column({ type: 'enum', enum: ['pending', 'accepted', 'rejected'], default: 'pending' })

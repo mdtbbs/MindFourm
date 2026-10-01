@@ -26,10 +26,21 @@ export class MultiplayerPlatformV11720000150000 implements MigrationInterface {
        AND GREATEST(earlier_duplicate.requester_id, earlier_duplicate.addressee_id) = GREATEST(retained.requester_id, retained.addressee_id)
        AND earlier_duplicate.id > retained.id
     `);
+    // MySQL 5.7 cannot safely COPY/rebuild this table to add STORED generated
+    // columns while its existing foreign keys are present (see MySQL bug #94816).
+    // Virtual generated columns and their secondary index are supported by 5.7;
+    // add each separately because virtual-column changes cannot be combined with
+    // other ALTER operations in-place.
     await queryRunner.query(`
       ALTER TABLE friendships
-        ADD COLUMN pair_low INT GENERATED ALWAYS AS (LEAST(requester_id, addressee_id)) STORED,
-        ADD COLUMN pair_high INT GENERATED ALWAYS AS (GREATEST(requester_id, addressee_id)) STORED,
+        ADD COLUMN pair_low INT GENERATED ALWAYS AS (LEAST(requester_id, addressee_id)) VIRTUAL
+    `);
+    await queryRunner.query(`
+      ALTER TABLE friendships
+        ADD COLUMN pair_high INT GENERATED ALWAYS AS (GREATEST(requester_id, addressee_id)) VIRTUAL
+    `);
+    await queryRunner.query(`
+      ALTER TABLE friendships
         ADD UNIQUE INDEX uq_friendships_undirected_pair (pair_low, pair_high)
     `);
 
@@ -200,6 +211,8 @@ export class MultiplayerPlatformV11720000150000 implements MigrationInterface {
     await queryRunner.query('DROP TABLE IF EXISTS multiplayer_sessions');
     await queryRunner.query('DROP TABLE IF EXISTS user_presence_preferences');
     await queryRunner.query('DROP TABLE IF EXISTS social_privacy_settings');
-    await queryRunner.query('ALTER TABLE friendships DROP INDEX uq_friendships_undirected_pair, DROP COLUMN pair_low, DROP COLUMN pair_high');
+    await queryRunner.query('ALTER TABLE friendships DROP INDEX uq_friendships_undirected_pair');
+    await queryRunner.query('ALTER TABLE friendships DROP COLUMN pair_low');
+    await queryRunner.query('ALTER TABLE friendships DROP COLUMN pair_high');
   }
 }
