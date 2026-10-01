@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 const DEFAULT_PORT = 4000;
 
 function resolvePort(): number {
@@ -65,6 +67,23 @@ export const appConfig = () => ({
     enabled: process.env.LANLINK_ENABLED === 'true',
     baseUrl: process.env.LANLINK_URL || '',
   },
+  multiplayer: {
+    relayCredentialSecret: process.env.MULTIPLAYER_RELAY_CREDENTIAL_SECRET || '',
+    relayMachineCredential: process.env.MULTIPLAYER_RELAY_MACHINE_CREDENTIAL || '',
+    relayAgentIds: process.env.MULTIPLAYER_RELAY_AGENT_IDS || '',
+  },
+  cloudSaves: {
+    maxBytesPerUser: parsePositiveInt(process.env.CLOUD_SAVES_MAX_BYTES_PER_USER, 524288000),
+    maxFileBytes: parsePositiveInt(process.env.CLOUD_SAVES_MAX_FILE_BYTES, 52428800),
+    maxSlots: parsePositiveInt(process.env.CLOUD_SAVES_MAX_SLOTS, 100),
+    maxHistoryPerSlot: parsePositiveInt(process.env.CLOUD_SAVES_MAX_HISTORY_PER_SLOT, 20),
+    retentionDays: parsePositiveInt(process.env.CLOUD_SAVES_RETENTION_DAYS, 90),
+    gcGraceHours: parsePositiveInt(process.env.CLOUD_SAVES_GC_GRACE_HOURS, 24),
+    uploadSessionMinutes: parsePositiveInt(process.env.CLOUD_SAVES_UPLOAD_SESSION_MINUTES, 10),
+    maxMods: parsePositiveInt(process.env.CLOUD_SAVES_MAX_MODS, 100),
+    maxManifestBytes: parsePositiveInt(process.env.CLOUD_SAVES_MAX_MANIFEST_BYTES, 16384),
+    storagePath: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'),
+  },
   forge: {
     baseUrl: process.env.MDT_FORGE_URL || '',
     apiKey: process.env.MDT_FORGE_API_KEY || '',
@@ -90,3 +109,8 @@ export const appConfig = () => ({
     },
   },
 });
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}

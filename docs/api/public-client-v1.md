@@ -1,10 +1,10 @@
-# MDTBBS Public Client API V1
+# 第三方客户端接入指南
 
-本指南面向 Web、Android、桌面客户端、Mindustry Mod 和第三方启动器。所有应用使用同一套 MindAuth OAuth Authorization Code + PKCE S256 和 `/api/v1/*`；客户端名称不会带来额外权限。
+本指南面向 Web、Android、桌面客户端、Mindustry Mod 和第三方启动器。所有应用使用同一套 MindAuth OAuth Authorization Code + PKCE S256，并调用 `/api/v1/*`；应用名称或客户端类型不会自动增加权限。
 
-线上接入入口是 [`/api/v1/docs/oauth`](https://mdtbbs.cn/api/v1/docs/oauth)，里面直接列了申请应用、Redirect URI、PKCE、scope、换 token、refresh 和 revoke。需要更完整的协议细节与 Java/Kotlin PKCE 示例时，再看 [MindAuth Public Client PKCE 指南](https://github.com/mdtbbs/MindAuth/blob/main/docs/public-client-pkce.md)。MindFourm 的 OpenAPI 契约位于 `/api/openapi/v1.json`。
+在线的[第三方客户端授权指南](https://mdtbbs.cn/api/v1/docs/oauth)介绍应用申请、Redirect URI、PKCE、权限申请、令牌交换、刷新和撤销。MindAuth 协议细节及 Java/Kotlin PKCE 示例见 [Public Client PKCE 指南](https://github.com/mdtbbs/MindAuth/blob/main/docs/public-client-pkce.md)。MindFourm 的 OpenAPI 契约位于 `/api/openapi/v1.json`。
 
-## 1. 接入顺序
+## 接入顺序
 
 1. 登录并完成手机号验证，在 MindAuth 开发者中心自助创建 Public Client。创建后立即取得 `client_id`，无需管理员审核；Public Client 没有 `client_secret`，创建接口按 IP 限流。
 2. 注册精确 Redirect URI 和所需 scopes。桌面 loopback 支持 `127.0.0.1`、`[::1]` 和 `localhost`；以端口 `0` 注册可匹配运行时随机端口，其他内网地址不允许。
@@ -15,9 +15,9 @@
 
 不要把 MindAuth 密码、External API Key、服务端密钥或 client secret 放进客户端。注册和账号验证始终在 MindAuth Web 完成。
 
-## 2. Scope
+## OAuth 权限范围（Scopes）
 
-只申请产品需要的 scope。开发者修改的 scope 立即生效；MindAuth 授权页面会展示权限中文说明，首次授权时展示全部权限，新增 scope 时只强调新增项。`message.read` 和 `message.write` 会标为敏感权限，但不需要人工审核。
+Scope 是按操作类型划分的权限类别，不会为每条 API 路径单独设置。一个 scope 可以覆盖多条接口；申请时只选择产品实际需要的权限。开发者修改应用所需的 scope 后会立即生效。MindAuth 授权页面会显示中文说明；首次授权显示全部权限，之后只突出新增项。`message.read` 和 `message.write` 属于敏感权限，但目前不需要人工审核。
 
 | Scope | 用途 | MindFourm API |
 | --- | --- | --- |
@@ -32,12 +32,22 @@
 | `notification.read` | 读取和处理通知 | notifications V1 |
 | `message.read` | 读取私信 | messages V1 读取接口 |
 | `message.write` | 发送私信 | `POST /api/v1/messages` |
+| `friends.read` | 读取好友与可见社交状态 | 好友列表、好友请求、按隐私策略可见的社交数据 |
+| `presence.read` | 读取在线状态 | Presence 查询；仍受用户隐私设置约束 |
+| `presence.write` | 更新在线状态 | Presence / Rich Activity 写入；客户端能力另需审核 |
+| `multiplayer.read` | 查看联机会话 | 可访问的 Session、Peer 与连接信息 |
+| `multiplayer.write` | 使用联机功能 | 创建或加入 Session、邀请好友、申请 Relay；Multiplayer 客户端能力另需审核 |
+| `game_content.saves.read` | 读取游戏云存档 | Cloud Saves V1 读取接口 |
+| `game_content.saves.write` | 写入游戏云存档 | 创建或更新存档、上传快照 |
+| `game_content.saves.delete` | 删除游戏云存档 | 删除存档槽或快照 |
 
 scope 表示客户端被允许请求某一类操作，不替代 Forum 的用户权限、手机号验证、社区条款、站点开关、封禁、内容审核、资源策略或私信开关。失败时读取 HTTP 状态和稳定 `error.code`；不要匹配中文消息。
 
-MindFourm 对 opaque Bearer 的 introspection 与 UserInfo 身份信息使用 Redis 缓存 30 秒，缓存 key 是 access token 的 SHA-256 摘要。MindAuth 撤销 token 或应用后，已缓存的论坛 API 身份最迟在 30 秒内失效。API V1 缺少 scope 时返回统一错误 envelope：`error.code` 为 `INSUFFICIENT_SCOPE`，`error.details` 包含 `{ "requiredScopes": ["resource.upload"] }`。
+论坛 API Reference 里的业务分组不一定对应 OAuth scope：蓝图/地图等 Game Content 读取使用 `resource.read`，上传使用 `resource.upload`；公开 GET 可以匿名访问，携带 OAuth Bearer 时才按该接口声明的 scope 校验。Relay Agent 内部接口通过 HTTPS 和独立机器凭证认证；External API 使用独立 API Key，不通过 Public Client scope 申请。
 
-## 3. Capability discovery
+论坛通过 MindAuth 验证不透明的 Bearer 令牌，并从 UserInfo 获取用户资料；验证结果和必要的身份信息会在 Redis 中缓存 30 秒。缓存键由 access token 的 SHA-256 摘要生成。MindAuth 撤销令牌或停用应用后，论坛 API 最迟会在 30 秒内停止接受已缓存的身份。V1 请求缺少 scope 时返回统一错误结构：`error.code` 为 `INSUFFICIENT_SCOPE`，`error.details` 中包含 `{ "requiredScopes": ["resource.upload"] }`。
+
+## 服务能力发现（Capabilities）
 
 `GET /api/v1/capabilities` 不需要认证。能力受 Forum 站点设置控制，运行时可能变化；`true` 也不代表当前用户已有对应 OAuth scope 或本地写入权限。
 
@@ -51,6 +61,15 @@ MindFourm 对 opaque Bearer 的 introspection 与 UserInfo 身份信息使用 Re
     "maps": { "read": true, "download": true, "upload": true },
     "schematics": { "read": true, "download": true, "upload": true }
   },
+  "multiplayer": {
+    "social_presence_v1": true,
+    "rich_activity_v1": true,
+    "multiplayer_sessions_v1": true,
+    "multiplayer_invites_v1": true,
+    "multiplayer_relay_v1": false,
+    "third_party_multiplayer_v1": false
+  },
+  "cloud_saves_v1": true,
   "client": { "minimum_supported_version": null, "recommended_version": null },
   "resource_read": true,
   "resource_files": true,
@@ -66,8 +85,9 @@ MindFourm 对 opaque Bearer 的 introspection 与 UserInfo 身份信息使用 Re
 ```
 
 响应中的旧扁平 capability 字段仍保留兼容性。第三方私信默认关闭；此时 `messages.third_party_access` 为 `false`，访问会返回 `403 THIRD_PARTY_ACCESS_DISABLED`。
+`multiplayer` 中的开关分别表示 Presence、Activity、Session、邀请、Relay 和第三方联机能力是否启用；`cloud_saves_v1` 表示云存档服务是否启用。它们只是站点能力提示，不会代替相应 OAuth scope 或应用能力审核。
 
-## 4. 当前用户与权限
+## 当前用户与可执行操作
 
 `GET /api/v1/me` 需要 `profile` scope。首次在论坛建立账号只需 `profile`；邮箱 scope 独立可选。除了兼容字段外，响应增加 `verification.phone` 与 `permissions`：
 
@@ -85,9 +105,9 @@ MindFourm 对 opaque Bearer 的 introspection 与 UserInfo 身份信息使用 Re
 
 可用 reason 包括 `USER_BANNED`、`TERMS_ACCEPTANCE_REQUIRED`、`FEATURE_DISABLED`、`RESOURCE_UPLOAD_DISABLED`、`PHONE_VERIFICATION_REQUIRED`、`MESSAGING_DISABLED` 和 `THIRD_PARTY_ACCESS_DISABLED`。`permissions` 是 UI 提示，不是授权凭证；每个写接口仍会在请求时执行领域权限与审核策略。当前仓库没有独立的用户禁言实体或禁言服务。
 
-## 5. Forum 与内容
+## 论坛与内容
 
-| Method | Path | Scope | 说明 |
+| 方法 | 路径 | Scope | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/threads?limit=20&offset=0` | `forum.read`（带 Bearer 时） | 分页 thread 列表；匿名读取仍可用 |
 | GET | `/api/v1/threads?q=search&limit=20` | `forum.read` | 搜索交由既有 SearchService |
@@ -103,7 +123,7 @@ Thread/reply/资源长描述提供兼容 Markdown/HTML 字段和 `content_format
 
 旧客户端仍可只提交 Markdown `content`，服务端会在兼容路径中生成 v2 canonical JSON。该兼容输入不表示 Markdown 是新内容的 source of truth。
 
-## 6. Resource V1
+## 资源中心
 
 公开读取使用稳定 `public_id`：
 
@@ -124,9 +144,9 @@ Manifest 顶层保留已发布字段，并增加 `schema_version`、`type` 和 `
 
 草稿文件保留在隔离的 quarantine 存储；API 不返回本地路径。草稿 30 分钟过期，每个用户最多保留 5 个活动草稿，旧草稿会被清理。上传需要 `resource.upload`，还受资源类型策略、手机号、站点开关和审核策略约束。
 
-## 7. Notifications 与 Messages
+## 通知与私信
 
-| Method | Path | Scope | 说明 |
+| 方法 | 路径 | Scope | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/notifications?page=1&limit=20` | `notification.read` | 通知列表 |
 | GET | `/api/v1/notifications/unread-count` | `notification.read` | 未读数量 |
@@ -139,7 +159,7 @@ Manifest 顶层保留已发布字段，并增加 `schema_version`、`type` 和 `
 
 SSE capability 当前为 `false`。私信除 scope 外还要求全站私信启用；第三方 OAuth 客户端还必须由站点显式开启 `feature_messages_third_party_access_enabled`。
 
-## 8. 调用示例
+## 调用示例
 
 以下示例展示取得 MindAuth token 后访问 Forum。PKCE code exchange 和 refresh 请求体见 [MindAuth PKCE 指南](https://github.com/mdtbbs/MindAuth/blob/main/docs/public-client-pkce.md)。不要在客户端硬编码 token；生产应用应使用平台安全存储，并处理 refresh rotation。
 
@@ -197,7 +217,7 @@ connection.disconnect()
 
 成功 JSON 默认通过 V1 envelope 返回；数组型旧响应可能直接返回数组，同时由 `meta.pagination` 提供分页。错误控制流使用 HTTP 状态码和 `error.code`。
 
-## 9. 兼容与迁移
+## 兼容与迁移
 
 - `/api/v1/auth/mobile/exchange`、`/refresh` 与 Forum mobile JWT 继续服务已有 Android 客户端；新客户端使用 MindAuth Public Client PKCE。旧接口目前仍受支持，没有因本次升级被删除。
 - `forum_session` 与 mobile legacy 凭证由 Forum 服务端赋予第一方兼容 capability；MindAuth OAuth Bearer 则只按实际 introspection 返回的 scope 授权。

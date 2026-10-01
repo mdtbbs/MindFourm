@@ -1,4 +1,4 @@
-export type ApiV1Meta = { request_id: string; pagination?: { page: number; limit: number; total: number; total_pages: number; has_more?: boolean } };
+export type ApiV1Meta = { request_id: string; next_cursor?: string | null; pagination?: { page: number; limit: number; total: number; total_pages: number; has_more?: boolean } };
 
 export type ApiV1Success<T> = {
   data: T;
@@ -31,6 +31,9 @@ export function apiV1Success<T>(data: T, requestId: string): ApiV1Success<T> {
   // shape (JSON.stringify ignores non-enumerable properties).
   if (Array.isArray(value) && (value as any).__v1Pagination) {
     return { data, meta: { request_id: requestId, pagination: normalizePagination((value as any).__v1Pagination) } };
+  }
+  if (Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, '__v1NextCursor')) {
+    return { data, meta: { request_id: requestId, next_cursor: (value as any).__v1NextCursor } };
   }
   if (value?.__v1Pagination) {
     const { __v1Pagination, ...payload } = value;

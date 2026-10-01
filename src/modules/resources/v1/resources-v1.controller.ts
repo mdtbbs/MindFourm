@@ -3,7 +3,7 @@ import { Response } from 'express';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { ApiTags, ApiOkResponse, ApiParam, ApiResponse } from '@nestjs/swagger';
+import { ApiTags, ApiOkResponse, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { ApiV1, RawHttpResponse } from '../../../common/decorators/api-v1.decorator';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { OptionalAuth } from '../../../common/decorators/public.decorator';
@@ -42,6 +42,9 @@ export class ResourcesV1Controller {
   @Get()
   @OptionalAuth()
   @OAuthOptionalProtected('resource.read')
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20, description: '每页返回数量。' })
+  @ApiQuery({ name: 'offset', required: false, type: Number, example: 0, description: '列表起始偏移量。' })
+  @ApiQuery({ name: 'q', required: false, type: String, example: 'schematic', description: '按资源名称或描述搜索。' })
   @ApiOkResponse({ description: 'Public resource list' })
   async listResources(@Query('limit') limit?: string, @Query('offset') offset?: string, @Query('q') query?: string) {
     await this.assertEnabled();

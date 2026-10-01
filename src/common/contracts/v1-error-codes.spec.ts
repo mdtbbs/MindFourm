@@ -24,6 +24,23 @@ describe('V1 Error Code Registry', () => {
     expect(unique.size).toBe(codes.length);
   });
 
+  it('registers stable Social Presence and Multiplayer error codes', () => {
+    for (const code of [
+      'FRIEND_REQUIRED', 'USER_BLOCKED', 'PRIVACY_DENIED', 'PRESENCE_CONNECTION_NOT_FOUND',
+      'SESSION_NOT_FOUND', 'SESSION_FULL', 'PEER_RESUME_INVALID', 'CANDIDATE_LIMIT_REACHED',
+      'INVITE_EXPIRED', 'JOIN_REQUEST_EXPIRED', 'JOIN_INTENT_CONSUMED', 'RELAY_UNAVAILABLE',
+      'CLIENT_CAPABILITY_NOT_APPROVED', 'RATE_LIMITED',
+    ]) expect(lookupV1ErrorCode(code)).not.toBeNull();
+  });
+
+  it('registers stable Cloud Saves API error codes', () => {
+    for (const code of ['CLOUD_SAVES_DISABLED', 'SAVE_NOT_FOUND', 'SAVE_QUOTA_EXCEEDED', 'SAVE_CONFLICT',
+      'SAVE_BASE_SNAPSHOT_INVALID', 'SAVE_UPLOAD_CHECKSUM_MISMATCH', 'SAVE_CURRENT_SNAPSHOT_DELETE_FORBIDDEN',
+      'SAVE_STORAGE_UNAVAILABLE', 'SAVE_INVALID_HASH', 'SAVE_INVALID_METADATA']) {
+      expect(lookupV1ErrorCode(code)).not.toBeNull();
+    }
+  });
+
   it('all codes have required fields', () => {
     for (const def of getAllV1ErrorCodes()) {
       expect(def.code).toBeTruthy();

@@ -98,7 +98,11 @@ export class RateLimitGuard implements CanActivate {
         remaining: 0,
         ipSource: req.clientIpSource || 'connection',
       });
-      throw new HttpException('请求过于频繁，请稍后再试', HttpStatus.TOO_MANY_REQUESTS);
+      const isVersionedApi = String(req.originalUrl || req.url || '').startsWith('/api/v1/');
+      throw new HttpException(
+        isVersionedApi ? { code: 'RATE_LIMITED', message: 'RATE_LIMITED' } : '请求过于频繁，请稍后再试',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     const response = context.switchToHttp().getResponse();

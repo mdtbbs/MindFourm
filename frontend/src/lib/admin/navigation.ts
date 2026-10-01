@@ -36,6 +36,7 @@ import {
   GitMerge,
   ScrollText,
   Trash2,
+  HardDrive,
 } from 'lucide-react';
 import type { UserRole } from '@/types';
 
@@ -168,6 +169,7 @@ export const adminNavSections: AdminNavSection[] = [
       { key: 'footer', label: '页脚设置', href: '/admin/settings/footer', icon: PanelLeft, roles: adminOnly },
       { key: 'display', label: '显示设置', href: '/admin/settings/display', icon: Palette, roles: adminOnly },
       { key: 'features', label: '功能开关', href: '/admin/settings/features', icon: ToggleLeft, roles: adminOnly },
+      { key: 'cloud-saves', label: '云存档', href: '/admin/settings/cloud-saves', icon: HardDrive, roles: adminOnly },
       { key: 'moderation-settings', label: '审核规则', href: '/admin/settings/moderation', icon: ShieldCheck, roles: adminOnly },
       { key: 'seo', label: 'SEO', href: '/admin/settings/seo', icon: Search, roles: adminOnly },
       { key: 'terms', label: '条款设置', href: '/admin/settings/terms', icon: FileCheck, roles: adminOnly },

@@ -12,7 +12,7 @@ jest.mock('@nestjs/common', () => ({
   },
 }));
 jest.mock('@nestjs/swagger', () => ({
-  ApiTags: decorator, ApiBearerAuth: decorator, ApiExtension: decorator,
+  ApiTags: decorator, ApiQuery: decorator, ApiBearerAuth: decorator, ApiExtension: decorator,
   ApiForbiddenResponse: decorator, ApiUnauthorizedResponse: decorator,
 }));
 jest.mock('../../common/guards/jwt-auth.guard', () => ({ JwtAuthGuard: class JwtAuthGuard {} }));

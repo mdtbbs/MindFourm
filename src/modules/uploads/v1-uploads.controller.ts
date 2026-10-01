@@ -1,5 +1,5 @@
 import { BadRequestException, Controller, HttpStatus, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '@common/decorators/api-v1.decorator';
 import { OAuthProtected } from '@common/decorators/oauth-protected.decorator';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
@@ -16,6 +16,15 @@ export class UploadsV1Controller {
   @Post('images')
   @OAuthProtected('forum.write')
   @UseInterceptors(publicImageUploadInterceptor)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary', description: 'JPEG、PNG、GIF 或 WebP 图片，最大 2 MiB。' } } } })
+  @ApiCreatedResponse({ description: '返回可嵌入帖子或资源正文的公开图片地址。', schema: { type: 'object', required: ['url', 'filename', 'original_name', 'mime_type', 'size'], properties: {
+    url: { type: 'string', example: '/uploads/public-images/image-uuid.png', description: '论坛同源公开图片路径。' },
+    filename: { type: 'string', description: '服务端生成的文件名。' },
+    original_name: { type: 'string', description: '上传时的原始文件名。' },
+    mime_type: { type: 'string', example: 'image/png', description: '检测到的图片 MIME 类型。' },
+    size: { type: 'integer', description: '图片字节数。' },
+  } } })
   async image(@UploadedFile() file?: Express.Multer.File) {
     if (!await this.settings.getBoolean('feature_public_api_image_upload_enabled', true)) {
       await cleanupUploadedPublicImage(file);

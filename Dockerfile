@@ -23,7 +23,7 @@ COPY --from=builder --chown=node:node /app/scripts ./scripts
 
 # Writable upload target; must be a mounted volume in production so uploads survive
 # container replacement.
-RUN mkdir -p /app/uploads && chown -R node:node /app/uploads
+RUN mkdir -p /app/uploads /var/lib/mindfourm/cloud-saves && chown -R node:node /app/uploads /var/lib/mindfourm
 
 # Drop root: the process only needs to read its own code and write to uploads.
 USER node

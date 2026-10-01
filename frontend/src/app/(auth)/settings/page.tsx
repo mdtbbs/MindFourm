@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth/context';
 import { notificationApi } from '@/lib/api/client';
 import Link from 'next/link';
 import { useI18n } from '@/i18n/provider';
+import { fetchV1 } from '@/lib/api/v1/transport';
 
 interface EmailPreferences {
   reply_email: boolean;
@@ -35,10 +36,18 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [cloudSavesEnabled, setCloudSavesEnabled] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     loadPreferences();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchV1<{ cloud_saves_v1: boolean }>('/capabilities')
+      .then((capabilities) => setCloudSavesEnabled(Boolean(capabilities.cloud_saves_v1)))
+      .catch(() => setCloudSavesEnabled(false));
   }, [isAuthenticated]);
 
   const loadPreferences = async () => {
@@ -97,6 +106,12 @@ export default function SettingsPage() {
           >
             {t('emailSettings.blockedUsers')}
           </Link>
+          {cloudSavesEnabled && <Link
+            href="/settings/cloud-saves"
+            className="rounded-lg bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
+          >
+            {t('cloudSaves.title')}
+          </Link>}
         </nav>
 
         {loading ? (

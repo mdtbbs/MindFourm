@@ -103,6 +103,32 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
     warnings.push('FORUM_API_KEY is not set — /api/service-api/* will reject every request');
   }
 
+  // Relay is optional. Once any Relay credential or Agent allowlist is set,
+  // require the complete shared-secret configuration in production.
+  const multiplayer = config.multiplayer || {} as AppConfig['multiplayer'];
+  const relayConfigured = Boolean(
+    multiplayer.relayCredentialSecret || multiplayer.relayMachineCredential
+    || multiplayer.relayAgentIds,
+  );
+  if (relayConfigured) {
+    requireInProduction(multiplayer.relayCredentialSecret, 'MULTIPLAYER_RELAY_CREDENTIAL_SECRET');
+    requireInProduction(multiplayer.relayMachineCredential, 'MULTIPLAYER_RELAY_MACHINE_CREDENTIAL');
+    requireInProduction(multiplayer.relayAgentIds, 'MULTIPLAYER_RELAY_AGENT_IDS');
+    if (multiplayer.relayCredentialSecret && multiplayer.relayCredentialSecret.length < 32) {
+      errors.push('MULTIPLAYER_RELAY_CREDENTIAL_SECRET must contain at least 32 characters');
+    }
+    if (multiplayer.relayMachineCredential && multiplayer.relayMachineCredential.length < 32) {
+      errors.push('MULTIPLAYER_RELAY_MACHINE_CREDENTIAL must contain at least 32 characters');
+    }
+    if (multiplayer.relayAgentIds) {
+      const agentIds = multiplayer.relayAgentIds.split(',').map((value) => value.trim()).filter(Boolean);
+      if (agentIds.length === 0 || agentIds.some((id) => !/^[A-Za-z0-9_-]{1,64}$/.test(id))
+        || new Set(agentIds).size !== agentIds.length) {
+        errors.push('MULTIPLAYER_RELAY_AGENT_IDS must be a comma-separated list of unique valid Agent IDs');
+      }
+    }
+  }
+
   // --- Community challenge provider ---
   const challengeProvider = String(communityChallenge.provider || 'disabled').toLowerCase();
   if (!['disabled', 'development', 'turnstile', 'hcaptcha'].includes(challengeProvider)) {
@@ -131,6 +157,24 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   }
 
   return { errors, warnings };
+}
+
+/** Fail startup if the admin has enabled official Relay without its control plane. */
+export function validateEnabledRelayConfig(multiplayer: AppConfig['multiplayer']): void {
+  const config = multiplayer || {} as AppConfig['multiplayer'];
+  const errors: string[] = [];
+  if (!config.relayCredentialSecret || config.relayCredentialSecret.length < 32) {
+    errors.push('MULTIPLAYER_RELAY_CREDENTIAL_SECRET must contain at least 32 characters');
+  }
+  if (!config.relayMachineCredential || config.relayMachineCredential.length < 32) {
+    errors.push('MULTIPLAYER_RELAY_MACHINE_CREDENTIAL must contain at least 32 characters');
+  }
+  const agentIds = (config.relayAgentIds || '').split(',').map((value) => value.trim()).filter(Boolean);
+  if (agentIds.length === 0 || agentIds.some((id) => !/^[A-Za-z0-9_-]{1,64}$/.test(id))
+    || new Set(agentIds).size !== agentIds.length) {
+    errors.push('MULTIPLAYER_RELAY_AGENT_IDS must be a comma-separated list of unique valid Agent IDs');
+  }
+  if (errors.length) throw new Error(`Official Multiplayer Relay is enabled with invalid configuration: ${errors.join('; ')}`);
 }
 
 /**

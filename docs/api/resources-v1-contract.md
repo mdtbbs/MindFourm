@@ -1,23 +1,16 @@
-# Resource API V1 contract
+# 资源中心 API V1 契约
 
-This contract is the shared read model for the web resource center, a future
-launcher, and in-game clients. The legacy `/api/resources` endpoints remain
-available for the current web application while clients migrate to `/api/v1`.
+本契约定义 Web 资源中心、启动器和游戏内客户端共用的资源读取格式。客户端迁移到 `/api/v1` 期间，当前 Web 应用仍可继续使用旧版 `/api/resources` 接口。
 
-## Identity and compatibility
+## 资源标识与兼容规则
 
-- `public_id` is the stable external identity of a resource, release, or file.
-- Numeric database IDs are implementation details and must not be persisted by
-  clients.
-- Clients must ignore unknown response fields and must not assume that a
-  resource kind has only one file.
-- `resource_kind` is the content classification (`map`, `schematic`, `mod`,
-  and future kinds); `resource_type` is the legacy delivery mode and is not
-  part of client identity.
-- Only approved, public resources and published releases are returned by the
-  public V1 read API.
+- `public_id` 是资源、版本或文件对外使用的稳定标识。
+- 数据库数字 ID 属于服务端实现细节，客户端不要保存或依赖它。
+- 客户端应忽略响应中不认识的字段，也不要假设一种资源类型只对应一个文件。
+- `resource_kind` 表示内容类别，例如 `map`、`schematic`、`mod`；`resource_type` 是旧版交付方式，不是资源身份的一部分。
+- 公开 V1 读取接口只返回已审核的公开资源和已发布版本。
 
-## Endpoints
+## 接口列表
 
 ```text
 GET /api/v1/resources
@@ -27,14 +20,9 @@ GET /api/v1/resources/{resource_public_id}/manifest
 GET /api/v1/resources/{resource_public_id}/versions/{version_public_id}/files/{file_public_id}/download
 ```
 
-The list endpoint uses `limit`, `offset`, and `q` during the compatibility
-period. The manifest is the launcher/in-game synchronization boundary: it only
-contains public UUIDs, published versions, compatibility, dependencies, file
-hashes, and derived `downloadable`/`installable` capabilities. A client can
-poll it without storing numeric database IDs.
+迁移兼容期间，列表接口支持 `limit`、`offset` 和 `q` 参数。Manifest 是启动器和游戏内客户端同步资源的依据，只包含公开 UUID、已发布版本、兼容信息、依赖、文件 Hash，以及服务端计算的 `downloadable` / `installable` 状态。客户端可以定期读取它，不必保存数据库数字 ID。
 
-Authenticated web interactions remain on the legacy resource route for now and
-are additive:
+目前，登录用户的资源互动仍使用旧版接口：
 
 ```text
 GET    /api/resources/{numeric_id}/like
@@ -42,13 +30,9 @@ POST   /api/resources/{numeric_id}/like
 DELETE /api/resources/{numeric_id}/like
 ```
 
-The like operation is idempotent. Comments continue to use the existing
-resource discussion API. Legacy resource read responses may include the
-additive `comment_count` field, which counts only visible public comments;
-`rating_count`, `rating_sum`, and `rating_average` remain rating aggregates.
-The V1 shape is unchanged.
+点赞操作是幂等的。评论继续使用现有资源讨论接口。旧版资源读取响应可能增加 `comment_count` 字段，只统计当前可见的公开评论；`rating_count`、`rating_sum` 和 `rating_average` 仍表示评分汇总。V1 响应结构保持不变。
 
-## Resource detail shape
+## 资源详情结构
 
 ```json
 {
@@ -79,14 +63,11 @@ The V1 shape is unchanged.
 }
 ```
 
-The `metadata` object is versioned. Renderer-produced fields and
-publisher-supplied fields are kept separate in storage; the API returns only
-validated fields. Map, schematic, and mod details may grow independently
-without changing the resource envelope.
+`metadata` 对象带有自己的版本号。系统解析生成的字段与发布者填写的字段分开保存；API 只返回通过校验的内容。地图、蓝图和模组可以分别扩展详情字段，不需要改变资源响应的外层结构。
 
-## Manifest shape
+## Manifest 结构
 
-The manifest is deliberately separate from the human-facing detail response:
+Manifest 与面向用户展示的详情响应分开：
 
 ```json
 {
@@ -112,105 +93,60 @@ The manifest is deliberately separate from the human-facing detail response:
 }
 ```
 
-`installable` is true only for an available, SHA-256-verified managed file.
-The server never executes a Mod and does not treat publisher-supplied metadata
-as a trust decision.
+只有文件可用且服务端已校验 SHA-256 时，`installable` 才为 `true`。服务端不会执行模组，也不会将发布者提供的元数据视为可信结论。
 
-## Client safety rules
+## 客户端安全处理
 
-- Use the file hash and availability fields before installing a file.
-- Treat missing metadata as unknown, never as a positive compatibility claim.
-- Do not execute or inspect Mod code on the API server; Mod uploads are parsed
-  as bounded archives and their manifest is treated as untrusted input.
-- A failed preview must not make an approved original file appear unavailable.
+- 安装文件前检查可用状态，并校验文件 Hash。
+- 缺失的元数据表示“未知”，不能据此认定资源兼容。
+- API 服务端不会执行模组代码。模组上传会按大小限制解析为归档文件，Manifest 也按不可信输入处理。
+- 预览失败不应导致已审核的原始文件被标记为不可用。
 
-## Resource kinds, topics, and compatibility provenance
+## 资源类别、主题与兼容信息来源
 
-`resource_kind` is the canonical content identity and comes from the shared
-registry. Read the current registry instead of maintaining a client-side copy:
+`resource_kind` 是内容类别的权威值，由共享注册表维护。客户端应读取当前注册表，不要自行维护副本：
 
 ```text
 GET /api/v1/resources/kinds
 GET /api/v1/resources/topics
 ```
 
-Kinds drive the primary resource navigation and submission type. Topics are
-optional secondary use/category filters. During migration, the legacy
-`category_id` query remains accepted as a topic filter; it does not change the
-resource kind. The legacy `resource_type` continues to describe delivery
-(`upload` or `external`) and is not a substitute for `resource_kind`.
+资源类别用于主导航和投稿类型；主题是可选的用途或分类筛选条件。迁移期间，旧版 `category_id` 参数仍可作为主题筛选使用，但不会改变资源类别。旧字段 `resource_type` 仍描述文件交付方式（`upload` 或 `external`），不能代替 `resource_kind`。
 
-Renderer facts and publisher declarations remain distinct. Compatibility rows
-include their provenance and confidence when available (for example,
-`file_metadata`, `inferred`, `user_declared`, `verified`, or `admin_verified`). A renderer build is
-the parser runtime and must not be shown as the build stored in a map save.
-Map metadata reports the stored game build only when the save contains it, and
-reports the save format version separately. Schematic compatibility is an
-inference from known content and format facts, not a promise that the blueprint
-will load in every release.
+系统解析结果与发布者声明保持区分。兼容记录在可用时会包含来源和可信度，例如 `file_metadata`、`inferred`、`user_declared`、`verified` 或 `admin_verified`。解析器运行版本不等于地图存档中的游戏版本，不能混为一谈。只有存档本身包含游戏版本时，地图元数据才会报告该版本；存档格式版本单独提供。蓝图兼容性是根据已知内容和格式推断的结果，不保证蓝图可在每个游戏版本中加载。
 
-## Duplicate detection and safe submission retries
+## 重复检测与安全重试
 
-The authenticated legacy web client may preflight a file or schematic through:
+登录后的旧版 Web 客户端可在提交前检查文件或蓝图：
 
 ```text
 POST /api/resources/duplicates/check
 ```
 
-V1 upload clients receive the same duplicate findings from draft preview and
-draft creation:
+V1 上传客户端可从草稿预览和草稿创建接口获取相同的重复检测结果：
 
 ```text
 POST /api/v1/resources/drafts/preview
 POST /api/v1/resources/drafts
 ```
 
-The result distinguishes an exact file SHA-256 match, an exact schematic
-structure match, and a rotation/mirror-normalized schematic candidate. An exact
-file match is a hard duplicate and final submission returns HTTP 409 with
-`RESOURCE_DUPLICATE`. An exact schematic structure match requires a non-empty
-`duplicate_note`, which is stored with the new resource for moderator review.
-The normalized match is advisory and never blocks submission. Similar title or
-source URL matches are also suggestions only.
+结果会区分文件 SHA-256 完全相同、蓝图结构完全相同，以及旋转或镜像归一化后可能相同的蓝图。文件 Hash 完全相同属于重复提交，最终提交时返回 HTTP 409 和 `RESOURCE_DUPLICATE`。蓝图结构完全相同时，必须填写非空 `duplicate_note`；该说明会随新资源保存，供审核人员检查。归一化匹配只作提示，不会阻止提交。标题或来源 URL 相似也只作为建议。
 
-Duplicate results only expose resources that the caller may see. A private or
-pending match is returned as a generic match with no title, public ID, or
-numeric ID. Clients must not use duplicate detection as an authorization or
-visibility oracle.
+重复检测只会披露当前用户有权查看的信息。若匹配项为私有或待审核资源，响应只表示“存在匹配”，不返回标题、公开 ID 或数据库 ID。客户端不能利用重复检测判断资源的权限或可见性。
 
-For a final create or draft submit, clients may send an `Idempotency-Key`
-header. Keys are scoped to the authenticated account and retained for 24 hours.
-Retry the exact same request with the same key after a timeout to replay the
-first result. Reusing a key with a different payload returns HTTP 409
-`IDEMPOTENCY_KEY_REUSED`; a concurrent request with the same key can return
-`IDEMPOTENCY_IN_PROGRESS`. A changed request must use a new key.
+最终创建资源或提交草稿时，客户端可以发送 `Idempotency-Key` 请求头。键按已认证账号隔离，并保留 24 小时。请求超时后，使用相同的键和完全相同的请求重试，即可重放首次结果。相同键搭配不同请求体会返回 HTTP 409 `IDEMPOTENCY_KEY_REUSED`；并发中的同键请求可能返回 `IDEMPOTENCY_IN_PROGRESS`。修改请求内容时必须生成新键。
 
-## Administrative duplicate merge
+## 管理员合并重复资源
 
-The web administration API provides a preview and an explicit merge action:
+Web 管理接口提供预览和显式合并操作：
 
 ```text
 GET  /api/resources/admin/{sourceId}/merge-preview?target_id={targetId}
 POST /api/resources/admin/{sourceId}/merge
 ```
 
-These numeric-ID routes are admin-only and are not part of public V1. Preview
-reports relationships that can be transferred and version collisions. The
-merge transaction transfers eligible history and associations to the target.
-Non-colliding versions move intact. A colliding version never overwrites the
-target; available attachments move as supplementary files only when both
-versions are already published. Other colliding release records stay on the
-source and their ID mapping is written to the merge audit. A legacy root file
-or external link fills an empty target field. The merge records an audit entry
-and keeps the source as a merged alias. Reads of the
-source resolve to the canonical target. Duplicate discovery never merges or
-deletes resources automatically; moderators must review and initiate a merge.
-The legacy numeric resource route returns HTTP 301. A V1 detail lookup for a
-merged `public_id` also returns HTTP 301 with a `Location` header and a body
-containing `merged`, `canonical_public_id`, and `redirect_url`.
+这些使用数据库数字 ID 的路由仅供管理员使用，不属于公开 V1。预览会列出可迁移的关联数据和版本冲突。合并事务会将符合条件的历史记录与关联迁移到目标资源。无冲突的版本会完整迁移；冲突版本不会覆盖目标版本。只有双方版本都已发布时，才会将可用附件作为补充文件迁移。其他冲突版本保留在源资源中，并将 ID 对应关系写入合并审计。若目标资源缺少根文件或外部链接，旧资源中的值可以补上。合并会记录审计日志，并将源资源保留为合并别名；读取源资源时会解析到规范目标。
 
-Historical duplicate groups can be inspected with
-`npm run report:resource-duplicates` after applying the integrity migration.
-The command is read-only, includes root resources and active version/file
-hashes, reports exact and normalized schematic fingerprints, and never changes
-or merges existing rows.
+系统不会自动合并或删除重复资源，必须由审核人员检查并发起合并。旧版数字 ID 资源路由返回 HTTP 301。V1 查询已合并的 `public_id` 时也返回 HTTP 301、`Location` 响应头，以及包含 `merged`、`canonical_public_id` 和 `redirect_url` 的响应体。
+
+应用完整性迁移后，可运行 `npm run report:resource-duplicates` 查看历史重复分组。该命令只读，会检查根资源和活动版本、文件 Hash，报告蓝图的精确与归一化指纹；不会修改或合并现有记录。

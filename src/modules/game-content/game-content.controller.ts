@@ -61,10 +61,26 @@ export class GameContentController {
   }
 
   @Get('blueprints') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+  @ApiQuery({ name: 'q', required: false, type: String, schema: { maxLength: 255 }, example: 'solar array', description: '按标题、说明和内容搜索。' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'trending', 'featured', 'all'], example: 'latest', description: '列表排序或内容筛选方式。' })
+  @ApiQuery({ name: 'order', required: false, enum: ['ASC', 'DESC', 'asc', 'desc'], example: 'DESC', description: '按排序字段升序或降序。' })
+  @ApiQuery({ name: 'tags', required: false, type: String, example: 'power,solar', description: '以逗号分隔的标签筛选。' })
+  @ApiQuery({ name: 'gameVersion', required: false, type: String, schema: { maxLength: 80 }, example: 'v157', description: '按 Mindustry 游戏版本筛选。' })
+  @ApiQuery({ name: 'author', required: false, type: String, schema: { maxLength: 100 }, example: 'player_name', description: '按作者用户名筛选。' })
+  @ApiQuery({ name: 'cursor', required: false, type: String, schema: { maxLength: 512 }, example: 'CURSOR_FROM_PREVIOUS_PAGE', description: '上一页 pagination.nextCursor 返回的不透明游标。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 50 }, example: 20, description: '每页数量，默认 20，最大 50。' })
   @ApiOkResponse({ type: GameContentListResponseDto })
   listBlueprints(@Query() query: GameContentListQueryDto) { return this.gameContent.list('blueprint', query); }
 
   @Get('maps') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
+  @ApiQuery({ name: 'q', required: false, type: String, schema: { maxLength: 255 }, example: 'Salt Flats', description: '按标题、说明和内容搜索。' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'trending', 'featured', 'all'], example: 'latest', description: '列表排序或内容筛选方式。' })
+  @ApiQuery({ name: 'order', required: false, enum: ['ASC', 'DESC', 'asc', 'desc'], example: 'DESC', description: '按排序字段升序或降序。' })
+  @ApiQuery({ name: 'tags', required: false, type: String, example: 'survival,desert', description: '以逗号分隔的标签筛选。' })
+  @ApiQuery({ name: 'gameVersion', required: false, type: String, schema: { maxLength: 80 }, example: 'v157', description: '按 Mindustry 游戏版本筛选。' })
+  @ApiQuery({ name: 'author', required: false, type: String, schema: { maxLength: 100 }, example: 'player_name', description: '按作者用户名筛选。' })
+  @ApiQuery({ name: 'cursor', required: false, type: String, schema: { maxLength: 512 }, example: 'CURSOR_FROM_PREVIOUS_PAGE', description: '上一页 pagination.nextCursor 返回的不透明游标。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 50 }, example: 20, description: '每页数量，默认 20，最大 50。' })
   @ApiOkResponse({ type: GameContentListResponseDto })
   listMaps(@Query() query: GameContentListQueryDto) { return this.gameContent.list('map', query); }
 
@@ -141,7 +157,8 @@ export class GameContentController {
   }
 
   @Get('feed') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 120, window: 60 }) @Header('Cache-Control', 'public, max-age=60, stale-while-revalidate=120')
-  @ApiQuery({ name: 'type', required: false, enum: ['featured', 'latest', 'trending', 'all'] })
+  @ApiQuery({ name: 'type', required: false, enum: ['featured', 'latest', 'trending', 'all'], example: 'all', description: '返回精选、最新、热门或全部内容分区。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 50 }, example: 20, description: '每个 Feed 分区最多返回数量，默认 20。' })
   @ApiOkResponse({ type: GameContentFeedResponseDto })
   async feed(@Query('type') type = 'all', @Query('limit') limit = '20') {
     if (!['featured', 'latest', 'trending', 'all'].includes(type)) throw new BadRequestException('无效的 Feed 类型');
@@ -176,7 +193,15 @@ export class GameContentController {
   }
 
   @Get('search') @OptionalAuth() @OAuthScopeIfBearer('resource.read') @RateLimit({ max: 60, window: 60 }) @Header('Cache-Control', 'public, max-age=30, stale-while-revalidate=60')
-  @ApiQuery({ name: 'type', required: false, enum: ['all', 'blueprint', 'map'] })
+  @ApiQuery({ name: 'q', required: true, type: String, schema: { maxLength: 255 }, example: 'power', description: '必填搜索关键词。' })
+  @ApiQuery({ name: 'type', required: false, enum: ['all', 'blueprint', 'map'], example: 'all', description: '搜索全部内容、蓝图或地图。' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['latest', 'trending', 'featured', 'all'], example: 'latest', description: '列表排序或内容筛选方式。' })
+  @ApiQuery({ name: 'order', required: false, enum: ['ASC', 'DESC', 'asc', 'desc'], example: 'DESC', description: '按排序字段升序或降序。' })
+  @ApiQuery({ name: 'tags', required: false, type: String, example: 'power,solar', description: '以逗号分隔的标签筛选。' })
+  @ApiQuery({ name: 'gameVersion', required: false, type: String, schema: { maxLength: 80 }, example: 'v157', description: '按 Mindustry 游戏版本筛选。' })
+  @ApiQuery({ name: 'author', required: false, type: String, schema: { maxLength: 100 }, example: 'player_name', description: '按作者用户名筛选。' })
+  @ApiQuery({ name: 'cursor', required: false, type: String, schema: { maxLength: 512 }, example: 'CURSOR_FROM_PREVIOUS_PAGE', description: '上一页 pagination.nextCursor 返回的不透明游标。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 50 }, example: 20, description: '每页数量，默认 20，最大 50。' })
   @ApiOkResponse({ type: GameContentListResponseDto })
   async search(@Query() query: GameContentListQueryDto, @Query('type') type = 'all') {
     if (!query.q?.trim()) throw new BadRequestException({ code: 'SEARCH_QUERY_REQUIRED', message: '请输入搜索关键词' });
@@ -303,9 +328,11 @@ export class GameContentController {
   me(@Req() req: any) { return this.gameContent.me(req.user); }
   @Get('me/favorites') @UseGuards(GameContentRequiredAuthGuard) @OAuthScopeDocumentation('resource.read')
   @ApiBearerAuth('MindAuthBearer')
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20, description: '最多返回的收藏内容数量，默认 20。' })
   myFavorites(@Req() req: any, @Query('limit') limit?: string) { return this.gameContent.favoritesFor(req.user.id, Number(limit) || 20); }
   @Get('me/resources') @UseGuards(GameContentRequiredAuthGuard) @OAuthScopeDocumentation('resource.read')
   @ApiBearerAuth('MindAuthBearer')
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 20, description: '最多返回的本人投稿数量，默认 20。' })
   myResources(@Req() req: any, @Query('limit') limit?: string) { return this.gameContent.myResources(req.user.id, Number(limit) || 20); }
 
   private blueprintMaxBytes(): number {

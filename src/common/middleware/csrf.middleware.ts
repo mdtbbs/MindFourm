@@ -74,6 +74,8 @@ function isExempt(req: Request): boolean {
   if (req.path.startsWith('/api/external/')) return true;
   if (req.path.startsWith('/api/service-api/')) return true;
   if (req.path.startsWith('/api/auto-post/')) return true;
+  // Internal Relay uses an explicit machine credential, never an ambient cookie.
+  if (req.path.startsWith('/api/internal/v1/relay/agents/')) return true;
   return false;
 }
 

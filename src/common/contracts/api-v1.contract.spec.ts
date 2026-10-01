@@ -18,4 +18,11 @@ describe('apiV1Success', () => {
     });
     expect(JSON.stringify(items)).toBe('["a"]');
   });
+
+  it('adds cursor metadata to array results without nesting the item list', () => {
+    const items: any[] = [{ id: 'save-1' }];
+    Object.defineProperty(items, '__v1NextCursor', { value: 'next-token' });
+    expect(apiV1Success(items, 'req-3')).toEqual({ data: items, meta: { request_id: 'req-3', next_cursor: 'next-token' } });
+    expect(JSON.stringify(items)).toBe('[{"id":"save-1"}]');
+  });
 });

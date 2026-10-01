@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, HttpStatus, Optional, Param, ParseIntPipe, Post, Put, Req } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiCreatedResponse, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
 import { getClientIp, getClientRegion } from '../../../common/utils/client-context.util';
@@ -12,6 +12,7 @@ import { RepliesService } from '../../replies/replies.service';
 import { SettingsService } from '../../settings/settings.service';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { CommunityChallengeService } from '../../community-challenges/community-challenge.service';
+import { REPLY_WRITE_SCHEMA, THREAD_WRITE_SCHEMA } from './thread-v1.openapi';
 
 /**
  * First-party Android write transport.  The underlying post/reply services are
@@ -32,7 +33,7 @@ export class ThreadWriteV1Controller {
 
   @Post()
   @OAuthProtected('forum.write')
-  @ApiCreatedResponse({ description: 'Thread created. It can be pending moderation.' })
+  @ApiCreatedResponse({ description: '讨论已创建；按站点审核策略可能返回 pending。', schema: THREAD_WRITE_SCHEMA })
   async createThread(@Body() dto: CreatePostDto, @Req() req: any) {
     await this.assertWritesEnabled();
     const ipAddress = getClientIp(req);
@@ -55,7 +56,7 @@ export class ThreadWriteV1Controller {
 
   @Put(':id')
   @OAuthProtected('forum.write')
-  @ApiOkResponse({ description: 'Thread updated by its owner or staff.' })
+  @ApiOkResponse({ description: '讨论已更新。', schema: THREAD_WRITE_SCHEMA })
   async updateThread(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePostDto,
@@ -68,7 +69,7 @@ export class ThreadWriteV1Controller {
 
   @Delete(':id')
   @OAuthProtected('forum.write')
-  @ApiOkResponse({ description: 'Thread soft-deleted by its owner or staff.' })
+  @ApiOkResponse({ description: '讨论已软删除。', schema: { type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean', example: true, description: '是否已删除。' } } } })
   async deleteThread(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     await this.assertWritesEnabled();
     await this.posts.softDelete(id, req.user.id, req.user.role);
@@ -77,7 +78,8 @@ export class ThreadWriteV1Controller {
 
   @Post(':id/replies')
   @OAuthProtected('forum.write')
-  @ApiCreatedResponse({ description: 'Reply created. It can be pending moderation.' })
+  @ApiBody({ type: CreateReplyDto, description: '正文至少提供 content（兼容 Markdown）或 content_json（推荐；与 content_schema_version: 2 一起使用）之一。' })
+  @ApiCreatedResponse({ description: '回复已创建；按站点审核策略可能返回 pending。', schema: REPLY_WRITE_SCHEMA })
   async createReply(
     @Param('id', ParseIntPipe) threadId: number,
     @Body() dto: CreateReplyDto,
@@ -104,7 +106,7 @@ export class ThreadWriteV1Controller {
 
   @Put(':threadId/replies/:replyId')
   @OAuthProtected('forum.write')
-  @ApiOkResponse({ description: 'Reply updated by its owner or staff.' })
+  @ApiOkResponse({ description: '回复已更新。', schema: REPLY_WRITE_SCHEMA })
   async updateReply(
     @Param('threadId', ParseIntPipe) _threadId: number,
     @Param('replyId', ParseIntPipe) replyId: number,
@@ -118,7 +120,7 @@ export class ThreadWriteV1Controller {
 
   @Delete(':threadId/replies/:replyId')
   @OAuthProtected('forum.write')
-  @ApiOkResponse({ description: 'Reply soft-deleted by its owner or staff.' })
+  @ApiOkResponse({ description: '回复已软删除。', schema: { type: 'object', required: ['deleted'], properties: { deleted: { type: 'boolean', example: true, description: '是否已删除。' } } } })
   async deleteReply(
     @Param('threadId', ParseIntPipe) _threadId: number,
     @Param('replyId', ParseIntPipe) replyId: number,

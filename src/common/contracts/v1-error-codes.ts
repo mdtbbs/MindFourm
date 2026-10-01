@@ -197,6 +197,69 @@ export const V1_ERROR_CODES: Record<string, V1ErrorCodeDefinition> = {
   },
 };
 
+/** Stable codes used by Social Presence, Realtime, and Multiplayer V1 services. */
+const SOCIAL_MULTIPLAYER_ERRORS: ReadonlyArray<readonly [string, number, boolean, string, string]> = [
+  ['TOKEN_INVALID', 401, false, '令牌无效', 'The supplied access token is invalid.'],
+  ['SCOPE_REQUIRED', 403, false, '授权权限不足', 'The OAuth token lacks a required scope.'],
+  ['INSUFFICIENT_SCOPE', 403, false, '授权权限不足', 'The OAuth token lacks one or more required scopes.'],
+  ['USER_BLOCKED', 403, false, '用户屏蔽了此联机操作', 'A block relationship prevents this social or multiplayer action.'],
+  ['FRIEND_REQUIRED', 403, false, '需要先添加好友', 'The session policy requires an accepted friendship.'],
+  ['PRIVACY_DENIED', 403, false, '对方的隐私设置不允许此操作', 'The target user privacy policy denies the operation.'],
+  ['CLIENT_CAPABILITY_NOT_APPROVED', 403, false, '客户端能力尚未审核通过', 'The OAuth client has not received approval for this product capability.'],
+  ['FEATURE_DISABLED', 403, false, '此功能暂未启用', 'The relevant site feature flag is disabled.'],
+  ['PRESENCE_CONNECTION_NOT_FOUND', 404, false, 'Presence 连接不存在或不属于当前用户', 'The Presence connection is absent, expired, or belongs to another user.'],
+  ['ACTIVITY_INVALID', 400, false, '活动数据无效', 'The submitted Rich Activity or Realtime protocol message is invalid.'],
+  ['SESSION_NOT_FOUND', 404, false, '联机会话不存在', 'The requested Session does not exist.'],
+  ['SESSION_EXPIRED', 404, false, '联机会话已过期', 'The requested Session has expired.'],
+  ['SESSION_CLOSED', 404, false, '联机会话已关闭', 'The requested Session is closed.'],
+  ['SESSION_FULL', 409, false, '联机会话人数已满', 'The Session has reached its player capacity.'],
+  ['SESSION_NOT_JOINABLE', 400, false, '联机会话当前不可加入', 'The Session configuration does not allow this join path.'],
+  ['SESSION_PERMISSION_DENIED', 403, false, '无权访问此联机会话', 'The caller cannot view or join this Session.'],
+  ['PEER_NOT_FOUND', 404, false, '联机 Peer 不存在', 'The requested Peer does not exist in this Session.'],
+  ['PEER_EXPIRED', 404, false, '联机 Peer 已过期', 'The Peer has left or expired.'],
+  ['PEER_RESUME_INVALID', 403, false, 'Peer 恢复凭证无效', 'The one-time resume token is expired, consumed, or bound to another client.'],
+  ['CANDIDATE_INVALID', 400, false, '连接候选数据无效', 'The Candidate payload or identifier is invalid.'],
+  ['CANDIDATE_LIMIT_REACHED', 429, true, '连接候选数量已达上限', 'The per-Peer Candidate limit has been reached.'],
+  ['INVITE_NOT_FOUND', 404, false, '联机邀请不存在', 'The invite does not exist or is not addressed to the caller.'],
+  ['INVITE_EXPIRED', 410, false, '联机邀请已过期', 'The invite has expired.'],
+  ['JOIN_REQUEST_REQUIRED', 409, false, '需要先请求房主批准加入', 'The Session requires an approved join request.'],
+  ['JOIN_REQUEST_EXPIRED', 410, false, '加入请求不存在或已过期', 'The join request is missing or expired.'],
+  ['JOIN_INTENT_INVALID', 403, false, '加入凭证不属于当前用户', 'The one-time Join Intent is bound to another user.'],
+  ['JOIN_INTENT_EXPIRED', 410, false, '加入凭证已过期', 'The one-time Join Intent has expired.'],
+  ['JOIN_INTENT_CONSUMED', 409, false, '加入凭证已使用', 'The one-time Join Intent was already consumed.'],
+  ['RELAY_UNAVAILABLE', 503, true, '官方 Relay 暂不可用', 'No healthy official Relay Agent has capacity.'],
+  ['RELAY_LIMIT_REACHED', 429, true, '官方 Relay 并发额度已满', 'The caller or Session has reached its Relay allocation limit.'],
+  ['RATE_LIMITED', 429, true, '请求过于频繁', 'The request rate limit has been reached.'],
+];
+
+const CLOUD_SAVE_ERRORS: ReadonlyArray<readonly [string, number, boolean, string, string]> = [
+  ['CLOUD_SAVES_DISABLED', 403, false, '云存档功能尚未启用', 'Cloud Saves is disabled for this deployment.'],
+  ['SAVE_NOT_FOUND', 404, false, '云存档不存在', 'The Save Slot does not exist or is not owned by the caller.'],
+  ['SAVE_SLOT_LIMIT_EXCEEDED', 409, false, '已达到云存档数量上限', 'The account has reached its active Save Slot limit.'],
+  ['SAVE_QUOTA_EXCEEDED', 409, false, '云存档空间不足', 'The user-scoped unique blob quota, including pending reservations, would be exceeded.'],
+  ['SAVE_FILE_TOO_LARGE', 413, false, '存档文件超过大小限制', 'The save file exceeds the configured per-file byte limit.'],
+  ['SAVE_UPLOAD_NOT_FOUND', 404, false, '上传会话不存在', 'The upload session is absent or belongs to another user.'],
+  ['SAVE_UPLOAD_EXPIRED', 410, false, '上传会话已过期', 'The upload session expired, was cancelled, or is no longer committable.'],
+  ['SAVE_UPLOAD_ALREADY_COMMITTED', 409, false, '上传会话已经提交', 'The upload session has already been committed.'],
+  ['SAVE_UPLOAD_OBJECT_MISSING', 409, false, '上传对象尚未到达存储服务', 'No object exists at the exact key bound to this upload session.'],
+  ['SAVE_UPLOAD_SIZE_MISMATCH', 409, false, '上传对象大小不匹配', 'The stored object size differs from the expected size.'],
+  ['SAVE_UPLOAD_CHECKSUM_MISMATCH', 409, false, '上传对象校验失败', 'The stored object SHA-256 differs from the expected checksum.'],
+  ['SAVE_CONFLICT', 409, false, '云存档已有更新', 'The cloud head changed since the submitted base Snapshot.'],
+  ['SAVE_BASE_SNAPSHOT_INVALID', 409, false, '基准快照无效', 'The supplied base Snapshot is deleted, absent, or belongs to another Slot.'],
+  ['SAVE_SNAPSHOT_NOT_FOUND', 404, false, '快照不存在', 'The Snapshot does not exist or is not owned by the caller.'],
+  ['SAVE_CURRENT_SNAPSHOT_DELETE_FORBIDDEN', 409, false, '当前快照不能单独删除', 'The current Snapshot must be replaced or its whole Slot deleted first.'],
+  ['SAVE_INVALID_HASH', 400, false, 'SHA-256 格式无效', 'The submitted SHA-256 must be 64 lowercase hexadecimal characters.'],
+  ['SAVE_INVALID_METADATA', 400, false, '存档元数据无效', 'The submitted save metadata failed validation or exceeded configured bounds.'],
+  ['SAVE_STORAGE_UNAVAILABLE', 503, true, '云存档存储暂不可用', 'The configured local save storage is unavailable or not ready.'],
+];
+
+for (const [code, httpStatus, retryable, defaultMessage, description] of SOCIAL_MULTIPLAYER_ERRORS) {
+  V1_ERROR_CODES[code] = { code, httpStatus, retryable, defaultMessage, description };
+}
+for (const [code, httpStatus, retryable, defaultMessage, description] of CLOUD_SAVE_ERRORS) {
+  V1_ERROR_CODES[code] = { code, httpStatus, retryable, defaultMessage, description };
+}
+
 /**
  * Look up an error code definition. Returns null for unknown codes.
  */

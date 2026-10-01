@@ -1,7 +1,6 @@
-# MindFourm External API（第三方机器人 API）
+# 外部服务 API（机器人与服务端集成）
 
-> 更新时间：2026-07-28  
-> 状态：M1 已实现。用于机器人/第三方服务以 API Key 调用论坛能力，可在授权 scope 内指定论坛用户发帖、回复、审核和管理资源。
+**更新时间：**2026-07-28 · **状态：**M1 已实现。本文介绍机器人和第三方服务如何通过 API Key 调用论坛，并在已授权的 scope 范围内代指定用户发帖、回复、审核和管理资源。
 
 ## 设计目标
 
@@ -21,7 +20,7 @@ External API 面向服务端机器人，不面向浏览器用户。典型用途�
 
 ---
 
-## Base URL
+## 接口地址
 
 后端全局前缀是 `/api`，External API 前缀为：
 
@@ -53,7 +52,7 @@ X-API-Key: mfk_live_xxxxxxxx.yyyyyyyyyyyyyyyyyyyyy
 
 API Key 明文只会在后台创建/轮换时显示一次；数据库只保存 SHA-256 hash 和 `key_prefix`。
 
-### Legacy fallback
+### 旧版 API Key 兼容
 
 旧的 `FORUM_API_KEY` 仍可作为过渡 fallback 使用。它会被视为：
 
@@ -99,7 +98,7 @@ admin:* + users:impersonate
 
 ---
 
-## Scopes
+## 权限范围（Scopes）
 
 | Scope | 用途 |
 |---|---|
@@ -325,7 +324,7 @@ Content-Type: application/json
 
 ### 其他管理接口
 
-| Method | Endpoint | 说明 |
+| 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/admin/external-api/keys` | Key 列表 |
 | PATCH | `/api/admin/external-api/keys/:id` | 更新名称、scopes、白名单、默认用户、限流、过期、启用状态 |

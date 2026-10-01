@@ -11,6 +11,7 @@ describe('CapabilitiesService', () => {
 
   it('uses SettingsService for the coarse resource V1 read capability', async () => {
     const settings = {
+      get: jest.fn(async () => null),
       getBoolean: jest.fn(async (key: string, fallback: boolean) => {
         if (key === 'feature_resources_v1_read_enabled') return true;
         return fallback;

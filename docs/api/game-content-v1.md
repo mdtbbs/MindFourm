@@ -1,6 +1,6 @@
-# Game Content API V1
+# 游戏内容 API V1
 
-Game Content V1 是 Mindustry 蓝图和地图的一等客户端接口。
+游戏内容 API V1 为 Mindustry 蓝图和地图提供稳定的客户端接口。
 
 Base URL:
 
@@ -10,7 +10,7 @@ Base URL:
 
 它和通用 Resource V1 共用底层 Resource domain，但提供更适合游戏内 Mod、桌面客户端和移动端的结构。
 
-## 1. Meta
+## 能力与上传限制
 
 ```http
 GET /api/v1/game-content/meta
@@ -27,14 +27,14 @@ GET /api/v1/game-content/meta
 
 客户端可以用它补充 `/api/v1/capabilities` 的全局能力发现。
 
-## 2. 浏览蓝图和地图
+## 浏览蓝图和地图
 
 ```http
 GET /api/v1/game-content/blueprints
 GET /api/v1/game-content/maps
 ```
 
-Query:
+查询参数：
 
 | 参数 | 说明 |
 | --- | --- |
@@ -86,7 +86,7 @@ Query:
 
 注意这里业务 payload 自己包含 `data + pagination`，外层仍有 V1 envelope。
 
-## 3. 详情
+## 查看详情
 
 ```http
 GET /api/v1/game-content/blueprints/{id}
@@ -158,7 +158,7 @@ GET /api/v1/game-content/maps/{id}
 
 详情读取会进入真实 view 统计逻辑。匿名访问会使用派生 client key 去重，登录用户按用户身份去重。
 
-## 4. 蓝图代码
+## 蓝图代码
 
 ```http
 GET /api/v1/game-content/blueprints/{id}/code
@@ -177,7 +177,7 @@ GET /api/v1/game-content/blueprints/{id}/code
 
 限流：`60 / 60s`。
 
-## 5. Preview
+## 预览
 
 ```http
 GET /api/v1/game-content/blueprints/{id}/preview
@@ -188,7 +188,7 @@ GET /api/v1/game-content/maps/{id}/preview
 
 如果预览尚未生成或不可用，客户端应该保留原资源功能，不要把“预览失败”等同于“资源不可下载”。
 
-## 6. 地图下载
+## 下载地图
 
 获取下载信息：
 
@@ -221,7 +221,7 @@ Cache-Control: private, no-store
 
 客户端应校验 `ETag` / manifest 中 hash，并保留失败重试策略。
 
-## 7. Feed
+## 内容动态
 
 ```http
 GET /api/v1/game-content/feed?type=all&limit=20
@@ -237,7 +237,7 @@ GET /api/v1/game-content/feed?type=all&limit=20
 `featured` 来自管理员/版主精选状态。
 `trending` 使用近期下载、点赞、收藏等持久化事件计算，不应把 lifetime download count 当成唯一热度依据。
 
-## 8. 搜索与标签
+## 搜索与标签
 
 ```http
 GET /api/v1/game-content/search?q=router&type=all
@@ -257,7 +257,7 @@ GET /api/v1/game-content/tags
 搜索限流：`60 / 60s`。
 tags 限流：`60 / 60s`。
 
-## 9. 蓝图提交
+## 提交蓝图
 
 ```http
 POST /api/v1/game-content/blueprints
@@ -286,9 +286,9 @@ Body:
 
 提交会进入现有 Resource 审核流程，不等于立即公开。
 
-## 10. 地图上传
+## 上传地图
 
-### 10.1 开始上传
+### 开始上传
 
 ```http
 POST /api/v1/game-content/maps/uploads
@@ -319,7 +319,7 @@ Content-Type: multipart/form-data
 5. 触发/读取地图解析和 preview 数据。
 6. 返回 `uploadId`、过期时间和私有 preview 地址。
 
-### 10.2 查询 session
+### 查询上传会话
 
 ```http
 GET /api/v1/game-content/maps/uploads/{uploadId}
@@ -339,7 +339,7 @@ Authorization: Bearer <MindAuth access token>
 - `expiresAt`
 - 完成后 `resourceId`
 
-### 10.3 私有 preview
+### 读取私有预览
 
 ```http
 GET /api/v1/game-content/maps/uploads/{uploadId}/preview
@@ -348,7 +348,7 @@ Authorization: Bearer <MindAuth access token>
 
 raw image response。
 
-### 10.4 完成提交
+### 完成提交
 
 ```http
 POST /api/v1/game-content/maps/uploads/{uploadId}/complete
@@ -368,7 +368,7 @@ Body:
 
 同一 upload session 的完成请求应具备可重试语义，避免因为客户端重试重复创建 Resource。
 
-## 11. 点赞与收藏
+## 点赞与收藏
 
 ```http
 POST   /api/v1/game-content/blueprints/{id}/like
@@ -390,7 +390,7 @@ DELETE /api/v1/game-content/{type}/{id}/favorite
 
 点赞和收藏接口应当按最终状态设计客户端 UI，不要依赖重复点击次数。
 
-## 12. 当前用户
+## 当前用户
 
 ```http
 GET /api/v1/game-content/me
@@ -400,7 +400,7 @@ GET /api/v1/game-content/me/resources?limit=20
 
 需要 MindAuth Bearer。
 
-## 13. 常见错误
+## 常见错误
 
 | code | 含义 |
 | --- | --- |
@@ -419,7 +419,7 @@ GET /api/v1/game-content/me/resources?limit=20
 
 客户端应该读取 `error.code`，不要解析 `message`。
 
-## 14. 缓存建议
+## 缓存建议
 
 服务端已为公开读接口设置缓存头。客户端可以遵守：
 

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '@common/decorators/api-v1.decorator';
 import { OAuthProtected } from '@common/decorators/oauth-protected.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
@@ -17,6 +17,8 @@ export class ReportsV1Controller {
   create(@Body() dto: CreateReportDto, @Req() req: any) { return this.reports.create(req.user.id, dto); }
   @Get('mine')
   @OAuthProtected('forum.read')
+  @ApiQuery({ name: 'page', required: false, type: Number, schema: { minimum: 1 }, example: 1, description: '结果页码，从 1 开始。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 50 }, example: 20, description: '每页举报记录数，最大 50。' })
   async mine(@Req() req: any, @Query('page') page?: string, @Query('limit') limit?: string) {
     const result = await this.reports.getMyReports(req.user.id, Number(page) || 1, Math.min(50, Number(limit) || 20));
     return {

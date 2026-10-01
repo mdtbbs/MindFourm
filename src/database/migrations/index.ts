@@ -60,6 +60,8 @@ import { ResourceIntegrityAndMerge1720000110000 } from './1720000110000-Resource
 import { AddInternationalCommunityFields1720000120000 } from './1720000120000-AddInternationalCommunityFields';
 import { AddResourceOriginIdentity1720000130000 } from './1720000130000-AddResourceOriginIdentity';
 import { RichContentSchemaV21720000140000 } from './1720000140000-RichContentSchemaV2';
+import { MultiplayerPlatformV11720000150000 } from './1720000150000-MultiplayerPlatformV1';
+import { CloudSavesV11720000160000 } from './1720000160000-CloudSavesV1';
 
 /**
  * Migrations in run order.
@@ -131,4 +133,6 @@ export const migrations = [
   AddInternationalCommunityFields1720000120000,
   AddResourceOriginIdentity1720000130000,
   RichContentSchemaV21720000140000,
+  MultiplayerPlatformV11720000150000,
+  CloudSavesV11720000160000,
 ];

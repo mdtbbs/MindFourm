@@ -1,5 +1,5 @@
 import { Controller, Get, Query, Req } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../common/decorators/api-v1.decorator';
 import { SearchService } from './search.service';
 import { SearchQueryDto } from './dto/search-query.dto';
@@ -15,6 +15,12 @@ export class SearchV1Controller {
   @Get()
   @OAuthProtected('forum.read')
   @RateLimit({ max: 30, window: 60 })
+  @ApiQuery({ name: 'q', required: true, type: String, schema: { maxLength: 255 }, example: '资源更新', description: '搜索关键词。' })
+  @ApiQuery({ name: 'type', required: false, enum: ['post', 'user', 'global'], example: 'global', description: '搜索内容类型。' })
+  @ApiQuery({ name: 'category', required: false, type: String, example: 'discussion', description: '分类筛选标识。' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['relevance', 'newest', 'oldest'], example: 'relevance', description: '结果排序方式。' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1, description: '结果页码，从 1 开始。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 100 }, example: 20, description: '每页结果数量。' })
   async unified(@Query() query: SearchQueryDto, @Req() req: any) {
     return this.search.withSearchAudit(req.user, query.q, async (normalized) => {
       const value = await this.search.searchUnified(normalized, req.user, query.limit);
@@ -28,6 +34,12 @@ export class SearchV1Controller {
   @Get('posts')
   @OAuthProtected('forum.read')
   @RateLimit({ max: 30, window: 60 })
+  @ApiQuery({ name: 'q', required: true, type: String, schema: { maxLength: 255 }, example: '资源更新', description: '搜索关键词。' })
+  @ApiQuery({ name: 'type', required: false, enum: ['post', 'user', 'global'], example: 'post', description: '搜索类型；此端点固定返回帖子结果。' })
+  @ApiQuery({ name: 'category', required: false, type: String, example: 'discussion', description: '分类筛选标识。' })
+  @ApiQuery({ name: 'sort', required: false, enum: ['relevance', 'newest', 'oldest'], example: 'relevance', description: '结果排序方式。' })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1, description: '结果页码，从 1 开始。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 100 }, example: 20, description: '每页结果数量。' })
   async posts(@Query() query: SearchQueryDto, @Req() req: any) {
     return this.search.withSearchAudit(req.user, query.q, async (normalized) => {
       const result = await this.search.searchPosts(normalized, query, req.user);

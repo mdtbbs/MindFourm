@@ -13,6 +13,7 @@ import { User } from './user.entity';
 
 @Entity('friendships')
 @Unique('uq_friendships_requester_addressee', ['requester_id', 'addressee_id'])
+@Unique('uq_friendships_undirected_pair', ['pair_low', 'pair_high'])
 @Index('idx_friendships_requester', ['requester_id'])
 @Index('idx_friendships_addressee', ['addressee_id'])
 @Index('idx_friendships_status', ['status'])
@@ -25,6 +26,12 @@ export class Friendship {
 
   @Column({ name: 'addressee_id' })
   addressee_id: number;
+
+  @Column({ type: 'int', asExpression: 'LEAST(requester_id, addressee_id)', generatedType: 'STORED', insert: false, update: false })
+  pair_low: number;
+
+  @Column({ type: 'int', asExpression: 'GREATEST(requester_id, addressee_id)', generatedType: 'STORED', insert: false, update: false })
+  pair_high: number;
 
   @Column({ type: 'enum', enum: ['pending', 'accepted', 'rejected'], default: 'pending' })
   status: 'pending' | 'accepted' | 'rejected';

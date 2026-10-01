@@ -113,7 +113,36 @@ export class FriendsService {
       addressee_id: addresseeId,
       status: 'pending',
     });
-    const saved = await this.friendshipRepo.save(friendship);
+    let saved: Friendship;
+    try {
+      saved = await this.friendshipRepo.save(friendship);
+    } catch (error) {
+      if (!this.isFriendshipPairConflict(error)) throw error;
+      // The undirected-pair unique index closes the concurrent A→B / B→A
+      // insert race. Re-read the winner and keep the service's normal contract.
+      const raced = await this.findFriendship(requesterId, addresseeId)
+        || await this.findFriendship(addresseeId, requesterId);
+      if (!raced) throw error;
+      if (raced.status === 'accepted') throw new BadRequestException('你们已经是好友了');
+      if (raced.requester_id === requesterId) throw new BadRequestException('已有待处理的好友请求');
+
+      raced.status = 'accepted';
+      saved = await this.friendshipRepo.save(raced);
+      const requester = await this.userRepo.findOne({
+        where: { id: requesterId },
+        select: ['id', 'username', 'avatar_url'],
+      });
+      if (requester) {
+        this.notificationsService.create({
+          user_id: addresseeId,
+          type: 'friend_accepted',
+          actor_id: requesterId,
+          content: `${requester.username} 接受了你的好友请求`,
+          emailEvent: false,
+        }).catch((err) => this.logger.error('Failed to send friend_accepted notification', err));
+      }
+      return saved;
+    }
 
     // Send notification to addressee
     const requester = await this.userRepo.findOne({
@@ -167,6 +196,24 @@ export class FriendsService {
     }
 
     return saved;
+  }
+
+  /** Accept by the stable request resource id used by the V1 API. */
+  async acceptRequestById(userId: number, requestId: number): Promise<Friendship> {
+    const request = await this.friendshipRepo.findOne({ where: { id: requestId, status: 'pending' } });
+    if (!request || request.addressee_id !== userId) {
+      throw new NotFoundException('未找到好友请求');
+    }
+    return this.acceptRequest(userId, request.requester_id);
+  }
+
+  /** Reject by request id while keeping the sender/recipient boundary explicit. */
+  async rejectRequestById(userId: number, requestId: number): Promise<void> {
+    const request = await this.friendshipRepo.findOne({ where: { id: requestId, status: 'pending' } });
+    if (!request || request.addressee_id !== userId) {
+      throw new NotFoundException('未找到好友请求');
+    }
+    await this.rejectRequest(userId, request.requester_id);
   }
 
   /**
@@ -357,5 +404,12 @@ export class FriendsService {
     return this.friendshipRepo.findOne({
       where: { requester_id: userId1, addressee_id: userId2 },
     });
+  }
+
+  private isFriendshipPairConflict(error: any): boolean {
+    const driverError = error?.driverError || error;
+    return driverError?.code === 'ER_DUP_ENTRY'
+      || driverError?.errno === 1062
+      || driverError?.code === '23505';
   }
 }

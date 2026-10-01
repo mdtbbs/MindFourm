@@ -3,6 +3,7 @@
 // a deployment runner's inherited environment.
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
+import { WsAdapter } from '@nestjs/platform-ws';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -26,7 +27,7 @@ import { clientContextMiddleware } from './common/middleware/client-context.midd
 import { SwaggerModule } from '@nestjs/swagger';
 import { createV1OpenApiDocument } from './openapi/v1-openapi';
 import { appConfig } from './config/app.config';
-import { validateConfig } from './config/validate';
+import { validateConfig, validateEnabledRelayConfig } from './config/validate';
 import { PerformanceTelemetryService } from './common/performance/performance-telemetry.service';
 import { registerDeveloperDocs } from './developer-docs/register-developer-docs';
 import packageJson from '../package.json';
@@ -58,6 +59,7 @@ async function bootstrap() {
     // fail validation even though the browser sent a valid payload.
     bodyParser: false,
   });
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   // Runs after app creation so ConfigModule has loaded .env into process.env, but
   // before any database or Redis connection — a misconfigured production deployment
@@ -90,7 +92,8 @@ async function bootstrap() {
     next();
   });
 
-  // Global prefix
+  // Internal Relay control uses HTTPS at the public edge and a shared machine
+  // credential. Its /api/internal route remains excluded from public OpenAPI.
   app.setGlobalPrefix('api');
 
   // CSP reports use application/csp-report or application/reports+json rather
@@ -176,6 +179,15 @@ async function bootstrap() {
   // module hooks run before the empty-database bootstrap can create tables.
   const settingsService = app.get(SettingsService);
   await settingsService.seedDefaults();
+  if (await settingsService.getBoolean('feature_multiplayer_relay_v1_enabled', false)) {
+    try {
+      const configService = app.get(ConfigService);
+      validateEnabledRelayConfig(configService.get('multiplayer')!);
+    } catch (error) {
+      await app.close();
+      throw error;
+    }
+  }
 
   // Initialize default resource categories for the resource center.
   const resourceCategoryService = app.get(ResourceCategoryService);
@@ -214,6 +226,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 4000;
   await app.listen(port);
+  app.enableShutdownHooks();
   console.log(`MindFourm NestJS running on http://localhost:${port}`);
 }
 

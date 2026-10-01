@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { resolve } from 'node:path';
 import { SettingsService } from '../settings/settings.service';
 import { SiteConfigService } from '../../config/site-profile';
+import { isCloudSaveStorageConfigured } from '../game-saves/cloud-save-storage-config';
 
 export type ClientCapabilities = {
   site: {
@@ -15,8 +17,17 @@ export type ClientCapabilities = {
   forum: { read: boolean; write: boolean; search: boolean; image_upload: boolean };
   resources: { read: boolean; download: boolean; upload: boolean };
   notifications: { read: boolean; sse: boolean };
+  multiplayer: {
+    social_presence_v1: boolean;
+    rich_activity_v1: boolean;
+    multiplayer_sessions_v1: boolean;
+    multiplayer_invites_v1: boolean;
+    multiplayer_relay_v1: boolean;
+    third_party_multiplayer_v1: boolean;
+  };
   messages: { available: boolean; third_party_access: boolean };
   game_content: { maps: { read: boolean; download: boolean; upload: boolean }; schematics: { read: boolean; download: boolean; upload: boolean } };
+  cloud_saves_v1: boolean;
   client: { minimum_supported_version: string | null; recommended_version: string | null };
   resource_read: boolean;
   resource_files: boolean;
@@ -36,7 +47,8 @@ export class CapabilitiesService {
 
   async getCapabilities(): Promise<ClientCapabilities> {
     const [resourceRead, forumWrite, imageUpload, resourceDownload, resourceUpload,
-      notifications, messages, thirdPartyMessages] = await Promise.all([
+      notifications, messages, thirdPartyMessages, socialPresence, richActivity, sessions, invites, relay, thirdPartyMultiplayer,
+      cloudSavesEnabled, cloudSavePath] = await Promise.all([
       this.settingsService.getBoolean('feature_resources_v1_read_enabled', true),
       this.settingsService.getBoolean('feature_public_api_forum_write_enabled', true),
       this.settingsService.getBoolean('feature_public_api_image_upload_enabled', true),
@@ -45,7 +57,18 @@ export class CapabilitiesService {
       this.settingsService.getBoolean('feature_notifications_v1_enabled', true),
       this.settingsService.getBoolean('feature_messages_enabled', true),
       this.settingsService.getBoolean('feature_messages_third_party_access_enabled', false),
+      this.settingsService.getBoolean('feature_social_presence_v1_enabled', false),
+      this.settingsService.getBoolean('feature_rich_activity_v1_enabled', false),
+      this.settingsService.getBoolean('feature_multiplayer_sessions_v1_enabled', false),
+      this.settingsService.getBoolean('feature_multiplayer_invites_v1_enabled', false),
+      this.settingsService.getBoolean('feature_multiplayer_relay_v1_enabled', false),
+      this.settingsService.getBoolean('feature_third_party_multiplayer_v1_enabled', false),
+      this.settingsService.getBoolean('cloud_saves_enabled', false),
+      this.settingsService.get('cloud_saves_storage_path'),
     ]);
+    const cloudSavesAvailable = cloudSavesEnabled && isCloudSaveStorageConfigured(
+      cloudSavePath || process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'),
+    );
     return {
       site: {
         profile: this.siteConfig.current.profile,
@@ -62,11 +85,20 @@ export class CapabilitiesService {
       forum: { read: true, write: forumWrite, search: true, image_upload: imageUpload },
       resources: { read: resourceRead, download: resourceRead && resourceDownload, upload: resourceUpload },
       notifications: { read: notifications, sse: false },
+      multiplayer: {
+        social_presence_v1: socialPresence,
+        rich_activity_v1: socialPresence && richActivity,
+        multiplayer_sessions_v1: sessions,
+        multiplayer_invites_v1: sessions && invites,
+        multiplayer_relay_v1: sessions && relay,
+        third_party_multiplayer_v1: thirdPartyMultiplayer,
+      },
       messages: { available: messages, third_party_access: messages && thirdPartyMessages },
       game_content: {
         maps: { read: resourceRead, download: resourceRead && resourceDownload, upload: resourceUpload },
         schematics: { read: resourceRead, download: resourceRead && resourceDownload, upload: resourceUpload },
       },
+      cloud_saves_v1: cloudSavesAvailable,
       client: { minimum_supported_version: null, recommended_version: null },
       // Legacy aliases remain until official clients migrate to nested capabilities.
       resource_read: resourceRead,

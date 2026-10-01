@@ -17,6 +17,11 @@ import { GameContentModule } from '../modules/game-content/game-content.module';
 import { SearchModule } from '../modules/search/search.module';
 import { NotificationsModule } from '../modules/notifications/notifications.module';
 import { MessagesModule } from '../modules/messages/messages.module';
+import { SocialModule } from '../modules/social/social.module';
+import { MultiplayerModule } from '../modules/multiplayer/multiplayer.module';
+import { PresenceModule } from '../modules/presence/presence.module';
+import { RealtimeGatewayModule } from '../modules/realtime/realtime-gateway.module';
+import { GameSavesModule } from '../modules/game-saves/game-saves.module';
 import { API_V1_VERSION } from './api-version';
 
 function keepOnlyV1Paths(document: OpenAPIObject): OpenAPIObject {
@@ -64,9 +69,14 @@ export function createV1OpenApiDocument(app: INestApplication) {
       ReportsModule,
       UploadsModule,
       GameContentModule,
+      GameSavesModule,
       SearchModule,
       NotificationsModule,
       MessagesModule,
+      SocialModule,
+      MultiplayerModule,
+      PresenceModule,
+      RealtimeGatewayModule,
     ],
   });
 

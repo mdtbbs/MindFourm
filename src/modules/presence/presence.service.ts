@@ -1,10 +1,12 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Redis from 'ioredis';
 import { RedisService } from '../../database/redis.service';
 import { NotificationStreamService } from '../notifications/notification-stream.service';
 import { Friendship } from '../../entities/friendship.entity';
+import { PresencePolicyService } from './presence-policy.service';
+import { SocialPrivacyService } from '../social/social-privacy.service';
 import {
   PresenceData,
   PRESENCE_TTL_SECONDS,
@@ -31,6 +33,8 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     private notificationStream: NotificationStreamService,
     @InjectRepository(Friendship)
     private friendshipRepo: Repository<Friendship>,
+    @Optional() private readonly presencePolicy?: PresencePolicyService,
+    @Optional() private readonly socialPrivacy?: SocialPrivacyService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -47,7 +51,7 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Write presence data to Redis with TTL.
-   * Called by LanLink via External API.
+   * Used for the legacy projection of V1 Presence connections.
    */
   async setPresence(userId: number, data: PresenceData): Promise<void> {
     const key = presenceKey(userId);
@@ -64,7 +68,7 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     await this.redisService.del(key);
   }
 
-  /** Store LanLink's legacy room activity in its separate compatibility key. */
+  /** Store LanLink's legacy room activity separately from OAuth Presence. */
   async setLanLinkPresence(userId: number, data: PresenceData): Promise<void> {
     await this.redisService.set(lanlinkPresenceKey(userId), JSON.stringify(data), PRESENCE_TTL_SECONDS);
   }
@@ -124,7 +128,11 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
-  /** Read LanLink's short-lived legacy activity without mixing its Redis key with OAuth Presence. */
+  /**
+   * Read the LanLink compatibility projection for social presence. This stays
+   * separate from the V1 connection snapshot so expiring a LanLink room cannot
+   * keep a dead OAuth Presence connection alive (or vice versa).
+   */
   async getLanLinkPresences(userIds: number[]): Promise<Map<number, PresenceData>> {
     const result = new Map<number, PresenceData>();
     if (userIds.length === 0) return result;
@@ -145,7 +153,7 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     return result;
   }
 
-  /** Return the newest visible source to existing External API callers. */
+  /** Return the most recently updated source for existing External API callers. */
   async getCompatiblePresences(userIds: number[]): Promise<Map<number, PresenceData>> {
     const [current, lanlink] = await Promise.all([
       this.getPresences(userIds),
@@ -252,7 +260,13 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    const presence = await this.getPresence(userId);
+    const [currentPresence, lanlinkPresence] = await Promise.all([
+      this.getPresence(userId),
+      this.getLanLinkPresences([userId]),
+    ]);
+    const presence = [currentPresence, lanlinkPresence.get(userId)]
+      .filter((value): value is PresenceData => !!value && value.status !== 'offline')
+      .sort((left, right) => right.updated_at - left.updated_at)[0] || null;
     const eventData = presence
       ? {
           friend_user_id: userId,
@@ -270,8 +284,27 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
 
     // Get friend IDs and push to each
     const friendIds = await this.getFriendIds(userId);
+    const [visiblePresence, visibleActivity, statuses] = await Promise.all([
+      this.presencePolicy
+        ? this.presencePolicy.canSeeFromManyViewers(userId, friendIds, 'presence_visibility')
+        : Promise.resolve(new Map(friendIds.map((friendId) => [friendId, true]))),
+      this.presencePolicy
+        ? this.presencePolicy.canSeeFromManyViewers(userId, friendIds, 'activity_visibility')
+        : Promise.resolve(new Map(friendIds.map((friendId) => [friendId, true]))),
+      this.socialPrivacy ? this.socialPrivacy.statusForMany([userId]) : Promise.resolve(new Map()),
+    ]);
+    const hidden = statuses.get(userId) === 'invisible';
     for (const friendId of friendIds) {
-      this.notificationStream.pushRaw(friendId, 'friend_presence', eventData);
+      const canSee = visiblePresence.get(friendId) === true && !hidden;
+      const canSeeActivity = visibleActivity.get(friendId) === true;
+      const friendEvent = canSee
+        ? {
+            ...eventData,
+            status: eventData.status === 'offline' ? 'offline' : eventData.status,
+            ...(canSeeActivity ? {} : { room_code: undefined, room_name: undefined, node_name: undefined }),
+          }
+        : { friend_user_id: userId, status: 'offline', updated_at: Date.now() };
+      this.notificationStream.pushRaw(friendId, 'friend_presence', friendEvent);
     }
 
     // Record cooldown

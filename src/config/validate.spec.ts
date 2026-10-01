@@ -1,4 +1,4 @@
-import { collectConfigIssues, validateConfig } from './validate';
+import { collectConfigIssues, validateConfig, validateEnabledRelayConfig } from './validate';
 
 type Config = Parameters<typeof collectConfigIssues>[0];
 
@@ -51,6 +51,11 @@ describe('collectConfigIssues', () => {
 
   it('accepts a fully configured production setup', () => {
     const { errors } = collectConfigIssues(makeConfig());
+    expect(errors).toEqual([]);
+  });
+
+  it('keeps local Cloud Saves storage out of remote integration startup validation', () => {
+    const { errors } = collectConfigIssues(makeConfig({ cloudSaves: { storagePath: '/var/lib/mindfourm/cloud-saves' } }));
     expect(errors).toEqual([]);
   });
 
@@ -128,6 +133,16 @@ describe('collectConfigIssues', () => {
     expect(withEasyManager.errors.join(' ')).toContain('EASYMANAGER_API_KEY is required');
   });
 
+  it('requires the shared Relay credentials and Agent allowlist when any Relay setting is configured in production', () => {
+    const { errors } = collectConfigIssues(makeConfig({ multiplayer: {
+      relayCredentialSecret: 'credential-secret-that-is-at-least-32-bytes',
+    } }));
+    expect(errors).toEqual(expect.arrayContaining([
+      'MULTIPLAYER_RELAY_MACHINE_CREDENTIAL is required in production',
+      'MULTIPLAYER_RELAY_AGENT_IDS is required in production',
+    ]));
+  });
+
   it('warns rather than fails when the service API key is absent', () => {
     // The guard fails closed, so a missing key breaks the endpoint but is not a
     // security hole.
@@ -164,5 +179,27 @@ describe('validateConfig', () => {
         }),
       ),
     ).not.toThrow();
+  });
+});
+
+describe('validateEnabledRelayConfig', () => {
+  it('fails startup when the Relay feature flag is enabled without production credentials', () => {
+    expect(() => validateEnabledRelayConfig(undefined as any)).toThrow(/MULTIPLAYER_RELAY_CREDENTIAL_SECRET/);
+  });
+
+  it('accepts a complete Relay configuration without exposing secret values', () => {
+    expect(() => validateEnabledRelayConfig({
+      relayCredentialSecret: 'credential-secret-that-is-at-least-32-bytes',
+      relayMachineCredential: 'machine-credential-that-is-at-least-32-bytes',
+      relayAgentIds: 'official-cn-1,official-eu-1',
+    })).not.toThrow();
+  });
+
+  it('does not require internal client-certificate paths for Relay control', () => {
+    expect(() => validateEnabledRelayConfig({
+      relayCredentialSecret: 'credential-secret-that-is-at-least-32-bytes',
+      relayMachineCredential: 'machine-credential-that-is-at-least-32-bytes',
+      relayAgentIds: 'official-cn-1',
+    })).not.toThrow();
   });
 });

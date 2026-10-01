@@ -18,10 +18,12 @@ import { CommunityChallengesModule } from './modules/community-challenges/commun
 import { PerformanceTelemetryModule } from './common/performance/performance-telemetry.module';
 import { CommunityCoreModule } from './modules/community-core/community-core.module';
 import { MdtbbsDomainModule } from './modules/mdtbbs-domain/mdtbbs-domain.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: [appConfig] }),
+    ScheduleModule.forRoot(),
     SiteConfigModule,
     DatabaseModule,
     RateLimitModule,

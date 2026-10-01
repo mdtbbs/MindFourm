@@ -1,4 +1,7 @@
-import { Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { open, mkdir, unlink } from 'node:fs/promises';
+import { isAbsolute, parse, resolve } from 'node:path';
+import { BadRequestException, ConflictException, Inject, Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Setting } from '@entities/setting.entity';
@@ -432,6 +435,18 @@ export class SettingsService implements OnModuleInit {
       'feature_notifications_v1_enabled',
       'feature_messages_enabled',
       'feature_messages_third_party_access_enabled',
+      'feature_social_presence_v1_enabled',
+      'feature_rich_activity_v1_enabled',
+      'feature_multiplayer_sessions_v1_enabled',
+      'feature_multiplayer_invites_v1_enabled',
+      'feature_multiplayer_relay_v1_enabled',
+      'feature_third_party_multiplayer_v1_enabled',
+    ]),
+    'cloud-saves': new Set([
+      'cloud_saves_enabled',
+      'cloud_saves_storage_path',
+      'cloud_saves_user_quota_bytes',
+      'cloud_saves_max_file_bytes',
     ]),
     terms: new Set([
       'terms_required',
@@ -562,6 +577,16 @@ export class SettingsService implements OnModuleInit {
       { key: 'feature_notifications_v1_enabled', value: 'true', category: 'features', description: 'Enable Public Client V1 notifications' },
       { key: 'feature_messages_enabled', value: 'true', category: 'features', description: 'Enable direct messages' },
       { key: 'feature_messages_third_party_access_enabled', value: 'false', category: 'features', description: 'Allow third-party OAuth clients to use direct messages' },
+      { key: 'feature_social_presence_v1_enabled', value: 'false', category: 'features', description: 'Enable multi-client Presence and social privacy APIs' },
+      { key: 'feature_rich_activity_v1_enabled', value: 'false', category: 'features', description: 'Enable Rich Activity reporting and display' },
+      { key: 'feature_multiplayer_sessions_v1_enabled', value: 'false', category: 'features', description: 'Enable private/friends/unlisted multiplayer Sessions' },
+      { key: 'feature_multiplayer_invites_v1_enabled', value: 'false', category: 'features', description: 'Enable multiplayer invites and join requests' },
+      { key: 'feature_multiplayer_relay_v1_enabled', value: 'false', category: 'features', description: 'Enable allocation of official Relay Agents' },
+      { key: 'feature_third_party_multiplayer_v1_enabled', value: 'false', category: 'features', description: 'Allow reviewed third-party OAuth apps to use Multiplayer APIs' },
+      { key: 'cloud_saves_enabled', value: 'false', category: 'cloud-saves', description: 'Enable private Mindustry cloud saves' },
+      { key: 'cloud_saves_storage_path', value: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'), category: 'cloud-saves', description: 'Persistent local directory for private save files' },
+      { key: 'cloud_saves_user_quota_bytes', value: process.env.CLOUD_SAVES_MAX_BYTES_PER_USER || '524288000', category: 'cloud-saves', description: 'Cloud save quota per user in bytes' },
+      { key: 'cloud_saves_max_file_bytes', value: process.env.CLOUD_SAVES_MAX_FILE_BYTES || '52428800', category: 'cloud-saves', description: 'Maximum size of one cloud save file in bytes' },
       // Terms & Conditions enforcement
       { key: 'terms_required', value: 'false', category: 'terms', description: 'Require users to accept Terms & Privacy before forum access' },
       { key: 'terms_updated_at', value: new Date().toISOString(), category: 'terms', description: 'Bump to force all users to re-accept terms' },
@@ -715,6 +740,10 @@ export class SettingsService implements OnModuleInit {
     return setting ? setting.value : null;
   }
 
+  getCached(key: string): string | null {
+    return this.settingsCache.get(key)?.value ?? null;
+  }
+
   /**
    * Get a setting as a number
    */
@@ -817,6 +846,8 @@ export class SettingsService implements OnModuleInit {
       normalizedPairs.set(key, normalizedValue);
     }
 
+    if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
+
     for (const [key, value] of normalizedPairs.entries()) {
       await this.settingRepository.query(
         'INSERT INTO settings (`key`, `value`, category, updated_at) VALUES (?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE `value` = ?, category = ?, updated_at = NOW()',
@@ -827,6 +858,62 @@ export class SettingsService implements OnModuleInit {
     // Reload cache after update
     await this.loadSettings();
     await this.invalidateNavigationIfNeeded(normalizedPairs.keys());
+  }
+
+  private async validateCloudSavesSettings(values: Map<string, string>): Promise<void> {
+    const allowed = new Set([
+      'cloud_saves_enabled',
+      'cloud_saves_storage_path',
+      'cloud_saves_user_quota_bytes',
+      'cloud_saves_max_file_bytes',
+    ]);
+    for (const key of values.keys()) {
+      if (!allowed.has(key)) throw new BadRequestException(`Unsupported cloud save setting: ${key}`);
+    }
+
+    const enabled = values.get('cloud_saves_enabled') ?? await this.get('cloud_saves_enabled') ?? 'false';
+    if (!['true', 'false'].includes(enabled)) throw new BadRequestException('云存档开关必须为 true 或 false。');
+
+    const currentQuota = await this.getNumber('cloud_saves_user_quota_bytes') || 524288000;
+    const currentMaxFile = await this.getNumber('cloud_saves_max_file_bytes') || 52428800;
+    const quota = values.has('cloud_saves_user_quota_bytes')
+      ? Number(values.get('cloud_saves_user_quota_bytes')) : currentQuota;
+    const maxFile = values.has('cloud_saves_max_file_bytes')
+      ? Number(values.get('cloud_saves_max_file_bytes')) : currentMaxFile;
+    if (!Number.isSafeInteger(quota) || quota < 1) throw new BadRequestException('每用户云存档额度必须是正整数（字节）。');
+    if (!Number.isSafeInteger(maxFile) || maxFile < 1 || maxFile > quota) {
+      throw new BadRequestException('单个存档文件上限必须为正整数，且不能超过每用户额度。');
+    }
+
+    const storagePath = values.get('cloud_saves_storage_path');
+    if (storagePath === undefined) return;
+    const normalizedPath = resolve(storagePath);
+    if (!storagePath || !isAbsolute(storagePath) || normalizedPath !== storagePath || parse(normalizedPath).root === normalizedPath) {
+      throw new BadRequestException('存档目录必须是绝对路径，且不能是文件系统根目录。');
+    }
+    const currentPath = await this.get('cloud_saves_storage_path');
+    if (currentPath && resolve(currentPath) !== normalizedPath) {
+      try {
+        const [blobs, uploads] = await Promise.all([
+          this.settingRepository.query("SELECT COUNT(*) AS count FROM game_save_blobs WHERE storage_provider='local'"),
+          this.settingRepository.query("SELECT COUNT(*) AS count FROM game_save_upload_sessions WHERE status IN ('pending','uploaded')"),
+        ]);
+        if (Number(blobs[0]?.count || 0) > 0 || Number(uploads[0]?.count || 0) > 0) {
+          throw new ConflictException('已有云存档或上传会话时不能直接更改存储目录；先停用功能并迁移文件。');
+        }
+      } catch (error: any) {
+        if (error instanceof ConflictException) throw error;
+        const code = error?.code || error?.driverError?.code;
+        if (code !== 'ER_NO_SUCH_TABLE') throw error;
+      }
+    }
+
+    await mkdir(normalizedPath, { recursive: true, mode: 0o700 });
+    const probePath = resolve(normalizedPath, `.write-check-${randomUUID()}`);
+    const probe = await open(probePath, 'wx', 0o600);
+    await probe.close();
+    await unlink(probePath);
+    values.set('cloud_saves_storage_path', normalizedPath);
   }
 
   private async invalidateNavigationIfNeeded(keys: Iterable<string>): Promise<void> {

@@ -315,6 +315,22 @@ describe('FriendsService.sendRequest', () => {
       })
     );
   });
+
+  it('resolves a concurrent reverse request after the undirected unique key wins', async () => {
+    const { service, friendshipRepo, notificationsService, friendships } = createService();
+    friendshipRepo.save.mockImplementationOnce(async () => {
+      friendships.push({ id: 12, requester_id: 2, addressee_id: 1, status: 'pending' });
+      const error: any = new Error('duplicate friendship pair');
+      error.driverError = { code: 'ER_DUP_ENTRY', errno: 1062 };
+      throw error;
+    });
+
+    const result = await service.sendRequest(1, 2);
+
+    expect(result).toMatchObject({ id: 12, requester_id: 2, addressee_id: 1, status: 'accepted' });
+    expect(friendships).toHaveLength(1);
+    expect(notificationsService.create).toHaveBeenCalledWith(expect.objectContaining({ user_id: 2, type: 'friend_accepted' }));
+  });
 });
 
 describe('FriendsService.acceptRequest', () => {

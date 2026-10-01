@@ -1,53 +1,55 @@
-# MDTBBS API 文档
+# MDTBBS API 开发者文档
 
 管理员跨站资源导入/导出使用 legacy 管理接口，具体格式和文件处理流程见[跨站资源迁移文档](../resources-cross-site-transfer.md)。
 
-本目录是 MindFourm 当前 API 的开发者入口。
+这里介绍 MindFourm 面向客户端和服务端集成开放的 API，包括适用场景、认证方式、请求参数与响应格式。论坛用户页面不提供 API 导航；本入口面向开发者。
 
-如果你正在做 Web、Android、桌面客户端、Mindustry Mod、Xenon Launcher 或其他第三方客户端，使用 MindAuth Authorization Code + PKCE 后调用 `/api/v1/*`。Xenon 没有专属鉴权分支。
-如果你正在做机器人、同步服务或后台自动化，使用 `/api/external/v1/*`。
-除非你正在维护论坛本体，否则不要把未文档化的 `/api/*` legacy 路由当成长期稳定契约。
+Web、Android、桌面端、Mindustry Mod、启动器等客户端通过 MindAuth Authorization Code + PKCE 获取访问令牌，再调用 `/api/v1/*`。机器人、同步服务和后台自动化使用 `/api/external/v1/*`。
 
-## 1. API 分层
+未在公开文档中列出的 `/api/*` 历史接口不属于第三方稳定契约；只有维护论坛本体时才应直接依赖它们。
 
-| 层级 | 基础路径 | 面向对象 | 稳定性 |
+## API 分层
+
+| 接口 | 基础路径 | 面向对象 | 稳定性 |
 | --- | --- | --- | --- |
-| Public Client V1 | `/api/v1` | Web、官方客户端、Mindustry Mod、第三方启动器 | 稳定契约；scope 与论坛策略共同控制 |
-| External API | `/api/external/v1` | QQ/Discord/Telegram 机器人、同步服务、服务端集成 | 受 scope 约束的服务端契约 |
-| Legacy / internal | `/api/*` | 论坛现有前端、后台、历史兼容代码 | 不承诺给第三方长期兼容 |
-| Service callbacks | 例如 `/api/service-api/*`、`/api/auto-post/*` | 受信任服务间调用 | 私有部署契约 |
+| Public Client V1 | `/api/v1` | Web、官方客户端、Mindustry Mod、第三方启动器 | 稳定契约；OAuth scope 与论坛策略共同控制 |
+| External API | `/api/external/v1` | QQ、Discord、Telegram 机器人、同步服务和服务端集成 | 受 scope 约束的服务端契约 |
+| 历史与内部接口 | `/api/*` | 论坛前端、后台和兼容代码 | 不承诺长期兼容第三方 |
+| 服务间回调 | 例如 `/api/service-api/*`、`/api/auto-post/*` | 受信任的服务间调用 | 私有部署契约 |
 
-第一方客户端不要因为源码里存在某个 legacy endpoint 就直接依赖它。V1 是否可用还要结合 capability 判断。
+客户端不要因为源码中存在某个历史接口就依赖它。调用 V1 功能前，还要检查服务端当前公布的能力。
 
-## 2. 文档入口
+## 文档入口
 
 生产或开发环境在 `OPENAPI_ENABLED != false` 时提供：
 
-- 在线开发者入口：`/api/v1`
-- 只读 API Reference：`/api/v1/reference`
-- Swagger 只读视图：`/api/docs/v1`（禁用 Try it）
+- 在线开发者文档：`/api/v1`
+- API 参数参考：`/api/v1/reference`
+- Swagger 文档：`/api/docs/v1`（只读，不提供在线调用）
 - OpenAPI JSON：`/api/openapi/v1.json`
-- Capability discovery：`GET /api/v1/capabilities`
+- 服务能力查询：`GET /api/v1/capabilities`
 
 `/api/v1` 的在线文档只展示公开稳定契约。Legacy、管理端和服务间接口不会出现在公开导航中。
 
 仓库内文档：
 
-- [First-party V1 参考](./first-party-v1.md)
-- [Public Client 快速接入](./public-client-v1.md)
-- [Rich Content Schema v2](./rich-content-schema-v2.md)
+- [论坛 API V1 参考](./first-party-v1.md)
+- [客户端接入指南](./public-client-v1.md)
+- [富文本格式 V2](./rich-content-schema-v2.md)
 - [认证与凭证](./authentication.md)
-- [Game Content V1](./game-content-v1.md)
-- [Resource V1 契约](./resources-v1-contract.md)
-- [External API](./external.md)
-- [资源评论 API](./social-resource-comments.md)
+- [游戏内容 API V1](./game-content-v1.md)
+- [资源中心 API V1](./resources-v1-contract.md)
+- [多人联机 API V1](./multiplayer-v1.md)
+- [云存档 API V1](./cloud-saves-v1.md)
+- [外部服务 API](./external.md)
+- [旧版好友与资源评论接口](./social-resource-comments.md)
 - [源码接口总表](./API_REFERENCE.md)
 
 `API_REFERENCE.md` 是全仓库接口盘点，不等于公开稳定 API。第三方客户端的契约边界以 V1 OpenAPI 和本目录明确标注的文档为准。
 
-## 3. V1 响应格式
+## V1 响应格式
 
-普通 V1 JSON 成功响应统一为：
+V1 JSON 接口成功时统一返回 `data` 和 `meta`：
 
 ```json
 {
@@ -93,7 +95,7 @@
 
 客户端控制流应读取 `error.code` 和 HTTP 状态码，不要匹配中文 `message`。
 
-### 原始响应例外
+### 文件与重定向响应
 
 文件、图片和重定向类接口可能标记为 raw response，不使用上述 JSON envelope，例如：
 
@@ -104,17 +106,15 @@
 
 调用方应根据 `Content-Type`、HTTP 状态码和响应头处理。
 
-## 4. 认证方式
+## 认证方式
 
 不同 API 不共用同一种凭证。
 
 | 场景 | 凭证 |
 | --- | --- |
-| 浏览器论坛会话 | `forum_session` Cookie |
-| Android / 第一方移动端 | Forum mobile Bearer token |
-| Public Client V1 | MindAuth Public Client access token，`Authorization: Bearer ...`；服务端 introspection 并按 scopes 校验 |
-| Existing Android clients | Forum mobile Bearer token（兼容路径，逐步迁移到 MindAuth Public Client） |
-| Browser forum session | `forum_session` Cookie（第一方兼容） |
+| 新客户端 | MindAuth Public Client access token；服务端验证令牌并按 scope 校验 |
+| 已发布的移动客户端 | Forum Mobile Bearer token（兼容路径） |
+| 浏览器论坛 | `forum_session` Cookie |
 | External API | External API Key，Bearer 或 `X-API-Key` |
 | 受信服务间调用 | 对应服务私钥头，例如 `X-Service-Key` |
 
@@ -122,7 +122,7 @@
 
 特别注意：当前源码中的 `POST /api/auth/validate-credentials` 是服务端接口，必须先通过 External API Key，并要求 `lanlink:auth` 或 `backupsave:auth` scope。它会向 MindAuth 校验用户名和密码，但不会向普通 Mod 签发 Game Content Bearer token，因此不能把它当作公开 Mod 登录接口。
 
-## 5. Capability-first
+## 先读取服务能力
 
 客户端启动后应先请求：
 
@@ -130,13 +130,13 @@
 GET /api/v1/capabilities
 ```
 
-能力以嵌套对象表达 forum、resources、notifications、messages、game_content 与 client 状态。已发布的扁平字段（例如 `resource_read`、`resource_files`、`download_grants`、`notifications_v1`）暂时保留为兼容别名。具体字段见 [Public Client V1 接入指南](./public-client-v1.md#capability-discovery)。
+能力以嵌套对象表示论坛、资源、通知、私信、游戏内容、联机和客户端状态；`cloud_saves_v1` 表示云存档是否启用。旧版扁平字段（例如 `resource_read`、`resource_files`、`download_grants`、`notifications_v1`）暂时保留为兼容别名。字段说明见[客户端接入指南](./public-client-v1.md)。
 
-能力为 `false` 时，客户端应隐藏或禁用依赖功能，而不是尝试调用未启用接口。
+能力为 `false` 时，客户端应隐藏或禁用对应功能，不要尝试调用未启用的接口。
 
 `GET /api/v1/client/config?platform=android&version_code=...` 提供移动端最低版本、最新版本、强制更新、维护状态和客户端功能开关。
 
-## 6. 兼容性约定
+## 兼容性约定
 
 V1 遵循以下规则：
 
@@ -149,7 +149,7 @@ V1 遵循以下规则：
 7. 文件下载必须校验 hash、可用状态和服务端返回的能力信息。
 8. Preview 失败不应让原始资源本身变成不可用。
 
-## 7. 限流
+## 请求限流
 
 全局默认：
 
@@ -168,7 +168,7 @@ Retry-After: 60
 
 达到限制后返回 HTTP `429`。V1 中会转换为 `RATE_LIMITED` 错误码，并标记 `retryable: true`。
 
-## 8. OpenAPI 维护规则
+## OpenAPI 文档维护
 
 `src/openapi/v1-openapi.ts` 是 V1 文档生成入口。
 
@@ -182,12 +182,12 @@ V1 OpenAPI 必须只暴露 `/v1/*` 路径。部分 Nest module 同时包含 lega
 4. 若仓库提交 `openapi-v1.json` 快照，重新导出后再提交。
 5. 不要手工把 legacy endpoint 加进 V1 文档来解决客户端需求，应先设计稳定 V1 endpoint。
 
-## 9. 源码中的已知边界
+## 各类接口的边界
 
 以下内容容易混淆，但现在不是同一件事：
 
-- `Resources V1` 是通用资源读取、manifest 和持久化上传草稿契约。
-- `Game Content V1` 是专门给蓝图和地图客户端使用的体验型 API，包含搜索、Feed、收藏、点赞、上传和文件下载。
-- `External API` 是服务端机器人接口，不应把 API Key 放进 Mod、网页 bundle 或桌面客户端发行包。
-- 新客户端使用 MindAuth Authorization Code + PKCE S256；当前 Forum mobile exchange 和 Forum mobile JWT 继续作为兼容路径，不会因本次升级突然失效。
-- `notifications_v1` 已纳入 First-party V1 OpenAPI，默认 capability 为 `true`，并受 `feature_notifications_v1_enabled` 控制；SSE 目前仍为 `false`。
+- `Resources V1` 提供通用资源读取、Manifest 和持久化上传草稿。
+- `Game Content V1` 为蓝图和地图客户端提供搜索、动态、收藏、点赞、上传和下载接口。
+- `External API` 面向服务端机器人。不要把 API Key 放入 Mod、网页代码包或桌面客户端。
+- 新客户端使用 MindAuth Authorization Code + PKCE S256。Forum Mobile token 和对应交换接口继续服务已发布的移动客户端。
+- `notifications_v1` 已纳入 First-party V1 OpenAPI，默认服务能力为 `true`，并受 `feature_notifications_v1_enabled` 控制；SSE 目前仍为 `false`。

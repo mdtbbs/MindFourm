@@ -50,7 +50,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 前缀 `/api/external/v1`，使用 `Authorization: Bearer` 或 `X-API-Key` 头携带 API Key，
 按 scope 授权，可指定目标用户代发帖/回复，独立限流与审计。详见 `docs/api/external.md`。
 
-| Method | Endpoint | Scope |
+| 方法 | 路径 | Scope |
 |--------|----------|-------|
 | POST | `/api/auth/validate-credentials` | lanlink:auth, backupsave:auth |
 | GET | `/api/external/v1/friends` | friends:read |
@@ -94,7 +94,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 前缀 `/api/service-api`，使用旧版 `FORUM_API_KEY`（被视为 `admin:* + users:impersonate`），
 供机器人代发帖、代回复。
 
-| Method | Endpoint | 说明 |
+| 方法 | 路径 | 说明 |
 |--------|----------|------|
 | POST | `/api/service-api/posts` | createPost |
 | POST | `/api/service-api/posts/:postId/replies` | createReply |
@@ -103,7 +103,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 用于受信服务间回调（如 EasyManager / 外部平台），头部携带 `X-Service-Key`。**不面向终端用户**。
 
-| Method | Endpoint | 说明 |
+| 方法 | 路径 | 说明 |
 |--------|----------|------|
 | POST | `/api/auto-post/server-approved` | handleServerApproved |
 | GET | `/api/post-servers/forum-posts/:serverId` | getForumPosts |
@@ -121,7 +121,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 管理后台：仪表盘统计、批量操作、审核、标签合并、清理。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/admin/system/performance` | 🔒 admin | - |
 | GET | `/api/admin/stats` | 🔒 moderator/admin | - |
@@ -167,7 +167,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 面向管理员的站内通知（SSE + webhook）。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/admin/notifications` | 🔒 需登录 | - |
 | GET | `/api/admin/notifications/unread-count` | 🔒 需登录 | - |
@@ -180,7 +180,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 文件上传。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/attachments/upload` | 🔒 需登录 | - |
 | POST | `/api/attachments/:id/approve` | 🔒 admin/moderator | - |
@@ -198,7 +198,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 认证：MindAuth OAuth 回调、会话创建/校验/销毁、滑动续期。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/auth/check` | 🔒 需登录 | - |
 | POST | `/api/auth/sync-phone-status` | 🔒 需登录 | - |
@@ -218,7 +218,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 保留的 EasyManager 回调处理器：服务批准后自动发布公告帖。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/auto-post/server-approved` | 🛡 服务间 | - |
 
@@ -228,7 +228,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 徽章定义与颁发。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/badges` | 🔒 需登录 | - |
 | GET | `/api/badges/user/:userId` | 🔒 需登录 | - |
@@ -244,7 +244,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 封禁管理（用户/IP/CIDR）。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/bans` | 🔒 admin | - |
 | POST | `/api/bans` | 🔒 admin | - |
@@ -257,7 +257,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 书签 CRUD。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/bookmarks` | 🔒 需登录 | - |
 | GET | `/api/bookmarks/check/:postId` | 🔒 需登录 | - |
@@ -270,7 +270,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 能力声明（客户端用）。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/v1/capabilities` | 公开 | - |
 | GET | `/api/v1/client/config` | 🔒 需登录 | - |
@@ -283,7 +283,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 分类层级管理。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/categories` | 🔒 需登录 | - |
 | GET | `/api/categories/:id` | 🔒 需登录 | - |
@@ -295,7 +295,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 发现页。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/v1/discover` | 🔒 需登录 | - |
 
@@ -305,7 +305,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 反馈。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/feedback` | 🔓 公开 | - |
 
@@ -315,7 +315,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 用户关注。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/follows/:userId` | 🔒 需登录 | - |
 | DELETE | `/api/follows/:userId` | 🔒 需登录 | - |
@@ -330,7 +330,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 好友系统：含外部机器人可调用的好友查询端点。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/external/v1/friends` | 🤖 机器人 | friends:read |
 | GET | `/api/external/v1/friends/requests` | 🤖 机器人 | friends:read |
@@ -351,7 +351,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 群组 CRUD + 成员管理。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/groups` | 🔒 需登录 | - |
 | GET | `/api/groups/my` | 🔒 需登录 | - |
@@ -372,7 +372,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > LANLink 快速代码：8 字符临时码生成/校验，用于局域网设备授权登录。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/lanlink/quick-code` | 🔒 需登录 | - |
 | POST | `/api/lanlink/quick-code` | 🔒 需登录 | - |
@@ -386,7 +386,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 等级体系。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/levels` | 🔒 需登录 | - |
 | GET | `/api/levels/user/:userId` | 🔒 需登录 | - |
@@ -401,7 +401,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 帖子/回复点赞。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/likes/posts/:postId` | 🔒 需登录 | - |
 | DELETE | `/api/likes/posts/:postId` | 🔒 需登录 | - |
@@ -418,7 +418,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 私信 + 游标分页。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/messages` | 🔒 需登录 | - |
 | GET | `/api/messages` | 🔒 需登录 | - |
@@ -441,7 +441,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 公告内容。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/v1/notices` | 🔒 需登录 | - |
 | GET | `/api/v1/notices/:id` | 🔒 需登录 | - |
@@ -456,7 +456,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 站内通知（5 类）+ SSE + 邮件。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/notifications` | 🔒 需登录 | - |
 | GET | `/api/notifications/cursor` | 🔒 需登录 | - |
@@ -472,7 +472,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 插件生命周期管理。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/plugins` | 🔒 需登录 | - |
 | GET | `/api/plugins/:slug` | 🔒 需登录 | - |
@@ -490,7 +490,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 积分系统。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/points/me` | 🔒 需登录 | - |
 | GET | `/api/points/me/history` | 🔒 需登录 | - |
@@ -508,7 +508,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 门户 V1。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/v1/portal` | 🔒 需登录 | - |
 
@@ -516,7 +516,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 帖子与服务器关联（EasyManager 集成预留）。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/post-servers/by-server/:serverId` | 🔓 公开 | - |
 | GET | `/api/post-servers/forum-posts/:serverId` | 🛡 服务间 | - |
@@ -529,7 +529,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 帖子 CRUD、Markdown、标签、游标分页、搜索。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/posts` | 🔒 需登录 | - |
 | GET | `/api/posts/cursor` | 🔒 需登录 | - |
@@ -554,7 +554,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 在线状态：Redis 驱动，含外部机器人在线状态读写。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/external/v1/notifications` | 🤖 机器人 | notifications:write |
 | GET | `/api/external/v1/presence` | 🤖 机器人 | presence:read |
@@ -569,7 +569,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 隐私相关。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/admin/privacy/deletion-requests` | 🔒 需登录 | - |
 | PUT | `/api/admin/privacy/deletion-requests/:id` | 🔒 需登录 | - |
@@ -583,7 +583,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 表情回应（白名单 emoji）。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/reactions/emojis` | 🔓 公开 | - |
 | POST | `/api/reactions/:targetType/:targetId` | 🔒 需登录 | - |
@@ -595,7 +595,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 回复管理、@提及解析、软删除。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/posts/:postId/replies` | 🔒 需登录 | - |
 | POST | `/api/posts/:postId/replies` | 🔒 需登录 | - |
@@ -609,7 +609,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 举报/审核队列。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/admin/reports` | 🔒 moderator/admin | - |
 | PATCH | `/api/admin/reports/:id` | 🔒 moderator/admin | - |
@@ -622,7 +622,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 资源中心：上传/外链、版本管理、分类、审核。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/resources` | 🔒 需登录 | - |
 | GET | `/api/resources/hot` | 🔒 需登录 | - |
@@ -665,7 +665,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > RSS 2.0 订阅源。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/rss/posts.xml` | 🔒 需登录 | - |
 | GET | `/api/rss/categories/:slug.xml` | 🔒 需登录 | - |
@@ -676,7 +676,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 搜索：LIKE + 热门搜索缓存。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/search` | 🔒 需登录 | - |
 | GET | `/api/search/history` | 🔒 需登录 | - |
@@ -690,7 +690,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 安全设置。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/security/csp-reports` | 🔓 公开 | - |
 
@@ -700,7 +700,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 服务器（暂停中的 EasyManager 代理）。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/servers/public` | 🔒 需登录 | - |
 | GET | `/api/servers/versions` | 🔒 需登录 | - |
@@ -713,7 +713,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > External API 平台：第三方机器人/服务以 API Key 调用，可代发帖/回复、审核和管理资源，独立 scope 与审计。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/admin/external-api/keys` | 🔒 需登录 | - |
 | POST | `/api/admin/external-api/keys` | 🔒 需登录 | - |
@@ -757,7 +757,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 键值设置。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/settings` | 🔓 公开 | - |
 | GET | `/api/settings/admin/sidebar-navigation` | 🔒 admin | - |
@@ -772,7 +772,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 积分商城（原子扣库存+扣分）。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/shop/items` | 🔒 需登录 | - |
 | GET | `/api/shop/items/:id` | 🔒 需登录 | - |
@@ -789,7 +789,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 仪表盘统计。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/stats/overview` | 🔒 需登录 | - |
 
@@ -799,7 +799,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 标签 CRUD、自动 slug、合并。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/tags` | 🔒 需登录 | - |
 | GET | `/api/tags/:slug/posts` | 🔒 需登录 | - |
@@ -811,7 +811,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 话题 V1。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/v1/threads` | 🔒 需登录 | - |
 | GET | `/api/v1/threads/:id` | 🔒 需登录 | - |
@@ -820,7 +820,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 用户间屏蔽。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | POST | `/api/user-blocks` | 🔒 需登录 | - |
 | DELETE | `/api/user-blocks/:blockedId` | 🔒 需登录 | - |
@@ -832,7 +832,7 @@ guest(0) < user(1) < active_user(2) < core_user(3) < moderator(4) < admin(5) < s
 
 > 用户资料、头像、角色管理。
 
-| Method | Endpoint | 认证 | 角色 |
+| 方法 | 路径 | 认证 | 角色 |
 |--------|---------|------|------|
 | GET | `/api/users/me` | 🔒 需登录 | - |
 | PUT | `/api/users/me/profile` | 🔒 需登录 | - |

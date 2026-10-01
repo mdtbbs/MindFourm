@@ -73,6 +73,12 @@ services:
       MINDAUTH_CLIENT_SECRET: ${MINDAUTH_CLIENT_SECRET:?MINDAUTH_CLIENT_SECRET is required}
       # Must match the redirect_uri registered for this client in MindAuth.
       MINDAUTH_CALLBACK_URL: ${MINDAUTH_CALLBACK_URL:-${FRONTEND_URL}/api/auth/callback}
+      CLOUD_SAVES_STORAGE_PATH: ${CLOUD_SAVES_STORAGE_PATH:-/var/lib/mindfourm/cloud-saves}
+      CLOUD_SAVES_MAX_BYTES_PER_USER: ${CLOUD_SAVES_MAX_BYTES_PER_USER:-524288000}
+      CLOUD_SAVES_MAX_FILE_BYTES: ${CLOUD_SAVES_MAX_FILE_BYTES:-52428800}
+      MULTIPLAYER_RELAY_CREDENTIAL_SECRET: ${MULTIPLAYER_RELAY_CREDENTIAL_SECRET:-}
+      MULTIPLAYER_RELAY_MACHINE_CREDENTIAL: ${MULTIPLAYER_RELAY_MACHINE_CREDENTIAL:-}
+      MULTIPLAYER_RELAY_AGENT_IDS: ${MULTIPLAYER_RELAY_AGENT_IDS:-}
       # Integrations. Previously absent entirely, so MindFileList uploads and the
       # service API silently no-opped inside Docker.
       FORUM_API_KEY: ${FORUM_API_KEY:-}
@@ -89,6 +95,8 @@ services:
     networks:
       - internal
       - web
+    volumes:
+      - cloud_saves_data:/var/lib/mindfourm/cloud-saves
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
       interval: 30s
@@ -136,6 +144,7 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  cloud_saves_data:
 
 networks:
   internal:

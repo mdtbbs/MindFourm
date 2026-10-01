@@ -47,6 +47,10 @@ import { FeedbackModule } from '../feedback/feedback.module';
 import { NoticesModule } from '../notices/notices.module';
 import { NavigationModule } from '../navigation/navigation.module';
 import { PortalModule } from '../portal/portal.module';
+import { RealtimeModule } from '../realtime/realtime.module';
+import { SocialModule } from '../social/social.module';
+import { MultiplayerModule } from '../multiplayer/multiplayer.module';
+import { RealtimeGatewayModule } from '../realtime/realtime-gateway.module';
 
 @Module({
   imports: [
@@ -57,7 +61,7 @@ import { PortalModule } from '../portal/portal.module';
     GroupsModule, ShopModule, RssModule, PluginsModule, SearchModule, ServiceApiModule, ReportsModule,
     UserBlocksModule, ReactionsModule, UploadsModule, FriendsModule, PresenceModule, CapabilitiesModule,
     MediaModule, DownloadsModule, EventsModule, ThreadsModule, CreatorModule, KnowledgeModule,
-    FeedbackModule, NoticesModule, NavigationModule, PortalModule,
+    FeedbackModule, NoticesModule, NavigationModule, PortalModule, RealtimeModule, SocialModule, MultiplayerModule, RealtimeGatewayModule,
   ],
 })
 export class CommunityCoreModule {}

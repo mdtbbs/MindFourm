@@ -1475,6 +1475,51 @@ export interface FriendListItem extends FriendSearchResult {
   friendship_since: string;
 }
 
+export interface SocialFriendPresenceItem {
+  user: FriendListItem;
+  presence: { status: 'online' | 'idle' | 'dnd' | 'offline'; last_seen_at?: number };
+  activity: null | {
+    type: 'playing' | 'hosting' | 'editing' | 'browsing' | 'downloading' | 'uploading' | 'launcher' | 'custom';
+    name: string; details?: string; state?: string;
+    game?: { id: string; version?: string };
+    party?: { current?: number; max?: number };
+    timestamps?: { started_at?: number };
+    join?: { session_id: string };
+    client_id: string; platform: string;
+    client?: { client_id: string; name?: string; application_icon_url?: string | null; developer_name?: string | null; developer_url?: string | null; supports_multiplayer?: boolean; supports_presence?: boolean };
+  };
+  actions: { can_join: boolean; can_request_join: boolean; can_invite: boolean; invite_session_id?: string; session_visible: boolean };
+}
+
+export const socialPresenceApi = {
+  getFriends: (page = 1, limit = 50) =>
+    request<{ data: SocialFriendPresenceItem[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(
+      `/api/v1/social/friends/presence?page=${page}&limit=${limit}`
+    ),
+};
+
+export const userBlocksApi = {
+  list: (page = 1, limit = 50) => request<{ data: Array<{ id: number; user: FriendSearchResult; reason: string | null; created_at: string }>; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/api/v1/blocks?page=${page}&limit=${limit}`),
+  unblock: (userId: number) => request<{ message?: string }>(`/api/v1/users/${userId}/block`, { method: 'DELETE' }),
+};
+
+export const multiplayerApi = {
+  getPreferences: () => request<{ default_client_id: string | null; clients: Array<{ client_id: string; name: string; launch_uri_template: string | null; application_icon_url: string | null }> }>('/api/v1/multiplayer/preferences'),
+  setDefaultClient: (clientId: string | null) => request<{ default_client_id: string | null }>('/api/v1/multiplayer/preferences', {
+    method: 'PATCH', body: JSON.stringify({ client_id: clientId || '' }),
+  }),
+  createJoinIntent: (sessionId: string, joinCode?: string) => request<{ intent_id: string; expires_in: number }>(
+    `/api/v1/multiplayer/sessions/${encodeURIComponent(sessionId)}/join-intents`,
+    { method: 'POST', body: JSON.stringify(joinCode ? { join_code: joinCode } : {}) },
+  ),
+  requestJoin: (sessionId: string) => request<{ join_request_id: string; status: string }>(
+    `/api/v1/multiplayer/sessions/${encodeURIComponent(sessionId)}/join-requests`, { method: 'POST' },
+  ),
+  invite: (sessionId: string, targetUserId: number) => request<{ id: string; status: string }>(
+    '/api/v1/multiplayer/invites', { method: 'POST', body: JSON.stringify({ session_id: sessionId, target_user_id: targetUserId }) },
+  ),
+};
+
 export interface FriendRequestItem {
   id: number;
   requester: FriendSearchResult;

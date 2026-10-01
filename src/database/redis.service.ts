@@ -305,11 +305,77 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  async hgetallMany(keys: string[]): Promise<Record<string, string>[]> {
+    if (!keys.length) return [];
+    return this.withFallback(
+      async () => {
+        const pipeline = this.client.pipeline();
+        keys.forEach((key) => pipeline.hgetall(key));
+        const results = await pipeline.exec();
+        return (results || []).map(([error, value]) => error ? {} : value as Record<string, string>);
+      },
+      () => keys.map((key) => this.fallback.hgetall(key)),
+    );
+  }
+
   async hdel(key: string, ...fields: string[]): Promise<number> {
     return this.withFallback(
       () => this.client.hdel(key, ...fields),
       () => this.fallback.hdel(key, ...fields),
     );
+  }
+
+  /** Batch read string keys using one Redis round trip. */
+  async mget(...keys: string[]): Promise<(string | null)[]> {
+    if (!keys.length) return [];
+    return this.withFallback(
+      () => this.client.mget(...keys),
+      () => keys.map((key) => this.fallback.get(key)),
+    );
+  }
+
+  /** Atomically consume a value only when its stored owner matches. */
+  async getAndDeleteIfMatches(key: string, expectedValue: string): Promise<string | null> {
+    return this.client.eval(
+      "local value = redis.call('GET', KEYS[1]); if value and string.sub(value, 1, string.len(ARGV[1])) == ARGV[1] then redis.call('DEL', KEYS[1]); return value; end; return false",
+      1,
+      key,
+      expectedValue,
+    ) as Promise<string | null>;
+  }
+
+  /**
+   * Append a short-lived user event to a Redis Stream. Multiplayer payloads are
+   * deliberately stored only in Redis and are never copied to operation logs.
+   */
+  async appendRealtimeEvent(stream: string, event: string, data: Record<string, unknown>): Promise<string> {
+    const id = await this.client.xadd(
+      stream,
+      'MAXLEN', '~', '10000', '*',
+      'event', event,
+      'timestamp', String(Date.now()),
+      'data', JSON.stringify(data),
+    );
+    if (!id) throw new Error('Redis Stream did not return an event id');
+    await this.client.expire(stream, 600);
+    return id;
+  }
+
+  async readRealtimeEvents(stream: string, start: string, count = 200): Promise<Array<[string, string[]]>> {
+    return this.client.xrange(stream, start, '+', 'COUNT', count) as Promise<Array<[string, string[]]>>;
+  }
+
+  async firstRealtimeEvent(stream: string): Promise<Array<[string, string[]]>> {
+    return this.client.xrange(stream, '-', '+', 'COUNT', 1) as Promise<Array<[string, string[]]>>;
+  }
+
+  async latestRealtimeEvent(stream: string): Promise<string> {
+    const rows = await this.client.xrevrange(stream, '+', '-', 'COUNT', 1);
+    return rows[0]?.[0] || '0-0';
+  }
+
+  async publishRealtime(channel: string, payload: string): Promise<void> {
+    await this.client.publish(channel, payload);
   }
 
   /**

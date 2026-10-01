@@ -1,4 +1,6 @@
-# 社交与资源评论 API
+# 旧版好友与资源评论接口
+
+本页记录浏览器论坛会话使用的历史 `/api/*` 接口，不属于公开稳定的 `/api/v1/*` 契约。第三方客户端请使用对应的 V1 接口和 MindAuth 授权流程。
 
 后端全局前缀为 `/api`。成功响应由 `ResponseInterceptor` 统一包装为：
 
@@ -8,7 +10,7 @@
 
 下面示例中的 `data` 表示包装后的业务数据。除资源评论公开读取外，Presence 和好友接口都要求有效的 `forum_session`。
 
-## Presence
+## 在线状态
 
 ### 批量查询在线状态
 
@@ -36,11 +38,11 @@ Cookie: forum_session=<session>
 
 在线状态写入和好友状态推送由 Presence 服务和外部/LanLink 集成负责。Redis 需要启用 keyspace notifications 才能推送好友在线状态变化。
 
-## Friends
+## 好友
 
-所有好友接口均需要登录。当前用户由 session 推断，不接受 body 中的 actor user id。
+所有好友接口都需要登录。服务端从 session 识别当前用户，请求体不接受代表操作人的用户 ID。
 
-| Method | Endpoint | 说明 |
+| 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/friends/request/:userId` | 发送好友请求 |
 | POST | `/api/friends/accept/:userId` | 接受对方请求；参数是请求方用户 ID |
@@ -60,7 +62,7 @@ GET /api/friends/requests?page=1&limit=20
 
 好友列表和请求列表返回业务分页对象，具体字段以当前响应中的 `data` 和 `pagination` 为准。
 
-## Resource Comments
+## 资源评论
 
 ### 获取资源评论
 

@@ -5,7 +5,7 @@ import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
-import { Server, Users, Trophy, ShoppingBag, FolderOpen } from 'lucide-react';
+import { Activity, Gamepad2, Network, Radio, Server, Shield, Users, Trophy, ShoppingBag, FolderOpen } from 'lucide-react';
 
 interface FeatureItem {
   key: string;
@@ -13,6 +13,7 @@ interface FeatureItem {
   description: string;
   icon: React.ElementType;
   routes: string[];
+  defaultEnabled?: boolean;
 }
 
 const features: FeatureItem[] = [
@@ -50,6 +51,54 @@ const features: FeatureItem[] = [
     description: '允许用户使用积分兑换商品和道具',
     icon: ShoppingBag,
     routes: ['/shop'],
+  },
+  {
+    key: 'feature_social_presence_v1_enabled',
+    label: '社交 Presence V1',
+    description: '允许多客户端在线状态、好友 Presence 与社交隐私 API。',
+    icon: Users,
+    routes: ['/friends', '/api/v1/presence'],
+    defaultEnabled: false,
+  },
+  {
+    key: 'feature_rich_activity_v1_enabled',
+    label: 'Rich Activity V1',
+    description: '允许经审核的客户端上报并展示游戏与应用活动。',
+    icon: Activity,
+    routes: ['/friends'],
+    defaultEnabled: false,
+  },
+  {
+    key: 'feature_multiplayer_sessions_v1_enabled',
+    label: '联机会话 V1',
+    description: '开放私有、好友和未列出 Session 的创建、加入与 Peer 管理。',
+    icon: Gamepad2,
+    routes: ['/api/v1/multiplayer/sessions'],
+    defaultEnabled: false,
+  },
+  {
+    key: 'feature_multiplayer_invites_v1_enabled',
+    label: '联机邀请与请求',
+    description: '开放好友邀请、请求加入及房主审批。',
+    icon: Radio,
+    routes: ['/api/v1/multiplayer/invites'],
+    defaultEnabled: false,
+  },
+  {
+    key: 'feature_multiplayer_relay_v1_enabled',
+    label: '官方 Relay 分配',
+    description: '允许 Control Plane 为 Peer 签发官方中继分配凭证。',
+    icon: Network,
+    routes: ['/api/v1/multiplayer/sessions/{id}/relay'],
+    defaultEnabled: false,
+  },
+  {
+    key: 'feature_third_party_multiplayer_v1_enabled',
+    label: '第三方 Multiplayer 客户端',
+    description: '允许已审核并获批对应 scope 和客户端能力的第三方应用调用联机 API。',
+    icon: Shield,
+    routes: ['MindAuth Developer Applications'],
+    defaultEnabled: false,
   },
 ];
 
@@ -98,7 +147,7 @@ export default function FeaturesSettingsPage() {
     return <div className="py-8 text-center text-surface-500">Loading...</div>;
   }
 
-  const enabledCount = features.filter((f) => (values[f.key] ?? 'true') === 'true').length;
+  const enabledCount = features.filter((f) => (values[f.key] ?? (f.defaultEnabled === false ? 'false' : 'true')) === 'true').length;
 
   return (
     <div className="bg-white border border-surface-200">
@@ -121,7 +170,7 @@ export default function FeaturesSettingsPage() {
 
         <div className="space-y-3">
           {features.map((feature) => {
-            const isEnabled = (values[feature.key] ?? 'true') === 'true';
+            const isEnabled = (values[feature.key] ?? (feature.defaultEnabled === false ? 'false' : 'true')) === 'true';
             const Icon = feature.icon;
 
             return (

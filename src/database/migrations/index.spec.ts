@@ -72,6 +72,12 @@ describe('migration registry', () => {
     expect(migrations.map((migration) => migration.name)).toContain('GameContentDurability1720000060000');
   });
 
+  it('includes the Cloud Saves v1 schema migration after the multiplayer schema', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('CloudSavesV11720000160000');
+    expect(names.indexOf('MultiplayerPlatformV11720000150000')).toBeLessThan(names.indexOf('CloudSavesV11720000160000'));
+  });
+
   it('upgrades the legacy download event placeholder after creating durable Game Content tables', () => {
     const names = migrations.map((migration) => migration.name);
     expect(names).toContain('UpgradeDownloadEvents1720000070000');

@@ -117,6 +117,20 @@ import { ContentRelation } from './content-relation.entity';
 import { DownloadEvent } from './download-event.entity';
 import { GameContentUploadSession } from './game-content-upload-session.entity';
 import { ResourceSubmissionIdempotency } from './resource-submission-idempotency.entity';
+import { SocialPrivacySetting } from './social-privacy-setting.entity';
+import { UserPresencePreference } from './user-presence-preference.entity';
+import { MultiplayerSession } from './multiplayer-session.entity';
+import { MultiplayerPeer } from './multiplayer-peer.entity';
+import { MultiplayerPeerResumeToken } from './multiplayer-peer-resume-token.entity';
+import { MultiplayerInvite } from './multiplayer-invite.entity';
+import { MultiplayerJoinRequest } from './multiplayer-join-request.entity';
+import { MultiplayerRelayAllocation } from './multiplayer-relay-allocation.entity';
+import { MultiplayerAuditLog } from './multiplayer-audit-log.entity';
+import { GameSaveSlot } from './game-save-slot.entity';
+import { GameSaveSnapshot } from './game-save-snapshot.entity';
+import { GameSaveBlob } from './game-save-blob.entity';
+import { GameSaveUploadSession } from './game-save-upload-session.entity';
+import { GameSaveIdempotency } from './game-save-idempotency.entity';
 
 /** Base forum, content and shared platform entities. */
 export const coreEntities = [
@@ -217,6 +231,15 @@ export const coreEntities = [
   ContentRelation,
   DownloadEvent,
   GameContentUploadSession,
+  SocialPrivacySetting,
+  UserPresencePreference,
+  MultiplayerSession,
+  MultiplayerPeer,
+  MultiplayerPeerResumeToken,
+  MultiplayerInvite,
+  MultiplayerJoinRequest,
+  MultiplayerRelayAllocation,
+  MultiplayerAuditLog,
 ];
 
 /** Entities that belong to Mindustry/MDTBBS integrations rather than Community. */
@@ -227,13 +250,22 @@ export const mdtbbsEntities = [
   GameServer,
   GameServerSnapshot,
   DeveloperFeedEntry,
+  GameSaveSlot,
+  GameSaveSnapshot,
+  GameSaveBlob,
+  GameSaveUploadSession,
+  GameSaveIdempotency,
 ] as const;
 
 /** Runtime profile composition. MDTBBS remains the current and only profile. */
 export const entities = [...coreEntities, ...mdtbbsEntities];
 
 export {
+  GameSaveSlot, GameSaveSnapshot, GameSaveBlob, GameSaveUploadSession, GameSaveIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
+  SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerPeer,
+  MultiplayerPeerResumeToken, MultiplayerInvite, MultiplayerJoinRequest,
+  MultiplayerRelayAllocation, MultiplayerAuditLog,
   AdminNotification,
   Message, Attachment, CustomEmoji, Resource, ResourceCategory, ResourceVersion,
   PostLike, ReplyLike, Ban, Setting, OperationLog, SessionAudit,

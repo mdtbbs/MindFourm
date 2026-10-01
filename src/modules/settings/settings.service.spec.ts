@@ -1,3 +1,6 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 const decorator = () => () => undefined;
 
 jest.mock('@nestjs/typeorm', () => ({
@@ -75,6 +78,39 @@ function createService(initialRows: SettingRow[]) {
 }
 
 describe('SettingsService', () => {
+  it('validates per-user quotas and creates a writable local cloud-save directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'mindfourm-cloud-save-settings-'));
+    try {
+      const repository = { query: jest.fn(async () => []) };
+      const service = new SettingsService(repository as any);
+      jest.spyOn(service, 'get').mockImplementation(async (key) => key === 'cloud_saves_storage_path' ? root : null);
+      jest.spyOn(service, 'getNumber').mockResolvedValue(null);
+
+      const values = new Map([
+        ['cloud_saves_storage_path', root],
+        ['cloud_saves_user_quota_bytes', '1048576'],
+        ['cloud_saves_max_file_bytes', '524288'],
+      ]);
+      await (service as any).validateCloudSavesSettings(values);
+
+      expect(values.get('cloud_saves_storage_path')).toBe(root);
+      await expect(readdir(root)).resolves.toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a per-user quota smaller than a configured maximum save file', async () => {
+    const service = new SettingsService({ query: jest.fn() } as any);
+    jest.spyOn(service, 'get').mockResolvedValue(null);
+    jest.spyOn(service, 'getNumber').mockResolvedValue(null);
+
+    await expect((service as any).validateCloudSavesSettings(new Map([
+      ['cloud_saves_user_quota_bytes', '100'],
+      ['cloud_saves_max_file_bytes', '101'],
+    ]))).rejects.toThrow('单个存档文件上限必须为正整数，且不能超过每用户额度。');
+  });
+
   it('loads basic settings from legacy rows stored under the general category', async () => {
     const { service } = createService([
       {
