@@ -109,7 +109,7 @@ export function tryNormalizePaginatedApiPayload<
   ) {
     const pagination = toPagination(payload.meta.pagination);
     if (pagination) {
-      return { data: payload.data as TItem[], pagination };
+      return { ...({} as TExtra), data: payload.data as TItem[], pagination };
     }
   }
 
