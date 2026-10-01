@@ -478,6 +478,42 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     if (Buffer.byteLength(JSON.stringify(metadata), 'utf8') > MAX_CANDIDATE_METADATA_BYTES) fail(400, 'CANDIDATE_INVALID');
     const key = `multiplayer:candidates:${sessionId}:${peer.id}`;
     const existing = await this.redis.hgetall(key);
+    const duplicate = Object.entries(existing).find(([, value]) => {
+      try {
+        const candidate = JSON.parse(value) as CandidateRecord;
+        return candidate.kind === dto.kind && candidate.transport === dto.transport
+          && candidate.address === dto.address && candidate.port === dto.port;
+      } catch {
+        return false;
+      }
+    });
+    if (duplicate) {
+      const [candidateId, value] = duplicate;
+      try {
+        const record = JSON.parse(value) as CandidateRecord;
+        if (record.priority !== (dto.priority ?? 0) || JSON.stringify(record.metadata ?? {}) !== JSON.stringify(metadata)) {
+          record.priority = dto.priority ?? 0;
+          record.metadata = metadata;
+          await this.redis.hset(key, candidateId, JSON.stringify(record));
+        }
+      } catch {
+        // Replace a corrupt matching field with a valid Candidate record.
+        const record: CandidateRecord = {
+          candidate_id: candidateId,
+          peer_id: peer.id,
+          kind: dto.kind,
+          transport: dto.transport,
+          address: dto.address,
+          port: dto.port,
+          priority: dto.priority ?? 0,
+          metadata,
+          created_at: Date.now(),
+        };
+        await this.redis.hset(key, candidateId, JSON.stringify(record));
+      }
+      await this.redis.expire(key, PRESENCE_TTL_SECONDS);
+      return { candidate_id: candidateId, expires_in: PRESENCE_TTL_SECONDS };
+    }
     if (Object.keys(existing).length >= MAX_CANDIDATES_PER_PEER) fail(429, 'CANDIDATE_LIMIT_REACHED');
     const candidateId = opaqueId('cnd');
     const record: CandidateRecord = {

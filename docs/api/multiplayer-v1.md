@@ -302,7 +302,7 @@ Content-Type: application/json
 | `priority` | 否 | 0–65535，默认 0。 |
 | `metadata` | 否 | 任意 JSON 对象，序列化后不超过 1 KiB。不要放 token 或敏感信息。 |
 
-发布返回 `candidate_id` 与 90 秒 `expires_in`。通过 `GET .../sessions/{id}/peers/{peerId}/candidates` 读取的是 Candidate 数组，每项含 `candidate_id`、`peer_id`、上述网络字段及 `created_at`（Unix 毫秒）。每 Peer 最多 32 条；用 `DELETE .../candidates/{candidateId}` 删除本人发布的候选。
+发布返回 `candidate_id` 与 90 秒 `expires_in`。对同一 Peer 重复发布相同的 `kind`、`transport`、`address`、`port` 会续期并复用原 `candidate_id`，适合客户端定期刷新候选而不堆积重复记录。通过 `GET .../sessions/{id}/peers/{peerId}/candidates` 读取的是 Candidate 数组，每项含 `candidate_id`、`peer_id`、上述网络字段及 `created_at`（Unix 毫秒）。每 Peer 最多 32 条；用 `DELETE .../candidates/{candidateId}` 删除本人发布的候选。
 
 ### 邀请与 Relay 中继
 
