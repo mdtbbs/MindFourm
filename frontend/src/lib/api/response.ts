@@ -32,7 +32,7 @@ function toPagination(value: unknown): ApiPagination | null {
   const page = toNumber(value.page);
   const limit = toNumber(value.limit);
   const total = toNumber(value.total);
-  const totalPages = toNumber(value.totalPages);
+  const totalPages = toNumber(value.totalPages ?? value.total_pages);
 
   if (page === null || limit === null || total === null || totalPages === null) {
     return null;
@@ -67,6 +67,13 @@ export function unwrapApiPayload<T>(payload: unknown): T | null {
     return envelope.success ? (envelope.data as T) : null;
   }
 
+  // API v1 uses { data, meta: { request_id, ... } } rather than the legacy
+  // { success, data } envelope. Only unwrap the documented v1 envelope so a
+  // normal resource object that happens to contain a `data` field stays intact.
+  if ('data' in payload && isRecord(payload.meta) && typeof payload.meta.request_id === 'string') {
+    return payload.data as T;
+  }
+
   return payload as T;
 }
 
@@ -88,6 +95,21 @@ export function tryNormalizePaginatedApiPayload<
         data: data as TItem[],
         pagination,
       };
+    }
+  }
+
+  // Some v1 endpoints return the page array directly and put pagination in
+  // meta; others return a paginated object inside data. Handle the former here,
+  // and let the existing inner-payload normalization handle the latter.
+  if (
+    'data' in payload
+    && isRecord(payload.meta)
+    && typeof payload.meta.request_id === 'string'
+    && Array.isArray(payload.data)
+  ) {
+    const pagination = toPagination(payload.meta.pagination);
+    if (pagination) {
+      return { data: payload.data as TItem[], pagination };
     }
   }
 

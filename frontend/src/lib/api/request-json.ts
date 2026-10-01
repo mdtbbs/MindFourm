@@ -5,9 +5,10 @@
  * `request` is module-private there and exporting it would mean editing a file under
  * concurrent change, so the behaviour that actually matters is reproduced here:
  * cookie credentials, the CSRF double-submit header on writes, and unwrapping the
- * global `{ success, data }` envelope. Deliberately *not* reproduced is the 30-second
- * GET response cache — reaction counts and block lists must reflect a write that just
- * happened, and a cached read would show the pre-toggle number.
+ * legacy `{ success, data }` and v1 `{ data, meta }` envelopes. Deliberately *not*
+ * reproduced is the 30-second GET response cache — reaction counts and block lists
+ * must reflect a write that just happened, and a cached read would show the pre-toggle
+ * number.
  */
 
 import { buildPublicApiUrl } from '@/lib/api/client';
