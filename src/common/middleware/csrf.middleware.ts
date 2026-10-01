@@ -65,8 +65,15 @@ function isExempt(req: Request): boolean {
   // Requiring both markers keeps cookie-backed browser writes CSRF-protected.
   const authorization = req.headers.authorization;
   const platform = req.headers['x-client-platform'];
+  const mdtbbsClient = req.headers['x-mdtbbs-client'];
   const hasBearerToken = typeof authorization === 'string' && /^Bearer\s+\S+$/i.test(authorization);
   if (platform === 'android' && hasBearerToken) return true;
+  // Native MindAuth clients identify the OAuth client explicitly and use a
+  // Bearer token instead of ambient browser cookies. The Mod sends this header
+  // on its V1 API calls; the JwtAuth/OAuth scope and phone guards still enforce
+  // authentication and write policy after CSRF middleware.
+  if (req.path.startsWith('/api/v1/') && hasBearerToken
+    && typeof mdtbbsClient === 'string' && mdtbbsClient.trim().length > 0) return true;
   // Game Content writes support first-party non-browser clients as well. These
   // routes are safe to exempt only when they use an explicit bearer credential;
   // cookie-authenticated browser requests still need the double-submit token.
