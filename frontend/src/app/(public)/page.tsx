@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import { ArrowRight, Search } from 'lucide-react';
 import ThreadList from '@/components/forum/thread-list';
 import CompactResourceCard from '@/components/forum/compact-resource-card';
-import { getHomeData, type HomeData, type HomeSection } from '@/lib/api/v1/home';
+import { getHomeData, type HomeData } from '@/lib/api/v1/home';
 import { fetchPublicSettings } from '@/lib/settings/server';
 import { resolveBrand } from '@/lib/theme/brand';
 import { generatePageMetadata } from '@/lib/metadata';
@@ -54,7 +54,7 @@ export default async function HomePage() {
   ]);
   const brand = resolveBrand(settings);
   const locale = await getRequestLocale();
-  const staleSections = [home.discussions, home.resources, home.news, home.notices, home.development.issues, home.development.pull_requests].filter((section) => section.state === 'stale').length;
+  const staleSections = [home.discussions, home.resources, home.news, home.notices].filter((section) => section.state === 'stale').length;
 
   if (siteProfile.profile === 'mindustry-club') {
     const t = (key: string) => translate(locale, key);
@@ -116,12 +116,6 @@ export default async function HomePage() {
 
       <section className="mt-8"><SectionHeading title="社区公告" href="/notices" />{home.notices.state === 'unavailable' ? <SectionUnavailable /> : home.notices.items.length ? <div className="grid gap-3">{home.notices.items.map((notice) => <Link key={notice.id} href={`/notices/${notice.public_id}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{notice.title}</h3>{notice.excerpt && <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{notice.excerpt}</p>}</Link>)}</div> : null}</section>
 
-      <section className="mt-10 border-t border-[var(--border)] pt-7"><SectionHeading title="Mindustry 开发动态" /><p className="-mt-1 mb-4 text-sm text-[var(--text-secondary)]">GitHub 自动同步内容，独立于社区讨论与用户主题统计。</p><div className="grid gap-6 md:grid-cols-2"><DeveloperList title="Issue" section={home.development.issues} /><DeveloperList title="Pull Request" section={home.development.pull_requests} /></div></section>
     </main>
   );
-}
-
-function DeveloperList({ title, section }: { title: string; section: HomeSection<HomeData['development']['issues']['items'][number]> }) {
-  const categoryId = section.items[0]?.category_id;
-  return <section><div className="mb-2 flex items-center justify-between gap-3"><h3 className="text-sm font-medium text-[var(--text-secondary)]">{title}</h3>{categoryId ? <Link href={`/categories/${categoryId}`} className="text-xs text-[var(--primary)] hover:underline">查看板块</Link> : null}</div>{section.state === 'unavailable' ? <SectionUnavailable /> : section.items.length ? <ul className="divide-y divide-[var(--border)] border border-[var(--border)]">{section.items.map((item) => <li key={item.id}><Link href={item.url} className="block p-3 hover:bg-[var(--bg-hover)]"><p className="text-sm font-medium text-[var(--text)]">#{item.external_id} {item.title}</p><p className="mt-1 text-xs text-[var(--text-muted)]">{item.repository} · {item.state}</p></Link></li>)}</ul> : <p className="text-sm text-[var(--text-muted)]">暂无动态</p>}</section>;
 }
