@@ -9,6 +9,8 @@ describe('MultiplayerService control-plane guards', () => {
       get: jest.fn().mockResolvedValue(`7:${payload}`),
       getAndDeleteIfMatches: jest.fn().mockResolvedValue(`7:${payload}`),
     };
+    service.joinRequests = { findOneBy: jest.fn().mockResolvedValue(null) };
+    service.joinIntents = { findOneBy: jest.fn().mockResolvedValue(null) };
     service.joinSession = jest.fn().mockResolvedValue({ peer: { id: 'peer' } });
 
     await expect(service.consumeJoinIntent(8, 'launcher', 'jnt_x')).rejects.toMatchObject({ status: 403 });
@@ -418,18 +420,41 @@ describe('MultiplayerService control-plane guards', () => {
 
   it('rotates Peer resume tokens once and binds resume to the original client', async () => {
     const session = { id: 'ses_12345678901234567890', expires_at: new Date(Date.now() + 60_000), status: 'closing' };
-    const peer = { id: 'peer_owner', session_id: session.id, user_id: 7, client_id: 'launcher', role: 'owner', status: 'disconnected' };
+    const peer = {
+      id: 'peer_owner', session_id: session.id, user_id: 7, client_id: 'launcher', role: 'owner', status: 'disconnected',
+      last_seen_at: new Date(Date.now() - 1_000),
+    };
     const token = { id: 10, peer_id: peer.id, expires_at: new Date(Date.now() + 60_000), consumed_at: null };
     const service = Object.create(MultiplayerService.prototype) as any;
+    const sessionQueryBuilder = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
     service.resumeTokens = {
       findOne: jest.fn().mockResolvedValue(token),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => value),
     };
-    service.peers = { findOneBy: jest.fn().mockResolvedValue(peer), save: jest.fn(async (value) => value) };
-    service.sessions = { save: jest.fn(async (value) => value) };
-    service.redis = { set: jest.fn().mockResolvedValue('OK') };
+    service.peers = {
+      findOneBy: jest.fn().mockResolvedValue(peer),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      save: jest.fn(async (value) => value),
+    };
+    service.sessions = {
+      findOneBy: jest.fn().mockResolvedValue(session),
+      createQueryBuilder: jest.fn(() => sessionQueryBuilder),
+      save: jest.fn(async (value) => value),
+    };
+    service.redis = {
+      setIfNotExists: jest.fn().mockResolvedValue(true),
+      getAndDeleteIfMatches: jest.fn().mockResolvedValue('lock'),
+      del: jest.fn().mockResolvedValue(1),
+      set: jest.fn().mockResolvedValue('OK'),
+    };
     service.realtime = { emitSession: jest.fn().mockResolvedValue(null) };
 
     await expect(service.resumePeer(7, 'other-launcher', session, 'raw-token')).rejects.toMatchObject({ status: 403 });
