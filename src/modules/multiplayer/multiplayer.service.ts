@@ -974,7 +974,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
           || !locked.consumed_peer_id) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
         if (locked.consumed_client_id !== clientId) fail(403, 'JOIN_INTENT_CLIENT_MISMATCH');
         const peer = await manager.findOne(MultiplayerPeer, {
-          where: { id: locked.consumed_peer_id, session_id: locked.session_id, user_id, client_id },
+          where: { id: locked.consumed_peer_id, session_id: locked.session_id, user_id: userId, client_id: clientId },
         });
         if (!peer || !['active', 'disconnected'].includes(peer.status)) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
         const session = await manager.findOneBy(MultiplayerSession, { id: locked.session_id });
@@ -997,7 +997,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       });
       if (!session || session.status !== 'active' || session.expires_at.getTime() <= now.getTime()) fail(404, 'SESSION_CLOSED');
       const existing = await manager.findOne(MultiplayerPeer, {
-        where: { session_id: session.id, user_id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) },
+        where: { session_id: session.id, user_id: userId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) },
       });
       if (existing) fail(400, 'SESSION_NOT_JOINABLE');
       const count = await manager.count(MultiplayerPeer, {
