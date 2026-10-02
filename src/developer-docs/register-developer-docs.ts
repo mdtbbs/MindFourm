@@ -544,7 +544,7 @@ Idempotency-Key: RANDOM_UUID_PERSISTED_FOR_THIS_ATTEMPT
   "grant_type": "refresh_token",
   "client_id": "YOUR_CLIENT_ID",
   "refresh_token": "CURRENT_REFRESH_TOKEN"
-}`, 'http')}<p>每次 refresh grant 都必须发送唯一的 <code>Idempotency-Key</code>。发送前持久保存 key；遇到超时或 5xx 时，10 分钟内用原 refresh token 和同一个 key 重试。成功后原子保存新的 refresh token 并清除待处理 key。缺少 key 会返回 <code>400 invalid_request</code>，不会消耗 refresh token；旧客户端必须升级。Access token 当前有效期约一小时。</p>${codeBlock(`POST https://auth.mdtbbs.cn/api/revoke
+}`, 'http')}<p><code>Idempotency-Key</code> 可选，但建议每次 refresh grant 发送唯一 key。发送前持久保存 key；遇到超时或 5xx 时，10 分钟内用原 refresh token 和同一个 key 重试。成功后原子保存新的 refresh token 并清除待处理 key。未带 key 的旧客户端仍按单次轮换行为刷新，但不能恢复超时前的响应，重放旧 token 会触发原有撤销策略。格式错误的非空 key 会返回 <code>400 invalid_request</code>，不会消耗 refresh token。Access token 当前有效期约一小时。</p>${codeBlock(`POST https://auth.mdtbbs.cn/api/revoke
 Content-Type: application/json
 
 {

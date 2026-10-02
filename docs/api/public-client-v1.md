@@ -11,7 +11,7 @@
 3. 客户端生成随机 PKCE verifier，计算 S256 challenge，使用系统浏览器打开 MindAuth `/api/authorize`，并验证返回的 `state`。
 4. 使用 authorization code、相同 `redirect_uri`、verifier 和 `client_id` 调用 MindAuth `/api/token`。
 5. 将 access token 作为 `Authorization: Bearer` 调用 MindFourm。Forum 服务端通过保密的 Resource Server 凭据 introspect opaque token；客户端不解析 token，也不接触 Forum 的 `MINDAUTH_CLIENT_SECRET`。
-6. access token 过期后通过标准 `/api/token` 的 `grant_type=refresh_token` 轮换 refresh token。每次刷新都必须使用唯一且预先持久化的 `Idempotency-Key`；超时或 5xx 时用原 refresh token 与同一 key 重试，成功后原子保存新 refresh token 并清除待处理 key。缺少 key 会返回 `400 invalid_request`，不会消费令牌，因此旧客户端必须升级。退出或解除授权调用 MindAuth `/api/revoke` 或用户的“已授权应用”页面。
+6. access token 过期后通过标准 `/api/token` 的 `grant_type=refresh_token` 轮换 refresh token。建议每次刷新使用唯一且预先持久化的 `Idempotency-Key`；超时或 5xx 时用原 refresh token 与同一 key 重试，成功后原子保存新 refresh token 并清除待处理 key。不带 key 的旧客户端仍按原有单次轮换行为工作，但不能恢复超时前的结果；格式错误的非空 key 会返回 `400 invalid_request`，且不会消费令牌。退出或解除授权调用 MindAuth `/api/revoke` 或用户的“已授权应用”页面。
 
 不要把 MindAuth 密码、External API Key、服务端密钥或 client secret 放进客户端。注册和账号验证始终在 MindAuth Web 完成。
 
