@@ -1030,22 +1030,22 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     // Match Peer state while holding the same lock as leave/cleanup. A competing
     // leave can win after the DB transaction; never recreate cache for a Peer it left.
     const repairedPeer = await this.withRelayLock(`multiplayer:relay:peer-lock:${result.peer.id}`, async () => {
-      const peer = await this.peers.findOneBy({ id: result.peer.id, session_id: result.peer.session_id, user_id });
+      const peer = await this.peers.findOneBy({ id: result.peer.id, session_id: result.peer.session_id, user_id: userId });
       if (!peer || !['active', 'disconnected'].includes(peer.status)) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
       const refreshedAt = new Date();
       const activated = await this.peers.update({
-        id: peer.id, session_id: peer.session_id, user_id, status: In(['active', 'disconnected']),
+        id: peer.id, session_id: peer.session_id, user_id: userId, status: In(['active', 'disconnected']),
       }, { status: 'active', last_seen_at: refreshedAt });
       if (!activated.affected) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
       peer.status = 'active';
       peer.last_seen_at = refreshedAt;
       await this.redis.del(`multiplayer:peer-cleanup:${peer.id}`);
       await this.redis.set(`multiplayer:peer:${peer.id}`, JSON.stringify({
-        peer_id: peer.id, session_id: peer.session_id, user_id, client_id: peer.client_id,
+        peer_id: peer.id, session_id: peer.session_id, user_id: userId, client_id: peer.client_id,
       }), PRESENCE_TTL_SECONDS);
       await this.clearCandidates(peer.session_id, peer.id);
       await this.realtime.emitSession(peer.session_id, 'peer.joined', {
-        session_id: peer.session_id, peer_id: peer.id, user_id,
+        session_id: peer.session_id, peer_id: peer.id, user_id: userId,
       });
       if (result.sessionOwnerUserId) {
         await this.realtime.emitUser(result.sessionOwnerUserId, 'session.updated', {
