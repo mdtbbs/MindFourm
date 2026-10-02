@@ -42,13 +42,13 @@
 | GET | `/api/v1/multiplayer/invites` | `multiplayer.read` | 列出自己的邀请 |
 | POST | `/api/v1/multiplayer/invites/{id}/accept`、`.../decline`、`.../revoke` | `multiplayer.write` | 处理邀请；接受返回 Join Intent |
 | POST | `/api/v1/multiplayer/sessions/{id}/join-requests` | `multiplayer.write` | 请求加入 `join_policy=request` 的 Session |
-| POST | `/api/v1/multiplayer/join-requests/{id}/approve`、`.../reject` | `multiplayer.write` | 房主批准/拒绝；批准返回 Join Intent |
-| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户、一次性 Join Intent；可传 Unlisted `join_code` |
-| POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | Launcher 消费 Intent 并成为 Session Peer |
+| POST | `/api/v1/multiplayer/join-requests/{id}/approve`、`.../reject` | `multiplayer.write` | 房主批准/拒绝；批准返回 10 分钟有效、绑定申请者 OAuth 客户端的 Join Intent |
+| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户的 Join Intent；不预绑定 OAuth client；可传 Unlisted `join_code` |
+| POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | Launcher 消费 Intent 并成为 Session Peer；直接、邀请接受和审批 Intent 的同用户/首次消费客户端可在 10 分钟恢复相同 Peer 与 Resume Token |
 | POST | `/api/v1/multiplayer/sessions/{id}/relay` | `multiplayer.write` | 为当前 Peer 请求官方 Relay Credential |
 | POST | `/api/v1/realtime/tickets` | `friends.read` | 创建 60 秒一次性 WebSocket ticket |
 
-Session visibility 为 `private`、`friends`、`unlisted`；join policy 为 `open`、`friends`、`request`、`invite_only`。V1 没有公共大厅或 Host Migration。房主断线后 Session 进入 60 秒 closing grace，只有同用户、同 OAuth 客户端并带有效一次性 resume token 才能恢复。
+Session visibility 为 `private`、`friends`、`unlisted`；join policy 为 `open`、`friends`、`request`、`invite_only`。V1 没有公共大厅或 Host Migration。房主主动离开后 Session 进入既有的 60 秒 closing grace，只有同用户、同 OAuth 客户端并带有效一次性 resume token 才能恢复；房主心跳超时后，90 秒 presence lease 到期时 Session 进入 closing。Peer 另有独立的 60 秒恢复窗口；它与 Session closing grace 是两种状态期限，即使当前时长相同也分别判定。
 
 好友 Presence 返回的 `actions.can_join`、`can_request_join`、`can_invite` 是后端策略结果。客户端不得自行推导按钮权限。Block 优先于 Privacy；好友聚合最多批量查询一页，不做每好友一组 SQL。
 
@@ -245,7 +245,7 @@ Content-Type: application/json
 }
 ```
 
-Session 对象中的 `current_players` 是当前占用人数；`expires_at` 是最长生命周期截止时间。Peer 对象的 `role` 为 `owner` 或 `member`，`status` 是 `joining`、`active`、`disconnected` 等服务端状态；`capabilities` 是客户端加入时提交的可选 JSON。`GET .../sessions/{id}/peers` 返回 Peer 数组；该接口要求调用者本身是活跃 Peer。
+Session 对象中的 `current_players` 是当前占用人数：`joining`、`active` 和仍在恢复窗口内的 `disconnected` Peer 都占用名额；`expired` Peer 不占名额。Peer 心跳每 30 秒发送一次；90 秒未收到心跳后状态变为 `disconnected`，服务端清理其网络候选和 Relay Allocation，并保留 60 秒恢复窗口。此窗口按最后一次心跳的 presence lease 截止时间计算；窗口结束后 Peer 变为 `expired`，resume token 不再可用，名额释放。`expires_at` 是 Session 最长生命周期截止时间。Peer 对象的 `role` 为 `owner` 或 `member`，`status` 是 `joining`、`active`、`disconnected`、`expired` 等服务端状态；`capabilities` 是客户端加入时提交的可选 JSON。`GET .../sessions/{id}/peers` 返回仍占用名额的 Peer 数组；该接口要求调用者本身是活跃 Peer。
 
 ### 解析、加入、退出和恢复
 
@@ -266,11 +266,17 @@ Content-Type: application/json
 | `resume_token` | 否 | 恢复既有 Peer 时提交；若提供则优先执行恢复。成功后旧 token 作废并返回新 token。 |
 | `capabilities` | 否 | 客户端可选能力 JSON；服务端作为该 Peer 信息返回，不会据此授予权限。 |
 
-新加入返回 `{ "peer": ..., "resume_token": "..." }`。即使 join body 没有可选字段，也发送 `{}`；恢复时还会有 `resumed: true`。`POST .../sessions/{id}/leave` 不需要 body；普通成员返回 `{ "status":"left" }`，房主退出返回 `{ "status":"closing","grace_seconds":60 }`。调用 `POST .../sessions/{id}/peers/{peerId}/heartbeat` 续期活跃 Peer，响应含 `peer_id`、30 秒 `heartbeat_interval` 和 90 秒 `expires_in`。
+新加入返回 `{ "peer": ..., "resume_token": "..." }`。即使 join body 没有可选字段，也发送 `{}`；恢复时还会有 `resumed: true`。恢复只能在 Peer 的 60 秒恢复窗口内完成；过期 Peer 不可恢复。`POST .../sessions/{id}/leave` 不需要 body；普通成员返回 `{ "status":"left" }`，房主主动退出返回 `{ "status":"closing","grace_seconds":60 }`。调用 `POST .../sessions/{id}/peers/{peerId}/heartbeat` 续期活跃 Peer，响应含 `peer_id`、30 秒 `heartbeat_interval` 和 90 秒 `expires_in`。
 
-若加入策略要求审批，客户端先 `POST .../sessions/{id}/join-requests`（无 body），房主通过 approve/reject 路径处理；请求和邀请有效期为 5 分钟。批准或接受邀请后响应中含短期 `join_intent`。启动器消费意图时调用 `POST /api/v1/multiplayer/join-intents/{intentId}/consume`，至少发送空 JSON 对象 `{}`，也可传 `{"capabilities":{...}}`。Join Intent 绑定用户、60 秒过期且只能消费一次。应用若提供启动器选择，应从 `preferences.clients` 选出应用；客户端注册的启动 URI 模板必须包含 `{intent_id}`，用户确认后才唤起启动器。
+若加入策略要求审批，客户端先 `POST .../sessions/{id}/join-requests`（无 body），房主通过 approve/reject 路径处理；请求有效期为 5 分钟。申请请求应使用最终消费该 Intent 的 OAuth 客户端。批准后，申请者收到绑定该 OAuth 客户端的 10 分钟 Join Intent。启动器消费意图时调用 `POST /api/v1/multiplayer/join-intents/{intentId}/consume`，至少发送空 JSON 对象 `{}`，也可传 `{"capabilities":{...}}`。批准事件和状态在 MySQL 中与审批状态同事务保存；Realtime 会在 Redis 或进程恢复后重发，直至客户端处理完成并 ACK。相同用户、OAuth 客户端和 intent 的重复消费在 Peer 首次创建后的 10 分钟恢复期内返回相同 Peer 与 Resume Token，不会创建第二个 Peer；Resume Token 本身不以明文存储。批准意图使用稳定的服务端密钥派生，生产环境需保留配置中的 `MULTIPLAYER_RELAY_CREDENTIAL_SECRET` 或 `MINDAUTH_NATIVE_EXCHANGE_SECRET`。客户端下载批准事件后应先成功消费并保存本地游标，再发送 ACK。应用若提供启动器选择，应从 `preferences.clients` 选出应用；客户端注册的启动 URI 模板必须包含 `{intent_id}`，用户确认后才唤起启动器。
 
-需要为 Unlisted Session 创建直接 Join Intent 时，调用 `POST /api/v1/multiplayer/sessions/{id}/join-intents`，发送 `{}`；也可传 `{"join_code":"A1B2C3D4E5"}` 证明持有该 Session 的加入码。成功返回 `{"intent_id":"jnt_opaque","expires_in":60}`。已有邀请接受或加入请求批准时，不需要客户端再创建一次 Intent。
+需要为 Unlisted Session 创建直接 Join Intent 时，调用 `POST /api/v1/multiplayer/sessions/{id}/join-intents`，发送 `{}`；也可传 `{"join_code":"A1B2C3D4E5"}` 证明持有该 Session 的加入码。成功返回 `{"intent_id":"jnt_opaque","expires_in":60}`。Intent 在 MySQL 中以 SHA-256 哈希保存，创建时绑定论坛用户，但保留“任意已注册 Launcher OAuth client 均可首次消费”的现有语义。首个成功消费的 OAuth client 会在同一数据库事务中绑定到结果；首次消费必须在 60 秒内完成。
+
+直接创建和接受邀请产生的 Intent，在首次消费创建 Peer 后 10 分钟内，同一论坛用户和首次消费的 OAuth client 重放同一 `intent_id`，会恢复相同 Peer 与 Resume Token，不会创建第二个 Peer。结果、Peer 与 Resume Token 哈希在同一事务提交；恢复期间 Peer 清理任务不会将该 Peer 标记为过期。接受邀请时，`invite.status=accepted` 与唯一 Join Intent 在同一事务写入；重复调用 accept 会返回该邀请当前有效的同一 Intent。尚未消费的 Intent 超过 60 秒后，重试会在行锁保护下轮换原 Intent 的哈希与有效期；已经消费的 Intent 永不重新授权，重试仍指向原消费结果。升级前已接受的邀请会在第一次重试时安全补建 durable Intent。不同 client 在首次消费后重放会得到 `JOIN_INTENT_CLIENT_MISMATCH`。生产部署必须在所有实例配置同一稳定的 `MULTIPLAYER_RELAY_CREDENTIAL_SECRET` 或 `MINDAUTH_NATIVE_EXCHANGE_SECRET`，且在仍有未过期 Join Intent 或结果恢复窗口时不要轮换密钥；缺少可用密钥时服务端会在签发 Intent 或消费事务开始前失败关闭。部署还需先应用 `MultiplayerJoinIntentRecovery1720000180000` migration。
+
+已批准的 Join Request Intent 仍绑定申请时提供的 OAuth client，保留上文所述可恢复 10 分钟及 Realtime ACK 规则。直接和邀请 Intent 则在首次成功消费时绑定 client。
+
+升级到持久化 Join Request 后，迁移会将 `status='approved'` 且 `join_intent_hash`、`join_intent_expires_at` 均为空的旧记录置为 `expired`。这些旧记录的随机 Redis bearer 和 OAuth client 绑定无法安全复原，申请者需要重新提交 Join Request 并等待房主批准；该兼容处理不影响独立直接 Join Intent 的 Redis 消费。
 
 ### 网络候选地址交换
 
@@ -343,13 +349,15 @@ Content-Type: application/json
 {"type":"resume","last_event_id":"1790758200000-0","sessions":{"ses_AbCdEf0123456789_-wxyz":"1790758200000-1"}}
 ```
 
-服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。Event 含 `id`、`event`、`timestamp`、`data`；user stream 用 `events:user:{userId}`，session stream 用 `events:session:{sessionId}`。每个 Redis Stream 最多保留 600 秒；恢复最多补发 200 条事件，cursor 已过期或 Redis 不可用时通知客户端重取 Snapshot。
+服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。Event 含 `id`、`event`、`timestamp`、`data`；user stream 用 `events:user:{userId}`，session stream 用 `events:session:{sessionId}`。每个 Redis Stream 最多保留 600 秒；恢复最多补发 200 条事件，cursor 已过期或 Redis 不可用时通知客户端重取 Snapshot。Peer 状态以数据库为准；客户端在 WebSocket 重连后应重新读取 Session/Peer Snapshot 来收敛状态，不能只依赖 `peer.disconnected` 或 `peer.updated` 实时事件。读取 peers 前须确保自身是活跃 Peer；断线客户端应先用 resume token 恢复自己。
 
 事件名：`friend.request.created`、`friend.request.accepted`、`friend.removed`、`presence.updated`、`activity.updated`、`multiplayer.invite.created`、`multiplayer.invite.accepted`、`multiplayer.invite.revoked`、`multiplayer.join_request.created`、`multiplayer.join_request.approved`、`multiplayer.join_request.rejected`、`session.updated`、`session.closed`、`peer.joined`、`peer.updated`、`peer.disconnected`、`peer.left`、`candidate.created`、`candidate.removed`、`relay.allocated`、`relay.revoked`。
 
+`multiplayer.join_request.approved` 发给申请者的原 OAuth 客户端，`data` 包含 `join_request_id`、`session_id` 和可直接传给启动器的 `intent_id`。批准记录同时作为持久 outbox；Redis append 失败、Realtime 进程重启或客户端未 ACK 时，服务端会从该记录重发。`intent_id` 在批准后 10 分钟失效；同一用户/客户端在结果恢复窗口内重试消费会得到同一 Peer 和 Resume Token。客户端只有在消费成功后才 ACK；崩溃后收到新事件 ID 时可重复消费并恢复结果。其它普通 Realtime 事件仍使用 Redis Stream 的 600 秒保留与 Snapshot 收敛规则。`intent_id` 是在保留现有事件字段基础上的新增字段，旧客户端可忽略它。
+
 ## 服务端状态与存储
 
-TypeORM migration `MultiplayerPlatformV11720000150000` 持久化无向好友唯一键、Social Privacy、Presence 用户偏好、Session、Peer、Resume Token、Invite、Join Request、Relay Allocation 和最小化 Audit；`synchronize=false` 保持关闭。Presence、Activity、Candidate、Join Intent、Realtime stream、Relay Agent health 放 Redis，Candidate 与连接 TTL 为 90 秒、Intent/ticket 为 60 秒、Relay Agent heartbeat 为 45 秒、Relay Credential/Allocation 为 120 秒、事件 Stream 为 600 秒。LanLink 旧客户端的 Presence 兼容投影单独存于 `presence:lanlink:{userId}`，TTL 为 120 秒；V1 Session Presence 通过心跳续期旧 External API 投影，两个来源不会互相删除。
+TypeORM migration `MultiplayerPlatformV11720000150000` 持久化无向好友唯一键、Social Privacy、Presence 用户偏好、Session、Peer、Resume Token、Invite、Join Request、Relay Allocation 和最小化 Audit；migration `MultiplayerJoinApprovalDurability1720000170000` 在 Join Request 行保存批准意图摘要、Peer 恢复结果及 Realtime ACK/重发状态；migration `MultiplayerJoinIntentRecovery1720000180000` 持久化直接/邀请 Join Intent 哈希及首个消费结果。`synchronize=false` 保持关闭。普通 Presence、Activity、Candidate、Realtime stream、Relay Agent health 放 Redis；直接/邀请 Intent 的初次有效期为 60 秒，成功消费的结果在 MySQL 保留 10 分钟恢复；批准 Join Intent 为 600 秒；ticket 为 60 秒；Candidate TTL 为 90 秒；Relay Agent heartbeat 为 45 秒；Relay Credential/Allocation 为 120 秒；事件 Stream 为 600 秒。LanLink 旧客户端的 Presence 兼容投影单独存于 `presence:lanlink:{userId}`，TTL 为 120 秒；V1 Session Presence 通过心跳续期旧 External API 投影，两个来源不会互相删除。
 
 旧版 LanLink Mod 仍使用本地 LanLink bearer、LLK1/LLKU 数据传输和 16 字节 room token；服务端要求它升级后才能使用 V1 联机。新版客户端使用 MindAuth Authorization Code + PKCE、V1 Session/Peer/Candidate 控制面和独立 WSS Relay AUTH 数据通道。Forum 好友页可按用户隐私显示兼容 Presence，但不会把旧房间转换成 V1 Session、Join Intent 或 Relay Allocation。
 
@@ -365,7 +373,7 @@ realtime:ticket:{ticket}                      # 一次性票据，60s
 multiplayer:session:{sessionId}               # session 快速状态
 multiplayer:peer:{peerId}                     # peer 快速状态，90s
 multiplayer:candidates:{sessionId}:{peerId}   # candidate hash，90s
-multiplayer:join-intent:{intentId}             # 一次性 intent，60s
+multiplayer:join-intent:{intentId}             # 旧进程存量 intent 兼容读取，最多60s
 multiplayer:relay:agent:{agentId}               # agent 心跳，45s
 multiplayer:relay:session-lock:{sessionId}      # 同一 Session 固定到一个 Agent 的锁，30s
 multiplayer:relay:peer-lock:{peerId}            # 每 Peer 最多一个活动 allocation 的锁，30s
@@ -437,7 +445,7 @@ POST /api/internal/v1/relay/agents/{id}/revoke
 
 ## 错误码
 
-稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`CLIENT_CAPABILITY_NOT_APPROVED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。客户端依 `error.code` 和 HTTP 状态，不依赖 message。
+稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`CLIENT_CAPABILITY_NOT_APPROVED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。客户端依 `error.code` 和 HTTP 状态，不依赖 message。
 
 ## 验证边界
 

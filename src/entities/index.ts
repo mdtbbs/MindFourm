@@ -123,6 +123,7 @@ import { MultiplayerSession } from './multiplayer-session.entity';
 import { MultiplayerPeer } from './multiplayer-peer.entity';
 import { MultiplayerPeerResumeToken } from './multiplayer-peer-resume-token.entity';
 import { MultiplayerInvite } from './multiplayer-invite.entity';
+import { MultiplayerJoinIntent } from './multiplayer-join-intent.entity';
 import { MultiplayerJoinRequest } from './multiplayer-join-request.entity';
 import { MultiplayerRelayAllocation } from './multiplayer-relay-allocation.entity';
 import { MultiplayerAuditLog } from './multiplayer-audit-log.entity';
@@ -237,6 +238,7 @@ export const coreEntities = [
   MultiplayerPeer,
   MultiplayerPeerResumeToken,
   MultiplayerInvite,
+  MultiplayerJoinIntent,
   MultiplayerJoinRequest,
   MultiplayerRelayAllocation,
   MultiplayerAuditLog,
@@ -264,7 +266,7 @@ export {
   GameSaveSlot, GameSaveSnapshot, GameSaveBlob, GameSaveUploadSession, GameSaveIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
   SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerPeer,
-  MultiplayerPeerResumeToken, MultiplayerInvite, MultiplayerJoinRequest,
+  MultiplayerPeerResumeToken, MultiplayerInvite, MultiplayerJoinIntent, MultiplayerJoinRequest,
   MultiplayerRelayAllocation, MultiplayerAuditLog,
   AdminNotification,
   Message, Attachment, CustomEmoji, Resource, ResourceCategory, ResourceVersion,

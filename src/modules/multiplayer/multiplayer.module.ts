@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Friendship } from '../../entities/friendship.entity';
 import { MultiplayerAuditLog } from '../../entities/multiplayer-audit-log.entity';
 import { MultiplayerInvite } from '../../entities/multiplayer-invite.entity';
+import { MultiplayerJoinIntent } from '../../entities/multiplayer-join-intent.entity';
 import { MultiplayerJoinRequest } from '../../entities/multiplayer-join-request.entity';
 import { MultiplayerPeer } from '../../entities/multiplayer-peer.entity';
 import { MultiplayerPeerResumeToken } from '../../entities/multiplayer-peer-resume-token.entity';
@@ -26,7 +27,7 @@ import { InvitePolicyService } from './invite-policy.service';
   imports: [
     TypeOrmModule.forFeature([
       Friendship, MultiplayerSession, MultiplayerPeer, MultiplayerPeerResumeToken,
-      MultiplayerInvite, MultiplayerJoinRequest, MultiplayerRelayAllocation, MultiplayerAuditLog, User, UserPresencePreference,
+      MultiplayerInvite, MultiplayerJoinIntent, MultiplayerJoinRequest, MultiplayerRelayAllocation, MultiplayerAuditLog, User, UserPresencePreference,
     ]),
     FriendsModule,
     NotificationsModule,

@@ -6,12 +6,13 @@ import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { createHmac, createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { isIP } from 'net';
-import { DataSource, In, IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import axios from 'axios';
 import { RedisService } from '../../database/redis.service';
 import { Friendship } from '../../entities/friendship.entity';
 import { MultiplayerAuditLog } from '../../entities/multiplayer-audit-log.entity';
 import { MultiplayerInvite } from '../../entities/multiplayer-invite.entity';
+import { MultiplayerJoinIntent } from '../../entities/multiplayer-join-intent.entity';
 import { MultiplayerJoinRequest } from '../../entities/multiplayer-join-request.entity';
 import { MultiplayerPeer } from '../../entities/multiplayer-peer.entity';
 import { MultiplayerPeerResumeToken } from '../../entities/multiplayer-peer-resume-token.entity';
@@ -30,12 +31,17 @@ import {
 } from './dto/multiplayer.dto';
 import { InvitePolicyService } from './invite-policy.service';
 import { SessionPolicyService } from './session-policy.service';
+import { MULTIPLAYER_CAPACITY_PEER_STATUSES } from './multiplayer.constants';
 
 const PRESENCE_TTL_SECONDS = 90;
+const PEER_DISCONNECT_GRACE_SECONDS = 60;
 const SESSION_LIFETIME_MS = 4 * 60 * 60 * 1000;
 const INVITE_TTL_MS = 5 * 60 * 1000;
 const JOIN_REQUEST_TTL_MS = 5 * 60 * 1000;
 const JOIN_INTENT_TTL_SECONDS = 60;
+const APPROVED_JOIN_INTENT_TTL_MS = 10 * 60 * 1000;
+const APPROVED_JOIN_RESULT_RECOVERY_MS = 10 * 60 * 1000;
+const APPROVED_JOIN_EVENT_RETRY_MS = 5 * 1000;
 const OWNER_GRACE_MS = 60 * 1000;
 const RELAY_CREDENTIAL_TTL_SECONDS = 120;
 const MAX_CANDIDATES_PER_PEER = 32;
@@ -175,6 +181,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(MultiplayerPeer) private readonly peers: Repository<MultiplayerPeer>,
     @InjectRepository(MultiplayerPeerResumeToken) private readonly resumeTokens: Repository<MultiplayerPeerResumeToken>,
     @InjectRepository(MultiplayerInvite) private readonly invites: Repository<MultiplayerInvite>,
+    @InjectRepository(MultiplayerJoinIntent) private readonly joinIntents: Repository<MultiplayerJoinIntent>,
     @InjectRepository(MultiplayerJoinRequest) private readonly joinRequests: Repository<MultiplayerJoinRequest>,
     @InjectRepository(MultiplayerRelayAllocation) private readonly relayAllocations: Repository<MultiplayerRelayAllocation>,
     @InjectRepository(MultiplayerAuditLog) private readonly audit: Repository<MultiplayerAuditLog>,
@@ -340,7 +347,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     const session = await this.findActiveSession(sessionId);
     const peer = await this.activePeer(sessionId, viewerId);
     if (!peer && !(await this.canViewSession(viewerId, session))) fail(403, 'SESSION_PERMISSION_DENIED');
-    return this.toPublicSession(session, await this.peers.count({ where: { session_id: sessionId, status: In(['joining', 'active', 'disconnected']) } }));
+    return this.toPublicSession(session, await this.peers.count({ where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } }));
   }
 
   async resolveCode(viewerId: number, code: string) {
@@ -351,14 +358,14 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     if (!session) fail(404, 'SESSION_NOT_FOUND');
     await this.assertSessionActive(session);
     if (await this.socialPolicy.isBlockedEither(viewerId, session.owner_user_id)) fail(403, 'SESSION_PERMISSION_DENIED');
-    return this.toPublicSession(session, await this.peers.count({ where: { session_id: session.id, status: In(['joining', 'active', 'disconnected']) } }));
+    return this.toPublicSession(session, await this.peers.count({ where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } }));
   }
 
   async joinSession(userId: number, clientId: string, sessionId: string, input: { invite_id?: string; resume_token?: string; join_code?: string; capabilities?: Record<string, unknown> } = {}, approvedIntent = false) {
     await this.requireEnabled('multiplayer_sessions_v1');
     if (input.resume_token) return this.resumePeer(userId, clientId, await this.findResumableSession(sessionId), input.resume_token);
     const session = await this.findActiveSession(sessionId);
-    const existing = await this.peers.findOne({ where: { session_id: sessionId, user_id: userId, status: In(['joining', 'active', 'disconnected']) } });
+    const existing = await this.peers.findOne({ where: { session_id: sessionId, user_id: userId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } });
     if (existing) fail(400, 'SESSION_NOT_JOINABLE');
     const invite = input.invite_id ? await this.getUsableInvite(input.invite_id, sessionId, userId) : null;
     const codeAuthorized = !!input.join_code && !!session.code_hash && timingSafeEqual(
@@ -372,12 +379,12 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     await this.dataSource.transaction(async (manager) => {
       const lockedSession = await manager.findOne(MultiplayerSession, { where: { id: sessionId }, lock: { mode: 'pessimistic_write' } });
       if (!lockedSession || lockedSession.status !== 'active' || lockedSession.expires_at.getTime() <= Date.now()) fail(404, 'SESSION_CLOSED');
-      const activeMembership = await manager.findOne(MultiplayerPeer, {
-        where: { session_id: sessionId, user_id: userId, status: In(['joining', 'active', 'disconnected']) },
+      const occupyingMembership = await manager.findOne(MultiplayerPeer, {
+        where: { session_id: sessionId, user_id: userId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) },
         lock: { mode: 'pessimistic_write' },
       });
-      if (activeMembership) fail(400, 'SESSION_NOT_JOINABLE');
-      const count = await manager.count(MultiplayerPeer, { where: { session_id: sessionId, status: In(['joining', 'active', 'disconnected']) } });
+      if (occupyingMembership) fail(400, 'SESSION_NOT_JOINABLE');
+      const count = await manager.count(MultiplayerPeer, { where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } });
       if (count >= lockedSession.max_players) fail(409, 'SESSION_FULL');
       await manager.save(MultiplayerPeer, manager.create(MultiplayerPeer, {
         id: peerId, session_id: sessionId, user_id: userId, client_id: clientId,
@@ -401,25 +408,56 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   async resumePeer(userId: number, clientId: string, session: MultiplayerSession, rawToken: string) {
     const token = await this.resumeTokens.findOne({ where: { token_hash: sha256(rawToken), consumed_at: IsNull() } });
     if (!token || token.expires_at.getTime() <= Date.now()) fail(403, 'PEER_RESUME_INVALID');
-    const peer = await this.peers.findOneBy({ id: token.peer_id });
-    if (!peer || peer.user_id !== userId || peer.client_id !== clientId || peer.session_id !== session.id || !['disconnected', 'active'].includes(peer.status)) fail(403, 'PEER_RESUME_INVALID');
-    const update = await this.resumeTokens.update({ id: token.id, consumed_at: IsNull() }, { consumed_at: new Date() });
-    if (!update.affected) fail(403, 'PEER_RESUME_INVALID');
-    peer.status = 'active';
-    peer.last_seen_at = new Date();
-    await this.peers.save(peer);
-    const rotatedToken = randomBytes(32).toString('base64url');
-    await this.resumeTokens.save(this.resumeTokens.create({
-      peer_id: peer.id, token_hash: sha256(rotatedToken), expires_at: session.expires_at, consumed_at: null,
-    }));
-    if (peer.role === 'owner') {
-      session.status = 'active';
-      session.close_after = null;
-      await this.sessions.save(session);
-    }
-    await this.redis.set(`multiplayer:peer:${peer.id}`, JSON.stringify({ peer_id: peer.id, session_id: session.id, user_id: userId, client_id: peer.client_id }), PRESENCE_TTL_SECONDS);
-    await this.realtime.emitSession(session.id, 'peer.updated', { session_id: session.id, peer_id: peer.id, status: 'active' });
-    return { peer: this.toPublicPeer(peer), resumed: true, resume_token: rotatedToken };
+    const result = await this.withRelayLock(`multiplayer:relay:peer-lock:${token.peer_id}`, async () => {
+      const now = new Date();
+      const resumeCutoff = new Date(now.getTime() - (PRESENCE_TTL_SECONDS + PEER_DISCONNECT_GRACE_SECONDS) * 1000);
+      const currentToken = await this.resumeTokens.findOne({ where: {
+        id: token.id, token_hash: sha256(rawToken), consumed_at: IsNull(),
+      } });
+      if (!currentToken || currentToken.expires_at.getTime() <= now.getTime()) fail(403, 'PEER_RESUME_INVALID');
+      const currentSession = await this.sessions.findOneBy({ id: session.id });
+      if (!currentSession || currentSession.expires_at.getTime() <= now.getTime()
+        || !['active', 'closing'].includes(currentSession.status)
+        || (currentSession.status === 'closing' && currentSession.close_after && currentSession.close_after.getTime() <= now.getTime())) {
+        fail(403, 'PEER_RESUME_INVALID');
+      }
+      const peer = await this.peers.findOneBy({ id: currentToken.peer_id });
+      if (!peer || peer.user_id !== userId || peer.client_id !== clientId || peer.session_id !== session.id
+        || !['disconnected', 'active'].includes(peer.status) || !peer.last_seen_at
+        || peer.last_seen_at.getTime() <= resumeCutoff.getTime()) fail(403, 'PEER_RESUME_INVALID');
+      const update = await this.resumeTokens.update({ id: currentToken.id, consumed_at: IsNull() }, { consumed_at: now });
+      if (!update.affected) fail(403, 'PEER_RESUME_INVALID');
+      const peerUpdate = await this.peers.update({
+        id: peer.id, session_id: session.id, user_id: userId, client_id: clientId,
+        status: In(['disconnected', 'active']), last_seen_at: MoreThan(resumeCutoff),
+      }, { status: 'active', last_seen_at: now });
+      if (!peerUpdate.affected) fail(403, 'PEER_RESUME_INVALID');
+      peer.status = 'active';
+      peer.last_seen_at = now;
+      const rotatedToken = randomBytes(32).toString('base64url');
+      if (peer.role === 'owner') {
+        const sessionUpdate = await this.sessions.createQueryBuilder().update(MultiplayerSession)
+          .set({ status: 'active', close_after: null })
+          .where('id = :sessionId AND status IN (:...resumableStatuses)', {
+            sessionId: session.id, resumableStatuses: ['active', 'closing'],
+          })
+          .andWhere("(status = 'active' OR close_after IS NULL OR close_after > :now)", { now })
+          .execute();
+        if (!sessionUpdate.affected) {
+          await this.peers.update({ id: peer.id, session_id: session.id, status: 'active' }, { status: 'expired' });
+          fail(403, 'PEER_RESUME_INVALID');
+        }
+      }
+      await this.resumeTokens.save(this.resumeTokens.create({
+        peer_id: peer.id, token_hash: sha256(rotatedToken), expires_at: session.expires_at, consumed_at: null,
+      }));
+      await this.redis.del(`multiplayer:peer-cleanup:${peer.id}`);
+      await this.redis.set(`multiplayer:peer:${peer.id}`, JSON.stringify({ peer_id: peer.id, session_id: session.id, user_id: userId, client_id: peer.client_id }), PRESENCE_TTL_SECONDS);
+      await this.realtime.emitSession(session.id, 'peer.updated', { session_id: session.id, peer_id: peer.id, status: 'active' });
+      return { peer: this.toPublicPeer(peer), resumed: true, resume_token: rotatedToken };
+    });
+    if (!result) fail(403, 'PEER_RESUME_INVALID');
+    return result;
   }
 
   async heartbeat(userId: number, sessionId: string, peerId: string) {
@@ -427,27 +465,47 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     await this.findActiveSession(sessionId);
     const peer = await this.requirePeer(userId, sessionId, peerId);
     if (peer.status !== 'active') fail(404, 'PEER_EXPIRED');
-    peer.last_seen_at = new Date();
-    await this.peers.save(peer);
+    const now = new Date();
+    const activeLeaseCutoff = new Date(now.getTime() - PRESENCE_TTL_SECONDS * 1000);
+    if (!peer.last_seen_at || peer.last_seen_at.getTime() <= activeLeaseCutoff.getTime()) fail(404, 'PEER_EXPIRED');
+    const update = await this.peers.update({
+      id: peerId, session_id: sessionId, user_id: userId, status: 'active', last_seen_at: MoreThan(activeLeaseCutoff),
+    }, { last_seen_at: now });
+    if (!update.affected) fail(404, 'PEER_EXPIRED');
     await this.redis.set(`multiplayer:peer:${peerId}`, JSON.stringify({ peer_id: peerId, session_id: sessionId, user_id: userId, client_id: peer.client_id }), PRESENCE_TTL_SECONDS);
     return { peer_id: peerId, heartbeat_interval: 30, expires_in: PRESENCE_TTL_SECONDS };
   }
 
   async leaveSession(userId: number, sessionId: string) {
-    const session = await this.findActiveSession(sessionId);
-    const peer = await this.peers.findOne({ where: { session_id: sessionId, user_id: userId, status: In(['joining', 'active', 'disconnected']) } });
+    await this.findActiveSession(sessionId);
+    const peer = await this.peers.findOne({ where: { session_id: sessionId, user_id: userId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } });
     if (!peer) fail(404, 'PEER_NOT_FOUND');
     const result = await this.withRelayLock(`multiplayer:relay:peer-lock:${peer.id}`, async () => {
       const currentPeer = await this.peers.findOneBy({ id: peer.id, user_id: userId });
-      if (!currentPeer || !['joining', 'active', 'disconnected'].includes(currentPeer.status)) fail(404, 'PEER_NOT_FOUND');
+      if (!currentPeer || !MULTIPLAYER_CAPACITY_PEER_STATUSES.some((status) => status === currentPeer.status)) fail(404, 'PEER_NOT_FOUND');
       if (currentPeer.role === 'owner') {
-        currentPeer.status = 'disconnected';
-        await this.peers.save(currentPeer);
-        session.status = 'closing';
-        session.close_after = new Date(Date.now() + OWNER_GRACE_MS);
-        await this.sessions.save(session);
-        await this.realtime.emitSession(sessionId, 'session.updated', { session_id: sessionId, status: 'closing', grace_seconds: 60 });
-        await this.realtime.emitSession(sessionId, 'peer.disconnected', { session_id: sessionId, peer_id: currentPeer.id });
+        const now = new Date();
+        let wasConnected = false;
+        if (currentPeer.status !== 'disconnected') {
+          const disconnected = await this.peers.update(
+            { id: currentPeer.id, status: In(['joining', 'active']) },
+            { status: 'disconnected', last_seen_at: now },
+          );
+          wasConnected = !!disconnected.affected;
+        }
+        if (wasConnected) {
+          const closing = await this.sessions.update(
+            { id: sessionId, status: 'active' },
+            { status: 'closing', close_after: new Date(now.getTime() + OWNER_GRACE_MS) },
+          );
+          if (closing.affected) {
+            await this.realtime.emitSession(sessionId, 'session.updated', { session_id: sessionId, status: 'closing', grace_seconds: 60 });
+          }
+        } else {
+          await this.ensureStaleOwnerSessionClosing(currentPeer, now);
+        }
+        if (wasConnected) await this.realtime.emitSession(sessionId, 'peer.disconnected', { session_id: sessionId, peer_id: currentPeer.id });
+        await this.cleanupDisconnectedPeerResources(currentPeer);
         return { status: 'closing', grace_seconds: 60 };
       }
       currentPeer.status = 'left';
@@ -466,7 +524,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.findActiveSession(sessionId);
     await this.requireActivePeer(userId, sessionId);
-    const rows = await this.peers.find({ where: { session_id: sessionId, status: In(['joining', 'active', 'disconnected']) }, order: { joined_at: 'ASC' } });
+    const rows = await this.peers.find({ where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) }, order: { joined_at: 'ASC' } });
     return rows.map((row) => this.toPublicPeer(row));
   }
 
@@ -546,7 +604,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   async getCandidates(userId: number, sessionId: string, targetPeerId: string) {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireActivePeer(userId, sessionId);
-    const target = await this.peers.findOne({ where: { id: targetPeerId, session_id: sessionId, status: In(['joining', 'active', 'disconnected']) } });
+    const target = await this.peers.findOne({ where: { id: targetPeerId, session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } });
     if (!target) fail(404, 'PEER_NOT_FOUND');
     const raw = await this.redis.hgetall(`multiplayer:candidates:${sessionId}:${targetPeerId}`);
     return Object.values(raw).flatMap((value) => {
@@ -584,13 +642,146 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   async acceptInvite(userId: number, inviteId: string) {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireEnabled('multiplayer_invites_v1');
-    const invite = await this.getUsableInvite(inviteId, undefined, userId);
-    await this.assertCanJoin(userId, await this.findActiveSession(invite.session_id), true);
-    invite.status = 'accepted';
-    await this.invites.save(invite);
-    const intent = await this.createJoinIntent(userId, invite.session_id, undefined, true);
-    await this.realtime.emitUser(invite.sender_user_id, 'multiplayer.invite.accepted', { invite_id: invite.id, session_id: invite.session_id });
-    return { invite_id: invite.id, status: invite.status, join_intent: intent };
+    const current = await this.invites.findOneBy({ id: inviteId, target_user_id: userId });
+    if (!current) fail(404, 'INVITE_NOT_FOUND');
+    if (current.status === 'pending') {
+      if (current.expires_at.getTime() <= Date.now()) {
+        await this.invites.update({ id: current.id, status: 'pending' }, { status: 'expired' });
+        fail(410, 'INVITE_EXPIRED');
+      }
+      await this.assertCanJoin(userId, await this.findActiveSession(current.session_id), true);
+    } else if (current.status !== 'accepted') {
+      fail(404, 'INVITE_NOT_FOUND');
+    }
+
+    const accepted = await this.dataSource.transaction(async (manager) => {
+      const invite = await manager.createQueryBuilder(MultiplayerInvite, 'invite')
+        .setLock('pessimistic_write')
+        .where('invite.id = :inviteId AND invite.target_user_id = :userId', { inviteId, userId })
+        .getOne();
+      if (!invite) fail(404, 'INVITE_NOT_FOUND');
+      if (invite.status === 'accepted') {
+        // Lock order for accepted retries is Invite -> JoinIntent -> Session.
+        // consumeJoinIntent uses JoinIntent -> Session, so both flows share the
+        // same suffix order and cannot deadlock each other.
+        const intent = await this.ensureAcceptedInviteJoinIntent(manager, invite, userId);
+        return { invite, intent, expired: false };
+      }
+      if (invite.status !== 'pending') fail(404, 'INVITE_NOT_FOUND');
+      if (invite.expires_at.getTime() <= Date.now()) {
+        invite.status = 'expired';
+        await manager.save(MultiplayerInvite, invite);
+        return { invite, intent: null, expired: true };
+      }
+      const intent = await this.ensureAcceptedInviteJoinIntent(manager, invite, userId);
+      invite.status = 'accepted';
+      await manager.save(MultiplayerInvite, invite);
+      return { invite, intent, expired: false };
+    });
+    if (accepted.expired) fail(410, 'INVITE_EXPIRED');
+    if (!accepted.intent) fail(410, 'INVITE_ALREADY_ACCEPTED');
+    const intentId = this.acceptedInviteJoinIntentId(accepted.intent);
+    // Re-emit on idempotent retries too: a previous response may have lost the
+    // realtime side effect after the accepted+intent transaction committed.
+    await this.realtime.emitUser(accepted.invite.sender_user_id, 'multiplayer.invite.accepted', {
+      invite_id: accepted.invite.id, session_id: accepted.invite.session_id,
+    });
+    return {
+      invite_id: accepted.invite.id,
+      status: accepted.invite.status,
+      join_intent: { intent_id: intentId, expires_in: Math.max(0, Math.ceil((accepted.intent.expires_at.getTime() - Date.now()) / 1000)) },
+    };
+  }
+
+  /**
+   * Finds or renews the single durable Join Intent for an accepted Invite.
+   * A consumed result is immutable; only an absent or expired, unconsumed row
+   * may be issued. Call with the Invite row already locked.
+   */
+  private async ensureAcceptedInviteJoinIntent(
+    manager: EntityManager,
+    invite: MultiplayerInvite,
+    userId: number,
+  ): Promise<MultiplayerJoinIntent> {
+    // The Invite lock serializes accept/retry calls for this ID. Avoid a
+    // pessimistic gap lock when no child exists; it would make simultaneous
+    // accepts for different invites to the same Session prone to insert deadlocks.
+    const visibleIntent = await manager.findOneBy(MultiplayerJoinIntent, { invite_id: invite.id });
+    let intent = visibleIntent
+      ? await manager.createQueryBuilder(MultiplayerJoinIntent, 'join_intent')
+        .setLock('pessimistic_write')
+        .where('join_intent.intent_hash = :intentHash', { intentHash: visibleIntent.intent_hash })
+        .getOne()
+      : null;
+    if (visibleIntent && !intent) fail(410, 'INVITE_ALREADY_ACCEPTED');
+    if (intent && (intent.user_id !== userId || intent.session_id !== invite.session_id || intent.invite_id !== invite.id)) {
+      fail(410, 'INVITE_ALREADY_ACCEPTED');
+    }
+    const now = new Date();
+    if (intent && (intent.consumed_at || intent.expires_at.getTime() > now.getTime())) return intent;
+
+    // Keep the consume lock suffix order JoinIntent -> Session. Pending accepts
+    // have no existing JoinIntent row, while consume cannot see the new row
+    // until this transaction commits.
+    const session = await manager.findOne(MultiplayerSession, {
+      where: { id: invite.session_id }, lock: { mode: 'pessimistic_write' },
+    });
+    if (!session || session.status !== 'active' || session.expires_at.getTime() <= now.getTime()) fail(404, 'SESSION_CLOSED');
+
+    const issuedAt = new Date(Math.floor(now.getTime() / 1000) * 1000);
+    const expiresAt = new Date(issuedAt.getTime() + JOIN_INTENT_TTL_SECONDS * 1000);
+    const candidate = intent || manager.create(MultiplayerJoinIntent, {
+      intent_hash: '', session_id: invite.session_id, user_id: userId, invite_id: invite.id,
+      allow_join_policy_bypass: true, issued_at: issuedAt, expires_at: expiresAt,
+      consumed_client_id: null, consumed_peer_id: null, consumed_at: null, recovery_expires_at: null,
+    });
+    candidate.allow_join_policy_bypass = true;
+    candidate.issued_at = issuedAt;
+    candidate.expires_at = expiresAt;
+    const intentId = this.acceptedInviteJoinIntentId(candidate);
+    const nextHash = sha256(intentId);
+
+    if (!intent) {
+      candidate.intent_hash = nextHash;
+      intent = await manager.save(MultiplayerJoinIntent, candidate);
+      await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
+        actor_user_id: userId, action: 'join_intent.created', target_type: 'session', target_id: invite.session_id,
+        details: { source: 'invite', invite_id: invite.id },
+      }));
+      return intent;
+    }
+
+    const previousHash = intent.intent_hash;
+    const rotated = await manager.createQueryBuilder()
+      .update(MultiplayerJoinIntent)
+      .set({
+        intent_hash: nextHash,
+        allow_join_policy_bypass: true,
+        issued_at: issuedAt,
+        expires_at: expiresAt,
+        consumed_client_id: null,
+        consumed_peer_id: null,
+        consumed_at: null,
+        recovery_expires_at: null,
+      })
+      .where('intent_hash = :previousHash AND invite_id = :inviteId AND consumed_at IS NULL', {
+        previousHash, inviteId: invite.id,
+      })
+      .execute();
+    if (!rotated.affected) fail(410, 'INVITE_ALREADY_ACCEPTED');
+    intent.intent_hash = nextHash;
+    intent.allow_join_policy_bypass = true;
+    intent.issued_at = issuedAt;
+    intent.expires_at = expiresAt;
+    intent.consumed_client_id = null;
+    intent.consumed_peer_id = null;
+    intent.consumed_at = null;
+    intent.recovery_expires_at = null;
+    await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
+      actor_user_id: userId, action: 'join_intent.renewed', target_type: 'session', target_id: invite.session_id,
+      details: { source: 'invite', invite_id: invite.id },
+    }));
+    return intent;
   }
 
   async declineInvite(userId: number, inviteId: string) {
@@ -616,7 +807,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     return { status: invite.status };
   }
 
-  async createJoinRequest(requesterId: number, sessionId: string) {
+  async createJoinRequest(requesterId: number, sessionId: string, requesterClientId = 'forum_web') {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireEnabled('multiplayer_invites_v1');
     const session = await this.findActiveSession(sessionId);
@@ -626,6 +817,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     if (existing && existing.expires_at.getTime() > Date.now()) return existing;
     const row = await this.joinRequests.save(this.joinRequests.create({
       id: opaqueId('jrq'), session_id: sessionId, requester_user_id: requesterId, target_user_id: session.owner_user_id,
+      requester_client_id: String(requesterClientId || 'forum_web').slice(0, 128),
       status: 'pending', expires_at: new Date(Date.now() + JOIN_REQUEST_TTL_MS),
     }));
     await this.notifications.create({ user_id: session.owner_user_id, type: 'multiplayer_join_request', actor_id: requesterId,
@@ -637,17 +829,47 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   async approveJoinRequest(ownerId: number, requestId: string) {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireEnabled('multiplayer_invites_v1');
-    const row = await this.joinRequests.findOneBy({ id: requestId, target_user_id: ownerId, status: 'pending' });
+    const current = await this.joinRequests.findOneBy({ id: requestId, target_user_id: ownerId });
+    if (!current || !['pending', 'approved'].includes(current.status)) fail(410, 'JOIN_REQUEST_EXPIRED');
+    if (current.status === 'pending') {
+      if (current.expires_at.getTime() <= Date.now()) {
+        await this.joinRequests.update({ id: current.id, target_user_id: ownerId, status: 'pending' }, { status: 'expired' });
+        fail(410, 'JOIN_REQUEST_EXPIRED');
+      }
+      const session = await this.findActiveSession(current.session_id);
+      const denial = await this.sessionPolicy.joinDenialCode(current.requester_user_id, session, { viaInviteOrApproval: true });
+      if (denial) this.failPolicy(denial);
+    }
+
+    const row = await this.dataSource.transaction(async (manager) => {
+      const locked = await manager.createQueryBuilder(MultiplayerJoinRequest, 'join_request')
+        .setLock('pessimistic_write')
+        .where('join_request.id = :requestId AND join_request.target_user_id = :ownerId', { requestId, ownerId })
+        .getOne();
+      if (!locked || !['pending', 'approved'].includes(locked.status)) fail(410, 'JOIN_REQUEST_EXPIRED');
+      if (locked.status === 'approved') {
+        if (!locked.join_intent_expires_at || locked.join_intent_expires_at.getTime() <= Date.now()) fail(410, 'JOIN_REQUEST_EXPIRED');
+        return locked;
+      }
+      // These timestamps participate in the deterministic intent HMAC. MySQL
+      // DATETIME has second precision here, so normalize before persisting.
+      const now = new Date(Math.floor(Date.now() / 1000) * 1000);
+      if (locked.expires_at.getTime() <= now.getTime()) {
+        locked.status = 'expired';
+        await manager.save(MultiplayerJoinRequest, locked);
+        return null;
+      }
+      locked.status = 'approved';
+      locked.approved_at = now;
+      locked.join_intent_expires_at = new Date(now.getTime() + APPROVED_JOIN_INTENT_TTL_MS);
+      locked.join_intent_hash = sha256(this.approvedJoinIntentId(locked));
+      locked.realtime_acknowledged_at = null;
+      locked.realtime_last_published_at = null;
+      return manager.save(MultiplayerJoinRequest, locked);
+    });
     if (!row) fail(410, 'JOIN_REQUEST_EXPIRED');
-    if (row.expires_at.getTime() <= Date.now()) { row.status = 'expired'; await this.joinRequests.save(row); fail(410, 'JOIN_REQUEST_EXPIRED'); }
-    const session = await this.findActiveSession(row.session_id);
-    const denial = await this.sessionPolicy.joinDenialCode(row.requester_user_id, session, { viaInviteOrApproval: true });
-    if (denial) this.failPolicy(denial);
-    row.status = 'approved';
-    await this.joinRequests.save(row);
-    const intent = await this.createJoinIntent(row.requester_user_id, row.session_id, undefined, true);
-    await this.realtime.emitUser(row.requester_user_id, 'multiplayer.join_request.approved', { join_request_id: row.id, session_id: row.session_id });
-    return { status: row.status, join_intent: intent };
+    await this.publishPendingJoinApprovals(row.requester_user_id, row.requester_client_id, true);
+    return { status: row.status, join_intent: { intent_id: this.approvedJoinIntentId(row), expires_in: Math.max(0, Math.ceil((row.join_intent_expires_at!.getTime() - Date.now()) / 1000)) } };
   }
 
   async rejectJoinRequest(ownerId: number, requestId: string) {
@@ -670,14 +892,38 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     );
     if (joinCode && !codeAuthorized) fail(403, 'SESSION_PERMISSION_DENIED');
     await this.assertCanJoin(userId, session, allowApproved, codeAuthorized);
+    this.joinRecoveryKey('approved-resume');
     const intentId = opaqueId('jnt');
-    const value = `${userId}:${JSON.stringify({ user_id: userId, session_id: sessionId, created_at: Date.now(), approved_join: true })}`;
-    await this.redis.set(`multiplayer:join-intent:${intentId}`, value, JOIN_INTENT_TTL_SECONDS);
-    await this.auditEvent(userId, 'join_intent.created', 'session', sessionId, {});
+    const issuedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
+    const intent = this.joinIntents.create({
+      intent_hash: sha256(intentId), session_id: sessionId, user_id: userId, invite_id: null,
+      // The issuance path has already checked visibility/join policy; keep
+      // the previous consume behavior, which treated every issued Intent as
+      // authorization after this point.
+      allow_join_policy_bypass: true,
+      issued_at: issuedAt, expires_at: new Date(issuedAt.getTime() + JOIN_INTENT_TTL_SECONDS * 1000),
+      consumed_client_id: null, consumed_peer_id: null, consumed_at: null, recovery_expires_at: null,
+    });
+    await this.dataSource.transaction(async (manager) => {
+      await manager.save(MultiplayerJoinIntent, intent);
+      await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
+        actor_user_id: userId, action: 'join_intent.created', target_type: 'session', target_id: sessionId,
+        details: { source: 'direct' },
+      }));
+    });
     return { intent_id: intentId, expires_in: JOIN_INTENT_TTL_SECONDS };
   }
 
   async consumeJoinIntent(userId: number, clientId: string, intentId: string, capabilities?: Record<string, unknown>) {
+    const intentHash = sha256(intentId);
+    const approvedRequest = await this.joinRequests.findOneBy({ join_intent_hash: intentHash });
+    if (approvedRequest) return this.consumeApprovedJoinIntent(userId, clientId, intentId, approvedRequest.id, capabilities);
+
+    const durableIntent = await this.joinIntents.findOneBy({ intent_hash: intentHash });
+    if (durableIntent) return this.consumeDurableJoinIntent(userId, clientId, intentId, durableIntent, capabilities);
+
+    // A rolling deployment may still receive a 60-second intent issued by the
+    // old process before the durable table was introduced.
     const key = `multiplayer:join-intent:${intentId}`;
     const current = await this.redis.get(key);
     if (!current) fail(410, 'JOIN_INTENT_EXPIRED');
@@ -691,12 +937,355 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     return this.joinSession(userId, clientId, payload.session_id, { capabilities }, payload.approved_join === true);
   }
 
+  private async consumeDurableJoinIntent(
+    userId: number,
+    clientId: string,
+    intentId: string,
+    current: MultiplayerJoinIntent,
+    capabilities?: Record<string, unknown>,
+  ) {
+    await this.requireEnabled('multiplayer_sessions_v1');
+    if (current.user_id !== userId) fail(403, 'JOIN_INTENT_INVALID');
+
+    let policyError: unknown = null;
+    if (!current.consumed_at) {
+      try {
+        const session = await this.findActiveSession(current.session_id);
+        await this.assertCanJoin(userId, session, current.allow_join_policy_bypass);
+      } catch (error) {
+        policyError = error;
+      }
+    }
+
+    // Fail closed before committing the one-time consume if the stable key is
+    // unavailable; otherwise a Peer could be created without a recoverable token.
+    this.joinRecoveryKey('approved-resume');
+    const result = await this.dataSource.transaction(async (manager) => {
+      const locked = await manager.createQueryBuilder(MultiplayerJoinIntent, 'join_intent')
+        .setLock('pessimistic_write')
+        .where('join_intent.intent_hash = :intentHash', { intentHash: sha256(intentId) })
+        .getOne();
+      if (!locked) fail(410, 'JOIN_INTENT_EXPIRED');
+      if (locked.user_id !== userId) fail(403, 'JOIN_INTENT_INVALID');
+      const now = new Date();
+
+      if (locked.consumed_at) {
+        if (!locked.recovery_expires_at || locked.recovery_expires_at.getTime() <= now.getTime()
+          || !locked.consumed_peer_id) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        if (locked.consumed_client_id !== clientId) fail(403, 'JOIN_INTENT_CLIENT_MISMATCH');
+        const peer = await manager.findOne(MultiplayerPeer, {
+          where: { id: locked.consumed_peer_id, session_id: locked.session_id, user_id, client_id },
+        });
+        if (!peer || !['active', 'disconnected'].includes(peer.status)) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        const session = await manager.findOneBy(MultiplayerSession, { id: locked.session_id });
+        if (!session || session.status === 'closed' || session.expires_at.getTime() <= now.getTime()
+          || (session.status === 'closing' && (!session.close_after || session.close_after.getTime() <= now.getTime()))) {
+          fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        }
+        const stableResumeToken = this.approvedResumeToken(intentId, userId, clientId, peer.id);
+        const token = await manager.findOne(MultiplayerPeerResumeToken, {
+          where: { peer_id: peer.id, token_hash: sha256(stableResumeToken) },
+        });
+        if (!token || token.expires_at.getTime() <= now.getTime()) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        return { peer, resumeToken: stableResumeToken, sessionOwnerUserId: session.owner_user_id };
+      }
+
+      if (locked.expires_at.getTime() <= now.getTime()) fail(410, 'JOIN_INTENT_EXPIRED');
+      if (policyError) throw policyError;
+      const session = await manager.findOne(MultiplayerSession, {
+        where: { id: locked.session_id }, lock: { mode: 'pessimistic_write' },
+      });
+      if (!session || session.status !== 'active' || session.expires_at.getTime() <= now.getTime()) fail(404, 'SESSION_CLOSED');
+      const existing = await manager.findOne(MultiplayerPeer, {
+        where: { session_id: session.id, user_id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) },
+      });
+      if (existing) fail(400, 'SESSION_NOT_JOINABLE');
+      const count = await manager.count(MultiplayerPeer, {
+        where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) },
+      });
+      if (count >= session.max_players) fail(409, 'SESSION_FULL');
+
+      const peerId = opaqueId('peer');
+      const tokenValue = this.approvedResumeToken(intentId, userId, clientId, peerId);
+      const peer = manager.create(MultiplayerPeer, {
+        id: peerId, session_id: session.id, user_id: userId, client_id: clientId,
+        role: 'member', status: 'active', capabilities: capabilities || null, last_seen_at: now,
+      });
+      await manager.save(MultiplayerPeer, peer);
+      await manager.save(MultiplayerPeerResumeToken, manager.create(MultiplayerPeerResumeToken, {
+        peer_id: peerId, token_hash: sha256(tokenValue), expires_at: session.expires_at, consumed_at: null,
+      }));
+      locked.consumed_client_id = clientId;
+      locked.consumed_peer_id = peerId;
+      locked.consumed_at = now;
+      locked.recovery_expires_at = new Date(now.getTime() + APPROVED_JOIN_RESULT_RECOVERY_MS);
+      await manager.save(MultiplayerJoinIntent, locked);
+      await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
+        actor_user_id: userId, action: 'peer.joined', target_type: 'session', target_id: session.id,
+        details: { peer_id: peerId, join_intent_hash: locked.intent_hash },
+      }));
+      return { peer, resumeToken: tokenValue, sessionOwnerUserId: session.owner_user_id };
+    });
+
+    // Match Peer state while holding the same lock as leave/cleanup. A competing
+    // leave can win after the DB transaction; never recreate cache for a Peer it left.
+    const repairedPeer = await this.withRelayLock(`multiplayer:relay:peer-lock:${result.peer.id}`, async () => {
+      const peer = await this.peers.findOneBy({ id: result.peer.id, session_id: result.peer.session_id, user_id });
+      if (!peer || !['active', 'disconnected'].includes(peer.status)) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+      const refreshedAt = new Date();
+      const activated = await this.peers.update({
+        id: peer.id, session_id: peer.session_id, user_id, status: In(['active', 'disconnected']),
+      }, { status: 'active', last_seen_at: refreshedAt });
+      if (!activated.affected) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+      peer.status = 'active';
+      peer.last_seen_at = refreshedAt;
+      await this.redis.del(`multiplayer:peer-cleanup:${peer.id}`);
+      await this.redis.set(`multiplayer:peer:${peer.id}`, JSON.stringify({
+        peer_id: peer.id, session_id: peer.session_id, user_id, client_id: peer.client_id,
+      }), PRESENCE_TTL_SECONDS);
+      await this.clearCandidates(peer.session_id, peer.id);
+      await this.realtime.emitSession(peer.session_id, 'peer.joined', {
+        session_id: peer.session_id, peer_id: peer.id, user_id,
+      });
+      if (result.sessionOwnerUserId) {
+        await this.realtime.emitUser(result.sessionOwnerUserId, 'session.updated', {
+          session_id: peer.session_id, status: 'active',
+        });
+      }
+      return peer;
+    });
+    if (!repairedPeer) fail(429, 'RATE_LIMITED');
+    return { peer: this.toPublicPeer(repairedPeer), resume_token: result.resumeToken };
+  }
+
+  /**
+   * Re-emits pending approvals from the same row that commits status=approved.
+   * The row is the durable outbox: a failed Redis append only delays another
+   * attempt and can never lose an approval across a process restart.
+   */
+  async publishPendingJoinApprovals(userId: number, clientId: string, force = false): Promise<void> {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - APPROVED_JOIN_EVENT_RETRY_MS);
+    const rows = await this.joinRequests.createQueryBuilder('join_request')
+      .where('join_request.requester_user_id = :userId', { userId })
+      .andWhere('join_request.requester_client_id = :clientId', { clientId })
+      .andWhere("join_request.status = 'approved'")
+      .andWhere('join_request.realtime_acknowledged_at IS NULL')
+      .andWhere('((join_request.consumed_peer_id IS NULL AND join_request.join_intent_expires_at > :now) OR (join_request.consumed_peer_id IS NOT NULL AND join_request.recovery_expires_at > :now))', { now })
+      // Filter retry throttling before take(50), so recently published old rows
+      // cannot permanently occupy the page and starve later approvals.
+      .andWhere(force ? '1 = 1' : '(join_request.realtime_last_published_at IS NULL OR join_request.realtime_last_published_at <= :cutoff)', { cutoff })
+      // MySQL sorts NULL first for ASC: unsent and least-recently-sent records
+      // move ahead of the previous page after their publish lease is updated.
+      // force skips only the cooldown, not the 50-row batch limit or this rotation.
+      .orderBy('join_request.realtime_last_published_at', 'ASC')
+      .addOrderBy('join_request.approved_at', 'ASC')
+      .take(50)
+      .getMany();
+
+    for (const row of rows) {
+      if (!row.join_intent_hash || !row.join_intent_expires_at) continue;
+      if (!force && row.realtime_last_published_at && row.realtime_last_published_at.getTime() > cutoff.getTime()) continue;
+      const update = await this.joinRequests.createQueryBuilder()
+        .update(MultiplayerJoinRequest)
+        .set({ realtime_last_published_at: now })
+        .where('id = :id AND realtime_acknowledged_at IS NULL', { id: row.id })
+        .andWhere('((consumed_peer_id IS NULL AND join_intent_expires_at > :now) OR (consumed_peer_id IS NOT NULL AND recovery_expires_at > :now))', { now })
+        .andWhere(force ? '1 = 1' : '(realtime_last_published_at IS NULL OR realtime_last_published_at <= :cutoff)', { cutoff })
+        .execute();
+      if (!update.affected) continue;
+      await this.realtime.emitUser(userId, 'multiplayer.join_request.approved', {
+        join_request_id: row.id,
+        session_id: row.session_id,
+        intent_id: this.approvedJoinIntentId(row),
+      });
+    }
+  }
+
+  async acknowledgeJoinApproval(userId: number, clientId: string, requestId: string): Promise<void> {
+    await this.joinRequests.createQueryBuilder()
+      .update(MultiplayerJoinRequest)
+      .set({ realtime_acknowledged_at: new Date() })
+      .where('id = :requestId AND requester_user_id = :userId AND requester_client_id = :clientId', { requestId, userId, clientId })
+      .andWhere("status = 'approved' AND realtime_acknowledged_at IS NULL")
+      .execute();
+  }
+
+  private joinRecoveryKey(purpose: 'approved-intent' | 'approved-resume' | 'invite-intent'): Buffer {
+    const source = this.config.get<string>('multiplayer.relayCredentialSecret')
+      || this.config.get<string>('mindauth.nativeExchangeSecret')
+      || (process.env.NODE_ENV === 'production' ? '' : 'development-only-multiplayer-join-recovery-secret');
+    if (!source || source.length < 32) fail(503, 'JOIN_INTENT_RECOVERY_UNAVAILABLE');
+    return createHmac('sha256', source).update(`mindfourm/multiplayer/${purpose}/v1`).digest();
+  }
+
+  private acceptedInviteJoinIntentId(intent: Pick<MultiplayerJoinIntent,
+    'invite_id' | 'user_id' | 'session_id' | 'issued_at' | 'expires_at'>): string {
+    if (!intent.invite_id) fail(410, 'INVITE_ALREADY_ACCEPTED');
+    const payload = [intent.invite_id, intent.user_id, intent.session_id,
+      intent.issued_at.getTime(), intent.expires_at.getTime()].join('\0');
+    return `jnt_${createHmac('sha256', this.joinRecoveryKey('invite-intent')).update(payload).digest().subarray(0, 24).toString('base64url')}`;
+  }
+
+  private approvedJoinIntentId(request: MultiplayerJoinRequest): string {
+    if (!request.approved_at || !request.join_intent_expires_at) fail(410, 'JOIN_INTENT_EXPIRED');
+    const payload = [request.id, request.requester_user_id, request.requester_client_id,
+      request.session_id, request.approved_at.getTime(), request.join_intent_expires_at.getTime()].join('\0');
+    return `jnt_${createHmac('sha256', this.joinRecoveryKey('approved-intent')).update(payload).digest().subarray(0, 24).toString('base64url')}`;
+  }
+
+  private approvedResumeToken(intentId: string, userId: number, clientId: string, peerId: string): string {
+    return createHmac('sha256', this.joinRecoveryKey('approved-resume'))
+      .update([intentId, userId, clientId, peerId].join('\0')).digest('base64url');
+  }
+
+  private async consumeApprovedJoinIntent(
+    userId: number,
+    clientId: string,
+    intentId: string,
+    requestId: string,
+    capabilities?: Record<string, unknown>,
+  ) {
+    await this.requireEnabled('multiplayer_sessions_v1');
+    const current = await this.joinRequests.findOneBy({ id: requestId });
+    if (!current || current.join_intent_hash !== sha256(intentId)) fail(410, 'JOIN_INTENT_EXPIRED');
+    if (current.requester_user_id !== userId) fail(403, 'JOIN_INTENT_INVALID');
+    if (current.requester_client_id !== clientId) fail(403, 'JOIN_INTENT_CLIENT_MISMATCH');
+
+    let policyError: unknown = null;
+    if (!current.consumed_peer_id) {
+      try {
+        const session = await this.findActiveSession(current.session_id);
+        await this.assertCanJoin(userId, session, true);
+      } catch (error) {
+        policyError = error;
+      }
+    }
+
+    const result = await this.dataSource.transaction(async (manager) => {
+      const locked = await manager.createQueryBuilder(MultiplayerJoinRequest, 'join_request')
+        .setLock('pessimistic_write')
+        .where('join_request.id = :requestId AND join_request.join_intent_hash = :intentHash', {
+          requestId, intentHash: sha256(intentId),
+        })
+        .getOne();
+      if (!locked || locked.status !== 'approved') fail(410, 'JOIN_INTENT_EXPIRED');
+      if (locked.requester_user_id !== userId) fail(403, 'JOIN_INTENT_INVALID');
+      if (locked.requester_client_id !== clientId) fail(403, 'JOIN_INTENT_CLIENT_MISMATCH');
+      const now = new Date();
+
+      if (locked.consumed_peer_id) {
+        if (!locked.recovery_expires_at || locked.recovery_expires_at.getTime() <= now.getTime()) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        if (locked.consumed_client_id !== clientId) fail(403, 'JOIN_INTENT_CLIENT_MISMATCH');
+        const peer = await manager.findOne(MultiplayerPeer, {
+          where: { id: locked.consumed_peer_id, session_id: locked.session_id, user_id, client_id },
+        });
+        if (!peer || !['active', 'disconnected'].includes(peer.status)) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        const session = await manager.findOneBy(MultiplayerSession, { id: locked.session_id });
+        if (!session || session.status === 'closed' || session.expires_at.getTime() <= now.getTime()
+          || (session.status === 'closing' && (!session.close_after || session.close_after.getTime() <= now.getTime()))) {
+          fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        }
+        const resumeToken = this.approvedResumeToken(intentId, userId, clientId, peer.id);
+        const token = await manager.findOne(MultiplayerPeerResumeToken, {
+          where: { peer_id: peer.id, token_hash: sha256(resumeToken), consumed_at: IsNull() },
+        });
+        if (!token || token.expires_at.getTime() <= now.getTime()) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        await manager.update(MultiplayerPeer, { id: peer.id, status: In(['active', 'disconnected']) }, {
+          status: 'active', last_seen_at: now,
+        });
+        peer.status = 'active';
+        peer.last_seen_at = now;
+        return { peer, resumeToken, sessionOwnerUserId: session.owner_user_id };
+      }
+
+      if (!locked.join_intent_expires_at || locked.join_intent_expires_at.getTime() <= now.getTime()) fail(410, 'JOIN_INTENT_EXPIRED');
+      if (policyError) throw policyError;
+      const session = await manager.findOne(MultiplayerSession, {
+        where: { id: locked.session_id }, lock: { mode: 'pessimistic_write' },
+      });
+      if (!session || session.status !== 'active' || session.expires_at.getTime() <= now.getTime()) fail(404, 'SESSION_CLOSED');
+      const existing = await manager.findOne(MultiplayerPeer, {
+        where: { session_id: session.id, user_id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) },
+      });
+      if (existing) fail(400, 'SESSION_NOT_JOINABLE');
+      const count = await manager.count(MultiplayerPeer, {
+        where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) },
+      });
+      if (count >= session.max_players) fail(409, 'SESSION_FULL');
+
+      const peerId = opaqueId('peer');
+      const resumeToken = this.approvedResumeToken(intentId, userId, clientId, peerId);
+      const peer = manager.create(MultiplayerPeer, {
+        id: peerId, session_id: session.id, user_id: userId, client_id: clientId,
+        role: 'member', status: 'active', capabilities: capabilities || null, last_seen_at: now,
+      });
+      await manager.save(MultiplayerPeer, peer);
+      await manager.save(MultiplayerPeerResumeToken, manager.create(MultiplayerPeerResumeToken, {
+        peer_id: peerId, token_hash: sha256(resumeToken), expires_at: session.expires_at, consumed_at: null,
+      }));
+      locked.consumed_peer_id = peerId;
+      locked.consumed_client_id = clientId;
+      locked.consumed_at = now;
+      locked.recovery_expires_at = new Date(now.getTime() + APPROVED_JOIN_RESULT_RECOVERY_MS);
+      await manager.save(MultiplayerJoinRequest, locked);
+      await manager.save(MultiplayerAuditLog, manager.create(MultiplayerAuditLog, {
+        actor_user_id: userId, action: 'peer.joined', target_type: 'session', target_id: session.id,
+        details: { peer_id: peerId, join_request_id: locked.id },
+      }));
+      return { peer, resumeToken, sessionOwnerUserId: session.owner_user_id };
+    });
+
+    // Repair volatile presence/event state on every retry. These writes occur
+    // after the durable peer/token/result transaction and are safe to repeat.
+    const restoredPeer = await this.withRelayLock(`multiplayer:relay:peer-lock:${result.peer.id}`, async () => {
+      const currentPeer = await this.peers.findOneBy({
+        id: result.peer.id, session_id: result.peer.session_id, user_id: userId, client_id: clientId,
+      });
+      if (!currentPeer || !['active', 'disconnected'].includes(currentPeer.status)) {
+        fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+      }
+      const currentSession = await this.sessions.findOneBy({ id: currentPeer.session_id });
+      const lockNow = new Date();
+      if (!currentSession || currentSession.status === 'closed' || currentSession.expires_at.getTime() <= lockNow.getTime()
+        || (currentSession.status === 'closing' && (!currentSession.close_after || currentSession.close_after.getTime() <= lockNow.getTime()))) {
+        fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+      }
+      if (currentPeer.status === 'disconnected') {
+        const activated = await this.peers.update({ id: currentPeer.id, status: 'disconnected' }, {
+          status: 'active', last_seen_at: lockNow,
+        });
+        if (!activated.affected) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+        currentPeer.status = 'active';
+        currentPeer.last_seen_at = lockNow;
+      }
+      await this.redis.del(`multiplayer:peer-cleanup:${result.peer.id}`);
+      await this.redis.set(`multiplayer:peer:${result.peer.id}`, JSON.stringify({
+        peer_id: result.peer.id, session_id: result.peer.session_id, user_id: userId, client_id: clientId,
+      }), PRESENCE_TTL_SECONDS);
+      await this.clearCandidates(result.peer.session_id, result.peer.id);
+      return currentPeer;
+    });
+    if (!restoredPeer) fail(429, 'RATE_LIMITED');
+    await this.realtime.emitSession(result.peer.session_id, 'peer.joined', {
+      session_id: result.peer.session_id, peer_id: result.peer.id, user_id: userId,
+    });
+    if (result.sessionOwnerUserId) {
+      await this.realtime.emitUser(result.sessionOwnerUserId, 'session.updated', {
+        session_id: result.peer.session_id, status: 'active',
+      });
+    }
+    const peer = await this.peers.findOneByOrFail({ id: restoredPeer.id });
+    if (!['active', 'disconnected'].includes(peer.status)) fail(410, 'JOIN_INTENT_RECOVERY_EXPIRED');
+    return { peer: this.toPublicPeer(peer), resume_token: result.resumeToken };
+  }
+
   async validateActivitySession(userId: number, sessionId: string) {
     await this.requireEnabled('multiplayer_sessions_v1');
     const session = await this.findActiveSession(sessionId);
     const peer = await this.peers.findOne({ where: { session_id: sessionId, user_id: userId, status: 'active' } });
     if (!peer) fail(403, 'SESSION_PERMISSION_DENIED');
-    const currentPlayers = await this.peers.count({ where: { session_id: sessionId, status: 'active' } });
+    const currentPlayers = await this.peers.count({ where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } });
     return { session, peer, current_players: currentPlayers };
   }
 
@@ -735,11 +1324,11 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     }) : [];
     const memberKeys = new Set([...participantPeers, ...inviteParticipantPeers].map((peer) => `${peer.session_id}:${peer.user_id}`));
     const allSessionIds = [...new Set([...sessionIds, ...inviteSessions.map((session) => session.id)])];
-    const activePeers = allSessionIds.length ? await this.peers.find({
-      where: { session_id: In(allSessionIds), status: 'active' }, select: ['session_id'],
+    const occupyingPeers = allSessionIds.length ? await this.peers.find({
+      where: { session_id: In(allSessionIds), status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) }, select: ['session_id'],
     }) : [];
-    const activeCounts = new Map<string, number>();
-    for (const peer of activePeers) activeCounts.set(peer.session_id, (activeCounts.get(peer.session_id) || 0) + 1);
+    const occupyingCounts = new Map<string, number>();
+    for (const peer of occupyingPeers) occupyingCounts.set(peer.session_id, (occupyingCounts.get(peer.session_id) || 0) + 1);
     const ownerIds = [...new Set(sessions.map((session) => session.owner_user_id))];
     const privacyTargets = [...new Set([...subjectIds, ...ownerIds])];
     const [friends, blocked, canJoinMap, canRequest, canInvite] = await Promise.all([
@@ -750,7 +1339,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       this.socialPolicy.canPerformMany(viewerId, subjectIds, 'allow_invites'),
     ]);
     const viewerSession = inviteSessions
-      .filter((session) => (activeCounts.get(session.id) || 0) < session.max_players)
+      .filter((session) => (occupyingCounts.get(session.id) || 0) < session.max_players)
       .sort((a, b) => Number(b.owner_user_id === viewerId) - Number(a.owner_user_id === viewerId))[0];
     for (const item of targets) {
       const targetAlreadyInInviteSession = !!viewerSession && memberKeys.has(`${viewerSession.id}:${item.user_id}`);
@@ -769,7 +1358,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
       if (blocked.get(item.user_id) || blocked.get(session.owner_user_id)) continue;
       const friend = friends.get(session.owner_user_id) === true;
       const visibleScope = session.visibility === 'friends' && friend;
-      const hasSpace = (activeCounts.get(session.id) || 0) < session.max_players;
+      const hasSpace = (occupyingCounts.get(session.id) || 0) < session.max_players;
       const canJoin = canJoinMap.get(session.owner_user_id) === true && hasSpace && visibleScope && (
         session.join_policy === 'open' || (session.join_policy === 'friends' && friend)
       );
@@ -1121,10 +1710,12 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     session.status = 'closed';
     session.close_after = null;
     await this.sessions.save(session);
-    const activePeers = await this.peers.find({ where: { session_id: session.id, status: In(['joining', 'active', 'disconnected']) } });
-    for (const peer of activePeers) {
-      peer.status = 'expired';
-      await this.peers.save(peer);
+    const occupyingPeers = await this.peers.find({ where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } });
+    for (const peer of occupyingPeers) {
+      const expired = await this.peers.update({
+        id: peer.id, session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES),
+      }, { status: 'expired' });
+      if (!expired.affected) continue;
       await this.redis.del(`multiplayer:peer:${peer.id}`);
       await this.clearCandidates(session.id, peer.id);
     }
@@ -1142,6 +1733,11 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
 
   private async cleanupExpiredSessions(): Promise<void> {
     try {
+      await this.cleanupPeerLifecycles(new Date());
+    } catch (error) {
+      this.logger.warn(`Multiplayer peer expiry sweep failed: ${(error as Error).message}`);
+    }
+    try {
       const now = new Date();
       const rows = await this.sessions.createQueryBuilder('session')
         .where("session.status = 'closing' AND session.close_after <= :now", { now })
@@ -1156,6 +1752,10 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
         .where("status = 'pending' AND expires_at <= :now", { now: new Date() }).execute();
       await this.joinRequests.createQueryBuilder().update().set({ status: 'expired' })
         .where("status = 'pending' AND expires_at <= :now", { now: new Date() }).execute();
+      await this.joinIntents.createQueryBuilder().delete()
+        .where('invite_id IS NULL')
+        .andWhere('((consumed_at IS NULL AND expires_at <= :now) OR (consumed_at IS NOT NULL AND recovery_expires_at <= :now))', { now: new Date() })
+        .execute();
       const expiredAllocations = await this.relayAllocations.find({ where: {
         status: In(['active', 'connected']), expires_at: LessThanOrEqual(new Date()),
       } });
@@ -1163,6 +1763,131 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.warn(`Multiplayer TTL sweep failed: ${(error as Error).message}`);
     }
+  }
+
+  private async cleanupPeerLifecycles(now: Date): Promise<void> {
+    const staleBefore = new Date(now.getTime() - PRESENCE_TTL_SECONDS * 1000);
+    const stalePeers = await this.peers.find({
+      where: [
+        { status: 'active', last_seen_at: LessThanOrEqual(staleBefore) },
+        { status: 'active', last_seen_at: IsNull() },
+      ],
+      order: { last_seen_at: 'ASC' },
+      take: 100,
+    });
+
+    for (const peer of stalePeers) {
+      await this.withRelayLock(`multiplayer:relay:peer-lock:${peer.id}`, async () => {
+        const currentPeer = await this.peers.findOneBy({ id: peer.id });
+        if (!currentPeer || currentPeer.status !== 'active'
+          || (currentPeer.last_seen_at && currentPeer.last_seen_at.getTime() > staleBefore.getTime())) return false;
+        const leaseStart = currentPeer.last_seen_at || staleBefore;
+        const disconnected = await this.peers.createQueryBuilder().update(MultiplayerPeer)
+          .set({ status: 'disconnected', last_seen_at: leaseStart })
+          .where('id = :id AND status = :active', { id: currentPeer.id, active: 'active' })
+          .andWhere('(last_seen_at IS NULL OR last_seen_at <= :staleBefore)', { staleBefore })
+          .execute();
+        if (!disconnected.affected) return false;
+        currentPeer.status = 'disconnected';
+        currentPeer.last_seen_at = leaseStart;
+        if (currentPeer.role === 'owner') {
+          try {
+            await this.ensureStaleOwnerSessionClosing(currentPeer, now);
+          } catch (error) {
+            this.logger.warn(`Could not close stale owner Session ${currentPeer.session_id}: ${(error as Error).message}`);
+          }
+        }
+        try {
+          await this.realtime.emitSession(currentPeer.session_id, 'peer.disconnected', {
+            session_id: currentPeer.session_id, peer_id: currentPeer.id,
+          });
+        } catch (error) {
+          this.logger.warn(`Could not emit stale Peer disconnect for ${currentPeer.id}: ${(error as Error).message}`);
+        }
+        return true;
+      }).catch((error) => {
+        this.logger.warn(`Could not disconnect stale Peer ${peer.id}: ${(error as Error).message}`);
+        return null;
+      });
+    }
+
+    const disconnectedPeers = await this.peers.find({
+      where: { status: 'disconnected' }, order: { last_seen_at: 'ASC' }, take: 100,
+    });
+    const expiredBefore = new Date(now.getTime() - (PRESENCE_TTL_SECONDS + PEER_DISCONNECT_GRACE_SECONDS) * 1000);
+    for (const peer of disconnectedPeers) {
+      try {
+        await this.withRelayLock(`multiplayer:relay:peer-lock:${peer.id}`, async () => {
+          const currentPeer = await this.peers.findOneBy({ id: peer.id });
+          if (!currentPeer || currentPeer.status !== 'disconnected') return false;
+          if (!currentPeer.last_seen_at) {
+            const leaseStart = new Date(now.getTime() - PRESENCE_TTL_SECONDS * 1000);
+            const initialized = await this.peers.update(
+              { id: currentPeer.id, status: 'disconnected', last_seen_at: IsNull() },
+              { last_seen_at: leaseStart },
+            );
+            if (!initialized.affected) return false;
+            currentPeer.last_seen_at = leaseStart;
+          }
+          await this.cleanupDisconnectedPeerResources(currentPeer);
+          if (currentPeer.role === 'owner') await this.ensureStaleOwnerSessionClosing(currentPeer, now);
+          if (currentPeer.last_seen_at!.getTime() > expiredBefore.getTime()) return true;
+          const pendingApprovalRecovery = await this.joinRequests.findOneBy({
+            consumed_peer_id: currentPeer.id,
+            realtime_acknowledged_at: IsNull(),
+            recovery_expires_at: MoreThan(now),
+          });
+          if (pendingApprovalRecovery) return true;
+          const pendingJoinIntentRecovery = await this.joinIntents.findOneBy({
+            consumed_peer_id: currentPeer.id,
+            recovery_expires_at: MoreThan(now),
+          });
+          if (pendingJoinIntentRecovery) return true;
+          const expired = await this.peers.createQueryBuilder().update(MultiplayerPeer)
+            .set({ status: 'expired' })
+            .where('id = :id AND session_id = :sessionId AND status = :disconnected', {
+              id: currentPeer.id, sessionId: currentPeer.session_id, disconnected: 'disconnected',
+            })
+            .andWhere('last_seen_at <= :expiredBefore', { expiredBefore })
+            .execute();
+          if (!expired.affected) return false;
+          await this.realtime.emitSession(currentPeer.session_id, 'peer.updated', {
+            session_id: currentPeer.session_id, peer_id: currentPeer.id, status: 'expired',
+          });
+          return true;
+        });
+      } catch (error) {
+        this.logger.warn(`Could not clean disconnected Peer ${peer.id}: ${(error as Error).message}`);
+      }
+    }
+  }
+
+  private async ensureStaleOwnerSessionClosing(peer: MultiplayerPeer, now: Date): Promise<void> {
+    const closeAfter = peer.last_seen_at
+      ? new Date(peer.last_seen_at.getTime() + (PRESENCE_TTL_SECONDS * 1000) + OWNER_GRACE_MS)
+      : new Date(now.getTime() + OWNER_GRACE_MS);
+    const updated = await this.sessions.update(
+      { id: peer.session_id, status: 'active' },
+      { status: 'closing', close_after: closeAfter },
+    );
+    if (updated.affected) {
+      try {
+        await this.realtime.emitSession(peer.session_id, 'session.updated', {
+          session_id: peer.session_id, status: 'closing', grace_seconds: OWNER_GRACE_MS / 1000,
+        });
+      } catch (error) {
+        this.logger.warn(`Could not emit stale owner Session closing for ${peer.session_id}: ${(error as Error).message}`);
+      }
+    }
+  }
+
+  private async cleanupDisconnectedPeerResources(peer: MultiplayerPeer): Promise<void> {
+    const markerKey = `multiplayer:peer-cleanup:${peer.id}`;
+    if (await this.redis.get(markerKey)) return;
+    await this.redis.del(`multiplayer:peer:${peer.id}`);
+    await this.clearCandidates(peer.session_id, peer.id);
+    await this.revokeRelayAllocationsForPeer(peer.id);
+    await this.redis.set(markerKey, 'done', PRESENCE_TTL_SECONDS + PEER_DISCONNECT_GRACE_SECONDS);
   }
 
   private async clearCandidates(sessionId: string, peerId: string): Promise<void> {
@@ -1246,7 +1971,7 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
     return {
       invite_id: invite.id, session_id: invite.session_id, sender_user_id: invite.sender_user_id,
       target_user_id: invite.target_user_id, status: invite.status, expires_at: invite.expires_at,
-      session: session ? this.toPublicSession(session, await this.peers.count({ where: { session_id: session.id, status: In(['joining', 'active', 'disconnected']) } })) : null,
+      session: session ? this.toPublicSession(session, await this.peers.count({ where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } })) : null,
     };
   }
 

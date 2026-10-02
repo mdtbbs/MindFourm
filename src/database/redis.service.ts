@@ -381,10 +381,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   /**
    * Lua script execution.
    *
-   * There is no fallback: the only script in use is the rate limiter's atomic
-   * INCR + EXPIRE, and `RateLimitGuard` already treats a failure here as "skip the
-   * check" so a Redis outage degrades rate limiting rather than blocking traffic.
-   * Emulating arbitrary Lua in process would be a much larger promise than that.
+   * There is no fallback: callers rely on Redis to run state transitions
+   * atomically (including rate limiting and MindAuth refresh recovery). Each
+   * caller handles an outage according to its contract; token rotation fails
+   * closed, while rate limiting may degrade. Do not emulate scripts in process
+   * and risk divergent state across workers.
    */
   async eval(script: string, keys: string[], args: (string | number)[]): Promise<any> {
     return this.client.eval(script, keys.length, ...keys, ...args);

@@ -39,6 +39,41 @@ const mindAuthHttp = axios.create({ timeout: MINDAUTH_TIMEOUT_MS });
 const MINDAUTH_OAUTH_CACHE_TTL_SECONDS = 30;
 
 /**
+ * Claim or reuse the one pending refresh attempt for this forum session.
+ * Keeping the old refresh token and key in the same Redis hash lets concurrent
+ * API workers safely retry the exact request after a timeout.
+ */
+const BEGIN_MINDAUTH_REFRESH_SCRIPT = `
+local currentRefreshToken = redis.call('HGET', KEYS[1], 'refreshToken')
+if currentRefreshToken ~= ARGV[1] then
+  return { 'ROTATED', redis.call('HGET', KEYS[1], 'accessToken') or '', currentRefreshToken or '' }
+end
+local pendingRefreshToken = redis.call('HGET', KEYS[1], 'mindAuthRefreshPendingToken')
+local pendingKey = redis.call('HGET', KEYS[1], 'mindAuthRefreshPendingKey')
+if pendingRefreshToken and pendingKey then
+  if pendingRefreshToken ~= ARGV[1] then return { 'CONFLICT' } end
+  return { 'READY', pendingKey }
+end
+if pendingRefreshToken or pendingKey then return { 'CONFLICT' } end
+redis.call('HSET', KEYS[1], 'mindAuthRefreshPendingToken', ARGV[1], 'mindAuthRefreshPendingKey', ARGV[2])
+return { 'READY', ARGV[2] }
+`;
+
+/** Persist the rotation and clear its pending key atomically after success. */
+const COMPLETE_MINDAUTH_REFRESH_SCRIPT = `
+local currentRefreshToken = redis.call('HGET', KEYS[1], 'refreshToken')
+local pendingRefreshToken = redis.call('HGET', KEYS[1], 'mindAuthRefreshPendingToken')
+local pendingKey = redis.call('HGET', KEYS[1], 'mindAuthRefreshPendingKey')
+if currentRefreshToken == ARGV[1] and pendingRefreshToken == ARGV[1] and pendingKey == ARGV[4] then
+  redis.call('HSET', KEYS[1], 'accessToken', ARGV[2], 'refreshToken', ARGV[3])
+  redis.call('HDEL', KEYS[1], 'mindAuthRefreshPendingToken', 'mindAuthRefreshPendingKey')
+  return 1
+end
+if currentRefreshToken == ARGV[3] and redis.call('HGET', KEYS[1], 'accessToken') == ARGV[2] then return 1 end
+return 0
+`;
+
+/**
  * Digest a session token for the audit trail.
  *
  * `session_audit.session_token` used to hold the raw 96-hex-char bearer token,
@@ -673,7 +708,7 @@ export class AuthService {
     return this.usersRepository.save(user);
   }
 
-  async refreshUserFromMindAuthWithToken(user: User, accessToken: string, refreshToken?: string, force = false): Promise<User> {
+  async refreshUserFromMindAuthWithToken(user: User, accessToken: string, refreshToken?: string, force = false, sessionKey?: string): Promise<User> {
     const cooldownKey = `mindauth:user-refresh:${user.id}`;
     if (!force && (await this.redisService.get(cooldownKey))) {
       return user;
@@ -689,7 +724,7 @@ export class AuthService {
       // Access token may be expired — try refreshing with refresh token
       if (refreshToken) {
         try {
-          const newTokens = await this.refreshAccessToken(refreshToken);
+          const newTokens = await this.refreshAccessToken(refreshToken, sessionKey);
           const mindauthUser = await this.getUserInfo(newTokens.accessToken);
           const updated = await this.syncMindAuthUserData(mindauthUser);
           return updated ?? user;
@@ -732,7 +767,7 @@ export class AuthService {
       });
     }
 
-    const mindauthUser = await this.getUserInfoForPhoneSync(accessToken, refreshToken);
+    const mindauthUser = await this.getUserInfoForPhoneSync(accessToken, refreshToken, sessionKey);
     const updated = await this.syncMindAuthUserData(mindauthUser);
     if (!updated) {
       throw new HttpException(
@@ -757,7 +792,7 @@ export class AuthService {
     return updated;
   }
 
-  private async getUserInfoForPhoneSync(accessToken: string, refreshToken?: string): Promise<{
+  private async getUserInfoForPhoneSync(accessToken: string, refreshToken?: string, sessionKey?: string): Promise<{
     id: number;
     username: string;
     email?: string | null;
@@ -777,7 +812,7 @@ export class AuthService {
       }
 
       try {
-        const newTokens = await this.refreshAccessToken(refreshToken);
+        const newTokens = await this.refreshAccessToken(refreshToken, sessionKey);
         return await this.getUserInfo(newTokens.accessToken);
       } catch {
         throw new UnauthorizedException({
@@ -791,7 +826,30 @@ export class AuthService {
   /**
    * Refresh OAuth access token using refresh token
    */
-  private async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; refreshToken?: string }> {
+  private async refreshAccessToken(refreshToken: string, sessionKey?: string): Promise<{ accessToken: string; refreshToken: string }> {
+    if (!sessionKey) {
+      throw new Error('MindAuth refresh requires the owning forum session to persist an Idempotency-Key');
+    }
+
+    const pending = await this.redisService.eval(
+      BEGIN_MINDAUTH_REFRESH_SCRIPT,
+      [sessionKey],
+      [refreshToken, crypto.randomUUID()],
+    ) as string[];
+    const pendingState = String(pending?.[0] || '');
+    if (pendingState === 'ROTATED') {
+      const accessToken = String(pending?.[1] || '');
+      const currentRefreshToken = String(pending?.[2] || '');
+      if (!accessToken || !currentRefreshToken) {
+        throw new Error('MindAuth refresh session changed without a complete replacement token pair');
+      }
+      return { accessToken, refreshToken: currentRefreshToken };
+    }
+    if (pendingState !== 'READY' || !pending?.[1]) {
+      throw new Error('MindAuth refresh already has an inconsistent pending attempt; refusing an unkeyed retry');
+    }
+    const idempotencyKey = String(pending[1]);
+
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
     const clientId = this.configService.get<string>('MINDAUTH_CLIENT_ID');
     const clientSecret = this.configService.get<string>('MINDAUTH_CLIENT_SECRET');
@@ -801,11 +859,29 @@ export class AuthService {
       refresh_token: refreshToken,
       client_id: clientId,
       client_secret: clientSecret,
-    });
+    }, { headers: { 'Idempotency-Key': idempotencyKey } });
+
+    const accessToken = response.data?.access_token;
+    const nextRefreshToken = response.data?.refresh_token;
+    if (typeof accessToken !== 'string' || !accessToken || typeof nextRefreshToken !== 'string' || !nextRefreshToken) {
+      // Keep the pending request identity. A retry with the old token and this
+      // key can recover a response even if the server already rotated it.
+      throw new Error('MindAuth refresh response did not include both tokens');
+    }
+
+    const saved = await this.redisService.eval(
+      COMPLETE_MINDAUTH_REFRESH_SCRIPT,
+      [sessionKey],
+      [refreshToken, accessToken, nextRefreshToken, idempotencyKey],
+    );
+    if (Number(saved) !== 1) {
+      // Do not clear the pending key or issue another refresh under a new key.
+      throw new Error('MindAuth refresh succeeded but its token pair could not be committed to the forum session');
+    }
 
     return {
-      accessToken: response.data.access_token,
-      refreshToken: response.data.refresh_token,
+      accessToken,
+      refreshToken: nextRefreshToken,
     };
   }
 
@@ -935,7 +1011,7 @@ export class AuthService {
     const accessToken = sessionData.accessToken;
     const refreshToken = sessionData.refreshToken;
     if (accessToken) {
-      return this.refreshUserFromMindAuthWithToken(user, accessToken, refreshToken);
+      return this.refreshUserFromMindAuthWithToken(user, accessToken, refreshToken, false, sessionKey);
     }
 
     return user;

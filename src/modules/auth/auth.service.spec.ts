@@ -78,7 +78,7 @@ describe('AuthService phone status sync', () => {
     jest.spyOn(service, 'syncMindAuthUserData').mockResolvedValue(updated as any);
 
     await expect(service.syncPhoneStatusFromSession('forum-session')).resolves.toBe(updated);
-    expect((service as any).refreshAccessToken).toHaveBeenCalledWith('refresh-token');
+    expect((service as any).refreshAccessToken).toHaveBeenCalledWith('refresh-token', 'session:forum-session');
     expect(service.getUserInfo).toHaveBeenLastCalledWith('new-access-token');
   });
 

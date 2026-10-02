@@ -62,6 +62,8 @@ import { AddResourceOriginIdentity1720000130000 } from './1720000130000-AddResou
 import { RichContentSchemaV21720000140000 } from './1720000140000-RichContentSchemaV2';
 import { MultiplayerPlatformV11720000150000 } from './1720000150000-MultiplayerPlatformV1';
 import { CloudSavesV11720000160000 } from './1720000160000-CloudSavesV1';
+import { MultiplayerJoinApprovalDurability1720000170000 } from './1720000170000-MultiplayerJoinApprovalDurability';
+import { MultiplayerJoinIntentRecovery1720000180000 } from './1720000180000-MultiplayerJoinIntentRecovery';
 
 /**
  * Migrations in run order.
@@ -135,4 +137,6 @@ export const migrations = [
   RichContentSchemaV21720000140000,
   MultiplayerPlatformV11720000150000,
   CloudSavesV11720000160000,
+  MultiplayerJoinApprovalDurability1720000170000,
+  MultiplayerJoinIntentRecovery1720000180000,
 ];

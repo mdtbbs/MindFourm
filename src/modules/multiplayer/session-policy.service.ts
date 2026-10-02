@@ -6,6 +6,7 @@ import { MultiplayerJoinRequest } from '../../entities/multiplayer-join-request.
 import { MultiplayerPeer } from '../../entities/multiplayer-peer.entity';
 import { MultiplayerSession } from '../../entities/multiplayer-session.entity';
 import { SocialPolicyService } from '../social/social-policy.service';
+import { MULTIPLAYER_CAPACITY_PEER_STATUSES } from './multiplayer.constants';
 
 export interface JoinPolicyOptions {
   viaInviteOrApproval: boolean;
@@ -34,7 +35,7 @@ export class SessionPolicyService {
     if (session.join_policy === 'friends' && !friend && !approvedPath) return 'FRIEND_REQUIRED';
     if (session.join_policy === 'invite_only' && !approvedPath) return 'SESSION_NOT_JOINABLE';
     if (session.join_policy === 'request' && !options.viaInviteOrApproval && !approvedPath) return 'JOIN_REQUEST_REQUIRED';
-    const count = await this.peers.count({ where: { session_id: session.id, status: In(['joining', 'active', 'disconnected']) } });
+    const count = await this.peers.count({ where: { session_id: session.id, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } });
     if (count >= session.max_players) return 'SESSION_FULL';
     return null;
   }
@@ -56,7 +57,7 @@ export class SessionPolicyService {
     if (await this.social.isBlockedEither(userId, session.owner_user_id)) return 'USER_BLOCKED';
     if (!(await this.social.canPerform(userId, session.owner_user_id, 'allow_join_request'))) return 'PRIVACY_DENIED';
     const existing = await this.peers.findOne({ where: {
-      session_id: session.id, user_id: userId, status: In(['joining', 'active', 'disconnected']),
+      session_id: session.id, user_id: userId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES),
     } });
     if (existing) return 'SESSION_NOT_JOINABLE';
     const pendingRequest = await this.joinRequests.findOne({ where: {
@@ -68,7 +69,7 @@ export class SessionPolicyService {
   }
 
   async capacityReached(sessionId: string, maxPlayers: number): Promise<boolean> {
-    return (await this.peers.count({ where: { session_id: sessionId, status: In(['joining', 'active', 'disconnected']) } })) >= maxPlayers;
+    return (await this.peers.count({ where: { session_id: sessionId, status: In(MULTIPLAYER_CAPACITY_PEER_STATUSES) } })) >= maxPlayers;
   }
 
   private async hasApprovedJoinPath(userId: number, sessionId: string): Promise<boolean> {

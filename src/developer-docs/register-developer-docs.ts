@@ -538,18 +538,19 @@ Content-Type: application/json
 }`, 'http')}<p>Public Client 不发送 <code>client_secret</code>。授权码五分钟有效，只能使用一次，并且绑定 client、Redirect URI 和 PKCE challenge。</p>`, 'token')}
     ${section('刷新与撤销', `${codeBlock(`POST https://auth.mdtbbs.cn/api/token
 Content-Type: application/json
+Idempotency-Key: RANDOM_UUID_PERSISTED_FOR_THIS_ATTEMPT
 
 {
   "grant_type": "refresh_token",
   "client_id": "YOUR_CLIENT_ID",
   "refresh_token": "CURRENT_REFRESH_TOKEN"
-}`, 'http')}${codeBlock(`POST https://auth.mdtbbs.cn/api/revoke
+}`, 'http')}<p>每次 refresh grant 都必须发送唯一的 <code>Idempotency-Key</code>。发送前持久保存 key；遇到超时或 5xx 时，10 分钟内用原 refresh token 和同一个 key 重试。成功后原子保存新的 refresh token 并清除待处理 key。缺少 key 会返回 <code>400 invalid_request</code>，不会消耗 refresh token；旧客户端必须升级。Access token 当前有效期约一小时。</p>${codeBlock(`POST https://auth.mdtbbs.cn/api/revoke
 Content-Type: application/json
 
 {
   "client_id": "YOUR_CLIENT_ID",
   "token": "TOKEN_TO_REVOKE"
-}`, 'http')}<p>Access token 当前有效期约一小时。Refresh token 会轮换，刷新成功后要立刻保存新的 refresh token，旧值不要继续使用。</p>`, 'refresh')}
+}`, 'http')}`, 'refresh')}
     ${section('权限范围（Scopes）', table(['Scope', '用途'], [
       [inlineCode('openid'), '稳定账号标识'],
       [inlineCode('profile'), '基本资料'],

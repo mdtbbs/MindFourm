@@ -259,8 +259,8 @@ thread/reply 读写支持 Tiptap JSON、服务端安全 HTML 与纯文本投影�
 | POST | `/api/v1/multiplayer/invites/{id}/accept`、`.../decline`、`.../revoke` | `multiplayer.write` | 接受、拒绝或撤销邀请 |
 | POST | `/api/v1/multiplayer/sessions/{id}/join-requests` | `multiplayer.write` | 请求加入需要审批的 Session |
 | POST | `/api/v1/multiplayer/join-requests/{id}/approve`、`.../reject` | `multiplayer.write` | 批准或拒绝加入请求 |
-| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建短期、一次性的 Join Intent |
-| POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | Launcher 消费 Join Intent 并加入 Session |
+| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户且不预绑定 OAuth client 的 Join Intent |
+| POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | Launcher 消费 Join Intent 并加入 Session；首次消费的同一用户/client 可在 10 分钟内恢复结果 |
 | POST | `/api/v1/multiplayer/sessions/{id}/relay` | `multiplayer.write` | 为当前 Peer 申请短期官方 Relay Credential |
 | POST | `/api/v1/realtime/tickets` | `friends.read` | 创建一次性 WebSocket ticket |
 

@@ -122,7 +122,9 @@ export class MultiplayerV1Controller {
   @MultiplayerOAuthProtected('multiplayer.write')
   @Post('sessions/:id/join-requests')
   @RateLimit({ max: 10, window: 60 })
-  requestJoin(@Param('id') id: string, @Req() request: any) { return this.multiplayer.createJoinRequest(request.user.id, id); }
+  requestJoin(@Param('id') id: string, @Req() request: any) {
+    return this.multiplayer.createJoinRequest(request.user.id, id, request.authContext?.clientId || 'forum_web');
+  }
 
   @ApiTags('加入请求')
   @MultiplayerOAuthProtected('multiplayer.write')
