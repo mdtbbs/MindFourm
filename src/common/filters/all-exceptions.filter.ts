@@ -12,6 +12,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest();
     const response = ctx.getResponse<Response>();
 
+    // Raw handlers and streams may have committed headers before an error is
+    // raised. Never try to write a second status/body to the same response.
+    if (response.headersSent) {
+      if (!response.writableEnded && !response.destroyed) response.end();
+      return;
+    }
+
     const originalUrl: string = request?.originalUrl || '';
     const requestId: string = request?.requestId || '';
     const isV1 = originalUrl.startsWith('/api/v1/');
