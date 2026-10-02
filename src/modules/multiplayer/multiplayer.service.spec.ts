@@ -464,6 +464,7 @@ describe('MultiplayerService control-plane guards', () => {
     expect(result).toMatchObject({ resumed: true, peer: { peer_id: 'peer_owner', status: 'active' } });
     expect(service.resumeTokens.update).toHaveBeenCalledWith({ id: 10, consumed_at: expect.anything() }, { consumed_at: expect.any(Date) });
     expect(service.resumeTokens.save).toHaveBeenCalledWith(expect.objectContaining({ peer_id: 'peer_owner', consumed_at: null }));
-    expect(service.sessions.save).toHaveBeenCalledWith(expect.objectContaining({ status: 'active', close_after: null }));
+    expect(sessionQueryBuilder.set).toHaveBeenCalledWith({ status: 'active', close_after: null });
+    expect(sessionQueryBuilder.execute).toHaveBeenCalled();
   });
 });
