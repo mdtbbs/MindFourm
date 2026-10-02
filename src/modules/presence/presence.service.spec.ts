@@ -39,6 +39,7 @@ interface MockRedisClient {
   exists: jest.Mock;
   config: jest.Mock;
   subscribe: jest.Mock;
+  psubscribe: jest.Mock;
   duplicate: jest.Mock;
   on: jest.Mock;
   options: { db: number };
@@ -78,6 +79,7 @@ function createMockRedisClient(options: { keyspaceEnabled?: boolean } = {}): Moc
       return null;
     }),
     subscribe: jest.fn(async () => 'OK'),
+    psubscribe: jest.fn(async () => 1),
     duplicate: jest.fn(function (this: MockRedisClient) {
       const dup = createMockRedisClient(options);
       dup.on.mockImplementation((event: string, handler: Function) => {
@@ -373,11 +375,19 @@ describe('PresenceService.onModuleInit - keyspace subscription', () => {
       notificationStream as any,
       friendshipRepo as any,
     );
+    const handleKeyspaceEvent = jest.spyOn(service as any, 'handleKeyspaceEvent').mockResolvedValue(undefined);
 
     await service.onModuleInit();
 
     // duplicate() should have been called to create a subscriber
     expect(client.duplicate).toHaveBeenCalled();
+    const subscriber = client.duplicate.mock.results[0].value;
+    expect(subscriber.psubscribe).toHaveBeenCalledWith('__keyspace@0__:presence:*');
+
+    const pmessageCall = subscriber.on.mock.calls.find((call: any[]) => call[0] === 'pmessage');
+    expect(pmessageCall).toBeDefined();
+    await pmessageCall![1]('__keyspace@0__:presence:*', '__keyspace@0__:presence:user:42', 'set');
+    expect(handleKeyspaceEvent).toHaveBeenCalledWith('__keyspace@0__:presence:user:42');
   });
 });
 

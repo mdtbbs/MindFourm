@@ -201,11 +201,15 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
     try {
       const config = await client.config('GET', 'notify-keyspace-events');
       const currentValue = Array.isArray(config) ? config[1] : (config as any);
-      if (!currentValue || currentValue === '') {
+      const currentFlags = typeof currentValue === 'string' ? currentValue : '';
+      const hasRequiredFlags =
+        currentFlags.includes('K') &&
+        (currentFlags.includes('A') || ['$', 'g', 'x'].every((flag) => currentFlags.includes(flag)));
+      if (!hasRequiredFlags) {
         this.logger.warn(
-          'Redis notify-keyspace-events is not enabled. ' +
+          'Redis notify-keyspace-events must include K$gx (or KEA). ' +
           'Presence change notifications will not be pushed to friends. ' +
-          'Set notify-keyspace-events to "KEA" or at least "Kx" to enable.',
+          'Set notify-keyspace-events to "K$gx" to enable.',
         );
         return;
       }
@@ -232,13 +236,12 @@ export class PresenceService implements OnModuleInit, OnModuleDestroy {
       const dbIndex = (client.options as any).db || 0;
       const channel = `__keyspace@${dbIndex}__:presence:*`;
 
-      await this.subscriber.subscribe(channel);
+      this.subscriber.on('pmessage', async (_pattern: string, keyChannel: string) => {
+        await this.handleKeyspaceEvent(keyChannel);
+      });
+      await this.subscriber.psubscribe(channel);
       this.subscriptionReady = true;
       this.logger.log(`Subscribed to Redis keyspace notifications on ${channel}`);
-
-      this.subscriber.on('message', async (_channel: string, key: string) => {
-        await this.handleKeyspaceEvent(key);
-      });
     } catch (err) {
       this.logger.warn(
         `Failed to subscribe to keyspace notifications: ${(err as Error).message}. ` +
