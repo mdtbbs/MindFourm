@@ -23,7 +23,7 @@ const { migrations } = require('../dist/database/migrations');
 async function prepare() {
   await dataSource.initialize();
   try {
-    const [{ database }] = await dataSource.query('SELECT DATABASE() AS database');
+    const [{ db_name: database }] = await dataSource.query('SELECT DATABASE() AS db_name');
     if (database !== EXPECTED_DATABASE) {
       throw new Error(`Refusing to prepare unexpected database: ${database}`);
     }
