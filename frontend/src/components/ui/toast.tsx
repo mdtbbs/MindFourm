@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ToastAction } from '@/store/toast-store';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
@@ -11,6 +12,7 @@ interface ToastProps {
   onDismiss: (id: string) => void;
   duration?: number;
   dismissible?: boolean;
+  action?: ToastAction;
 }
 
 const typeStyles: Record<ToastType, string> = {
@@ -47,7 +49,7 @@ const typeIcons: Record<ToastType, React.ReactNode> = {
   ),
 };
 
-export default function Toast({ id, message, type, onDismiss, duration = 4000, dismissible = true }: ToastProps) {
+export default function Toast({ id, message, type, onDismiss, duration = 4000, dismissible = true, action }: ToastProps) {
   const [visible, setVisible] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -85,13 +87,13 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000, d
     >
       {typeIcons[type]}
       <p className="flex-1 text-sm font-medium leading-5">{message}</p>
-      {id === 'phone-verification-required' && (
-        <button
-          type="button"
-          className="shrink-0 rounded-md bg-yellow-500 px-2 py-1 text-xs font-semibold text-yellow-950 transition-colors hover:bg-yellow-400"
+      {action && (
+        <a
+          href={action.href}
+          className="shrink-0 border border-current/20 px-2 py-1 text-xs font-semibold underline-offset-2 hover:underline"
         >
-          去认证
-        </button>
+          {action.label}
+        </a>
       )}
       {dismissible && (
         <button
