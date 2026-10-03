@@ -19,8 +19,10 @@ function asRecord(value: unknown): MetadataRecord {
 }
 
 function hasValue(value: unknown): boolean {
-  if (value === null || value === undefined || value === '') return false;
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
   if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === 'object') return Object.keys(value as MetadataRecord).length > 0;
   return true;
 }
 
@@ -34,14 +36,24 @@ function stableValue(value: unknown): string {
 }
 
 function mergeRecords(authorInput: MetadataRecord, parsedResult: MetadataRecord): MetadataRecord {
-  const result: MetadataRecord = { ...authorInput };
-  for (const [key, parsedValue] of Object.entries(parsedResult)) {
-    const authorValue = result[key];
-    result[key] = authorValue && parsedValue
-      && typeof authorValue === 'object' && !Array.isArray(authorValue)
-      && typeof parsedValue === 'object' && !Array.isArray(parsedValue)
-      ? mergeRecords(authorValue as MetadataRecord, parsedValue as MetadataRecord)
-      : parsedValue;
+  const result: MetadataRecord = {};
+  const keys = new Set([...Object.keys(authorInput), ...Object.keys(parsedResult)]);
+  for (const key of keys) {
+    const authorValue = authorInput[key];
+    const parsedValue = parsedResult[key];
+    const authorIsRecord = authorValue !== null && typeof authorValue === 'object' && !Array.isArray(authorValue);
+    const parsedIsRecord = parsedValue !== null && typeof parsedValue === 'object' && !Array.isArray(parsedValue);
+
+    if (authorIsRecord || parsedIsRecord) {
+      result[key] = mergeRecords(
+        authorIsRecord ? authorValue as MetadataRecord : {},
+        parsedIsRecord ? parsedValue as MetadataRecord : {},
+      );
+    } else if (hasValue(authorValue)) {
+      result[key] = hasValue(authorValue) ? authorValue : parsedValue;
+    } else if (hasValue(parsedValue)) {
+      result[key] = parsedValue;
+    }
   }
   return result;
 }

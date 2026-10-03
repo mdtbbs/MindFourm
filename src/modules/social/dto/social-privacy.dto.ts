@@ -24,6 +24,10 @@ export class PatchSocialPrivacyDto {
   @IsOptional() @IsEnum(VISIBILITY)
   allow_invites?: typeof VISIBILITY[number];
 
+  @ApiPropertyOptional({ enum: [...VISIBILITY], example: 'everyone', description: '谁可以向你发送私信；默认允许所有人，屏蔽关系始终优先。' })
+  @IsOptional() @IsEnum(VISIBILITY)
+  allow_messages?: typeof VISIBILITY[number];
+
   @ApiPropertyOptional({ example: true, description: '是否向有权限的好友显示上次在线时间。' })
   @IsOptional() @IsBoolean()
   show_last_seen?: boolean;

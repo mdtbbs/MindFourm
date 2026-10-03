@@ -369,6 +369,7 @@ public final class MapRenderer {
     }
 
     static String schematicMetadata(Schematic schematic, List<String> unknownBlocks, int formatVersion) {
+        Double estimatedBuildTime = estimateBuildTimeSeconds(schematic, unknownBlocks);
         LinkedHashMap<String, Integer> counts = new LinkedHashMap<>();
         StringBuilder positions = new StringBuilder("[");
         boolean firstPosition = true;
@@ -427,6 +428,8 @@ public final class MapRenderer {
             ",\"block_positions\":" + positions +
             ",\"block_positions_truncated\":" + (schematic.tiles.size > 10000) +
             ",\"requirements\":" + requirements +
+            ",\"estimated_build_time_seconds\":" + (estimatedBuildTime == null ? "null" : number(estimatedBuildTime)) +
+            ",\"estimated_build_time_method\":" + quote(estimatedBuildTime == null ? "unavailable" : "sum_of_block_build_time_ticks_divided_by_60") +
             ",\"production\":" + safeProductionAnalysis(schematic, unknownBlocks) +
             ",\"power_production\":" + number(production) +
             ",\"power_consumption\":" + number(consumption) +
@@ -443,6 +446,22 @@ public final class MapRenderer {
             ",\"structure_hash\":" + quote(SchematicFingerprint.exact(schematic)) +
             ",\"normalized_structure_hash\":" + quote(SchematicFingerprint.normalized(schematic)) +
             "}";
+    }
+
+    /**
+     * Estimates blueprint construction time from the resolved Mindustry content database.
+     * Block buildTime is measured in game ticks; 60 ticks make one second. Unknown content
+     * makes the total incomplete, so callers receive null instead of a misleading partial sum.
+     */
+    static Double estimateBuildTimeSeconds(Schematic schematic, List<String> unknownBlocks) {
+        if (schematic == null || schematic.tiles.size == 0 || (unknownBlocks != null && !unknownBlocks.isEmpty())) return null;
+        double totalTicks = 0d;
+        for (Schematic.Stile tile : schematic.tiles) {
+            if (tile.block == null || !Float.isFinite(tile.block.buildTime) || tile.block.buildTime <= 0f) return null;
+            totalTicks += tile.block.buildTime;
+        }
+        double seconds = totalTicks / 60d;
+        return Double.isFinite(seconds) && seconds > 0d ? seconds : null;
     }
 
     private static String safeProductionAnalysis(Schematic schematic, List<String> unknownBlocks) {

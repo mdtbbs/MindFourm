@@ -23,6 +23,9 @@ export class SocialPrivacySetting {
   @Column({ type: 'enum', enum: ['everyone', 'friends', 'nobody'], default: 'friends' })
   allow_invites: SocialVisibility;
 
+  @Column({ type: 'enum', enum: ['everyone', 'friends', 'nobody'], default: 'everyone' })
+  allow_messages: SocialVisibility;
+
   @Column({ type: 'boolean', default: true })
   show_last_seen: boolean;
 

@@ -4,11 +4,12 @@ import { Resource } from '@entities/resource.entity';
 import { Reply } from '@entities/reply.entity';
 import { LikesModule } from '../likes/likes.module';
 import { RepliesModule } from '../replies/replies.module';
+import { CommunityChallengesModule } from '../community-challenges/community-challenges.module';
 import { ResourceCommentsService } from './resource-comments.service';
 import { ResourceCommentsController } from './resource-comments.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Resource, Reply]), RepliesModule, LikesModule],
+  imports: [TypeOrmModule.forFeature([Resource, Reply]), RepliesModule, LikesModule, CommunityChallengesModule],
   controllers: [ResourceCommentsController],
   providers: [ResourceCommentsService],
   exports: [ResourceCommentsService],

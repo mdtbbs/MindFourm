@@ -202,7 +202,8 @@
   },
   "adminNavigation": {
     "item": {
-      "resource-analytics": "リソース統計"
+      "resource-analytics": "リソース統計",
+      "security-access-logs": "セキュリティアクセスログ"
     }
   },
   "legal": {

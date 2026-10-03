@@ -24,13 +24,13 @@ GET /api/v1/resources/{pack_public_id}/versions/{version_public_id}/pack-items
 PUT /api/v1/resources/{pack_public_id}/versions/{version_public_id}/pack-items
 ```
 
-迁移兼容期间，列表接口支持 `limit`、`offset` 和 `q` 参数。Manifest 是启动器和游戏内客户端同步资源的依据，只包含公开 UUID、已发布版本、兼容信息、依赖、文件 Hash，以及服务端计算的 `downloadable` / `installable` 状态。客户端可以定期读取它，不必保存数据库数字 ID。
+迁移兼容期间，列表接口支持 `limit`、`offset` 和 `q` 参数。清单是启动器和游戏内客户端同步资源的依据，只包含公开 UUID、已发布版本、兼容信息、依赖、文件摘要，以及服务端计算的 `downloadable` / `installable` 状态。客户端可以定期读取它，不必保存数据库数字 ID。
 
-Pack 是资源版本化安装单元。每个已发布 Pack version 固定引用最多 100 个已发布资源版本；成员清单发布后不可更改。Manifest 使用公开 ID 并返回固定版本、文件名、字节数、SHA-256、依赖与稳定下载地址，客户端可据此重复安装相同内容。
+资源包是资源版本化安装单元。每个已发布资源包版本固定引用最多 100 个已发布资源版本；成员清单发布后不可更改。清单使用公开 ID 并返回固定版本、文件名、字节数、SHA-256、依赖与稳定下载地址，客户端可据此重复安装相同内容。
 
-读取 Pack Manifest 使用 `resource.read`，生成批量下载 grants 使用 `resource.download`；两项操作可匿名访问，但请求携带 MindAuth Bearer 时仍校验相应 scope。Pack owner 的 item 查询与替换使用 `resource.upload`，替换只能在 Pack version 发布前进行。限流和完整 schema 以 Public OpenAPI 中的 `getPackVersionManifest`、`createPackVersionDownloadGrants`、`listPackVersionItems` 与 `replacePackVersionItems` 为准。
+读取资源包清单使用 `resource.read`，生成批量下载授权使用 `resource.download`；两项操作可匿名访问，但请求携带 MindAuth Bearer 令牌时仍会校验相应权限范围。资源包所有者查询和替换成员项使用 `resource.upload`，替换只能在资源包版本发布前进行。限流和完整数据结构以公开 OpenAPI 中的 `getPackVersionManifest`、`createPackVersionDownloadGrants`、`listPackVersionItems` 与 `replacePackVersionItems` 为准。
 
-### Pack Manifest
+### 资源包清单
 
 ```http
 GET /api/v1/packs/{packId}/versions/{versionId}/manifest
@@ -62,20 +62,20 @@ GET /api/v1/packs/{packId}/versions/{versionId}/manifest
 }
 ```
 
-客户端应按 Pack version 和每个成员的固定 version ID 复现安装；下载后校验 `size_bytes` 与 SHA-256。不要把 `game_version: null` 当成任意游戏版本兼容。
+客户端应按资源包版本和每个成员固定的版本 ID 复现安装；下载后校验 `size_bytes` 与 SHA-256。不要把 `game_version: null` 当成兼容任意游戏版本。
 
-### 批量下载 grants
+### 批量下载授权
 
 ```http
 POST /api/v1/packs/{packId}/versions/{versionId}/download-grants
 Authorization: Bearer <ACCESS_TOKEN>
 ```
 
-请求体为空。业务响应包含 `pack_public_id`、`pack_version_public_id` 和 `grants[]`；每项标识成员资源、固定版本、文件、下载地址，以及 `granted` 是否记录了新的下载 grant。`granted: false` 表示该文件和调用者在短去重窗口内已有 grant，不会重复增加计数。该操作限流为 10 次/60 秒。
+请求体为空。业务响应包含 `pack_public_id`、`pack_version_public_id` 和 `grants[]`；每项标识成员资源、固定版本、文件、下载地址，以及 `granted` 是否记录了新的下载授权。`granted: false` 表示该文件和当前调用者在短去重窗口内已有授权，不会重复增加计数。该操作限流为 10 次/60 秒。
 
-### Pack 成员编辑
+### 资源包成员编辑
 
-Pack owner 使用 `GET /api/v1/resources/{packId}/versions/{versionId}/pack-items` 查看成员清单；用 `PUT` 整体替换：
+资源包所有者使用 `GET /api/v1/resources/{packId}/versions/{versionId}/pack-items` 查看成员清单；用 `PUT` 整体替换：
 
 ```json
 {
@@ -85,7 +85,7 @@ Pack owner 使用 `GET /api/v1/resources/{packId}/versions/{versionId}/pack-item
 }
 ```
 
-每项必须引用已发布资源版本的公开 ID，最多 100 项，不能重复。`GET` 限流为 30 次/60 秒，`PUT` 限流为 10 次/60 秒。已发布 Pack version 不可再编辑。
+每项必须引用已发布资源版本的公开 ID，最多 100 项，不能重复。`GET` 限流为 30 次/60 秒，`PUT` 限流为 10 次/60 秒。已发布资源包版本不可再编辑。
 
 ## 资源详情结构
 
@@ -120,9 +120,9 @@ Pack owner 使用 `GET /api/v1/resources/{packId}/versions/{versionId}/pack-item
 
 `metadata` 对象带有自己的版本号。系统解析生成的字段与发布者填写的字段分开保存；API 只返回通过校验的内容。地图、蓝图和模组可以分别扩展详情字段，不需要改变资源响应的外层结构。
 
-## Manifest 结构
+## 清单结构
 
-Manifest 与面向用户展示的详情响应分开：
+清单与面向用户展示的详情响应分开：
 
 ```json
 {
@@ -152,9 +152,9 @@ Manifest 与面向用户展示的详情响应分开：
 
 ## 客户端安全处理
 
-- 安装文件前检查可用状态，并校验文件 Hash。
+- 安装文件前检查可用状态，并校验文件摘要。
 - 缺失的元数据表示“未知”，不能据此认定资源兼容。
-- API 服务端不会执行模组代码。模组上传会按大小限制解析为归档文件，Manifest 也按不可信输入处理。
+- API 服务端不会执行模组代码。模组上传会按大小限制解析为归档文件，清单也按不可信输入处理。
 - 预览失败不应导致已审核的原始文件被标记为不可用。
 
 ## 资源类别、主题与兼容信息来源
@@ -179,10 +179,10 @@ POST /api/v1/resources/drafts/preview
 POST /api/v1/resources/drafts
 ```
 
-结果会区分文件 SHA-256 完全相同、蓝图结构完全相同，以及旋转或镜像归一化后可能相同的蓝图。文件 Hash 完全相同属于重复提交，最终提交时返回 HTTP 409 和 `RESOURCE_DUPLICATE`。蓝图结构完全相同时，必须填写非空 `duplicate_note`；该说明会随新资源保存，供审核人员检查。归一化匹配只作提示，不会阻止提交。标题或来源 URL 相似也只作为建议。
+结果会区分文件 SHA-256 完全相同、蓝图结构完全相同，以及旋转或镜像归一化后可能相同的蓝图。文件摘要完全相同属于重复提交，最终提交时返回 HTTP 409 和 `RESOURCE_DUPLICATE`。蓝图结构完全相同时，必须填写非空 `duplicate_note`；该说明会随新资源保存，供审核人员检查。归一化匹配只作提示，不会阻止提交。标题或来源 URL 相似也只作为建议。
 
 重复检测只会披露当前用户有权查看的信息。若匹配项为私有或待审核资源，响应只表示“存在匹配”，不返回标题、公开 ID 或数据库 ID。客户端不能利用重复检测判断资源的权限或可见性。
 
 最终创建资源或提交草稿时，客户端可以发送 `Idempotency-Key` 请求头。键按已认证账号隔离，并保留 24 小时。请求超时后，使用相同的键和完全相同的请求重试，即可重放首次结果。相同键搭配不同请求体会返回 HTTP 409 `IDEMPOTENCY_KEY_REUSED`；并发中的同键请求可能返回 `IDEMPOTENCY_IN_PROGRESS`。修改请求内容时必须生成新键。
 
-若公开资源已合并，客户端应遵循 V1 响应中的规范资源重定向信息；资源合并审核属于后台流程，不属于 Public Client 操作。
+若公开资源已合并，客户端应遵循 V1 响应中的规范资源重定向信息；资源合并审核属于后台流程，不属于公开客户端操作。

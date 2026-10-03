@@ -33,7 +33,7 @@ export default function ResourceModerationReview({ resource }: { resource: Resou
     <section className="space-y-4" aria-label="资源元数据审核对照">
       <div>
         <h4 className="text-base font-semibold text-surface-900 dark:text-gray-100">元数据审核对照</h4>
-        <p className="mt-1 text-xs text-surface-500">作者填写内容与解析器结果并列展示；有效结果中同名字段优先采用解析结果。</p>
+        <p className="mt-1 text-xs text-surface-500">作者填写内容与解析器结果并列展示；有效结果优先采用作者填写内容，作者未填写的字段使用解析结果补充。</p>
       </div>
 
       {differences.length > 0 ? (

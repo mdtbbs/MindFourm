@@ -11,6 +11,7 @@ import { UserBlocksModule } from '../user-blocks/user-blocks.module';
 import { MessagesV1Controller } from './v1/messages-v1.controller';
 import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
 import { SettingsModule } from '../settings/settings.module';
+import { SocialModule } from '../social/social.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { SettingsModule } from '../settings/settings.module';
     NotificationsModule,
     UserBlocksModule,
     SettingsModule,
+    SocialModule,
   ],
   controllers: [MessagesController, GroupChatsController, MessagesV1Controller],
   providers: [MessagesService, OAuthScopeGuard],

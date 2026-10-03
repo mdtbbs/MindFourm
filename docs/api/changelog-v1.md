@@ -1,13 +1,13 @@
-# Public API Changelog
+# 公开 API 更新记录
 
-This changelog tracks changes to the third-party Public Client API. Internal and service-to-service routes do not belong to this list.
+本记录追踪面向第三方公开客户端的 API 变更。内部接口和服务间调用接口不列入本记录。
 
-## Unreleased
+## 尚未发布
 
-- Publish a method-and-path allowlist for third-party Public V1 operations and keep the internal V1 specification out of the public developer portal.
-- Publish each operation's effective rate limit in OpenAPI and in the online endpoint reference.
-- Add the online PKCE try-it flow, stable error reference, and API lifecycle guide.
-- Publish Pack version manifests, batch download grants, and owner-only fixed membership operations.
-- Preserve the existing `/api/v1` success and error envelopes, OAuth scope enforcement, and compatibility paths.
+- 发布第三方公开 V1 接口的方法与路径白名单，并确保内部 V1 规范不进入公开开发者文档。
+- 在 OpenAPI 规范和在线接口参考中标明每个接口实际生效的限流规则。
+- 增加在线 PKCE 调试流程、稳定错误代码参考和 API 生命周期指南。
+- 发布资源包版本清单、批量下载授权和仅所有者可用的固定成员管理接口。
+- 保留现有 `/api/v1` 成功与错误响应结构、OAuth 权限范围校验和兼容路径。
 
-There are currently no deprecated operations in the Public V1 OpenAPI contract. New operation changes should be recorded here before release.
+当前公开 V1 OpenAPI 契约没有已弃用的接口。发布接口变更前，应先在此记录中登记。

@@ -3650,9 +3650,16 @@
     "/v1/messages": {
       "get": {
         "operationId": "MessagesV1Controller_conversations",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
         "x-required-scopes": [
           "message.read"
         ],
+        "summary": "列出私信会话",
+        "description": "需要有效且未封禁的账号；OAuth Bearer 需要 message.read。若对方已屏蔽当前账号，不会泄露其会话摘要。每个账号每分钟最多 60 次。",
         "parameters": [
           {
             "name": "cursor",
@@ -3768,18 +3775,20 @@
           {
             "MindAuthBearer": []
           }
-        ],
-        "x-rate-limit": {
-          "limit": 1200,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
+        ]
       },
       "post": {
         "operationId": "MessagesV1Controller_send",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
         "x-required-scopes": [
           "message.write"
         ],
+        "summary": "发送私信",
+        "description": "需要有效且未封禁的账号；OAuth Bearer 需要 message.write。尊重收件人私信隐私设置及双方屏蔽关系，每个账号每分钟最多 10 次。",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -3793,7 +3802,7 @@
         },
         "responses": {
           "201": {
-            "description": "消息已发送，并应用现有屏蔽与通知策略。",
+            "description": "消息已发送，并应用收件人隐私、屏蔽与通知策略。",
             "content": {
               "application/json": {
                 "schema": {
@@ -3864,22 +3873,43 @@
           {
             "MindAuthBearer": []
           }
-        ],
-        "x-rate-limit": {
-          "limit": 180,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
+        ]
       }
     },
     "/v1/messages/unread-count": {
       "get": {
         "operationId": "MessagesV1Controller_unreadCount",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
         "x-required-scopes": [
           "message.read"
         ],
+        "summary": "读取未读私信数",
+        "description": "需要有效且未封禁的账号；OAuth Bearer 需要 message.read。每个账号每分钟最多 60 次。",
         "parameters": [],
         "responses": {
+          "200": {
+            "description": "当前账号的未读消息数量。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "count"
+                  ],
+                  "properties": {
+                    "count": {
+                      "type": "integer",
+                      "example": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
@@ -3894,20 +3924,22 @@
           {
             "MindAuthBearer": []
           }
-        ],
-        "x-rate-limit": {
-          "limit": 1200,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
+        ]
       }
     },
     "/v1/messages/{userId}": {
       "get": {
         "operationId": "MessagesV1Controller_conversation",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
         "x-required-scopes": [
           "message.read"
         ],
+        "summary": "读取私信会话",
+        "description": "需要有效且未封禁的账号；OAuth Bearer 需要 message.read。若对方已屏蔽当前账号，则拒绝读取。每个账号每分钟最多 60 次。",
         "parameters": [
           {
             "name": "userId",
@@ -4031,405 +4063,6 @@
         },
         "tags": [
           "v1-messages"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ],
-        "x-rate-limit": {
-          "limit": 1200,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
-      }
-    },
-    "/v1/reports": {
-      "post": {
-        "operationId": "ReportsV1Controller_create",
-        "x-rate-limit": {
-          "limit": 10,
-          "window_seconds": 3600,
-          "basis": "authenticated_user_or_session_or_ip"
-        },
-        "x-required-scopes": [
-          "forum.write"
-        ],
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateReportDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "v1-reports"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ]
-      }
-    },
-    "/v1/reports/mine": {
-      "get": {
-        "operationId": "ReportsV1Controller_mine",
-        "x-required-scopes": [
-          "forum.read"
-        ],
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1
-            },
-            "description": "结果页码，从 1 开始。"
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "maximum": 50
-            },
-            "description": "每页举报记录数，最大 50。"
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "v1-reports"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ],
-        "x-rate-limit": {
-          "limit": 1200,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
-      }
-    },
-    "/v1/presence/connections": {
-      "post": {
-        "operationId": "PresenceV1Controller_create",
-        "x-rate-limit": {
-          "limit": 20,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        },
-        "x-required-scopes": [
-          "presence.write"
-        ],
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreatePresenceConnectionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "在线状态"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ]
-      }
-    },
-    "/v1/presence/connections/{id}": {
-      "patch": {
-        "operationId": "PresenceV1Controller_patch",
-        "x-required-scopes": [
-          "presence.write"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PatchPresenceConnectionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "在线状态"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ],
-        "x-rate-limit": {
-          "limit": 180,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
-      },
-      "delete": {
-        "operationId": "PresenceV1Controller_remove",
-        "x-required-scopes": [
-          "presence.write"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "在线状态"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ],
-        "x-rate-limit": {
-          "limit": 180,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
-      }
-    },
-    "/v1/presence/connections/{id}/heartbeat": {
-      "post": {
-        "operationId": "PresenceV1Controller_heartbeat",
-        "x-rate-limit": {
-          "limit": 60,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        },
-        "x-required-scopes": [
-          "presence.write"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "在线状态"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ]
-      }
-    },
-    "/v1/presence/connections/{id}/activity": {
-      "put": {
-        "operationId": "PresenceV1Controller_activity",
-        "x-rate-limit": {
-          "limit": 30,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        },
-        "x-required-scopes": [
-          "presence.write"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PutRichActivityDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "在线状态"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ]
-      },
-      "delete": {
-        "operationId": "PresenceV1Controller_removeActivity",
-        "x-required-scopes": [
-          "presence.write"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "在线状态"
-        ],
-        "security": [
-          {
-            "MindAuthBearer": []
-          }
-        ],
-        "x-rate-limit": {
-          "limit": 180,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        }
-      }
-    },
-    "/v1/social/friends/presence": {
-      "get": {
-        "operationId": "SocialFriendsPresenceV1Controller_list",
-        "x-rate-limit": {
-          "limit": 60,
-          "window_seconds": 60,
-          "basis": "authenticated_user_or_session_or_ip"
-        },
-        "x-required-scopes": [
-          "friends.read",
-          "presence.read"
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "maximum": 50
-            },
-            "description": "每页好友数，最大 50。"
-          },
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1
-            },
-            "description": "好友列表页码，从 1 开始。"
-          }
-        ],
-        "responses": {
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
-          "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
-          }
-        },
-        "tags": [
-          "好友",
-          "在线状态",
-          "活动"
         ],
         "security": [
           {
@@ -4819,6 +4452,400 @@
         },
         "tags": [
           "社交隐私"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/reports": {
+      "post": {
+        "operationId": "ReportsV1Controller_create",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 3600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "forum.write"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "v1-reports"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/reports/mine": {
+      "get": {
+        "operationId": "ReportsV1Controller_mine",
+        "x-required-scopes": [
+          "forum.read"
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1
+            },
+            "description": "结果页码，从 1 开始。"
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "每页举报记录数，最大 50。"
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "v1-reports"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 1200,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      }
+    },
+    "/v1/presence/connections": {
+      "post": {
+        "operationId": "PresenceV1Controller_create",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "presence.write"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePresenceConnectionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "在线状态"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/presence/connections/{id}": {
+      "patch": {
+        "operationId": "PresenceV1Controller_patch",
+        "x-required-scopes": [
+          "presence.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchPresenceConnectionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "在线状态"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 180,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      },
+      "delete": {
+        "operationId": "PresenceV1Controller_remove",
+        "x-required-scopes": [
+          "presence.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "在线状态"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 180,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      }
+    },
+    "/v1/presence/connections/{id}/heartbeat": {
+      "post": {
+        "operationId": "PresenceV1Controller_heartbeat",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "presence.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "在线状态"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/presence/connections/{id}/activity": {
+      "put": {
+        "operationId": "PresenceV1Controller_activity",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "presence.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutRichActivityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "在线状态"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "PresenceV1Controller_removeActivity",
+        "x-required-scopes": [
+          "presence.write"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "在线状态"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 180,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      }
+    },
+    "/v1/social/friends/presence": {
+      "get": {
+        "operationId": "SocialFriendsPresenceV1Controller_list",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "friends.read",
+          "presence.read"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50
+            },
+            "description": "每页好友数，最大 50。"
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1
+            },
+            "description": "好友列表页码，从 1 开始。"
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "好友",
+          "在线状态",
+          "活动"
         ],
         "security": [
           {
@@ -12372,69 +12399,6 @@
           "content"
         ]
       },
-      "CreateReportDto": {
-        "type": "object",
-        "properties": {
-          "target_type": {
-            "type": "string",
-            "enum": [
-              "post",
-              "reply",
-              "resource",
-              "user"
-            ],
-            "example": "post",
-            "description": "被举报对象类型。"
-          },
-          "target_id": {
-            "type": "number",
-            "minimum": 1,
-            "example": 123,
-            "description": "被举报对象的 ID。"
-          },
-          "reason": {
-            "type": "string",
-            "enum": [
-              "spam",
-              "abuse",
-              "porn",
-              "illegal",
-              "off_topic",
-              "copyright",
-              "other"
-            ],
-            "example": "spam",
-            "description": "举报原因。"
-          },
-          "detail": {
-            "type": "string",
-            "maxLength": 1000,
-            "example": "补充说明。",
-            "description": "可选补充说明，最多 1000 个字符。"
-          }
-        },
-        "required": [
-          "target_type",
-          "target_id",
-          "reason"
-        ]
-      },
-      "ResolveReportDto": {
-        "type": "object",
-        "properties": {}
-      },
-      "CreatePresenceConnectionDto": {
-        "type": "object",
-        "properties": {}
-      },
-      "PatchPresenceConnectionDto": {
-        "type": "object",
-        "properties": {}
-      },
-      "PutRichActivityDto": {
-        "type": "object",
-        "properties": {}
-      },
       "CreateFriendRequestDto": {
         "type": "object",
         "properties": {
@@ -12502,12 +12466,85 @@
             "example": "friends",
             "description": "谁可以向你发送多人游戏邀请。"
           },
+          "allow_messages": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "friends",
+              "nobody"
+            ],
+            "example": "everyone",
+            "description": "谁可以向你发送私信；默认允许所有人，屏蔽关系始终优先。"
+          },
           "show_last_seen": {
             "type": "boolean",
             "example": true,
             "description": "是否向有权限的好友显示上次在线时间。"
           }
         }
+      },
+      "CreateReportDto": {
+        "type": "object",
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "enum": [
+              "post",
+              "reply",
+              "resource",
+              "user"
+            ],
+            "example": "post",
+            "description": "被举报对象类型。"
+          },
+          "target_id": {
+            "type": "number",
+            "minimum": 1,
+            "example": 123,
+            "description": "被举报对象的 ID。"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "spam",
+              "abuse",
+              "porn",
+              "illegal",
+              "off_topic",
+              "copyright",
+              "other"
+            ],
+            "example": "spam",
+            "description": "举报原因。"
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 1000,
+            "example": "补充说明。",
+            "description": "可选补充说明，最多 1000 个字符。"
+          }
+        },
+        "required": [
+          "target_type",
+          "target_id",
+          "reason"
+        ]
+      },
+      "ResolveReportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreatePresenceConnectionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "PatchPresenceConnectionDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "PutRichActivityDto": {
+        "type": "object",
+        "properties": {}
       },
       "SetDefaultMultiplayerClientDto": {
         "type": "object",

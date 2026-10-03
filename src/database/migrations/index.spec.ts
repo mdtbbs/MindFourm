@@ -101,4 +101,16 @@ describe('migration registry', () => {
     expect(names).toContain('UnifyResourceDiscussions1720000230000');
     expect(names.indexOf('ResourcePackItems1720000220000')).toBeLessThan(names.indexOf('UnifyResourceDiscussions1720000230000'));
   });
+
+  it('registers retained security access logs after the resource discussion migration', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('SecurityAccessLogs1720000240000');
+    expect(names.indexOf('UnifyResourceDiscussions1720000230000')).toBeLessThan(names.indexOf('SecurityAccessLogs1720000240000'));
+  });
+
+  it('registers per-user message privacy after the security log schema', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('MessagePrivacySetting1720000250000');
+    expect(names.indexOf('SecurityAccessLogs1720000240000')).toBeLessThan(names.indexOf('MessagePrivacySetting1720000250000'));
+  });
 });

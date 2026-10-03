@@ -101,6 +101,26 @@ async function cleanup() {
     );
     log('resource_bookmarks', (bmResult as any).affectedRows);
 
+    // Canonical resource discussions are ordinary forum Posts and Replies linked
+    // by resources.discussion_thread_id. Remove their E2E rows before deleting the
+    // owning resources so the seeded comments do not remain as orphan threads.
+    const [discussionReplies] = await connection.execute(
+      `DELETE FROM replies
+         WHERE post_id IN (
+           SELECT discussion_thread_id FROM resources
+            WHERE title LIKE 'E2E Resource rich discussion %'
+              AND discussion_thread_id IS NOT NULL)`,
+    );
+    log('resource discussion replies', (discussionReplies as any).affectedRows);
+    const [discussionPosts] = await connection.execute(
+      `DELETE FROM posts
+         WHERE id IN (
+           SELECT discussion_thread_id FROM resources
+            WHERE title LIKE 'E2E Resource rich discussion %'
+              AND discussion_thread_id IS NOT NULL)`,
+    );
+    log('resource discussion posts', (discussionPosts as any).affectedRows);
+
     // 4. Resources — FK cascades clean up resource_versions, resource_comments,
     //    resource_downloads, resource_ratings, resource_favorites, etc.
     const [resResult] = await connection.execute(

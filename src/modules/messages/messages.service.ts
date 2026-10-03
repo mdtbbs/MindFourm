@@ -12,6 +12,7 @@ import { parseMarkdown } from '@common/utils/markdown.util';
 import { parseDateCursor, toDateCursor } from '@common/utils/date-cursor.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UserBlocksService } from '../user-blocks/user-blocks.service';
+import { SocialPolicyService } from '../social/social-policy.service';
 
 const DEFAULT_MESSAGE_LIMIT = 50;
 const MAX_MESSAGE_LIMIT = 100;
@@ -45,6 +46,7 @@ export class MessagesService {
     private notificationsService: NotificationsService,
     private userBlocksService: UserBlocksService,
     private dataSource: DataSource,
+    private socialPolicy: SocialPolicyService,
   ) {}
 
   async create(dto: CreateMessageDto, senderId: number): Promise<Message> {
@@ -59,6 +61,9 @@ export class MessagesService {
       // Checked before the write, not in the client: the block is invisible to the
       // sender, so hiding the compose box would still leave this endpoint reachable.
       await this.userBlocksService.assertNotBlocked(senderId, dto.recipient_id);
+      if (!await this.socialPolicy.canPerform(senderId, dto.recipient_id, 'allow_messages')) {
+        throw new ForbiddenException('对方的私信隐私设置不允许你发送消息');
+      }
 
       const contentHtml = parseMarkdown(dto.content);
       saved = await queryRunner.manager.save(Message, {
@@ -108,6 +113,8 @@ export class MessagesService {
     const params: unknown[] = [
       userId, userId, userId, userId, userId, userId, userId, userId, userId, userId,
     ];
+    // A recipient who has blocked this caller must not leak conversation metadata.
+    params.push(userId);
     if (cursor) params.push(parseDateCursor(cursor));
     params.push(cappedLimit + 1);
 
@@ -129,6 +136,7 @@ export class MessagesService {
         FROM messages WHERE sender_id = ? OR recipient_id = ?) cp
       WHERE (m.sender_id = ? OR m.recipient_id = ?)
         AND m.deleted_by_sender = 0 AND m.deleted_by_recipient = 0
+        AND NOT EXISTS (SELECT 1 FROM user_blocks blocked WHERE blocked.blocker_id = u.id AND blocked.blocked_id = ?)
       GROUP BY user_id, u.username, u.avatar_url
       ${cursorClause}
       ORDER BY last_at DESC LIMIT ?
@@ -155,6 +163,7 @@ export class MessagesService {
   }
 
   async getConversation(userId: number, otherUserId: number, limit: unknown, cursor?: string) {
+    await this.userBlocksService.assertNotBlocked(userId, otherUserId);
     const cappedLimit = normalizeMessageLimit(limit);
     const qb = this.messageRepo.createQueryBuilder('m')
       .where('(m.sender_id = :userId AND m.recipient_id = :otherId) OR (m.sender_id = :otherId AND m.recipient_id = :userId)',

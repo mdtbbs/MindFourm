@@ -11,6 +11,17 @@ test('Developer Center serves the Public V1 contract without private routes', as
 
   expect(paths).toContain('/v1/packs/{packId}/versions/{versionId}/manifest');
   expect(paths).toContain('/v1/packs/{packId}/versions/{versionId}/download-grants');
+  expect(paths).toEqual(expect.arrayContaining([
+    '/v1/messages',
+    '/v1/messages/unread-count',
+    '/v1/messages/{userId}',
+  ]));
+  expect(contract.paths['/v1/messages'].get['x-required-scopes']).toContain('message.read');
+  expect(contract.paths['/v1/messages'].post['x-required-scopes']).toContain('message.write');
+  expect(contract.paths['/v1/messages'].get['x-rate-limit'].limit).toBe(60);
+  expect(contract.paths['/v1/messages'].post['x-rate-limit'].limit).toBe(10);
+  expect(Object.keys(contract.components.schemas.PatchSocialPrivacyDto.properties)).toContain('allow_messages');
+  expect(JSON.stringify(contract.components.schemas)).toContain('documentation_url');
   expect(paths).not.toContain('/admin');
   expect(paths.some((path) => /(^|\/)(admin|internal)(\/|$)/i.test(path))).toBe(false);
   expect(paths.some((path) => path.includes('/relay-agent/'))).toBe(false);

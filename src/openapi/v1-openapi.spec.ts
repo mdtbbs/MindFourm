@@ -60,6 +60,13 @@ describe('Public V1 OpenAPI operation policy', () => {
     expect(document.components?.securitySchemes).toHaveProperty('MindAuthBearer');
     expect(document.components?.securitySchemes).not.toHaveProperty('InternalKey');
     expect(document.tags?.map((tag) => tag.name)).toEqual(['public']);
+    expect(document.components?.schemas?.PublicV1ErrorEnvelope).toMatchObject({
+      properties: {
+        error: { properties: { documentation_url: { type: 'string', format: 'uri' } } },
+      },
+    });
+    expect((document.paths['/v1/threads'] as any).get.responses.default.content['application/json'].schema.$ref)
+      .toBe('#/components/schemas/PublicV1ErrorEnvelope');
   });
 
   it('adds effective default limits when an operation has no explicit override', () => {

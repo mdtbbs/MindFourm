@@ -4,7 +4,7 @@ describe('SocialPolicyService', () => {
   const makeService = () => {
     const friendships = { find: jest.fn(), exists: jest.fn() };
     const blocks = { find: jest.fn(), exists: jest.fn() };
-    const privacy = { findBy: jest.fn(), createQueryBuilder: jest.fn() };
+    const privacy = { findBy: jest.fn(), findOneBy: jest.fn(), createQueryBuilder: jest.fn() };
     return { service: new SocialPolicyService(friendships as any, blocks as any, privacy as any), friendships, blocks, privacy };
   };
 
@@ -26,6 +26,21 @@ describe('SocialPolicyService', () => {
     expect(join.get(11)).toBe(false);
     expect(friendships.find).toHaveBeenCalledTimes(2);
     expect(blocks.find).toHaveBeenCalledTimes(2);
+  });
+
+  it('applies the recipient allow_messages setting to everyone, friends, and nobody', async () => {
+    const { service, friendships, blocks, privacy } = makeService();
+    blocks.exists.mockResolvedValue(false);
+    friendships.exists.mockResolvedValue(true);
+
+    privacy.findOneBy.mockResolvedValue({ user_id: 9, allow_messages: 'friends' });
+    await expect(service.canPerform(1, 9, 'allow_messages')).resolves.toBe(true);
+
+    friendships.exists.mockResolvedValue(false);
+    await expect(service.canPerform(1, 9, 'allow_messages')).resolves.toBe(false);
+
+    privacy.findOneBy.mockResolvedValue({ user_id: 9, allow_messages: 'nobody' });
+    await expect(service.canPerform(1, 9, 'allow_messages')).resolves.toBe(false);
   });
 
   it('uses friends as the default and returns one bounded settings read for missing records', async () => {

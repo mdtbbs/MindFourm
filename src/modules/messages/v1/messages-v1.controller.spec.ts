@@ -1,6 +1,16 @@
+import 'reflect-metadata';
 import { MessagesV1Controller } from './messages-v1.controller';
+import { REQUIRED_OAUTH_SCOPES } from '../../../common/decorators/require-oauth-scopes.decorator';
+import { RATE_LIMIT_KEY } from '../../../common/decorators/rate-limit.decorator';
 
 describe('MessagesV1Controller', () => {
+  it('keeps separate read/write OAuth scopes and explicit request limits', () => {
+    expect(Reflect.getMetadata(REQUIRED_OAUTH_SCOPES, MessagesV1Controller.prototype.conversations)).toEqual(['message.read']);
+    expect(Reflect.getMetadata(RATE_LIMIT_KEY, MessagesV1Controller.prototype.conversations)).toEqual({ max: 60, window: 60 });
+    expect(Reflect.getMetadata(REQUIRED_OAUTH_SCOPES, MessagesV1Controller.prototype.send)).toEqual(['message.write']);
+    expect(Reflect.getMetadata(RATE_LIMIT_KEY, MessagesV1Controller.prototype.send)).toEqual({ max: 10, window: 60 });
+  });
+
   it('adapts the existing cursor service and returns only public message fields', async () => {
     const messages = {
       getConversation: jest.fn().mockResolvedValue({

@@ -10,7 +10,7 @@
  */
 
 import { test, expect } from '../fixtures/page-objects/base.po';
-import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
+import { test as authTest, adminTest, expect as authExpect } from '../fixtures/auth.fixture';
 
 test.describe('Admin Panel Access Control', () => {
   test('should deny access to unauthenticated users', async ({ page }) => {
@@ -31,6 +31,20 @@ test.describe('Admin Panel Access Control', () => {
     const url = page.url();
     expect(url.includes('login') || url.includes('unauthorized') || true).toBeTruthy();
   });
+});
+
+authTest('regular users cannot read security access logs containing IP addresses', async ({ authenticatedPage }) => {
+  const status = await authenticatedPage.evaluate(async () => {
+    const response = await fetch('/api/admin/security-access-logs', { credentials: 'include' });
+    return response.status;
+  });
+  authExpect(status).toBe(403);
+});
+
+adminTest('administrators can open the restricted security access log viewer', async ({ authenticatedPage }) => {
+  await authenticatedPage.goto('/admin/security-access-logs', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await authExpect(authenticatedPage.getByRole('heading', { name: /安全访问日志|Security access logs/ })).toBeVisible();
+  await authExpect(authenticatedPage.getByRole('columnheader', { name: /IP 地址|IP address/ })).toBeVisible();
 });
 
 authTest.describe('Admin Dashboard', () => {

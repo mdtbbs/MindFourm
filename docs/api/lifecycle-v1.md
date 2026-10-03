@@ -1,27 +1,27 @@
-# Public V1 API Lifecycle
+# 公开 V1 API 生命周期
 
-## Current contract
+## 当前契约
 
-The current Public Client contract is V1 (`1.0.0`). Its published operation set is an explicit method-and-path allowlist. An operation outside that list is not a third-party API, even if an internal controller uses a `/v1/` route.
+当前面向第三方客户端的公开契约为 V1（`1.0.0`）。已发布接口由明确的方法与路径白名单限定。即使内部控制器使用 `/v1/` 路径，未列入白名单的接口也不属于第三方 API。
 
-The public contract keeps the existing `{ data, meta }` success envelope, `{ error, meta }` failure envelope, OAuth scopes, and authorization behavior. Additive optional fields are compatible; changing required fields, identity meaning, or response shape requires a new major API version.
+公开契约保留现有 `{ data, meta }` 成功响应、`{ error, meta }` 错误响应、OAuth 权限范围和授权行为。新增可选字段属于兼容变更；修改必填字段、身份含义或响应结构时，必须发布新的主版本。
 
-## Deprecation policy
+## 弃用规则
 
-Do not silently remove a public operation. Before deprecating one:
+不得静默移除公开接口。弃用接口前，请完成以下事项：
 
-1. Mark it `deprecated: true` in OpenAPI.
-2. Add `x-deprecated-since` with the release identifier.
-3. Add `x-removal-plan` with the planned removal version and date.
-4. Add `x-migration-guide` pointing to a guide with the replacement operation and request/response changes.
-5. Record the change in the [API changelog](/api/v1/docs/changelog) and show the notice in the endpoint reference.
+1. 在 OpenAPI 中将接口标记为 `deprecated: true`。
+2. 添加 `x-deprecated-since`，注明弃用的版本或发布日期。
+3. 添加 `x-removal-plan`，注明计划移除的版本和日期。
+4. 添加 `x-migration-guide`，指向说明替代接口以及请求、响应变更的迁移指南。
+5. 在 [API 更新记录](/api/v1/docs/changelog)中登记，并在接口参考中显示弃用提示。
 
-Keep the deprecated operation available for at least 12 months after the notice is published. If the planned date must change, update the changelog and the operation metadata before that date. Removing an operation with a breaking contract requires a new major API version.
+弃用公告发布后，至少保留该接口 12 个月。若计划日期需要调整，应在该日期前更新更新记录和接口元数据。涉及破坏性契约变更的接口移除，必须发布新的主版本。
 
-## Migration guide requirements
+## 迁移指南要求
 
-A migration guide must name the affected methods and paths, the reason for the change, the supported replacement, scope changes, parameter and response mapping, error behavior, and a tested client example. If there is no compatible replacement, say so explicitly and publish the removal date.
+迁移指南必须列出受影响的方法和路径、变更原因、支持的替代接口、权限范围变化、参数与响应字段映射、错误处理方式，以及经过测试的客户端示例。如果没有兼容的替代接口，也必须明确说明并公布移除日期。
 
-## Current deprecated operations
+## 当前已弃用接口
 
-None. The internal specification may retain private compatibility routes; their presence does not grant third-party support or require public migration notices.
+目前没有已弃用的公开接口。内部规范可以保留私有兼容路由；这些路由的存在不代表支持第三方调用，也不要求发布公开迁移通知。

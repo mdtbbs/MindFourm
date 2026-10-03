@@ -21,6 +21,7 @@ export class SocialPrivacyService {
       allow_join: settings.allow_join,
       allow_join_request: settings.allow_join_request,
       allow_invites: settings.allow_invites,
+      allow_messages: settings.allow_messages,
       show_last_seen: settings.show_last_seen,
       status: preference.status,
     };
