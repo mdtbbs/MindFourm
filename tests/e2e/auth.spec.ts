@@ -34,7 +34,9 @@ async function expectMindAuthRedirect(
   await stubMindAuth(page);
   await Promise.all([
     page.waitForURL(
-      (url) => url.origin === AUTH_ORIGIN || url.hostname.includes('mindauth'),
+      (url) => (url.origin === AUTH_ORIGIN || url.hostname.includes('mindauth'))
+        && readAuthRoute(url.toString()) === expectedPath
+        && readAuthParam(url.toString(), 'state') === expectedState,
       { timeout: 10000 },
     ),
     Promise.resolve(action()),
@@ -83,7 +85,7 @@ test.describe('Public Authentication Checks', () => {
 
   test('should show login link for unauthenticated users', async ({ page, homePage }) => {
     await homePage.navigate();
-    await expect(page.getByRole('link', { name: '登录' })).toBeVisible();
+    await expect(page.locator('a[href="/login"]')).toBeVisible();
   });
 
   test('should preserve protected route in login redirect', async ({ page }) => {
@@ -114,7 +116,7 @@ test.describe('Public Authentication Checks', () => {
     await expectMindAuthRedirect(
       page,
       async () => {
-        await page.getByRole('link', { name: '登录' }).click();
+        await page.locator('a[href="/login"]').last().click();
       },
       '/authorize',
       '/search?q=oauth',
@@ -127,7 +129,7 @@ test.describe('Public Authentication Checks', () => {
     await expectMindAuthRedirect(
       page,
       async () => {
-        await page.getByRole('link', { name: '注册' }).click();
+        await page.locator('a[href="/register"]').last().click();
       },
       '/register',
       '/groups?tab=recent',

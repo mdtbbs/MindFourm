@@ -105,7 +105,9 @@ authTest.describe('Resource Submission Flow', () => {
     if (!Number.isSafeInteger(hostReplyId) || hostReplyId < 1) throw new Error('Host reply response carried no id');
     await approveAsAdmin(request, 'reply', hostReplyId);
 
-    const initialProjection = unwrap(await (await request.get(`${API_URL}/api/resources/${resourceId}/comments?limit=100`)).json());
+    const initialResponse = await request.get(`${API_URL}/api/resources/${resourceId}/comments?limit=100`);
+    const initialEnvelope = await initialResponse.json();
+    const initialProjection = initialEnvelope?.data?.data ? initialEnvelope.data : initialEnvelope?.data ?? initialEnvelope;
     const threadId = Number(initialProjection?.discussion_thread_id);
     if (!Number.isSafeInteger(threadId) || threadId < 1) throw new Error('Resource discussion response carried no canonical thread id');
 

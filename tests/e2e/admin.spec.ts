@@ -194,7 +194,8 @@ adminTest('desktop (>1180px): full navigation visible and mobile toggle hidden',
     // Click overlay to close drawer
     const overlay = authenticatedPage.locator('.admin-v2-mobile-backdrop');
     await authExpect(overlay).toBeVisible();
-    await overlay.click();
+    // The drawer sits above the backdrop on the left. Click the uncovered edge.
+    await overlay.click({ position: { x: 350, y: 400 } });
     await authenticatedPage.waitForTimeout(400);
     authExpect(await sidebar.getAttribute('class')).not.toContain('is-open');
     const boxClosed = await sidebar.boundingBox();

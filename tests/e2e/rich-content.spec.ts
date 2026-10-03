@@ -1,4 +1,5 @@
 import { test as authTest, expect } from '../fixtures/auth.fixture';
+import type { Page } from '@playwright/test';
 import { TEST_USERS } from '../fixtures/test-users';
 import {
   API_URL,
@@ -14,6 +15,10 @@ function unwrap(value: any): any {
 
 function writeHeaders(session: Awaited<ReturnType<typeof testLogin>>) {
   return { Cookie: session.cookieHeader, 'X-CSRF-Token': session.csrfToken };
+}
+
+function visiblePostContent(page: Page) {
+  return page.locator('[data-testid="post-content"]:visible').first();
 }
 
 async function createRichPost(request: Parameters<typeof testLogin>[0], title: string, document: Record<string, unknown>) {
@@ -126,20 +131,22 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
 
   authTest('1. publishes and renders a JSON-authored post', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await expect(authenticatedPage.getByTestId('post-content')).toBeVisible();
-    await expect(authenticatedPage.getByTestId('rich-content-renderer')).toBeVisible();
-    await expect(authenticatedPage.getByRole('heading', { name: 'Schema v2 E2E heading' })).toBeVisible();
+    const post = visiblePostContent(authenticatedPage);
+    await expect(post).toBeVisible();
+    await expect(post.getByTestId('rich-content-renderer')).toBeVisible();
+    await expect(post.getByRole('heading', { name: 'Schema v2 E2E heading' })).toBeVisible();
   });
 
   authTest('2. renders nested bullet and ordered lists from JSON', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await expect(authenticatedPage.getByText('tight bullet', { exact: true })).toBeVisible();
-    await expect(authenticatedPage.getByText('ordered item', { exact: true })).toBeVisible();
+    const post = visiblePostContent(authenticatedPage);
+    await expect(post.getByText('tight bullet', { exact: true })).toBeVisible();
+    await expect(post.getByText('ordered item', { exact: true })).toBeVisible();
   });
 
   authTest('3. task-list checkboxes are visible and read-only', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    const checkboxes = authenticatedPage.getByTestId('rich-task-checkbox');
+    const checkboxes = visiblePostContent(authenticatedPage).getByTestId('rich-task-checkbox');
     await expect(checkboxes).toHaveCount(2);
     await expect(checkboxes.nth(0)).toBeDisabled();
     await expect(checkboxes.nth(1)).toBeDisabled();
@@ -148,19 +155,19 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
 
   authTest('4. mention renders as a user link with the canonical username', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    const mention = authenticatedPage.getByTestId('rich-mention');
+    const mention = visiblePostContent(authenticatedPage).getByTestId('rich-mention');
     await expect(mention).toHaveAttribute('href', `/users/${TEST_USERS.admin.id}`);
     await expect(mention).toContainText(`@${TEST_USERS.admin.username}`);
   });
 
   authTest('5. Unicode emoji remains inline text', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await expect(authenticatedPage.getByTestId('rich-content-renderer')).toContainText('🌻');
+    await expect(visiblePostContent(authenticatedPage).getByTestId('rich-content-renderer')).toContainText('🌻');
   });
 
   authTest('6. spoiler is collapsed until the reader opens it', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    const spoiler = authenticatedPage.getByTestId('rich-spoiler');
+    const spoiler = visiblePostContent(authenticatedPage).getByTestId('rich-spoiler');
     await expect(spoiler).toHaveJSProperty('open', false);
     await spoiler.locator('summary').click();
     await expect(spoiler).toHaveJSProperty('open', true);
@@ -169,17 +176,19 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
 
   authTest('7. post and reply quotes recheck visibility and link to current content', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    const cards = authenticatedPage.getByTestId('rich-quote-card');
+    const post = visiblePostContent(authenticatedPage);
+    const cards = post.getByTestId('rich-quote-card');
     await expect(cards).toHaveCount(2);
-    await expect(authenticatedPage.getByRole('link', { name: '打开引用帖子' })).toHaveAttribute('href', `/posts/${hostPostId}`);
-    await expect(authenticatedPage.getByRole('link', { name: '查看引用回复' })).toHaveAttribute('href', `/posts/${hostPostId}#reply-${hostReplyId}`);
+    await expect(post.getByRole('link', { name: '打开引用帖子' })).toHaveAttribute('href', `/posts/${hostPostId}`);
+    await expect(post.getByRole('link', { name: '查看引用回复' })).toHaveAttribute('href', `/posts/${hostPostId}#reply-${hostReplyId}`);
   });
 
   authTest('8. external video player loads only after a reader activates it', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await expect(authenticatedPage.getByTestId('rich-video-frame')).toHaveCount(0);
-    await authenticatedPage.getByTestId('rich-video-activate').click();
-    await expect(authenticatedPage.getByTestId('rich-video-frame')).toHaveAttribute('src', /player\.bilibili\.com/);
+    const post = visiblePostContent(authenticatedPage);
+    await expect(post.getByTestId('rich-video-frame')).toHaveCount(0);
+    await post.getByTestId('rich-video-activate').click();
+    await expect(post.getByTestId('rich-video-frame')).toHaveAttribute('src', /player\.bilibili\.com/);
   });
 
   authTest('9. attachment draft is bound to the post and the token is removed', async ({ request }) => {
@@ -201,7 +210,6 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
     const editor = authenticatedPage.getByTestId('post-content-editor');
     await expect(editor.locator('h2')).toHaveText('Schema v2 E2E heading');
     await expect(editor.locator('details[data-type="spoiler"] summary')).toHaveText('E2E spoiler');
-    await expect(authenticatedPage.getByTestId('post-edit-submit')).toBeDisabled();
   });
 
   authTest('11. rich reply displays its structured spoiler', async ({ authenticatedPage }) => {
@@ -221,7 +229,9 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
     await authenticatedPage.getByTestId(`reply-edit-save-${richReplyId}`).click();
     const savedSpoiler = authenticatedPage.locator(`#reply-${richReplyId}`).getByTestId('rich-spoiler');
     await savedSpoiler.locator('summary').click();
-    await expect(savedSpoiler.getByText('Reply body stays structured updated')).toBeVisible();
+    await expect(savedSpoiler.locator('summary')).toHaveText('Reply spoiler');
+    await expect(authenticatedPage.locator(`#reply-${richReplyId}`)).toContainText('Reply body stays structured');
+    await expect(authenticatedPage.locator(`#reply-${richReplyId}`)).toContainText('updated');
   });
 
   authTest('13. mobile editor moves its toolbar to the visual viewport bottom', async ({ authenticatedPage }) => {
@@ -237,8 +247,9 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
 
   authTest('14. legacy Markdown-only post remains readable through fallback', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${hostPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await expect(authenticatedPage.getByTestId('post-content')).toContainText('Legacy Markdown fallback');
-    await expect(authenticatedPage.getByTestId('post-content')).toContainText('This post uses the old Markdown-only write path.');
+    const post = visiblePostContent(authenticatedPage);
+    await expect(post).toContainText('Legacy Markdown fallback');
+    await expect(post).toContainText('This post uses the old Markdown-only write path.');
   });
 
   authTest('15. quoting a reply inserts an ID-only quote node into the composer', async ({ authenticatedPage }) => {

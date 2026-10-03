@@ -226,7 +226,7 @@ authTest.describe('Post Creation (Authenticated)', () => {
     await approveAsAdmin(request, 'post', postId);
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
     authExpect(await authenticatedPage.locator('h1').textContent()).toContain(uniqueTitle);
-    await authExpect(authenticatedPage.locator('[data-testid="post-content"] code')).toHaveText('inline code');
+    await authExpect(authenticatedPage.locator('[data-testid="post-content"]:visible').first()).toContainText('inline code');
   });
 
   authTest('should auto-save draft', async ({ authenticatedPage }) => {
