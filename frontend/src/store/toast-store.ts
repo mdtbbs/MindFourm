@@ -10,12 +10,18 @@ import { create } from 'zustand';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
 
+export interface ToastAction {
+  label: string;
+  href: string;
+}
+
 export interface ToastItem {
   id: string;
   message: string;
   type: ToastType;
   duration?: number; // Auto-dismiss duration in ms (default: 5000)
   dismissible?: boolean;
+  action?: ToastAction;
   createdAt: number;
 }
 
@@ -25,7 +31,7 @@ interface ToastState {
 
   // Actions
   showToast: (message: string, type?: ToastType, duration?: number) => void;
-  showPersistentToast: (id: string, message: string, type?: ToastType) => void;
+  showPersistentToast: (id: string, message: string, type?: ToastType, action?: ToastAction) => void;
   showSuccess: (message: string) => void;
   showError: (message: string) => void;
   showInfo: (message: string) => void;
@@ -78,7 +84,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
     }
   },
 
-  showPersistentToast: (id, message, type = 'warning') => {
+  showPersistentToast: (id, message, type = 'warning', action) => {
     set((state) => {
       const existing = state.toasts.find((toast) => toast.id === id);
       const persistentToast: ToastItem = {
@@ -89,6 +95,7 @@ export const useToastStore = create<ToastState>((set, get) => ({
         // A persistent reminder may be closed. It is recreated after route
         // navigation while the account remains unverified.
         dismissible: true,
+        action,
         createdAt: existing?.createdAt ?? Date.now(),
       };
 
