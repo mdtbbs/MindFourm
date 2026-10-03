@@ -79,16 +79,23 @@ export class EmailQueueService implements OnModuleInit, OnModuleDestroy {
     const { to, subject, html, text, logId } = job;
 
     try {
-      await this.emailService.sendMail({ to, subject, html, text });
+      if (logId) {
+        await this.emailLogRepository.increment({ id: logId }, 'attempts', 1);
+      }
+      const providerMessageId = await this.emailService.sendMail({ to, subject, html, text });
       await this.updateEmailLog(logId, {
         status: 'sent',
         error_message: null,
+        sent_at: new Date(),
+        failed_at: null,
+        provider_message_id: providerMessageId,
       });
     } catch (error) {
       const err = error as Error;
       await this.updateEmailLog(logId, {
         status: 'failed',
         error_message: this.truncateErrorMessage(err.message),
+        failed_at: new Date(),
       });
 
       if (error instanceof EmailTransportUnavailableError) {
@@ -102,7 +109,7 @@ export class EmailQueueService implements OnModuleInit, OnModuleDestroy {
 
   private async updateEmailLog(
     logId: number | undefined,
-    patch: Pick<EmailLog, 'status' | 'error_message'>,
+    patch: Partial<Pick<EmailLog, 'status' | 'error_message' | 'sent_at' | 'failed_at' | 'provider_message_id'>>,
   ): Promise<void> {
     if (!logId) {
       return;

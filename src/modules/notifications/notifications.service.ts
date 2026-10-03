@@ -24,6 +24,7 @@ import { NotificationStreamService } from './notification-stream.service';
 import { TemplateService } from './template.service';
 import { SiteConfigService } from '../../config/site-profile';
 import { UserBlocksService } from '../user-blocks/user-blocks.service';
+import { escapeMarkdownText } from '@common/utils/email-template.util';
 
 export interface NotificationView {
   id: number;
@@ -43,7 +44,6 @@ export interface NotificationView {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly fallbackFrontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
   constructor(
     @InjectRepository(Notification)
@@ -81,12 +81,7 @@ export class NotificationsService {
    * branding/domain changes instead of staying pinned to the initial env default.
    */
   private async getFrontendUrl(): Promise<string> {
-    try {
-      const configured = await this.settingsService.get('site_url');
-      return configured?.trim() || this.fallbackFrontendUrl;
-    } catch {
-      return this.fallbackFrontendUrl;
-    }
+    return this.settingsService.getPublicSiteUrl();
   }
 
   private isEnabled(value: string | null | undefined, defaultValue: boolean): boolean {
@@ -131,6 +126,24 @@ export class NotificationsService {
     return message.length > maxLength ? `${message.slice(0, maxLength - 3)}...` : message;
   }
 
+  private escapeMarkdownTemplateVariables(variables: Record<string, unknown>): Record<string, unknown> {
+    const escaped = { ...variables };
+    for (const key of [
+      'username',
+      'actor_name',
+      'post_title',
+      'reply_excerpt',
+      'mention_excerpt',
+      'sender_name',
+      'message_excerpt',
+    ]) {
+      if (typeof escaped[key] === 'string') {
+        escaped[key] = escapeMarkdownText(escaped[key] as string);
+      }
+    }
+    return escaped;
+  }
+
   private composeMarkdownMessage(title: string, body: string): string {
     const sections = [
       title.trim() ? `# ${title.trim()}` : '',
@@ -160,15 +173,14 @@ export class NotificationsService {
   private async renderWelcomeContent(user: User): Promise<string> {
     const emailSettings = await this.settingsService.getByCategory('email');
     const siteName = await this.getSiteName();
-    const variables = {
-      username: user.username || (this.siteConfig?.current.profile === 'mindustry-club' ? 'there' : '用户'),
-      site_name: siteName,
-    };
+    const username = user.username || (this.siteConfig?.current.profile === 'mindustry-club' ? 'there' : '用户');
+    const titleVariables = { username, site_name: siteName };
+    const bodyVariables = { username: escapeMarkdownText(username), site_name: siteName };
 
     const titleTemplate = emailSettings.welcome_notification_title || DEFAULT_WELCOME_NOTIFICATION_TITLE;
     const bodyTemplate = emailSettings.welcome_notification_body || DEFAULT_WELCOME_NOTIFICATION_BODY;
-    const title = this.templateService.render(titleTemplate, variables);
-    const body = this.templateService.render(bodyTemplate, variables);
+    const title = escapeMarkdownText(this.templateService.render(titleTemplate, titleVariables));
+    const body = this.templateService.render(bodyTemplate, bodyVariables);
 
     return this.composeMarkdownMessage(title, body);
   }
@@ -183,7 +195,7 @@ export class NotificationsService {
     templateVars: Record<string, unknown>,
   ): Promise<void> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
-    if (!user || !user.email) return;
+    if (!user || !user.email || !user.email_verified) return;
 
     const templateConfig = EMAIL_TEMPLATE_DEFAULTS[emailType];
     const userPreferenceEnabled = user[templateConfig.preferenceKey] !== false;
@@ -216,7 +228,10 @@ export class NotificationsService {
     const subjectTemplate = emailSettings[templateConfig.subjectSettingKey] || templateConfig.defaultSubject;
     const bodyTemplate = emailSettings[templateConfig.bodySettingKey] || templateConfig.defaultBody;
     const subject = this.sanitizeHeaderValue(this.templateService.render(subjectTemplate, variables));
-    const contentMarkdown = this.templateService.render(bodyTemplate, variables);
+    const contentMarkdown = this.templateService.render(
+      bodyTemplate,
+      this.escapeMarkdownTemplateVariables(variables),
+    );
     const layout = this.siteConfig?.current.profile === 'mindustry-club' ? EMAIL_LAYOUT_TEMPLATE_EN : EMAIL_LAYOUT_TEMPLATE;
     const html = this.templateService.render(layout, {
       ...variables,
@@ -236,6 +251,7 @@ export class NotificationsService {
         to: user.email,
         subject,
         html,
+        text: contentMarkdown,
         logId: emailLog.id,
       });
     } catch (error) {
@@ -314,10 +330,14 @@ export class NotificationsService {
       });
     }
 
-    await this.queueEmailIfEnabled(userId, 'welcome', {
-      content,
-      action_url: frontendUrl,
-    });
+    try {
+      await this.queueEmailIfEnabled(userId, 'welcome', {
+        content,
+        action_url: frontendUrl,
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to queue welcome email for user ${userId}: ${(error as Error).message}`);
+    }
   }
 
   /**

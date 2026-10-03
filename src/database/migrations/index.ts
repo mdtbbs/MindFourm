@@ -69,6 +69,7 @@ import { MultiplayerPlatformV11720000150000 } from './1720000150000-MultiplayerP
 import { CloudSavesV11720000160000 } from './1720000160000-CloudSavesV1';
 import { MultiplayerJoinApprovalDurability1720000170000 } from './1720000170000-MultiplayerJoinApprovalDurability';
 import { MultiplayerJoinIntentRecovery1720000180000 } from './1720000180000-MultiplayerJoinIntentRecovery';
+import { EmailDeliveryHardening1720000240000 } from './1720000240000-EmailDeliveryHardening';
 
 /**
  * Migrations in run order.
@@ -149,4 +150,5 @@ export const migrations = [
   AddPreferredContentLanguage1720000210000,
   ResourcePackItems1720000220000,
   UnifyResourceDiscussions1720000230000,
+  EmailDeliveryHardening1720000240000,
 ];

@@ -33,6 +33,7 @@ describe('EmailQueueService', () => {
     };
     const emailLogRepository = {
       update: jest.fn().mockResolvedValue(undefined),
+      increment: jest.fn().mockResolvedValue(undefined),
     };
     const redisService = {
       getConnectionConfig: jest.fn().mockReturnValue({ host: 'localhost', port: 6379 }),
@@ -53,6 +54,7 @@ describe('EmailQueueService', () => {
 
   it('marks queued email logs as sent after successful delivery', async () => {
     const { service, emailService, emailLogRepository } = createService();
+    emailService.sendMail.mockResolvedValue('provider-12');
 
     await service.processEmailJob({
       to: 'user@example.com',
@@ -67,9 +69,13 @@ describe('EmailQueueService', () => {
       html: '<p>Hello</p>',
       text: undefined,
     });
+    expect(emailLogRepository.increment).toHaveBeenCalledWith({ id: 12 }, 'attempts', 1);
     expect(emailLogRepository.update).toHaveBeenCalledWith(12, {
       status: 'sent',
       error_message: null,
+      sent_at: expect.any(Date),
+      failed_at: null,
+      provider_message_id: 'provider-12',
     });
   });
 
@@ -87,6 +93,7 @@ describe('EmailQueueService', () => {
     expect(emailLogRepository.update).toHaveBeenCalledWith(18, {
       status: 'failed',
       error_message: 'SMTP unavailable',
+      failed_at: expect.any(Date),
     });
   });
 
@@ -104,6 +111,7 @@ describe('EmailQueueService', () => {
     expect(emailLogRepository.update).toHaveBeenCalledWith(22, {
       status: 'failed',
       error_message: 'ECONNRESET while sending',
+      failed_at: expect.any(Date),
     });
   });
 

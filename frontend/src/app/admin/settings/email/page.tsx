@@ -119,7 +119,7 @@ export default function EmailSettingsPage() {
   const smtpPasswordStored = smtpPasswordValue === SECRET_PLACEHOLDER;
   const activeConfig = TEMPLATE_FIELDS.find((item) => item.key === activeTemplate) ?? TEMPLATE_FIELDS[0];
   const welcomeNoticeEnabled = (values.welcome_notification_enabled ?? 'true') === 'true';
-  const smtpSecureEnabled = (values.smtp_secure ?? 'true') === 'true';
+  const smtpSecureEnabled = (values.smtp_secure ?? 'false') === 'true';
 
   const variableHints = useMemo(
     () => TEMPLATE_VARIABLE_HINTS[activeTemplate],
@@ -204,11 +204,11 @@ export default function EmailSettingsPage() {
             <label className="block text-sm text-surface-700 md:col-span-2">
               <span className="mb-2 block">发件人地址</span>
               <input
-                type="email"
+                type="text"
                 value={values.smtp_from ?? ''}
                 onChange={(e) => update('smtp_from', e.target.value)}
                 className="w-full border border-surface-200 bg-white px-3 py-2 text-sm md:max-w-xl"
-                placeholder="社区论坛 <noreply@example.com>"
+                placeholder="MDTBBS <noreply@mdtbbs.cn>"
               />
             </label>
 
@@ -219,8 +219,11 @@ export default function EmailSettingsPage() {
                 onChange={(e) => toggleBoolean('smtp_secure', e.target.checked)}
                 className="h-4 w-4 accent-surface-900"
               />
-              启用 TLS / SSL 安全连接
+              使用 SMTPS（隐式 TLS，通常端口 465）
             </label>
+            <p className="text-xs text-surface-500 md:col-span-2">
+              端口 587 使用 STARTTLS，请保持此选项关闭；端口 465 通常开启。
+            </p>
           </div>
         </section>
 

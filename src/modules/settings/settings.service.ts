@@ -21,6 +21,8 @@ import {
   SidebarNavigationItem,
 } from '@common/utils/sidebar-navigation.util';
 import { getDefaultSidebarNavigation } from '@common/utils/sidebar-navigation-defaults';
+import { resolvePublicSiteUrl, validateConfiguredPublicSiteUrl } from '@common/utils/public-site-url.util';
+import { validateHandlebarsTemplate } from '@common/utils/email-template.util';
 import { NAVIGATION_INVALIDATOR, type NavigationInvalidator } from '../navigation/navigation.contract';
 import { SiteConfigService } from '../../config/site-profile';
 import { getSiteDefaultSettings } from './site-default-packs';
@@ -471,6 +473,24 @@ export class SettingsService implements OnModuleInit {
     }
   }
 
+  async getPublicSiteUrl(): Promise<string> {
+    const configuredUrl = await this.get('site_url');
+    return resolvePublicSiteUrl({
+      configuredUrl,
+      envUrl: process.env.FRONTEND_URL,
+      profileDomain: this.siteConfig?.current.domain,
+      nodeEnv: process.env.NODE_ENV,
+    });
+  }
+
+  private getDefaultSiteUrl(): string {
+    return resolvePublicSiteUrl({
+      envUrl: process.env.FRONTEND_URL,
+      profileDomain: this.siteConfig?.current.domain,
+      nodeEnv: process.env.NODE_ENV,
+    });
+  }
+
   /**
    * Seed default settings (INSERT IGNORE)
    */
@@ -502,7 +522,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'brand_accent', value: DEFAULT_BRAND_ACCENT, category: 'basic', description: 'Global accent surface color' },
       { key: 'top_navigation_items', value: serializeTopNavigationItems(DEFAULT_TOP_NAVIGATION_ITEMS), category: 'navigation', description: 'Top navigation links and groups as JSON' },
       { key: 'sidebar_navigation_items', value: JSON.stringify(getDefaultSidebarNavigation()), category: 'navigation', description: 'Sidebar navigation items as JSON' },
-      { key: 'site_url', value: process.env.FRONTEND_URL || 'http://localhost:3000', category: 'basic', description: '站点URL - 用于生成邮件链接、RSS订阅等，必须设置为实际运营域名' },
+      { key: 'site_url', value: this.getDefaultSiteUrl(), category: 'basic', description: '站点URL - 用于生成邮件链接、RSS订阅等；生产环境必须为 HTTPS 公网地址' },
       { key: 'admin_email', value: 'admin@example.com', category: 'basic', description: 'Admin email' },
       { key: 'maintenance_mode', value: 'false', category: 'basic', description: 'Maintenance mode toggle' },
       { key: 'posts_per_page', value: '20', category: 'posts', description: 'Posts per page' },
@@ -596,8 +616,8 @@ export class SettingsService implements OnModuleInit {
       { key: 'smtp_port', value: '587', category: 'email', description: 'SMTP server port' },
       { key: 'smtp_user', value: '', category: 'email', description: 'SMTP username' },
       { key: 'smtp_password', value: '', category: 'email', description: 'SMTP password' },
-      { key: 'smtp_from', value: 'noreply@mindforum.com', category: 'email', description: 'Email sender address' },
-      { key: 'smtp_secure', value: 'true', category: 'email', description: 'Use TLS/SSL' },
+      { key: 'smtp_from', value: this.siteConfig?.current.profile === 'mindustry-club' ? 'Mindustry Club <noreply@mindustry.club>' : 'MDTBBS <noreply@mdtbbs.cn>', category: 'email', description: 'Email sender address' },
+      { key: 'smtp_secure', value: 'false', category: 'email', description: 'Use implicit TLS (SMTPS, normally port 465); port 587 uses STARTTLS with this disabled' },
       { key: 'welcome_notification_enabled', value: 'true', category: 'email', description: 'Enable welcome notification for new users' },
       { key: 'welcome_notification_title', value: DEFAULT_WELCOME_NOTIFICATION_TITLE, category: 'email', description: 'Welcome notification title template' },
       { key: 'welcome_notification_body', value: DEFAULT_WELCOME_NOTIFICATION_BODY, category: 'email', description: 'Welcome notification body template' },
@@ -827,6 +847,7 @@ export class SettingsService implements OnModuleInit {
     const normalizedPairs = this.normalizeBatch(keyValuePairs);
 
     if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
+    if (category === 'email') await this.validateEmailSettings(normalizedPairs);
 
     for (const [key, value] of normalizedPairs.entries()) {
       await this.settingRepository.query(
@@ -854,6 +875,7 @@ export class SettingsService implements OnModuleInit {
 
     const normalizedPairs = this.normalizeBatch(replacementValues);
     if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
+    if (category === 'email') await this.validateEmailSettings(normalizedPairs);
 
     const updated = await this.settingRepository.manager.transaction(async (manager) => {
       const placeholders = keys.map(() => '?').join(', ');
@@ -900,9 +922,58 @@ export class SettingsService implements OnModuleInit {
       if (key === 'footer_friendly_links') {
         normalizedValue = normalizeFooterFriendlyLinks(value);
       }
+      if (key === 'site_url') {
+        try {
+          normalizedValue = validateConfiguredPublicSiteUrl(value, process.env.NODE_ENV);
+        } catch (error) {
+          throw new BadRequestException(`站点 URL 无效：${(error as Error).message}`);
+        }
+      }
       normalizedPairs.set(key, normalizedValue);
     }
     return normalizedPairs;
+  }
+
+  private async validateEmailSettings(values: Map<string, string>): Promise<void> {
+    const booleanKeys = [
+      'smtp_secure',
+      'welcome_notification_enabled',
+      ...Object.values(EMAIL_TEMPLATE_DEFAULTS).map((config) => config.enabledSettingKey),
+    ];
+    for (const key of booleanKeys) {
+      const value = values.get(key);
+      if (value !== undefined && value !== 'true' && value !== 'false') {
+        throw new BadRequestException(`${key} 必须为 true 或 false。`);
+      }
+    }
+
+    const portRaw = values.get('smtp_port') ?? await this.get('smtp_port') ?? '587';
+    const port = Number(portRaw);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new BadRequestException('SMTP 端口必须是 1 到 65535 之间的整数。');
+    }
+
+    const secure = values.get('smtp_secure') ?? await this.get('smtp_secure') ?? 'false';
+    if (port === 587 && secure === 'true') {
+      throw new BadRequestException('SMTP 端口 587 使用 STARTTLS，请关闭“隐式 TLS / SMTPS”；端口 465 才通常启用该选项。');
+    }
+
+    const templateKeys = new Set([
+      'welcome_notification_title',
+      'welcome_notification_body',
+      ...Object.values(EMAIL_TEMPLATE_DEFAULTS).flatMap((config) => [
+        config.subjectSettingKey,
+        config.bodySettingKey,
+      ]),
+    ]);
+    for (const [key, value] of values.entries()) {
+      if (!templateKeys.has(key)) continue;
+      try {
+        validateHandlebarsTemplate(value);
+      } catch (error) {
+        throw new BadRequestException(`${key} 模板语法错误：${(error as Error).message}`);
+      }
+    }
   }
 
   private async validateCloudSavesSettings(values: Map<string, string>): Promise<void> {
