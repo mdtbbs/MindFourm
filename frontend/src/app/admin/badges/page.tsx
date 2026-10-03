@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useEffect, useState, useCallback } from 'react';
 import { badgesApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
@@ -76,7 +78,7 @@ export default function AdminBadgesPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除此徽章吗？')) return;
+    if (!await confirmDialog({ message: '确定要删除此徽章吗？', destructive: true })) return;
     try {
       await badgesApi.adminDelete(id);
       setMessage('徽章已删除');

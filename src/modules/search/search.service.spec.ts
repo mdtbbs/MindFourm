@@ -2,6 +2,7 @@ const decorator = () => () => undefined;
 
 jest.mock('@nestjs/common', () => ({
   Inject: () => () => undefined,
+  Optional: decorator,
   Injectable: decorator,
   Logger: class Logger { warn = jest.fn(); },
 }));
@@ -38,6 +39,7 @@ jest.mock('@entities/group-member.entity', () => ({ GroupMember: class GroupMemb
 jest.mock('@entities/knowledge-article.entity', () => ({ KnowledgeArticle: class KnowledgeArticle {} }));
 jest.mock('../../database/redis.service', () => ({ RedisService: class RedisService {} }));
 jest.mock('../posts/post-summary.service', () => ({ PostSummaryService: class PostSummaryService {} }));
+jest.mock('../../config/site-profile', () => ({ SiteConfigService: class SiteConfigService {} }));
 
 import { SearchService } from './search.service';
 
@@ -89,6 +91,7 @@ function createService(overrides: {
   userRepository?: Record<string, jest.Mock>;
   knowledgeRepository?: Record<string, jest.Mock>;
   providerRegistry?: { search: jest.Mock };
+  siteConfig?: { current: { searchProviders?: readonly string[]; contentLanguagePreference?: boolean } };
 } = {}) {
   const queryBuilder = createQueryBuilder(
     [
@@ -137,6 +140,7 @@ function createService(overrides: {
     undefined,
     undefined,
     providerRegistry as any,
+    overrides.siteConfig as any,
   );
 
   return {
@@ -172,7 +176,7 @@ describe('SearchService', () => {
       '(p.title LIKE :query OR p.content LIKE :query)',
       { query: '%guide%' },
     );
-    expect(queryBuilder.orderBy).toHaveBeenCalledWith(
+    expect(queryBuilder.addOrderBy).toHaveBeenCalledWith(
       'search_title_match',
       'DESC',
     );
@@ -198,6 +202,66 @@ describe('SearchService', () => {
         totalPages: 2,
       },
     });
+  });
+
+  it('filters declared content language and ranks the member preferred language first', async () => {
+    const { service, queryBuilder } = createService({
+      siteConfig: { current: { contentLanguagePreference: true } },
+    });
+    await service.searchPosts('map', { page: 1, limit: 10, sort: 'relevance', content_language: 'ja' }, {
+      id: 4, role: 'user', preferred_content_language: 'ru',
+    });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('p.content_language = :contentLanguage', { contentLanguage: 'ja' });
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith(
+      'CASE WHEN p.content_language = :preferredContentLanguage THEN 1 ELSE 0 END', 'search_language_match',
+    );
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith('search_language_match', 'DESC');
+  });
+
+  it('does not apply preferred-language ranking on the MDTBBS site profile', async () => {
+    const { service, queryBuilder } = createService({
+      siteConfig: { current: { contentLanguagePreference: false } },
+    });
+
+    await service.searchPosts('map', { page: 1, limit: 10, sort: 'relevance', preferred_content_language: 'ru' }, {
+      id: 4, role: 'user', preferred_content_language: 'ru',
+    });
+
+    expect(queryBuilder.addSelect).not.toHaveBeenCalledWith(
+      'CASE WHEN p.content_language = :preferredContentLanguage THEN 1 ELSE 0 END', 'search_language_match',
+    );
+    expect(queryBuilder.orderBy).not.toHaveBeenCalledWith('search_language_match', 'DESC');
+  });
+
+  it('does not run search providers excluded by the active Site Profile', async () => {
+    const providerRegistry = { search: jest.fn().mockResolvedValue([]) };
+    const { service } = createService({
+      providerRegistry,
+      siteConfig: { current: { searchProviders: ['posts', 'users', 'resources'] } },
+    });
+
+    const result = await service.searchUnified('guide');
+
+    expect(providerRegistry.search).toHaveBeenCalledTimes(1);
+    expect(providerRegistry.search).toHaveBeenCalledWith('resources', 'guide', expect.any(Object));
+    expect(result.groups.developer_feed).toEqual([]);
+  });
+
+  it('keeps per-user language ranking out of MDTBBS unified search providers', async () => {
+    const providerRegistry = { search: jest.fn().mockResolvedValue([]) };
+    const { service, queryBuilder } = createService({
+      providerRegistry,
+      siteConfig: { current: { searchProviders: ['posts', 'resources'], contentLanguagePreference: false } },
+    });
+
+    await service.searchUnified('map', { id: 4, role: 'user', preferred_content_language: 'ru' });
+
+    expect(queryBuilder.addSelect).not.toHaveBeenCalledWith(
+      'CASE WHEN p.content_language = :preferredContentLanguage THEN 1 ELSE 0 END', 'search_language_match',
+    );
+    expect(providerRegistry.search).toHaveBeenCalledWith('resources', 'map', expect.objectContaining({
+      preferred_content_language: undefined,
+    }));
   });
 
   it('bounds malformed internal pagination arguments and preserves LIKE escaping', async () => {

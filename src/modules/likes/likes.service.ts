@@ -8,6 +8,7 @@ import { Reply } from '@entities/reply.entity';
 import { BatchViewer, BatchTargetType, visibleBatchTargets } from '@common/utils/batch-targets.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PointsService } from '../points/points.service';
+import { applyResourceDiscussionVisibility } from '@common/utils/post-visibility.util';
 
 @Injectable()
 export class LikesService {
@@ -144,12 +145,13 @@ export class LikesService {
   }
 
   async getUserLikedPosts(userId: number, page: number, limit: number) {
-    const [posts, total] = await this.postRepo
+    const query = this.postRepo
       .createQueryBuilder('p')
       .innerJoin(PostLike, 'pl', 'pl.post_id = p.id AND pl.user_id = :userId', { userId })
       .leftJoin('p.user', 'u')
-      .leftJoin('p.category', 'c')
-      .orderBy('p.created_at', 'DESC')
+      .leftJoin('p.category', 'c');
+    applyResourceDiscussionVisibility(query, 'p', { id: userId, role: 'user' });
+    const [posts, total] = await query.orderBy('p.created_at', 'DESC')
       .skip((page - 1) * limit)
       .take(limit)
       .getManyAndCount();

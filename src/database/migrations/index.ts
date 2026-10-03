@@ -1,4 +1,8 @@
 import { ForumPerformance1720000190000 } from './1720000190000-ForumPerformance';
+import { ResourceViewsAnalytics1720000200000 } from './1720000200000-ResourceViewsAnalytics';
+import { AddPreferredContentLanguage1720000210000 } from './1720000210000-AddPreferredContentLanguage';
+import { ResourcePackItems1720000220000 } from './1720000220000-ResourcePackItems';
+import { UnifyResourceDiscussions1720000230000 } from './1720000230000-UnifyResourceDiscussions';
 import { BaselineSchema1720000000000 } from './1720000000000-BaselineSchema';
 import { NormalizeReplyStatus1720000001000 } from './1720000001000-NormalizeReplyStatus';
 import { AddMissingIndexes1720000002000 } from './1720000002000-AddMissingIndexes';
@@ -141,4 +145,8 @@ export const migrations = [
   MultiplayerJoinApprovalDurability1720000170000,
   MultiplayerJoinIntentRecovery1720000180000,
   ForumPerformance1720000190000,
+  ResourceViewsAnalytics1720000200000,
+  AddPreferredContentLanguage1720000210000,
+  ResourcePackItems1720000220000,
+  UnifyResourceDiscussions1720000230000,
 ];

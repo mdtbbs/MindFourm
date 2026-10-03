@@ -391,7 +391,7 @@ export default function ResourceSubmitForm() {
         maxLength={50}
       />
 
-      <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
+      <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${description}\n${content}`} />
 
       <div className="space-y-2">
         <label className="block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.shortDescription')}</label>

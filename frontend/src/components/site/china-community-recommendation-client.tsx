@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useI18n } from '@/i18n/provider';
 
-export function ChinaRecommendationBanner({ subdued }: { subdued: boolean }) {
+export function ChinaRecommendationBanner() {
   const [visible, setVisible] = useState(true);
   const { t } = useI18n();
   if (!visible) return null;
@@ -13,7 +13,7 @@ export function ChinaRecommendationBanner({ subdued }: { subdued: boolean }) {
     document.cookie = `club_mdtbbs_recommendation=dismissed; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
     setVisible(false);
   };
-  return <aside className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 text-sm ${subdued ? 'border-[var(--border)] bg-[var(--bg)] text-[var(--text-secondary)]' : 'border-blue-200 bg-blue-50 text-slate-800'}`} aria-label={t('recommendation.title')}>
+  return <aside className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-blue-200 bg-blue-50 px-4 py-3 text-sm text-slate-800" aria-label={t('recommendation.title')}>
     <div className="min-w-0 flex-1"><strong className="font-semibold">{t('recommendation.title')}</strong><span className="ml-2">{t('recommendation.description')}</span></div>
     <div className="flex shrink-0 items-center gap-3">
       <Link href="https://mdtbbs.cn" target="_blank" rel="noreferrer" className="font-semibold underline underline-offset-2">{t('recommendation.visit')}</Link>

@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useCallback, useEffect, useState } from 'react';
 import { groupsAdminApi, Group, GroupInput, GroupMember, userApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
@@ -101,7 +103,7 @@ export default function AdminGroupsPage() {
 
   const handleDelete = async (group: Group) => {
     if (group.is_system) return;
-    if (!window.confirm(`确定要删除用户组「${group.name}」吗？成员关系也会被移除。`)) return;
+    if (!await confirmDialog({ message: `确定要删除用户组「${group.name}」吗？成员关系也会被移除。`, destructive: true })) return;
     setDeleting(group.id);
     setError(null);
     try {
@@ -162,7 +164,7 @@ export default function AdminGroupsPage() {
   };
 
   const removeMember = async (member: GroupMember) => {
-    if (!memberGroup || !window.confirm(`确定要移除成员「${member.username}」吗？`)) return;
+    if (!memberGroup || !await confirmDialog({ message: `确定要移除成员「${member.username}」吗？`, destructive: true })) return;
     setMemberError(null);
     try {
       await groupsAdminApi.removeMember(memberGroup.id, member.id);

@@ -23,7 +23,7 @@ export class SearchV1Controller {
   @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 100 }, example: 20, description: '每页结果数量。' })
   async unified(@Query() query: SearchQueryDto, @Req() req: any) {
     return this.search.withSearchAudit(req.user, query.q, async (normalized) => {
-      const value = await this.search.searchUnified(normalized, req.user, query.limit);
+      const value = await this.search.searchUnified(normalized, req.user, query.limit, query.content_language);
       return {
         value,
         resultsCount: Object.values(value.total_by_type).reduce((total, count) => total + count, 0),

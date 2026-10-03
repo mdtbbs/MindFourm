@@ -37,6 +37,9 @@ import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
 import { ResourcesV1WriteController } from './v1/resources-v1-write.controller';
 import { ResourceDuplicateService } from './resource-duplicate.service';
 import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
+import { ResourceViewsService } from './resource-views.service';
+import { DownloadsModule } from '../downloads/downloads.module';
+import { ResourceCommentsModule } from '../resource-comments/resource-comments.module';
 
 @Module({
   imports: [
@@ -47,9 +50,11 @@ import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
     LogsModule,
     NavigationModule,
     CustomEmojisModule,
+    DownloadsModule,
+    ResourceCommentsModule,
     TypeOrmModule.forFeature([Resource, ResourceUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription]),
   ],
-  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
   controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController],
   exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
 })

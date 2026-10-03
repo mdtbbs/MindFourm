@@ -1,16 +1,12 @@
-import { shouldRecommendMdtbbs, shouldSubdueMdtbbsRecommendation } from './recommendation-policy';
+import { shouldRecommendMdtbbs } from './recommendation-policy';
 
 describe('Mindustry Club mainland China recommendation', () => {
-  it('shows only for trusted CN region and hides after dismissal', () => {
+  it('shows for a Chinese region or language environment unless an international choice was made', () => {
     expect(shouldRecommendMdtbbs('CN')).toBe(true);
+    expect(shouldRecommendMdtbbs('US', false, null, 'zh-CN,zh;q=0.9')).toBe(true);
+    expect(shouldRecommendMdtbbs('CN', false, 'en', 'zh-CN')).toBe(false);
     expect(shouldRecommendMdtbbs('CN', true)).toBe(false);
+    expect(shouldRecommendMdtbbs('US', false, 'ru', 'ru,en;q=0.8')).toBe(false);
     expect(shouldRecommendMdtbbs('US')).toBe(false);
-    expect(shouldRecommendMdtbbs(undefined)).toBe(false);
-  });
-
-  it('uses a quieter presentation for visitors with an international language preference', () => {
-    expect(shouldSubdueMdtbbsRecommendation(null, 'ja,en;q=0.8')).toBe(true);
-    expect(shouldSubdueMdtbbsRecommendation('ru', 'zh-CN')).toBe(true);
-    expect(shouldSubdueMdtbbsRecommendation('zh-CN', 'zh-CN')).toBe(false);
   });
 });

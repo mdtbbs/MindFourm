@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { friendsApi, multiplayerApi, socialPresenceApi, userBlocksApi, type SocialFriendPresenceItem } from '@/lib/api/client';
 import FriendRequests from '@/components/lanlink/FriendRequests';
+import { confirmDialog } from '@/store/interaction-dialog-store';
 
 type Tab = 'all' | 'online' | 'pending' | 'blocked';
 
@@ -63,7 +64,7 @@ export default function FriendsList() {
   });
 
   const removeFriend = async (userId: number) => {
-    if (!confirm('确定要删除这位好友吗？')) return;
+    if (!await confirmDialog({ message: '确定要删除这位好友吗？', destructive: true })) return;
     markBusy(userId, true);
     try { await friendsApi.removeFriend(userId); setFriends((items) => items.filter((item) => item.user.id !== userId)); }
     catch { setError('删除好友失败，请重试。'); }

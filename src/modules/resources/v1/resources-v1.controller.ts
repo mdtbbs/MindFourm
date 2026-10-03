@@ -1,4 +1,4 @@
-import { Controller, Get, Param, HttpStatus, Query, Res, StreamableFile, NotFoundException, Optional } from '@nestjs/common';
+import { Controller, Get, Param, HttpStatus, Query, Req, Res, StreamableFile, NotFoundException, Optional } from '@nestjs/common';
 import { Response } from 'express';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
@@ -17,6 +17,8 @@ import { ResourceReadAdapterService, V1ResourceDto } from '../resource-read-adap
 import { V1ResourceDetail, V1ResourceManifest } from './resources-v1.dto';
 import { RESOURCE_KINDS } from '../resource-kind-registry';
 import { ResourceCategoryService } from '../resource-categories.service';
+import { DownloadGrantService } from '../../downloads/download-grant.service';
+import { getClientIp } from '@common/utils/client-context.util';
 
 /**
  * V1 Resource read endpoints.
@@ -37,6 +39,7 @@ export class ResourcesV1Controller {
     private readonly resourceReadAdapter: ResourceReadAdapterService,
     @Optional() private readonly resourcePreviewService?: ResourcePreviewService,
     @Optional() private readonly categoryService?: ResourceCategoryService,
+    @Optional() private readonly downloadGrantService?: DownloadGrantService,
   ) {}
 
   @Get()
@@ -105,6 +108,7 @@ export class ResourcesV1Controller {
     @Param('versionId') versionId: string,
     @Param('fileId') fileId: string,
     @Res({ passthrough: true }) res: Response,
+    @Req() req: any,
   ) {
     await this.assertEnabled();
     const caps = await this.capabilitiesService.getCapabilities();
@@ -121,7 +125,7 @@ export class ResourcesV1Controller {
     );
     if (redirectUrl) {
       assertSafeRedirectUrl(redirectUrl);
-      await this.resourceReadAdapter.incrementDownload(target.resource.id);
+      await this.recordDownloadGrant(target, req);
       return res.redirect(redirectUrl);
     }
 
@@ -132,12 +136,35 @@ export class ResourcesV1Controller {
     } catch {
       throw new NotFoundException('文件不存在');
     }
-    await this.resourceReadAdapter.incrementDownload(target.resource.id);
+    await this.recordDownloadGrant(target, req);
     res.set({
       'Content-Type': target.file.mime_type || 'application/octet-stream',
       'Content-Disposition': attachmentContentDisposition(target.file.original_filename || target.file.display_name || 'file'),
     });
     return new StreamableFile(createReadStream(filePath));
+  }
+
+  private async recordDownloadGrant(target: { resource: any; version: any; file: any }, req: any): Promise<void> {
+    if (!this.downloadGrantService) {
+      await this.resourceReadAdapter.incrementDownload(target.resource.id);
+      return;
+    }
+    const userId = Number(req?.user?.id);
+    const userAgent = String(req?.headers?.['user-agent'] || '');
+    const actorKey = Number.isInteger(userId) && userId > 0
+      ? `user:${userId}`
+      : `ipua:${getClientIp(req) || 'unknown'}:${userAgent}`;
+    await this.downloadGrantService.recordGrant({
+      resourceId: target.resource.id,
+      versionId: target.version.id,
+      fileId: target.file.id,
+      grantedAt: new Date(),
+      userId: Number.isInteger(userId) && userId > 0 ? userId : null,
+      clientType: 'public-v1',
+      clientVersion: String(req?.headers?.['x-client-version'] || '').slice(0, 80) || null,
+      platform: String(req?.headers?.['x-platform'] || '').slice(0, 40) || null,
+      backend: String(target.file.delivery_mode || 'managed').slice(0, 32),
+    }, actorKey);
   }
 
   @Get(':id')

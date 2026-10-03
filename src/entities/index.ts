@@ -115,6 +115,8 @@ import { DeveloperFeedEntry } from './developer-feed-entry.entity';
 import { ServiceAccount } from './service-account.entity';
 import { ContentRelation } from './content-relation.entity';
 import { DownloadEvent } from './download-event.entity';
+import { ResourceViewEvent } from './resource-view-event.entity';
+import { ResourcePackItem } from './resource-pack-item.entity';
 import { GameContentUploadSession } from './game-content-upload-session.entity';
 import { ResourceSubmissionIdempotency } from './resource-submission-idempotency.entity';
 import { SocialPrivacySetting } from './social-privacy-setting.entity';
@@ -231,6 +233,8 @@ export const coreEntities = [
   ServiceAccount,
   ContentRelation,
   DownloadEvent,
+  ResourceViewEvent,
+  ResourcePackItem,
   GameContentUploadSession,
   SocialPrivacySetting,
   UserPresencePreference,
@@ -330,6 +334,8 @@ export {
   DeveloperFeedEntry,
   ContentRelation,
   DownloadEvent,
+  ResourceViewEvent,
+  ResourcePackItem,
   GameContentUploadSession,
   ServiceAccount,
 };

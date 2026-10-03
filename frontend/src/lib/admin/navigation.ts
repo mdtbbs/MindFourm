@@ -109,6 +109,7 @@ export const adminNavSections: AdminNavSection[] = [
     feature: 'resources',
     items: [
       { key: 'resources', label: '全部资源', href: '/admin/resources', icon: Package, roles: staff, exact: true, keywords: ['地图', '蓝图', 'mod'] },
+      { key: 'resource-analytics', label: '资源统计', href: '/admin/resources/analytics', icon: TrendingUp, roles: staff, keywords: ['PV', 'UV', '下载', 'views'] },
       { key: 'resource-moderation', label: '资源审批', href: '/admin/resources/moderation', icon: ListChecks, roles: staff, keywords: ['待审核'] },
       { key: 'resource-categories', label: '资源分类', href: '/admin/resources/categories', icon: Layers3, roles: adminOnly },
       { key: 'resource-merge', label: '重复资源合并', href: '/admin/resources/merge', icon: GitMerge, roles: adminOnly, keywords: ['重复', '合并'] },

@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useState } from 'react';
 import { resourceAdminApi } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
@@ -48,7 +50,12 @@ export default function ResourceMergePage() {
 
   const merge = async () => {
     if (!preview) return;
-    const accepted = window.confirm(`确认将「${preview.source.title}」合并到「${preview.target.title}」？来源资源将标记为已合并，API 详情请求会永久重定向到目标资源。`);
+    const accepted = await confirmDialog({
+      title: '确认合并资源',
+      message: `确认将「${preview.source.title}」合并到「${preview.target.title}」？来源资源将标记为已合并，API 详情请求会永久重定向到目标资源。`,
+      confirmLabel: '合并资源',
+      destructive: true,
+    });
     if (!accepted) return;
     setBusy(true);
     setError(null);

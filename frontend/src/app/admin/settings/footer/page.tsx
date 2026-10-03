@@ -12,6 +12,8 @@ import {
   type FooterFriendlyLink,
 } from '@/lib/footer/footer-settings';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 
 const EMPTY_LINK: FooterFriendlyLink = { label: '', href: '', description: '' };
 
@@ -25,23 +27,24 @@ export default function FooterSettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [links, setLinks] = useState<FooterFriendlyLink[]>([{ ...EMPTY_LINK }]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges({ values, links });
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const data = await adminApi.getSettings('footer');
+      const editableLinks = toEditableLinks(data.footer_friendly_links);
       setValues(data);
-      setLinks(toEditableLinks(data.footer_friendly_links));
+      setLinks(editableLinks);
+      initializeUnsaved({ values: data, links: editableLinks });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load footer settings');
+      setLoadError(err instanceof Error ? err.message : 'Failed to load footer settings');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
@@ -78,9 +81,8 @@ export default function FooterSettingsPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
-    setMessage(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    unsaved.setSaving();
     try {
       if (linkErrors.length > 0) {
         throw new Error(linkErrors[0]);
@@ -92,29 +94,26 @@ export default function FooterSettingsPage() {
       };
       await adminApi.updateSettings('footer', payload);
       await refreshAfterSettingsSave();
+      const savedLinks = toEditableLinks(payload.footer_friendly_links);
       setValues(payload);
-      setLinks(toEditableLinks(payload.footer_friendly_links));
-      setMessage('页脚设置已保存');
-      setTimeout(() => setMessage(null), 3000);
+      setLinks(savedLinks);
+      unsaved.markSaved({ values: payload, links: savedLinks });
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存页脚设置失败');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : '保存页脚设置失败');
     }
   };
 
   if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">页脚设置</h2>
         <p className="text-xs text-surface-400 mt-1">配置底部友情链接、版权文案和备案信息；留空则前台自动隐藏。</p>
       </div>
 
       <div className="p-6 space-y-6">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
         {linkErrors.map((item) => <Alert key={item} type="error" message={item} />)}
 
         <div>
@@ -227,10 +226,22 @@ export default function FooterSettingsPage() {
         </div>
       </div>
 
-      <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
-        <Button variant="ghost" onClick={fetchSettings}>重置</Button>
-        <Button onClick={handleSave} disabled={saving || linkErrors.length > 0}>{saving ? '保存中...' : '保存'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        saveDisabled={linkErrors.length > 0}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) {
+            setValues(restored.values);
+            setLinks(restored.links);
+          }
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

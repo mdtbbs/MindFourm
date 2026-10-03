@@ -35,7 +35,7 @@ export default function ContentSidebar({
   const navRef = useRef<HTMLElement>(null);
   const { t } = useI18n();
   useEffect(() => { navRef.current?.scrollTo({ top: 0 }); }, [mode]);
-  const cta = contentNavigationCta(mode, settings);
+  const cta = contentNavigationCta(mode, settings, t);
   return <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
     <SidebarBrand siteName={siteName} subtitle={mode === 'resources' ? t('resources.title') : sidebarTitle} logoUrl={logoUrl} sidebarLogoUrl={sidebarLogoUrl} />
     <nav ref={navRef} data-testid="sidebar-nav" aria-label={t('navigation.siteNavigation')} className={SIDEBAR_LAYOUT_CLASSES.nav}>

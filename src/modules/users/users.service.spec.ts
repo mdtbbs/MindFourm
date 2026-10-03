@@ -77,6 +77,21 @@ function createService(overrides: {
   return { service, userRepository, postRepository, replyRepository };
 }
 
+describe('UsersService.updateProfile', () => {
+  it('persists the preferred content language for the local account', async () => {
+    const user = { id: 7, username: 'Alice', preferred_content_language: null };
+    const { service, userRepository } = createService({
+      userRepository: { findOne: jest.fn().mockResolvedValue(user) },
+    });
+
+    await expect(service.updateProfile(7, { preferred_content_language: 'ja' })).resolves.toMatchObject({
+      id: 7,
+      preferred_content_language: 'ja',
+    });
+    expect(userRepository.save).toHaveBeenCalledWith(user);
+  });
+});
+
 describe('UsersService.getRepliesByUserId', () => {
   it('returns paginated public replies in the shape the profile page normalizes', async () => {
     const query = createChain({

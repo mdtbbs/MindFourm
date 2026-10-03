@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowRight, Radio, Bell, Boxes } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { getDiscoverSummary } from "@/lib/api/v1/discover";
 import { getRequestLocale } from '@/i18n/server';
 import { translate } from '@/i18n';
 import { siteProfile } from '@/config/site-profile';
+import { buildDiscoverNavigation } from '@/lib/navigation/discover-navigation';
 
 export async function generateMetadata() {
   const locale = await getRequestLocale();
@@ -19,26 +20,7 @@ export default async function DiscoverPage() {
   } catch {
     summary = null;
   }
-  const entries = [
-    {
-      href: "/lanlink",
-      icon: Radio,
-      title: t('discoverPage.rooms'),
-      description: t('discoverPage.roomsDescription'),
-    },
-    {
-      href: "/resources",
-      icon: Boxes,
-      title: t('discoverPage.resources'),
-      description: t('discoverPage.resourcesDescription'),
-    },
-    {
-      href: "/notices",
-      icon: Bell,
-      title: t('discoverPage.notices'),
-      description: t('discoverPage.noticesDescription'),
-    },
-  ];
+  const entries = buildDiscoverNavigation(siteProfile, (key) => t(key));
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 border-b border-[var(--border)] pb-6">

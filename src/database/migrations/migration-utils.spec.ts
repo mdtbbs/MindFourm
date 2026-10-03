@@ -86,15 +86,14 @@ describe('existence probes', () => {
     await expect(foreignKeyOnColumnExists(queryRunner, 'attachments', 'user_id')).resolves.toBe(true);
   });
 
-  it('excludes TypeORM\'s own migrations table from the emptiness check', async () => {
-    // TypeORM creates `migrations` before running any migration, so counting it made
-    // a fresh database look established: the baseline took its patch-an-existing-schema
-    // branch and created nothing, while all six migrations recorded as applied.
+  it('excludes TypeORM bookkeeping tables from the emptiness check', async () => {
+    // TypeORM creates these tables before migrations. Neither may make an empty
+    // schema look established or prevent the baseline from creating entities.
     const { queryRunner, statements } = createQueryRunner([TABLE_PRESENT]);
 
     await hasAnyBaseTables(queryRunner);
 
-    expect(statements[0].sql).toMatch(/table_name\s*<>\s*'migrations'/);
+    expect(statements[0].sql).toMatch(/table_name\s+NOT IN\s*\('migrations',\s*'typeorm_metadata'\)/);
   });
 
   it('report absence when information_schema returns nothing', async () => {

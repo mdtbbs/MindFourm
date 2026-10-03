@@ -31,7 +31,7 @@ export class MdtbbsPortalSectionProvider implements PortalSectionProvider, OnMod
   private async getLatestResources(): Promise<HomeResource[]> {
     const selected = await this.resourceRepo.createQueryBuilder('resource')
       .leftJoin('resource.user', 'user').leftJoin('resource.category', 'category')
-      .select(['resource.id', 'resource.title', 'resource.slug', 'resource.resource_kind', 'resource.version', 'resource.updated_at', 'resource.renderer_status', 'user.id', 'user.username', 'category.id', 'category.name'])
+      .select(['resource.id', 'resource.title', 'resource.slug', 'resource.resource_kind', 'resource.version', 'resource.content_language', 'resource.updated_at', 'resource.renderer_status', 'user.id', 'user.username', 'category.id', 'category.name'])
       .addSelect("LEFT(COALESCE(NULLIF(resource.summary, ''), resource.description), 360)", 'resource_card_description').maxExecutionTime(2500)
       .where('resource.status IN (:...statuses)', { statuses: ['approved', 'published'] })
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
@@ -39,6 +39,7 @@ export class MdtbbsPortalSectionProvider implements PortalSectionProvider, OnMod
       .orderBy('resource.updated_at', 'DESC').addOrderBy('resource.id', 'DESC').take(6).getRawAndEntities();
     return selected.entities.map((resource, index) => ({ id: resource.id, title: resource.title, slug: resource.slug || null,
       resource_kind: resource.resource_kind || null, version: resource.version || null,
+      content_language: resource.content_language || 'unknown',
       updated_at: resource.updated_at.toISOString(), author_name: resource.user?.username || null,
       category_name: resource.category?.name || null, description: selected.raw[index]?.resource_card_description || null,
       preview_url: resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null }));

@@ -6,6 +6,9 @@ import { notificationApi } from '@/lib/api/client';
 import Link from 'next/link';
 import { useI18n } from '@/i18n/provider';
 import { fetchV1 } from '@/lib/api/v1/transport';
+import { userApi } from '@/lib/api/client';
+import { localeNames, type Locale } from '@/i18n';
+import { siteProfile } from '@/config/site-profile';
 
 interface EmailPreferences {
   reply_email: boolean;
@@ -24,8 +27,8 @@ const EMAIL_OPTIONS: { key: keyof EmailPreferences; label: string; description: 
 ];
 
 export default function SettingsPage() {
-  const { t } = useI18n();
-  const { user, isAuthenticated } = useAuth();
+  const { t, locale, setLocale } = useI18n();
+  const { user, isAuthenticated, refreshAuth } = useAuth();
   const [preferences, setPreferences] = useState<EmailPreferences>({
     reply_email: true,
     mention_email: true,
@@ -37,11 +40,35 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [cloudSavesEnabled, setCloudSavesEnabled] = useState(false);
+  const [preferredContentLanguage, setPreferredContentLanguage] = useState(user?.preferred_content_language || '');
+  const [contentLanguageSaving, setContentLanguageSaving] = useState(false);
+  const [contentLanguageSaved, setContentLanguageSaved] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     loadPreferences();
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (user?.preferred_content_language) setPreferredContentLanguage(user.preferred_content_language);
+  }, [user?.preferred_content_language]);
+
+  const saveContentLanguage = async () => {
+    setContentLanguageSaving(true);
+    try {
+      const contentLanguage = siteProfile.contentLanguages.find((item) => item === preferredContentLanguage) ?? null;
+      await userApi.updateProfile({ preferred_content_language: contentLanguage });
+      const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+      document.cookie = `forum_content_language=${encodeURIComponent(contentLanguage || 'auto')}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+      await refreshAuth();
+      setContentLanguageSaved(true);
+      window.setTimeout(() => setContentLanguageSaved(false), 3000);
+    } catch (error) {
+      console.error('Failed to save content-language preference:', error);
+    } finally {
+      setContentLanguageSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -93,6 +120,30 @@ export default function SettingsPage() {
         </div>
 
         <h1 className="text-2xl font-bold mb-6">{t('emailSettings.title')}</h1>
+
+        {siteProfile.contentLanguagePreference && <section className="card mb-6 p-6" aria-labelledby="language-settings-title">
+          <h2 id="language-settings-title" className="text-lg font-semibold">{t('languageSettings.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('languageSettings.description')}</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="account-language" className="mb-2 block text-sm font-medium">{t('languageSettings.accountLanguage')}</label>
+              <select id="account-language" value={locale} onChange={(event) => setLocale(event.target.value as Locale)} className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]">
+                {(['en', 'ru', 'ja', 'zh-CN'] as Locale[]).map((item) => <option key={item} value={item}>{localeNames[item]}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="feed-language" className="mb-2 block text-sm font-medium">{t('languageSettings.feedLanguage')}</label>
+              <select id="feed-language" value={preferredContentLanguage} onChange={(event) => { setPreferredContentLanguage(event.target.value); setContentLanguageSaved(false); }} className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]">
+                <option value="">{t('languageSettings.followInterface')}</option>
+                {siteProfile.contentLanguages.map((item) => <option key={item} value={item}>{localeNames[item]}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-3">
+            <button type="button" onClick={saveContentLanguage} disabled={contentLanguageSaving} className="btn btn-primary">{contentLanguageSaving ? t('languageSettings.saving') : t('languageSettings.save')}</button>
+            {contentLanguageSaved && <span role="status" className="text-sm text-success">{t('languageSettings.saved')}</span>}
+          </div>
+        </section>}
 
         {/* The block list had no entry point at all and was reachable only by typing the
             URL, which for a privacy control is the same as not shipping it. */}

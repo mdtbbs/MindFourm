@@ -79,13 +79,22 @@ async function main() {
     connectTimeout: 5000,
   });
   try {
+    const requiredMigrations = [
+      ['AddInternationalCommunityFields1720000120000', 'MindFourm migration 1720000120000'],
+      ['AddResourceOriginIdentity1720000130000', 'MindFourm migration 1720000130000'],
+      ['ResourceViewsAnalytics1720000200000', 'MindFourm migration 1720000200000'],
+      ['AddPreferredContentLanguage1720000210000', 'MindFourm migration 1720000210000'],
+      ['ResourcePackItems1720000220000', 'MindFourm migration 1720000220000'],
+      ['UnifyResourceDiscussions1720000230000', 'MindFourm migration 1720000230000'],
+    ];
     const [rows] = await connection.execute(
-      'SELECT name FROM migrations WHERE name IN (?, ?)',
-      ['AddInternationalCommunityFields1720000120000', 'AddResourceOriginIdentity1720000130000'],
+      `SELECT name FROM migrations WHERE name IN (${requiredMigrations.map(() => '?').join(', ')})`,
+      requiredMigrations.map(([name]) => name),
     );
     const applied = new Set(rows.map((row) => row.name));
-    check('MindFourm migration 1720000120000 is applied', applied.has('AddInternationalCommunityFields1720000120000'));
-    check('MindFourm migration 1720000130000 is applied', applied.has('AddResourceOriginIdentity1720000130000'));
+    for (const [name, label] of requiredMigrations) {
+      check(`${label} is applied`, applied.has(name));
+    }
   } finally {
     await connection.end();
   }

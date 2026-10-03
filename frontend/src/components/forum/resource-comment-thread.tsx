@@ -6,6 +6,10 @@ import type { ResourceComment } from '@/types';
 import { useAuth } from '@/store/user-store';
 import { Heart, Reply as ReplyIcon, Trash2, Send } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
+import { confirmDialog } from '@/store/interaction-dialog-store';
+import Link from 'next/link';
+import RichContentRenderer from '@/components/ui/rich-content-renderer';
+import { likeApi } from '@/lib/api/client';
 
 interface ResourceCommentThreadProps {
   resourceId: number;
@@ -51,11 +55,18 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
   const [submitting, setSubmitting] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [discussionUrl, setDiscussionUrl] = useState<string | null>(null);
 
   const loadComments = useCallback(async () => {
     try {
       const res = await resourceCommentApi.getByResource(resourceId, { page: 1, limit: 100 });
-      setComments(res.data || []);
+      const rows = res.data || [];
+      let likedById: Record<number, { liked: boolean; count: number }> = {};
+      if (user?.id && rows.length) {
+        try { likedById = await likeApi.checkBatch('reply', rows.map(({ id }) => id)); } catch { /* The compact thread remains readable if like status is unavailable. */ }
+      }
+      setComments(rows.map((comment) => ({ ...comment, is_liked: likedById[comment.id]?.liked || false, upvote_count: likedById[comment.id]?.count ?? comment.upvote_count })));
+      setDiscussionUrl(res.discussion_thread_url || null);
       setPage(1);
       const count = res.pagination?.total ?? 0;
       setTotal(count);
@@ -65,12 +76,17 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
     } finally {
       setLoading(false);
     }
-  }, [resourceId, onCountChange]);
+  }, [resourceId, onCountChange, user?.id]);
 
   const loadMore = async () => {
     const nextPage = page + 1;
     const res = await resourceCommentApi.getByResource(resourceId, { page: nextPage, limit: 100 });
-    setComments((current) => [...current, ...(res.data || [])]);
+    const rows = res.data || [];
+    let likedById: Record<number, { liked: boolean; count: number }> = {};
+    if (user?.id && rows.length) {
+      try { likedById = await likeApi.checkBatch('reply', rows.map(({ id }) => id)); } catch { /* Keep the rows visible. */ }
+    }
+    setComments((current) => [...current, ...rows.map((comment) => ({ ...comment, is_liked: likedById[comment.id]?.liked || false, upvote_count: likedById[comment.id]?.count ?? comment.upvote_count }))]);
     setPage(nextPage);
   };
 
@@ -97,12 +113,28 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm(t('resourceComments.deleteConfirm'))) return;
+    if (!await confirmDialog({ message: t('resourceComments.deleteConfirm'), destructive: true })) return;
     try {
       await resourceCommentApi.delete(id);
       await loadComments();
     } catch {
       // silent
+    }
+  };
+
+  const handleLike = async (comment: ResourceComment) => {
+    if (!viewerId) return;
+    const wasLiked = Boolean(comment.is_liked);
+    setComments((current) => current.map((row) => row.id === comment.id
+      ? { ...row, is_liked: !wasLiked, upvote_count: Math.max(0, row.upvote_count + (wasLiked ? -1 : 1)) }
+      : row));
+    try {
+      if (wasLiked) await likeApi.unlikeReply(comment.id);
+      else await likeApi.likeReply(comment.id);
+    } catch {
+      setComments((current) => current.map((row) => row.id === comment.id
+        ? { ...row, is_liked: wasLiked, upvote_count: Math.max(0, row.upvote_count + (wasLiked ? 1 : -1)) }
+        : row));
     }
   };
 
@@ -114,6 +146,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
 
   return (
     <div className="space-y-6">
+      {discussionUrl && <div className="flex justify-end"><Link href={discussionUrl} className="text-sm font-medium text-primary hover:underline">{t('resourceComments.fullDiscussion')}</Link></div>}
       {/* 评论表单 */}
       <div className="card p-4">
         <h3 className="text-lg font-bold mb-3">
@@ -164,6 +197,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
               viewerIsStaff={viewerIsStaff}
               onReply={(id, username) => setReplyTo({ id, username })}
               onDelete={handleDelete}
+              onLike={handleLike}
             />
           ))}
         </div>
@@ -180,6 +214,7 @@ function CommentNode({
   viewerIsStaff,
   onReply,
   onDelete,
+  onLike,
 }: {
   node: CommentNode;
   depth: number;
@@ -187,6 +222,7 @@ function CommentNode({
   viewerIsStaff: boolean;
   onReply: (id: number, username: string) => void;
   onDelete: (id: number) => void;
+  onLike: (comment: ResourceComment) => void;
 }) {
   const { locale, t } = useI18n();
   const canDelete = viewerIsStaff || currentUserId === node.user_id;
@@ -205,9 +241,9 @@ function CommentNode({
                 {new Date(node.created_at).toLocaleString(({ en: 'en', ru: 'ru', ja: 'ja-JP', 'zh-CN': 'zh-CN' } as const)[locale])}
               </span>
             </div>
-            <div className="text-sm whitespace-pre-wrap">{node.content}</div>
+            <div className="text-sm"><RichContentRenderer json={node.content_json} markdownFallback={node.content} /></div>
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-              <button className="flex items-center gap-1 hover:text-primary">
+              <button type="button" onClick={() => onLike(node)} disabled={!currentUserId} aria-pressed={Boolean(node.is_liked)} className={`flex items-center gap-1 hover:text-primary disabled:opacity-50 ${node.is_liked ? 'text-primary' : ''}`}>
                 <Heart className="w-3 h-3" />
                 {node.upvote_count > 0 && <span>{node.upvote_count}</span>}
               </button>
@@ -244,6 +280,7 @@ function CommentNode({
               viewerIsStaff={viewerIsStaff}
               onReply={onReply}
               onDelete={onDelete}
+              onLike={onLike}
             />
           ))}
         </div>

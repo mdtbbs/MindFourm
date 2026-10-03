@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { lanlinkApi } from '@/lib/api/client';
+import { confirmDialog } from '@/store/interaction-dialog-store';
 import type { QuickCodeGenerateResponse, QuickCodeResetResponse } from '@/types/lanlink';
 import Alert from '@/components/ui/alert';
 
@@ -28,9 +29,12 @@ export function QuickCodeGenerator({ hasExistingCode, onCodeGenerated }: Props) 
   };
 
   const handleReset = async () => {
-    const confirmed = window.confirm(
-      '确定要重置快速码吗？\n\n旧快速码将立即失效，新代码生成后旧代码无法再使用。'
-    );
+    const confirmed = await confirmDialog({
+      title: '重置快速码',
+      message: '确定要重置快速码吗？旧快速码将立即失效，新代码生成后旧代码无法再使用。',
+      confirmLabel: '重置快速码',
+      destructive: true,
+    });
     if (!confirmed) return;
 
     setLoading(true);

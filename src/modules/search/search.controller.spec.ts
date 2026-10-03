@@ -1,6 +1,7 @@
 const decorator = () => () => undefined;
 
 jest.mock('@nestjs/common', () => ({
+  applyDecorators: (...decorators: Array<(...args: any[]) => void>) => (...args: any[]) => decorators.forEach((decorator) => decorator(...args)),
   Controller: decorator,
   Get: decorator,
   Delete: decorator,
@@ -9,6 +10,8 @@ jest.mock('@nestjs/common', () => ({
   Req: decorator,
   SetMetadata: decorator,
 }));
+
+jest.mock('@nestjs/swagger', () => ({ ApiExtension: decorator }));
 
 jest.mock('../../common/guards/jwt-auth.guard', () => ({
   JwtAuthGuard: class JwtAuthGuard {},

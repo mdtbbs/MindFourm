@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { Post } from '@entities/post.entity';
 import { GameServer } from '@entities/game-server.entity';
+import { applyPublicPostVisibility } from '@common/utils/post-visibility.util';
 
 /**
  * Discover Service — aggregates content from multiple domains for discovery.
@@ -30,20 +31,20 @@ export class DiscoverService {
   ) {}
 
   async getDiscoverSummary(): Promise<DiscoverSummary> {
+    const threadCountQuery = this.postRepo.createQueryBuilder('post');
+    applyPublicPostVisibility(threadCountQuery, 'post');
+    const recentThreadsQuery = this.postRepo.createQueryBuilder('post').select(['post.id', 'post.title', 'post.created_at']);
+    applyPublicPostVisibility(recentThreadsQuery, 'post');
     const [resourceCount, threadCount, serverCount, recentResources, recentThreads, activeServers] = await Promise.all([
       this.resourceRepo.count({ where: { is_public: 1 as any } }),
-      this.postRepo.count({ where: { status: 'published' as any } }),
+      threadCountQuery.getCount(),
       this.serverRepo.count({ where: { is_public: true } }),
       this.resourceRepo.find({
         where: { is_public: 1 as any, status: 'approved' as any },
         order: { created_at: 'DESC' }, take: 10,
         select: ['id', 'title', 'created_at'],
       }),
-      this.postRepo.find({
-        where: { status: 'published' as any },
-        order: { created_at: 'DESC' }, take: 10,
-        select: ['id', 'title', 'created_at'],
-      }),
+      recentThreadsQuery.orderBy('post.created_at', 'DESC').take(10).getMany(),
       this.serverRepo.find({
         where: { is_public: true, status: 'active' as any },
         order: { name: 'ASC' }, take: 10,

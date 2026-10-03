@@ -47,6 +47,7 @@ export interface UnifiedHeaderProps {
   // Slots for custom content
   topNavigationSlot?: React.ReactNode;
   notificationDropdownSlot?: React.ReactNode;
+  userMenuSlot?: React.ReactNode;
   utilitySlot?: React.ReactNode;
   mobileMenuSlot?: React.ReactNode;
 }
@@ -77,6 +78,7 @@ export function UnifiedHeader({
   onMobileMenuClick,
   topNavigationSlot,
   notificationDropdownSlot,
+  userMenuSlot,
   utilitySlot,
   mobileMenuSlot,
 }: UnifiedHeaderProps) {
@@ -287,6 +289,7 @@ export function UnifiedHeader({
                       >
                         {labels.settings || "设置"}
                       </Link>
+                      {userMenuSlot}
                       {onLogout && (
                         <button
                           type="button"

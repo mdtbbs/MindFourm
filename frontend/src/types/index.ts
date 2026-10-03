@@ -11,6 +11,7 @@ export interface User {
   bio?: string | null;
   email_verified?: boolean;
   preferred_locale?: string | null;
+  preferred_content_language?: 'zh-CN' | 'en' | 'ru' | 'ja' | null;
   phone_verified?: boolean;
   phone_verified_at?: string | null;
   createdAt: string;
@@ -130,6 +131,18 @@ export interface Post {
   /** Last time the title or body changed; absent if never edited. */
   edited_at?: string | null;
   replies?: Reply[];
+  resource_header?: {
+    id: number;
+    title: string;
+    slug: string | null;
+    resource_kind: string | null;
+    status: string;
+    version: string | null;
+    preview_url: string | null;
+    resource_url: string;
+    download_url: string;
+    author: { id: number; username: string; avatar_url: string | null } | null;
+  } | null;
   replyPagination?: {
     total: number;
     page: number;
@@ -169,6 +182,7 @@ export interface Reply {
   parent_reply_id: number | null;
   content: string;
   content_html: string | null;
+  is_liked?: boolean;
   content_json?: Record<string, unknown> | null;
   content_schema_version?: number;
   content_text?: string | null;
@@ -235,6 +249,20 @@ export interface FormState<T> {
 
 // Admin panel types
 export interface AdminStats {
+  range_days: 1 | 7 | 30 | 90;
+  range_metrics: {
+    new_users: number;
+    threads: number;
+    replies: number;
+    resources: number;
+    reports: number;
+    downloads: number;
+    views: number;
+    failed_jobs: number;
+    email_failures: number;
+    outbox_failures: number;
+    renderer_queue: number;
+  };
   total_posts: number;
   community_posts: number;
   automated_posts: number;
@@ -469,12 +497,15 @@ export interface Conversation {
 // Resources
 export interface Resource {
   id: number;
+  public_id?: string | null;
   user_id: number;
   title: string;
   description: string | null;
   resource_type: 'upload' | 'external';
   resource_kind?: string | null;
   integrity?: string | null;
+  integrity_status?: string | null;
+  hash_algorithm?: string | null;
   file_name: string | null;
   file_path: string | null;
   file_size: number;
@@ -510,6 +541,7 @@ export interface Resource {
   metadata?: ResourceDetailMetadata;
   renderer_status?: 'processing' | 'ready' | 'failed' | 'unavailable' | null;
   renderer_error_code?: string | null;
+  renderer_parser_version?: string | null;
   renderer_metadata?: MindustryRendererMetadata | Record<string, unknown> | null;
   preview_url?: string | null;
   favorite_count?: number;
@@ -588,6 +620,7 @@ export interface ResourceCategory {
 
 export interface ResourceVersion {
   id: number;
+  public_id?: string | null;
   resource_id: number;
   version: string;
   file_path: string | null;
@@ -612,6 +645,29 @@ export interface ResourceVersion {
   }>;
 }
 
+export interface PackVersionManifest {
+  schema_version: number;
+  pack: { public_id: string; version_public_id: string; version: string; game_version: string | null };
+  members: Array<{
+    resource_kind: string;
+    resource_public_id: string;
+    name?: string;
+    version_public_id: string;
+    version: string;
+    file_name: string;
+    size_bytes: number;
+    sha256: string;
+    dependencies: Array<{
+      type: string;
+      resource_public_id: string | null;
+      external_identifier: string | null;
+      version_constraint: string | null;
+      notes: string | null;
+    }>;
+    download_url: string;
+  }>;
+}
+
 // Resource Comments
 export interface ResourceComment {
   id: number;
@@ -620,6 +676,10 @@ export interface ResourceComment {
   parent_id: number | null;
   content: string;
   content_html: string | null;
+  content_json?: Record<string, unknown> | null;
+  content_schema_version?: number;
+  content_text?: string | null;
+  is_liked?: boolean;
   status: string;
   edited_at: string | null;
   upvote_count: number;
@@ -639,6 +699,8 @@ export interface ResourceCommentListResponse {
     total: number;
     totalPages: number;
   };
+  discussion_thread_id?: number;
+  discussion_thread_url?: string;
 }
 
 // Servers (EasyManager integration)

@@ -31,11 +31,20 @@ const ICON_COMPONENTS: Record<string, LucideIcon> = {
 interface NavigationEditorProps {
   initialItems: SidebarNavigationItem[];
   onSave: (items: SidebarNavigationItem[]) => Promise<void>;
+  items?: SidebarNavigationItem[];
+  onItemsChange?: (items: SidebarNavigationItem[]) => void;
+  hideSave?: boolean;
 }
 
-export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps) {
-  const [items, setItems] = useState<SidebarNavigationItem[]>(initialItems);
+export function NavigationEditor({ initialItems, onSave, items: controlledItems, onItemsChange, hideSave = false }: NavigationEditorProps) {
+  const [localItems, setLocalItems] = useState<SidebarNavigationItem[]>(initialItems);
   const [saving, setSaving] = useState(false);
+  const items = controlledItems ?? localItems;
+
+  function commitItems(nextItems: SidebarNavigationItem[]) {
+    if (controlledItems === undefined) setLocalItems(nextItems);
+    onItemsChange?.(nextItems);
+  }
 
   const validation = useMemo(() => validateSidebarNavigation(items), [items]);
 
@@ -43,19 +52,19 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
     if (index === 0) return;
     const next = [...items];
     [next[index - 1], next[index]] = [next[index], next[index - 1]];
-    setItems(next);
+    commitItems(next);
   }
 
   function moveDown(index: number) {
     if (index === items.length - 1) return;
     const next = [...items];
     [next[index], next[index + 1]] = [next[index + 1], next[index]];
-    setItems(next);
+    commitItems(next);
   }
 
   function removeItem(index: number) {
     if (items[index]?.id === 'home') return;
-    setItems(items.filter((_, i) => i !== index));
+    commitItems(items.filter((_, i) => i !== index));
   }
 
   function addItem() {
@@ -67,13 +76,13 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
       enabled: true,
       requiresAuth: false,
     };
-    setItems([...items, newItem]);
+    commitItems([...items, newItem]);
   }
 
   function updateItem(index: number, updates: Partial<SidebarNavigationItem>) {
     const next = [...items];
     next[index] = { ...next[index], ...updates };
-    setItems(next);
+    commitItems(next);
   }
 
   async function handleSave() {
@@ -218,14 +227,16 @@ export function NavigationEditor({ initialItems, onSave }: NavigationEditorProps
         );
       })}
 
-      <div className="flex justify-between pt-2">
+      <div className={`flex ${hideSave ? 'justify-start' : 'justify-between'} pt-2`}>
         <Button data-testid="add-nav-item-button" onClick={addItem} variant="outline">
           <Plus className="h-4 w-4 mr-1.5" />
           添加项目
         </Button>
-        <Button data-testid="save-nav-button" onClick={handleSave} disabled={saving || !validation.valid}>
-          {saving ? '保存中...' : '保存'}
-        </Button>
+        {!hideSave && (
+          <Button data-testid="save-nav-button" onClick={handleSave} disabled={saving || !validation.valid}>
+            {saving ? '保存中...' : '保存'}
+          </Button>
+        )}
       </div>
     </div>
   );

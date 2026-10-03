@@ -10,6 +10,7 @@ import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
 import { PostRevision } from '@entities/post-revision.entity';
 import { ContentRelation } from '@entities/content-relation.entity';
+import { Resource } from '@entities/resource.entity';
 import { DatabaseModule } from '../../database/database.module';
 import { PointsModule } from '../points/points.module';
 import { GroupsModule } from '../groups/groups.module';
@@ -41,7 +42,7 @@ import { EventsModule } from '../events/events.module';
     CustomEmojisModule,
     AttachmentsModule,
     LogsModule,
-    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision, ContentRelation]),
+    TypeOrmModule.forFeature([Post, User, Category, Tag, PostTag, Reply, PostRevision, ContentRelation, Resource]),
   ],
   providers: [PostsService, PostSummaryService, PostDetailService, PostRevisionsService, PostActivityService],
   controllers: [PostsController],

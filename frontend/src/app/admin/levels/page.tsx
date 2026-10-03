@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useEffect, useState, useCallback } from 'react';
 import { levelsApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
@@ -74,7 +76,7 @@ export default function AdminLevelsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除此等级吗？')) return;
+    if (!await confirmDialog({ message: '确定要删除此等级吗？', destructive: true })) return;
     try {
       await levelsApi.adminDelete(id);
       setMessage('等级已删除');

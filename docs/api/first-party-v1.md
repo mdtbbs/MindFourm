@@ -24,17 +24,7 @@ Base URL:
 | GET | `/api/v1/capabilities` | 公开 | 能力发现；包含 `multiplayer` 功能开关和 `cloud_saves_v1` |
 | GET | `/api/v1/client/config` | 公开 | Android 等客户端版本和功能配置 |
 
-## 移动端会话
-
-| 方法 | 路径 | 认证 | 说明 |
-| --- | --- | --- | --- |
-| POST | `/api/v1/auth/mobile/exchange` | 公开 | MindAuth native code 换 Forum mobile token |
-| POST | `/api/v1/auth/mobile/refresh` | 刷新令牌 | 轮换 access/refresh token |
-| POST | `/api/v1/auth/mobile/logout` | Forum Bearer / 会话 | 注销指定设备会话 |
-| GET | `/api/v1/auth/mobile/sessions` | Forum Bearer / 会话 | 查看当前用户设备会话 |
-| DELETE | `/api/v1/auth/mobile/sessions/{id}` | Forum Bearer / 会话 | 撤销设备会话 |
-
-认证细节见 [authentication.md](./authentication.md)。
+第三方客户端统一使用 MindAuth Authorization Code + PKCE；第一方移动应用可能保留兼容能力，但不属于第三方 Public API。
 
 ## 用户资料
 
@@ -290,9 +280,7 @@ Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都�
 | POST | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/download` | `game_content.saves.read` | 获取需继续认证的私有下载地址 |
 | GET | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/file` | `game_content.saves.read` | 从论坛本地存储下载存档文件 |
 
-文件通过 Forum API 流式传输；后台管理员可配置本地持久化目录、每用户额度和单文件大小。完整请求流程与磁盘部署要求见[云存档 API](./cloud-saves-v1.md)。
-
-上传和下载的文件字节由客户端直接传到对象存储，不经过论坛 API；签名 URL 和云存档响应为私有数据，不应缓存。分页、配额、幂等、上传/恢复示例和完整字段说明见 [云存档 API](./cloud-saves-v1.md)。
+云存档文件属于用户私有数据。客户端应按 [云存档 API](./cloud-saves-v1.md) 的流程完成校验和传输，并且不要缓存签名地址或私有响应。
 
 ## 通知与私信
 
@@ -316,9 +304,6 @@ Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都�
 | GET | `/api/v1/discover` | 公开 | 发现页聚合 |
 | GET | `/api/v1/home` | 公开 | 第一方首页数据 |
 | GET | `/api/v1/portal` | 公开 | Portal 聚合数据 |
-| GET | `/api/v1/lanlink/rooms` | 公开 | LanLink 公共房间列表 |
-
-`/api/external/v1/lanlink/quick-code/*` 属于 External API，不属于这个公共 V1 面。
 
 ## 公告
 
@@ -326,10 +311,6 @@ Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都�
 | --- | --- | --- | --- |
 | GET | `/api/v1/notices` | 公开 | 已发布公告列表 |
 | GET | `/api/v1/notices/{id}` | 公开 | 公告详情 |
-| GET | `/api/v1/admin/notices` | 管理员 | 管理公告 |
-| POST | `/api/v1/admin/notices` | 管理员 | 创建公告 |
-| PATCH | `/api/v1/admin/notices/{id}` | 管理员 | 更新公告 |
-| DELETE | `/api/v1/admin/notices/{id}` | 管理员 | 删除公告 |
 
 ## 反馈、举报与图片上传
 
@@ -342,17 +323,6 @@ Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都�
 
 Public Client OAuth、scope 名称、富文本字段以及 cURL、JavaScript、Java、Kotlin 调用示例见[客户端接入指南](./public-client-v1.md)。
 
-## 不属于公开论坛 API 的接口
+## 公开契约范围
 
-下列路径可能真实存在，但不要因为它们能调用就视为 V1：
-
-```text
-/api/resources/*
-/api/posts/*
-/api/replies/*
-/api/service-api/*
-/api/external/v1/*
-/api/admin/*
-```
-
-这些路由有的是 legacy Web API，有的是机器人/后台/服务间接口。对外客户端需要新能力时，优先新增 `/api/v1/*` 契约，不要把内部路由直接暴露成“文档”。
+本指南只列出第三方 Public Client V1 操作。第一方兼容能力、论坛管理功能以及服务端集成使用的其他接口不属于本指南；请以 Public OpenAPI 的实际操作列表为准。

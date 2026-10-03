@@ -244,7 +244,7 @@ export class RepliesService {
   async getByPostId(postId: number, page: number = 1, limit: number = 20, viewer?: PostViewer): Promise<{ data: PublicReply[]; total: number; page: number; totalPages: number }> {
     if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(limit) || limit < 1) throw new BadRequestException('Invalid pagination');
     limit = Math.min(limit, 50);
-    const post = await this.postRepository.findOne({ where: { id: postId }, select: ['id', 'status', 'user_id', 'required_group_id'] });
+    const post = await this.postRepository.findOne({ where: { id: postId }, select: ['id', 'post_type', 'status', 'user_id', 'required_group_id'] });
     if (!post) throw new NotFoundException('Post not found');
     await this.assertParentVisible(post, viewer);
     const skip = (page - 1) * limit;
@@ -283,7 +283,7 @@ export class RepliesService {
     if (reply.status === 'deleted' || (reply.status !== REPLY_STATUS.published && reply.user_id !== viewer?.id && !['admin', 'moderator'].includes(viewer?.role || ''))) {
       throw new NotFoundException('Reply not found');
     }
-    const post = await this.postRepository.findOne({ where: { id: reply.post_id }, select: ['id', 'status', 'user_id', 'required_group_id'] });
+    const post = await this.postRepository.findOne({ where: { id: reply.post_id }, select: ['id', 'post_type', 'status', 'user_id', 'required_group_id'] });
     if (!post) throw new NotFoundException('Post not found');
     await this.assertParentVisible(post, viewer);
     return toPublicReply(reply);
@@ -322,7 +322,7 @@ export class RepliesService {
     reply.content_schema_version = contentSource.content_schema_version;
     reply.updated_at = new Date();
 
-    const post = await this.postRepository.findOne({ where: { id: reply.post_id }, select: ['id', 'status', 'user_id', 'required_group_id'] });
+    const post = await this.postRepository.findOne({ where: { id: reply.post_id }, select: ['id', 'post_type', 'status', 'user_id', 'required_group_id'] });
     if (!post) throw new NotFoundException('Post not found');
     await this.assertParentVisible(post, { id: userId, role: userRole || 'user' });
     const saved = await this.saveReplyWithAttachments(reply, contentSource.content_json, userId);
@@ -362,7 +362,10 @@ export class RepliesService {
 
   private async assertParentVisible(post: Post, viewer?: PostViewer): Promise<void> {
     if (this.postsService) return this.postsService.assertPostVisible(post, viewer);
-    // Embedders without PostsService fail closed at the group wall.
+    // Embedders without PostsService fail closed for resource discussions and the group wall.
+    // Resource discussion visibility also depends on the current parent resource;
+    // without the shared visibility policy this path cannot prove that relationship.
+    if (post.post_type === 'resource_discussion') throw new NotFoundException('Post not found');
     const staff = ['admin', 'moderator'].includes(viewer?.role || '');
     if (post.status !== 'published' && !staff && post.user_id !== viewer?.id) throw new NotFoundException('Post not found');
     if (post.required_group_id && !staff) throw new ForbiddenException('需要加入该组才能查看此帖子');

@@ -17,12 +17,10 @@ import { QueryRunner } from 'typeorm';
 /**
  * True when the schema already holds application tables.
  *
- * TypeORM's own `migrations` bookkeeping table is excluded, and this is the whole
- * point of the function: TypeORM creates that table *before* running any migration,
- * so counting it made a genuinely empty database look like an existing one. The
- * baseline then took its "patch an existing schema" branch, patched tables that did
- * not exist, and every later migration skipped through its idempotency guards — all
- * six recorded as applied against a database containing nothing but `migrations`.
+ * TypeORM's own bookkeeping tables are excluded. It creates both `migrations` and
+ * `typeorm_metadata` before running migrations, so counting either one makes an
+ * empty database look established. The baseline would then take its patch-existing
+ * branch without creating the entity tables.
  */
 export async function hasAnyBaseTables(queryRunner: QueryRunner): Promise<boolean> {
   const rows = await queryRunner.query(
@@ -30,7 +28,7 @@ export async function hasAnyBaseTables(queryRunner: QueryRunner): Promise<boolea
        FROM information_schema.tables
       WHERE table_schema = DATABASE()
         AND table_type = 'BASE TABLE'
-        AND table_name <> 'migrations'
+        AND table_name NOT IN ('migrations', 'typeorm_metadata')
       LIMIT 1`,
   );
   return rows.length > 0;

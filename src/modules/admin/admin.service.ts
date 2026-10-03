@@ -59,8 +59,8 @@ export class AdminService {
   /**
    * Get dashboard statistics (delegate to StatsService)
    */
-  async getStats() {
-    return this.statsService.getDashboardStats();
+  async getStats(rangeDays: 1 | 7 | 30 | 90 = 7) {
+    return this.statsService.getDashboardStats(rangeDays);
   }
 
   /**

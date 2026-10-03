@@ -31,7 +31,14 @@
     "rejectReasonOptional": "却下理由を入力してください（任意）。",
     "rejectPlaceholder": "例：コミュニティのガイドラインに沿っていません…",
     "cancel": "キャンセル",
-    "confirmReject": "却下を確定"
+    "confirmReject": "却下を確定",
+    "resourceHeader": "リソース",
+    "resourceVersion": "バージョン {version}",
+    "resourceBy": "投稿者: {author}",
+    "viewResource": "リソースを見る",
+    "downloadResource": "ダウンロード",
+    "resourcePublished": "公開中",
+    "resourceApproved": "承認済み"
   },
   "replySection": {
     "aria": "返信",

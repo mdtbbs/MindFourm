@@ -31,7 +31,14 @@
     "rejectReasonOptional": "请填写拒绝此帖子的原因（可选）",
     "rejectPlaceholder": "例如：内容不符合社区规范…",
     "cancel": "取消",
-    "confirmReject": "确认拒绝"
+    "confirmReject": "确认拒绝",
+    "resourceHeader": "关联资源",
+    "resourceVersion": "版本 {version}",
+    "resourceBy": "作者：{author}",
+    "viewResource": "查看资源",
+    "downloadResource": "下载",
+    "resourcePublished": "已发布",
+    "resourceApproved": "已通过审核"
   },
   "replySection": {
     "aria": "回复",

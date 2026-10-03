@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, CornerDownLeft, Search, UserRound, PackageSearch } from 'lucide-react';
+import { ArrowRight, CornerDownLeft, Search, UserRound, PackageSearch, FileText, ScrollText, ShieldCheck, Settings2 } from 'lucide-react';
 import type { AdminNavSection } from '@/lib/admin/navigation';
+import { resolveQuickOpenCommand, type QuickOpenCommandAliases, type QuickOpenPage } from '@/lib/admin/command-palette';
+import { navigateWithUnsavedChanges } from '@/lib/admin/unsaved-navigation';
 import { useI18n } from '@/i18n/provider';
 
 interface AdminCommandMenuProps {
@@ -19,10 +21,6 @@ interface CommandResult {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   disabled?: boolean;
-}
-
-function normalize(value: string, locale: string): string {
-  return value.trim().toLocaleLowerCase(locale);
 }
 
 export default function AdminCommandMenu({ open, onOpenChange, sections }: AdminCommandMenuProps) {
@@ -53,7 +51,8 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
   }, [open, onOpenChange]);
 
   const results = useMemo<CommandResult[]>(() => {
-    const term = normalize(query, locale);
+    const normalize = (value: string) => value.trim().toLocaleLowerCase(locale);
+    const term = normalize(query);
     const staticResults = sections.flatMap((section) =>
       section.items.map((item) => ({
         key: `${section.key}:${item.key}`,
@@ -62,7 +61,7 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
         href: item.href ?? '',
         icon: item.icon,
         disabled: item.disabled || !item.href,
-        haystack: normalize([section.label, item.label, ...(item.keywords ?? [])].join(' '), locale),
+        haystack: normalize([section.label, item.label, item.key, item.href ?? '', ...(item.keywords ?? [])].join(' ')),
       })),
     );
 
@@ -80,40 +79,98 @@ export default function AdminCommandMenu({ open, onOpenChange, sections }: Admin
 
     if (!term) return matched;
 
-    const dynamic: CommandResult[] = [];
-    const userCommand = t('adminShell.userCommand');
-    const userMatch = query.trim().match(new RegExp(`^${userCommand}\\s+(.+)$`, 'i'));
-    if (userMatch?.[1]) {
-      const value = userMatch[1].trim();
-      dynamic.push({
-        key: 'dynamic:user',
-        label: t('adminShell.searchUser', { value }),
-        description: t('adminShell.userManagement'),
-        href: `/admin/users?search=${encodeURIComponent(value)}`,
-        icon: UserRound,
-      });
-    }
+    const aliases: QuickOpenCommandAliases = {
+      user: t('adminShell.userCommand'),
+      resource: t('adminShell.resourceCommand'),
+      post: t('adminShell.postCommand'),
+      thread: t('adminShell.threadCommand'),
+      setting: t('adminShell.settingCommand'),
+      page: t('adminShell.pageCommand'),
+      requestId: t('adminShell.requestIdCommand'),
+      moderation: t('adminShell.moderationCommand'),
+      settingsAlias: t('adminShell.settingsAlias'),
+      resourcesAlias: t('adminShell.resourcesAlias'),
+      moderationQueueAlias: t('adminShell.moderationQueueAlias'),
+    };
+    const pages: QuickOpenPage[] = staticResults.map(({ key, label, description, href, haystack, disabled }) => ({
+      key,
+      label,
+      description,
+      href,
+      haystack,
+      disabled,
+    }));
 
-    const resourceCommand = t('adminShell.resourceCommand');
-    const resourceMatch = query.trim().match(new RegExp(`^${resourceCommand}\\s+(.+)$`, 'i'));
-    if (resourceMatch?.[1]) {
-      const value = resourceMatch[1].trim();
-      dynamic.push({
+    const dynamic = resolveQuickOpenCommand(query, aliases, pages, locale).map((resolution) => {
+      if (resolution.type === 'user') return {
+        key: 'dynamic:user',
+        label: t('adminShell.searchUser', { value: resolution.value }),
+        description: t('adminShell.userManagement'),
+        href: resolution.href,
+        icon: UserRound,
+      };
+      if (resolution.type === 'resource') return {
         key: 'dynamic:resource',
-        label: t('adminShell.searchResource', { value }),
+        label: t('adminShell.searchResource', { value: resolution.value }),
         description: t('adminShell.resourceManagement'),
-        href: `/admin/resources?search=${encodeURIComponent(value)}`,
+        href: resolution.href,
         icon: PackageSearch,
-      });
-    }
+      };
+      if (resolution.type === 'post') return {
+        key: `dynamic:post:${resolution.value}`,
+        label: t('adminShell.searchPost', { value: resolution.value }),
+        description: t('adminShell.postManagement'),
+        href: resolution.href,
+        icon: FileText,
+      };
+      if (resolution.type === 'requestId') return {
+        key: `dynamic:request-id:${resolution.value}`,
+        label: t('adminShell.searchRequestId', { value: resolution.value }),
+        description: t('adminShell.requestIdManagement'),
+        href: resolution.href,
+        icon: ScrollText,
+      };
+      if (resolution.type === 'moderation') return {
+        key: `dynamic:moderation:${resolution.filter}`,
+        label: resolution.filter === 'resources'
+          ? t('adminShell.openResourceModeration')
+          : t('adminShell.openModeration'),
+        description: t('adminShell.moderationQueue'),
+        href: resolution.href,
+        icon: ShieldCheck,
+      };
+      if (resolution.type === 'setting') return {
+        key: `dynamic:setting:${resolution.page.key}`,
+        label: t('adminShell.openSetting', { value: resolution.page.label }),
+        description: resolution.page.description,
+        href: resolution.href,
+        icon: Settings2,
+      };
+      if (resolution.type === 'page') return {
+        key: `dynamic:page:${resolution.page.key}`,
+        label: t('adminShell.openAdminPage', { value: resolution.page.label }),
+        description: resolution.page.description,
+        href: resolution.href,
+        icon: Settings2,
+      };
+      return {
+        key: 'dynamic:unknown',
+        label: '',
+        description: '',
+        href: '',
+        icon: Settings2,
+        disabled: true,
+      };
+    });
 
     return [...dynamic, ...matched].slice(0, 12);
   }, [locale, query, sections, t]);
 
   const go = (result: CommandResult) => {
     if (result.disabled || !result.href) return;
-    router.push(result.href);
-    onOpenChange(false);
+    void navigateWithUnsavedChanges(result.href, (href) => router.push(href)).then((navigated) => {
+      if (navigated) onOpenChange(false);
+    });
   };
 
   if (!open) return null;

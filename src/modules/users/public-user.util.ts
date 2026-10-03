@@ -22,6 +22,7 @@ const PRIVATE_USER_FIELDS = [
   'digest_email',
   'phone_verified',
   'phone_verified_at',
+  'preferred_content_language',
 ] as const;
 
 export function toPublicUser<T extends Record<string, any>>(user: T): Partial<T> {

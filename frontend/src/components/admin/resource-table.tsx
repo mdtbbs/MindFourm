@@ -7,6 +7,7 @@ import { Download, Eye, ExternalLink, FileDown, Star, Trash2 } from 'lucide-reac
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
 import { useI18n } from '@/i18n/provider';
+import { promptDialog } from '@/store/interaction-dialog-store';
 
 interface ResourceTableProps {
   initialSearch?: string;
@@ -69,9 +70,14 @@ export default function ResourceTable({ initialSearch = '' }: ResourceTableProps
   }, [loadData]);
 
   const handleDelete = async (resource: Resource) => {
-    const typed = window.prompt(
-      `删除资源会影响前台和第三方 API。请输入资源标题“${resource.title}”确认删除。`,
-    );
+    const typed = await promptDialog({
+      title: '确认删除资源',
+      message: '删除资源会影响前台和第三方 API。请输入资源标题以继续。',
+      label: `资源标题：${resource.title}`,
+      required: true,
+      validate: (value) => value === resource.title ? null : '输入内容与资源标题不一致',
+      submitLabel: '删除资源',
+    });
     if (typed !== resource.title) return;
 
     try {

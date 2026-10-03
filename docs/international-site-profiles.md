@@ -48,6 +48,7 @@ Each forum creates local users keyed by `mindauth_id`. Roles, bans, posts, repli
 | Policy | MDTBBS | Mindustry Club |
 |---|---|---|
 | UI locales | `zh-CN` | `en`, `ru`, `ja` |
+| Content languages | `en`, `ru`, `ja`, `zh-CN` | `en`, `ru`, `ja`, `zh-CN` |
 | Email required for community writes | no | yes |
 | Phone required for community writes | yes | no |
 | Default resource moderation | yes | no; content-safety flags can still require review |
@@ -55,6 +56,20 @@ Each forum creates local users keyed by `mindauth_id`. Roles, bans, posts, repli
 | Server directory | existing MDTBBS directory | independent public directory remains available |
 
 Public `/api/v1/capabilities` reports profile, locales, features, and verification requirements. Stable API codes such as `EMAIL_VERIFICATION_REQUIRED`, `PHONE_VERIFICATION_REQUIRED`, `TERMS_ACCEPTANCE_REQUIRED`, and `RESOURCE_UPLOAD_DISABLED` are intended for clients to translate.
+
+### Mindustry Club language and visible navigation
+
+The Club interface defaults to English. The main language chooser offers English, Russian, and Japanese; the Chinese catalog remains available to account-level language preferences and through `?lang=zh-CN`. The Chinese-language recommendation is a dismissible banner and never redirects visitors. Club navigation is driven by the frontend Site Profile and exposes Discussions, Resources, Discover, Developers, and the independent public server directory; it does not expose the legacy Wiki or LanLink entry.
+
+Post and resource authors can set a content language. The editor detects a starting value from the text and lets the author change it before publishing. Club account settings store a preferred feed language; feed results remain multilingual, with the preferred language ranked first. Search defaults to all languages and provides an explicit language filter. These preferences are local to the Club account and are not synchronized with MDTBBS.
+
+Club legal pages use the localized English, Russian, or Japanese catalog for Terms, Privacy, Community Guidelines, Content & Resource Rules, and Copyright & Takedown Policy. Keep those translations complete in `frontend/src/i18n/locales/{en,ru,ja}/common.json` when changing the policies.
+
+### Keeping branch delta small
+
+Keep shared forum behavior on the common trunk. Profile-specific branding, navigation, feature visibility, locale policy, and portal composition belong in `src/config/site-profile-data.ts` and `frontend/src/config/site-profile.ts`; user-facing copy belongs in locale catalogs. Gate a real behavior difference behind the profile rather than copying a page or service into a long-lived Club branch. Add profile tests for any new visible feature so MDTBBS behavior remains covered.
+
+The preferred content-language field is stored per local user. Its schema change is an explicit migration (`1720000210000-AddPreferredContentLanguage`); register and run migrations independently in each profile database. Do not use TypeORM `synchronize` or copy user preferences between deployments.
 
 ## Migrations and operations
 

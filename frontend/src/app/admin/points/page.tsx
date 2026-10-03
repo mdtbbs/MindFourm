@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
@@ -76,7 +78,7 @@ export default function AdminPointsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除此规则吗？')) return;
+    if (!await confirmDialog({ message: '确定要删除此规则吗？', destructive: true })) return;
     try {
       await api.delete(`/api/points/admin/rules/${id}`);
       setMessage('规则已删除');

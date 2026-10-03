@@ -12,6 +12,7 @@ import {
 import { useNavigation } from '@/lib/navigation/context';
 import { useI18n } from '@/i18n/provider';
 import { siteProfile } from '@/config/site-profile';
+import { LocaleSwitcher } from '@/i18n/provider';
 
 const FOOTER_LINKS = [
   { href: '/links', key: 'footer.links' },
@@ -111,10 +112,11 @@ export default function Footer() {
             </Link>
           ))}
         </nav>
+        <div className="mt-3 flex justify-center"><LocaleSwitcher /></div>
 
         <div className="mt-4 space-y-2 text-center text-sm text-[var(--text-muted)]">
           <p>{footer.copyright}</p>
-          {(footer.icpNumber || footer.policeNumber) && (
+          {siteProfile.features.domesticFiling && (footer.icpNumber || footer.policeNumber) && (
             <p className="flex flex-wrap justify-center gap-x-4 gap-y-1">
               <FilingText number={footer.icpNumber} href={footer.icpUrl} />
               <FilingText number={footer.policeNumber} href={footer.policeUrl} />

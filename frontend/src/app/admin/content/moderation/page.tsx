@@ -18,6 +18,7 @@ import type { ModerationItem, Resource, UserProfile } from '@/types';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import InlineLoading from '@/components/ui/inline-loading';
+import ResourceModerationReview from '@/components/admin/resource-moderation-review';
 
 type Filter = 'all' | 'posts' | 'replies' | 'avatars' | 'resources';
 
@@ -302,6 +303,7 @@ export default function ModerationPage() {
                   </div>
                 </div>
               ) : null}
+              <ResourceModerationReview resource={selected.data} />
               <Link
                 href={`/resources/${selected.data.id}`}
                 target="_blank"

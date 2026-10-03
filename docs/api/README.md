@@ -1,10 +1,8 @@
 # MDTBBS API 开发者文档
 
-管理员跨站资源导入/导出使用 legacy 管理接口，具体格式和文件处理流程见[跨站资源迁移文档](../resources-cross-site-transfer.md)。
+这里介绍 MindFourm 的第三方 Public Client API，包括适用场景、认证方式、请求参数与响应格式。论坛用户页面不提供 API 导航；本入口面向开发者。
 
-这里介绍 MindFourm 面向客户端和服务端集成开放的 API，包括适用场景、认证方式、请求参数与响应格式。论坛用户页面不提供 API 导航；本入口面向开发者。
-
-Web、Android、桌面端、Mindustry Mod、启动器等客户端通过 MindAuth Authorization Code + PKCE 获取访问令牌，再调用 `/api/v1/*`。机器人、同步服务和后台自动化使用 `/api/external/v1/*`。
+Web、Android、桌面端、Mindustry Mod、启动器等客户端通过 MindAuth Authorization Code + PKCE 获取访问令牌，再调用 Public Client V1。获准的服务端集成凭证另行管理，不属于第三方 Public Client API。
 
 未在公开文档中列出的 `/api/*` 历史接口不属于第三方稳定契约；只有维护论坛本体时才应直接依赖它们。
 
@@ -13,9 +11,8 @@ Web、Android、桌面端、Mindustry Mod、启动器等客户端通过 MindAuth
 | 接口 | 基础路径 | 面向对象 | 稳定性 |
 | --- | --- | --- | --- |
 | Public Client V1 | `/api/v1` | Web、官方客户端、Mindustry Mod、第三方启动器 | 稳定契约；OAuth scope 与论坛策略共同控制 |
-| External API | `/api/external/v1` | QQ、Discord、Telegram 机器人、同步服务和服务端集成 | 受 scope 约束的服务端契约 |
 | 历史与内部接口 | `/api/*` | 论坛前端、后台和兼容代码 | 不承诺长期兼容第三方 |
-| 服务间回调 | 例如 `/api/service-api/*`、`/api/auto-post/*` | 受信任的服务间调用 | 私有部署契约 |
+| 服务间集成 | 受信任的服务端调用 | 私有部署契约 |
 
 客户端不要因为源码中存在某个历史接口就依赖它。调用 V1 功能前，还要检查服务端当前公布的能力。
 
@@ -27,9 +24,11 @@ Web、Android、桌面端、Mindustry Mod、启动器等客户端通过 MindAuth
 - API 参数参考：`/api/v1/reference`
 - Swagger 文档：`/api/docs/v1`（只读，不提供在线调用）
 - OpenAPI JSON：`/api/openapi/v1.json`
+- 明确命名的 Public OpenAPI：`/api/openapi/public-v1.json`（与兼容地址内容相同）
 - 服务能力查询：`GET /api/v1/capabilities`
 
 `/api/v1` 的在线文档只展示公开稳定契约。Legacy、管理端和服务间接口不会出现在公开导航中。
+仓库导出的 `openapi-internal-v1.json` 是仅供开发/审查使用的内部快照，不通过 HTTP 路由提供；勿将其发布到第三方开发者页面。旧文件名 `openapi-v1.json` 仅作为 Public JSON 兼容镜像。
 
 仓库内文档：
 
@@ -41,11 +40,10 @@ Web、Android、桌面端、Mindustry Mod、启动器等客户端通过 MindAuth
 - [资源中心 API V1](./resources-v1-contract.md)
 - [多人联机 API V1](./multiplayer-v1.md)
 - [云存档 API V1](./cloud-saves-v1.md)
-- [外部服务 API](./external.md)
-- [旧版好友与资源评论接口](./social-resource-comments.md)
-- [源码接口总表](./API_REFERENCE.md)
-
-`API_REFERENCE.md` 是全仓库接口盘点，不等于公开稳定 API。第三方客户端的契约边界以 V1 OpenAPI 和本目录明确标注的文档为准。
+- [Public V1 错误代码](./errors-v1.md)
+- [Public API 更新记录](./changelog-v1.md)
+- [Public API 生命周期](./lifecycle-v1.md)
+第三方客户端的契约边界以 Public V1 OpenAPI 和本目录的 Public Client 指南为准。仓库中的实现、运维资料和兼容代码不是额外的公开 API 契约。
 
 ## V1 响应格式
 
@@ -113,14 +111,10 @@ V1 JSON 接口成功时统一返回 `data` 和 `meta`：
 | 场景 | 凭证 |
 | --- | --- |
 | 新客户端 | MindAuth Public Client access token；服务端验证令牌并按 scope 校验 |
-| 已发布的移动客户端 | Forum Mobile Bearer token（兼容路径） |
-| 浏览器论坛 | `forum_session` Cookie |
-| External API | External API Key，Bearer 或 `X-API-Key` |
-| 受信服务间调用 | 对应服务私钥头，例如 `X-Service-Key` |
+| 第三方客户端 | MindAuth Public Client Bearer，Authorization Code + PKCE |
+| 机器人或服务端集成 | 获准的服务端凭证；只在可信服务端使用 |
 
 详细流程见 [authentication.md](./authentication.md)。
-
-特别注意：当前源码中的 `POST /api/auth/validate-credentials` 是服务端接口，必须先通过 External API Key，并要求 `lanlink:auth` 或 `backupsave:auth` scope。它会向 MindAuth 校验用户名和密码，但不会向普通 Mod 签发 Game Content Bearer token，因此不能把它当作公开 Mod 登录接口。
 
 ## 先读取服务能力
 
@@ -188,6 +182,6 @@ V1 OpenAPI 必须只暴露 `/v1/*` 路径。部分 Nest module 同时包含 lega
 
 - `Resources V1` 提供通用资源读取、Manifest 和持久化上传草稿。
 - `Game Content V1` 为蓝图和地图客户端提供搜索、动态、收藏、点赞、上传和下载接口。
-- `External API` 面向服务端机器人。不要把 API Key 放入 Mod、网页代码包或桌面客户端。
-- 新客户端使用 MindAuth Authorization Code + PKCE S256。Forum Mobile token 和对应交换接口继续服务已发布的移动客户端。
+- 第三方客户端必须使用自己的 MindAuth Public Client 和 Authorization Code + PKCE S256。第一方兼容登录能力不属于 Public Client 契约。
+- 服务器端集成凭证单独受控，不应嵌入客户端；不属于本开发者中心的 Public Client V1。
 - `notifications_v1` 已纳入 First-party V1 OpenAPI，默认服务能力为 `true`，并受 `feature_notifications_v1_enabled` 控制；SSE 目前仍为 `false`。

@@ -31,7 +31,14 @@
     "rejectReasonOptional": "Укажите причину отклонения (необязательно).",
     "rejectPlaceholder": "Например: публикация не соответствует правилам сообщества…",
     "cancel": "Отмена",
-    "confirmReject": "Подтвердить"
+    "confirmReject": "Подтвердить",
+    "resourceHeader": "Ресурс",
+    "resourceVersion": "Версия {version}",
+    "resourceBy": "Автор: {author}",
+    "viewResource": "Открыть ресурс",
+    "downloadResource": "Скачать",
+    "resourcePublished": "Опубликован",
+    "resourceApproved": "Одобрен"
   },
   "replySection": {
     "aria": "Ответы",

@@ -1,15 +1,309 @@
 {
-  "common": { "save": "保存", "cancel": "キャンセル", "loading": "読み込み中…", "search": "検索", "searchCommunity": "ディスカッション、リソース、メンバーを検索…", "back": "戻る", "close": "閉じる", "home": "ホーム", "language": "言語", "skipToContent": "本文へ移動", "menu": "メニュー", "theme": "テーマを変更", "switchToLight": "ライトテーマに切替", "switchToDark": "ダークテーマに切替" },
-  "home": { "intro": "Mindustryプレイヤーのコミュニティです。Mod、マップ、設計図を探して、ゲームについて話しましょう。", "searchPlaceholder": "Mod、マップ、設計図、ディスカッションを検索…", "quickLinks": "リソースを見る", "mods": "Mod", "maps": "マップ", "schematics": "設計図", "latestDiscussions": "新着ディスカッション", "latestResources": "新着リソース", "viewAll": "すべて見る", "noDiscussions": "公開中のディスカッションはまだありません。", "noResources": "公開中のリソースはまだありません。", "unavailable": "このセクションは一時的に利用できません。", "reload": "再試行", "stale": "一部のセクションでは直近に取得した内容を表示しています。", "gameServers": "ゲームサーバー" },
-  "navigation": { "home": "ホーム", "posts": "ディスカッション", "resources": "リソース", "servers": "サーバー", "wiki": "ナレッジベース", "login": "ログイン", "register": "アカウントを作成", "logout": "ログアウト", "profile": "プロフィール", "settings": "設定", "friends": "フレンド", "messages": "メッセージ", "bookmarks": "ブックマーク", "notifications": "通知", "admin": "管理", "siteNavigation": "サイトナビゲーション" },
-  "forum": { "createPost": "新しい話題を投稿", "latestDiscussions": "新着ディスカッション", "trending": "注目", "reply": "返信", "replies": "返信", "categories": "カテゴリ", "tags": "タグ", "report": "報告", "searchResults": "検索結果", "contentLanguage": "投稿の言語" },
-  "resources": { "title": "リソース", "mods": "Mod", "maps": "マップ", "schematics": "設計図", "download": "ダウンロード", "upload": "リソースを投稿", "popular": "人気のリソース", "version": "バージョン", "compatibility": "対応状況", "anonymousDownload": "公開ファイルはアカウントなしでダウンロードできます。" },
-  "mobile": { "publish": "投稿", "myAccount": "マイページ", "chooseWhatToPublish": "投稿内容を選択", "quickActions": "投稿ショートカット", "openPublish": "投稿メニューを開く", "closePublish": "投稿メニューを閉じる", "publishPost": "ディスカッションを開始", "publishPostDescription": "質問や近況を投稿", "publishSchematic": "設計図を共有", "publishSchematicDescription": ".mschをアップロード、またはコードを貼り付け", "publishMap": "マップを共有", "publishMapDescription": ".msavをアップロードしてプレビューを作成", "publishResource": "その他のリソースを投稿", "publishResourceDescription": "Mod、ツールなどのファイルを共有" },
-  "notifications": { "title": "通知", "unread": "未読 {count} 件", "system": "システム", "community": "コミュニティ", "reply": "ディスカッションに返信しました", "mention": "あなたに言及しました", "postLike": "ディスカッションにいいねしました", "replyLike": "返信にいいねしました", "message": "メッセージを送信しました", "bestAnswer": "返信をベストアンサーに選びました", "systemNotice": "お知らせを送信しました", "newNotice": "通知を送信しました", "allReadLabel": "すべて既読にする", "allRead": "すべて既読", "empty": "通知はありません", "viewAll": "すべての通知を見る" },
-  "footer": { "links": "コミュニティリンク", "more": "もっと見る", "navigation": "フッターナビゲーション", "friendly": "便利なリンク", "thanks": "謝辞", "about": "コミュニティについて", "terms": "利用規約", "privacy": "プライバシー", "feedback": "フィードバック" , "communityGuidelines": "コミュニティガイドライン", "resourceRules": "コンテンツ・リソース規則", "takedown": "著作権と削除申請", "tableOfContents": "目次"},
-  "consent": { "title": "コミュニティ規約をご確認ください", "summary": "参加する前に利用規約とプライバシーポリシーをご確認ください。", "loginRequired": "規約に同意するにはログインしてください。", "login": "ログインに戻る", "termsIntro": "こちらをご確認ください：", "and": "および", "disagree": "同意しない場合は「同意しない」を選ぶとログアウトします。コミュニティには参加できません。", "checkbox": "規約を読み、同意しました", "decline": "同意しない", "accept": "同意する", "processing": "保存中…", "checking": "ログイン状態を確認中…", "checkFailed": "ログイン状態を確認できません。ホームに戻って再試行してください。", "submitFailed": "選択を保存できませんでした。もう一度お試しください。" },
-  "auth": { "signIn": "ログイン", "register": "アカウントを作成", "signedIn": "ログイン中", "guest": "ログインしていません", "emailVerificationRequired": "投稿やアップロードの前にメールアドレスを確認してください。", "phoneVerificationRequired": "続行するには電話番号の確認が必要です。" },
-  "errors": { "EMAIL_VERIFICATION_REQUIRED": "メールアドレスを確認してください。", "PHONE_NOT_VERIFIED": "電話番号を確認してください。", "phoneRetry": "電話番号の確認が必要です。確認が完了すると、この操作は自動的に再開されます。", "USER_BANNED": "このアカウントでは操作できません。", "TERMS_ACCEPTANCE_REQUIRED": "続行するにはコミュニティ規約への同意が必要です。", "FEATURE_DISABLED": "この機能は現在利用できません。", "RESOURCE_UPLOAD_DISABLED": "現在リソースをアップロードできません。", "notFound": "ページが見つかりません", "notFoundDescription": "ページが削除されたか、公開されていないか、リンクが間違っている可能性があります。", "searchPosts": "ディスカッションを検索…", "browseCategories": "カテゴリを見る", "retry": "再試行", "pageError": "ページエラー", "loadError": "ページを読み込めませんでした。もう一度お試しください。", "globalTitle": "このページは一時的に利用できません", "globalDescription": "時間をおいて再度お試しください。内部エラーの詳細は表示されません。" },
-  "recommendation": { "title": "中国語のMindustryコミュニティをお探しですか？", "description": "MDTBBSでは中国本土のプレイヤー向けに中国語で交流できます。", "visit": "MDTBBSを見る", "stay": "Mindustry Clubに残る" },
-  "admin": { "language": "管理画面の言語", "english": "English", "chinese": "简体中文" }
+  "common": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "loading": "読み込み中…",
+    "search": "検索",
+    "searchCommunity": "ディスカッション、リソース、メンバーを検索…",
+    "back": "戻る",
+    "close": "閉じる",
+    "home": "ホーム",
+    "language": "言語",
+    "skipToContent": "本文へ移動",
+    "menu": "メニュー",
+    "theme": "テーマを変更",
+    "switchToLight": "ライトテーマに切替",
+    "switchToDark": "ダークテーマに切替"
+  },
+  "home": {
+    "intro": "Mindustryプレイヤーのコミュニティです。Mod、マップ、設計図を探して、ゲームについて話しましょう。",
+    "searchPlaceholder": "Mod、マップ、設計図、ディスカッションを検索…",
+    "quickLinks": "リソースを見る",
+    "mods": "Mod",
+    "maps": "マップ",
+    "schematics": "設計図",
+    "latestDiscussions": "新着ディスカッション",
+    "latestResources": "新着リソース",
+    "viewAll": "すべて見る",
+    "noDiscussions": "公開中のディスカッションはまだありません。",
+    "noResources": "公開中のリソースはまだありません。",
+    "unavailable": "このセクションは一時的に利用できません。",
+    "reload": "再試行",
+    "stale": "一部のセクションでは直近に取得した内容を表示しています。",
+    "gameServers": "ゲームサーバー"
+  },
+  "navigation": {
+    "discover": "見つける",
+    "developers": "開発者向け",
+    "home": "ホーム",
+    "posts": "ディスカッション",
+    "resources": "リソース",
+    "servers": "サーバー",
+    "allDiscussions": "すべてのディスカッション",
+    "resourceBrowsing": "リソースを探す",
+    "allResources": "すべてのリソース",
+    "discussionBoards": "ディスカッションカテゴリ",
+    "account": "アカウント",
+    "myPosts": "自分のディスカッション",
+    "bookmarks": "ブックマーク",
+    "messages": "メッセージ",
+    "notifications": "通知",
+    "friends": "フレンド",
+    "settings": "設定",
+    "publishDiscussion": "ディスカッションを開始",
+    "publishResource": "リソースを投稿"
+  },
+  "forum": {
+    "createPost": "新しい話題を投稿",
+    "latestDiscussions": "新着ディスカッション",
+    "trending": "注目",
+    "reply": "返信",
+    "replies": "返信",
+    "categories": "カテゴリ",
+    "tags": "タグ",
+    "report": "報告",
+    "searchResults": "検索結果",
+    "contentLanguage": "投稿の言語"
+  },
+  "resources": {
+    "title": "リソース",
+    "mods": "Mod",
+    "maps": "マップ",
+    "schematics": "設計図",
+    "download": "ダウンロード",
+    "upload": "リソースを投稿",
+    "popular": "人気のリソース",
+    "version": "バージョン",
+    "compatibility": "対応状況",
+    "anonymousDownload": "公開ファイルはアカウントなしでダウンロードできます。",
+    "kinds": {
+      "mod": "Mod",
+      "map": "マップ",
+      "schematic": "設計図",
+      "save": "セーブデータ",
+      "game_version": "ゲームバージョン",
+      "server_plugin": "サーバープラグイン",
+      "development_tool": "開発ツール",
+      "texture_ui": "テクスチャとUI",
+      "other": "その他"
+    }
+  },
+  "mobile": {
+    "publish": "投稿",
+    "myAccount": "マイページ",
+    "chooseWhatToPublish": "投稿内容を選択",
+    "quickActions": "投稿ショートカット",
+    "openPublish": "投稿メニューを開く",
+    "closePublish": "投稿メニューを閉じる",
+    "publishPost": "ディスカッションを開始",
+    "publishPostDescription": "質問や近況を投稿",
+    "publishSchematic": "設計図を共有",
+    "publishSchematicDescription": ".mschをアップロード、またはコードを貼り付け",
+    "publishMap": "マップを共有",
+    "publishMapDescription": ".msavをアップロードしてプレビューを作成",
+    "publishResource": "その他のリソースを投稿",
+    "publishResourceDescription": "Mod、ツールなどのファイルを共有"
+  },
+  "notifications": {
+    "title": "通知",
+    "unread": "未読 {count} 件",
+    "system": "システム",
+    "community": "コミュニティ",
+    "reply": "ディスカッションに返信しました",
+    "mention": "あなたに言及しました",
+    "postLike": "ディスカッションにいいねしました",
+    "replyLike": "返信にいいねしました",
+    "message": "メッセージを送信しました",
+    "bestAnswer": "返信をベストアンサーに選びました",
+    "systemNotice": "お知らせを送信しました",
+    "newNotice": "通知を送信しました",
+    "allReadLabel": "すべて既読にする",
+    "allRead": "すべて既読",
+    "empty": "通知はありません",
+    "viewAll": "すべての通知を見る"
+  },
+  "footer": {
+    "links": "コミュニティリンク",
+    "more": "もっと見る",
+    "navigation": "フッターナビゲーション",
+    "friendly": "便利なリンク",
+    "thanks": "謝辞",
+    "about": "コミュニティについて",
+    "terms": "利用規約",
+    "privacy": "プライバシー",
+    "feedback": "フィードバック",
+    "communityGuidelines": "コミュニティガイドライン",
+    "resourceRules": "コンテンツ・リソース規則",
+    "takedown": "著作権と削除申請",
+    "tableOfContents": "目次"
+  },
+  "consent": {
+    "title": "コミュニティ規約をご確認ください",
+    "summary": "参加する前に利用規約とプライバシーポリシーをご確認ください。",
+    "loginRequired": "規約に同意するにはログインしてください。",
+    "login": "ログインに戻る",
+    "termsIntro": "こちらをご確認ください：",
+    "and": "および",
+    "disagree": "同意しない場合は「同意しない」を選ぶとログアウトします。コミュニティには参加できません。",
+    "checkbox": "規約を読み、同意しました",
+    "decline": "同意しない",
+    "accept": "同意する",
+    "processing": "保存中…",
+    "checking": "ログイン状態を確認中…",
+    "checkFailed": "ログイン状態を確認できません。ホームに戻って再試行してください。",
+    "submitFailed": "選択を保存できませんでした。もう一度お試しください。"
+  },
+  "auth": {
+    "signIn": "ログイン",
+    "register": "アカウントを作成",
+    "signedIn": "ログイン中",
+    "guest": "ログインしていません",
+    "emailVerificationRequired": "投稿やアップロードの前にメールアドレスを確認してください。",
+    "phoneVerificationRequired": "続行するには電話番号の確認が必要です。"
+  },
+  "errors": {
+    "EMAIL_VERIFICATION_REQUIRED": "メールアドレスを確認してください。",
+    "PHONE_NOT_VERIFIED": "電話番号を確認してください。",
+    "phoneRetry": "電話番号の確認が必要です。確認が完了すると、この操作は自動的に再開されます。",
+    "USER_BANNED": "このアカウントでは操作できません。",
+    "TERMS_ACCEPTANCE_REQUIRED": "続行するにはコミュニティ規約への同意が必要です。",
+    "FEATURE_DISABLED": "この機能は現在利用できません。",
+    "RESOURCE_UPLOAD_DISABLED": "現在リソースをアップロードできません。",
+    "notFound": "ページが見つかりません",
+    "notFoundDescription": "ページが削除されたか、公開されていないか、リンクが間違っている可能性があります。",
+    "searchPosts": "ディスカッションを検索…",
+    "browseCategories": "カテゴリを見る",
+    "retry": "再試行",
+    "pageError": "ページエラー",
+    "loadError": "ページを読み込めませんでした。もう一度お試しください。",
+    "globalTitle": "このページは一時的に利用できません",
+    "globalDescription": "時間をおいて再度お試しください。内部エラーの詳細は表示されません。"
+  },
+  "recommendation": {
+    "title": "中国語のコミュニティをお探しですか？",
+    "description": "MDTBBS は中国語で交流できる Mindustry コミュニティです。",
+    "visit": "MDTBBS.cn を見る",
+    "stay": "このサイトに留まる"
+  },
+  "admin": {
+    "language": "管理画面の言語",
+    "english": "English",
+    "chinese": "简体中文"
+  },
+  "languageSettings": {
+    "title": "言語設定",
+    "description": "画面の言語と、フィードで優先する言語を選択できます。他の言語の投稿も引き続き表示されます。",
+    "accountLanguage": "画面の言語",
+    "feedLanguage": "フィードの優先言語",
+    "followInterface": "画面の言語に合わせる",
+    "save": "フィード設定を保存",
+    "saving": "保存中…",
+    "saved": "保存しました"
+  },
+  "adminNavigation": {
+    "item": {
+      "resource-analytics": "リソース統計"
+    }
+  },
+  "legal": {
+    "terms": {
+      "title": "利用規約",
+      "accounts": {
+        "title": "アカウントとアクセス",
+        "body": "MindAuth を使ってサインインします。アカウントを安全に管理し、許可なく他人のアカウントを使用しないでください。コミュニティやサービスを保護するため、必要に応じてアクセスを制限することがあります。"
+      },
+      "content": {
+        "title": "投稿コンテンツ",
+        "body": "作成したコンテンツの権利は引き続きあなたに帰属します。サービス運営に必要な範囲で、Mindustry Club にホスト、表示、配布する許可を与えるものとします。法律、安全性、バックアップ上の必要に応じて、提供されている機能からコンテンツを削除できます。"
+      },
+      "conduct": {
+        "title": "コミュニティでの行動",
+        "body": "嫌がらせ、なりすまし、スパム、サービスへの妨害、悪意あるファイルのアップロードは禁止です。コミュニティガイドラインとコンテンツ・リソース規則に従ってください。"
+      },
+      "moderation": {
+        "title": "モデレーションとサービス提供",
+        "body": "メンバーはコンテンツを報告できます。管理者は安全、権利、または不正利用への対応として、コンテンツを非表示・削除したり、アカウントを制限したりすることがあります。Mindustry Club は独立したプレイヤーコミュニティであり、Anuken または公式 Mindustry プロジェクトとは無関係で、その承認も受けていません。サービスは変更または停止される場合があります。"
+      }
+    },
+    "privacy": {
+      "title": "プライバシーポリシー",
+      "identity": {
+        "title": "アカウント情報",
+        "body": "MindAuth がアカウント認証を提供します。Mindustry Club は、プロフィール、投稿、返信、リソース記録、モデレーションの判断を独立したコミュニティ用データベースに保存します。"
+      },
+      "data": {
+        "title": "取り扱うデータ",
+        "body": "サービス提供、不正防止、報告の調査のため、アカウント情報、メール認証状態、IPアドレスとリクエストのメタデータ、セッションCookie、セキュリティ・モデレーションログを処理します。IPアドレスとセキュリティログへのアクセスは制限し、必要な期間のみ保持します。"
+      },
+      "cookies": {
+        "title": "Cookie と言語設定",
+        "body": "必須のCookieはセッションを保護し、選択した画面言語とフィード言語を記憶します。サイトをまたいだ広告には使用しません。"
+      },
+      "publicContent": {
+        "title": "公開コンテンツ",
+        "body": "公開投稿やリソースページは、検索エンジンを含むすべての人に表示されることがあります。"
+      },
+      "requests": {
+        "title": "プライバシーに関する依頼",
+        "body": "プライバシーに関する質問やアカウント削除の依頼は、報告またはフィードバック機能からサイト管理者に連絡してください。"
+      }
+    },
+    "communityGuidelines": {
+      "title": "コミュニティガイドライン",
+      "respect": {
+        "title": "相手を尊重する",
+        "body": "人ではなく考えを批評しましょう。嫌がらせ、脅迫、なりすましは禁止です。"
+      },
+      "discussion": {
+        "title": "役立つ議論をする",
+        "body": "話題に沿って必要な情報を共有し、スパム、詐欺、議論を妨げる行為を避けてください。"
+      },
+      "credit": {
+        "title": "作者を明記する",
+        "body": "可能な場合は作者と原典へのリンクを記載してください。ライセンスとクレジット表記の条件を守ってください。"
+      },
+      "safety": {
+        "title": "コミュニティを守る",
+        "body": "個人情報、悪意あるリンク、端末やアカウントを侵害する目的のコンテンツを投稿しないでください。"
+      },
+      "reporting": {
+        "title": "問題を報告する",
+        "body": "管理者の対応が必要なコンテンツには報告機能を使ってください。他のメンバーを攻撃したり黙らせたりするために報告しないでください。"
+      }
+    },
+    "resourceRules": {
+      "title": "コンテンツ・リソース規則",
+      "rights": {
+        "title": "権利を確認して共有する",
+        "body": "共有する権利のある素材だけをアップロードしてください。適用されるライセンスと原作者を記載してください。"
+      },
+      "metadata": {
+        "title": "正確に説明する",
+        "body": "対応バージョンと互換性を正確に記載してください。作者、ファイル、機能について誤解を招く説明をしないでください。"
+      },
+      "prohibited": {
+        "title": "危険なファイル",
+        "body": "マルウェア、トロイの木馬、バックドア、認証情報を盗むツール、端末やアカウントを損傷する目的のファイルをアップロードしないでください。"
+      },
+      "review": {
+        "title": "確認",
+        "body": "リソース投稿は不正利用や危険なコンテンツの確認対象になることがあります。報告を確認する間、管理者が公開を制限する場合があります。"
+      }
+    },
+    "copyright": {
+      "title": "著作権と削除申請",
+      "submit": {
+        "title": "申請方法",
+        "body": "Mindustry Club のコンテンツが権利を侵害していると思われる場合、ページまたはリソースのURL、対象素材、保有する権利、希望する対応を記載し、連絡先とともに管理者へ送ってください。"
+      },
+      "review": {
+        "title": "確認と対応",
+        "body": "管理者が報告を確認します。確認中に対象素材を一時的に制限し、調査後に削除またはアクセスを復元する場合があります。"
+      },
+      "abuse": {
+        "title": "不正な申請",
+        "body": "虚偽または悪意のある報告は却下されることがあります。正確な情報を記載し、誠実に申請してください。"
+      }
+    }
+  }
 }

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
-import Button from '@/components/ui/button';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 
 type ModerationSettingItem = {
   key: string;
@@ -32,21 +33,22 @@ const moderationSettings: ModerationSettingItem[] = [
 export default function ModerationSettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     try {
-      setError(null);
-      setValues(await adminApi.getSettings('moderation'));
+      const data = await adminApi.getSettings('moderation');
+      setValues(data);
+      initializeUnsaved(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载审核设置失败');
+      setLoadError(err instanceof Error ? err.message : '加载审核设置失败');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
@@ -57,17 +59,14 @@ export default function ModerationSettingsPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
-    setMessage(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('moderation', values);
-      setMessage('审核设置已保存');
-      setTimeout(() => setMessage(null), 3000);
+      await adminApi.updateSettings('moderation', submittedValues);
+      unsaved.markSaved(submittedValues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存审核设置失败');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : '保存审核设置失败');
     }
   };
 
@@ -76,7 +75,7 @@ export default function ModerationSettingsPage() {
   }
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">审核开关</h2>
         <p className="text-xs text-surface-400 mt-1">
@@ -85,8 +84,7 @@ export default function ModerationSettingsPage() {
       </div>
 
       <div className="p-6 space-y-4">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
 
         <div className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           已经进入待审核队列的内容不会因为关闭开关自动通过；关闭后只影响之后新发布的内容。
@@ -139,10 +137,18 @@ export default function ModerationSettingsPage() {
         </section>
       </div>
 
-      <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
-        <Button variant="ghost" onClick={fetchSettings}>重置</Button>
-        <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

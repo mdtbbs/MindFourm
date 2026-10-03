@@ -18,6 +18,7 @@ import type { AdminLog, AdminStats } from '@/types';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import Alert from '@/components/ui/alert';
 import ActiveUsersMetric from './active-users-metric';
+import { useI18n } from '@/i18n/provider';
 
 type PerformanceTelemetry = Awaited<ReturnType<typeof adminApi.getPerformanceTelemetry>>;
 
@@ -37,6 +38,8 @@ function formatAction(log: AdminLog): string {
 }
 
 export default function Dashboard() {
+  const { locale } = useI18n();
+  const english = locale !== 'zh-CN';
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -48,13 +51,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rangeDays, setRangeDays] = useState<1 | 7 | 30 | 90>(7);
 
   const load = useCallback(async (soft = false) => {
     soft ? setRefreshing(true) : setLoading(true);
     setError(null);
 
     try {
-      const nextStats = await adminApi.getStats();
+      const nextStats = await adminApi.getStats(rangeDays);
       setStats(nextStats);
 
       const optional = await Promise.allSettled([
@@ -88,7 +92,7 @@ export default function Dashboard() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [rangeDays]);
 
   useEffect(() => {
     void load(false);
@@ -186,21 +190,42 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="grid border border-surface-200 bg-white sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          ['今日社区主题', stats?.today_community_posts ?? 0],
-          ['今日回复', stats?.today_replies ?? 0],
-          ['今日资源', stats?.today_resources ?? 0],
-          ['今日注册', stats?.today_users ?? 0],
-        ].map(([label, value], index) => (
-          <div
-            key={String(label)}
-            className={`px-5 py-4 ${index ? 'border-t border-surface-200 sm:border-l sm:border-t-0' : ''} ${index === 2 ? 'sm:border-t lg:border-t-0' : ''}`}
-          >
-            <div className="text-xs text-surface-500">{label}</div>
-            <div className="mt-2 text-xl font-semibold tabular-nums text-surface-900">{value}</div>
+      <section className="border border-surface-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-200 px-5 py-3">
+          <div>
+            <div className="text-sm font-semibold text-surface-900">{english ? 'Selected period' : '所选时间段'}</div>
+            <div className="mt-0.5 text-xs text-surface-500">{english ? 'New activity and resource traffic' : '新增内容与资源访问量'}</div>
           </div>
-        ))}
+          <div className="flex gap-1" role="group" aria-label={english ? 'Dashboard time range' : '后台统计时间范围'}>
+            {([1, 7, 30, 90] as const).map((days) => (
+              <button
+                key={days}
+                type="button"
+                aria-pressed={rangeDays === days}
+                onClick={() => setRangeDays(days)}
+                className={`min-h-8 border px-2.5 text-xs ${rangeDays === days ? 'border-primary-600 bg-primary-600 text-white' : 'border-surface-200 bg-white text-surface-700 hover:bg-surface-50'}`}
+              >
+                {english ? (days === 1 ? '24h' : `${days}d`) : (days === 1 ? '24 小时' : `${days} 天`)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7">
+          {[
+            [english ? 'New users' : '新增用户', stats?.range_metrics.new_users],
+            [english ? 'Threads' : '主题', stats?.range_metrics.threads],
+            [english ? 'Replies' : '回复', stats?.range_metrics.replies],
+            [english ? 'Resources' : '资源', stats?.range_metrics.resources],
+            [english ? 'Reports' : '举报', stats?.range_metrics.reports],
+            [english ? 'Downloads' : '下载', stats?.range_metrics.downloads],
+            [english ? 'Views' : '浏览', stats?.range_metrics.views],
+          ].map(([label, value], index) => (
+            <div key={String(label)} className={`min-h-20 border-surface-200 px-4 py-3 ${index % 2 ? 'border-l' : ''} ${index > 1 ? 'border-t' : ''} ${index % 4 > 1 ? 'sm:border-l' : ''} ${index >= 4 ? 'sm:border-t' : ''} xl:border-t-0 ${index ? 'xl:border-l' : ''}`}>
+              <div className="text-xs text-surface-500">{label}</div>
+              <div className="mt-2 text-xl font-semibold tabular-nums text-surface-900">{value ?? '—'}</div>
+            </div>
+          ))}
+        </div>
       </section>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
@@ -261,6 +286,22 @@ export default function Dashboard() {
             <div className="flex items-center justify-between px-4 py-3 text-sm">
               <dt className="flex items-center gap-2 text-surface-500"><SearchX className="h-3.5 w-3.5" />7 日无结果搜索</dt>
               <dd className="font-mono text-xs text-surface-800">{stats?.zero_result_searches_7d ?? '—'}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 text-sm">
+              <dt className="text-surface-500">{english ? 'Failed downloads' : '失败任务'}</dt>
+              <dd className="font-mono text-xs text-surface-800">{stats?.range_metrics.failed_jobs ?? '—'}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 text-sm">
+              <dt className="text-surface-500">{english ? 'Email failures' : '邮件失败'}</dt>
+              <dd className="font-mono text-xs text-surface-800">{stats?.range_metrics.email_failures ?? '—'}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 text-sm">
+              <dt className="text-surface-500">{english ? 'Outbox failures' : '事件投递失败'}</dt>
+              <dd className="font-mono text-xs text-surface-800">{stats?.range_metrics.outbox_failures ?? '—'}</dd>
+            </div>
+            <div className="flex items-center justify-between px-4 py-3 text-sm">
+              <dt className="text-surface-500">{english ? 'Renderer queue' : '资源预览队列'}</dt>
+              <dd className="font-mono text-xs text-surface-800">{stats?.range_metrics.renderer_queue ?? '—'}</dd>
             </div>
           </dl>
           {isAdmin ? (

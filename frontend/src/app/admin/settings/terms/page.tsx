@@ -5,26 +5,29 @@ import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 
 export default function TermsSettingsPage() {
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
-      setValues(await adminApi.getSettings('terms'));
+      const data = await adminApi.getSettings('terms');
+      setValues(data);
+      initializeUnsaved(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载条款设置失败');
+      setLoadError(err instanceof Error ? err.message : '加载条款设置失败');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
@@ -35,18 +38,15 @@ export default function TermsSettingsPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setMessage(null);
-    setError(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('terms', values);
+      await adminApi.updateSettings('terms', submittedValues);
       await refreshAfterSettingsSave();
-      setMessage('条款设置已保存');
-      setTimeout(() => setMessage(null), 3000);
+      unsaved.markSaved(submittedValues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存条款设置失败');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : '保存条款设置失败');
     }
   };
 
@@ -55,14 +55,13 @@ export default function TermsSettingsPage() {
   if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">条款设置</h2>
         <p className="text-xs text-surface-400 mt-1">控制登录时的服务条款与隐私政策同意流程。</p>
       </div>
       <div className="p-6 space-y-5">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
 
         <label className="flex items-start gap-3 border border-surface-200 p-4 cursor-pointer">
           <input
@@ -115,12 +114,19 @@ export default function TermsSettingsPage() {
           />
         </div>
 
-        <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? '保存中...' : '保存设置'}
-          </Button>
-        </div>
       </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

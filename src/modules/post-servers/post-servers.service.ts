@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { User } from '@entities/user.entity';
 import { ContentRelation } from '@entities/content-relation.entity';
+import { applyPublicPostVisibility } from '@common/utils/post-visibility.util';
 
 @Injectable()
 export class PostServersService {
@@ -22,8 +23,12 @@ export class PostServersService {
       select: ['source_id'],
     });
     if (relations.length === 0) return [];
-    return this.postRepo.find({ where: { id: In(relations.map((relation) => relation.source_id)), status: 'published' },
-      relations: ['user', 'category'], order: { created_at: 'DESC' } });
+    const query = this.postRepo.createQueryBuilder('post')
+      .leftJoinAndSelect('post.user', 'user')
+      .leftJoinAndSelect('post.category', 'category')
+      .where('post.id IN (:...postIds)', { postIds: relations.map((relation) => relation.source_id) });
+    applyPublicPostVisibility(query, 'post');
+    return query.orderBy('post.created_at', 'DESC').getMany();
   }
 
   async getForumPostsByServer(serverId: number) {

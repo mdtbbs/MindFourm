@@ -13,7 +13,7 @@ test('resource filter updates preserve existing URL query compatibility', () => 
 
 test('canonical resource kinds are the single primary taxonomy and legacy topic filters remain compatible', () => {
   expect(resourceKinds.map(({ value }) => value)).toEqual([
-    'mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'other',
+    'mod', 'map', 'schematic', 'save', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'pack', 'other',
   ]);
   const query = new URLSearchParams(mergeResourceQuery('category_id=12', { resource_kind: 'map' }));
   expect(query.get('category_id')).toBe('12');

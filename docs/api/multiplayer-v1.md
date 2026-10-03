@@ -268,15 +268,14 @@ Content-Type: application/json
 
 新加入返回 `{ "peer": ..., "resume_token": "..." }`。即使 join body 没有可选字段，也发送 `{}`；恢复时还会有 `resumed: true`。恢复只能在 Peer 的 60 秒恢复窗口内完成；过期 Peer 不可恢复。`POST .../sessions/{id}/leave` 不需要 body；普通成员返回 `{ "status":"left" }`，房主主动退出返回 `{ "status":"closing","grace_seconds":60 }`。调用 `POST .../sessions/{id}/peers/{peerId}/heartbeat` 续期活跃 Peer，响应含 `peer_id`、30 秒 `heartbeat_interval` 和 90 秒 `expires_in`。
 
-若加入策略要求审批，客户端先 `POST .../sessions/{id}/join-requests`（无 body），房主通过 approve/reject 路径处理；请求有效期为 5 分钟。申请请求应使用最终消费该 Intent 的 OAuth 客户端。批准后，申请者收到绑定该 OAuth 客户端的 10 分钟 Join Intent。启动器消费意图时调用 `POST /api/v1/multiplayer/join-intents/{intentId}/consume`，至少发送空 JSON 对象 `{}`，也可传 `{"capabilities":{...}}`。批准事件和状态在 MySQL 中与审批状态同事务保存；Realtime 会在 Redis 或进程恢复后重发，直至客户端处理完成并 ACK。相同用户、OAuth 客户端和 intent 的重复消费在 Peer 首次创建后的 10 分钟恢复期内返回相同 Peer 与 Resume Token，不会创建第二个 Peer；Resume Token 本身不以明文存储。批准意图使用稳定的服务端密钥派生，生产环境需保留配置中的 `MULTIPLAYER_RELAY_CREDENTIAL_SECRET` 或 `MINDAUTH_NATIVE_EXCHANGE_SECRET`。客户端下载批准事件后应先成功消费并保存本地游标，再发送 ACK。应用若提供启动器选择，应从 `preferences.clients` 选出应用；客户端注册的启动 URI 模板必须包含 `{intent_id}`，用户确认后才唤起启动器。
+若加入策略要求审批，客户端先创建 Join Request。请求有效期为 5 分钟；房主批准后，申请者会收到绑定当前 OAuth Client 的 Join Intent。申请者消费 Intent 后即可加入 Session；重复消费会在恢复窗口内返回相同结果。处理批准事件时，客户端应先成功消费并保存本地事件游标，再发送 ACK；启动器跳转前应由用户确认。
 
-需要为 Unlisted Session 创建直接 Join Intent 时，调用 `POST /api/v1/multiplayer/sessions/{id}/join-intents`，发送 `{}`；也可传 `{"join_code":"A1B2C3D4E5"}` 证明持有该 Session 的加入码。成功返回 `{"intent_id":"jnt_opaque","expires_in":60}`。Intent 在 MySQL 中以 SHA-256 哈希保存，创建时绑定论坛用户，但保留“任意已注册 Launcher OAuth client 均可首次消费”的现有语义。首个成功消费的 OAuth client 会在同一数据库事务中绑定到结果；首次消费必须在 60 秒内完成。
+Unlisted Session 可通过 Join Code 创建直接 Join Intent。Intent 绑定当前论坛用户，60 秒内首次消费；成功结果在 10 分钟恢复窗口内可由相同用户和 OAuth Client 重取。
 
-直接创建和接受邀请产生的 Intent，在首次消费创建 Peer 后 10 分钟内，同一论坛用户和首次消费的 OAuth client 重放同一 `intent_id`，会恢复相同 Peer 与 Resume Token，不会创建第二个 Peer。结果、Peer 与 Resume Token 哈希在同一事务提交；恢复期间 Peer 清理任务不会将该 Peer 标记为过期。接受邀请时，`invite.status=accepted` 与唯一 Join Intent 在同一事务写入；重复调用 accept 会返回该邀请当前有效的同一 Intent。尚未消费的 Intent 超过 60 秒后，重试会在行锁保护下轮换原 Intent 的哈希与有效期；已经消费的 Intent 永不重新授权，重试仍指向原消费结果。升级前已接受的邀请会在第一次重试时安全补建 durable Intent。不同 client 在首次消费后重放会得到 `JOIN_INTENT_CLIENT_MISMATCH`。生产部署必须在所有实例配置同一稳定的 `MULTIPLAYER_RELAY_CREDENTIAL_SECRET` 或 `MINDAUTH_NATIVE_EXCHANGE_SECRET`，且在仍有未过期 Join Intent 或结果恢复窗口时不要轮换密钥；缺少可用密钥时服务端会在签发 Intent 或消费事务开始前失败关闭。部署还需先应用 `MultiplayerJoinIntentRecovery1720000180000` migration。
+直接创建、接受邀请和房主批准的 Intent 都有明确的有效期与消费身份约束。消费失败时按稳定错误码处理；已经消费的 Intent 不会重新授予加入权限。
 
 已批准的 Join Request Intent 仍绑定申请时提供的 OAuth client，保留上文所述可恢复 10 分钟及 Realtime ACK 规则。直接和邀请 Intent 则在首次成功消费时绑定 client。
 
-升级到持久化 Join Request 后，迁移会将 `status='approved'` 且 `join_intent_hash`、`join_intent_expires_at` 均为空的旧记录置为 `expired`。这些旧记录的随机 Redis bearer 和 OAuth client 绑定无法安全复原，申请者需要重新提交 Join Request 并等待房主批准；该兼容处理不影响独立直接 Join Intent 的 Redis 消费。
 
 ### 网络候选地址交换
 
@@ -340,7 +339,7 @@ Content-Type: application/json
 
 ## WebSocket 实时事件
 
-地址为当前 API 主机上的 `/realtime/v1`，生产建议由独立 `realtime.mdtbbs.cn` 入口转发到 Realtime Gateway。WebSocket 首帧 `hello` 含心跳间隔。客户端发送：
+WebSocket 地址为当前 API 主机上的 `/realtime/v1`。WebSocket 首帧 `hello` 含心跳间隔。客户端发送：
 
 ```json
 {"type":"heartbeat"}
@@ -349,112 +348,22 @@ Content-Type: application/json
 {"type":"resume","last_event_id":"1790758200000-0","sessions":{"ses_AbCdEf0123456789_-wxyz":"1790758200000-1"}}
 ```
 
-服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。Event 含 `id`、`event`、`timestamp`、`data`；user stream 用 `events:user:{userId}`，session stream 用 `events:session:{sessionId}`。每个 Redis Stream 最多保留 600 秒；恢复最多补发 200 条事件，cursor 已过期或 Redis 不可用时通知客户端重取 Snapshot。Peer 状态以数据库为准；客户端在 WebSocket 重连后应重新读取 Session/Peer Snapshot 来收敛状态，不能只依赖 `peer.disconnected` 或 `peer.updated` 实时事件。读取 peers 前须确保自身是活跃 Peer；断线客户端应先用 resume token 恢复自己。
+服务端支持 `hello`、`heartbeat_ack`、`subscribed`、`event`、`ack`、`error`、`resumed` 和 `resume_failed`。Event 含 `id`、`event`、`timestamp`、`data`；用户和 Session 事件可分别订阅。事件流最多保留 600 秒，恢复最多补发 200 条；cursor 已过期或无法恢复时，客户端应重新读取 Snapshot。Peer 状态以 API 返回的最新 Session/Peer Snapshot 为准。
 
 事件名：`friend.request.created`、`friend.request.accepted`、`friend.removed`、`presence.updated`、`activity.updated`、`multiplayer.invite.created`、`multiplayer.invite.accepted`、`multiplayer.invite.revoked`、`multiplayer.join_request.created`、`multiplayer.join_request.approved`、`multiplayer.join_request.rejected`、`session.updated`、`session.closed`、`peer.joined`、`peer.updated`、`peer.disconnected`、`peer.left`、`candidate.created`、`candidate.removed`、`relay.allocated`、`relay.revoked`。
 
-`multiplayer.join_request.approved` 发给申请者的原 OAuth 客户端，`data` 包含 `join_request_id`、`session_id` 和可直接传给启动器的 `intent_id`。批准记录同时作为持久 outbox；Redis append 失败、Realtime 进程重启或客户端未 ACK 时，服务端会从该记录重发。`intent_id` 在批准后 10 分钟失效；同一用户/客户端在结果恢复窗口内重试消费会得到同一 Peer 和 Resume Token。客户端只有在消费成功后才 ACK；崩溃后收到新事件 ID 时可重复消费并恢复结果。其它普通 Realtime 事件仍使用 Redis Stream 的 600 秒保留与 Snapshot 收敛规则。`intent_id` 是在保留现有事件字段基础上的新增字段，旧客户端可忽略它。
+`multiplayer.join_request.approved` 发给申请者的原 OAuth Client，`data` 包含 `join_request_id`、`session_id` 和可传给启动器的 `intent_id`。批准事件会在处理完成前重发；`intent_id` 在批准后 10 分钟失效。相同用户和客户端在结果恢复窗口内重试消费会得到相同结果。客户端只有在消费成功后才 ACK；崩溃后收到新事件 ID 时可重复消费并恢复结果。
 
-## 服务端状态与存储
+## 功能可用性
 
-TypeORM migration `MultiplayerPlatformV11720000150000` 持久化无向好友唯一键、Social Privacy、Presence 用户偏好、Session、Peer、Resume Token、Invite、Join Request、Relay Allocation 和最小化 Audit；migration `MultiplayerJoinApprovalDurability1720000170000` 在 Join Request 行保存批准意图摘要、Peer 恢复结果及 Realtime ACK/重发状态；migration `MultiplayerJoinIntentRecovery1720000180000` 持久化直接/邀请 Join Intent 哈希及首个消费结果。`synchronize=false` 保持关闭。普通 Presence、Activity、Candidate、Realtime stream、Relay Agent health 放 Redis；直接/邀请 Intent 的初次有效期为 60 秒，成功消费的结果在 MySQL 保留 10 分钟恢复；批准 Join Intent 为 600 秒；ticket 为 60 秒；Candidate TTL 为 90 秒；Relay Agent heartbeat 为 45 秒；Relay Credential/Allocation 为 120 秒；事件 Stream 为 600 秒。LanLink 旧客户端的 Presence 兼容投影单独存于 `presence:lanlink:{userId}`，TTL 为 120 秒；V1 Session Presence 通过心跳续期旧 External API 投影，两个来源不会互相删除。
+多人联机能力按站点配置和应用审核状态动态启用。客户端应先读取 `GET /api/v1/capabilities` 与 `GET /api/v1/multiplayer/capabilities`，并在功能不可用时按稳定错误码提示用户。服务器部署、Relay 服务注册和运维配置不属于第三方 Public API。
 
-旧版 LanLink Mod 仍使用本地 LanLink bearer、LLK1/LLKU 数据传输和 16 字节 room token；服务端要求它升级后才能使用 V1 联机。新版客户端使用 MindAuth Authorization Code + PKCE、V1 Session/Peer/Candidate 控制面和独立 WSS Relay AUTH 数据通道。Forum 好友页可按用户隐私显示兼容 Presence，但不会把旧房间转换成 V1 Session、Join Intent 或 Relay Allocation。
-
-键模式：
-
-```text
-presence:conn:{connectionId}                 # 90s
-presence:user:{userId}:connections            # 索引 hash，活动时 180s
-activity:conn:{connectionId}                  # 90s
-events:user:{userId}                          # stream，600s
-events:session:{sessionId}                    # stream，600s
-realtime:ticket:{ticket}                      # 一次性票据，60s
-multiplayer:session:{sessionId}               # session 快速状态
-multiplayer:peer:{peerId}                     # peer 快速状态，90s
-multiplayer:candidates:{sessionId}:{peerId}   # candidate hash，90s
-multiplayer:join-intent:{intentId}             # 旧进程存量 intent 兼容读取，最多60s
-multiplayer:relay:agent:{agentId}               # agent 心跳，45s
-multiplayer:relay:session-lock:{sessionId}      # 同一 Session 固定到一个 Agent 的锁，30s
-multiplayer:relay:peer-lock:{peerId}            # 每 Peer 最多一个活动 allocation 的锁，30s
-ratelimit:{category}:{subject}                 # 由共享限流 Guard 按窗口设置
-```
-
-## 功能开关与配置
-
-以下是 Settings 中的 bool key，默认全部关闭：
-
-```text
-feature_social_presence_v1_enabled
-feature_rich_activity_v1_enabled
-feature_multiplayer_sessions_v1_enabled
-feature_multiplayer_invites_v1_enabled
-feature_multiplayer_relay_v1_enabled
-feature_third_party_multiplayer_v1_enabled
-```
-
-公开环境变量：
-
-| 变量 | 说明 |
-|---|---|
-| `MINDAUTH_URL` | MindAuth public application metadata API 的 base URL |
-| `MULTIPLAYER_RELAY_CREDENTIAL_SECRET` | 至少 32 字符的 Credential HMAC secret；Forum 与官方 Relay Agent 通过独立安全配置共享 |
-| `MULTIPLAYER_RELAY_MACHINE_CREDENTIAL` | 至少 32 字符的 Relay 内部机器凭证 |
-| `MULTIPLAYER_RELAY_AGENT_IDS` | 允许注册的官方 Agent ID，逗号分隔；不支持第三方 Provider |
-Relay Agent 内部请求复用 Forum 的 HTTPS 入口，调用 `/api/internal/v1/relay/agents/*`，并携带 `X-Relay-Machine-Credential`。Forum 用配置的机器凭证做 timing-safe 校验，再检查 Agent ID allowlist 和 allocation/session/peer 绑定。Relay feature flag 开启时，Forum 启动前检查至少 32 字符的两个共享密钥和非空 Agent allowlist；不需要独立端口或 Agent 客户端证书。外部 WSS 数据面仍使用有效的公开 TLS 证书。Multiplayer V1 的 WSS Agent `endpoint` 必须是带显式端口的 `wss://host:port/relay/v1`；其他传输类型可使用 `udp://host:port`、`quic://host:port` 或 `tcp://host:port`，但不属于本版客户端数据通道。Control Plane 签发仅含 allocation/session/peer/agent/expiry 的短期签名凭证，不含账号资料或 OAuth token。
-
-`POST /api/v1/multiplayer/sessions/{id}/relay` 返回 `allocation_id`、`agent_id`、`endpoint`、短期 `credential` 和 `expires_in`。Credential 当前是 `base64url(JSON payload).base64url(HMAC-SHA256)`；payload 恰有 `relay_session_id`（等于 allocation ID）、`session_id`、`peer_id`、`agent_id`、`expiry`（Unix 秒）五个字段。客户端只应在内存短期持有 Credential，并且只能在 WSS 建连后通过首个文本帧发送，例如 `{"op":"auth","version":1,"credential":"<credential>"}`；同一 WSS 连接重新认证使用 `{"op":"reauth","version":1,"credential":"<renewed credential>"}`。禁止放入 URL、query、子协议名或日志。
-
-同一 Session 的所有仍有效 Allocation 固定到同一个健康 Agent，直到它们全部过期或撤销。每个 Peer 最多有一个仍有效 Allocation。如果遗留数据中同一 Session 已有多个 Agent 的活动 Allocation，Control Plane 会 fail closed 并返回 `RELAY_UNAVAILABLE`，待冲突 Allocation 过期或撤销后再分配。Agent 为每条新 WSS 连接生成随机 `connection_id`；首次 `auth` 和同一 WSS 上的 `reauth` 都复用这个 ID。Peer 已连上时再次调用公共 `/relay` 会返回相同 `allocation_id` 和新 Credential；新 expiry 先记为待确认值，当前 lease 到 Agent 在同一连接上成功消费 Credential 后才延长。Agent 收到任一认证帧后，通过 HTTPS 调用对应的内部 `POST /api/internal/v1/relay/agents/{agentId}/allocations`，请求体为 `{"allocation_id":"<allocation_id>","credential":"<credential>","connection_id":"<connection_id>"}`。Control Plane 验证签名、expiry、数据库 Allocation/Agent/Session/Peer 绑定和 Peer 活跃状态，然后原子地把 Allocation 标记为 `connected`，或在相同 `connection_id` 下确认 pending expiry 并原子延长 lease。成功 ACK 数据包含可信的 `allocation_id`、`agent_id`、`session_id`、`peer_id`、`peer_role`、`connection_id`、`expires_at`。Agent 必须按返回的 Session 和 Peer 信息配对，不能相信客户端另行声称的 Session/Peer/role。
-
-若同一 `connection_id` 的 ACK 因 HTTP 超时重试，Control Plane 幂等返回同一可信绑定；不同连接尝试消费已连接的 Credential 会以 HTTP 429 `RELAY_LIMIT_REACHED` 拒绝。Agent 连接断开时，调用 `POST /api/internal/v1/relay/agents/{agentId}/revoke`，提交 `{"allocation_id":"...","connection_id":"..."}`；服务端验证绑定后撤销并广播 `relay.revoked`，且保留原 `connection_id`。同一断开撤销请求可安全重试。Agent 应在 Allocation 的 `expires_at` 到期时强制断开，不能依赖实时撤销事件。
-
-Agent 确认后向客户端发送 `{"op":"auth_ok"}`。之后的 WSS binary payload 遵守 MLR1 数据通道协议，帧类型包括 `TCP_DATA`、`TCP_CLOSE`、`UDP_DATAGRAM`。Agent 只在同 Session 的已认证 Peer 间按 MLR1 路由规则转发，不解析游戏载荷。Control Plane 不代理、转发或存储游戏数据。旧 LanLink Relay 的 `LLK1`/`LLKU` 协议使用 16 字节 legacy `roomToken`，与 V1 Credential 不兼容；旧客户端应收到更新要求，新版使用这里定义的 WSS AUTH 接入流程。
-
-## Relay Agent 内部协议
-
-这些接口不在 Public OpenAPI 中：
-
-```text
-POST /api/internal/v1/relay/agents/register
-POST /api/internal/v1/relay/agents/{id}/heartbeat
-POST /api/internal/v1/relay/agents/{id}/allocations
-POST /api/internal/v1/relay/agents/{id}/revoke
-```
-
-`POST /register` 请求为 `{agent_id, endpoint, region?, capacity, capabilities?}`；成功返回 `{agent_id, registered:true, expires_in:45}`。`POST /{id}/heartbeat` 无请求体，返回 `{agent_id, accepted:true, expires_in:45}`。`POST /{id}/allocations` 是一次性 Credential 消费和连接确认，接收 `{allocation_id, credential, connection_id}`，返回以下可信绑定对象；`expires_at` 序列化为 ISO 8601 时间：
-
-```json
-{
-  "success": true,
-  "data": {
-    "allocation_id": "rly_...",
-    "agent_id": "official-eu-1",
-    "session_id": "ses_...",
-    "peer_id": "peer_...",
-    "peer_role": "member",
-    "connection_id": "conn_...",
-    "expires_at": "2026-10-01T12:00:00.000Z"
-  }
-}
-```
-
-相同连接 ID 的重试幂等；`reauth` 的新 Credential 必须继续使用原 `connection_id`，ACK 后才将待确认的 `expires_at` 提升为正式 lease。已连接到其他 connection ID 的 Allocation 被拒绝。`POST /{id}/revoke` 接收 `{allocation_id, connection_id?}`；如果 Allocation 已连接，必须提供原 connection ID。成功或重复撤销返回 `{"success":true,"data":{"allocation_id":"rly_...","revoked":true}}`；已过期时返回 `{"success":true,"data":{"allocation_id":"rly_...","revoked":false,"status":"expired"}}`。撤销只改状态，不清空原 connection ID。以上内部成功响应使用 legacy envelope；credential 仅允许经 HTTPS 机器凭证发送，不得记入请求日志。
-
-所有请求通过 Forum HTTPS 入口并携带 `X-Relay-Machine-Credential`。服务端 Guard 使用 timing-safe 比较校验机器凭证；缺失或错误的凭证以 `AUTH_REQUIRED` 拒绝。入口仍由生产 HTTPS/TLS 终止层保护，普通第三方 API 客户端没有该机器凭证，不能调用 Agent 控制操作。
+Relay Credential 是短期秘密。客户端只应在 WSS 建连后的首个认证帧中使用，并在内存中短暂保留；不得放入 URL、query、子协议名、日志或分析事件。收到 `auth_ok` 后，后续二进制帧按已公布的客户端数据通道格式传输。
 
 ## 错误码
 
 稳定的业务错误码包括 `AUTH_REQUIRED`、`TOKEN_INVALID`、`TOKEN_EXPIRED`、`SCOPE_REQUIRED`/`INSUFFICIENT_SCOPE`、`USER_BLOCKED`、`FRIEND_REQUIRED`、`PRIVACY_DENIED`、`CLIENT_CAPABILITY_NOT_APPROVED`、`PRESENCE_CONNECTION_NOT_FOUND`、`ACTIVITY_INVALID`、`SESSION_NOT_FOUND`、`SESSION_EXPIRED`、`SESSION_CLOSED`、`SESSION_FULL`、`SESSION_NOT_JOINABLE`、`SESSION_PERMISSION_DENIED`、`PEER_NOT_FOUND`、`PEER_EXPIRED`、`PEER_RESUME_INVALID`、`CANDIDATE_INVALID`、`CANDIDATE_LIMIT_REACHED`、`INVITE_NOT_FOUND`、`INVITE_EXPIRED`、`INVITE_ALREADY_ACCEPTED`、`JOIN_REQUEST_REQUIRED`、`JOIN_REQUEST_EXPIRED`、`JOIN_INTENT_INVALID`、`JOIN_INTENT_CLIENT_MISMATCH`、`JOIN_INTENT_EXPIRED`、`JOIN_INTENT_CONSUMED`、`JOIN_INTENT_RECOVERY_EXPIRED`、`JOIN_INTENT_RECOVERY_UNAVAILABLE`、`RELAY_UNAVAILABLE`、`RELAY_LIMIT_REACHED`、`RATE_LIMITED`。客户端依 `error.code` 和 HTTP 状态，不依赖 message。
 
-## 验证边界
+## 客户端恢复
 
-```sh
-npm run build:backend
-npm run build:frontend
-npm test -- --runInBand
-npm run openapi:export
-npm run openapi:check
-```
-
-后端 Jest 是项目单元/服务契约套件。Forum v1 已使用隔离 MariaDB 与 Redis 完成双用户 HTTP 联调，覆盖好友、Presence 多客户端、Activity、聚合、Session、Candidate、Invite、Join Request/Intent、Resume、Relay Allocation、Invisible、Block、Realtime 10 并发连接与 Resume，以及并发 heartbeat。真实 Relay Agent 数据转发、游戏包抓取、生产 HTTPS 入口与机器凭证部署、真实公网压力及客户端设备验收仍需在相应测试环境验证，不能由本地联调代替。
+Realtime 事件用于低延迟更新界面，不应取代 API Snapshot。断线或收到 `resume_failed` 后重新读取当前会话、好友和 Peer 状态；对可重试的请求，按错误码、状态码和 `request_id` 处理。

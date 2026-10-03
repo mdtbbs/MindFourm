@@ -5,6 +5,7 @@ import { INestApplication } from '@nestjs/common';
 import { OpenAPIObject } from '@nestjs/swagger';
 import { API_V1_BASE_PATH, API_V1_VERSION } from '../openapi/api-version';
 import { parseMarkdown } from '../common/utils/markdown.util';
+import { getAllV1ErrorCodes } from '../common/contracts/v1-error-codes';
 
 type CodeLanguage = 'curl' | 'javascript' | 'typescript' | 'java' | 'kotlin';
 
@@ -27,6 +28,7 @@ const NAV_GROUPS = [
       { href: '/api/v1/docs/oauth', label: '第三方客户端授权' },
       { href: '/api/v1/docs/authentication', label: '身份认证' },
       { href: '/api/v1/docs/public-client', label: '客户端接入' },
+      { href: '/api/v1/debugger', label: '在线调试' },
     ],
   },
   {
@@ -37,15 +39,16 @@ const NAV_GROUPS = [
       { href: '/api/v1/docs/resources', label: '资源中心 API' },
       { href: '/api/v1/docs/multiplayer', label: '多人联机 API' },
       { href: '/api/v1/docs/cloud-saves', label: '云存档 API' },
-      { href: '/api/v1/docs/resource-comments', label: '旧版好友与评论' },
+      { href: '/api/v1/docs/errors', label: '错误代码' },
     ],
   },
   {
     label: '参考资料',
     items: [
       { href: '/api/v1/docs/rich-content', label: '富文本格式' },
-      { href: '/api/v1/docs/external', label: '外部服务 API' },
       { href: '/api/v1/reference', label: 'API 参考' },
+      { href: '/api/v1/docs/changelog', label: 'API 更新记录' },
+      { href: '/api/v1/docs/lifecycle', label: 'API 生命周期' },
     ],
   },
 ];
@@ -60,8 +63,6 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   resources: 'resources-v1-contract.md',
   multiplayer: 'multiplayer-v1.md',
   'cloud-saves': 'cloud-saves-v1.md',
-  external: 'external.md',
-  'resource-comments': 'social-resource-comments.md',
 };
 
 const MARKDOWN_GUIDE_SLUGS: Record<string, string> = Object.fromEntries(
@@ -189,6 +190,7 @@ function commonShell(params: {
   forumVersion: string;
   activePath?: string;
   toc?: Array<{ href: string; label: string; level?: number }>;
+  script?: string;
 }): string {
   const nonce = randomBytes(16).toString('base64');
   const nav = NAV_GROUPS.map((group) => {
@@ -344,6 +346,19 @@ function commonShell(params: {
     .code-example pre { display: none; margin: 0; border-radius: 0; }
     .code-example pre[data-active="true"] { display: block; }
     .reference-filter { width: 100%; margin: 10px 0 22px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; }
+    .debug-link { display: inline-block; padding: 8px 11px; border: 1px solid var(--border); border-radius: 7px; font-weight: 650; }
+    .debug-panel { display: grid; gap: 14px; margin: 18px 0; padding: 18px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
+    .debug-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .debug-field { display: grid; gap: 6px; min-width: 0; }
+    .debug-field label { font-size: 13px; font-weight: 650; }
+    .debug-field input, .debug-field select, .debug-field textarea { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; }
+    .debug-field textarea { min-height: 180px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 13px; }
+    .debug-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .debug-actions button { padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); cursor: pointer; font: inherit; }
+    .debug-actions button.primary { border-color: var(--accent); background: var(--accent); color: white; }
+    .debug-output { overflow-wrap: anywhere; }
+    .debug-output pre { max-height: 460px; }
+    .debug-error { color: #d92d20; }
     .footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13px; }
     .markdown-body { min-width: 0; }
     .markdown-body > h1 + p { max-width: 74ch; margin: 0 0 28px; color: var(--muted); font-size: 17px; line-height: 1.75; }
@@ -364,6 +379,7 @@ function commonShell(params: {
       .sidebar-group { flex: 0 0 auto; flex-direction: row; gap: 2px; }
       .sidebar a { white-space: nowrap; }
       .cards, .stat-grid { grid-template-columns: 1fr; }
+      .debug-grid { grid-template-columns: 1fr; }
       h1 { font-size: 38px; }
     }
   </style>
@@ -411,20 +427,26 @@ function commonShell(params: {
           item.hidden = query && !item.getAttribute('data-endpoint-search').includes(query);
         });
       });
+      var initialQuery = new URLSearchParams(window.location.search).get('q');
+      if (initialQuery) {
+        filter.value = initialQuery;
+        filter.dispatchEvent(new Event('input'));
+      }
     }
   </script>
+  ${params.script ? `<script nonce="${nonce}">${params.script}</script>` : ''}
 </body>
 </html>`;
 }
 
-function setHtmlHeaders(res: any, nonceAwareHtml: string): void {
+function setHtmlHeaders(res: any, nonceAwareHtml: string, options: { noStore?: boolean } = {}): void {
   const nonceMatch = nonceAwareHtml.match(/<style nonce="([^"]+)">/);
   const nonce = nonceMatch?.[1] || '';
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+  res.setHeader('Cache-Control', options.noStore ? 'no-store' : 'public, max-age=300, stale-while-revalidate=600');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy',
-    `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; img-src 'self' data:; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
+    `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; img-src 'self' data:; connect-src 'self' https://auth.mdtbbs.cn; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`);
 }
 
 function renderHome(forumVersion: string): string {
@@ -438,22 +460,31 @@ function renderHome(forumVersion: string): string {
       <div class="stat"><span>API 地址</span><strong>mdtbbs.cn/api/v1</strong></div>
     </div>
     ${callout('info', '先检查服务能力', `客户端启动后先请求 ${inlineCode('GET /api/v1/capabilities')}，再根据服务端返回值启用对应功能。`)}
+    <h2>按目标开始</h2>
     <div class="cards">
       <a class="card" href="/api/v1/docs/quick-start"><strong>快速开始</strong><span>请求、响应、版本与错误处理。</span></a>
-      <a class="card" href="/api/v1/docs/first-party"><strong>论坛 API</strong><span>分类、讨论、回复、搜索、收藏、用户与登录后写操作。</span></a>
-      <a class="card" href="/api/v1/docs/game-content"><strong>游戏内容 API</strong><span>用于游戏内浏览蓝图和地图，并支持搜索、预览和上传。</span></a>
-      <a class="card" href="/api/v1/docs/resources"><strong>资源中心 API</strong><span>用于启动器资源页、版本同步、安装和下载。</span></a>
-      <a class="card" href="/api/v1/docs/multiplayer"><strong>多人联机 API</strong><span>好友状态、会话、邀请、网络连接与 Relay。</span></a>
-      <a class="card" href="/api/v1/docs/cloud-saves"><strong>云存档 API</strong><span>个人存档、历史版本、上传、恢复与存储配额。</span></a>
+      <a class="card" href="/api/v1/docs/oauth"><strong>Authentication</strong><span>为自己的客户端注册 OAuth Client，使用 Authorization Code + PKCE 登录。</span></a>
+      <a class="card" href="/api/v1/docs/public-client"><strong>Build a launcher</strong><span>了解能力发现、资源安装、游戏内容与客户端请求约定。</span></a>
+      <a class="card" href="/api/v1/docs/public-client"><strong>Build a community client</strong><span>从讨论、用户资料、通知和社交能力开始接入。</span></a>
+      <a class="card" href="/api/v1/docs/first-party"><strong>Read forum content</strong><span>读取讨论、回复、用户资料、公告与首页聚合。</span></a>
+      <a class="card" href="/api/v1/docs/first-party"><strong>Publish forum content</strong><span>创建讨论和回复、上传图片并处理稳定错误码。</span></a>
+      <a class="card" href="/api/v1/docs/resources"><strong>Access resources</strong><span>查询资源、Manifest、版本、文件摘要与下载。</span></a>
+      <a class="card" href="/api/v1/docs/resources"><strong>Upload resources</strong><span>创建草稿、上传文件并提交审核。</span></a>
+      <a class="card" href="/api/v1/docs/resources"><strong>Install a Pack</strong><span>使用固定资源版本、校验文件摘要并批量申请下载 grants。</span></a>
+      <a class="card" href="/api/v1/reference?q=%2Fv1%2Fsearch"><strong>Search</strong><span>查看论坛搜索接口的参数、权限和当前分页字段。</span></a>
+      <a class="card" href="/api/v1/docs/game-content"><strong>Game content</strong><span>浏览 Mindustry 蓝图和地图，进行搜索、预览与下载。</span></a>
+      <a class="card" href="/api/v1/docs/cloud-saves"><strong>Cloud Saves</strong><span>管理个人存档、历史版本、上传、恢复与配额。</span></a>
+      <a class="card" href="/api/v1/docs/multiplayer"><strong>Friends &amp; Presence</strong><span>好友关系、Presence、隐私与实时状态。</span></a>
+      <a class="card" href="/api/v1/docs/multiplayer"><strong>Multiplayer</strong><span>创建和加入 Session、邀请、Join Intent、连接候选与 Relay。</span></a>
+      <a class="card" href="/api/v1/reference?q=%2Fv1%2Fnotifications"><strong>Notifications</strong><span>读取通知、未读数量并确认已读状态。</span></a>
       <a class="card" href="/api/v1/docs/oauth"><strong>第三方客户端授权</strong><span>让桌面端、Android、Mod 和启动器安全登录论坛账号。</span></a>
-      <a class="card" href="/api/v1/docs/public-client"><strong>客户端接入指南</strong><span>OAuth 权限、服务能力和客户端请求约定。</span></a>
+      <a class="card" href="/api/v1/debugger"><strong>在线调试 Public API</strong><span>使用自己的 OAuth Client 调试明确选中的公开操作。</span></a>
       <a class="card" href="/api/v1/docs/rich-content"><strong>富文本格式</strong><span>发帖、回复和资源说明使用的正文数据格式。</span></a>
-      <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>区分新客户端、兼容移动端、浏览器和服务端凭证。</span></a>
-      <a class="card" href="/api/v1/docs/external"><strong>外部服务 API</strong><span>给机器人、同步服务和后台自动化使用。</span></a>
+      <a class="card" href="/api/v1/docs/authentication"><strong>身份认证</strong><span>使用自己的 Public Client、获批 scopes 和 Bearer token。</span></a>
       <a class="card" href="/api/v1/reference"><strong>API 参考</strong><span>按路径查询参数、权限要求和响应字段。</span></a>
     </div>
     ${section('最小示例', `${codeBlock(`curl "https://mdtbbs.cn/api/v1/threads?limit=20&offset=0"`, 'bash')}<p>公开讨论可以匿名读取。发帖、回复等写操作需要 Bearer 身份和对应 scope。</p>`)}
-    ${section('公开接口范围', '<p>客户端接口使用 <code>/api/v1/*</code>；机器人和服务端集成使用 <code>/api/external/v1/*</code>。未在本开发者文档列出的 <code>/api/*</code>、管理端和服务间路由不属于第三方稳定契约。</p>')}
+    ${section('公开接口范围', '<p>第三方客户端接口使用 <code>/api/v1/*</code>。服务端集成、管理端和服务间路由不属于本 Public Client Developer Center 或稳定契约。</p>')}
   `;
   return commonShell({
     title: '概览',
@@ -572,7 +603,7 @@ Content-Type: application/json
       [inlineCode('game_content.saves.write'), '创建或更新游戏云存档'],
       [inlineCode('game_content.saves.delete'), '删除游戏云存档'],
     ]), 'scopes')}
-    ${callout('info', '权限按操作类别申请', 'Scope 表示客户端可以请求哪类操作，不会为每条 API 路径单独创建一项。例如蓝图和地图共用 <code>resource.read</code> 或 <code>resource.upload</code>；部分公开 GET 接口无需登录。Presence 和多人联机还需要在应用表单申请相应能力并通过审核。Relay Agent 内部接口和 External API Key 不属于 Public Client OAuth。')}
+    ${callout('info', '权限按操作类别申请', 'Scope 表示客户端可以请求哪类操作，不会为每条 API 路径单独创建一项。例如蓝图和地图共用 <code>resource.read</code> 或 <code>resource.upload</code>；部分公开 GET 接口无需登录。Presence 和多人联机还需要在应用表单申请相应能力并通过审核。服务端集成凭证不属于 Public Client OAuth。')}
     ${section('论坛还会检查用户和站点权限', '<p>OAuth scope 说明客户端可以请求哪类操作。论坛执行请求时还会检查用户封禁、手机号验证、社区条款、版块权限、审核策略、站点开关和资源策略。</p><p>客户端启动后先请求 <code>GET /api/v1/capabilities</code>。登录后也可以读取 <code>GET /api/v1/me</code> 中的 <code>permissions</code>，决定是否展示操作入口。每个接口仍会独立校验权限；<code>permissions</code> 只是界面提示，不能代替授权。</p>', 'policy')}
     ${section('常见失败', table(['错误', '通常是什么问题'], [
       [inlineCode('invalid_client'), 'client_id 不存在、未批准、已停用，或 Confidential Client 缺少正确认证'],
@@ -591,19 +622,15 @@ Content-Type: application/json
 
   const authentication = `
     <div class="eyebrow">认证方式</div><h1>身份认证</h1>
-    <p class="lead">新客户端优先使用 MindAuth Public Client OAuth。下面几套凭证还会保留一段时间，主要服务旧客户端、浏览器会话和服务端集成。</p>
+    <p class="lead">第三方客户端统一使用 MindAuth Public Client OAuth。每个应用使用自己的 client_id 与获批 scopes。</p>
     ${table(['场景', '凭证', '说明'], [
       ['公开读取', '无需凭证', '蓝图、地图、公开资源等允许匿名读取的接口'],
-      ['新桌面端 / Android / Mod / 启动器', 'MindAuth Public Client Bearer', 'Authorization Code + PKCE，推荐路径'],
-      ['旧版移动客户端', 'Forum Mobile Bearer', '兼容现有已发布客户端'],
-      ['浏览器论坛', 'forum_session Cookie', 'HttpOnly，同源 Web 使用'],
-      ['机器人 / 同步服务', 'External API Key', '只放服务端'],
+      ['第三方客户端', 'MindAuth Public Client Bearer', 'Authorization Code + PKCE；不得使用第一方兼容凭证'],
+      ['服务端集成', '独立的服务端凭证', '只在可信服务端保存，不可嵌入客户端'],
     ])}
     ${section('新客户端：MindAuth Public Client', '<p>先在 <a href="/api/v1/docs/oauth">OAuth / Public Client</a> 页面完成应用申请和 PKCE 登录。成功后，把 MindAuth access token 放到 <code>Authorization: Bearer &lt;token&gt;</code>。Forum 会在服务端校验 token 和 scopes，客户端自己不需要解析 opaque token。</p>', 'public-client')}
-    ${section('Forum Mobile Bearer（兼容）', `<p>现有 Android / 原生客户端仍可使用 MindAuth native authorization code + PKCE，通过 <code>POST /api/v1/auth/mobile/exchange</code> 换 Forum 自己的 access/refresh token。当前 access token 约 30 分钟，refresh token 约 90 天并轮换。</p><p>新项目没有兼容包袱时，不建议再从这条路径起步。</p>`, 'mobile')}
-    ${section('浏览器 forum_session', '<p>论坛 Web 登录后使用 HttpOnly <code>forum_session</code> Cookie。它适合同源网页和 SSR，客户端不要尝试读取、复制或把这个 Cookie 搬到别的应用里。</p>', 'session')}
-    ${section('External API Key', `${codeBlock('Authorization: Bearer mfk_live_xxx.yyy\n# 或\nX-API-Key: mfk_live_xxx.yyy', 'http')}<p>Key 带有 scopes、启停、过期、IP 白名单、限流、默认 actor 和审计属性，只适合机器人、同步服务和后台自动化。</p>`, 'external-key')}
-    ${callout('warning', '终端客户端只带自己的公开凭证', 'External API Key、Forum 内部服务密钥和 Confidential Client secret 都不应该出现在浏览器 JavaScript、APK、Mod JAR、桌面客户端发行包或公开仓库中。')}
+    ${section('第一方兼容能力', '<p>论坛可能保留已发布第一方客户端需要的兼容登录方式，但这些能力不属于第三方 Public API，也不会赋予第三方应用额外权限。</p>', 'first-party-compat')}
+    ${callout('warning', '终端客户端只带自己的公开凭证', 'Public Client 只使用自己的 client_id 和获批 scopes。用户密码、服务器端凭证和 client secret 都不应进入浏览器 JavaScript、APK、Mod JAR、桌面客户端发行包或公开仓库。')}
   `;
 
   const firstParty = `
@@ -675,43 +702,6 @@ Content-Type: application/json
     ${section('客户端安全', '<ul><li>安装前检查文件 Hash 和 availability / installable。</li><li>缺失 metadata 表示未知，不要推断为兼容。</li><li>失败的 Preview 不应让已批准的原始文件变成不可用。</li></ul>', 'safety')}
   `;
 
-  const externalRows = [
-    ['GET', '/me', '—', '当前 API Key 的安全视图'],
-    ['POST', '/images', 'images:write', '上传公共图片'],
-    ['GET', '/users/{id}', 'users:read', '读取用户安全字段'],
-    ['GET', '/categories', 'categories:read', '分类'],
-    ['GET', '/tags', 'tags:read', '标签'],
-    ['GET', '/posts', 'posts:read', '帖子列表'],
-    ['GET', '/posts/activity', 'posts:read', '帖子活动'],
-    ['POST', '/posts', 'posts:write', '创建帖子'],
-    ['GET', '/posts/{id}', 'posts:read', '帖子详情'],
-    ['PATCH', '/posts/{id}', 'posts:write', '更新帖子'],
-    ['DELETE', '/posts/{id}', 'posts:delete', '删除帖子'],
-    ['GET', '/posts/{id}/replies', 'replies:read', '回复列表'],
-    ['POST', '/posts/{id}/replies', 'replies:write', '创建回复'],
-    ['GET', '/replies/{id}', 'replies:read', '回复详情'],
-    ['PATCH', '/replies/{id}', 'replies:write', '更新回复'],
-    ['DELETE', '/replies/{id}', 'replies:delete', '删除回复'],
-    ['POST', '/posts/{id}/moderation', 'posts:moderate', '帖子审核 / 管理'],
-    ['POST', '/replies/{id}/moderation', 'replies:delete / posts:moderate', '回复审核'],
-    ['GET', '/resources', 'resources:read', '资源列表'],
-    ['GET', '/resources/filter-options', 'resources:read', '资源筛选项'],
-    ['POST', '/resources', 'resources:write', '创建外链资源'],
-    ['GET', '/resources/categories', 'resources:read', '资源分类'],
-    ['GET', '/resources/{id}', 'resources:read', '资源详情'],
-    ['PATCH', '/resources/{id}', 'resources:write', '更新资源'],
-    ['DELETE', '/resources/{id}', 'resources:delete', '删除资源'],
-    ['POST', '/resources/{id}/moderation', 'resources:moderate', '资源审核'],
-  ];
-
-  const external = `
-    <div class="eyebrow">服务端集成</div><h1>外部服务 API</h1>
-    <p class="lead">External API 面向机器人、同步器和后台自动化，只允许在服务器端持有 API Key。Base URL 为 <code>/api/external/v1</code>。</p>
-    ${section('认证', `${codeBlock('Authorization: Bearer mfk_live_xxxxxxxx.yyyyyyyyyyyyyyyyy\n# 兼容：X-API-Key: mfk_live_...', 'http')}<p>每个 Key 都可以独立设置 scopes、启停、过期、IP 白名单、每分钟限流、默认 actor 和审计。</p>${codeTabs(makeCodeSamples('GET', '/external/v1/me', { security: [{ ExternalApiKey: [] }] }))}`, 'auth')}
-    ${section('权限范围与接口', table(['方法', '相对路径', 'Scope', '说明'], externalRows.map((row) => [row[0], inlineCode(row[1]), inlineCode(row[2]), row[3]])), 'endpoints')}
-    ${section('用户代发', '<p>需要 <code>users:impersonate</code> 时，可显式指定 <code>user_id</code>、<code>mindauth_id</code> 或 <code>username</code> 之一；未指定时使用 Key 的默认用户。被封禁用户不能被代发。</p>', 'actor')}
-    ${callout('warning', '仅服务器端使用', '不要将 External API Key 嵌入 Mod、APK、启动器或浏览器前端。需要终端用户身份时，应使用相应的客户端认证流程。')}
-  `;
 
   return {
     'quick-start': { title: '快速开始', description: 'MDTBBS API 快速开始', body: quickStart },
@@ -721,7 +711,6 @@ Content-Type: application/json
     'first-party': { title: '论坛 API', description: 'MDTBBS 论坛 API V1', body: firstParty },
     'game-content': { title: '游戏内容 API', description: 'MDTBBS 游戏内容 API', body: gameContent },
     resources: { title: '资源中心 API', description: 'MDTBBS 资源中心 API', body: resources },
-    external: { title: '外部服务 API', description: 'MDTBBS External API', body: external },
   };
 }
 
@@ -1270,6 +1259,605 @@ function referenceTagLabel(tag: string): string {
   return API_TAG_LABELS[tag] || tag;
 }
 
+function rateLimitLabel(value: any): string {
+  if (!value || !Number.isFinite(value.limit) || !Number.isFinite(value.window_seconds)) return '限流未声明';
+  const seconds = Number(value.window_seconds);
+  const window = seconds % 3600 === 0 ? `${seconds / 3600}h` : seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
+  return `${value.limit} 次 / ${window}`;
+}
+
+function paginationLabel(document: OpenAPIObject, path: string, pathItem: any, operation: any): string {
+  const names = new Set(parametersFor(pathItem, operation)
+    .filter((parameter) => parameter.in === 'query')
+    .map((parameter) => String(parameter.name).toLowerCase()));
+  if ([...names].some((name) => ['cursor', 'next_cursor', 'after'].includes(name))) return '游标分页；以该接口的 cursor / next_cursor 参数或响应字段为准。';
+  if (names.has('page') || names.has('page_size')) return '页码分页；使用 page / page_size，响应元数据字段以契约为准。';
+  if (names.has('offset') || names.has('limit')) return '偏移分页；使用 offset / limit，响应元数据字段以契约为准。';
+  if (path.includes('/feed') || path.includes('/notifications')) return '连续更新列表；请按此接口声明的游标字段翻页。';
+  return '本接口没有声明列表分页参数。';
+}
+
+function runOnlineDebugger(): void {
+  const root = document.querySelector('[data-public-debugger]') as HTMLElement | null;
+  if (!root) return;
+
+  const specUrl = '/api/openapi/v1.json';
+  const tokenStorageKey = 'mdtbbs.public-api-debugger.access-token';
+  const pendingStorageKey = 'mdtbbs.public-api-debugger.pkce';
+  const issuer = 'https://auth.mdtbbs.cn';
+  const methodSelect = document.querySelector('[data-debug-operation]') as HTMLSelectElement;
+  const selectedPath = root.getAttribute('data-selected-path') || '';
+  const selectedMethod = (root.getAttribute('data-selected-method') || '').toLowerCase();
+  const clientIdInput = document.querySelector('[data-debug-client-id]') as HTMLInputElement;
+  const scopeConsent = document.querySelector('[data-debug-scope-consent]') as HTMLInputElement;
+  const scopeLabel = document.querySelector('[data-debug-scopes]') as HTMLElement;
+  const authStatus = document.querySelector('[data-debug-auth-status]') as HTMLElement;
+  const connectButton = document.querySelector('[data-debug-connect]') as HTMLButtonElement;
+  const clearTokenButton = document.querySelector('[data-debug-clear-token]') as HTMLButtonElement;
+  const fieldsRoot = document.querySelector('[data-debug-fields]') as HTMLElement;
+  const bodyRoot = document.querySelector('[data-debug-body]') as HTMLElement;
+  const requestButton = document.querySelector('[data-debug-run]') as HTMLButtonElement;
+  const writeConsent = document.querySelector('[data-debug-write-consent]') as HTMLInputElement;
+  const requestOutput = document.querySelector('[data-debug-request]') as HTMLElement;
+  const responseOutput = document.querySelector('[data-debug-response]') as HTMLElement;
+  const requestIdOutput = document.querySelector('[data-debug-request-id]') as HTMLElement;
+  const rateOutput = document.querySelector('[data-debug-rate]') as HTMLElement;
+  const statusOutput = document.querySelector('[data-debug-status]') as HTMLElement;
+  let openApi: any = null;
+
+  function showStatus(target: HTMLElement, message: string, isError = false): void {
+    target.textContent = message;
+    target.classList.toggle('debug-error', isError);
+  }
+
+  function readToken(): any {
+    try {
+      const value = sessionStorage.getItem(tokenStorageKey);
+      return value ? JSON.parse(value) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function updateTokenStatus(): void {
+    const token = readToken();
+    if (!token?.access_token) {
+      showStatus(authStatus, '未连接。可以匿名调用不要求 OAuth 的公开接口。');
+      clearTokenButton.hidden = true;
+      return;
+    }
+    if (clientIdInput && !clientIdInput.value) clientIdInput.value = token.client_id || '';
+    const expires = Number(token.expires_at || 0);
+    const expiryText = expires
+      ? expires <= Date.now() ? '，已过期' : `，约 ${Math.ceil((expires - Date.now()) / 60000)} 分钟后过期`
+      : '';
+    showStatus(authStatus, `已连接 Client ${token.client_id || '(unknown)'}${expiryText}。Token 仅保存在当前浏览器标签页会话中，不会显示或发送给文档服务器。`);
+    clearTokenButton.hidden = false;
+  }
+
+  function resolveRef(schema: any, depth = 0): any {
+    if (!schema || depth > 8) return schema || {};
+    if (schema.$ref && openApi) {
+      const parts = String(schema.$ref).replace(/^#\//, '').split('/').map((part: string) => part.replaceAll('~1', '/').replaceAll('~0', '~'));
+      let value: any = openApi;
+      for (const part of parts) value = value?.[part];
+      return value ? resolveRef(value, depth + 1) : schema;
+    }
+    if (schema.allOf?.length) {
+      const merged: any = { ...schema, properties: { ...(schema.properties || {}) } };
+      for (const candidate of schema.allOf) {
+        const resolved = resolveRef(candidate, depth + 1);
+        Object.assign(merged, resolved);
+        merged.properties = { ...merged.properties, ...(resolved.properties || {}) };
+      }
+      delete merged.allOf;
+      return merged;
+    }
+    return schema;
+  }
+
+  function sampleFor(schemaValue: any, depth = 0): any {
+    const schema = resolveRef(schemaValue, depth);
+    if (depth > 8) return null;
+    if (schema.example !== undefined) return schema.example;
+    if (schema.default !== undefined) return schema.default;
+    if (Array.isArray(schema.enum) && schema.enum.length) return schema.enum[0];
+    if (schema.oneOf?.length) return sampleFor(schema.oneOf[0], depth + 1);
+    if (schema.anyOf?.length) return sampleFor(schema.anyOf[0], depth + 1);
+    if (schema.type === 'object' || schema.properties) {
+      const required = new Set(schema.required || []);
+      const object: any = {};
+      for (const [name, property] of Object.entries(schema.properties || {})) {
+        if (required.has(name)) object[name] = sampleFor(property, depth + 1);
+      }
+      return object;
+    }
+    if (schema.type === 'array') return [];
+    if (schema.type === 'integer' || schema.type === 'number') return 1;
+    if (schema.type === 'boolean') return false;
+    return '';
+  }
+
+  function makeInput(name: string, description: string, schemaValue: any, required: boolean, prefix: string): HTMLInputElement {
+    const schema = resolveRef(schemaValue);
+    const label = document.createElement('label');
+    label.className = 'debug-field';
+    const title = document.createElement('span');
+    title.textContent = `${name}${required ? ' *' : ''}${description ? ` · ${description}` : ''}`;
+    const input = document.createElement('input');
+    input.type = schema.format === 'binary' ? 'file' : schema.type === 'integer' || schema.type === 'number' ? 'number' : 'text';
+    if (input.type === 'number') input.step = schema.type === 'integer' ? '1' : 'any';
+    input.dataset.fieldName = name;
+    input.dataset.fieldPrefix = prefix;
+    input.dataset.schemaType = schema.type || 'string';
+    input.dataset.fieldFormat = schema.format || '';
+    input.required = required;
+    if (input.type !== 'file') {
+      const sample = schema.example ?? schema.default ?? (Array.isArray(schema.enum) ? schema.enum[0] : undefined);
+      input.value = sample === undefined ? '' : String(sample);
+      input.placeholder = schema.type === 'array' ? '以逗号分隔' : required ? '请填写' : '可选';
+    }
+    label.append(title, input);
+    return input;
+  }
+
+  function operationForSelection(): any {
+    if (!openApi || !methodSelect.value) return null;
+    const [method, ...pathBits] = methodSelect.value.split(' ');
+    const path = pathBits.join(' ');
+    const item = openApi.paths?.[path];
+    return item ? { method, path, pathItem: item, operation: item[method.toLowerCase()] } : null;
+  }
+
+  function updateScopeView(): void {
+    const selected = operationForSelection();
+    if (!selected?.operation) {
+      showStatus(scopeLabel, '先选择公开接口。');
+      return;
+    }
+    const operation = selected.operation;
+    const requiredScopes = operation['x-required-scopes'] || [];
+    const optionalScopes = operation['x-oauth-scopes-if-bearer'] || [];
+    const scopes = requiredScopes.length ? requiredScopes : optionalScopes;
+    const security = Array.isArray(operation.security) ? operation.security : [];
+    const hasAnonymousAlternative = security.some((requirement: any) => !requirement || Object.keys(requirement).length === 0);
+    const requiresBearer = security.length > 0 && !hasAnonymousAlternative;
+    const requested = ['openid', ...scopes];
+    scopeConsent.checked = false;
+    scopeConsent.disabled = false;
+    connectButton.disabled = false;
+    if (requiredScopes.length || optionalScopes.length || requiresBearer) {
+      scopeLabel.textContent = `仅为当前操作申请：${requested.join(' ')}`;
+    } else {
+      scopeLabel.textContent = '此接口不声明 OAuth scope；登录调试只会申请 openid。';
+    }
+    requestButton.dataset.requiresBearer = requiresBearer ? 'true' : 'false';
+    requestButton.dataset.supportsBearer = security.some((requirement: any) => Object.prototype.hasOwnProperty.call(requirement || {}, 'MindAuthBearer')) ? 'true' : 'false';
+    updateTokenStatus();
+  }
+
+  function renderSelectedOperation(): void {
+    const selected = operationForSelection();
+    fieldsRoot.replaceChildren();
+    bodyRoot.replaceChildren();
+    writeConsent.checked = false;
+    if (!selected?.operation) {
+      showStatus(statusOutput, '选择接口以查看可填写的参数。');
+      updateScopeView();
+      return;
+    }
+    const operation = selected.operation;
+    const seen = new Set<string>();
+    const parameters = [...(selected.pathItem.parameters || []), ...(operation.parameters || [])];
+    for (const parameter of parameters) {
+      if (!['path', 'query'].includes(parameter.in)) continue;
+      const key = `${parameter.in}:${parameter.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      fieldsRoot.append(makeInput(`${parameter.in}.${parameter.name}`, parameter.description || '', parameter.schema || {}, Boolean(parameter.required), parameter.in));
+    }
+    for (const match of selected.path.matchAll(/\{([^}]+)\}/g)) {
+      const name = match[1];
+      if (!seen.has(`path:${name}`)) {
+        seen.add(`path:${name}`);
+        fieldsRoot.append(makeInput(`path.${name}`, '', { type: 'string' }, true, 'path'));
+      }
+    }
+
+    const requestBody = operation.requestBody;
+    if (requestBody) {
+      const content = requestBody.content || {};
+      const mediaType = Object.keys(content)[0] || 'application/json';
+      const schema = resolveRef(content[mediaType]?.schema || {});
+      const isMultipart = mediaType.startsWith('multipart/form-data');
+      const isBinary = mediaType === 'application/octet-stream' || schema.format === 'binary';
+      if (isMultipart && schema.properties) {
+        const required = new Set(schema.required || []);
+        for (const [name, property] of Object.entries(schema.properties)) {
+          fieldsRoot.append(makeInput(`body.${name}`, '', property, required.has(name), 'body'));
+        }
+        bodyRoot.dataset.contentType = mediaType;
+        bodyRoot.dataset.bodyMode = 'multipart';
+      } else if (isBinary) {
+        bodyRoot.dataset.contentType = mediaType;
+        bodyRoot.dataset.bodyMode = 'binary';
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.dataset.bodyFile = 'true';
+        input.required = Boolean(requestBody.required);
+        bodyRoot.append(input);
+      } else {
+        const label = document.createElement('label');
+        label.className = 'debug-field';
+        const title = document.createElement('span');
+        title.textContent = `请求体 · ${mediaType}${requestBody.required ? ' *' : ''}`;
+        const textarea = document.createElement('textarea');
+        textarea.dataset.bodyJson = 'true';
+        textarea.dataset.contentType = mediaType;
+        textarea.value = JSON.stringify(sampleFor(schema), null, 2);
+        label.append(title, textarea);
+        bodyRoot.append(label);
+        bodyRoot.dataset.bodyMode = 'json';
+        bodyRoot.dataset.contentType = mediaType;
+      }
+    }
+    requestButton.dataset.method = selected.method;
+    requestButton.dataset.path = selected.path;
+    showStatus(statusOutput, '参数已根据 Public OpenAPI 生成。请检查所有示例字段；写操作会真实提交到当前论坛。');
+    updateScopeView();
+  }
+
+  function parsePath(methodSelectValue: string): { method: string; path: string } | null {
+    const [method, ...parts] = methodSelectValue.split(' ');
+    return method && parts.length ? { method, path: parts.join(' ') } : null;
+  }
+
+  async function connectClient(): Promise<void> {
+    const selected = operationForSelection();
+    if (!selected?.operation) return;
+    const clientId = clientIdInput.value.trim();
+    if (!clientId) {
+      showStatus(statusOutput, '请先填写你在 MindAuth 开发者中心注册的 client_id。', true);
+      clientIdInput.focus();
+      return;
+    }
+    if (!scopeConsent.checked) {
+      showStatus(statusOutput, '请先确认只申请当前接口显示的 scopes。', true);
+      scopeConsent.focus();
+      return;
+    }
+    connectButton.disabled = true;
+    showStatus(statusOutput, '正在读取 MindAuth OAuth 配置…');
+    try {
+      const discoveryResponse = await fetch(`${issuer}/.well-known/openid-configuration`, { cache: 'no-store', credentials: 'omit' });
+      if (!discoveryResponse.ok) throw new Error('无法读取 MindAuth OAuth 配置');
+      const discovery = await discoveryResponse.json();
+      const authorizationEndpoint = new URL(discovery.authorization_endpoint);
+      if (authorizationEndpoint.origin !== issuer) throw new Error('MindAuth discovery 返回了非预期授权域名');
+      const verifierBytes = crypto.getRandomValues(new Uint8Array(32));
+      const stateBytes = crypto.getRandomValues(new Uint8Array(32));
+      const verifier = btoa(Array.from(verifierBytes, (byte) => String.fromCharCode(byte)).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      const state = btoa(Array.from(stateBytes, (byte) => String.fromCharCode(byte)).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      const challengeDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+      const challenge = btoa(Array.from(new Uint8Array(challengeDigest), (byte) => String.fromCharCode(byte)).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      const redirectUri = `${window.location.origin}/api/v1/debug/callback`;
+      const scopes = ['openid', ...(selected.operation['x-required-scopes'] || selected.operation['x-oauth-scopes-if-bearer'] || [])];
+      sessionStorage.setItem(pendingStorageKey, JSON.stringify({ client_id: clientId, verifier, state, redirect_uri: redirectUri, scopes }));
+      authorizationEndpoint.searchParams.set('response_type', 'code');
+      authorizationEndpoint.searchParams.set('client_id', clientId);
+      authorizationEndpoint.searchParams.set('redirect_uri', redirectUri);
+      authorizationEndpoint.searchParams.set('scope', [...new Set(scopes)].join(' '));
+      authorizationEndpoint.searchParams.set('state', state);
+      authorizationEndpoint.searchParams.set('code_challenge', challenge);
+      authorizationEndpoint.searchParams.set('code_challenge_method', 'S256');
+      window.location.assign(authorizationEndpoint.toString());
+    } catch (error) {
+      connectButton.disabled = false;
+      showStatus(statusOutput, error instanceof Error ? error.message : '无法发起 OAuth 授权。', true);
+    }
+  }
+
+  async function sendRequest(): Promise<void> {
+    const selected = operationForSelection();
+    if (!selected?.operation) return;
+    const method = String(selected.method).toUpperCase();
+    const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+    if (isWrite && !writeConsent.checked) {
+      showStatus(statusOutput, '请先确认这会真实修改论坛数据。', true);
+      writeConsent.focus();
+      return;
+    }
+    const token = readToken();
+    if (requestButton.dataset.requiresBearer === 'true' && !token?.access_token) {
+      showStatus(statusOutput, '此接口需要 Bearer token。请先使用自己的 OAuth Client 登录。', true);
+      return;
+    }
+    if (token?.expires_at && token.expires_at <= Date.now()) {
+      showStatus(statusOutput, '当前 access token 已过期，请重新使用自己的 OAuth Client 授权。', true);
+      return;
+    }
+
+    let path = selected.path;
+    const query = new URLSearchParams();
+    const inputs = Array.from(fieldsRoot.querySelectorAll('input[data-field-name]')) as HTMLInputElement[];
+    for (const input of inputs) {
+      const name = input.dataset.fieldName || '';
+      const prefix = input.dataset.fieldPrefix || '';
+      const value = input.value.trim();
+      if (input.required && !value && input.type !== 'file') {
+        showStatus(statusOutput, `请填写必填参数 ${name}。`, true);
+        input.focus();
+        return;
+      }
+      if (!value) continue;
+      if (prefix === 'path') {
+        const rawName = name.replace(/^path\./, '');
+        path = path.replace(`{${rawName}}`, encodeURIComponent(value));
+      } else if (prefix === 'query') {
+        const values = input.dataset.schemaType === 'array' ? value.split(',').map((item) => item.trim()).filter(Boolean) : [value];
+        if (values.length > 1) values.forEach((item) => query.append(name.replace(/^query\./, ''), item));
+        else query.append(name.replace(/^query\./, ''), values[0] || value);
+      }
+    }
+    if (/\{[^}]+\}/.test(path)) {
+      showStatus(statusOutput, '请填写所有路径参数。', true);
+      return;
+    }
+    if (query.size) path += `${path.includes('?') ? '&' : '?'}${query.toString()}`;
+
+    let body: BodyInit | undefined;
+    let contentType = '';
+    const bodyMode = bodyRoot.dataset.bodyMode;
+    if (bodyMode === 'json') {
+      const textarea = bodyRoot.querySelector('textarea[data-body-json]') as HTMLTextAreaElement;
+      if (textarea?.value.trim()) {
+        try { body = JSON.stringify(JSON.parse(textarea.value)); }
+        catch { showStatus(statusOutput, '请求体不是有效 JSON。', true); textarea.focus(); return; }
+      }
+      contentType = textarea?.dataset.contentType || 'application/json';
+    } else if (bodyMode === 'binary') {
+      const fileInput = bodyRoot.querySelector('input[data-body-file]') as HTMLInputElement;
+      body = fileInput.files?.[0];
+      if (!body && fileInput.required) { showStatus(statusOutput, '请选择要上传的文件。', true); fileInput.focus(); return; }
+      contentType = bodyRoot.dataset.contentType || 'application/octet-stream';
+    } else if (bodyMode === 'multipart') {
+      const form = new FormData();
+      for (const input of inputs.filter((item) => item.dataset.fieldPrefix === 'body')) {
+        const name = (input.dataset.fieldName || '').replace(/^body\./, '');
+        const value = input.type === 'file' ? input.files?.[0] : input.value;
+        if (input.required && !value) { showStatus(statusOutput, `请填写或选择 ${name}。`, true); input.focus(); return; }
+        if (value) form.append(name, value as string | Blob);
+      }
+      body = form;
+    }
+
+    const url = `${window.location.origin}/api${path}`;
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token?.access_token && requestButton.dataset.supportsBearer === 'true') headers.Authorization = `Bearer ${token.access_token}`;
+    if (body && contentType && bodyMode !== 'multipart') headers['Content-Type'] = contentType;
+    requestOutput.textContent = `${method} ${url}\n${Object.entries(headers).map(([key, value]) => `${key}: ${key.toLowerCase() === 'authorization' ? 'Bearer [redacted]' : value}`).join('\n')}${body ? `\n\n${typeof body === 'string' ? body : '[binary or multipart body]'}` : ''}`;
+    responseOutput.textContent = '请求中…';
+    showStatus(statusOutput, '请求已发送到当前论坛 API。');
+    requestIdOutput.textContent = '—';
+    rateOutput.textContent = '—';
+    requestButton.disabled = true;
+    try {
+      const response = await fetch(url, { method, headers, body: ['GET', 'HEAD'].includes(method) ? undefined : body, credentials: 'omit', redirect: 'follow' });
+      const requestId = response.headers.get('x-request-id') || response.headers.get('request-id') || '';
+      const contentTypeHeader = response.headers.get('content-type') || '';
+      const isText = /json|text|xml|javascript|problem\+json/i.test(contentTypeHeader);
+      let responseBody = '';
+      let parsed: any = null;
+      const length = Number(response.headers.get('content-length') || 0);
+      if (isText && (!length || length < 1000000)) {
+        responseBody = await response.text();
+        if (responseBody.length > 160000) responseBody = `${responseBody.slice(0, 160000)}\n…（响应已截断）`;
+        try { parsed = JSON.parse(responseBody); } catch { /* text response */ }
+      } else if (!isText) {
+        responseBody = '[文件/二进制响应未读取；请使用原生客户端验证文件下载]';
+      } else {
+        responseBody = '[响应超过 1 MB，调试器不读取响应正文]';
+      }
+      requestIdOutput.textContent = parsed?.meta?.request_id || requestId || '响应未提供 request_id';
+      rateOutput.textContent = `limit ${response.headers.get('x-ratelimit-limit') || '不可见'} · remaining ${response.headers.get('x-ratelimit-remaining') || '不可见'} · retry-after ${response.headers.get('retry-after') || '—'}`;
+      responseOutput.textContent = `HTTP ${response.status} ${response.statusText}\nContent-Type: ${contentTypeHeader || 'unknown'}\n\n${parsed ? JSON.stringify(parsed, null, 2) : responseBody || '(empty response)'}`;
+      showStatus(statusOutput, response.ok ? '请求完成。' : `请求返回 HTTP ${response.status}；检查 error.code 和 request_id。`, !response.ok);
+    } catch (error) {
+      responseOutput.textContent = error instanceof Error ? error.message : String(error);
+      showStatus(statusOutput, '浏览器未能读取响应。若这是 MindAuth CORS 拒绝，请检查 OAuth 服务允许的来源；该页面不会将 token 中转到文档服务器。', true);
+    } finally {
+      requestButton.disabled = false;
+    }
+  }
+
+  connectButton.addEventListener('click', () => { void connectClient(); });
+  clearTokenButton.addEventListener('click', () => {
+    sessionStorage.removeItem(tokenStorageKey);
+    updateTokenStatus();
+    showStatus(statusOutput, '已清除当前标签页中的 access token。');
+  });
+  methodSelect.addEventListener('change', renderSelectedOperation);
+  requestButton.addEventListener('click', () => { void sendRequest(); });
+  scopeConsent.addEventListener('change', () => { connectButton.disabled = !scopeConsent.checked; });
+  clientIdInput.addEventListener('input', () => { connectButton.disabled = !scopeConsent.checked; });
+  updateTokenStatus();
+
+  fetch(specUrl, { cache: 'no-store', credentials: 'omit' })
+    .then((response) => {
+      if (!response.ok) throw new Error('Public OpenAPI 下载失败');
+      return response.json();
+    })
+    .then((documentValue) => {
+      openApi = documentValue;
+      for (const [path, pathItem] of Object.entries(openApi.paths || {})) {
+        for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
+          const operation = (pathItem as any)[method];
+          if (!operation) continue;
+          const option = document.createElement('option');
+          option.value = `${method} ${path}`;
+          const tag = (operation.tags || [])[0] || 'Public API';
+          option.textContent = `${method.toUpperCase()} /api${path} · ${operation.summary || operation.operationId || tag}`;
+          methodSelect.append(option);
+        }
+      }
+      const wanted = parsePath(`${selectedMethod} ${selectedPath}`);
+      if (wanted) methodSelect.value = `${wanted.method} ${wanted.path}`;
+      renderSelectedOperation();
+      const connected = new URLSearchParams(window.location.search).get('connected');
+      if (connected) history.replaceState(null, '', window.location.pathname);
+    })
+    .catch((error) => showStatus(statusOutput, error instanceof Error ? error.message : 'Public OpenAPI 无法加载。', true));
+}
+
+function finishOnlineDebuggerOAuth(): void {
+  const statusNode = document.querySelector('[data-oauth-callback-status]') as HTMLElement | null;
+  if (!statusNode) return;
+  const storageKey = 'mdtbbs.public-api-debugger.pkce';
+  const tokenKey = 'mdtbbs.public-api-debugger.access-token';
+  const issuer = 'https://auth.mdtbbs.cn';
+  const parameters = new URLSearchParams(window.location.search);
+  const code = parameters.get('code');
+  const returnedState = parameters.get('state');
+  const oauthError = parameters.get('error');
+  const oauthErrorDescription = parameters.get('error_description');
+  history.replaceState(null, '', window.location.pathname);
+
+  function show(message: string, isError = false): void {
+    const target = document.querySelector('[data-oauth-callback-status]') as HTMLElement | null;
+    if (!target) return;
+    target.textContent = message;
+    target.classList.toggle('debug-error', isError);
+  }
+
+  if (oauthError) {
+    sessionStorage.removeItem(storageKey);
+    show(`MindAuth 授权未完成：${oauthError}${oauthErrorDescription ? ` · ${oauthErrorDescription}` : ''}`, true);
+    return;
+  }
+  let pending: any;
+  try { pending = JSON.parse(sessionStorage.getItem(storageKey) || 'null'); }
+  catch { pending = null; }
+  if (!code || !pending || !returnedState || returnedState !== pending.state) {
+    sessionStorage.removeItem(storageKey);
+    show('授权回调无效或 state 校验失败。请回到调试器重新发起授权。', true);
+    return;
+  }
+
+  show('已校验 OAuth state，正在兑换短期 access token…');
+  fetch(`${issuer}/.well-known/openid-configuration`, { cache: 'no-store', credentials: 'omit' })
+    .then((response) => {
+      if (!response.ok) throw new Error('无法读取 MindAuth OAuth 配置');
+      return response.json();
+    })
+    .then((discovery) => {
+      const tokenEndpoint = new URL(discovery.token_endpoint);
+      if (tokenEndpoint.origin !== issuer) throw new Error('MindAuth discovery 返回了非预期 token 域名');
+      return fetch(tokenEndpoint.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'authorization_code',
+          client_id: pending.client_id,
+          code,
+          redirect_uri: pending.redirect_uri,
+          code_verifier: pending.verifier,
+        }),
+        credentials: 'omit',
+      }).then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok || !payload.access_token) throw new Error(payload.error || 'MindAuth token 兑换失败');
+        const token = {
+          access_token: payload.access_token,
+          client_id: pending.client_id,
+          expires_at: payload.expires_in ? Date.now() + Number(payload.expires_in) * 1000 : null,
+          scope: payload.scope || pending.scopes.join(' '),
+        };
+        sessionStorage.setItem(tokenKey, JSON.stringify(token));
+        sessionStorage.removeItem(storageKey);
+        show('授权完成。access token 只保存在当前标签页的 sessionStorage，不显示、不过期刷新，也不发送到文档服务器。');
+        window.setTimeout(() => window.location.replace('/api/v1/debugger?connected=1'), 1200);
+      });
+    })
+    .catch((error) => {
+      sessionStorage.removeItem(storageKey);
+      show(error instanceof Error ? error.message : 'OAuth token 兑换失败。确认 redirect URI 已登记且 MindAuth 允许此网页来源。', true);
+    });
+}
+
+function renderDebugger(forumVersion: string, method = '', path = ''): string {
+  const body = `
+    <div class="eyebrow">Public Client V1</div><h1>在线调试</h1>
+    <p class="lead">选择一项公开 API，使用自己的 MindAuth Public Client 与明确列出的 scopes 调试。请求直接从浏览器发送到当前论坛；此页不创建高权限 Token、不提供 Sandbox，也不把 Token 发到文档服务器。</p>
+    <div class="debug-panel" data-public-debugger data-selected-method="${escapeHtml(method.toLowerCase())}" data-selected-path="${escapeHtml(path)}">
+      <div class="debug-field"><label for="debug-operation">Public API 操作</label><select id="debug-operation" data-debug-operation><option value="">正在加载 Public OpenAPI…</option></select></div>
+      <div class="debug-grid">
+        <div class="debug-field"><label for="debug-client-id">你的 OAuth Client ID</label><input id="debug-client-id" data-debug-client-id autocomplete="off" spellcheck="false" placeholder="从 MindAuth 开发者中心复制 client_id"></div>
+        <div class="debug-field"><label>OAuth Scope</label><div data-debug-scopes>先选择 API 操作。</div></div>
+      </div>
+      <p>Redirect URI：<code data-debug-redirect-uri></code>。先把此完整 URI 登记到你自己的 MindAuth Client。在线调试只申请 <code>openid</code> 和所选 API 操作声明的 scopes，不会追加其他权限。</p>
+      <label><input type="checkbox" data-debug-scope-consent> 我确认向当前 Client 申请上面列出的 scopes。</label>
+      <div class="debug-actions"><button type="button" class="primary" data-debug-connect disabled>使用我的 Client 登录</button><button type="button" data-debug-clear-token hidden>清除 Token</button></div>
+      <p data-debug-auth-status aria-live="polite">正在检查当前标签页的 Token 状态…</p>
+      <div data-debug-fields class="debug-grid" aria-label="请求参数"></div>
+      <div data-debug-body></div>
+      <label><input type="checkbox" data-debug-write-consent> 我知道提交、更新或删除操作会对当前账号执行真实操作。</label>
+      <div class="debug-actions"><button type="button" class="primary" data-debug-run>发送 Request</button><span data-debug-status aria-live="polite">选择接口以查看可填写的参数。</span></div>
+      <section class="debug-output"><h2>实际 Request</h2><pre><code data-debug-request>—</code></pre></section>
+      <section class="debug-output"><h2>Response</h2><p>HTTP 状态和响应正文</p><pre><code data-debug-response>—</code></pre><p>request_id：<code data-debug-request-id>—</code></p><p>Rate Limit：<code data-debug-rate>—</code></p></section>
+    </div>
+    ${callout('warning', '安全边界', '调试器会使用你的授权执行所选操作。不要粘贴其他人的 Token；完整 Token 不会显示，关闭标签页会清除会话存储。')}
+  `;
+  const callbackUri = 'window.location.origin + "/api/v1/debug/callback"';
+  return commonShell({
+    title: '在线调试 Public API',
+    description: '使用自己的 OAuth Public Client 调试经批准的 V1 操作。',
+    body,
+    forumVersion,
+    activePath: '/api/v1/debugger',
+    script: `document.querySelector('[data-debug-redirect-uri]').textContent = ${callbackUri}; (${runOnlineDebugger.toString()})();`,
+  });
+}
+
+function renderOAuthCallback(forumVersion: string): string {
+  const body = `
+    <div class="eyebrow">MindAuth OAuth</div><h1>授权回调</h1>
+    <p class="lead" data-oauth-callback-status aria-live="polite">正在验证授权回调…</p>
+    <p><a href="/api/v1/debugger">返回 Public API 在线调试器</a></p>
+  `;
+  return commonShell({
+    title: 'OAuth 授权回调',
+    description: '验证 PKCE state 并为当前标签页兑换临时访问令牌。',
+    body,
+    forumVersion,
+    script: `(${finishOnlineDebuggerOAuth.toString()})();`,
+  });
+}
+
+function renderErrorReference(forumVersion: string): string {
+  const rows = getAllV1ErrorCodes().slice().sort((left, right) => left.code.localeCompare(right.code)).map((item) => [
+    inlineCode(item.code),
+    String(item.httpStatus),
+    item.retryable ? '是' : '否',
+    escapeHtml(item.description),
+  ]);
+  const body = `
+    <div class="eyebrow">Public API 错误</div><h1>稳定错误代码</h1>
+    <p class="lead">V1 JSON 错误使用现有 <code>{ error, meta }</code> envelope。控制流应依据 HTTP 状态和 <code>error.code</code>；<code>message</code> 是面向用户的文字，可能本地化。</p>
+    ${codeBlock(`{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "请求过于频繁",
+    "retryable": true,
+    "details": []
+  },
+  "meta": { "request_id": "req_..." }
+}`, 'json')}
+    ${table(['code', 'HTTP', '可重试', '含义'], rows)}
+    ${callout('info', '排查问题', '把 HTTP 状态、稳定错误码和 <code>meta.request_id</code> 一起提供给维护者。达到限流后请遵守 <code>Retry-After</code>，不要忙等重试。')}
+  `;
+  return commonShell({ title: '错误代码', description: 'MDTBBS Public V1 稳定错误代码表', body, forumVersion, activePath: '/api/v1/docs/errors' });
+}
+
 function renderReference(document: OpenAPIObject, forumVersion: string): string {
   const groups = new Map<string, string[]>();
   for (const [path, pathItem] of Object.entries(document.paths || {})) {
@@ -1280,9 +1868,16 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
       const securityBadge = hasSecurity(operation)
         ? '<span class="badge">' + (hasOptionalSecurity(operation) ? 'Bearer 可选' : 'Bearer 必需') + '</span>'
         : '';
-      const declaredScopes = operation['x-required-scopes'] || [];
+      const declaredScopes = operation['x-required-scopes'] || operation['x-oauth-scopes-if-bearer'] || [];
       const oauthScope = declaredScopes[0] || referenceOAuthScope(method, path);
-      const scopeBadge = oauthScope ? `<span class="badge">OAuth scope: ${escapeHtml(oauthScope)}</span>` : '';
+      const scopeBadges = declaredScopes.length
+        ? declaredScopes.map((scope: string) => `<span class="badge">OAuth scope: ${escapeHtml(scope)}</span>`).join('')
+        : oauthScope ? `<span class="badge">OAuth scope: ${escapeHtml(oauthScope)}</span>` : '';
+      const limitBadge = `<span class="badge">Rate limit: ${escapeHtml(rateLimitLabel(operation['x-rate-limit']))}</span>`;
+      const lifecycle = operation.deprecated
+        ? callout('warning', 'Deprecated', `Since ${escapeHtml(operation['x-deprecated-since'] || 'unknown')}. ${escapeHtml(operation['x-removal-plan'] || '')} <a href="${escapeHtml(operation['x-migration-guide'] || '/api/v1/docs/lifecycle')}">Migration guide</a>.`)
+        : '';
+      const debuggerHref = `/api/v1/debugger?method=${encodeURIComponent(method)}&path=${encodeURIComponent(path)}`;
       const tag = String((operation.tags || [])[0] || '其他接口');
       const anchor = referenceTagAnchor(tag);
       const endpoint = `
@@ -1293,13 +1888,16 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
           </div>
           <p class="endpoint-summary">${escapeHtml(operation.summary || operation.description || '公开 V1 接口')}</p>
           <div class="use-case"><strong>用途：</strong>${escapeHtml(endpointUseCase(method, path, operation))}</div>
-          <div class="meta-line">${securityBadge}${scopeBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
+          <div class="meta-line">${securityBadge}${scopeBadges}${limitBadge}${(operation.tags || []).map((tag: string) => `<span class="badge">${escapeHtml(tag)}</span>`).join('')}</div>
+          ${lifecycle}
+          <p>分页：${escapeHtml(paginationLabel(document, path, pathItem, operation))} <a href="/api/v1/docs/errors">错误码与通用错误结构</a></p>
           ${renderContractParameters(document, path, pathItem, operation)}
           ${renderRequestBody(document, operation)}
           ${renderResponses(document, path, method, operation)}
           <h3>调用示例</h3>
           <p>示例会按契约填入查询参数和请求体字段；尖括号占位符要替换成实际值。响应示例是结构模板，不代表线上数据。</p>
           ${codeTabs(samples)}
+          <p><a class="debug-link" href="${escapeHtml(debuggerHref)}">在在线调试器中打开此操作</a></p>
         </article>`;
       if (!groups.has(tag)) groups.set(tag, []);
       groups.get(tag)!.push(endpoint);
@@ -1317,10 +1915,10 @@ function renderReference(document: OpenAPIObject, forumVersion: string): string 
   }));
   const body = `
     <div class="eyebrow">OpenAPI</div><h1>API 参考</h1>
-    <p class="lead">本页从运行时 First-party V1 OpenAPI 契约生成，并按业务标签分组。参数表会说明位置、类型、必填、示例和约束；请求体与成功响应会列出契约已声明的字段。</p>
+    <p class="lead">本页从 Public Client V1 OpenAPI 契约生成，并按业务标签分组。参数表会说明位置、类型、必填、示例和约束；请求体与成功响应会列出契约已声明的字段。</p>
     <p>当前列出 ${operationCount} 个操作。分页方式按接口分别使用 page/offset 或 opaque cursor，请以每个接口的参数表为准，不要混用。</p>
     <input class="reference-filter" data-reference-filter type="search" placeholder="搜索接口路径、用途、方法或说明…" aria-label="搜索 API">
-    ${callout('info', '机器可读契约', 'OpenAPI JSON：<a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。')}
+    ${callout('info', '机器可读契约', 'Public OpenAPI JSON：<a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。每项接口都列出准确 OAuth scopes、限流和分页参数；<a href="/api/v1/debugger">在线调试器</a>只允许调用本公开契约中的接口。')}
     ${groupHtml}
   `;
 
@@ -1341,6 +1939,12 @@ export function registerDeveloperDocs(
 ): void {
   const adapter = app.getHttpAdapter();
 
+  adapter.get('/developers', (_req: any, res: any) => {
+    const html = renderHome(forumVersion);
+    setHtmlHeaders(res, html);
+    res.status(200).send(html);
+  });
+
   adapter.get('/api/v1', (_req: any, res: any) => {
     const html = renderHome(forumVersion);
     setHtmlHeaders(res, html);
@@ -1349,7 +1953,15 @@ export function registerDeveloperDocs(
 
   adapter.get('/api/v1/docs/:slug', (req: any, res: any) => {
     const slug = String(req.params?.slug || '');
-    const page = renderMarkdownGuide(slug) || guidePages()[slug];
+    const page = slug === 'errors'
+      ? null
+      : renderMarkdownGuide(slug) || guidePages()[slug];
+    if (slug === 'errors') {
+      const html = renderErrorReference(forumVersion);
+      setHtmlHeaders(res, html);
+      res.status(200).send(html);
+      return;
+    }
     if (!page) {
       res.status(404).json({
         error: { code: 'DOC_NOT_FOUND', message: '文档页面不存在', retryable: false, details: [] },
@@ -1372,6 +1984,20 @@ export function registerDeveloperDocs(
   adapter.get('/api/v1/reference', (_req: any, res: any) => {
     const html = renderReference(document, forumVersion);
     setHtmlHeaders(res, html);
+    res.status(200).send(html);
+  });
+
+  adapter.get('/api/v1/debugger', (_req: any, res: any) => {
+    const method = String(_req.query?.method || '').toLowerCase();
+    const path = String(_req.query?.path || '');
+    const html = renderDebugger(forumVersion, method, path);
+    setHtmlHeaders(res, html, { noStore: true });
+    res.status(200).send(html);
+  });
+
+  adapter.get('/api/v1/debug/callback', (_req: any, res: any) => {
+    const html = renderOAuthCallback(forumVersion);
+    setHtmlHeaders(res, html, { noStore: true });
     res.status(200).send(html);
   });
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { adminApi, categoryApi, postApi } from '@/lib/api/client';
@@ -154,7 +156,7 @@ export default function AdminPostsPage() {
   };
 
   const handleDelete = async (post: AdminPostRow) => {
-    if (!confirm(`确定删除帖子“${post.title}”吗？`)) return;
+    if (!await confirmDialog({ message: `确定删除帖子“${post.title}”吗？`, destructive: true })) return;
 
     try {
       setButtonLoading(post.id, true);
@@ -184,7 +186,7 @@ export default function AdminPostsPage() {
 
   const handleBulkDelete = async () => {
     if (!selectedIds.length) return;
-    if (!confirm(`确定删除选中的 ${selectedIds.length} 个帖子吗？`)) return;
+    if (!await confirmDialog({ message: `确定删除选中的 ${selectedIds.length} 个帖子吗？`, destructive: true })) return;
 
     setBulkActionLoading(true);
     try {

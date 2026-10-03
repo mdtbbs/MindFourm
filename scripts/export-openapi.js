@@ -8,7 +8,7 @@ require('dotenv/config');
 process.env.OPENAPI_EXPORT = 'true';
 const { NestFactory } = require('@nestjs/core');
 const { AppModule } = require('../dist/app.module');
-const { createV1OpenApiDocument } = require('../dist/openapi/v1-openapi');
+const { createInternalV1OpenApiDocument, createV1OpenApiDocument } = require('../dist/openapi/v1-openapi');
 const fs = require('fs');
 const path = require('path');
 
@@ -23,17 +23,30 @@ async function exportOpenApi() {
 
   console.log('📝 正在生成 OpenAPI V1 文档...');
 
-  // 生成 V1 OpenAPI 文档
-  const document = createV1OpenApiDocument(app);
+  const publicDocument = createV1OpenApiDocument(app);
+  const internalDocument = createInternalV1OpenApiDocument(app);
+  const legacyOutputPath = path.join(__dirname, '..', 'openapi-v1.json');
+  const publicOutputPath = process.env.OPENAPI_PUBLIC_OUTPUT_PATH
+    || process.env.OPENAPI_OUTPUT_PATH
+    || path.join(__dirname, '..', 'openapi-public-v1.json');
+  const internalOutputPath = process.env.OPENAPI_INTERNAL_OUTPUT_PATH
+    || path.join(__dirname, '..', 'openapi-internal-v1.json');
 
-  // 输出路径
-  const outputPath = process.env.OPENAPI_OUTPUT_PATH || path.join(__dirname, '..', 'openapi-v1.json');
-  fs.writeFileSync(outputPath, JSON.stringify(document, null, 2));
+  fs.writeFileSync(publicOutputPath, JSON.stringify(publicDocument, null, 2));
+  fs.writeFileSync(internalOutputPath, JSON.stringify(internalDocument, null, 2));
+  if (!process.env.OPENAPI_PUBLIC_OUTPUT_PATH && !process.env.OPENAPI_OUTPUT_PATH) {
+    fs.writeFileSync(legacyOutputPath, JSON.stringify(publicDocument, null, 2));
+  }
 
-  console.log(`✅ OpenAPI V1 文档已导出到: ${outputPath}`);
-  console.log(`📊 路径数量: ${Object.keys(document.paths).length}`);
-  console.log(`📦 Schema 数量: ${Object.keys(document.components?.schemas || {}).length}`);
-  console.log(`📏 文件大小: ${(fs.statSync(outputPath).size / 1024).toFixed(1)} KB`);
+  for (const [label, outputPath, document] of [
+    ['Public V1', publicOutputPath, publicDocument],
+    ['Internal V1', internalOutputPath, internalDocument],
+  ]) {
+    console.log(`✅ ${label} OpenAPI 文档已导出到: ${outputPath}`);
+    console.log(`📊 路径数量: ${Object.keys(document.paths).length}`);
+    console.log(`📦 Schema 数量: ${Object.keys(document.components?.schemas || {}).length}`);
+    console.log(`📏 文件大小: ${(fs.statSync(outputPath).size / 1024).toFixed(1)} KB`);
+  }
 
   await app.close();
   process.exit(0);

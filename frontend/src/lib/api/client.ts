@@ -1,4 +1,4 @@
-import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, AttachmentDraft, CustomEmojiSummary, Message, Conversation, Resource, ResourceCategory, ResourceVersion, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse, QuickCodeStatus, QuickCodeGenerateResponse, QuickCodeResetResponse, ResourceComment, ResourceCommentListResponse } from '@/types';
+import type { User, Post, PostSummary, PostListResponse, CreatePostInput, Reply, ReplyListResponse, CreateReplyInput, Category, Tag, AdminLog, AdminStats, AdminBan, AdminBanListResponse, CreateBanInput, ModerationItem, UserProfile, Bookmark, BookmarkListResponse, Notification, NotificationListResponse, AdminNotification, AdminNotificationListResponse, Attachment, AttachmentDraft, CustomEmojiSummary, Message, Conversation, Resource, ResourceCategory, ResourceVersion, PackVersionManifest, Server, ServerVersion, ServerTemplate, LikedPost, SearchHistoryEntry, SearchResultResponse, QuickCodeStatus, QuickCodeGenerateResponse, QuickCodeResetResponse, ResourceComment, ResourceCommentListResponse } from '@/types';
 import { tryNormalizePaginatedApiPayload, unwrapApiPayload } from '@/lib/api/response';
 import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
@@ -619,16 +619,23 @@ export const adminApi = {
       body: JSON.stringify({ category_id }),
     });
   },
-  getLogs: (params?: { page?: number; limit?: number }) =>
+  getLogs: (params?: { page?: number; limit?: number; request_id?: string }) =>
     request<{ data: AdminLog[]; pagination: PostListResponse['pagination'] }>(
-      `/api/admin/logs${buildQueryString({ page: params?.page, limit: params?.limit })}`
+      `/api/admin/logs${buildQueryString({ page: params?.page, limit: params?.limit, request_id: params?.request_id })}`
     ),
+  rollbackSettings: (category: string, auditId: number) => {
+    clearCache();
+    return request<{ message: string; rolled_back_audit_id: number }>(
+      `/api/admin/settings/${encodeURIComponent(category)}/rollback/${auditId}`,
+      { method: 'POST' },
+    );
+  },
   getUsers: (params?: { page?: number; limit?: number; search?: string }) =>
     request<{ data: User[]; pagination: PostListResponse['pagination'] }>(
       `/api/admin/users${buildQueryString({ page: params?.page, limit: params?.limit, search: params?.search })}`
     ),
-  getStats: () =>
-    request<AdminStats>('/api/admin/stats'),
+  getStats: (rangeDays: 1 | 7 | 30 | 90 = 7) =>
+    request<AdminStats>(`/api/admin/stats?range_days=${rangeDays}`),
   getRateLimitObservability: () =>
     request<{
       total: number;
@@ -944,7 +951,7 @@ export const userApi = {
   search: (q: string, limit: number = 10) =>
     request<Array<Pick<UserProfile, 'id' | 'username' | 'avatar_url'>>>(`/api/users/search${buildQueryString({ q, limit })}`),
   getMyProfile: () => request<UserProfile>('/api/users/me'),
-  updateProfile: (data: { username?: string; bio?: string; preferred_locale?: string }) =>
+  updateProfile: (data: { username?: string; bio?: string; preferred_locale?: string; preferred_content_language?: 'zh-CN' | 'en' | 'ru' | 'ja' | null }) =>
     request<UserProfile>('/api/users/me/profile', {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -1232,6 +1239,12 @@ export const resourceApi = {
     ),
   getRelated: (id: number, limit = 6) =>
     request<Resource[]>(`/api/resources/${id}/related?limit=${limit}`),
+  recordView: (id: number) =>
+    request<{ recorded: boolean; view_count: number }>(`/api/resources/${id}/view`, { skipCache: true }),
+  getAnalytics: (rangeDays: 1 | 7 | 30 | 90) =>
+    request<ResourceAnalytics>(`/api/resources/admin/analytics?range_days=${rangeDays}`, { skipCache: true }),
+  getPackManifest: (packPublicId: string, versionPublicId: string) =>
+    request<PackVersionManifest>(`/api/v1/packs/${encodeURIComponent(packPublicId)}/versions/${encodeURIComponent(versionPublicId)}/manifest`, { skipCache: true }),
   download: (id: number, versionId?: number | null) =>
     `${API_BASE}/api/resources/${id}/download${versionId ? `?version_id=${versionId}` : ''}`,
   upload: (formData: FormData, idempotencyKey?: string) =>
@@ -1316,6 +1329,20 @@ export const resourceApi = {
     ),
   getHot: () => request<Resource[]>('/api/resources/hot'),
 };
+
+export interface ResourceAnalytics {
+  range_days: 1 | 7 | 30 | 90;
+  since: string;
+  views: { pv: number; uv: number };
+  downloads: number;
+  download_conversion_percent: number;
+  favorites: number;
+  likes: number;
+  ratings: number;
+  comments: number;
+  daily: Array<{ day: string; pv: number; uv: number }>;
+  referrers: Array<{ category: string; count: number }>;
+}
 
 // Resource Category Admin APIs
 export const resourceCategoryApi = {

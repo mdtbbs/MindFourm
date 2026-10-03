@@ -5,6 +5,7 @@ import { Bookmark } from '../../entities/bookmark.entity';
 import { Post } from '../../entities/post.entity';
 import { User } from '../../entities/user.entity';
 import { Category } from '../../entities/category.entity';
+import { applyResourceDiscussionVisibility } from '@common/utils/post-visibility.util';
 
 @Injectable()
 export class BookmarksService {
@@ -73,13 +74,16 @@ export class BookmarksService {
     page: number = 1,
     limit: number = 20,
   ): Promise<{ bookmarks: Bookmark[]; total: number }> {
-    const [bookmarks, total] = await this.bookmarkRepository.findAndCount({
-      where: { user_id: userId },
-      relations: ['post', 'post.category', 'post.user'],
-      order: { created_at: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+    const query = this.bookmarkRepository.createQueryBuilder('bookmark')
+      .leftJoinAndSelect('bookmark.post', 'post')
+      .leftJoinAndSelect('post.category', 'category')
+      .leftJoinAndSelect('post.user', 'user')
+      .where('bookmark.user_id = :userId', { userId });
+    applyResourceDiscussionVisibility(query, 'post', { id: userId, role: 'user' });
+    const [bookmarks, total] = await query.orderBy('bookmark.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
 
     return { bookmarks, total };
   }

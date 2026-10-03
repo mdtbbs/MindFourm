@@ -10,6 +10,8 @@ import { generatePageMetadata } from '@/lib/metadata';
 import { siteProfile } from '@/config/site-profile';
 import { getRequestLocale } from '@/i18n/server';
 import { translate } from '@/i18n';
+import { getRequestContentLanguage } from '@/i18n/server';
+import { prioritizeContentLanguage } from '@/lib/content-language';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,13 +47,19 @@ function SectionHeading({ title, href }: { title: string; href?: string }) {
 }
 
 export default async function HomePage() {
-  const [settings, home] = await Promise.all([
+  const [settings, loadedHome, preferredContentLanguage] = await Promise.all([
     fetchPublicSettings(),
     // The aggregate endpoint is cache-backed, so a slow upstream must not hold
     // the SSR shell indefinitely. Individual unavailable sections render their
     // own retry state below rather than turning the whole route into an error.
     getHomeData({ signal: AbortSignal.timeout(4500), init: { cache: 'no-store' } }).catch(() => UNAVAILABLE_HOME),
+    getRequestContentLanguage(),
   ]);
+  const home = siteProfile.contentLanguagePreference ? {
+    ...loadedHome,
+    discussions: { ...loadedHome.discussions, items: prioritizeContentLanguage(loadedHome.discussions.items, preferredContentLanguage) },
+    resources: { ...loadedHome.resources, items: prioritizeContentLanguage(loadedHome.resources.items, preferredContentLanguage) },
+  } : loadedHome;
   const brand = resolveBrand(settings);
   const locale = await getRequestLocale();
   const staleSections = [home.discussions, home.resources, home.news, home.notices].filter((section) => section.state === 'stale').length;
@@ -64,12 +72,16 @@ export default async function HomePage() {
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry Club</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{t('home.intro')}</p>
         <form action="/search" className="relative mt-5 max-w-2xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label={t('common.search')} placeholder={t('home.searchPlaceholder')} className="h-11 w-full rounded border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
-        <nav aria-label={t('home.quickLinks')} className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        <nav aria-label={t('navigation.siteNavigation')} className="mt-5 flex flex-wrap gap-2">
+          {siteProfile.navigation.filter((entry) => ['posts', 'resources', 'discover', 'developers'].includes(entry.key))
+            .filter((entry) => !entry.feature || siteProfile.features[entry.feature])
+            .map((entry) => <Link key={entry.key} href={entry.href} className="border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{t(`navigation.${entry.key}`)} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
+        </nav>
+        <nav aria-label={t('home.quickLinks')} className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
           {[
             { href: '/resources?resource_kind=mod', label: t('home.mods') },
             { href: '/resources?resource_kind=map', label: t('home.maps') },
             { href: '/resources?resource_kind=schematic', label: t('home.schematics') },
-            { href: '/game-servers', label: t('home.gameServers') },
           ].map((entry) => <Link key={entry.href} href={entry.href} className="text-[var(--primary)] hover:underline">{entry.label} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
         </nav>
       </section>

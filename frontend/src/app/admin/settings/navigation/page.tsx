@@ -5,6 +5,8 @@ import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 import {
   DEFAULT_TOP_NAVIGATION_ITEMS,
   parseTopNavigationItems,
@@ -19,22 +21,26 @@ export default function NavigationSettingsPage() {
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
-  const fetchSettings = useCallback(async () => {
+  const fetchSettings = useCallback(async (resetBaseline = true) => {
     try {
       const data = await adminApi.getSettings('navigation');
       const raw = data.top_navigation_items;
       const normalized = prettyPrintNavigation(parseTopNavigationItems(raw));
-      setValues({ ...data, top_navigation_items: normalized });
+      const nextValues = { ...data, top_navigation_items: normalized };
+      setValues(nextValues);
+      if (resetBaseline) initializeUnsaved(nextValues);
+      return nextValues;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load navigation settings');
+      setLoadError(err instanceof Error ? err.message : 'Failed to load navigation settings');
+      return null;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
@@ -60,18 +66,16 @@ export default function NavigationSettingsPage() {
   );
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
+    if (!unsaved.isDirty || unsaved.isSaving || navigationSyntaxError) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('navigation', values);
+      await adminApi.updateSettings('navigation', submittedValues);
       await refreshAfterSettingsSave();
-      setMessage('Navigation settings saved successfully');
-      setTimeout(() => setMessage(null), 3000);
-      await fetchSettings();
+      const refreshedValues = await fetchSettings(false);
+      unsaved.markSaved(refreshedValues ?? submittedValues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save navigation settings');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : 'Failed to save navigation settings');
     }
   };
 
@@ -88,7 +92,7 @@ export default function NavigationSettingsPage() {
   }
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">顶部导航</h2>
         <p className="text-xs text-surface-400 mt-1">
@@ -97,8 +101,7 @@ export default function NavigationSettingsPage() {
       </div>
 
       <div className="p-6 space-y-6">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
         {navigationSyntaxError && <Alert type="error" message={navigationSyntaxError} />}
 
         <div className="border border-surface-200 bg-surface-50 p-4 text-xs text-surface-600 space-y-2">
@@ -171,10 +174,19 @@ export default function NavigationSettingsPage() {
         </div>
       </div>
 
-      <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
-        <Button variant="ghost" onClick={fetchSettings}>重置</Button>
-        <Button onClick={handleSave} disabled={saving || Boolean(navigationSyntaxError)}>{saving ? '保存中...' : '保存'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        saveDisabled={Boolean(navigationSyntaxError)}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

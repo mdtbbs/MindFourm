@@ -83,4 +83,22 @@ describe('migration registry', () => {
     expect(names).toContain('UpgradeDownloadEvents1720000070000');
     expect(names.indexOf('GameContentDurability1720000060000')).toBeLessThan(names.indexOf('UpgradeDownloadEvents1720000070000'));
   });
+
+  it('adds durable resource view events and rolling visitor de-duplication', () => {
+    expect(migrations.map((migration) => migration.name)).toContain('ResourceViewsAnalytics1720000200000');
+  });
+
+  it('registers persisted content-language preferences and pinned Pack membership', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('AddPreferredContentLanguage1720000210000');
+    expect(names).toContain('ResourcePackItems1720000220000');
+    expect(names.indexOf('ResourceViewsAnalytics1720000200000')).toBeLessThan(names.indexOf('AddPreferredContentLanguage1720000210000'));
+    expect(names.indexOf('AddPreferredContentLanguage1720000210000')).toBeLessThan(names.indexOf('ResourcePackItems1720000220000'));
+  });
+
+  it('unifies legacy resource comments into canonical forum discussions after Pack membership', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('UnifyResourceDiscussions1720000230000');
+    expect(names.indexOf('ResourcePackItems1720000220000')).toBeLessThan(names.indexOf('UnifyResourceDiscussions1720000230000'));
+  });
 });

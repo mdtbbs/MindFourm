@@ -1,9 +1,14 @@
-export function shouldRecommendMdtbbs(country?: string | null, dismissed = false): boolean {
-  return !dismissed && String(country || '').split(',')[0].trim().toUpperCase() === 'CN';
+function languageOf(value?: string | null): string {
+  return String(value || '').split(',')[0].split(';')[0].trim().replaceAll('_', '-').split('-')[0].toLowerCase();
 }
 
-export function shouldSubdueMdtbbsRecommendation(explicitLocale?: string | null, acceptLanguage?: string | null): boolean {
-  const preferred = String(explicitLocale || '').trim().toLowerCase();
-  const accepted = String(acceptLanguage || '').split(',')[0].trim().toLowerCase();
-  return ['en', 'ru', 'ja'].some((locale) => preferred.startsWith(locale) || accepted.startsWith(locale));
+export function shouldRecommendMdtbbs(
+  country?: string | null,
+  dismissed = false,
+  explicitLocale?: string | null,
+  acceptLanguage?: string | null,
+): boolean {
+  if (dismissed) return false;
+  if (explicitLocale) return languageOf(explicitLocale) === 'zh';
+  return String(country || '').split(',')[0].trim().toUpperCase() === 'CN' || languageOf(acceptLanguage) === 'zh';
 }

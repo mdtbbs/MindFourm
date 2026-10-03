@@ -1,6 +1,6 @@
 # Cloud Saves V1
 
-Cloud Saves stores each user's private Mindustry save snapshots on the Forum server's persistent local disk. MySQL stores slot, snapshot, quota, and reference metadata. The client transfers file bytes through the Forum API; the service validates their declared size and SHA-256 before creating an immutable snapshot.
+Cloud Saves stores private Mindustry save snapshots. The service validates declared file size and SHA-256 before creating an immutable snapshot; clients must not share save data or download addresses between users.
 
 ## Access and ownership
 
@@ -132,19 +132,9 @@ The client should stream to a temporary file, verify size and SHA-256, preserve 
 - Unpinned history is subject to the configured retention limit. Pinned snapshots are retained until explicitly unpinned or their slot is deleted.
 - Deleted or unreferenced files are removed by the maintenance worker after its grace period.
 
-## Administrator configuration
+## Availability
 
-Open **Admin → Settings → Cloud Saves** at `/admin/settings/cloud-saves`. Administrators can:
-
-- Enable or disable Cloud Saves.
-- Set the persistent absolute directory used for save files.
-- Set the quota for each user and the maximum size of one save file.
-
-The Forum process user must be able to write to the directory. The directory must be on persistent storage and included in server backups. The settings page probes write access before saving. Once any local blobs or pending uploads exist, changing the directory is rejected so files do not become detached from MySQL metadata; stop the feature and migrate the directory before changing it.
-
-The default initial path comes from `CLOUD_SAVES_STORAGE_PATH` (or `<application directory>/storage/cloud-saves` in development). Container deployments must mount a persistent volume at the configured path. Back up the local directory and Forum database together.
-
-Cloud Saves is off by default. Enable it in the administrator settings after confirming the path is persistent and writable. No S3 service or object-storage CORS policy is required.
+Check `GET /api/v1/capabilities` before enabling Cloud Saves in a client. The service may be disabled or its limits may change; treat the current quota response and stable error codes as authoritative. Administrative storage configuration is outside the Public Client API.
 
 ## Client requirements
 

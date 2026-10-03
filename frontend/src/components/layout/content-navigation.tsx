@@ -7,6 +7,7 @@ import { ChevronDown } from 'lucide-react';
 import { getIconComponent } from '@/lib/resource-icons';
 import { buildContentNavigation } from '@/lib/navigation/content-navigation';
 import type { Category, ResourceCategory } from '@/types';
+import { useI18n } from '@/i18n/provider';
 
 export default function ContentNavigation({
   mode, settings, isAuthenticated, userId, forumCategories = [], resourceCategories = [], onNavigate,
@@ -21,8 +22,9 @@ export default function ContentNavigation({
 }) {
   const pathname = usePathname();
   const search = useSearchParams();
+  const { t } = useI18n();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const sections = buildContentNavigation({ mode, settings, isAuthenticated, userId, forumCategories, resourceCategories });
+  const sections = buildContentNavigation({ mode, settings, isAuthenticated, userId, forumCategories, resourceCategories, translate: t });
   const linkClass = (active: boolean, indent?: boolean) => `relative flex min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-[var(--motion-fast)] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r before:bg-[var(--primary)] before:transition-opacity before:duration-[var(--motion-fast)] ${indent ? 'ml-3' : ''} ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`;
 
   return <>

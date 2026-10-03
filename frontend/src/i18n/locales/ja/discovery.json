@@ -24,7 +24,9 @@
     "recentSearches": "最近の検索",
     "clearHistory": "消去",
     "popularSearches": "人気の検索",
-    "partialResults": "一部の検索カテゴリは現在利用できません。取得できた結果を表示しています。しばらくしてから再試行してください。"
+    "partialResults": "一部の検索カテゴリは現在利用できません。取得できた結果を表示しています。しばらくしてから再試行してください。",
+    "filterLanguage": "コンテンツの言語",
+    "allLanguages": "すべての言語"
   },
   "notices": {
     "title": "コミュニティのお知らせ",
@@ -65,8 +67,8 @@
   },
   "contentLanguage": {
     "label": "コンテンツの言語",
-    "unknown": "指定しない",
-    "hint": "投稿またはリソースの言語を選択してください。",
+    "unknown": "自動検出",
+    "hint": "本文から初期値を検出します。公開前に確認または変更してください。",
     "languages": {
       "en": "英語",
       "ru": "ロシア語",
@@ -87,7 +89,11 @@
     "resourcesDescription": "コミュニティのリソースやツールを見る",
     "notices": "コミュニティのお知らせ",
     "noticesDescription": "最新のお知らせやイベントを見る",
-    "summary": "リソース: {resources} · ディスカッション: {discussions}"
+    "summary": "リソース: {resources} · ディスカッション: {discussions}",
+    "discussions": "ディスカッション",
+    "discussionsDescription": "Mindustryのプレイヤーと話し合いましょう。",
+    "developers": "開発者向け",
+    "developersDescription": "開発者センターと連携ガイドをご覧ください。"
   },
   "tagsPage": {
     "title": "タグ",

@@ -41,16 +41,19 @@ jest.mock('@common/utils/markdown.util', () => ({ parseMarkdown: (v: string) => 
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PostsService } from './posts.service';
 
-function createService(options: { isMember?: boolean; requiresApproval?: boolean } = {}) {
+function createService(options: { isMember?: boolean; requiresApproval?: boolean; resourceVisible?: boolean } = {}) {
   const groupsService = {
     checkMembership: jest.fn().mockResolvedValue(options.isMember ?? false),
   };
   const settingsService = {
     getBoolean: jest.fn().mockResolvedValue(options.requiresApproval ?? true),
   };
+  const dataSource = {
+    query: jest.fn().mockResolvedValue(options.resourceVisible ? [{ id: 11 }] : []),
+  };
 
   const service = new PostsService(
-    {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any,
+    {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, dataSource as any,
     {} as any, {} as any,
     groupsService as any,
     { execute: jest.fn() } as any,
@@ -59,7 +62,7 @@ function createService(options: { isMember?: boolean; requiresApproval?: boolean
     {} as any, {} as any,
   );
 
-  return { service, groupsService, settingsService };
+  return { service, groupsService, settingsService, dataSource };
 }
 
 const STAFF = { id: 99, role: 'moderator' };
@@ -70,7 +73,7 @@ describe('PostsService visibility', () => {
   async function check(
     post: Record<string, any>,
     viewer?: { id: number; role: string },
-    options?: { isMember?: boolean },
+    options?: { isMember?: boolean; resourceVisible?: boolean },
   ) {
     const { service } = createService(options);
     return (service as any).assertPostVisible(post, viewer);
@@ -97,6 +100,34 @@ describe('PostsService visibility', () => {
 
   it('lets the author read their own unpublished post', async () => {
     await expect(check({ status: 'pending', user_id: 7 }, AUTHOR)).resolves.toBeUndefined();
+  });
+
+  it('checks the backing resource before showing a published discussion to other viewers', async () => {
+    const { service, dataSource } = createService();
+
+    await expect((service as any).assertPostVisible({
+      id: 501, post_type: 'resource_discussion', status: 'published', user_id: 7,
+    }, STRANGER)).rejects.toBeInstanceOf(NotFoundException);
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining("resource.status IN ('approved', 'published')"), [501]);
+    expect(dataSource.query.mock.calls[0][0]).toContain('resource.is_public = 1');
+    expect(dataSource.query.mock.calls[0][0]).toContain('resource.deleted_at IS NULL');
+    expect(dataSource.query.mock.calls[0][0]).toContain('category.is_active = 1');
+    expect(dataSource.query.mock.calls[0][0]).toContain("resource.visibility = 'public'");
+  });
+
+  it('allows a discussion to readers only while its resource satisfies public resource visibility', async () => {
+    await expect(check({
+      id: 501, post_type: 'resource_discussion', status: 'published', user_id: 7,
+    }, STRANGER, { resourceVisible: true })).resolves.toBeUndefined();
+  });
+
+  it('keeps the private discussion available to its resource owner under normal author rules', async () => {
+    const { service, dataSource } = createService();
+
+    await expect((service as any).assertPostVisible({
+      id: 501, post_type: 'resource_discussion', status: 'published', user_id: AUTHOR.id,
+    }, AUTHOR)).resolves.toBeUndefined();
+    expect(dataSource.query).not.toHaveBeenCalled();
   });
 
   it('lets staff read an unpublished post', async () => {

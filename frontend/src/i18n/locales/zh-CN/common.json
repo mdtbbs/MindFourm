@@ -1,15 +1,309 @@
 {
-  "common": { "save": "保存", "cancel": "取消", "loading": "加载中…", "search": "搜索", "searchCommunity": "搜索讨论、资源和用户…", "back": "返回", "close": "关闭", "home": "首页", "language": "语言", "skipToContent": "跳至主要内容", "menu": "菜单", "theme": "切换主题", "switchToLight": "切换到亮色模式", "switchToDark": "切换到暗色模式" },
-  "home": { "intro": "由 Mindustry 玩家运营的社区。寻找 Mod、地图与蓝图，加入讨论。", "searchPlaceholder": "搜索 Mod、地图、蓝图和讨论…", "quickLinks": "浏览资源", "mods": "模组", "maps": "地图", "schematics": "蓝图", "latestDiscussions": "最新讨论", "latestResources": "最新资源", "viewAll": "查看全部", "noDiscussions": "暂时没有公开讨论。", "noResources": "暂时没有公开资源。", "unavailable": "此内容暂时不可用。", "reload": "重试", "stale": "部分区域显示的是最近一次可用的数据。", "gameServers": "游戏服务器" },
-  "navigation": { "home": "首页", "posts": "讨论", "resources": "资源", "servers": "服务器", "wiki": "知识库", "login": "登录", "register": "创建账号", "logout": "退出登录", "profile": "个人资料", "settings": "设置", "friends": "好友", "messages": "私信", "bookmarks": "收藏", "notifications": "通知", "admin": "管理后台", "siteNavigation": "站点导航" },
-  "forum": { "createPost": "发布讨论", "latestDiscussions": "最新讨论", "trending": "热门", "reply": "回复", "replies": "回复", "categories": "分类", "tags": "标签", "report": "举报", "searchResults": "搜索结果", "contentLanguage": "内容语言" },
-  "resources": { "title": "资源", "mods": "模组", "maps": "地图", "schematics": "蓝图", "download": "下载", "upload": "上传资源", "popular": "热门资源", "version": "版本", "compatibility": "兼容性", "anonymousDownload": "公开文件无需登录即可下载。" },
-  "mobile": { "publish": "发布", "myAccount": "我的", "chooseWhatToPublish": "选择发布内容", "quickActions": "常用发布入口", "openPublish": "打开发布菜单", "closePublish": "关闭发布菜单", "publishPost": "发布讨论", "publishPostDescription": "提出问题或分享动态", "publishSchematic": "发布蓝图", "publishSchematicDescription": "上传 .msch 文件或粘贴蓝图代码", "publishMap": "发布地图", "publishMapDescription": "上传 .msav 并生成预览", "publishResource": "发布其他资源", "publishResourceDescription": "提交 Mod、工具或其他文件" },
-  "notifications": { "title": "通知", "unread": "{count} 条未读", "system": "系统", "community": "社区", "reply": "回复了你的讨论", "mention": "提到了你", "postLike": "赞了你的讨论", "replyLike": "赞了你的回复", "message": "给你发了私信", "bestAnswer": "将你的回复设为最佳答案", "systemNotice": "发送了社区通知", "newNotice": "发送了新通知", "allReadLabel": "全部标为已读", "allRead": "全部已读", "empty": "暂无通知", "viewAll": "查看全部通知" },
-  "footer": { "links": "社区链接", "more": "更多", "navigation": "页脚导航", "friendly": "常用链接", "thanks": "鸣谢", "about": "关于我们", "terms": "服务条款", "privacy": "隐私政策", "feedback": "意见反馈" , "communityGuidelines": "社区准则", "resourceRules": "内容与资源规则", "takedown": "版权与下架政策", "tableOfContents": "本页目录"},
-  "consent": { "title": "请阅读并同意以下条款", "summary": "使用本站前请阅读并同意我们的服务条款与隐私政策。", "loginRequired": "请先登录后再接受条款。", "login": "返回登录", "termsIntro": "请阅读", "and": "和", "disagree": "如果你不同意，可以点击“不同意”退出；你将无法继续使用本站。", "checkbox": "我已阅读并同意上述条款", "decline": "不同意", "accept": "我已阅读并同意", "processing": "处理中…", "checking": "正在检查登录状态…", "checkFailed": "登录状态检查超时或暂时不可用，请返回首页后重试。", "submitFailed": "无法保存你的选择，请重试。" },
-  "auth": { "signIn": "登录", "register": "创建账号", "signedIn": "已登录", "guest": "未登录", "emailVerificationRequired": "请先验证邮箱，再发布帖子或上传资源。", "phoneVerificationRequired": "请先验证手机号后继续。" },
-  "errors": { "EMAIL_VERIFICATION_REQUIRED": "请先验证邮箱。", "PHONE_NOT_VERIFIED": "请先验证手机号。", "phoneRetry": "请先验证手机号，完成后系统会自动继续此操作。", "USER_BANNED": "此账号暂时无法执行此操作。", "TERMS_ACCEPTANCE_REQUIRED": "请先接受社区条款。", "FEATURE_DISABLED": "此功能暂不可用。", "RESOURCE_UPLOAD_DISABLED": "资源上传暂不可用。", "notFound": "页面不存在", "notFoundDescription": "页面可能已被删除、尚未公开，或者链接有误。", "searchPosts": "搜索讨论…", "browseCategories": "浏览分类", "retry": "重试", "pageError": "页面错误", "loadError": "内容加载失败，请重试。", "globalTitle": "页面暂时不可用", "globalDescription": "请稍后重试。内部错误详情不会显示。" },
-  "recommendation": { "title": "正在寻找中文 Mindustry 社区？", "description": "MDTBBS 为中国大陆玩家提供中文社区。", "visit": "访问 MDTBBS", "stay": "继续留在 Mindustry Club" },
-  "admin": { "language": "管理后台语言", "english": "English", "chinese": "简体中文" }
+  "common": {
+    "save": "保存",
+    "cancel": "取消",
+    "loading": "加载中…",
+    "search": "搜索",
+    "searchCommunity": "搜索讨论、资源和用户…",
+    "back": "返回",
+    "close": "关闭",
+    "home": "首页",
+    "language": "语言",
+    "skipToContent": "跳至主要内容",
+    "menu": "菜单",
+    "theme": "切换主题",
+    "switchToLight": "切换到亮色模式",
+    "switchToDark": "切换到暗色模式"
+  },
+  "home": {
+    "intro": "由 Mindustry 玩家运营的社区。寻找 Mod、地图与蓝图，加入讨论。",
+    "searchPlaceholder": "搜索 Mod、地图、蓝图和讨论…",
+    "quickLinks": "浏览资源",
+    "mods": "模组",
+    "maps": "地图",
+    "schematics": "蓝图",
+    "latestDiscussions": "最新讨论",
+    "latestResources": "最新资源",
+    "viewAll": "查看全部",
+    "noDiscussions": "暂时没有公开讨论。",
+    "noResources": "暂时没有公开资源。",
+    "unavailable": "此内容暂时不可用。",
+    "reload": "重试",
+    "stale": "部分区域显示的是最近一次可用的数据。",
+    "gameServers": "游戏服务器"
+  },
+  "navigation": {
+    "discover": "发现",
+    "developers": "开发者",
+    "home": "首页",
+    "posts": "讨论",
+    "resources": "资源",
+    "servers": "服务器",
+    "allDiscussions": "全部讨论",
+    "resourceBrowsing": "浏览资源",
+    "allResources": "全部资源",
+    "discussionBoards": "讨论板块",
+    "account": "账户",
+    "myPosts": "我的讨论",
+    "bookmarks": "收藏",
+    "messages": "私信",
+    "notifications": "通知",
+    "friends": "好友",
+    "settings": "设置",
+    "publishDiscussion": "发布讨论",
+    "publishResource": "上传资源"
+  },
+  "forum": {
+    "createPost": "发布讨论",
+    "latestDiscussions": "最新讨论",
+    "trending": "热门",
+    "reply": "回复",
+    "replies": "回复",
+    "categories": "分类",
+    "tags": "标签",
+    "report": "举报",
+    "searchResults": "搜索结果",
+    "contentLanguage": "内容语言"
+  },
+  "resources": {
+    "title": "资源",
+    "mods": "模组",
+    "maps": "地图",
+    "schematics": "蓝图",
+    "download": "下载",
+    "upload": "上传资源",
+    "popular": "热门资源",
+    "version": "版本",
+    "compatibility": "兼容性",
+    "anonymousDownload": "公开文件无需登录即可下载。",
+    "kinds": {
+      "mod": "Mod",
+      "map": "地图",
+      "schematic": "蓝图",
+      "save": "存档",
+      "game_version": "游戏版本",
+      "server_plugin": "服务器插件",
+      "development_tool": "开发工具",
+      "texture_ui": "材质与界面",
+      "other": "其他"
+    }
+  },
+  "mobile": {
+    "publish": "发布",
+    "myAccount": "我的",
+    "chooseWhatToPublish": "选择发布内容",
+    "quickActions": "常用发布入口",
+    "openPublish": "打开发布菜单",
+    "closePublish": "关闭发布菜单",
+    "publishPost": "发布讨论",
+    "publishPostDescription": "提出问题或分享动态",
+    "publishSchematic": "发布蓝图",
+    "publishSchematicDescription": "上传 .msch 文件或粘贴蓝图代码",
+    "publishMap": "发布地图",
+    "publishMapDescription": "上传 .msav 并生成预览",
+    "publishResource": "发布其他资源",
+    "publishResourceDescription": "提交 Mod、工具或其他文件"
+  },
+  "notifications": {
+    "title": "通知",
+    "unread": "{count} 条未读",
+    "system": "系统",
+    "community": "社区",
+    "reply": "回复了你的讨论",
+    "mention": "提到了你",
+    "postLike": "赞了你的讨论",
+    "replyLike": "赞了你的回复",
+    "message": "给你发了私信",
+    "bestAnswer": "将你的回复设为最佳答案",
+    "systemNotice": "发送了社区通知",
+    "newNotice": "发送了新通知",
+    "allReadLabel": "全部标为已读",
+    "allRead": "全部已读",
+    "empty": "暂无通知",
+    "viewAll": "查看全部通知"
+  },
+  "footer": {
+    "links": "社区链接",
+    "more": "更多",
+    "navigation": "页脚导航",
+    "friendly": "常用链接",
+    "thanks": "鸣谢",
+    "about": "关于我们",
+    "terms": "服务条款",
+    "privacy": "隐私政策",
+    "feedback": "意见反馈",
+    "communityGuidelines": "社区准则",
+    "resourceRules": "内容与资源规则",
+    "takedown": "版权与下架政策",
+    "tableOfContents": "本页目录"
+  },
+  "consent": {
+    "title": "请阅读并同意以下条款",
+    "summary": "使用本站前请阅读并同意我们的服务条款与隐私政策。",
+    "loginRequired": "请先登录后再接受条款。",
+    "login": "返回登录",
+    "termsIntro": "请阅读",
+    "and": "和",
+    "disagree": "如果你不同意，可以点击“不同意”退出；你将无法继续使用本站。",
+    "checkbox": "我已阅读并同意上述条款",
+    "decline": "不同意",
+    "accept": "我已阅读并同意",
+    "processing": "处理中…",
+    "checking": "正在检查登录状态…",
+    "checkFailed": "登录状态检查超时或暂时不可用，请返回首页后重试。",
+    "submitFailed": "无法保存你的选择，请重试。"
+  },
+  "auth": {
+    "signIn": "登录",
+    "register": "创建账号",
+    "signedIn": "已登录",
+    "guest": "未登录",
+    "emailVerificationRequired": "请先验证邮箱，再发布帖子或上传资源。",
+    "phoneVerificationRequired": "请先验证手机号后继续。"
+  },
+  "errors": {
+    "EMAIL_VERIFICATION_REQUIRED": "请先验证邮箱。",
+    "PHONE_NOT_VERIFIED": "请先验证手机号。",
+    "phoneRetry": "请先验证手机号，完成后系统会自动继续此操作。",
+    "USER_BANNED": "此账号暂时无法执行此操作。",
+    "TERMS_ACCEPTANCE_REQUIRED": "请先接受社区条款。",
+    "FEATURE_DISABLED": "此功能暂不可用。",
+    "RESOURCE_UPLOAD_DISABLED": "资源上传暂不可用。",
+    "notFound": "页面不存在",
+    "notFoundDescription": "页面可能已被删除、尚未公开，或者链接有误。",
+    "searchPosts": "搜索讨论…",
+    "browseCategories": "浏览分类",
+    "retry": "重试",
+    "pageError": "页面错误",
+    "loadError": "内容加载失败，请重试。",
+    "globalTitle": "页面暂时不可用",
+    "globalDescription": "请稍后重试。内部错误详情不会显示。"
+  },
+  "recommendation": {
+    "title": "正在寻找中文社区？",
+    "description": "MDTBBS 是 Mindustry 中文玩家社区。",
+    "visit": "访问 MDTBBS.cn",
+    "stay": "留在本站"
+  },
+  "admin": {
+    "language": "管理后台语言",
+    "english": "English",
+    "chinese": "简体中文"
+  },
+  "languageSettings": {
+    "title": "语言偏好",
+    "description": "设置界面语言和信息流优先语言。其他语言的内容仍会显示。",
+    "accountLanguage": "界面语言",
+    "feedLanguage": "信息流语言",
+    "followInterface": "跟随界面语言",
+    "save": "保存信息流偏好",
+    "saving": "保存中…",
+    "saved": "已保存"
+  },
+  "adminNavigation": {
+    "item": {
+      "resource-analytics": "资源统计"
+    }
+  },
+  "legal": {
+    "terms": {
+      "title": "服务条款",
+      "accounts": {
+        "title": "账户与访问",
+        "body": "本站通过 MindAuth 提供登录。请妥善保护账户，未经许可不得使用他人账户。为保护社区或服务，我们可能在必要时限制访问。"
+      },
+      "content": {
+        "title": "用户内容",
+        "body": "你保留自己创作内容的所有权，并授予 Mindustry Club 为运营服务而托管、展示和分发该内容的许可。法律、安全和备份需要可能影响内容删除。"
+      },
+      "conduct": {
+        "title": "社区行为",
+        "body": "禁止骚扰、冒充他人、垃圾信息、干扰服务或上传恶意文件。请遵守社区指南与内容和资源规则。"
+      },
+      "moderation": {
+        "title": "审核与服务可用性",
+        "body": "成员可以举报内容。管理员可以隐藏或删除内容、限制账户，以应对安全、权利或滥用问题。Mindustry Club 是独立的玩家社区，与 Anuken 或 Mindustry 官方项目无关，也未获其认可；服务可能调整或暂时不可用。"
+      }
+    },
+    "privacy": {
+      "title": "隐私政策",
+      "identity": {
+        "title": "账户数据",
+        "body": "MindAuth 提供账户身份认证。Mindustry Club 使用独立社区数据库保存本地个人资料、帖子、回复、资源记录和审核决定。"
+      },
+      "data": {
+        "title": "处理的数据",
+        "body": "为提供服务、防止滥用和调查举报，我们会处理账户资料、邮箱验证状态、IP 地址与请求元数据、会话 Cookie，以及安全和审核日志。IP 与安全日志仅授权人员可访问，并按实际需要保留。"
+      },
+      "cookies": {
+        "title": "Cookie 与语言",
+        "body": "必要 Cookie 用于保护登录会话并记住界面语言与信息流语言偏好。我们不会将其用于跨站广告。"
+      },
+      "publicContent": {
+        "title": "公开内容",
+        "body": "公开帖子和资源页面可能对任何人开放，包括搜索引擎。"
+      },
+      "requests": {
+        "title": "隐私请求",
+        "body": "如有隐私问题或希望删除账户，请通过举报或反馈工具联系站点管理员。"
+      }
+    },
+    "communityGuidelines": {
+      "title": "社区指南",
+      "respect": {
+        "title": "尊重他人",
+        "body": "讨论观点，不针对个人。禁止骚扰、威胁或冒充其他成员。"
+      },
+      "discussion": {
+        "title": "保持讨论有用",
+        "body": "围绕主题交流，提供必要背景，避免垃圾信息、诈骗和妨碍正常讨论的行为。"
+      },
+      "credit": {
+        "title": "注明作者",
+        "body": "尽可能注明创作者并链接原始来源。遵守许可证和署名要求。"
+      },
+      "safety": {
+        "title": "保护社区安全",
+        "body": "不要发布个人信息、恶意链接，或旨在危害设备和账户的内容。"
+      },
+      "reporting": {
+        "title": "举报问题",
+        "body": "需要管理员处理时请使用举报功能。不要借举报骚扰或压制其他成员。"
+      }
+    },
+    "resourceRules": {
+      "title": "内容与资源规则",
+      "rights": {
+        "title": "合法分享",
+        "body": "只上传你有权分享的材料。注明适用许可证并尊重原作者。"
+      },
+      "metadata": {
+        "title": "准确描述资源",
+        "body": "准确说明版本和兼容性，不得虚报作者、文件内容或资源功能。"
+      },
+      "prohibited": {
+        "title": "禁止危险文件",
+        "body": "禁止上传恶意软件、木马、后门、窃取凭据的工具，以及意图损害设备或账户的文件。"
+      },
+      "review": {
+        "title": "内容审核",
+        "body": "资源投稿可能接受滥用与安全检查。管理员审核举报时可能暂时限制相关材料。"
+      }
+    },
+    "copyright": {
+      "title": "版权与下架政策",
+      "submit": {
+        "title": "提交请求",
+        "body": "如认为 Mindustry Club 上的内容侵害了你的权利，请向管理员提供页面或资源链接、相关材料、你拥有的权利、希望采取的措施，以及可联系你的方式。"
+      },
+      "review": {
+        "title": "审查与处理",
+        "body": "管理员会审查请求，可在调查期间暂时限制争议内容，并在审查后删除内容或恢复访问。"
+      },
+      "abuse": {
+        "title": "滥用举报",
+        "body": "虚假或恶意举报可能被拒绝。请提供准确资料并诚信提交请求。"
+      }
+    }
+  }
 }

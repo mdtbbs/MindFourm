@@ -1,5 +1,7 @@
 # 外部服务 API（机器人与服务端集成）
 
+> Repository-side reference for separately approved server integrations. This guide is not linked or served from the third-party Public Client Developer Center.
+
 **更新时间：**2026-07-28 · **状态：**M1 已实现。本文介绍机器人和第三方服务如何通过 API Key 调用论坛，并在已授权的 scope 范围内代指定用户发帖、回复、审核和管理资源。
 
 ## 设计目标
@@ -148,21 +150,9 @@ Authorization: Bearer <external-api-key>
 
 若没有已接受的好友关系，`is_friend` 为 `false`。参数无效返回 HTTP 400；缺少 `friends:read` 返回 HTTP 403。好友关系查询发生错误时接口会返回错误，不会返回肯定结果；调用方必须将非成功响应视为未获授权。
 
-## LanLink MindAuth 登录解析
+## 凭证边界
 
-LanLink 控制面可以用仅服务端持有的 External API Key，将 Mod 的 MindAuth access token 解析为 Forum 本地用户身份：
-
-```http
-POST /api/external/v1/lanlink/oauth/resolve
-Authorization: Bearer <external-api-key>
-Content-Type: application/json
-
-{"access_token":"<short-lived MindAuth access token>"}
-```
-
-此端点要求专用 External API Key（正整数 key ID、显式 `lanlink:auth` scope；拒绝旧版 legacy key 和通配 scope），并只接受 `LANLINK_MINDAUTH_CLIENT_ID` 指定的已批准 Public Client。MindAuth 中 Public Client 的 party type 可以是 `third_party`（开发者目录申请并经管理员批准）或 `first_party`；必须具备 `profile friends.read presence.read presence.write multiplayer.read multiplayer.write` 全部授权 scope。配置的 client ID 必须与 Mod 登录页中的 ID 一致。
-
-成功响应只返回 Forum 本地用户身份及 `expires_at`（Unix 秒）；不会返回 OAuth token，并带 `Cache-Control: no-store`。LanLink 必须按该绝对过期时间扣除安全余量后签发本地短期 JWT，不能直接把 MindAuth opaque token 当作旧 WS `hello.token` 使用。请求包含 bearer，生产环境只能经 HTTPS 发送。
+External API Key 仅用于获准的服务端集成。Public Client、浏览器、Android、桌面客户端、Mod 和启动器不得使用或转发这类凭证。服务间身份转换和 Forum 内部控制接口不属于此服务端集成指南。
 
 ---
 
@@ -270,68 +260,9 @@ X-Request-ID: <request-id>
 
 > **提示**：`content` 为空字符串或纯文本时同样有效——纯文本会被作为普通段落处理。
 
-## API Key 管理接口（后台）
+## 凭证管理
 
-后台页面：
-
-```txt
-/admin/settings/external-api
-```
-
-后台 API：
-
-```txt
-/api/admin/external-api
-```
-
-这些接口需要普通后台登录、`JwtAuthGuard + RolesGuard`，且角色为 `admin`。
-
-### 创建 Key
-
-```http
-POST /api/admin/external-api/keys
-Content-Type: application/json
-```
-
-```json
-{
-  "name": "QQ 审核机器人",
-  "scopes": ["posts:read", "posts:write", "replies:write", "users:impersonate"],
-  "allowed_ips": ["203.0.113.10", "203.0.113.0/24"],
-  "default_user_id": 1,
-  "rate_limit_per_minute": 120,
-  "expires_at": "2026-12-31T23:59:59+08:00"
-}
-```
-
-响应中的 `plain_key` 只显示一次：
-
-```json
-{
-  "success": true,
-  "data": {
-    "key": {
-      "id": 1,
-      "name": "QQ 审核机器人",
-      "key_prefix": "mfk_live_abcd1234",
-      "scopes": ["posts:read", "posts:write", "replies:write", "users:impersonate"],
-      "enabled": true
-    },
-    "plain_key": "mfk_live_abcd1234.xxxxxxxxxxxxxxxxx"
-  }
-}
-```
-
-### 其他管理接口
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| GET | `/api/admin/external-api/keys` | Key 列表 |
-| PATCH | `/api/admin/external-api/keys/:id` | 更新名称、scopes、白名单、默认用户、限流、过期、启用状态 |
-| POST | `/api/admin/external-api/keys/:id/rotate` | 轮换密钥，旧密钥立即失效 |
-| POST | `/api/admin/external-api/keys/:id/enable` | 启用 |
-| POST | `/api/admin/external-api/keys/:id/disable` | 停用 |
-| GET | `/api/admin/external-api/audit-logs` | 审计日志 |
+API Key 由论坛运营方通过受控管理流程签发、限制权限并轮换。管理界面和管理 API 不属于 External API 契约；集成方应通过获准渠道申请凭证，并按最小权限原则使用。
 
 ---
 
@@ -631,26 +562,9 @@ POST /api/external/v1/resources/123/moderation
 
 ---
 
-## 审计日志
+## 审计
 
-每个写操作都会记录两层日志：
-
-1. `external_api_audit_logs`
-   - 记录 API key、scope、actor、target、request id、IP、UA、状态和错误。
-2. `operation_logs`
-   - 记录为 `external.<action>`，用于现有后台操作日志体系。
-
-后台最近审计日志可在：
-
-```txt
-/admin/settings/external-api
-```
-
-或调用：
-
-```http
-GET /api/admin/external-api/audit-logs?page=1&limit=20
-```
+服务端集成写操作会记录审计信息。凭证持有者应保存 API 返回的 request ID，并在需要调查时提供给论坛运营方；审计查询功能不属于 External API 契约。
 
 ---
 
@@ -699,14 +613,9 @@ curl -X POST "https://forum.example.com/api/external/v1/posts/123/moderation" \
 
 ---
 
-## 部署注意事项
+## 安全建议
 
-- 本功能新增数据库迁移：`1720000011000-CreateExternalApiTables.ts`。
-- 当前项目配置 `migrationsRun: true`，正常启动后会自动执行迁移。
-- 如果生产环境禁用自动迁移，需要手动执行迁移后再启动服务。
-- 生产 API Key 建议：
-  - 不发放 `admin:*` / `*`，除非是完全可信的内部机器人。
-  - 尽量配置 IP 白名单。
-  - 使用最小 scopes。
-  - 定期轮换密钥。
-  - 查看审计日志确认机器人行为。
+- 只在可信服务端保存 API Key，不要提交到源码仓库。
+- 只申请业务必需的 scopes，并在可能时限制来源网络。
+- 发现凭证泄漏时立即联系论坛运营方停用并轮换。
+- 保留请求 ID，按接口返回的状态和错误码处理失败。

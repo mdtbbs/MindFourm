@@ -12,6 +12,7 @@
 import React from 'react';
 import { useToastStore, useToast, ToastItem } from '@/store/toast-store';
 import Toast from '@/components/ui/toast';
+import InteractionDialogHost from '@/components/ui/interaction-dialog-host';
 
 // Re-export useToast for backward compatibility
 export { useToast };
@@ -47,6 +48,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           />
         ))}
       </div>
+      <InteractionDialogHost />
     </>
   );
 }

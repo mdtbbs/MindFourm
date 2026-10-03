@@ -7,6 +7,7 @@ import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { Check, X, Eye } from 'lucide-react';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
+import ResourceModerationReview from '@/components/admin/resource-moderation-review';
 
 export default function ResourceModerationTable() {
   const [resources, setResources] = useState<Resource[]>([]);
@@ -90,6 +91,7 @@ export default function ResourceModerationTable() {
           {selectedResource.resource_type === 'external' && selectedResource.external_url && (
             <p className="text-sm text-surface-500 mb-2">外链: {selectedResource.external_url}</p>
           )}
+          <ResourceModerationReview resource={selectedResource} />
           <p className="text-sm text-surface-500 mb-4">上传者: {selectedResource.username}</p>
           <div className="flex gap-3">
             <button

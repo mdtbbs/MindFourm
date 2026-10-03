@@ -14,6 +14,7 @@ import OrderedListExt from '@tiptap/extension-ordered-list';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
 import { RICH_CONTENT_EXTENSIONS } from './rich-content-extensions';
+import { normalizeEditorLink } from './editor-link';
 
 const TightBulletList = BulletListExt.extend({
   addAttributes() {
@@ -36,7 +37,11 @@ export function createTiptapEditorExtensions(placeholder = '') {
     Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: true }),
     ImageExt.configure({ inline: true, allowBase64: false }),
     Placeholder.configure({ placeholder }),
-    LinkExt.configure({ openOnClick: false, HTMLAttributes: { class: 'editor-link' } }),
+    LinkExt.configure({
+      openOnClick: false,
+      HTMLAttributes: { class: 'editor-link' },
+      isAllowedUri: (url) => normalizeEditorLink(url) !== null,
+    }),
     UnderlineExt,
     CharacterCount,
     TableExtension.configure({ resizable: false }),

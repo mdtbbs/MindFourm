@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useToastStore } from '@/store/toast-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +26,7 @@ export function CategoryEditor({ category, onSave, onCancel }: CategoryEditorPro
     description: category.description ?? '',
   });
   const [saving, setSaving] = useState(false);
+  const showError = useToastStore((state) => state.showError);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,7 +34,7 @@ export function CategoryEditor({ category, onSave, onCancel }: CategoryEditorPro
     try {
       await onSave(formData);
     } catch (error) {
-      alert('保存失败');
+      showError(error instanceof Error ? error.message : '保存失败');
     } finally {
       setSaving(false);
     }

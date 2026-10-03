@@ -29,7 +29,8 @@ export function middleware(request: NextRequest) {
   const sessionToken = request.cookies.get("forum_session");
 
   const explicitLocale = request.nextUrl.searchParams.get('lang');
-  const normalizedLocale = normalizeLocale(explicitLocale);
+  const localeOptions = siteProfile.profile === 'mindustry-club' ? ['en', 'ru', 'ja', 'zh-CN'] : siteProfile.localization.supportedLocales;
+  const normalizedLocale = normalizeLocale(explicitLocale, localeOptions);
   if (explicitLocale && normalizedLocale) {
     const destination = request.nextUrl.clone();
     destination.searchParams.delete('lang');

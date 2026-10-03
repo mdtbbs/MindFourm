@@ -3,35 +3,38 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
-import Button from '@/components/ui/button';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 
 const MIB = 1024 * 1024;
 
 export default function CloudSavesSettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
-    setError(null);
-    try { setValues(await adminApi.getSettings('cloud-saves')); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '加载云存档配置失败'); }
+    try {
+      const data = await adminApi.getSettings('cloud-saves');
+      setValues(data);
+      initializeUnsaved(data);
+    }
+    catch (cause) { setLoadError(cause instanceof Error ? cause.message : '加载云存档配置失败'); }
     finally { setLoading(false); }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => { void fetchSettings(); }, [fetchSettings]);
 
   const save = async () => {
-    setSaving(true);
-    setError(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('cloud-saves', values);
-      setMessage('云存档配置已保存');
-      setTimeout(() => setMessage(null), 3000);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '保存云存档配置失败'); }
-    finally { setSaving(false); }
+      await adminApi.updateSettings('cloud-saves', submittedValues);
+      unsaved.markSaved(submittedValues);
+    } catch (cause) { unsaved.setError(cause instanceof Error ? cause.message : '保存云存档配置失败'); }
   };
 
   const update = (key: string, value: string) => setValues(previous => ({ ...previous, [key]: value }));
@@ -47,15 +50,14 @@ export default function CloudSavesSettingsPage() {
   if (loading) return <div className="py-8 text-center text-surface-500">正在加载…</div>;
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">云存档设置</h2>
         <p className="mt-1 text-xs text-surface-500">存档文件保存在论坛服务器的本地持久化目录中，不使用对象存储。</p>
       </div>
 
       <div className="space-y-6 p-6">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
 
         <label className="flex items-start gap-3 rounded border border-surface-200 bg-surface-50 p-4">
           <input
@@ -102,10 +104,18 @@ export default function CloudSavesSettingsPage() {
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-surface-200 px-6 py-4">
-        <Button variant="ghost" onClick={() => void fetchSettings()}>重置</Button>
-        <Button onClick={() => void save()} disabled={saving}>{saving ? '保存中…' : '保存配置'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void save(); }}
+      />
     </div>
   );
 }

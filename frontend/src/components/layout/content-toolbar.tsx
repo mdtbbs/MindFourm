@@ -66,6 +66,7 @@ export default function ContentToolbar(props: {
       onSearch={props.onSearch}
       onMobileMenuClick={props.onOpenDrawer}
       notificationDropdownSlot={<NotificationDropdown />}
+      userMenuSlot={<div className="border-t border-[var(--border)]"><LocaleSwitcher className="w-full" /></div>}
       utilitySlot={<LocaleSwitcher className="hidden lg:block" />}
       topNavigationSlot={
         props.navigationMode ? (

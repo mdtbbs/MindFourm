@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
 import Button from '@/components/ui/button';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 
 type EmailTemplateKey = 'reply' | 'mention' | 'message' | 'system' | 'welcome';
 const SECRET_PLACEHOLDER = '__unchanged__';
@@ -69,21 +71,24 @@ const TEMPLATE_VARIABLE_HINTS: Record<EmailTemplateKey, string[]> = {
 export default function EmailSettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<EmailTemplateKey>('reply');
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
     try {
       const data = await adminApi.getSettings('email');
       setValues(data);
+      initializeUnsaved(data);
+      return data;
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载邮件设置失败');
+      setLoadError(err instanceof Error ? err.message : '加载邮件设置失败');
+      return null;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
@@ -98,17 +103,15 @@ export default function EmailSettingsPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('email', values);
-      setMessage('邮件设置已保存');
-      setTimeout(() => setMessage(null), 3000);
-      await fetchSettings();
+      await adminApi.updateSettings('email', submittedValues);
+      const refreshedValues = await fetchSettings();
+      unsaved.markSaved(refreshedValues ?? submittedValues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存邮件设置失败');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : '保存邮件设置失败');
     }
   };
 
@@ -128,7 +131,7 @@ export default function EmailSettingsPage() {
   }
 
   return (
-    <div className="border border-surface-200 bg-white">
+    <div className={`border border-surface-200 bg-white ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="border-b border-surface-200 px-6 py-4">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">邮件模板</h2>
         <p className="mt-1 text-xs text-surface-400">
@@ -137,8 +140,7 @@ export default function EmailSettingsPage() {
       </div>
 
       <div className="space-y-8 p-6">
-        {message ? <Alert type="success" message={message} /> : null}
-        {error ? <Alert type="error" message={error} /> : null}
+        {loadError ? <Alert type="error" message={loadError} /> : null}
 
         <section className="space-y-4">
           <div>
@@ -354,10 +356,18 @@ export default function EmailSettingsPage() {
         </section>
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-surface-200 px-6 py-4">
-        <Button variant="ghost" onClick={fetchSettings}>重置</Button>
-        <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

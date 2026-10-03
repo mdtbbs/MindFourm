@@ -37,7 +37,7 @@ export default function ContentDrawer({
     document.addEventListener('keydown', closeOnEscape);
     return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', closeOnEscape); };
   }, [open, onClose]);
-  const cta = contentNavigationCta(mode, settings);
+  const cta = contentNavigationCta(mode, settings, t);
   const displayLogoUrl = sidebarLogoUrl || logoUrl;
   return <AnimatePresence>{open && <motion.div data-testid="mobile-drawer" className="fixed inset-0 z-[60] lg:hidden" role="dialog" aria-modal="true" aria-label={t('navigation.siteNavigation')} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduceMotion ? 0 : motionTokens.normal, ease: motionTokens.easing }}>
     <motion.button type="button" aria-label={t('common.close')} className="absolute inset-0 bg-black/40" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: reduceMotion ? 0 : motionTokens.normal }} />

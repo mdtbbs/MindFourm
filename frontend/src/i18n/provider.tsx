@@ -7,6 +7,7 @@ import { localeNames, translate, type Locale } from './index';
 import { siteProfile } from '@/config/site-profile';
 import { userApi } from '@/lib/api/client';
 import { useUserStore } from '@/store/user-store';
+import { CONTENT_LANGUAGE_CODES } from '@/lib/content-language';
 
 type LocaleContextValue = { locale: Locale; t: (key: string, values?: Record<string, string | number>) => string; setLocale: (locale: Locale) => void };
 const LocaleContext = createContext<LocaleContextValue | null>(null);
@@ -19,7 +20,8 @@ export function I18nProvider({ children, initialLocale }: { children: React.Reac
   const isAuthLoading = useUserStore((state) => state.isLoading);
   const setLocale = useCallback((next: Locale) => {
     const isAdmin = window.location.pathname.startsWith('/admin');
-    if (!(isAdmin ? ['en', 'zh-CN'] : siteProfile.localization.supportedLocales).includes(next)) return;
+    const validCatalogLocale = CONTENT_LANGUAGE_CODES.includes(next as (typeof CONTENT_LANGUAGE_CODES)[number]);
+    if (!(validCatalogLocale && (isAdmin ? ['en', 'zh-CN'] : true))) return;
     setCurrentLocale(next);
     const secure = window.location.protocol === 'https:' ? '; Secure' : '';
     document.cookie = `${isAdmin ? 'forum_admin_locale' : 'forum_locale'}=${encodeURIComponent(next)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
@@ -41,11 +43,12 @@ export function I18nProvider({ children, initialLocale }: { children: React.Reac
     if (explicit) {
       if (isAuthLoading) return;
       const requested = decodeURIComponent(explicit) as Locale;
-      if (siteProfile.localization.supportedLocales.includes(requested)) setLocale(requested);
+      if (CONTENT_LANGUAGE_CODES.includes(requested as (typeof CONTENT_LANGUAGE_CODES)[number])) setLocale(requested);
       document.cookie = 'forum_locale_explicit=; Path=/; Max-Age=0; SameSite=Lax';
       return;
     }
-    if (preferred && siteProfile.localization.supportedLocales.includes(preferred as Locale)) {
+    const allowHiddenLocale = saved === 'zh-CN' || user?.preferred_locale === 'zh-CN';
+    if (preferred && (siteProfile.localization.supportedLocales.includes(preferred as Locale) || (allowHiddenLocale && preferred === 'zh-CN'))) {
       const preferredLocale = preferred as Locale;
       if (locale !== preferredLocale) setCurrentLocale(preferredLocale);
       document.documentElement.lang = preferredLocale;
@@ -53,7 +56,7 @@ export function I18nProvider({ children, initialLocale }: { children: React.Reac
       document.cookie = `${cookieName}=${encodeURIComponent(preferredLocale)}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
       return;
     }
-    if (saved) return;
+    if (saved && (siteProfile.localization.supportedLocales.includes(decodeURIComponent(saved) as Locale) || saved === 'zh-CN')) return;
   }, [isAuthLoading, locale, pathname, setLocale, user]);
   const value = useMemo(() => ({ locale, t: (key: string, values?: Record<string, string | number>) => translate(locale, key, values), setLocale }), [locale, setLocale]);
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;

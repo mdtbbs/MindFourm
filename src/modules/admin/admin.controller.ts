@@ -1,6 +1,7 @@
 import {
   Body,
   BadRequestException,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -13,6 +14,7 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  NotFoundException,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { StatsService } from '../stats/stats.service';
@@ -39,6 +41,7 @@ import { RateLimitTelemetryService } from '../../common/rate-limit/rate-limit-te
 import { PerformanceTelemetryService } from '../../common/performance/performance-telemetry.service';
 import { CreateCategoryDto } from '../categories/dto/create-category.dto';
 import { UpdateCategoryDto } from '../categories/dto/update-category.dto';
+import { createSettingsAuditDetails, getSettingsRollbackValues } from '@common/utils/settings-audit.util';
 
 /** Safely parse a query param to int, falling back to a default when the
  *  global ValidationPipe turns a missing param into `undefined`/NaN. */
@@ -84,8 +87,10 @@ export class AdminController {
    */
   @Get('stats')
   @Roles('moderator', 'admin')
-  async getStats() {
-    return this.adminService.getStats();
+  async getStats(@Query('range_days') rangeDays?: string) {
+    const requested = toInt(rangeDays, 7);
+    const range = ([1, 7, 30, 90].includes(requested) ? requested : 7) as 1 | 7 | 30 | 90;
+    return this.adminService.getStats(range);
   }
 
   /**
@@ -120,12 +125,17 @@ export class AdminController {
    */
   @Put('settings/brand')
   @Roles('admin')
-  async updateBrandSettings(@Body() dto: UpdateBrandSettingsDto) {
+  async updateBrandSettings(@Body() dto: UpdateBrandSettingsDto, @Req() req: any) {
     const touchesPublicSettings = this.settingsService.hasPublicKeys(Object.keys(dto));
+    const before = await this.settingsService.getByCategoryForAdmin('brand');
     await this.settingsService.setBatch('brand', dto as Record<string, string>);
     if (touchesPublicSettings) {
       await this.settingsRevalidationService.revalidatePublicSettings();
     }
+    const after = await this.settingsService.getByCategoryForAdmin('brand');
+    const applied = Object.fromEntries(Object.keys(dto).map((key) => [key, after[key] ?? String(dto[key] ?? '')]));
+    await this.logOperation(req, 'settings.update', 'setting', undefined,
+      createSettingsAuditDetails('brand', before, applied, req.requestId));
     return { message: 'Settings updated' };
   }
 
@@ -137,13 +147,52 @@ export class AdminController {
   async updateSettings(
     @Param('category') category: string,
     @Body() settings: Record<string, string>,
+    @Req() req: any,
   ) {
     const touchesPublicSettings = this.settingsService.hasPublicKeys(Object.keys(settings));
+    const before = await this.settingsService.getByCategoryForAdmin(category);
     await this.settingsService.setBatch(category, settings);
     if (touchesPublicSettings) {
       await this.settingsRevalidationService.revalidatePublicSettings();
     }
+    const after = await this.settingsService.getByCategoryForAdmin(category);
+    const applied = Object.fromEntries(Object.keys(settings).map((key) => [key, after[key] ?? String(settings[key] ?? '')]));
+    await this.logOperation(req, 'settings.update', 'setting', undefined,
+      createSettingsAuditDetails(category, before, applied, req.requestId));
     return { message: 'Settings updated' };
+  }
+
+  @Post('settings/:category/rollback/:auditId')
+  @Roles('admin')
+  async rollbackSettings(
+    @Param('category') category: string,
+    @Param('auditId', ParseIntPipe) auditId: number,
+    @Req() req: any,
+  ) {
+    const audit = await this.logsService.getLogById(auditId);
+    if (!audit || audit.action !== 'settings.update' || audit.target_type !== 'setting') {
+      throw new NotFoundException('Settings audit record not found');
+    }
+    const current = await this.settingsService.getByCategoryForAdmin(category);
+    const rollbackValues = getSettingsRollbackValues(audit.details, category, current);
+    if (!rollbackValues) {
+      throw new ConflictException('Settings changed since this audit or the snapshot is not safe to roll back');
+    }
+
+    const restoredSuccessfully = await this.settingsService.setBatchIfUnchanged(category, current, rollbackValues);
+    if (!restoredSuccessfully) {
+      throw new ConflictException('Settings changed since this audit or the snapshot is not safe to roll back');
+    }
+    if (this.settingsService.hasPublicKeys(Object.keys(rollbackValues))) {
+      await this.settingsRevalidationService.revalidatePublicSettings();
+    }
+    const after = await this.settingsService.getByCategoryForAdmin(category);
+    const restored = Object.fromEntries(Object.keys(rollbackValues).map((key) => [key, after[key] ?? rollbackValues[key]]));
+    await this.logOperation(req, 'settings.rollback', 'setting', undefined, {
+      ...createSettingsAuditDetails(category, current, restored, req.requestId),
+      rolled_back_audit_id: audit.id,
+    });
+    return { message: 'Settings restored', rolled_back_audit_id: audit.id };
   }
 
   /**
@@ -595,6 +644,7 @@ export class AdminController {
     @Query('user_id') user_id?: number,
     @Query('action') action?: string,
     @Query('target_type') target_type?: string,
+    @Query('request_id') request_id?: string,
   ) {
     return this.logsService.getLogs({
       page: toInt(page, 1),
@@ -602,6 +652,7 @@ export class AdminController {
       user_id: toIntOpt(user_id),
       action,
       target_type,
+      request_id: request_id?.trim(),
     });
   }
 

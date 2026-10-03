@@ -39,6 +39,7 @@ function toAuthUser(user: User) {
     email: user.email,
     email_verified: !!user.email_verified,
     preferred_locale: user.preferred_locale || null,
+    preferred_content_language: user.preferred_content_language || null,
     avatar_url: user.avatar_url,
     role: user.role,
     bio: user.bio,

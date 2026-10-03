@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 
-export interface SearchOptions { limit: number; viewer?: { id: number; role: string }; }
+export interface SearchOptions {
+  limit: number;
+  viewer?: { id: number; role: string; preferred_content_language?: string | null };
+  content_language?: string;
+  preferred_content_language?: string | null;
+}
 export interface SearchResultGroup<T = unknown> { items: T[]; }
 export interface SearchProvider {
   readonly key: string;

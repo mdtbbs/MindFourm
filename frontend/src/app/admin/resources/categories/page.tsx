@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,7 +59,7 @@ export default function CategoriesPage() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('确定删除此分类？')) return;
+    if (!await confirmDialog({ message: '确定删除此分类？', destructive: true })) return;
 
     await resourceCategoryApi.delete(id);
     await loadCategories();

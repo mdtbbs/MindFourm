@@ -281,7 +281,7 @@ export default function MindustryResourceWorkbench({ kind }: { kind: Kind }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <Input label={kind === 'map' ? t('resourceWorkbench.mapName') : t('resourceWorkbench.schematicName')} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} required />
               <Input label={t('resourceWorkbench.versionOptional')} value={version} onChange={(event) => setVersion(event.target.value)} placeholder={t('resourceWorkbench.versionUnspecified')} maxLength={50} />
-              <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
+              <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${description}\n${content}`} />
             </div>
             <label className="mt-4 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbench.shortDescription')}</label>
             <textarea value={description} onChange={(event) => setDescription(event.target.value)} maxLength={300} className="mt-1 min-h-24 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text)]" placeholder={t('resourceWorkbench.shortDescriptionPlaceholder')} />

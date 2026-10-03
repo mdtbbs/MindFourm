@@ -24,6 +24,7 @@ export interface PostSummaryDto {
   slug: string | null;
   title: string;
   excerpt: string;
+  content_language: string;
   status: string;
   is_pinned: boolean;
   is_locked: boolean;
@@ -92,6 +93,7 @@ export class PostSummaryService {
       slug: post.slug ?? null,
       title: post.title,
       excerpt: this.buildExcerpt(post.content_text || post.content),
+      content_language: post.content_language || 'unknown',
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
       is_locked: Boolean(post.is_locked),

@@ -31,7 +31,14 @@
     "rejectReasonOptional": "Add a reason for rejecting this discussion (optional).",
     "rejectPlaceholder": "For example: this does not follow the community guidelines…",
     "cancel": "Cancel",
-    "confirmReject": "Confirm rejection"
+    "confirmReject": "Confirm rejection",
+    "resourceHeader": "Resource",
+    "resourceVersion": "Version {version}",
+    "resourceBy": "By {author}",
+    "viewResource": "View resource",
+    "downloadResource": "Download",
+    "resourcePublished": "Published",
+    "resourceApproved": "Approved"
   },
   "replySection": {
     "aria": "Replies",

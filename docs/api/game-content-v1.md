@@ -305,7 +305,7 @@ Content-Type: multipart/form-data
 
 - 单文件
 - 硬上限 20 MiB
-- 可以通过 `GAME_CONTENT_MAP_MAX_BYTES` 配置更小值
+- 实际限制以 `GET /api/v1/game-content/meta` 返回的当前能力为准
 - 最多 8 个 multipart fields
 - 单 field 最大 64 KiB
 - endpoint 限流：`3 / 3600s`

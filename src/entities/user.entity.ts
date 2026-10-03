@@ -39,6 +39,9 @@ export class User {
   @Column({ type: 'varchar', length: 16, nullable: true })
   preferred_locale: string | null;
 
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  preferred_content_language: string | null;
+
   @Column({ length: 50, default: 'user' })
   role: string;
 

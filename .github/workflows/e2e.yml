@@ -1,0 +1,153 @@
+name: Product E2E
+
+on:
+  pull_request:
+    branches: [master]
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Select the Playwright suite
+        type: choice
+        options: [smoke, full]
+        default: smoke
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    name: ${{ (github.event_name == 'schedule' || inputs.suite == 'full') && 'Full nightly browser suite' || 'PR browser smoke' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: mindfourm_ci
+          MYSQL_DATABASE: mindfourm_ci
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -hmysql -pmindfourm_ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      NODE_ENV: test
+      ENABLE_TEST_AUTH: 'true'
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: '3306'
+      MYSQL_USER: root
+      MYSQL_PASSWORD: mindfourm_ci
+      MYSQL_DATABASE: mindfourm_ci
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+      REDIS_DB: '1'
+      PORT: '4000'
+      API_URL: http://127.0.0.1:4000
+      FRONTEND_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+      NEXT_PUBLIC_MINDAUTH_URL: http://127.0.0.1:4001
+      FORUM_INTERNAL_API_KEY: e2e-internal-key
+      MOBILE_AUTH_JWT_SECRET: e2e-mobile-jwt-secret
+      MOBILE_AUTH_REFRESH_HMAC_SECRET: e2e-mobile-refresh-secret
+      CLOUD_SAVES_STORAGE_PATH: ${{ runner.temp }}/mindfourm-cloud-saves
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build backend
+        run: npm run build:backend
+
+      - name: Apply schema migrations to isolated MySQL
+        run: npm run migration:run
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start API and web app
+        shell: bash
+        run: |
+          mkdir -p "$CLOUD_SAVES_STORAGE_PATH"
+          nohup npm run start:prod > "$RUNNER_TEMP/mindfourm-api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/mindfourm-api.pid"
+          (
+            cd frontend
+            HOSTNAME=127.0.0.1 PORT=3000 nohup npm run start > "$RUNNER_TEMP/mindfourm-web.log" 2>&1 &
+            echo $! > "$RUNNER_TEMP/mindfourm-web.pid"
+          )
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:4000/api/health >/dev/null \
+              && curl --silent --fail http://127.0.0.1:3000/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/mindfourm-api.log"
+          cat "$RUNNER_TEMP/mindfourm-web.log"
+          exit 1
+
+      - name: Run PR browser smoke
+        if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'smoke')
+        run: >-
+          npm run test:e2e -- --project=chromium
+          tests/e2e/auth.spec.ts
+          tests/e2e/post.spec.ts
+          tests/e2e/rich-content.spec.ts
+          tests/e2e/resource.spec.ts
+          tests/e2e/admin.spec.ts
+          tests/e2e/product-smoke.spec.ts
+
+      - name: Run full nightly browser suite
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
+        run: npm run test:e2e -- --project=chromium --grep-invert 'MFL Integration'
+
+      - name: Upload Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            playwright-report/
+            test-results/
+            ${{ runner.temp }}/mindfourm-api.log
+            ${{ runner.temp }}/mindfourm-web.log
+          if-no-files-found: ignore
+          retention-days: 7

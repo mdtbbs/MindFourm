@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { adminApi } from '@/lib/api/client';
 import type { AdminLog } from '@/types';
+import { confirmDialog } from '@/store/interaction-dialog-store';
+import { getSettingsRollbackAudit } from '@/lib/admin/settings-audit';
 import Badge from '@/components/ui/badge';
 import Pagination from '@/components/ui/pagination';
+import Button from '@/components/ui/button';
 
 type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'danger';
 
@@ -16,8 +19,12 @@ export default function AdminLogsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [rollbackLoadingId, setRollbackLoadingId] = useState<number | null>(null);
+  const [rollbackMessage, setRollbackMessage] = useState<string | null>(null);
+  const [refreshCount, setRefreshCount] = useState(0);
 
   const page = Number(searchParams?.get('page')) || 1;
+  const requestId = searchParams?.get('request_id')?.trim() || undefined;
 
   useEffect(() => {
     let cancelled = false;
@@ -26,7 +33,7 @@ export default function AdminLogsPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await adminApi.getLogs({ page, limit: 20 });
+        const res = await adminApi.getLogs({ page, limit: 20, request_id: requestId });
         if (!cancelled) {
           setLogs(res.data);
           setTotalPages(res.pagination.totalPages);
@@ -45,7 +52,32 @@ export default function AdminLogsPage() {
     return () => {
       cancelled = true;
     };
-  }, [page]);
+  }, [page, requestId, refreshCount]);
+
+  const rollbackSettings = async (log: AdminLog) => {
+    const audit = getSettingsRollbackAudit(log.action, log.details);
+    if (!audit || rollbackLoadingId !== null) return;
+    const confirmed = await confirmDialog({
+      title: '回滚这次设置更改？',
+      message: `将恢复“${audit.category}”分类在操作日志 #${log.id} 修改前的值。若设置已再次更改，服务器会拒绝回滚。`,
+      confirmLabel: '回滚设置',
+      cancelLabel: '取消',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    setRollbackLoadingId(log.id);
+    setRollbackMessage(null);
+    try {
+      await adminApi.rollbackSettings(audit.category, log.id);
+      setRollbackMessage(`已回滚操作日志 #${log.id} 的设置。`);
+      setRefreshCount((count) => count + 1);
+    } catch (cause) {
+      setRollbackMessage(cause instanceof Error ? cause.message : '设置回滚失败');
+    } finally {
+      setRollbackLoadingId(null);
+    }
+  };
 
   const formatTime = (iso: string) => {
     return new Date(iso).toLocaleString('zh-CN', {
@@ -71,6 +103,8 @@ export default function AdminLogsPage() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-surface-900">操作日志</h2>
         <p className="text-sm text-surface-500 mt-1">查看系统管理员操作记录</p>
+        {requestId ? <p className="mt-2 text-xs text-surface-500">request_id: <code>{requestId}</code></p> : null}
+        {rollbackMessage ? <p className="mt-2 text-sm text-surface-700" role="status">{rollbackMessage}</p> : null}
       </div>
 
       {loading && (
@@ -116,13 +150,16 @@ export default function AdminLogsPage() {
                     <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
                       时间
                     </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
+                      设置
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-surface-200">
                   {logs.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={8}
+                        colSpan={9}
                         className="px-4 py-12 text-center text-sm text-surface-500"
                       >
                         暂无日志记录
@@ -160,6 +197,19 @@ export default function AdminLogsPage() {
                         <td className="px-4 py-3 text-sm text-surface-600 whitespace-nowrap">
                           {formatTime(log.created_at)}
                         </td>
+                        <td className="px-4 py-3 text-sm whitespace-nowrap">
+                          {getSettingsRollbackAudit(log.action, log.details) ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={rollbackLoadingId !== null}
+                              onClick={() => void rollbackSettings(log)}
+                            >
+                              {rollbackLoadingId === log.id ? '回滚中…' : '回滚'}
+                            </Button>
+                          ) : null}
+                        </td>
                       </tr>
                     ))
                   )}
@@ -174,6 +224,7 @@ export default function AdminLogsPage() {
                 currentPage={page}
                 totalPages={totalPages}
                 basePath={pathname ?? '/admin/logs'}
+                queryParams={requestId ? { request_id: requestId } : undefined}
               />
             </div>
           )}

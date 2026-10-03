@@ -7,6 +7,7 @@ import {
   Param,
   Body,
   Query,
+  Req,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { ResourceCommentsService } from './resource-comments.service';
 import { CreateResourceCommentDto } from './dto/create-resource-comment.dto';
 import { UpdateResourceCommentDto } from './dto/update-resource-comment.dto';
 import { Public } from '@common/decorators/public.decorator';
+import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
 
 @Controller()
 export class ResourceCommentsController {
@@ -41,7 +43,10 @@ export class ResourceCommentsController {
     @Body() dto: CreateResourceCommentDto,
     @Request() req,
   ) {
-    return this.service.create(parseInt(resourceId), req.user.id, dto);
+    return this.service.create(parseInt(resourceId), req.user.id, dto, {
+      ipAddress: getClientIp(req),
+      locationLabel: getClientRegion(req),
+    });
   }
 
   @Put('resource-comments/:id')
@@ -51,7 +56,7 @@ export class ResourceCommentsController {
     @Body() dto: UpdateResourceCommentDto,
     @Request() req,
   ) {
-    return this.service.update(parseInt(id), req.user.id, dto);
+    return this.service.update(parseInt(id), req.user.id, dto, req.user.role);
   }
 
   @Delete('resource-comments/:id')
@@ -66,15 +71,15 @@ export class ResourceCommentsController {
 
   @Post('resource-comments/:id/like')
   @UseGuards(JwtAuthGuard)
-  async likeComment(@Param('id') id: string) {
-    await this.service.incrementLike(parseInt(id));
+  async likeComment(@Param('id') id: string, @Req() req: any) {
+    await this.service.incrementLike(parseInt(id), req.user.id);
     return { success: true };
   }
 
   @Delete('resource-comments/:id/like')
   @UseGuards(JwtAuthGuard)
-  async unlikeComment(@Param('id') id: string) {
-    await this.service.decrementLike(parseInt(id));
+  async unlikeComment(@Param('id') id: string, @Req() req: any) {
+    await this.service.decrementLike(parseInt(id), req.user.id);
     return { success: true };
   }
 }

@@ -4,6 +4,7 @@ import type { Resource } from '@/types';
 import { resourceApi } from '@/lib/api/client';
 import { resourceCardFacts, resourceFileSummary } from '@/lib/resources/presentation';
 import { useI18n } from '@/i18n/provider';
+import PackManifestPanel from './resources/detail/pack-manifest-panel';
 
 type ContentEntry = { name: string; icon: string | null };
 type ProductionEntry = { id: string; name?: string; rate?: number; produced?: number; consumed?: number; net?: number; estimated?: boolean };
@@ -49,7 +50,7 @@ function FactGrid({ resource, t }: { resource: Resource; t: (key: string) => str
   return <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">{facts.map((fact) => <div key={fact.label}><dt className="text-xs text-[var(--text-muted)]">{t(`resourceKindDetails.fact.${factKeys[fact.label] || 'resourceVersion'}`)}</dt><dd className="mt-1 break-words font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>;
 }
 
-export default function ResourceKindDetails({ resource }: { resource: Resource }) {
+export default function ResourceKindDetails({ resource, selectedVersionPublicId }: { resource: Resource; selectedVersionPublicId?: string }) {
   const { t, locale } = useI18n();
   const kind = resource.resource_kind || 'other';
   const metadata = (resource.renderer_metadata || {}) as Record<string, unknown>;
@@ -111,6 +112,7 @@ export default function ResourceKindDetails({ resource }: { resource: Resource }
     return item.channel || t('resourceKindDetails.unrestricted');
   };
 
+  if (kind === 'pack') return <PackManifestPanel resource={resource} selectedVersionPublicId={selectedVersionPublicId} />;
   if (!['map', 'schematic', 'mod', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'save'].includes(kind)) return null;
   const mediumLabel = t('resourceKindDetails.confidenceMedium');
   const lowLabel = t('resourceKindDetails.confidenceLow');

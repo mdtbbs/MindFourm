@@ -1,6 +1,6 @@
 {
   "name": "mindforum",
-  "version": "2.5.2",
+  "version": "2.6.0",
   "description": "Forum with MindAuth integration - NestJS + TypeScript + TypeORM",
   "main": "dist/main.js",
   "scripts": {
@@ -9,6 +9,8 @@
     "build": "npm run build:backend && npm run build:frontend",
     "build:production": "npm run build && npm run build:renderer",
     "build:renderer": "bash tools/mindustry-renderer/build-renderer.sh",
+    "lint": "npm --prefix frontend run lint",
+    "typecheck:frontend": "npm --prefix frontend run typecheck",
     "openapi:export": "npm run build:backend && node scripts/export-openapi.js",
     "openapi:check": "node scripts/check-openapi.cjs",
     "readiness:production": "node scripts/production-readiness.cjs",

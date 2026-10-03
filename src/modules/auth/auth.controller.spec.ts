@@ -101,6 +101,7 @@ describe('AuthController', () => {
         email: 'test@example.com',
         email_verified: false,
         preferred_locale: null,
+        preferred_content_language: null,
         avatar_url: '/avatar.png',
         role: 'user',
         bio: 'hello',

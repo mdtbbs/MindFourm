@@ -302,7 +302,7 @@ export default function PostForm() {
             {availableTagNames && <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={availableTagNames}>{t('postForm.tagsAvailable', { tags: availableTagNames })}</p>}
           </div>
 
-          <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
+          <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${content}`} />
 
           {/* Status */}
           <div>

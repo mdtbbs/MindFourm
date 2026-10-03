@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useState, useEffect } from 'react';
 import { adminApi } from '@/lib/api/client';
 import type { Category } from '@/types';
@@ -35,7 +37,7 @@ export default function CategoriesPage() {
   }, []);
 
   const handleDelete = async (id: number, name: string) => {
-    if (!confirm(`确定要删除分类「${name}」吗？此操作不可撤销。`)) return;
+    if (!await confirmDialog({ message: `确定要删除分类「${name}」吗？此操作不可撤销。`, destructive: true })) return;
 
     try {
       await adminApi.deleteCategory(id);

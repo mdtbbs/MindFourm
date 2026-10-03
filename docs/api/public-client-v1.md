@@ -43,9 +43,9 @@ Scope 是按操作类型划分的权限类别，不会为每条 API 路径单独
 
 scope 表示客户端被允许请求某一类操作，不替代 Forum 的用户权限、手机号验证、社区条款、站点开关、封禁、内容审核、资源策略或私信开关。失败时读取 HTTP 状态和稳定 `error.code`；不要匹配中文消息。
 
-论坛 API Reference 里的业务分组不一定对应 OAuth scope：蓝图/地图等 Game Content 读取使用 `resource.read`，上传使用 `resource.upload`；公开 GET 可以匿名访问，携带 OAuth Bearer 时才按该接口声明的 scope 校验。Relay Agent 内部接口通过 HTTPS 和独立机器凭证认证；External API 使用独立 API Key，不通过 Public Client scope 申请。
+论坛 API Reference 里的业务分组不一定对应 OAuth scope：蓝图/地图等 Game Content 读取使用 `resource.read`，上传使用 `resource.upload`；公开 GET 可以匿名访问，携带 OAuth Bearer 时才按该接口声明的 scope 校验。服务端机器人集成如使用独立 API Key，应只在可信服务端保存，不能作为 Public Client 凭证。
 
-论坛通过 MindAuth 验证不透明的 Bearer 令牌，并从 UserInfo 获取用户资料；验证结果和必要的身份信息会在 Redis 中缓存 30 秒。缓存键由 access token 的 SHA-256 摘要生成。MindAuth 撤销令牌或停用应用后，论坛 API 最迟会在 30 秒内停止接受已缓存的身份。V1 请求缺少 scope 时返回统一错误结构：`error.code` 为 `INSUFFICIENT_SCOPE`，`error.details` 中包含 `{ "requiredScopes": ["resource.upload"] }`。
+Forum 会验证 MindAuth Bearer，并按 token 实际授予的 scope 校验 V1 操作。令牌失效或撤销后，客户端应停止使用该 token。缺少 scope 时读取稳定的 `error.code`；例如 `INSUFFICIENT_SCOPE` 会说明操作所需的 scope。
 
 ## 服务能力发现（Capabilities）
 
@@ -219,20 +219,11 @@ connection.disconnect()
 
 ## 兼容与迁移
 
-- `/api/v1/auth/mobile/exchange`、`/refresh` 与 Forum mobile JWT 继续服务已有 Android 客户端；新客户端使用 MindAuth Public Client PKCE。旧接口目前仍受支持，没有因本次升级被删除。
-- `forum_session` 与 mobile legacy 凭证由 Forum 服务端赋予第一方兼容 capability；MindAuth OAuth Bearer 则只按实际 introspection 返回的 scope 授权。
+- 新的第三方客户端必须使用自己的 MindAuth Public Client 和 Authorization Code + PKCE，不依赖第一方兼容登录能力或预授予权限。
+- MindAuth OAuth Bearer 只按实际 introspection 返回的 scope 授权。
 - `openapi-v1.json` 中受 OAuth 保护的操作声明 `MindAuthBearer` 安全方案与 `x-required-scopes`；匿名读取操作用匿名或 Bearer 两种安全方案表达，并以 `x-oauth-scopes-if-bearer` 说明携带 token 时的 scope 校验。
 - `GET /api/v1/threads/{id}` 的内嵌 replies 保留；新客户端可以使用独立分页 endpoint。
 - `content` Markdown 和已发布的 capability 扁平别名保留；JSON 富文本与嵌套 capabilities 为新增字段。
 - OpenAPI 只包含 `/api/v1/*` 稳定契约；以 `/api/openapi/v1.json` 为机器可读来源。
 
-### 官方 Android
-
-Android Public Client 使用精确 Redirect URI `mdtbbs://oauth/callback`。MindAuth migration `013_seed_official_android_public_client.sql` 会创建已批准的官方 first-party Public Client `mdtbbs_android_public` 并登记 Android 默认请求的 scopes。新版本 Android 默认使用该 ID；应用前先部署 MindAuth migrations。需要切换到其他已批准客户端时，只配置公开 `client_id`：
-
-```properties
-mdtbbsOauthClientId=<approved-public-client-id>
-mdtbbsMindAuthBaseUrl=https://auth.mdtbbs.cn/
-```
-
-`mdtbbsOauthAuthorizationEndpoint`、`mdtbbsOauthScopes` 和 `mdtbbsMindAuthRegistrationUrl` 可按部署覆盖。不要定义或打包任何 `client_secret`。当构建没有 Public Client ID 时，Android 暂时保留已有 Native Auth + Forum mobile token 登录；已保存的未加版本前缀 refresh token 继续走 Forum legacy refresh，新 OAuth refresh token 加密保存并固定走 MindAuth rotation。
+第一方官方客户端可以维护自己的客户端配置与迁移策略；第三方应用应在 MindAuth 开发者中心注册独立 Public Client、登记自己的 Redirect URI，并只使用自己实际获批的 scopes。

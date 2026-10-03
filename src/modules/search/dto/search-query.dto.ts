@@ -31,4 +31,8 @@ export class SearchQueryDto {
   @Max(100)
   @Type(() => Number)
   limit?: number;
+
+  @IsOptional()
+  @IsIn(['en', 'ru', 'ja', 'zh-CN'])
+  content_language?: string;
 }

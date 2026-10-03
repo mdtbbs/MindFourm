@@ -1,6 +1,22 @@
 import { buildContentNavigation, contentNavigationCta } from './content-navigation';
+import { siteProfile, type FrontendSiteProfile } from '@/config/site-profile';
 
 const base = { settings: {}, isAuthenticated: false, forumCategories: [], resourceCategories: [] };
+const clubProfile: FrontendSiteProfile = {
+  ...siteProfile,
+  profile: 'mindustry-club',
+  branding: { ...siteProfile.branding, shortName: 'Mindustry Club' },
+  features: { ...siteProfile.features, resources: true, developers: true, serversDirectory: true, lanlink: false },
+  navigation: [
+    { key: 'home', href: '/', label: 'Home' },
+    { key: 'posts', href: '/threads', label: 'Discussions' },
+    { key: 'resources', href: '/resources', label: 'Resources', feature: 'resources' },
+    { key: 'discover', href: '/discover', label: 'Discover' },
+    { key: 'developers', href: '/developers', label: 'Developers', feature: 'developers' },
+    { key: 'servers', href: '/servers', label: 'Servers', feature: 'serversDirectory' },
+    { key: 'wiki', href: '/wiki', label: 'Knowledge base' },
+  ],
+};
 
 test('desktop and drawer receive a stable global section with domain-specific context', () => {
   const forum = buildContentNavigation({ ...base, mode: 'forum' });
@@ -37,4 +53,24 @@ test('global navigation honors admin configuration', () => {
     settings: { sidebar_navigation_items: JSON.stringify([{ id: 'home', label: '社区首页', href: '/', icon: 'Home', enabled: true, requiresAuth: false }]) },
   });
   expect(configured[0].items[0]?.label).toBe('社区首页');
+});
+
+test('Mindustry Club navigation follows its profile and omits unavailable legacy links', () => {
+  const club = buildContentNavigation({
+    ...base,
+    mode: 'forum',
+    profile: clubProfile,
+    translate: (key) => key,
+  });
+  const global = club[0].items;
+  expect(global.map((item) => item.href)).toEqual(['/', '/threads', '/resources', '/discover', '/developers', '/servers', '/search']);
+  expect(global.map((item) => item.label)).toContain('navigation.developers');
+  expect(global.some((item) => item.href === '/wiki' || item.href === '/lanlink')).toBe(false);
+  expect(club.find((section) => section.id === 'context')?.items[0]?.label).toBe('navigation.allDiscussions');
+});
+
+test('Mindustry Club publishing shortcuts use the selected locale', () => {
+  const translate = (key: string) => key;
+  expect(contentNavigationCta('forum', {}, translate, clubProfile)).toMatchObject({ label: 'navigation.publishDiscussion', href: '/posts/new' });
+  expect(contentNavigationCta('resources', {}, translate, clubProfile)).toMatchObject({ label: 'navigation.publishResource', href: '/resources/submit' });
 });

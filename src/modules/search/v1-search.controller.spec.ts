@@ -65,12 +65,12 @@ describe('SearchV1Controller', () => {
 
   it('forwards the authenticated actor to unified V2 search', async () => {
     search.searchUnified.mockResolvedValue({ groups: { users: [] }, total_by_type: { users: 0 } });
-    const viewer = { id: 92, role: 'user' };
+    const viewer = { id: 92, role: 'user', preferred_content_language: 'ru' };
 
-    await expect(controller.unified({ q: 'uid:92', limit: 8 } as any, { user: viewer })).resolves.toEqual({
+    await expect(controller.unified({ q: 'uid:92', limit: 8, content_language: 'ja' } as any, { user: viewer })).resolves.toEqual({
       groups: { users: [] }, total_by_type: { users: 0 },
     });
-    expect(search.searchUnified).toHaveBeenCalledWith('uid:92', viewer, 8);
+    expect(search.searchUnified).toHaveBeenCalledWith('uid:92', viewer, 8, 'ja');
     expect(search.withSearchAudit).toHaveBeenCalledWith(viewer, 'uid:92', expect.any(Function));
   });
 });

@@ -6,7 +6,7 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
-import { createV1OpenApiDocument } from '../src/openapi/v1-openapi';
+import { createInternalV1OpenApiDocument, createV1OpenApiDocument } from '../src/openapi/v1-openapi';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -17,17 +17,25 @@ async function exportOpenApi() {
     bodyParser: false,
   });
 
-  // 生成 V1 OpenAPI 文档
-  const document = createV1OpenApiDocument(app);
+  const publicDocument = createV1OpenApiDocument(app);
+  const internalDocument = createInternalV1OpenApiDocument(app);
+  const publicOutputPath = path.join(__dirname, '..', 'openapi-public-v1.json');
+  const internalOutputPath = path.join(__dirname, '..', 'openapi-internal-v1.json');
+  const legacyOutputPath = path.join(__dirname, '..', 'openapi-v1.json');
 
-  // 输出路径
-  const outputPath = path.join(__dirname, '..', 'openapi-v1.json');
-  fs.writeFileSync(outputPath, JSON.stringify(document, null, 2));
+  fs.writeFileSync(publicOutputPath, JSON.stringify(publicDocument, null, 2));
+  fs.writeFileSync(internalOutputPath, JSON.stringify(internalDocument, null, 2));
+  fs.writeFileSync(legacyOutputPath, JSON.stringify(publicDocument, null, 2));
 
-  console.log(`✅ OpenAPI V1 文档已导出到: ${outputPath}`);
-  console.log(`📊 路径数量: ${Object.keys(document.paths).length}`);
-  console.log(`📦 Schema 数量: ${Object.keys(document.components?.schemas || {}).length}`);
-  console.log(`📏 文件大小: ${(fs.statSync(outputPath).size / 1024).toFixed(1)} KB`);
+  for (const [label, outputPath, document] of [
+    ['Public V1', publicOutputPath, publicDocument],
+    ['Internal V1', internalOutputPath, internalDocument],
+  ]) {
+    console.log(`✅ ${label} OpenAPI 文档已导出到: ${outputPath}`);
+    console.log(`📊 路径数量: ${Object.keys(document.paths).length}`);
+    console.log(`📦 Schema 数量: ${Object.keys(document.components?.schemas || {}).length}`);
+    console.log(`📏 文件大小: ${(fs.statSync(outputPath).size / 1024).toFixed(1)} KB`);
+  }
 
   await app.close();
 }

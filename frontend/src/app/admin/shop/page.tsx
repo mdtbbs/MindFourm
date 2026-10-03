@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
@@ -66,7 +68,7 @@ export default function AdminShopPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('确定要删除此商品吗？')) return;
+    if (!await confirmDialog({ message: '确定要删除此商品吗？', destructive: true })) return;
     try {
       await api.delete(`/api/shop/admin/items/${id}`);
       setMessage('商品已删除');

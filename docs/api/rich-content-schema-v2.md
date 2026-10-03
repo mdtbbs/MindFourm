@@ -32,4 +32,4 @@
 
 视频来源由部署使用的站点配置决定。MDTBBS 支持 Bilibili、抖音和 HTTPS MP4/WebM；Mindustry Club 支持 YouTube、Bilibili 和 HTTPS MP4/WebM。第三方播放器只会在读者主动打开视频卡片后加载。
 
-数据库迁移会新增 `content_schema_version`、分批转换旧 Markdown、创建自定义表情数据表，并增加附件草稿生命周期所需的字段和索引。迁移会保留有效 JSON，也不会改写原 Markdown。部署启用 V2 写入前，先应用该迁移。
+启用 V2 写入后，旧 Markdown 内容仍可读取；新客户端应按本页 schema 提交结构化 JSON。具体服务端上线安排不属于客户端 API 契约。

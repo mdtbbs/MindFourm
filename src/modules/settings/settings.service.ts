@@ -824,27 +824,7 @@ export class SettingsService implements OnModuleInit {
    * Batch update settings (upsert)
    */
   async setBatch(category: string, keyValuePairs: Record<string, string>): Promise<void> {
-    const normalizedPairs = new Map<string, string>();
-
-    for (const [key, value] of Object.entries(keyValuePairs)) {
-      if (value === SECRET_PLACEHOLDER) {
-        continue;
-      }
-
-      let normalizedValue = value;
-      if (key === 'brand_primary' || key === 'brand_accent' || key === 'latest_posts_accent_color') {
-        assertValidColorSetting(key, value);
-        normalizedValue = value.trim();
-      }
-      if (key === 'top_navigation_items') {
-        normalizedValue = serializeTopNavigationItems(parseTopNavigationItems(value));
-      }
-      if (key === 'footer_friendly_links') {
-        normalizedValue = normalizeFooterFriendlyLinks(value);
-      }
-
-      normalizedPairs.set(key, normalizedValue);
-    }
+    const normalizedPairs = this.normalizeBatch(keyValuePairs);
 
     if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
 
@@ -858,6 +838,71 @@ export class SettingsService implements OnModuleInit {
     // Reload cache after update
     await this.loadSettings();
     await this.invalidateNavigationIfNeeded(normalizedPairs.keys());
+  }
+
+  /** Atomically restore a setting snapshot only while every audited value is unchanged. */
+  async setBatchIfUnchanged(
+    category: string,
+    expectedCurrent: Record<string, string>,
+    replacementValues: Record<string, string>,
+  ): Promise<boolean> {
+    const keys = Object.keys(expectedCurrent).sort();
+    if (!keys.length || keys.length !== Object.keys(replacementValues).length
+      || keys.some((key) => !Object.prototype.hasOwnProperty.call(replacementValues, key))) {
+      return false;
+    }
+
+    const normalizedPairs = this.normalizeBatch(replacementValues);
+    if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
+
+    const updated = await this.settingRepository.manager.transaction(async (manager) => {
+      const placeholders = keys.map(() => '?').join(', ');
+      const rows: Array<{ key: string; value: string; category: string }> = await manager.query(
+        `SELECT \`key\`, \`value\`, category FROM settings WHERE \`key\` IN (${placeholders}) ORDER BY \`key\` FOR UPDATE`,
+        keys,
+      );
+      const rowsByKey = new Map(rows.map((row) => [row.key, row]));
+      if (rows.length !== keys.length || keys.some((key) => {
+        const row = rowsByKey.get(key);
+        return !row || row.category !== category || row.value !== expectedCurrent[key];
+      })) {
+        return false;
+      }
+
+      for (const key of keys) {
+        await manager.query(
+          'UPDATE settings SET `value` = ?, updated_at = NOW() WHERE `key` = ? AND category = ?',
+          [normalizedPairs.get(key), key, category],
+        );
+      }
+      return true;
+    });
+
+    if (!updated) return false;
+    await this.loadSettings();
+    await this.invalidateNavigationIfNeeded(normalizedPairs.keys());
+    return true;
+  }
+
+  private normalizeBatch(keyValuePairs: Record<string, string>): Map<string, string> {
+    const normalizedPairs = new Map<string, string>();
+    for (const [key, value] of Object.entries(keyValuePairs)) {
+      if (value === SECRET_PLACEHOLDER) continue;
+
+      let normalizedValue = value;
+      if (key === 'brand_primary' || key === 'brand_accent' || key === 'latest_posts_accent_color') {
+        assertValidColorSetting(key, value);
+        normalizedValue = value.trim();
+      }
+      if (key === 'top_navigation_items') {
+        normalizedValue = serializeTopNavigationItems(parseTopNavigationItems(value));
+      }
+      if (key === 'footer_friendly_links') {
+        normalizedValue = normalizeFooterFriendlyLinks(value);
+      }
+      normalizedPairs.set(key, normalizedValue);
+    }
+    return normalizedPairs;
   }
 
   private async validateCloudSavesSettings(values: Map<string, string>): Promise<void> {

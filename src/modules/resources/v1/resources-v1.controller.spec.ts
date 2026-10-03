@@ -88,4 +88,36 @@ describe('ResourcesV1Controller', () => {
     await expect(controller.listResources('20', '0', 'mod')).resolves.toMatchObject({ items: [{ public_id: 'resource-2', title: 'Mod' }] });
     expect(adapter.listResourcesV1).toHaveBeenCalledWith({ limit: 20, offset: 0, search: 'mod' });
   });
+
+  it('records V1 file downloads through the shared download grant ledger', async () => {
+    const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
+    const adapter = {
+      getPublicFileByPublicIds: jest.fn().mockResolvedValue({
+        resource: { id: 7 }, version: { id: 12 },
+        file: { id: 30, availability_status: 'available', delivery_mode: 'external', external_url: 'https://cdn.example.org/mod.jar' },
+      }),
+      incrementDownload: jest.fn(),
+    };
+    const downloadGrant = { recordGrant: jest.fn().mockResolvedValue(true) };
+    const controller = new ResourcesV1Controller(capabilities as any, adapter as any, undefined, undefined, downloadGrant as any);
+    const response = { redirect: jest.fn() };
+
+    await controller.downloadFile('resource-public-id', 'version-public-id', 'file-public-id', response as any, {
+      user: { id: 22 },
+      headers: { 'user-agent': 'Example launcher', 'x-client-version': '2.1.0', 'x-platform': 'linux' },
+    });
+
+    expect(downloadGrant.recordGrant).toHaveBeenCalledWith(expect.objectContaining({
+      resourceId: 7,
+      versionId: 12,
+      fileId: 30,
+      userId: 22,
+      clientType: 'public-v1',
+      clientVersion: '2.1.0',
+      platform: 'linux',
+      backend: 'external',
+    }), 'user:22');
+    expect(adapter.incrementDownload).not.toHaveBeenCalled();
+    expect(response.redirect).toHaveBeenCalledWith('https://cdn.example.org/mod.jar');
+  });
 });

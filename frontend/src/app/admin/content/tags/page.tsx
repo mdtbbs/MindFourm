@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api/client';
 import type { Tag } from '@/types';
@@ -36,7 +38,7 @@ export default function TagsPage() {
   };
 
   const handleDelete = async (tag: Tag) => {
-    if (!confirm(`Delete tag "${tag.name}"?`)) return;
+    if (!await confirmDialog({ title: 'Delete tag', message: `Delete tag "${tag.name}"?`, destructive: true })) return;
     try { await adminApi.deleteTag(tag.id); setMessage('Tag deleted'); fetchTags(); }
     catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
   };

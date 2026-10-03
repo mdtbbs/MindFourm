@@ -38,6 +38,10 @@ export class LogsService {
     return this.operationLogRepository.save(log);
   }
 
+  async getLogById(id: number): Promise<OperationLog | null> {
+    return this.operationLogRepository.findOne({ where: { id } });
+  }
+
   /**
    * Get paginated logs with user info
    */
@@ -47,6 +51,7 @@ export class LogsService {
     user_id?: number;
     action?: string;
     target_type?: string;
+    request_id?: string;
   }): Promise<{
     data: OperationLog[];
     total: number;
@@ -54,13 +59,55 @@ export class LogsService {
     limit: number;
     totalPages: number;
   }> {
-    const { page, limit, user_id, action, target_type } = params;
+    const { page, limit, user_id, action, target_type, request_id } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {};
     if (user_id) where.user_id = user_id;
     if (action) where.action = action;
     if (target_type) where.target_type = target_type;
+
+    if (request_id) {
+      const query = this.operationLogRepository
+        .createQueryBuilder('log')
+        .leftJoin('log.user', 'user')
+        .select([
+          'log.id',
+          'log.user_id',
+          'log.action',
+          'log.target_type',
+          'log.target_id',
+          'log.details',
+          'log.ip_address',
+          'log.user_agent',
+          'log.created_at',
+          'user.id',
+          'user.username',
+          'user.email',
+        ])
+        .where(
+          "CASE WHEN JSON_VALID(log.details) THEN JSON_UNQUOTE(JSON_EXTRACT(log.details, '$.request_id')) ELSE NULL END = :requestId",
+          { requestId: request_id },
+        );
+
+      if (user_id) query.andWhere('log.user_id = :userId', { userId: user_id });
+      if (action) query.andWhere('log.action = :action', { action });
+      if (target_type) query.andWhere('log.target_type = :targetType', { targetType: target_type });
+
+      const [data, total] = await query
+        .orderBy('log.created_at', 'DESC')
+        .skip(skip)
+        .take(limit)
+        .getManyAndCount();
+
+      return {
+        data,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      };
+    }
 
     const [data, total] = await this.operationLogRepository.findAndCount({
       where,

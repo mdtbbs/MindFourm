@@ -122,7 +122,7 @@ export default function PostEditForm({ post }: PostEditFormProps) {
       <h1 className="text-2xl font-semibold text-[var(--text)] mb-6">{t('postEdit.title')}</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} />
+        <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${content}`} />
         <div>
           <label htmlFor="post-title" className="block text-sm font-medium text-[var(--text)] mb-2">
             {t('postEdit.titleLabel')}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  Calendar, Download, Package, Tag, User,
+  Calendar, Download, Eye, Package, Tag, User,
 } from 'lucide-react';
 import { Resource } from '@/types';
 import { resourceApi } from '@/lib/api/client';
@@ -17,7 +17,7 @@ import ResourceAside from './resources/detail/resource-aside';
 import { resourceCardFacts, resourceFileExtension } from '@/lib/resources/presentation';
 import { useI18n } from '@/i18n/provider';
 
-interface ResourceDetailProps { resource: Resource; }
+interface ResourceDetailProps { resource: Resource; selectedVersionPublicId?: string; }
 
 const RESOURCE_FACT_KEYS: Record<string, string> = {
   '地图尺寸': 'mapSize', '模式': 'mode', '星球': 'planet', '出生点': 'spawns', '核心': 'cores',
@@ -26,7 +26,7 @@ const RESOURCE_FACT_KEYS: Record<string, string> = {
   '资源版本': 'resourceVersion', '适用版本': 'compatibleVersions',
 };
 
-export default function ResourceDetail({ resource }: ResourceDetailProps) {
+export default function ResourceDetail({ resource, selectedVersionPublicId }: ResourceDetailProps) {
   const { t, locale } = useI18n();
   const { isAuthenticated, user } = useAuth();
   const showSuccess = useToastStore((state) => state.showSuccess);
@@ -43,6 +43,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
   const [copied, setCopied] = useState(false);
   const [schematicCopied, setSchematicCopied] = useState(false);
   const [commentCount, setCommentCount] = useState(resource.comment_count || 0);
+  const [viewCount, setViewCount] = useState(Number(resource.view_count || 0));
   const updateCommentCount = useCallback((count: number) => setCommentCount(count), []);
 
   const metadata = resource.metadata;
@@ -60,12 +61,15 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
     return [...new Set(all)];
   }, [metadata, resource.preview_url]);
   const downloadUrl = resourceApi.download(resource.id);
-  const primaryVersion = resource.versions?.[0];
+  const selectedVersion = selectedVersionPublicId
+    ? resource.versions?.find((version) => version.public_id === selectedVersionPublicId)
+    : undefined;
+  const primaryVersion = selectedVersion || resource.versions?.[0];
   const primaryChecksum = primaryVersion?.checksum || resource.content_hash;
   const displayedSupportedVersions = metadata?.supported_versions || [];
   const displayedCompatibility = metadata?.compatibility || [];
   const quickFacts = resourceCardFacts(resource).slice(0, 4);
-  const resourceKind = resource.resource_kind && ['map', 'schematic', 'mod', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'save'].includes(resource.resource_kind)
+  const resourceKind = resource.resource_kind && ['map', 'schematic', 'mod', 'pack', 'game_version', 'server_plugin', 'development_tool', 'texture_ui', 'save'].includes(resource.resource_kind)
     ? resource.resource_kind : 'other';
   const statusKey = resource.status === 'approved' || resource.status === 'published' ? 'statusPublished'
     : resource.status === 'pending' || resource.status === 'pending_review' ? 'statusPending'
@@ -124,6 +128,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
 
   useEffect(() => {
     resourceApi.getRelated(resource.id).then(setRelated).catch(() => undefined);
+    resourceApi.recordView(resource.id).then((result) => setViewCount(result.view_count)).catch(() => undefined);
     if (isAuthenticated) {
       resourceApi.getFavorite(resource.id).then((result) => {
         setFavorite(result.is_favorited);
@@ -208,6 +213,7 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
                 <Link href={`/users/${resource.user_id}`} className="inline-flex min-w-0 max-w-full items-center gap-2 hover:text-[var(--primary)]"><span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--bg-elevated)]">{resource.avatar_url ? <img src={resource.avatar_url} alt="" className="h-full w-full object-cover" /> : <User className="h-4 w-4" />}</span><span className="min-w-0 break-all">{resource.username || t('resourceDetail.unknownAuthor')}</span></Link>
                 <span className="inline-flex items-center gap-1"><Calendar className="h-4 w-4" />{new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(resource.updated_at || resource.created_at))} {t('resourceDetail.updated')}</span>
                 <span className="inline-flex items-center gap-1"><Download className="h-4 w-4" />{t('resourceDetail.downloads', { count: new Intl.NumberFormat(locale).format(resource.download_count || 0) })}</span>
+                <span className="inline-flex items-center gap-1"><Eye className="h-4 w-4" />{t('resourceDetail.views', { count: new Intl.NumberFormat(locale).format(viewCount) })}</span>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">{displayTags.map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-secondary)]"><Tag className="h-3.5 w-3.5" />{tag}</span>)}</div>
               {['map', 'schematic'].includes(resource.resource_kind || '') && resource.renderer_status !== 'ready' && <p className="mt-3 text-sm text-[var(--text-muted)]">{resource.renderer_status === 'processing' ? t('resourceDetail.rendererProcessing') : resource.renderer_status === 'failed' ? t('resourceDetail.rendererFailed') : t('resourceDetail.rendererUnavailable')}</p>}
@@ -239,10 +245,10 @@ export default function ResourceDetail({ resource }: ResourceDetailProps) {
       </div>
     </section>
 
-    <ResourceKindDetails resource={resource} />
+    <ResourceKindDetails resource={resource} selectedVersionPublicId={primaryVersion?.public_id || undefined} />
 
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-      <ResourceTabs resource={resource} activeTab={activeTab} onChange={setActiveTab} downloadUrl={downloadUrl} commentCount={commentCount} onCommentCountChange={updateCommentCount} />
+      <ResourceTabs resource={resource} selectedVersionPublicId={primaryVersion?.public_id || undefined} activeTab={activeTab} onChange={setActiveTab} downloadUrl={downloadUrl} commentCount={commentCount} onCommentCountChange={updateCommentCount} />
       <ResourceAside
         resource={resource}
         supportedVersions={displayedSupportedVersions}

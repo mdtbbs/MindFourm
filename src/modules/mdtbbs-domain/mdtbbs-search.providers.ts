@@ -15,17 +15,23 @@ export class MdtbbsResourceSearchProvider implements SearchProvider, OnModuleIni
   onModuleInit(): void { this.registry.register(this); }
   async search(query: string, options: SearchOptions): Promise<SearchResultGroup> {
     const qb = this.repo.createQueryBuilder('r').leftJoin('r.user', 'user').leftJoin('r.category', 'category')
-      .select(['r.id', 'r.title', 'r.resource_type', 'r.version', 'r.slug', 'r.download_count', 'r.rating_average', 'r.rating_count', 'r.user_id', 'r.created_at', 'user.id', 'user.username', 'category.id', 'category.name'])
+      .select(['r.id', 'r.title', 'r.resource_type', 'r.version', 'r.content_language', 'r.slug', 'r.download_count', 'r.rating_average', 'r.rating_count', 'r.user_id', 'r.created_at', 'user.id', 'user.username', 'category.id', 'category.name'])
       .addSelect("LEFT(COALESCE(NULLIF(r.summary, ''), r.description), 360)", 'resource_card_description')
       .maxExecutionTime(2500)
       .where('r.status = :status', { status: 'approved' }).andWhere('r.is_public = :public', { public: 1 })
       .andWhere('(category.id IS NULL OR category.is_active = :active)', { active: 1 });
     qb.andWhere('(r.title LIKE :query OR r.description LIKE :query)', { query: `%${escapeLike(query)}%` });
-    const selected = await qb.orderBy('r.download_count', 'DESC').addOrderBy('r.rating_average', 'DESC')
+    if (options.content_language) qb.andWhere('r.content_language = :contentLanguage', { contentLanguage: options.content_language });
+    if (options.preferred_content_language) {
+      qb.addSelect('CASE WHEN r.content_language = :preferredContentLanguage THEN 1 ELSE 0 END', 'search_language_match')
+        .setParameter('preferredContentLanguage', options.preferred_content_language);
+    }
+    const selected = await (options.preferred_content_language ? qb.orderBy('search_language_match', 'DESC') : qb)
+      .addOrderBy('r.download_count', 'DESC').addOrderBy('r.rating_average', 'DESC')
       .addOrderBy('r.created_at', 'DESC').take(options.limit).getRawAndEntities();
     return { items: selected.entities.map((r, index) => ({ id: r.id, title: r.title, description: selected.raw[index]?.resource_card_description || null, resource_type: r.resource_type,
       version: r.version, slug: r.slug, download_count: r.download_count, rating_average: r.rating_average,
-      rating_count: r.rating_count, category_name: r.category?.name || null, username: r.user?.username || null,
+      rating_count: r.rating_count, content_language: r.content_language || 'unknown', category_name: r.category?.name || null, username: r.user?.username || null,
       user_id: r.user_id, created_at: r.created_at })) };
   }
 }

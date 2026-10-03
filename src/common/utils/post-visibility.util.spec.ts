@@ -17,6 +17,8 @@ describe('post query visibility', () => {
     const qb = builder(); applyPostVisibility(qb, 'post', { id: 7, role: 'user' });
     expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('post.user_id = :postVisibilityUser'), expect.objectContaining({postVisibilityPending: 'pending', postVisibilityUser: 7}));
     expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('post_visibility_member.group_id = post.required_group_id'), { postVisibilityUser: 7 });
+    expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining("COALESCE(post.post_type, 'normal') <> 'resource_discussion'"), { postVisibilityUser: 7 });
+    expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('post_visibility_resource.status IN (\'approved\', \'published\')'), { postVisibilityUser: 7 });
   });
   it('lets staff inspect nonpublic posts and restricted groups', () => {
     const qb = builder(); applyPostVisibility(qb, 'post', { id: 7, role: 'moderator' }, 'draft');
@@ -26,5 +28,6 @@ describe('post query visibility', () => {
     const qb = builder(); applyPublicPostVisibility(qb);
     expect(qb.andWhere).toHaveBeenCalledWith('post.status = :postVisibilityStatus', { postVisibilityStatus:'published' });
     expect(qb.andWhere).toHaveBeenCalledWith('post.required_group_id IS NULL', undefined);
+    expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('post_visibility_resource'), undefined);
   });
 });

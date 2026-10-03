@@ -6,6 +6,20 @@ import { RedisService } from '../../database/redis.service';
 import { PUBLIC_RESOURCE_STATUSES } from '@common/utils/constants';
 
 export interface DashboardStats {
+  range_days: 1 | 7 | 30 | 90;
+  range_metrics: {
+    new_users: number;
+    threads: number;
+    replies: number;
+    resources: number;
+    reports: number;
+    downloads: number;
+    views: number;
+    failed_jobs: number;
+    email_failures: number;
+    outbox_failures: number;
+    renderer_queue: number;
+  };
   total_posts: number;
   community_posts: number;
   automated_posts: number;
@@ -73,15 +87,16 @@ export class StatsService {
   /**
    * Get dashboard statistics in a single query
    */
-  getDashboardStats(): Promise<DashboardStats> {
-    return this.cached('dashboard', () => this.buildDashboardStats());
+  getDashboardStats(rangeDays: 1 | 7 | 30 | 90 = 7): Promise<DashboardStats> {
+    const safeRange = ([1, 7, 30, 90].includes(Number(rangeDays)) ? Number(rangeDays) : 7) as 1 | 7 | 30 | 90;
+    return this.cached(`dashboard:${safeRange}`, () => this.buildDashboardStats(safeRange));
   }
 
-  private async buildDashboardStats(): Promise<DashboardStats> {
+  private async buildDashboardStats(rangeDays: 1 | 7 | 30 | 90): Promise<DashboardStats> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [statsRows, sessionCount, activity7d, resourceTypeBreakdown] = await Promise.all([
+    const [statsRows, sessionCount, activity7d, resourceTypeBreakdown, rangeRows] = await Promise.all([
       this.postRepository.query(`
         SELECT p.*, r.*, u.*, a.*,
           (SELECT COUNT(*) FROM reports WHERE status = 'pending') as pending_reports,
@@ -107,10 +122,39 @@ export class StatsService {
       this.redisService.activeUserStats(),
       this.get7DayActivity(),
       this.getResourceTypeBreakdown(),
+      this.postRepository.query(`
+        SELECT
+          (SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS new_users,
+          (SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND status = 'published' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS threads,
+          (SELECT COUNT(*) FROM replies WHERE deleted_at IS NULL AND status = 'published' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS replies,
+          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS resources,
+          (SELECT COUNT(*) FROM reports WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS reports,
+          (SELECT COUNT(*) FROM download_events WHERE event_type = 'granted' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS downloads,
+          (SELECT COUNT(*) FROM resource_view_events WHERE created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS views,
+          (SELECT COUNT(*) FROM download_events WHERE event_type = 'failed' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS failed_jobs,
+          (SELECT COUNT(*) FROM email_logs WHERE status IN ('failed', 'bounced') AND sent_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS email_failures,
+          (SELECT COUNT(*) FROM outbox_events WHERE status = 'failed' AND created_at >= DATE_SUB(NOW(), INTERVAL ${rangeDays} DAY)) AS outbox_failures,
+          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND renderer_status = 'processing') AS renderer_queue
+      `),
     ]);
     const [stats] = statsRows;
+    const [range] = rangeRows;
 
     return {
+      range_days: rangeDays,
+      range_metrics: {
+        new_users: this.parseCount(range?.new_users),
+        threads: this.parseCount(range?.threads),
+        replies: this.parseCount(range?.replies),
+        resources: this.parseCount(range?.resources),
+        reports: this.parseCount(range?.reports),
+        downloads: this.parseCount(range?.downloads),
+        views: this.parseCount(range?.views),
+        failed_jobs: this.parseCount(range?.failed_jobs),
+        email_failures: this.parseCount(range?.email_failures),
+        outbox_failures: this.parseCount(range?.outbox_failures),
+        renderer_queue: this.parseCount(range?.renderer_queue),
+      },
       total_posts: this.parseCount(stats?.total_posts),
       community_posts: this.parseCount(stats?.community_posts),
       automated_posts: this.parseCount(stats?.automated_posts),

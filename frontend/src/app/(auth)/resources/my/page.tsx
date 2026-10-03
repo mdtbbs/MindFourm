@@ -6,6 +6,7 @@ import { resourceApi } from '@/lib/api/client';
 import { Resource } from '@/types';
 import { Download, Edit, ExternalLink, FileText, Loader2, Trash2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
+import { confirmDialog } from '@/store/interaction-dialog-store';
 import { useI18n } from '@/i18n/provider';
 
 function formatSize(bytes: number): string {
@@ -57,7 +58,7 @@ export default function MyResourcesPage() {
   }, [loadResources]);
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm(t('myResources.deleteConfirm'))) return;
+    if (!await confirmDialog({ message: t('myResources.deleteConfirm'), destructive: true })) return;
     setDeletingId(id);
     try {
       await resourceApi.delete(id);

@@ -19,4 +19,10 @@ export class UpdateProfileDto {
   @IsIn(['zh-CN', 'en', 'ru', 'ja'])
   @ApiPropertyOptional({ enum: ['zh-CN', 'en', 'ru', 'ja'], example: 'zh-CN', description: '界面语言偏好。' })
   preferred_locale?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['zh-CN', 'en', 'ru', 'ja'])
+  @ApiPropertyOptional({ enum: ['zh-CN', 'en', 'ru', 'ja'], nullable: true, example: 'en', description: '内容信息流语言偏好；null 表示不指定。' })
+  preferred_content_language?: string | null;
 }

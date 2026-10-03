@@ -10,6 +10,7 @@ import { useReplyComposeStore } from '@/store/reply-compose-store';
 import { useAuth } from '@/store/user-store';
 import { postApi, replyApi } from '@/lib/api/client';
 import { useToastStore } from '@/store/toast-store';
+import { confirmDialog } from '@/store/interaction-dialog-store';
 import type { Reply } from '@/types';
 import { CheckCircle2, Loader2, Pencil, Quote, Reply as ReplyIcon, Trash2 } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
@@ -101,7 +102,7 @@ export default function ReplyActions({
   };
 
   const remove = async () => {
-    if (!window.confirm(t('replyActions.deleteConfirm'))) return;
+    if (!await confirmDialog({ message: t('replyActions.deleteConfirm'), destructive: true })) return;
 
     setBusy(true);
     try {

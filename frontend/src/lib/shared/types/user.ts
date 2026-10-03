@@ -10,6 +10,7 @@ export interface User {
   mindauth_id?: number;
   email_verified?: boolean;
   preferred_locale?: string | null;
+  preferred_content_language?: 'zh-CN' | 'en' | 'ru' | 'ja' | null;
   created_at?: string;
   updated_at?: string;
 }

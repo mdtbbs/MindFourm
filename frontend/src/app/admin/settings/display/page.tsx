@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi, categoryApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
-import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 import MarkdownEditor from '@/components/ui/markdown-editor';
 import type { Category } from '@/types';
 
@@ -25,9 +26,9 @@ export default function DisplaySettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -36,30 +37,29 @@ export default function DisplaySettingsPage() {
         categoryApi.getList(),
       ]);
       setValues(settings);
+      initializeUnsaved(settings);
       setCategories(categoryList);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed');
+      setLoadError(err instanceof Error ? err.message : 'Failed');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('display', values);
+      await adminApi.updateSettings('display', submittedValues);
       await refreshAfterSettingsSave();
-      setMessage('Saved');
-      setTimeout(() => setMessage(null), 3000);
+      unsaved.markSaved(submittedValues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : 'Failed');
     }
   };
 
@@ -80,15 +80,14 @@ export default function DisplaySettingsPage() {
   }
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">显示设置</h2>
         <p className="text-xs text-surface-400 mt-1">控制首页和列表显示行为</p>
       </div>
 
       <div className="p-6 space-y-6">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
 
         <div className="grid gap-5 md:grid-cols-3">
           <div>
@@ -190,10 +189,18 @@ export default function DisplaySettingsPage() {
 
       </div>
 
-      <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
-        <Button variant="ghost" onClick={fetchSettings}>Reset</Button>
-        <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

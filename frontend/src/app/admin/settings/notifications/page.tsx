@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
-import Button from '@/components/ui/button';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 
 const ROLE_OPTIONS = [
   { value: 'moderator', label: '版主' },
@@ -26,9 +27,9 @@ function parseRoles(value: string | undefined): string[] {
 export default function NotificationSettingsPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const roles = useMemo(
     () => new Set(parseRoles(values.admin_notifications_recipient_roles)),
@@ -40,13 +41,15 @@ export default function NotificationSettingsPage() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      setValues(await adminApi.getSettings('notifications'));
+      const data = await adminApi.getSettings('notifications');
+      setValues(data);
+      initializeUnsaved(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载通知设置失败');
+      setLoadError(err instanceof Error ? err.message : '加载通知设置失败');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
@@ -68,16 +71,14 @@ export default function NotificationSettingsPage() {
   };
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('notifications', values);
-      setMessage('通知设置已保存');
-      setTimeout(() => setMessage(null), 3000);
+      await adminApi.updateSettings('notifications', submittedValues);
+      unsaved.markSaved(submittedValues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '保存通知设置失败');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : '保存通知设置失败');
     }
   };
 
@@ -86,7 +87,7 @@ export default function NotificationSettingsPage() {
   }
 
   return (
-    <div className="border border-surface-200 bg-white">
+    <div className={`border border-surface-200 bg-white ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="border-b border-surface-200 px-6 py-4">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">后台通知</h2>
         <p className="mt-1 text-xs text-surface-400">
@@ -95,8 +96,7 @@ export default function NotificationSettingsPage() {
       </div>
 
       <div className="space-y-6 p-6">
-        {message ? <Alert type="success" message={message} /> : null}
-        {error ? <Alert type="error" message={error} /> : null}
+        {loadError ? <Alert type="error" message={loadError} /> : null}
 
         <div className="space-y-3">
           <label className="flex items-center gap-3 text-sm text-surface-700">
@@ -253,10 +253,18 @@ export default function NotificationSettingsPage() {
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-surface-200 px-6 py-4">
-        <Button variant="ghost" onClick={fetchSettings}>Reset</Button>
-        <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

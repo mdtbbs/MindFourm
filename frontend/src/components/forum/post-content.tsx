@@ -17,6 +17,8 @@ import Link from 'next/link';
 import { Pin, Move, Trash2, Check, X, Pencil, Lock, Unlock } from 'lucide-react';
 import { postApi } from '@/lib/api/client';
 import { useI18n } from '@/i18n/provider';
+import { confirmDialog } from '@/store/interaction-dialog-store';
+import Image from 'next/image';
 
 interface PostContentProps {
   post: Post;
@@ -66,7 +68,7 @@ export default function PostContent({
 
   const handleDeleteForOwner = async () => {
     if (!postId || deleting) return;
-    if (!window.confirm(t('postDetail.deleteConfirm'))) return;
+    if (!await confirmDialog({ message: t('postDetail.deleteConfirm'), destructive: true })) return;
     setDeleting(true);
     try {
       await postApi.delete(postId);
@@ -114,6 +116,36 @@ export default function PostContent({
 
   return (
     <article className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] overflow-hidden">
+      {post.resource_header && (
+        <section className="border-b border-[var(--border)] bg-[var(--bg-hover)]/40 p-4 sm:p-5" aria-label={t('postDetail.resourceHeader')}>
+          <div className="flex flex-col gap-4 sm:flex-row">
+            {post.resource_header.preview_url && (
+              <Link href={post.resource_header.resource_url} className="relative block aspect-video w-full shrink-0 overflow-hidden border border-[var(--border)] sm:w-48" aria-label={t('postDetail.viewResource')}>
+                <Image src={post.resource_header.preview_url} alt="" fill sizes="(max-width: 640px) 100vw, 192px" className="object-cover" unoptimized />
+              </Link>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('postDetail.resourceHeader')}</div>
+              <Link href={post.resource_header.resource_url} className="text-lg font-semibold text-[var(--text)] hover:text-[var(--primary)]">
+                {post.resource_header.title}
+              </Link>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--text-secondary)]">
+                {post.resource_header.version && <span>{t('postDetail.resourceVersion', { version: post.resource_header.version })}</span>}
+                <span>{post.resource_header.status === 'published' ? t('postDetail.resourcePublished') : t('postDetail.resourceApproved')}</span>
+                {post.resource_header.author && <AuthorLink userId={post.resource_header.author.id} name={post.resource_header.author.username} avatarUrl={post.resource_header.author.avatar_url} size="sm" showMeta={false} />}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link href={post.resource_header.resource_url} className="inline-flex min-h-9 items-center border border-[var(--border)] px-3 text-sm text-[var(--text)] hover:bg-[var(--bg-hover)]">
+                  {t('postDetail.viewResource')}
+                </Link>
+                <a href={post.resource_header.download_url} className="inline-flex min-h-9 items-center bg-[var(--primary)] px-3 text-sm text-white hover:opacity-90">
+                  {t('postDetail.downloadResource')}
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
       {/* Header */}
       <div className="px-5 pt-5 sm:px-6">
         <h1 className="text-2xl font-bold tracking-tight text-[var(--text)]">{post.title}</h1>

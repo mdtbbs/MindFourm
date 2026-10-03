@@ -6,6 +6,7 @@ const fullUser = {
   role: 'user',
   email: 'alice@example.com',
   mindauth_id: 900123,
+  preferred_content_language: 'ja',
   avatar_url: '/uploads/avatars/a.png',
   pending_avatar_url: '/uploads/avatars/pending.png',
   avatar_status: 'approved',
@@ -30,6 +31,7 @@ describe('toPublicUser', () => {
     for (const field of [
       'email',
       'mindauth_id',
+      'preferred_content_language',
       'pending_avatar_url',
       'available_points',
       'reply_email',

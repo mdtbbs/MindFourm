@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, IsNull, Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { PostTag } from '@entities/post-tag.entity';
 import { Reply } from '@entities/reply.entity';
 import { ContentRelation } from '@entities/content-relation.entity';
+import { Resource } from '@entities/resource.entity';
 import { getPrefixMetadata, parsePrefixCatalog, DEFAULT_POST_PREFIXES } from './post-prefixes.util';
 
 export interface PostDetailTag {
@@ -72,6 +73,7 @@ export interface PostDetailDto {
   author_avatar_url: string | null;
   location_label: string | null;
   prefix: { value: string; label: string; color: string } | null;
+  resource_header: PostDetailResourceHeader | null;
   tags: PostDetailTag[];
   replies?: PostDetailReply[];
   replyPagination?: {
@@ -82,6 +84,19 @@ export interface PostDetailDto {
   };
 }
 
+export interface PostDetailResourceHeader {
+  id: number;
+  title: string;
+  slug: string | null;
+  resource_kind: string | null;
+  status: string;
+  version: string | null;
+  preview_url: string | null;
+  resource_url: string;
+  download_url: string;
+  author: { id: number; username: string; avatar_url: string | null } | null;
+}
+
 @Injectable()
 export class PostDetailService {
   constructor(
@@ -89,12 +104,15 @@ export class PostDetailService {
     private readonly postTagRepository: Repository<PostTag>,
     @InjectRepository(ContentRelation)
     private readonly relationRepository: Repository<ContentRelation>,
+    @InjectRepository(Resource)
+    private readonly resourceRepository: Repository<Resource>,
   ) {}
 
   async toDetail(post: Post, prefixCatalog?: string | null): Promise<PostDetailDto> {
-    const [tags, serverRelation] = await Promise.all([
+    const [tags, serverRelation, resourceHeader] = await Promise.all([
       this.loadTags(post.id),
       this.relationRepository.findOne({ where: { source_type: 'post', source_id: post.id, target_type: 'game_server', relation_type: 'related' } }),
+      this.loadResourceHeader(post.id, post.post_type),
     ]);
 
     const catalog = parsePrefixCatalog(prefixCatalog ?? undefined);
@@ -136,7 +154,36 @@ export class PostDetailService {
       author_avatar_url: post.user?.avatar_url ?? null,
       location_label: post.location_label ?? null,
       prefix: prefixMeta ? { value: prefixMeta.value, label: prefixMeta.label, color: prefixMeta.color } : null,
+      resource_header: resourceHeader,
       tags,
+    };
+  }
+
+  async loadResourceHeader(postId: number, postType: string): Promise<PostDetailResourceHeader | null> {
+    if (postType !== 'resource_discussion') return null;
+    const resource = await this.resourceRepository.findOne({
+      where: [
+        { discussion_thread_id: postId, status: In(['approved', 'published']), is_public: 1, visibility: 'public' },
+        { discussion_thread_id: postId, status: In(['approved', 'published']), is_public: 1, visibility: IsNull() },
+      ],
+      relations: { user: true, latest_published_version: true },
+    });
+    if (!resource) return null;
+    return {
+      id: resource.id,
+      title: resource.title,
+      slug: resource.slug || null,
+      resource_kind: resource.resource_kind || null,
+      status: resource.status,
+      version: resource.latest_published_version?.version || resource.version || null,
+      preview_url: resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null,
+      resource_url: `/resources/${resource.slug ? `${resource.id}-${resource.slug}` : resource.id}`,
+      download_url: `/api/resources/${resource.id}/download`,
+      author: resource.user ? {
+        id: resource.user.id,
+        username: resource.user.username,
+        avatar_url: resource.user.avatar_url || null,
+      } : null,
     };
   }
 

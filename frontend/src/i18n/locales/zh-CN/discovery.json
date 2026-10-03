@@ -24,7 +24,9 @@
     "recentSearches": "最近搜索",
     "clearHistory": "清空",
     "popularSearches": "热门搜索",
-    "partialResults": "部分搜索分类暂时不可用，以下显示已获取的结果。请稍后重试。"
+    "partialResults": "部分搜索分类暂时不可用，以下显示已获取的结果。请稍后重试。",
+    "filterLanguage": "内容语言",
+    "allLanguages": "全部语言"
   },
   "notices": {
     "title": "公告中心",
@@ -65,8 +67,8 @@
   },
   "contentLanguage": {
     "label": "内容语言",
-    "unknown": "不指定",
-    "hint": "选择帖子或资源正文使用的语言。",
+    "unknown": "自动检测",
+    "hint": "系统会根据正文设置初始值，发布前请确认或修改。",
     "languages": {
       "en": "英语",
       "ru": "俄语",
@@ -87,7 +89,11 @@
     "resourcesDescription": "浏览社区资源与工具",
     "notices": "社区公告",
     "noticesDescription": "查看最新公告和活动",
-    "summary": "资源：{resources} · 讨论：{discussions}"
+    "summary": "资源：{resources} · 讨论：{discussions}",
+    "discussions": "讨论",
+    "discussionsDescription": "与其他 Mindustry 玩家交流。",
+    "developers": "开发者中心",
+    "developersDescription": "查看开发者中心与集成指南。"
   },
   "tagsPage": {
     "title": "标签",

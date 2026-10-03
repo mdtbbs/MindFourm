@@ -221,6 +221,7 @@ async function bootstrap() {
       },
     });
     app.getHttpAdapter().get('/api/openapi/v1.json', (_req: unknown, res: any) => res.json(document));
+    app.getHttpAdapter().get('/api/openapi/public-v1.json', (_req: unknown, res: any) => res.json(document));
     registerDeveloperDocs(app, document, packageJson.version);
   }
 

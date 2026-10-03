@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
 import { Post } from '@entities/post.entity';
@@ -15,8 +15,9 @@ import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.servic
 import { applyPostVisibility } from '@common/utils/post-visibility.util';
 import { selectPostCards, hydratePostCardExcerpts } from '@common/utils/post-card-query.util';
 import { SearchProviderRegistry } from './search-provider.registry';
+import { SiteConfigService } from '../../config/site-profile';
 
-export type SearchViewer = { id: number; role: string } | undefined;
+export type SearchViewer = { id: number; role: string; preferred_content_language?: string | null } | undefined;
 export type SearchActor = { id: number; username?: string; role?: string };
 export type AuditedSearchResult<T> = { value: T; resultsCount: number };
 export const SEARCH_SETTINGS_READER = Symbol('SEARCH_SETTINGS_READER');
@@ -58,6 +59,7 @@ export class SearchService {
     @Inject(SEARCH_SETTINGS_READER)
     private settingsReader?: SearchSettingsReader,
     private readonly providerRegistry?: SearchProviderRegistry,
+    @Optional() private readonly siteConfig?: SiteConfigService,
   ) {}
 
   /** Persist the actor and query before executing any search work. */
@@ -150,7 +152,7 @@ export class SearchService {
 
   async searchPosts(
     query: string,
-    options: { page?: number; limit?: number; category?: string; categoryId?: number; sort?: string },
+    options: { page?: number; limit?: number; category?: string; categoryId?: number; sort?: string; content_language?: string; preferred_content_language?: string | null },
     viewer?: SearchViewer,
   ): Promise<{ data: PostSummaryDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     const page = Math.min(10000, Math.max(1, Math.trunc(Number(options.page)) || 1));
@@ -163,12 +165,23 @@ export class SearchService {
     // Keep LIKE semantics for legacy Markdown rows; deployed schemas do not yet
     // guarantee a FULLTEXT index. The selected card still reads only a body prefix.
     qb.andWhere('(p.title LIKE :query OR p.content LIKE :query)', { query: `%${escapeLike(query)}%` });
+    const preferredContentLanguage = this.siteConfig?.current.contentLanguagePreference
+      ? options.preferred_content_language || viewer?.preferred_content_language || null
+      : null;
+    if (options.content_language) {
+      qb.andWhere('p.content_language = :contentLanguage', { contentLanguage: options.content_language });
+    }
     if (options.category) qb.andWhere('category.slug = :category', { category: options.category });
     if (options.categoryId) qb.andWhere('category.id = :categoryId', { categoryId: options.categoryId });
     const direction = options.sort === 'oldest' ? 'ASC' : 'DESC';
     if (options.sort === 'relevance') {
+      if (preferredContentLanguage) {
+        qb.addSelect('CASE WHEN p.content_language = :preferredContentLanguage THEN 1 ELSE 0 END', 'search_language_match')
+          .orderBy('search_language_match', 'DESC');
+        (qb as any).setParameter?.('preferredContentLanguage', preferredContentLanguage);
+      }
       qb.addSelect('CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END', 'search_title_match')
-        .orderBy('search_title_match', 'DESC').addOrderBy('p.created_at', 'DESC');
+        .addOrderBy('search_title_match', 'DESC').addOrderBy('p.created_at', 'DESC');
     } else qb.orderBy('p.created_at', direction);
     qb.addOrderBy('p.id', direction).skip((page - 1) * limit).take(limit);
     const cards = await qb.getRawAndEntities();
@@ -202,7 +215,7 @@ export class SearchService {
    * mistake a resource or developer mirror for a forum post. All visibility
    * predicates live here on the server; clients only receive already-safe cards.
    */
-  async searchUnified(query: string, viewer?: SearchViewer, limit = 10): Promise<{
+  async searchUnified(query: string, viewer?: SearchViewer, limit = 10, contentLanguage?: string): Promise<{
     groups: UnifiedSearchGroups;
     total_by_type: Record<keyof UnifiedSearchGroups, number>;
     unavailable: Array<keyof UnifiedSearchGroups>;
@@ -210,14 +223,18 @@ export class SearchService {
     const normalized = query.trim();
     const resultLimit = Math.max(1, Math.min(limit, 20));
     const keys = ['posts', 'users', 'wiki', 'resources', 'servers', 'game_versions', 'developer_feed'] as const;
+    const enabledProviders = new Set(this.siteConfig?.current.searchProviders || keys);
+    const preferredContentLanguage = this.siteConfig?.current.contentLanguagePreference
+      ? viewer?.preferred_content_language
+      : undefined;
     const work = [
-      this.searchPosts(normalized, { page: 1, limit: resultLimit, sort: 'relevance' }, viewer).then((result) => result.data),
-      this.searchUsers(normalized, resultLimit),
-      this.searchWiki(normalized, resultLimit),
-      this.providerRegistry?.search('resources', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
-      this.providerRegistry?.search('servers', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
-      this.providerRegistry?.search('game_versions', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
-      this.providerRegistry?.search('developer_feed', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
+      enabledProviders.has('posts') ? this.searchPosts(normalized, { page: 1, limit: resultLimit, sort: 'relevance', content_language: contentLanguage, preferred_content_language: preferredContentLanguage }, viewer).then((result) => result.data) : Promise.resolve([]),
+      enabledProviders.has('users') ? this.searchUsers(normalized, resultLimit) : Promise.resolve([]),
+      enabledProviders.has('wiki') ? this.searchWiki(normalized, resultLimit) : Promise.resolve([]),
+      enabledProviders.has('resources') ? this.providerRegistry?.search('resources', normalized, { limit: resultLimit, viewer, content_language: contentLanguage, preferred_content_language: preferredContentLanguage }) || Promise.resolve([]) : Promise.resolve([]),
+      enabledProviders.has('servers') ? this.providerRegistry?.search('servers', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]) : Promise.resolve([]),
+      enabledProviders.has('game_versions') ? this.providerRegistry?.search('game_versions', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]) : Promise.resolve([]),
+      enabledProviders.has('developer_feed') ? this.providerRegistry?.search('developer_feed', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]) : Promise.resolve([]),
     ];
     const results = await Promise.allSettled(work.map((promise, index) => withTimeout<unknown[]>(promise, 2500, `Search ${keys[index]}`)));
     const groups = {} as UnifiedSearchGroups;

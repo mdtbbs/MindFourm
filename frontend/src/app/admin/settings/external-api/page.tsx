@@ -1,5 +1,7 @@
 'use client';
 
+import { confirmDialog } from '@/store/interaction-dialog-store';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
@@ -165,7 +167,7 @@ export default function ExternalApiSettingsPage() {
   };
 
   const rotate = async (id: number) => {
-    if (!window.confirm('轮换后旧密钥会立即失效，确定继续吗？')) return;
+    if (!await confirmDialog({ message: '轮换后旧密钥会立即失效，确定继续吗？', confirmLabel: '轮换密钥', destructive: true })) return;
     try {
       const result = await adminApi.rotateExternalApiKey(id);
       setNewSecret(result.plain_key);

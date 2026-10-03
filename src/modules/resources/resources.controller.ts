@@ -57,6 +57,7 @@ import { ResourceDuplicateService } from './resource-duplicate.service';
 import { SiteConfigService } from '@config/site-profile';
 import { buildResourceExportManifest, parseResourceImportManifest } from './resource-transfer.util';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
+import { ResourceViewsService } from './resource-views.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -151,6 +152,7 @@ export class ResourcesController {
     private readonly resourcePreviewService: ResourcePreviewService,
     private readonly duplicateService: ResourceDuplicateService,
     private readonly siteConfig: SiteConfigService,
+    private readonly resourceViews: ResourceViewsService,
   ) {}
 
   @Get()
@@ -269,6 +271,39 @@ export class ResourcesController {
   @Roles('admin', 'moderator')
   async getAdminList(@Query() query: QueryResourcesDto) {
     return this.resourcesService.getList(query, { scope: 'admin' });
+  }
+
+  @Get('admin/analytics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async getResourceAnalytics(@Query('range_days') rawRange: string | undefined, @Req() req: any) {
+    const range = Number(rawRange);
+    const rangeDays = ([1, 7, 30, 90].includes(range) ? range : 7) as 1 | 7 | 30 | 90;
+    await this.logOperation(req, 'resource.analytics.view', undefined, {
+      range_days: rangeDays,
+      request_id: req.requestId || req.headers?.['x-request-id'] || null,
+      source: 'admin-resource-analytics',
+    });
+    return this.resourceViews.getAnalytics(rangeDays);
+  }
+
+  @Get('admin/:id/analytics')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async getSingleResourceAnalytics(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('range_days') rawRange: string | undefined,
+    @Req() req: any,
+  ) {
+    await this.resourcesService.getById(id, req.user);
+    const range = Number(rawRange);
+    const rangeDays = ([1, 7, 30, 90].includes(range) ? range : 7) as 1 | 7 | 30 | 90;
+    await this.logOperation(req, 'resource.analytics.view', id, {
+      range_days: rangeDays,
+      request_id: req.requestId || req.headers?.['x-request-id'] || null,
+      source: 'admin-resource-detail-analytics',
+    });
+    return this.resourceViews.getAnalytics(rangeDays, id);
   }
 
   @Get('admin/:id/export-manifest')
@@ -459,6 +494,23 @@ export class ResourcesController {
   @Get(':id/related')
   async getRelated(@Param('id', ParseIntPipe) id: number, @Query('limit') limit?: string) {
     return this.resourcesService.getRelatedResources(id, Number(limit) || 6);
+  }
+
+  @Get(':id/view')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  async recordView(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: any,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const resource = await this.resourcesService.getById(id, req?.user);
+    const recorded = await this.resourceViews.recordRequest(resource, req, res);
+    return {
+      recorded,
+      view_count: Number(resource.view_count || 0) + (recorded ? 1 : 0),
+    };
   }
 
   @Get(':id/download')

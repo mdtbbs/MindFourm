@@ -64,7 +64,11 @@ describe('StatsService', () => {
         .mockResolvedValueOnce([
           { type: 'map', count: '4' },
           { type: 'mod', count: '3' },
-        ]),
+        ])
+        .mockResolvedValueOnce([{
+          new_users: '1', threads: '2', replies: '3', resources: '4', reports: '5', downloads: '6',
+          views: '7', failed_jobs: '8', email_failures: '9', outbox_failures: '10', renderer_queue: '11',
+        }]),
     };
     const redisService = {
       activeUserStats: jest.fn().mockResolvedValue({ count: 2, observedSince: '2026-10-02T00:00:00Z', complete: true }),
@@ -79,6 +83,20 @@ describe('StatsService', () => {
     );
 
     await expect(service.getDashboardStats()).resolves.toEqual({
+      range_days: 7,
+      range_metrics: {
+        new_users: 1,
+        threads: 2,
+        replies: 3,
+        resources: 4,
+        reports: 5,
+        downloads: 6,
+        views: 7,
+        failed_jobs: 8,
+        email_failures: 9,
+        outbox_failures: 10,
+        renderer_queue: 11,
+      },
       total_posts: 12,
       community_posts: 9,
       automated_posts: 3,
@@ -104,11 +122,12 @@ describe('StatsService', () => {
 
     // Both repeated and concurrent requests reuse this bounded aggregate.
     await Promise.all([service.getDashboardStats(), service.getDashboardStats()]);
-    expect(postRepository.query).toHaveBeenCalledTimes(3);
+    expect(postRepository.query).toHaveBeenCalledTimes(4);
     expect(postRepository.query.mock.calls[0][0]).toContain('deleted_at IS NULL');
     expect(postRepository.query.mock.calls[1][0]).not.toContain('DATE(p.created_at)');
     expect(postRepository.query.mock.calls[0][0]).toContain("FROM posts WHERE deleted_at IS NULL AND status = 'published'");
     expect(postRepository.query.mock.calls[1][0]).toContain("p.status = 'published' AND p.source = 'USER'");
+    expect(postRepository.query.mock.calls[3][0]).toContain('DATE_SUB(NOW(), INTERVAL 7 DAY)');
     expect(redisService.activeUserStats).toHaveBeenCalledWith();
   });
 

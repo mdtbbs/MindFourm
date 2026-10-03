@@ -201,6 +201,10 @@
   background: var(--bg);
 }
 
+.admin-settings-unsaved-bar {
+  left: calc(var(--admin-rail-width) + var(--admin-subnav-width));
+}
+
 .admin-v2-topbar {
   position: sticky;
   top: 0;
@@ -364,6 +368,10 @@
 }
 
 /* Command menu */
+.admin-v2 :is(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl) {
+  border-radius: 0 !important;
+}
+
 .admin-command-backdrop {
   position: fixed;
   inset: 0;
@@ -560,6 +568,10 @@
 
   .admin-v2-workspace {
     margin-left: 0;
+  }
+
+  .admin-settings-unsaved-bar {
+    left: 0;
   }
 
   .admin-v2-mobile-menu,

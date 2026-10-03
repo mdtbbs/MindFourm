@@ -10,6 +10,7 @@ import ErrorState from '@/components/ui/error-state';
 import EmptyState from '@/components/ui/empty-state';
 import { getRequestLocale } from '@/i18n/server';
 import { translate, type Locale } from '@/i18n';
+import { siteProfile } from '@/config/site-profile';
 
 export const revalidate = 0;
 
@@ -45,10 +46,11 @@ const emptyResult: UnifiedSearchResult = {
   total_by_type: {},
 };
 
-async function fetchUnified(query: string): Promise<UnifiedSearchResult> {
+async function fetchUnified(query: string, contentLanguage?: string): Promise<UnifiedSearchResult> {
   const qs = new URLSearchParams();
   qs.set('q', query);
   qs.set('limit', '10');
+  if (contentLanguage) qs.set('content_language', contentLanguage);
   return fetchApiData<UnifiedSearchResult>(`/api/v1/search?${qs.toString()}`, {
     init: { next: { revalidate: 0 } },
     fallback: emptyResult,
@@ -62,15 +64,18 @@ async function fetchUnified(query: string): Promise<UnifiedSearchResult> {
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; content_language?: string }>;
 }) {
   const params = await searchParams;
   const locale = await getRequestLocale();
   const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const query = params.q || '';
+  const selectedLanguage = siteProfile.contentLanguages.includes(params.content_language as (typeof siteProfile.contentLanguages)[number])
+    ? params.content_language
+    : '';
   let result: UnifiedSearchResult;
   try {
-    result = query ? await fetchUnified(query) : emptyResult;
+    result = query ? await fetchUnified(query, selectedLanguage) : emptyResult;
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (message.includes('(401)')) {
@@ -92,6 +97,17 @@ export default async function SearchPage({
           {t('searchPage.results')}
           {query && <span className="ml-2 text-lg font-normal text-[var(--text-muted)]">&ldquo;{query}&rdquo;</span>}
         </h1>
+        {siteProfile.features.contentLanguageSearch && <form action="/search" className="mt-4 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="q" value={query} />
+          <div className="min-w-48">
+            <label htmlFor="search-content-language" className="mb-1.5 block text-xs font-medium text-[var(--text-secondary)]">{t('searchPage.filterLanguage')}</label>
+            <select id="search-content-language" name="content_language" defaultValue={selectedLanguage} className="min-h-10 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 py-2 text-sm text-[var(--text)]">
+              <option value="">{t('searchPage.allLanguages')}</option>
+              {siteProfile.contentLanguages.map((language) => <option key={language} value={language}>{t(`contentLanguage.languages.${language}`)}</option>)}
+            </select>
+          </div>
+          <button type="submit" className="min-h-10 border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{t('common.search')}</button>
+        </form>}
         {totalResults > 0 && (
           <p className="mt-1 text-sm text-[var(--text-secondary)]">
             {t('searchPage.resultCount', { count: new Intl.NumberFormat(locale).format(totalResults) })}
@@ -144,7 +160,7 @@ export default async function SearchPage({
           {groups.wiki.length > 0 && <SearchSection title={t('searchPage.knowledgeBase')} count={groups.wiki.length} locale={locale}>
             {groups.wiki.map((article) => <SearchLink key={article.id} href={`/search?q=${encodeURIComponent(article.title)}`} title={article.title} description={article.summary} meta={article.category || undefined} />)}
           </SearchSection>}
-          {groups.developer_feed.length > 0 && <SearchSection title={t('searchPage.developerUpdates')} count={groups.developer_feed.length} locale={locale}>
+          {siteProfile.features.developerFeed && groups.developer_feed.length > 0 && <SearchSection title={t('searchPage.developerUpdates')} count={groups.developer_feed.length} locale={locale}>
             {groups.developer_feed.map((entry) => <a key={entry.id} href={entry.source_url} rel="noreferrer" className="block border border-[var(--border)] p-3 hover:border-[var(--primary)]">
               <div className="font-medium text-[var(--text)]">{entry.summary || `${entry.repository} #${entry.external_id}`}</div>
               <p className="mt-1 text-sm text-[var(--text-secondary)]">{entry.repository} · @{entry.author_login} · {entry.state}</p>

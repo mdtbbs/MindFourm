@@ -142,11 +142,13 @@ export class ResourcesService {
     if (resources.length === 0) return [];
     const ids = resources.map(({ id }) => id);
     const rows = await this.dataSource.query(
-      `SELECT resource_id, COUNT(*) AS comment_count
-       FROM resource_comments
-       WHERE status = ? AND resource_id IN (${ids.map(() => '?').join(',')})
-       GROUP BY resource_id`,
-      ['visible', ...ids],
+      `SELECT resource.id AS resource_id, COUNT(reply.id) AS comment_count
+       FROM resources resource
+       LEFT JOIN replies reply
+         ON reply.post_id = resource.discussion_thread_id AND reply.status = 'published'
+       WHERE resource.id IN (${ids.map(() => '?').join(',')})
+       GROUP BY resource.id`,
+      ids,
     ) as Array<{ resource_id: number | string; comment_count: number | string }>;
     const counts = new Map(rows.map((row) => [Number(row.resource_id), Number(row.comment_count)]));
     return resources.map((resource) => this.normalizeResource({ ...resource,
@@ -1181,7 +1183,7 @@ export class ResourcesService {
 
   private async resourceMergeCounts(query: (sql: string, params?: any[]) => Promise<any[]>, resourceId: number) {
     const tables = [
-      'resource_comments', 'resource_favorites', 'resource_likes', 'resource_ratings',
+      'replies', 'resource_comment_reply_map', 'resource_favorites', 'resource_likes', 'resource_ratings',
       'resource_subscriptions', 'resource_attributions', 'resource_versions', 'resource_files',
       'download_events', 'resource_version_dependencies', 'content_relations',
       'knowledge_articles', 'game_content_upload_sessions', 'resource_media_links', 'resource_content_hash_claims', 'resource_structure_hash_claims',
@@ -1189,7 +1191,7 @@ export class ResourcesService {
     ];
     const presentRows = await query(`SELECT table_name FROM information_schema.tables
       WHERE table_schema = DATABASE() AND table_name IN (${tables.map(() => '?').join(',')})`, tables);
-    const present = new Set((presentRows || []).map((row) => String(row.table_name)));
+    const present = new Set<string>((presentRows || []).map((row) => String(row.table_name)));
     const counts: Record<string, number> = {};
     const count = async (name: string, sql: string, params: any[] = [resourceId], resultKey = name) => {
       if (!present.has(name)) { counts[resultKey] = 0; return; }
@@ -1197,7 +1199,9 @@ export class ResourcesService {
       counts[resultKey] = Number(rows?.[0]?.count || 0);
     };
     await Promise.all([
-      count('resource_comments', 'SELECT COUNT(*) AS count FROM resource_comments WHERE resource_id = ?'),
+      count('replies', `SELECT COUNT(*) AS count FROM replies reply
+        INNER JOIN resources resource ON resource.discussion_thread_id = reply.post_id
+        WHERE resource.id = ?`, [resourceId], 'resource_comments'),
       count('resource_favorites', 'SELECT COUNT(*) AS count FROM resource_favorites WHERE resource_id = ?'),
       count('resource_likes', 'SELECT COUNT(*) AS count FROM resource_likes WHERE resource_id = ?'),
       count('resource_ratings', 'SELECT COUNT(*) AS count FROM resource_ratings WHERE resource_id = ?'),
@@ -1216,6 +1220,58 @@ export class ResourcesService {
         WHERE id = ? AND (file_path IS NOT NULL OR content_hash IS NOT NULL OR mfl_file_id IS NOT NULL OR external_url IS NOT NULL)`, [resourceId], 'legacy_root_file'),
     ]);
     return counts;
+  }
+
+  private async mergePublicResourceDiscussion(
+    manager: EntityManager,
+    present: Set<string>,
+    source: Resource,
+    target: Resource,
+    mergePublicDiscussion: boolean,
+  ): Promise<number> {
+    const sourceThreadId = Number(source.discussion_thread_id || 0);
+    if (!mergePublicDiscussion || !sourceThreadId || !present.has('posts') || !present.has('replies')) return 0;
+
+    const sourceRows = await manager.query(
+      'SELECT id, post_type, source FROM posts WHERE id = ? AND deleted_at IS NULL',
+      [sourceThreadId],
+    );
+    if (sourceRows[0]?.post_type !== 'resource_discussion' || sourceRows[0]?.source !== 'SYSTEM') return 0;
+
+    const targetThreadId = Number(target.discussion_thread_id || 0);
+    let movedReplies = 0;
+    if (targetThreadId) {
+      const targetRows = await manager.query(
+        'SELECT id, post_type, source FROM posts WHERE id = ? AND deleted_at IS NULL',
+        [targetThreadId],
+      );
+      if (targetRows[0]?.post_type !== 'resource_discussion' || targetRows[0]?.source !== 'SYSTEM') {
+        throw new ConflictException('目标资源绑定了无效的讨论主题');
+      }
+      if (targetThreadId !== sourceThreadId) {
+        const result = await manager.query('UPDATE replies SET post_id = ? WHERE post_id = ?', [targetThreadId, sourceThreadId]);
+        movedReplies = Number(result?.affectedRows ?? result?.raw?.affectedRows ?? result?.[0]?.affectedRows ?? 0);
+        await manager.query(`UPDATE posts
+          SET last_activity_at = GREATEST(COALESCE(last_activity_at, created_at),
+            COALESCE((SELECT MAX(created_at) FROM replies WHERE post_id = ?), last_activity_at, created_at))
+          WHERE id = ?`, [targetThreadId, targetThreadId]);
+        await manager.query('UPDATE posts SET deleted_at = NOW(), updated_at = NOW() WHERE id = ?', [sourceThreadId]);
+        await manager.query('UPDATE resources SET discussion_thread_id = NULL WHERE id = ?', [source.id]);
+      }
+    } else {
+      const points = Array.from(String(target.title || `#${target.id}`));
+      const title = `Resource discussion: ${points.length > 230 ? points.slice(0, 230).join('') : points.join('')}`;
+      await manager.query('UPDATE resources SET discussion_thread_id = ? WHERE id = ?', [sourceThreadId, target.id]);
+      await manager.query('UPDATE resources SET discussion_thread_id = NULL WHERE id = ?', [source.id]);
+      await manager.query(`UPDATE posts
+        SET title = ?, status = 'published', deleted_at = NULL, updated_at = NOW()
+        WHERE id = ?`, [title, sourceThreadId]);
+    }
+
+    if (present.has('resource_comment_reply_map')) {
+      await manager.query('UPDATE resource_comment_reply_map SET resource_id = ? WHERE resource_id = ?', [target.id, source.id]);
+    }
+    return movedReplies;
   }
 
   async previewResourceMerge(sourceId: number, targetId: number) {
@@ -1268,7 +1324,7 @@ export class ResourcesService {
 
       const tableRows = await manager.query(`SELECT table_name FROM information_schema.tables
         WHERE table_schema = DATABASE()`, []);
-      const present = new Set((tableRows || []).map((row: any) => String(row.table_name)));
+      const present = new Set<string>((tableRows || []).map((row: any) => String(row.table_name)));
       const counts = await this.resourceMergeCounts((sql, params) => manager.query(sql, params), sourceId);
       const migrated: Record<string, number> = { preview: 0, version_collisions: 0 };
       const safely = async (table: string, sql: string, params: any[]) => {
@@ -1293,7 +1349,9 @@ export class ResourcesService {
       await safely('resource_ratings', `INSERT IGNORE INTO resource_ratings (resource_id, user_id, rating, created_at, updated_at)
         SELECT ?, user_id, rating, created_at, updated_at FROM resource_ratings WHERE resource_id = ?`, [targetId, sourceId]);
       await safely('resource_ratings', 'DELETE FROM resource_ratings WHERE resource_id = ?', [sourceId]);
-      await safely('resource_comments', 'UPDATE resource_comments SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
+      migrated.resource_discussion_replies = await this.mergePublicResourceDiscussion(
+        manager, present, source, target, sourcePublic && targetPublic,
+      );
       await safely('resource_attributions', 'UPDATE resource_attributions SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
       await safely('resource_media_links', 'UPDATE resource_media_links SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
       await safely('knowledge_articles', 'UPDATE knowledge_articles SET related_resource_id = ? WHERE related_resource_id = ?', [targetId, sourceId]);

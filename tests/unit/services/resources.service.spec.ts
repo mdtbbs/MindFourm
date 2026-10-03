@@ -231,15 +231,15 @@ describe('ResourcesService - admin merge', () => {
     const source = {
       id: 11, status: 'published', is_public: 1, title: 'Source', metadata_json: { tags: ['source'] },
       rating_count: 1, rating_sum: 4, download_count: 10, view_count: 20,
-      merged_into_resource_id: null, file_path: null, content_hash: null, mfl_file_id: null, external_url: null,
+      merged_into_resource_id: null, discussion_thread_id: 301, file_path: null, content_hash: null, mfl_file_id: null, external_url: null,
     };
     const target = {
       id: 12, status: 'published', is_public: 1, title: 'Canonical', metadata_json: { tags: ['target'] },
       rating_count: 1, rating_sum: 5, download_count: 3, view_count: 7,
-      merged_into_resource_id: null, file_path: null, content_hash: null, mfl_file_id: null, external_url: null,
+      merged_into_resource_id: null, discussion_thread_id: 302, file_path: null, content_hash: null, mfl_file_id: null, external_url: null,
     };
     const tables = [
-      'resource_comments', 'resource_favorites', 'resource_likes', 'resource_ratings', 'resource_subscriptions',
+      'resource_comments', 'resource_comment_reply_map', 'replies', 'posts', 'resource_favorites', 'resource_likes', 'resource_ratings', 'resource_subscriptions',
       'resource_attributions', 'resource_versions', 'resource_files', 'download_events', 'resource_version_dependencies',
       'resource_version_compatibilities', 'content_relations', 'knowledge_articles', 'game_content_upload_sessions',
       'resource_media_links', 'resource_content_hash_claims', 'resource_structure_hash_claims', 'resources',
@@ -249,6 +249,7 @@ describe('ResourcesService - admin merge', () => {
       query: jest.fn(async (sql: string, params: any[] = []) => {
         if (sql.includes('SELECT * FROM resources WHERE id IN')) return [source, target];
         if (sql.includes('information_schema.tables')) return tables;
+        if (sql.includes('SELECT id, post_type, source FROM posts WHERE id = ?')) return [{ id: params[0], post_type: 'resource_discussion', source: 'SYSTEM' }];
         if (sql.includes('SELECT id, version, status FROM resource_versions WHERE resource_id = ? ORDER BY id')) {
           versionSelects.push(Number(params[0]));
           return [{ id: 101, version: '1.0.0', status: 'published' }, { id: 102, version: '2.0.0', status: 'published' }];
@@ -274,7 +275,10 @@ describe('ResourcesService - admin merge', () => {
     const result = await service.mergeResource(11, 12, 99);
 
     expect(versionSelects).toEqual([11, 12]);
-    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_comments SET resource_id = ?'), [12, 11]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE replies SET post_id = ? WHERE post_id = ?'), [302, 301]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_comment_reply_map SET resource_id = ?'), [12, 11]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE posts SET deleted_at = NOW()'), [301]);
+    expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE resources SET discussion_thread_id = NULL WHERE id = ?'), [11]);
     expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_files'), [201, 101]);
     expect(manager.query).toHaveBeenCalledWith(expect.stringContaining('UPDATE download_events SET version_id = ?'), [201, 101]);
     expect(manager.query).toHaveBeenCalledWith(expect.stringContaining("status = 'merged'"), [12, 11]);

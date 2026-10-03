@@ -68,16 +68,63 @@ function createService(initialRows: SettingRow[]) {
     return [];
   });
   const find = jest.fn(async () => rows.map((row) => ({ ...row })));
+  const managerQuery = jest.fn(async (sql: string, params: unknown[]) => {
+    if (sql.startsWith('SELECT')) {
+      const keys = params as string[];
+      return rows.filter((row) => keys.includes(row.key)).map((row) => ({ ...row }));
+    }
+    const [value, key, category] = params as string[];
+    const row = rows.find((item) => item.key === key && item.category === category);
+    if (row) row.value = value;
+    return [{ affectedRows: row ? 1 : 0 }];
+  });
+  const manager = {
+    query: managerQuery,
+    transaction: jest.fn(async (work: (transaction: { query: typeof managerQuery }) => Promise<unknown>) => work({ query: managerQuery })),
+  };
 
   return {
     rows,
     query,
     find,
-    service: new SettingsService({ query, find } as any),
+    manager,
+    managerQuery,
+    service: new SettingsService({ query, find, manager } as any),
   };
 }
 
 describe('SettingsService', () => {
+  it('restores a settings snapshot only while all current values still match inside one transaction', async () => {
+    const { service, rows, manager, managerQuery } = createService([
+      { key: 'site_name', value: 'New name', category: 'brand', description: null, updated_at: new Date() },
+      { key: 'tagline', value: 'New tagline', category: 'brand', description: null, updated_at: new Date() },
+    ]);
+
+    await expect(service.setBatchIfUnchanged('brand', {
+      site_name: 'New name',
+      tagline: 'New tagline',
+    }, {
+      site_name: 'Old name',
+      tagline: 'Old tagline',
+    })).resolves.toBe(true);
+
+    expect(manager.transaction).toHaveBeenCalledTimes(1);
+    expect(managerQuery.mock.calls[0][0]).toContain('FOR UPDATE');
+    expect(rows.map(({ value }) => value)).toEqual(['Old name', 'Old tagline']);
+  });
+
+  it('does not overwrite settings when the audited values have changed', async () => {
+    const { service, rows, managerQuery } = createService([
+      { key: 'site_name', value: 'Changed again', category: 'brand', description: null, updated_at: new Date() },
+    ]);
+
+    await expect(service.setBatchIfUnchanged('brand', { site_name: 'New name' }, { site_name: 'Old name' }))
+      .resolves.toBe(false);
+
+    expect(managerQuery).toHaveBeenCalledTimes(1);
+    expect(rows[0].value).toBe('Changed again');
+  });
+
   it('validates per-user quotas and creates a writable local cloud-save directory', async () => {
     const root = await mkdtemp(join(tmpdir(), 'mindfourm-cloud-save-settings-'));
     try {

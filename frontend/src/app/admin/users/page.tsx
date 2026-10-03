@@ -19,6 +19,7 @@ import Pagination from '@/components/ui/pagination';
 import ErrorState from '@/components/ui/error-state';
 import InlineLoading from '@/components/ui/inline-loading';
 import { roleLabel } from '@/lib/display-labels';
+import { promptDialog } from '@/store/interaction-dialog-store';
 
 const PAGE_SIZE = 20;
 
@@ -152,9 +153,14 @@ export default function AdminUsersPage() {
     if (!selectedId || !profile || profile.role === role || updatingRole) return;
 
     const expected = profile.username || String(profile.id);
-    const typed = window.prompt(
-      `这是权限变更操作。请输入“${expected}”确认将 ${userDisplayName(profile)} 的角色改为「${roleLabel(role)}」。`,
-    );
+    const typed = await promptDialog({
+      title: '确认修改用户角色',
+      message: `这是权限变更操作。请输入名称以确认将 ${userDisplayName(profile)} 的角色改为「${roleLabel(role)}」。`,
+      label: `请输入：${expected}`,
+      required: true,
+      validate: (value) => value === expected ? null : '输入内容不匹配',
+      submitLabel: '修改角色',
+    });
     if (typed !== expected) return;
 
     setUpdatingRole(true);

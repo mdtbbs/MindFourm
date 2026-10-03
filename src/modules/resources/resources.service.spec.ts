@@ -293,7 +293,7 @@ describe('ResourcesService', () => {
     const result = await service.getById(17, { id: 9, role: 'user' });
 
     expect(result).toMatchObject({ rating_count: 6, comment_count: 2 });
-    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining("WHERE status = ? AND resource_id IN (?)"), ['visible', 17]);
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining("reply.post_id = resource.discussion_thread_id AND reply.status = 'published'"), [17]);
     expect(resourceRepository.findOne).toHaveBeenCalled();
   });
 

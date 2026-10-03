@@ -7,5 +7,6 @@
   { "value": "server_plugin", "label": "服务器插件", "showInNavigation": true },
   { "value": "development_tool", "label": "工具", "showInNavigation": true },
   { "value": "texture_ui", "label": "材质与界面", "showInNavigation": true },
+  { "value": "pack", "label": "资源包", "showInNavigation": true },
   { "value": "other", "label": "其他", "showInNavigation": true }
 ]

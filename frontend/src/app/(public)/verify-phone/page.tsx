@@ -5,12 +5,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import PhoneVerificationForm from "@/components/auth/phone-verification-form";
 import { useAuth } from "@/lib/auth/context";
 import { getSafePhoneVerificationRedirect } from "@/lib/phone-verification/redirect";
+import { siteProfile } from '@/config/site-profile';
 function VerifyPhoneContent() {
   const router = useRouter(),
     params = useSearchParams(),
     { user, isAuthenticated, isLoading } = useAuth();
   const redirect = getSafePhoneVerificationRedirect(params.get("redirect"));
   useEffect(() => {
+    if (!siteProfile.features.phoneVerification) {
+      router.replace('/');
+      return;
+    }
     if (!isLoading && !isAuthenticated)
       router.replace(
         `/login?redirect=${encodeURIComponent(`/verify-phone?redirect=${redirect}`)}`,
@@ -20,7 +25,7 @@ function VerifyPhoneContent() {
     if (!isLoading && user?.phone_verified && params.get("redirect"))
       router.replace(redirect);
   }, [isLoading, user, params, redirect, router]);
-  if (isLoading || !isAuthenticated) return null;
+  if (!siteProfile.features.phoneVerification || isLoading || !isAuthenticated) return null;
   if (user?.phone_verified)
     return (
       <main className="mx-auto max-w-md px-4 py-16 text-center">

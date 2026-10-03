@@ -3,30 +3,40 @@
 import { useEffect, useState, useCallback } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
-import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 
 export default function SeoSettingsPage() {
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
-    try { setValues(await adminApi.getSettings('seo')); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
+    try {
+      const data = await adminApi.getSettings('seo');
+      setValues(data);
+      initializeUnsaved(data);
+    }
+    catch (err) { setLoadError(err instanceof Error ? err.message : 'Failed'); }
     finally { setLoading(false); }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
   const handleSave = async () => {
-    setSaving(true); setError(null);
-    try { await adminApi.updateSettings('seo', values); await refreshAfterSettingsSave(); setMessage('Saved'); setTimeout(() => setMessage(null), 3000); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
-    finally { setSaving(false); }
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
+    try {
+      await adminApi.updateSettings('seo', submittedValues);
+      await refreshAfterSettingsSave();
+      unsaved.markSaved(submittedValues);
+    }
+    catch (err) { unsaved.setError(err instanceof Error ? err.message : 'Failed'); }
   };
 
   const update = (k: string, v: string) => setValues((p) => ({ ...p, [k]: v }));
@@ -34,14 +44,13 @@ export default function SeoSettingsPage() {
   if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">SEO 设置</h2>
         <p className="text-xs text-surface-400 mt-1">优化搜索引擎索引</p>
       </div>
       <div className="p-6 space-y-6">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
 
         <div>
           <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">标题后缀</label>
@@ -74,10 +83,18 @@ export default function SeoSettingsPage() {
           </label>
         </div>
       </div>
-      <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
-        <Button variant="ghost" onClick={fetchSettings}>Reset</Button>
-        <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

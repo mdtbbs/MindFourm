@@ -1,15 +1,309 @@
 {
-  "common": { "save": "Save", "cancel": "Cancel", "loading": "Loading…", "search": "Search", "searchCommunity": "Search discussions, resources and members…", "back": "Back", "close": "Close", "home": "Home", "language": "Language", "skipToContent": "Skip to main content", "menu": "Menu", "theme": "Change theme", "switchToLight": "Switch to light theme", "switchToDark": "Switch to dark theme" },
-  "home": { "intro": "A community built by Mindustry players. Find mods, maps and schematics, then join the discussion.", "searchPlaceholder": "Search mods, maps, schematics and discussions…", "quickLinks": "Browse resources", "mods": "Mods", "maps": "Maps", "schematics": "Schematics", "latestDiscussions": "Latest discussions", "latestResources": "Latest resources", "viewAll": "View all", "noDiscussions": "No public discussions yet.", "noResources": "No public resources yet.", "unavailable": "This section is temporarily unavailable.", "reload": "Try again", "stale": "Some sections are showing the most recently available results.", "gameServers": "Game servers" },
-  "navigation": { "home": "Home", "posts": "Discussions", "resources": "Resources", "servers": "Servers", "wiki": "Knowledge base", "login": "Sign in", "register": "Create account", "logout": "Sign out", "profile": "Profile", "settings": "Settings", "friends": "Friends", "messages": "Messages", "bookmarks": "Bookmarks", "notifications": "Notifications", "admin": "Administration", "siteNavigation": "Site navigation" },
-  "forum": { "createPost": "Start a discussion", "latestDiscussions": "Latest discussions", "trending": "Trending", "reply": "Reply", "replies": "Replies", "categories": "Categories", "tags": "Tags", "report": "Report", "searchResults": "Search results", "contentLanguage": "Content language" },
-  "resources": { "title": "Resources", "mods": "Mods", "maps": "Maps", "schematics": "Schematics", "download": "Download", "upload": "Upload a resource", "popular": "Popular resources", "version": "Version", "compatibility": "Compatibility", "anonymousDownload": "Public files can be downloaded without an account." },
-  "mobile": { "publish": "Publish", "myAccount": "My account", "chooseWhatToPublish": "Choose what to publish", "quickActions": "Quick publishing shortcuts", "openPublish": "Open publishing menu", "closePublish": "Close publishing menu", "publishPost": "Start a discussion", "publishPostDescription": "Ask a question or share an update", "publishSchematic": "Share a schematic", "publishSchematicDescription": "Upload a .msch file or paste a schematic code", "publishMap": "Share a map", "publishMapDescription": "Upload a .msav file with a generated preview", "publishResource": "Upload another resource", "publishResourceDescription": "Share a mod, tool or other file" },
-  "notifications": { "title": "Notifications", "unread": "{count} unread", "system": "System", "community": "Community", "reply": "replied to your discussion", "mention": "mentioned you", "postLike": "liked your discussion", "replyLike": "liked your reply", "message": "sent you a message", "bestAnswer": "marked your reply as the best answer", "systemNotice": "sent a community notice", "newNotice": "sent a notification", "allReadLabel": "Mark all as read", "allRead": "All read", "empty": "No notifications yet", "viewAll": "View all notifications" },
-  "footer": { "links": "Community links", "more": "More", "navigation": "Footer navigation", "friendly": "Useful links", "thanks": "Thanks", "about": "About", "terms": "Terms", "privacy": "Privacy", "feedback": "Feedback" , "communityGuidelines": "Community guidelines", "resourceRules": "Content & resource rules", "takedown": "Copyright & takedowns", "tableOfContents": "On this page"},
-  "consent": { "title": "Review and accept the community terms", "summary": "Please review and accept the Terms of Service and Privacy Policy before participating.", "loginRequired": "Sign in before accepting the terms.", "login": "Return to sign in", "termsIntro": "Please review the", "and": "and the", "disagree": "If you do not agree, choose “Decline” to sign out. You will not be able to participate.", "checkbox": "I have read and agree to these terms", "decline": "Decline", "accept": "I agree", "processing": "Saving…", "checking": "Checking sign-in…", "checkFailed": "Sign-in could not be checked. Return home and try again.", "submitFailed": "Your choice could not be saved. Please try again." },
-  "auth": { "signIn": "Sign in", "register": "Create account", "signedIn": "Signed in", "guest": "Not signed in", "emailVerificationRequired": "Verify your email address before posting or uploading.", "phoneVerificationRequired": "Verify your phone number to continue." },
-  "errors": { "EMAIL_VERIFICATION_REQUIRED": "Verify your email address before continuing.", "PHONE_NOT_VERIFIED": "Verify your phone number before continuing.", "phoneRetry": "Verify your phone number to continue this action. It will resume automatically when verification is complete.", "USER_BANNED": "This account cannot perform this action.", "TERMS_ACCEPTANCE_REQUIRED": "Accept the community terms to continue.", "FEATURE_DISABLED": "This feature is currently unavailable.", "RESOURCE_UPLOAD_DISABLED": "Resource uploads are currently unavailable.", "notFound": "Page not found", "notFoundDescription": "This page may have been removed, may not be public, or the link may be incorrect.", "searchPosts": "Search discussions…", "browseCategories": "Browse categories", "retry": "Try again", "pageError": "Page error", "loadError": "The page could not be loaded. Try again.", "globalTitle": "This page is temporarily unavailable", "globalDescription": "Please try again later. Internal error details are hidden." },
-  "recommendation": { "title": "Looking for the Chinese Mindustry community?", "description": "MDTBBS provides a Chinese-language community for players in mainland China.", "visit": "Visit MDTBBS", "stay": "Stay on Mindustry Club" },
-  "admin": { "language": "Admin language", "english": "English", "chinese": "简体中文" }
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "loading": "Loading…",
+    "search": "Search",
+    "searchCommunity": "Search discussions, resources and members…",
+    "back": "Back",
+    "close": "Close",
+    "home": "Home",
+    "language": "Language",
+    "skipToContent": "Skip to main content",
+    "menu": "Menu",
+    "theme": "Change theme",
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme"
+  },
+  "home": {
+    "intro": "A community built by Mindustry players. Find mods, maps and schematics, then join the discussion.",
+    "searchPlaceholder": "Search mods, maps, schematics and discussions…",
+    "quickLinks": "Browse resources",
+    "mods": "Mods",
+    "maps": "Maps",
+    "schematics": "Schematics",
+    "latestDiscussions": "Latest discussions",
+    "latestResources": "Latest resources",
+    "viewAll": "View all",
+    "noDiscussions": "No public discussions yet.",
+    "noResources": "No public resources yet.",
+    "unavailable": "This section is temporarily unavailable.",
+    "reload": "Try again",
+    "stale": "Some sections are showing the most recently available results.",
+    "gameServers": "Game servers"
+  },
+  "navigation": {
+    "discover": "Discover",
+    "developers": "Developers",
+    "home": "Home",
+    "posts": "Discussions",
+    "resources": "Resources",
+    "servers": "Servers",
+    "allDiscussions": "All discussions",
+    "resourceBrowsing": "Browse resources",
+    "allResources": "All resources",
+    "discussionBoards": "Discussion boards",
+    "account": "Account",
+    "myPosts": "My discussions",
+    "bookmarks": "Bookmarks",
+    "messages": "Messages",
+    "notifications": "Notifications",
+    "friends": "Friends",
+    "settings": "Settings",
+    "publishDiscussion": "Start a discussion",
+    "publishResource": "Upload a resource"
+  },
+  "forum": {
+    "createPost": "Start a discussion",
+    "latestDiscussions": "Latest discussions",
+    "trending": "Trending",
+    "reply": "Reply",
+    "replies": "Replies",
+    "categories": "Categories",
+    "tags": "Tags",
+    "report": "Report",
+    "searchResults": "Search results",
+    "contentLanguage": "Content language"
+  },
+  "resources": {
+    "title": "Resources",
+    "mods": "Mods",
+    "maps": "Maps",
+    "schematics": "Schematics",
+    "download": "Download",
+    "upload": "Upload a resource",
+    "popular": "Popular resources",
+    "version": "Version",
+    "compatibility": "Compatibility",
+    "anonymousDownload": "Public files can be downloaded without an account.",
+    "kinds": {
+      "mod": "Mods",
+      "map": "Maps",
+      "schematic": "Schematics",
+      "save": "Save files",
+      "game_version": "Game versions",
+      "server_plugin": "Server plugins",
+      "development_tool": "Development tools",
+      "texture_ui": "Textures and UI",
+      "other": "Other"
+    }
+  },
+  "mobile": {
+    "publish": "Publish",
+    "myAccount": "My account",
+    "chooseWhatToPublish": "Choose what to publish",
+    "quickActions": "Quick publishing shortcuts",
+    "openPublish": "Open publishing menu",
+    "closePublish": "Close publishing menu",
+    "publishPost": "Start a discussion",
+    "publishPostDescription": "Ask a question or share an update",
+    "publishSchematic": "Share a schematic",
+    "publishSchematicDescription": "Upload a .msch file or paste a schematic code",
+    "publishMap": "Share a map",
+    "publishMapDescription": "Upload a .msav file with a generated preview",
+    "publishResource": "Upload another resource",
+    "publishResourceDescription": "Share a mod, tool or other file"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "unread": "{count} unread",
+    "system": "System",
+    "community": "Community",
+    "reply": "replied to your discussion",
+    "mention": "mentioned you",
+    "postLike": "liked your discussion",
+    "replyLike": "liked your reply",
+    "message": "sent you a message",
+    "bestAnswer": "marked your reply as the best answer",
+    "systemNotice": "sent a community notice",
+    "newNotice": "sent a notification",
+    "allReadLabel": "Mark all as read",
+    "allRead": "All read",
+    "empty": "No notifications yet",
+    "viewAll": "View all notifications"
+  },
+  "footer": {
+    "links": "Community links",
+    "more": "More",
+    "navigation": "Footer navigation",
+    "friendly": "Useful links",
+    "thanks": "Thanks",
+    "about": "About",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "feedback": "Feedback",
+    "communityGuidelines": "Community guidelines",
+    "resourceRules": "Content & resource rules",
+    "takedown": "Copyright & takedowns",
+    "tableOfContents": "On this page"
+  },
+  "consent": {
+    "title": "Review and accept the community terms",
+    "summary": "Please review and accept the Terms of Service and Privacy Policy before participating.",
+    "loginRequired": "Sign in before accepting the terms.",
+    "login": "Return to sign in",
+    "termsIntro": "Please review the",
+    "and": "and the",
+    "disagree": "If you do not agree, choose “Decline” to sign out. You will not be able to participate.",
+    "checkbox": "I have read and agree to these terms",
+    "decline": "Decline",
+    "accept": "I agree",
+    "processing": "Saving…",
+    "checking": "Checking sign-in…",
+    "checkFailed": "Sign-in could not be checked. Return home and try again.",
+    "submitFailed": "Your choice could not be saved. Please try again."
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "register": "Create account",
+    "signedIn": "Signed in",
+    "guest": "Not signed in",
+    "emailVerificationRequired": "Verify your email address before posting or uploading.",
+    "phoneVerificationRequired": "Verify your phone number to continue."
+  },
+  "errors": {
+    "EMAIL_VERIFICATION_REQUIRED": "Verify your email address before continuing.",
+    "PHONE_NOT_VERIFIED": "Verify your phone number before continuing.",
+    "phoneRetry": "Verify your phone number to continue this action. It will resume automatically when verification is complete.",
+    "USER_BANNED": "This account cannot perform this action.",
+    "TERMS_ACCEPTANCE_REQUIRED": "Accept the community terms to continue.",
+    "FEATURE_DISABLED": "This feature is currently unavailable.",
+    "RESOURCE_UPLOAD_DISABLED": "Resource uploads are currently unavailable.",
+    "notFound": "Page not found",
+    "notFoundDescription": "This page may have been removed, may not be public, or the link may be incorrect.",
+    "searchPosts": "Search discussions…",
+    "browseCategories": "Browse categories",
+    "retry": "Try again",
+    "pageError": "Page error",
+    "loadError": "The page could not be loaded. Try again.",
+    "globalTitle": "This page is temporarily unavailable",
+    "globalDescription": "Please try again later. Internal error details are hidden."
+  },
+  "recommendation": {
+    "title": "Looking for the Chinese community?",
+    "description": "MDTBBS is the Chinese-language Mindustry community.",
+    "visit": "Visit MDTBBS.cn",
+    "stay": "Stay here"
+  },
+  "admin": {
+    "language": "Admin language",
+    "english": "English",
+    "chinese": "简体中文"
+  },
+  "languageSettings": {
+    "title": "Language preferences",
+    "description": "Choose the interface language and the language to prioritize in your feed. Other languages remain visible.",
+    "accountLanguage": "Interface language",
+    "feedLanguage": "Feed preference",
+    "followInterface": "Follow interface language",
+    "save": "Save feed preference",
+    "saving": "Saving…",
+    "saved": "Saved"
+  },
+  "adminNavigation": {
+    "item": {
+      "resource-analytics": "Resource analytics"
+    }
+  },
+  "legal": {
+    "terms": {
+      "title": "Terms of Service",
+      "accounts": {
+        "title": "Accounts and access",
+        "body": "Sign-in is provided by MindAuth. Keep your account secure and do not use another person’s account without permission. We may restrict access when needed to protect the community or service."
+      },
+      "content": {
+        "title": "Your content",
+        "body": "You keep ownership of content you create. You grant Mindustry Club permission to host, display, distribute, and make that content available as needed to operate the service. You may remove your content where the service provides that option, subject to legal, security, and backup needs."
+      },
+      "conduct": {
+        "title": "Community conduct",
+        "body": "Do not harass people, impersonate others, spam, interfere with the service, or upload malicious files. Follow the Community Guidelines and Content & Resource Rules."
+      },
+      "moderation": {
+        "title": "Moderation and availability",
+        "body": "Members may report content. Administrators may hide or remove content and restrict accounts to address safety, rights, or abuse reports. Mindustry Club is an independent player community, is not affiliated with or endorsed by Anuken or the official Mindustry project, and may change or be unavailable."
+      }
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "identity": {
+        "title": "Account data",
+        "body": "MindAuth provides account identity. Mindustry Club stores its own profile, posts, replies, resource records, and moderation decisions in an independent community database."
+      },
+      "data": {
+        "title": "Data we process",
+        "body": "We process account details, email verification state, IP address and request metadata, session cookies, and security or moderation logs to provide the service, prevent abuse, and investigate reports. Access to IP and security logs is restricted, and they are kept only as needed."
+      },
+      "cookies": {
+        "title": "Cookies and language",
+        "body": "Essential cookies keep sessions secure and remember your language and feed preferences. We do not use them for cross-site advertising."
+      },
+      "publicContent": {
+        "title": "Public content",
+        "body": "Public posts and resource pages may be visible to anyone, including search engines."
+      },
+      "requests": {
+        "title": "Privacy requests",
+        "body": "Contact the site administrators through the report or feedback tools for privacy questions or account deletion requests."
+      }
+    },
+    "communityGuidelines": {
+      "title": "Community Guidelines",
+      "respect": {
+        "title": "Be considerate",
+        "body": "Critique ideas without targeting people. Do not harass, threaten, or impersonate other members."
+      },
+      "discussion": {
+        "title": "Keep discussions useful",
+        "body": "Keep discussions on topic, share context, and avoid spam, scams, and disruptive behavior."
+      },
+      "credit": {
+        "title": "Credit creators",
+        "body": "Credit creators and link to original sources when possible. Respect licenses and attribution requests."
+      },
+      "safety": {
+        "title": "Protect the community",
+        "body": "Do not publish personal information, malicious links, or content intended to compromise devices or accounts."
+      },
+      "reporting": {
+        "title": "Report concerns",
+        "body": "Use the report action when content needs administrator attention. Do not use reports to target or silence other members."
+      }
+    },
+    "resourceRules": {
+      "title": "Content & Resource Rules",
+      "rights": {
+        "title": "Share responsibly",
+        "body": "Upload only material you have the right to share. Include the applicable license and credit original authors."
+      },
+      "metadata": {
+        "title": "Describe resources accurately",
+        "body": "Describe versions and compatibility accurately. Do not misrepresent authorship, files, or how a resource works."
+      },
+      "prohibited": {
+        "title": "Unsafe files",
+        "body": "Do not upload malware, trojans, backdoors, credential theft tools, or files intended to damage devices or accounts."
+      },
+      "review": {
+        "title": "Review",
+        "body": "Resource submissions may be checked for abuse and unsafe content. Administrators may restrict material while reviewing a report."
+      }
+    },
+    "copyright": {
+      "title": "Copyright and Takedown Policy",
+      "submit": {
+        "title": "Submit a request",
+        "body": "If you believe content on Mindustry Club infringes your rights, send the site administrators the page or resource URL, identify the material and the right you hold, explain what action you request, and include a way to contact you."
+      },
+      "review": {
+        "title": "Review and action",
+        "body": "Administrators review reports, may temporarily restrict disputed material, and may remove content or restore access after review."
+      },
+      "abuse": {
+        "title": "Abusive reports",
+        "body": "False or abusive reports may be rejected. Provide accurate information and only submit requests in good faith."
+      }
+    }
+  }
 }

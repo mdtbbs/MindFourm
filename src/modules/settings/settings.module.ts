@@ -5,9 +5,10 @@ import { SettingsRevalidationService } from './settings-revalidation.service';
 import { SettingsController } from './settings.controller';
 import { Setting } from '@entities/setting.entity';
 import { NavigationModule } from '../navigation/navigation.module';
+import { LogsModule } from '../logs/logs.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Setting]), NavigationModule],
+  imports: [TypeOrmModule.forFeature([Setting]), NavigationModule, LogsModule],
   controllers: [SettingsController],
   providers: [SettingsService, SettingsRevalidationService],
   exports: [SettingsService, SettingsRevalidationService],

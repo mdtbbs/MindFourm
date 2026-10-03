@@ -10,6 +10,7 @@ import {
   restoreGameSaveSnapshot, type GameSaveQuota, type GameSaveSlot, type GameSaveSnapshot,
 } from '@/lib/api/v1/game-saves';
 import { useI18n } from '@/i18n/provider';
+import { confirmDialog, promptDialog } from '@/store/interaction-dialog-store';
 import { buildPublicApiUrl } from '@/lib/api/client';
 
 type Capability = { cloud_saves_v1: boolean };
@@ -89,7 +90,14 @@ export default function CloudSavesPage() {
   };
 
   const rename = async (slot: GameSaveSlot) => {
-    const name = window.prompt(t('cloudSaves.renamePrompt'), slot.name)?.trim();
+    const answer = await promptDialog({
+      title: t('cloudSaves.renamePrompt'),
+      label: t('cloudSaves.renamePrompt'),
+      defaultValue: slot.name,
+      maxLength: 80,
+      required: true,
+    });
+    const name = answer?.trim();
     if (!name || name === slot.name) return;
     setBusy(`rename:${slot.id}`);
     setError('');
@@ -101,7 +109,7 @@ export default function CloudSavesPage() {
   };
 
   const removeSlot = async (slot: GameSaveSlot) => {
-    if (!window.confirm(t('cloudSaves.deleteSlotConfirm'))) return;
+    if (!await confirmDialog({ message: t('cloudSaves.deleteSlotConfirm'), destructive: true })) return;
     setBusy(`delete-slot:${slot.id}`);
     setError('');
     try { await deleteGameSave(slot.id); await loadAll(null); }
@@ -111,7 +119,7 @@ export default function CloudSavesPage() {
 
   const restore = async (snapshot: GameSaveSnapshot) => {
     if (!selected) return;
-    if (!window.confirm(t('cloudSaves.restoreConfirm', { revision: snapshot.revision }))) return;
+    if (!await confirmDialog({ message: t('cloudSaves.restoreConfirm', { revision: snapshot.revision }), confirmLabel: '恢复', destructive: true })) return;
     setBusy(`restore:${snapshot.id}`);
     setError('');
     try {
@@ -133,7 +141,7 @@ export default function CloudSavesPage() {
   };
 
   const removeSnapshot = async (snapshot: GameSaveSnapshot) => {
-    if (!selected || !window.confirm(t('cloudSaves.deleteSnapshotConfirm', { revision: snapshot.revision }))) return;
+    if (!selected || !await confirmDialog({ message: t('cloudSaves.deleteSnapshotConfirm', { revision: snapshot.revision }), destructive: true })) return;
     setBusy(`delete-snapshot:${snapshot.id}`);
     setError('');
     try {

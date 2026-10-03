@@ -24,7 +24,9 @@
     "recentSearches": "Recent searches",
     "clearHistory": "Clear",
     "popularSearches": "Popular searches",
-    "partialResults": "Some search categories are temporarily unavailable. Available results are shown below. Please retry later."
+    "partialResults": "Some search categories are temporarily unavailable. Available results are shown below. Please retry later.",
+    "filterLanguage": "Content language",
+    "allLanguages": "All languages"
   },
   "notices": {
     "title": "Community notices",
@@ -65,8 +67,8 @@
   },
   "contentLanguage": {
     "label": "Content language",
-    "unknown": "Not specified",
-    "hint": "Choose the language used in this post or resource.",
+    "unknown": "Detected automatically",
+    "hint": "We detect a starting value from the text. Review or change it before publishing.",
     "languages": {
       "en": "English",
       "ru": "Russian",
@@ -87,7 +89,11 @@
     "resourcesDescription": "Browse community resources and tools",
     "notices": "Community notices",
     "noticesDescription": "Read the latest notices and events",
-    "summary": "Resources: {resources} · Discussions: {discussions}"
+    "summary": "Resources: {resources} · Discussions: {discussions}",
+    "discussions": "Discussions",
+    "discussionsDescription": "Join conversations with other Mindustry players.",
+    "developers": "Developers",
+    "developersDescription": "Explore the developer center and integration guides."
   },
   "tagsPage": {
     "title": "Tags",

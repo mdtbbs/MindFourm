@@ -10,6 +10,9 @@ import { normalizeEditorContent } from "@/lib/editor-content";
 import { siteProfile } from "@/config/site-profile";
 import { projectRichContentToMarkdown } from "@/lib/tiptap/rich-content-projection";
 import { createTiptapEditorExtensions } from "@/lib/tiptap/editor-extensions";
+import { parseRichEmbed } from "@/lib/tiptap/rich-embed";
+import { normalizeEditorLink } from "@/lib/tiptap/editor-link";
+import { confirmDialog, promptDialog } from "@/store/interaction-dialog-store";
 import {
   Bold,
   Italic,
@@ -36,39 +39,6 @@ import {
   Underline as UnderlineIcon,
   Smile,
 } from "lucide-react";
-
-function parseRichEmbed(raw: string): Record<string, unknown> | null {
-  if (!raw || raw.length > 4096) return null;
-  let url: URL;
-  try { url = new URL(raw); } catch { return null; }
-  if (!['https:'].includes(url.protocol) || url.username || url.password) return null;
-  const providers = siteProfile.videoProviders as readonly string[];
-  const host = url.hostname.toLowerCase().replace(/^www\./, '');
-  if (providers.includes('direct') && /\.(?:mp4|webm)$/i.test(url.pathname)) {
-    return { type: 'video', attrs: { provider: 'direct', src: url.href, title: '' } };
-  }
-  if (providers.includes('youtube') && ['youtube.com', 'm.youtube.com', 'youtu.be', 'youtube-nocookie.com'].includes(host)) {
-    const id = host === 'youtu.be' ? url.pathname.slice(1).split('/')[0] : url.searchParams.get('v') || url.pathname.match(/\/embed\/([A-Za-z0-9_-]{11})/)?.[1];
-    if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return { type: 'video', attrs: { provider: 'youtube', videoId: id, title: '' } };
-  }
-  if (providers.includes('bilibili') && (host === 'bilibili.com' || host.endsWith('.bilibili.com'))) {
-    const id = url.pathname.match(/\/video\/(BV[0-9A-Za-z]{10}|av[1-9][0-9]{0,14})/)?.[1] || url.searchParams.get('bvid');
-    if (id && /^(?:BV[0-9A-Za-z]{10}|av[1-9][0-9]{0,14})$/.test(id)) return { type: 'video', attrs: { provider: 'bilibili', videoId: id, title: '' } };
-  }
-  if (providers.includes('douyin') && (host === 'douyin.com' || host.endsWith('.douyin.com'))) {
-    const id = url.pathname.match(/\/video\/(\d{5,32})/)?.[1];
-    if (id) return { type: 'video', attrs: { provider: 'douyin', videoId: id, title: '' } };
-  }
-  const postId = Number(url.pathname.match(/^\/posts\/(\d+)(?:\/|$)/)?.[1]);
-  const replyId = Number(url.hash.match(/^#reply-(\d+)$/)?.[1]);
-  const allowedDomains = [siteProfile.domain, 'www.' + siteProfile.domain];
-  if (postId > 0 && (typeof window === 'undefined' || url.hostname === window.location.hostname || allowedDomains.includes(url.hostname))) {
-    return replyId > 0
-      ? { type: 'replyQuote', attrs: { postId, replyId } }
-      : { type: 'postQuote', attrs: { postId } };
-  }
-  return null;
-}
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -198,9 +168,16 @@ export default function TiptapEditor({
       handlePaste(_view, event) {
         const plainText = event.clipboardData?.getData('text/plain')?.trim() || '';
         const embed = parseRichEmbed(plainText);
-        if (embed && context !== 'resource' && typeof window !== 'undefined' && window.confirm('检测到可嵌入内容，是否插入为结构化卡片？')) {
+        if (embed && context !== 'resource' && typeof window !== 'undefined') {
           event.preventDefault();
-          richPasteInsertFnRef.current?.(embed);
+          void confirmDialog({
+            title: '插入为卡片',
+            message: '检测到可嵌入的视频或帖子链接。要插入为结构化卡片吗？',
+            confirmLabel: '插入卡片',
+          }).then((accepted) => {
+            if (accepted) richPasteInsertFnRef.current?.(embed);
+            else editor?.chain().focus().insertContent(plainText).run();
+          });
           return true;
         }
         if (!imageUpload) return false;
@@ -334,23 +311,57 @@ export default function TiptapEditor({
     }
   }, [editor, showError]);
 
-  const insertVideo = useCallback(() => {
+  const insertVideo = useCallback(async () => {
     if (!editor) return;
-    const url = window.prompt('粘贴支持的视频链接（Bilibili、抖音或 HTTPS MP4/WebM）');
-    const embed = parseRichEmbed(url?.trim() || '');
-    if (!embed || embed.type !== 'video') {
-      showError('此链接不是当前站点支持的视频来源');
+    const providerLabels: Record<string, string> = {
+      youtube: 'YouTube',
+      bilibili: 'Bilibili',
+      douyin: '抖音',
+      direct: 'HTTPS MP4/WebM',
+    };
+    const supportedProviders = siteProfile.videoProviders.map((provider) => providerLabels[provider]).filter(Boolean);
+    const url = await promptDialog({
+      title: '插入视频',
+      message: `支持来源：${supportedProviders.join('、')}。请粘贴完整 HTTPS 视频链接。`,
+      label: '视频链接',
+      inputType: 'url',
+      placeholder: 'https://…',
+      validate: (value) => {
+        const embed = parseRichEmbed(value);
+        return embed?.type === 'video' ? null : '请输入当前站点支持的 HTTPS 视频链接';
+      },
+    });
+    if (url === null) return;
+    const embed = parseRichEmbed(url);
+    if (embed?.type !== 'video') return;
+    editor.chain().focus().insertContent(embed).run();
+  }, [editor]);
+
+  const insertQuote = useCallback(async () => {
+    if (!editor) return;
+    const value = await promptDialog({
+      title: '引用帖子',
+      message: '输入帖子 ID，或粘贴论坛帖子/回复链接。',
+      label: '帖子 ID 或链接',
+      required: true,
+      placeholder: '123 或 https://…/posts/123#reply-456',
+      validate: (input) => {
+        const id = Number(input);
+        if (Number.isSafeInteger(id) && id > 0) return null;
+        const quote = parseRichEmbed(input);
+        return quote?.type === 'postQuote' || quote?.type === 'replyQuote' ? null : '请输入有效帖子 ID 或本站帖子/回复链接';
+      },
+    });
+    if (value === null) return;
+    const postId = Number(value);
+    if (Number.isSafeInteger(postId) && postId > 0) {
+      editor.chain().focus().insertContent({ type: 'postQuote', attrs: { postId } }).run();
       return;
     }
-    editor.chain().focus().insertContent(embed).run();
-  }, [editor, showError]);
-
-  const insertQuote = useCallback(() => {
-    if (!editor) return;
-    const value = window.prompt('输入要引用的帖子 ID');
-    const postId = Number(value);
-    if (!Number.isSafeInteger(postId) || postId < 1) return;
-    editor.chain().focus().insertContent({ type: 'postQuote', attrs: { postId } }).run();
+    const quote = parseRichEmbed(value);
+    if (quote?.type === 'postQuote' || quote?.type === 'replyQuote') {
+      editor.chain().focus().insertContent(quote).run();
+    }
   }, [editor]);
 
   /* ── @ user suggestions ─────────────────────────────── */
@@ -470,31 +481,26 @@ export default function TiptapEditor({
 
   /* ── Link dialog ─────────────────────────────────────── */
 
-  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
-  const [linkUrl, setLinkUrl] = useState("");
-
-  const openLinkDialog = useCallback(() => {
+  const openLinkDialog = useCallback(async () => {
     if (!editor) return;
     const prevUrl = editor.getAttributes("link").href || "";
-    setLinkUrl(prevUrl);
-    setLinkDialogOpen(true);
-  }, [editor]);
-
-  const applyLink = useCallback(() => {
-    if (!editor) return;
-    const url = linkUrl.trim();
+    const value = await promptDialog({
+      title: '插入或编辑链接',
+      message: '支持 HTTP/HTTPS 外链、站内路径和邮箱链接。输入裸域名会自动使用 HTTPS。',
+      label: '链接地址',
+      defaultValue: prevUrl,
+      placeholder: '输入 HTTPS、站内路径或邮箱地址',
+      validate: (input) => !input.trim() || normalizeEditorLink(input) ? null : '请输入有效的 HTTPS、HTTP、站内路径或邮箱链接',
+    });
+    if (value === null) return;
+    const url = value.trim() ? normalizeEditorLink(value) : '';
+    if (url === null) return;
     if (!url) {
       editor.chain().focus().unsetLink().run();
-    } else {
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange("link")
-        .setLink({ href: url })
-        .run();
+      return;
     }
-    setLinkDialogOpen(false);
-  }, [editor, linkUrl]);
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  }, [editor]);
 
   /* ── Cleanup ─────────────────────────────────────────── */
 
@@ -600,15 +606,6 @@ export default function TiptapEditor({
         </div>
       )}
 
-      {/* ── Link dialog ─────────────────────────────────── */}
-      {linkDialogOpen && (
-        <LinkDialog
-          url={linkUrl}
-          onUrlChange={setLinkUrl}
-          onApply={applyLink}
-          onClose={() => setLinkDialogOpen(false)}
-        />
-      )}
     </div>
   );
 }
@@ -801,59 +798,3 @@ function Divider() {
 }
 
 /* ─── Link dialog ─────────────────────────────────────── */
-
-function LinkDialog({
-  url,
-  onUrlChange,
-  onApply,
-  onClose,
-}: {
-  url: string;
-  onUrlChange: (v: string) => void;
-  onApply: () => void;
-  onClose: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        onApply();
-      }
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [onApply, onClose]);
-
-  return (
-    <div className="tiptap-link-dialog" role="presentation">
-      <div
-        className="tiptap-link-dialog-inner"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="tiptap-link-dialog-title"
-      >
-        <h2 id="tiptap-link-dialog-title" className="sr-only">插入或编辑链接</h2>
-        <label htmlFor="tiptap-link-url" className="sr-only">链接地址</label>
-        <input
-          ref={inputRef}
-          id="tiptap-link-url"
-          type="url"
-          value={url}
-          onChange={(e) => onUrlChange(e.target.value)}
-          placeholder="输入链接地址 https://…"
-          className="tiptap-link-input"
-        />
-        <button type="button" onClick={onApply} className="tiptap-link-apply">
-          确定
-        </button>
-        <button type="button" onClick={onClose} className="tiptap-link-cancel">
-          取消
-        </button>
-      </div>
-    </div>
-  );
-}

@@ -9,6 +9,7 @@ interface ConfiguredFooterPageProps {
   title: string;
   settingKey: string;
   fallback: React.ReactNode;
+  preferFallback?: boolean;
 }
 
 function toAnchorId(value: string): string {
@@ -27,6 +28,7 @@ export default async function ConfiguredFooterPage({
   title,
   settingKey,
   fallback,
+  preferFallback = false,
 }: ConfiguredFooterPageProps) {
   // At build time the loopback API is intentionally skipped, which used to
   // bake the fallback text into these otherwise static routes. These pages
@@ -34,7 +36,7 @@ export default async function ConfiguredFooterPage({
   noStore();
   const [settings, locale] = await Promise.all([fetchPublicSettings({ fresh: true }), getRequestLocale()]);
   const tableOfContentsLabel = translate(locale, 'footer.tableOfContents');
-  const content = settings[settingKey]?.trim();
+  const content = preferFallback ? '' : settings[settingKey]?.trim();
   const renderedContent = content?.replace(/^#\s+/gm, '## ') || '';
   const tableOfContents = getTableOfContents(renderedContent);
 

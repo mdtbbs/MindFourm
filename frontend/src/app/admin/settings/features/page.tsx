@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { adminApi } from '@/lib/api/client';
 import Alert from '@/components/ui/alert';
-import Button from '@/components/ui/button';
 import { useSettingsSaveRefresh } from '@/hooks/use-settings-save-refresh';
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes';
+import SettingsUnsavedChangesBar from '@/components/admin/settings-unsaved-changes-bar';
 import { Activity, Gamepad2, Network, Radio, Server, Shield, Users, Trophy, ShoppingBag, FolderOpen } from 'lucide-react';
 
 interface FeatureItem {
@@ -106,36 +107,36 @@ export default function FeaturesSettingsPage() {
   const refreshAfterSettingsSave = useSettingsSaveRefresh();
   const [values, setValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const unsaved = useUnsavedChanges(values);
+  const initializeUnsaved = unsaved.initialize;
 
   const fetchSettings = useCallback(async () => {
     try {
-      setValues(await adminApi.getSettings('features'));
+      const data = await adminApi.getSettings('features');
+      setValues(data);
+      initializeUnsaved(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed');
+      setLoadError(err instanceof Error ? err.message : 'Failed');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [initializeUnsaved]);
 
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
 
   const handleSave = async () => {
-    setSaving(true);
-    setError(null);
+    if (!unsaved.isDirty || unsaved.isSaving) return;
+    const submittedValues = { ...values };
+    unsaved.setSaving();
     try {
-      await adminApi.updateSettings('features', values);
+      await adminApi.updateSettings('features', submittedValues);
       await refreshAfterSettingsSave();
-      setMessage('已保存');
-      setTimeout(() => setMessage(null), 3000);
+      unsaved.markSaved(submittedValues);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed');
-    } finally {
-      setSaving(false);
+      unsaved.setError(err instanceof Error ? err.message : 'Failed');
     }
   };
 
@@ -150,7 +151,7 @@ export default function FeaturesSettingsPage() {
   const enabledCount = features.filter((f) => (values[f.key] ?? (f.defaultEnabled === false ? 'false' : 'true')) === 'true').length;
 
   return (
-    <div className="bg-white border border-surface-200">
+    <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
       <div className="px-6 py-4 border-b border-surface-200">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-surface-700">功能管理</h2>
         <p className="text-xs text-surface-400 mt-1">
@@ -159,8 +160,7 @@ export default function FeaturesSettingsPage() {
       </div>
 
       <div className="p-6 space-y-4">
-        {message && <Alert type="success" message={message} />}
-        {error && <Alert type="error" message={error} />}
+        {loadError && <Alert type="error" message={loadError} />}
 
         <div className="flex items-center justify-between border border-surface-200 bg-surface-50 px-4 py-3">
           <span className="text-sm text-surface-700">
@@ -233,10 +233,18 @@ export default function FeaturesSettingsPage() {
         </div>
       </div>
 
-      <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
-        <Button variant="ghost" onClick={fetchSettings}>重置</Button>
-        <Button onClick={handleSave} disabled={saving}>{saving ? '保存中...' : '保存'}</Button>
-      </div>
+      <SettingsUnsavedChangesBar
+        dirty={unsaved.isDirty}
+        saving={unsaved.isSaving}
+        saved={unsaved.isSaved}
+        error={unsaved.error}
+        onDiscard={() => {
+          const restored = unsaved.discard();
+          if (restored) setValues(restored);
+          setLoadError(null);
+        }}
+        onSave={() => { void handleSave(); }}
+      />
     </div>
   );
 }

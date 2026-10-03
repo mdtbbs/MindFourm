@@ -324,6 +324,12 @@ export class PostsService {
       await this.assertPostVisible(cachedPost, viewer);
       // Still increment view count in background
       await this.incrementViewCount(id);
+      if (cachedPost.post_type === 'resource_discussion') {
+        return {
+          ...cachedPost,
+          resource_header: await this.postDetailService.loadResourceHeader(id, cachedPost.post_type),
+        };
+      }
       return cachedPost;
     }
 
@@ -396,7 +402,7 @@ export class PostsService {
    * bypassed entirely by logging out.
    */
   async assertPostVisible(
-    post: { status?: string; user_id?: number; required_group_id?: number | null },
+    post: { id?: number; post_type?: string; status?: string; user_id?: number; required_group_id?: number | null },
     viewer?: { id: number; role: string },
   ): Promise<void> {
     const isStaff = !!viewer && ['admin', 'moderator'].includes(viewer.role);
@@ -405,6 +411,23 @@ export class PostsService {
     if (post.status && post.status !== 'published' && !isStaff && !isAuthor) {
       // 404 rather than 403: existence of unpublished content is itself private.
       throw new NotFoundException('帖子不存在');
+    }
+
+    if (post.post_type === 'resource_discussion' && !isStaff && !isAuthor) {
+      const visibleResource = post.id ? await this.dataSource.query(
+        `SELECT resource.id
+           FROM resources resource
+           LEFT JOIN resource_categories category ON category.id = resource.category_id
+          WHERE resource.discussion_thread_id = ?
+            AND resource.deleted_at IS NULL
+            AND resource.is_public = 1
+            AND resource.status IN ('approved', 'published')
+            AND (resource.visibility IS NULL OR resource.visibility = 'public')
+            AND (resource.category_id IS NULL OR category.is_active = 1)
+          LIMIT 1`,
+        [post.id],
+      ) : [];
+      if (!visibleResource?.length) throw new NotFoundException('帖子不存在');
     }
 
     if (post.required_group_id && !isStaff) {
