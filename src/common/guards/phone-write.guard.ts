@@ -59,7 +59,7 @@ export class PhoneWriteGuard implements CanActivate {
     if (this.siteConfig.current.verification.requirePhoneForWrites && !user.phone_verified) {
       throw new ForbiddenException({
         code: 'PHONE_NOT_VERIFIED',
-        message: '请先验证手机号后再继续操作',
+        message: '请先完成手机号安全验证后再继续操作',
       });
     }
 
