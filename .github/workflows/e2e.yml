@@ -68,7 +68,7 @@ jobs:
       FORUM_INTERNAL_API_KEY: e2e-internal-key
       MOBILE_AUTH_JWT_SECRET: e2e-mobile-jwt-secret
       MOBILE_AUTH_REFRESH_HMAC_SECRET: e2e-mobile-refresh-secret
-      CLOUD_SAVES_STORAGE_PATH: ${{ runner.temp }}/mindfourm-cloud-saves
+      CLOUD_SAVES_STORAGE_PATH: /tmp/mindfourm-cloud-saves
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
