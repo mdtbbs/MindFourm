@@ -7,7 +7,7 @@ describe('public resource boundary', () => {
     file_path: '/srv/private/map.msav', renderer_preview_key: '/private/preview.png',
     reject_reason: 'moderation note', duplicate_note: 'internal',
     user: { id: 2, username: 'Author', email: 'private@example.test', mindauth_id: 90, role: 'user', avatar_url: null, phone: 'private' },
-    renderer_metadata_json: { blocks: Array(1000).fill('wall') },
+    renderer_metadata_json: { width: 8, height: 6, build: 160, blocks: Array(1000).fill('wall') },
     metadata_json: { tags: ['map'], private: 'secret' },
   } as any;
   it('never serializes private user, storage, or moderation columns', () => {
@@ -21,6 +21,8 @@ describe('public resource boundary', () => {
     expect(card.description).toHaveLength(360);
     expect(card).not.toHaveProperty('content_json');
     expect(card).not.toHaveProperty('renderer_metadata');
+    expect(card.renderer_summary).toEqual({ width: 8, height: 6, build: 160 });
+    expect(card.renderer_summary).not.toHaveProperty('blocks');
     for (const column of ['resource.content', 'resource.content_json', 'resource.description', 'user.email', 'user.phone', 'resource.file_path']) expect(RESOURCE_CARD_COLUMNS).not.toContain(column);
     expect(RESOURCE_CARD_COLUMNS).toContain('resource.rating_average');
   });

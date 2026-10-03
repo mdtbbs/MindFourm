@@ -1,3 +1,4 @@
+import { toPublicResource } from '../resources/resource-public.dto';
 import { GameContentService } from './game-content.service';
 
 describe('GameContentService', () => {
@@ -50,6 +51,14 @@ describe('GameContentService', () => {
     expect(result.data[0].author).not.toHaveProperty('email');
     expect(result.data[0]).not.toHaveProperty('metadata_json');
     expect(redis.setIfNotExists).not.toHaveBeenCalled();
+  });
+
+  it('retains tags and previews through the real public resource projection', async () => {
+    const { service, resourcesDomain } = dependencies();
+    resourcesDomain.getList.mockResolvedValue({ data: [toPublicResource(resource, true)] as any, next_cursor: 'cursor-2', has_more: true });
+    const result = await service.list('blueprint', { limit: '20' });
+    expect(result.data[0]).toMatchObject({ tags: ['防御'], preview: { width: 8, height: 6, thumbnail: expect.stringContaining('/preview') } });
+    expect(result.data[0]).not.toHaveProperty('renderer_metadata_json');
   });
 
   it('applies the public featured filter and time-window trending order through ResourcesService', async () => {

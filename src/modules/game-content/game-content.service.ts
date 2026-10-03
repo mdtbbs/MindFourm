@@ -104,8 +104,8 @@ export class GameContentService {
     const likeCounts = new Map(likeRows.map((r) => [Number(r.id), Number(r.count)]));
     const favoriteCounts = new Map(favoriteRows.map((r) => [Number(r.id), Number(r.count)]));
     return rows.map((r) => {
-      const parsed = this.parseObject(r.renderer_metadata_json);
-      const metadata = this.parseObject(r.metadata_json);
+      const parsed = this.parseObject((r as any).renderer_summary || r.renderer_metadata_json);
+      const metadata = this.parseObject((r as any).metadata || r.metadata_json);
       const resourceType = type || (r.resource_kind === 'map' ? 'map' : 'blueprint');
       return {
         id: this.publicId(r), resourceId: r.id, type: resourceType, title: r.title, summary: r.summary || r.description || '',

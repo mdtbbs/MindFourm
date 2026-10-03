@@ -783,6 +783,9 @@ export class ResourcesService {
         .leftJoin('resource.category', 'category')
         .select(RESOURCE_CARD_COLUMNS)
         .addSelect("LEFT(COALESCE(NULLIF(resource.summary, ''), resource.description), 360)", 'resource_card_description')
+        .addSelect('resource.filter_width', 'resource_card_width')
+        .addSelect('resource.filter_height', 'resource_card_height')
+        .addSelect("LEFT(JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.build')), 32)", 'resource_card_build')
         .maxExecutionTime(2500)
         .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
         .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
@@ -906,6 +909,7 @@ export class ResourcesService {
         const row = cards.get(entity.id);
         return Object.assign(entity, {
           description: row?.resource_card_description || null,
+          renderer_summary: { width: row?.resource_card_width, height: row?.resource_card_height, build: row?.resource_card_build },
           ...(options.trendingOnly ? { trending_score: Number(row?.trending_score) || 0 } : {}),
         });
       });
