@@ -1089,6 +1089,19 @@ export class ResourcesService {
     }
   }
 
+  /** Internal file operations need storage keys; never serialize this record as an API response. */
+  async getForFileAccess(id: number, viewer?: { id: number; role: string }): Promise<Resource> {
+    const resource = await this.resourceRepository.findOne({
+      where: { id },
+      select: ['id', 'user_id', 'category_id', 'status', 'is_public', 'resource_kind', 'resource_type',
+        'file_path', 'file_name', 'file_size', 'mime_type', 'content_hash', 'use_mfl', 'mfl_download_url',
+        'external_url', 'renderer_status', 'renderer_preview_key'],
+    });
+    if (!resource) throw new NotFoundException('资源不存在');
+    await this.assertResourceVisible(resource, viewer);
+    return resource;
+  }
+
   async getById(id: number, viewer?: { id: number; role: string }): Promise<any> {
     const resource = await this.resourceRepository.findOne({
       where: { id },

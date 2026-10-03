@@ -204,6 +204,24 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('retains storage keys for authorized file operations without exposing them in public details', async () => {
+    const resource = { id: 27, user_id: 9, status: 'published', is_public: 1, category_id: null,
+      renderer_preview_key: 'map/preview.png', file_path: '/private/map.msav', mfl_download_url: 'https://files.example.test/map' };
+    const { service, resourceRepository } = createService({ resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) } });
+    await expect(service.getForFileAccess(27)).resolves.toMatchObject({ renderer_preview_key: 'map/preview.png', file_path: '/private/map.msav' });
+    const detail = await service.getById(27);
+    expect(detail).not.toHaveProperty('renderer_preview_key');
+    expect(detail).not.toHaveProperty('file_path');
+    expect(resourceRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({ select: expect.arrayContaining(['file_path', 'renderer_preview_key', 'content_hash']) }));
+  });
+
+  it('denies anonymous file access to pending resources while allowing their owner', async () => {
+    const resource = { id: 27, user_id: 9, status: 'pending', is_public: 1, category_id: null, file_path: '/private/map.msav' };
+    const { service } = createService({ resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) } });
+    await expect(service.getForFileAccess(27)).rejects.toThrow('资源不存在');
+    await expect(service.getForFileAccess(27, { id: 9, role: 'user' })).resolves.toBe(resource);
+  });
+
   it('keeps an unknown schematic minimum build unknown instead of persisting Build 0', async () => {
     const { service, manager } = createService({
       manager: {

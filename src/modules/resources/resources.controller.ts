@@ -432,7 +432,7 @@ export class ResourcesController {
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
   async getPreview(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
-    const resource = await this.resourcesService.getById(id, req?.user);
+    const resource = await this.resourcesService.getForFileAccess(id, req?.user);
     const preview = await this.resourcePreviewService.readPreview(resource);
     if (!preview) throw new NotFoundException('预览尚未生成');
     res.setHeader('Content-Type', 'image/png');
@@ -472,8 +472,8 @@ export class ResourcesController {
     @Res({ passthrough: true }) res: Response,
     @Req() req?: any,
   ) {
-    // getById enforces moderation status, so unapproved files are not downloadable.
-    const resource = await this.resourcesService.getById(id, req?.user);
+    // Resolve storage fields internally, with the same visibility rules as the public DTO.
+    const resource = await this.resourcesService.getForFileAccess(id, req?.user);
 
     // MFL redirect: if resource uses MFL, redirect to MFL download URL
     if (!versionId && resource.use_mfl && resource.mfl_download_url) {
@@ -609,7 +609,7 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')
   async retryPreview(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
-    const resource = await this.resourcesService.getById(id, req.user);
+    const resource = await this.resourcesService.getForFileAccess(id, req.user);
     if (!this.resourcePreviewService.supports(resource)) {
       throw new BadRequestException('该资源类型不支持预览');
     }
