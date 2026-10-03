@@ -16,12 +16,22 @@ const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
 const AUTH_URL = process.env.PLAYWRIGHT_AUTH_URL || 'http://127.0.0.1:4001';
 const AUTH_ORIGIN = new URL(AUTH_URL).origin;
 
+async function stubMindAuth(page: Page): Promise<void> {
+  await page.unroute(`${AUTH_ORIGIN}/**`).catch(() => {});
+  await page.route(`${AUTH_ORIGIN}/**`, (route) => route.fulfill({
+    status: 200,
+    contentType: 'text/html',
+    body: '<!doctype html><html><body>MindAuth E2E stub</body></html>',
+  }));
+}
+
 async function expectMindAuthRedirect(
   page: Page,
   action: () => Promise<unknown> | unknown,
   expectedPath: string,
   expectedState: string,
 ) {
+  await stubMindAuth(page);
   await Promise.all([
     page.waitForURL(
       (url) => url.origin === AUTH_ORIGIN || url.hostname.includes('mindauth'),
@@ -71,14 +81,9 @@ test.describe('Public Authentication Checks', () => {
     expect(data).toHaveProperty('authenticated');
   });
 
-  test('should show login button for unauthenticated users', async ({ homePage }) => {
+  test('should show login link for unauthenticated users', async ({ page, homePage }) => {
     await homePage.navigate();
-
-    // Check for login link/button in header
-    const loginButton = homePage.page.locator('[data-testid="login-button"]');
-    if (await loginButton.isVisible()) {
-      await expect(loginButton).toBeVisible();
-    }
+    await expect(page.getByRole('link', { name: '登录' })).toBeVisible();
   });
 
   test('should preserve protected route in login redirect', async ({ page }) => {
@@ -87,7 +92,7 @@ test.describe('Public Authentication Checks', () => {
       async () => {
         await page.goto('/notifications', { waitUntil: 'domcontentloaded', timeout: 60000 });
       },
-      '/login',
+      '/authorize',
       '/notifications',
     );
   });
@@ -109,9 +114,9 @@ test.describe('Public Authentication Checks', () => {
     await expectMindAuthRedirect(
       page,
       async () => {
-        await page.getByRole('button', { name: '登录' }).click();
+        await page.getByRole('link', { name: '登录' }).click();
       },
-      '/login',
+      '/authorize',
       '/search?q=oauth',
     );
   });
@@ -122,7 +127,7 @@ test.describe('Public Authentication Checks', () => {
     await expectMindAuthRedirect(
       page,
       async () => {
-        await page.getByRole('button', { name: '注册' }).click();
+        await page.getByRole('link', { name: '注册' }).click();
       },
       '/register',
       '/groups?tab=recent',
@@ -133,48 +138,25 @@ test.describe('Public Authentication Checks', () => {
 
 test.describe('Route Protection', () => {
   test('should protect /notifications route', async ({ page }) => {
-    await page.goto('/notifications', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    // Should redirect to login if not authenticated
-    // Or show unauthorized message
-    const url = page.url();
-    const isProtected = url.includes('login') || url.includes('unauthorized');
-    expect(isProtected || page.locator('[data-testid="auth-required"]').isVisible()).toBeTruthy();
+    await expectMindAuthRedirect(page, () => page.goto('/notifications', { waitUntil: 'domcontentloaded', timeout: 60000 }), '/authorize', '/notifications');
   });
 
   test('should protect /messages route', async ({ page }) => {
-    await page.goto('/messages', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const url = page.url();
-    const isProtected = url.includes('login');
-    expect(isProtected || await page.locator('[data-testid="auth-required"]').isVisible()).toBeTruthy();
+    await expectMindAuthRedirect(page, () => page.goto('/messages', { waitUntil: 'domcontentloaded', timeout: 60000 }), '/authorize', '/messages');
   });
 
   test('should protect /bookmarks route', async ({ page }) => {
-    await page.goto('/bookmarks', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const url = page.url();
-    const isProtected = url.includes('login');
-    expect(isProtected || await page.locator('[data-testid="auth-required"]').isVisible()).toBeTruthy();
+    await expectMindAuthRedirect(page, () => page.goto('/bookmarks', { waitUntil: 'domcontentloaded', timeout: 60000 }), '/authorize', '/bookmarks');
   });
 
   test('should protect /settings route', async ({ page }) => {
-    await page.goto('/settings', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const url = page.url();
-    const isProtected = url.includes('login');
-    expect(isProtected || await page.locator('[data-testid="auth-required"]').isVisible()).toBeTruthy();
+    await expectMindAuthRedirect(page, () => page.goto('/settings', { waitUntil: 'domcontentloaded', timeout: 60000 }), '/authorize', '/settings');
   });
 });
 
 test.describe('Admin Route Protection', () => {
   test('should protect /admin route', async ({ page }) => {
-    await page.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    // Should redirect to login or show unauthorized
-    const url = page.url();
-    const isProtected = url.includes('login') || url.includes('unauthorized');
-    expect(isProtected).toBeTruthy();
+    await expectMindAuthRedirect(page, () => page.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 }), '/authorize', '/admin');
   });
 
   test('should protect all admin sub-routes', async ({ page }) => {
@@ -187,10 +169,7 @@ test.describe('Admin Route Protection', () => {
     ];
 
     for (const route of adminRoutes) {
-      await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      const url = page.url();
-      const isProtected = url.includes('login');
-      expect(isProtected).toBeTruthy();
+      await expectMindAuthRedirect(page, () => page.goto(route, { waitUntil: 'domcontentloaded', timeout: 60000 }), '/authorize', route);
     }
   });
 });

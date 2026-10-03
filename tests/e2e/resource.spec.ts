@@ -6,6 +6,10 @@ function uniqueResourceName(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function unwrap(value: any): any {
+  return value?.data?.data ?? value?.data ?? value;
+}
+
 async function waitForResourceFormReady(page: import('@playwright/test').Page): Promise<void> {
   // The rich-text editor is client-only.  Waiting for it ensures React has
   // hydrated the form before changing the hidden resource-type radio.
@@ -24,7 +28,8 @@ authTest.describe('Resource Submission Flow', () => {
     const title = uniqueResourceName('E2E Resource Draft');
     await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await waitForResourceFormReady(authenticatedPage);
-    await authenticatedPage.getByTestId('resource-type-external').locator('input').check({ force: true });
+    await authenticatedPage.getByTestId('resource-type-external').click();
+    await authExpect(authenticatedPage.getByTestId('resource-type-external').locator('input')).toBeChecked();
     await authenticatedPage.getByTestId('resource-title-input').fill(title);
     await authenticatedPage.getByTestId('resource-version-input').fill('draft-1');
 
@@ -33,10 +38,10 @@ authTest.describe('Resource Submission Flow', () => {
     await authenticatedPage.waitForTimeout(2300);
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
 
+    await authExpect(authenticatedPage.getByText(/发现此设备保存的草稿/)).toBeVisible();
+    await authenticatedPage.getByRole('button', { name: '恢复草稿' }).click();
     await authExpect(authenticatedPage.getByTestId('resource-title-input')).toHaveValue(title);
     await authExpect(authenticatedPage.getByTestId('resource-version-input')).toHaveValue('draft-1');
-    await authExpect(authenticatedPage.getByText('已恢复上次未提交的资源草稿')).toBeVisible();
-    await authenticatedPage.getByRole('button', { name: '丢弃草稿' }).click();
   });
 
   authTest('should submit an external resource', async ({ authenticatedPage }) => {
@@ -113,11 +118,11 @@ authTest.describe('Resource Submission Flow', () => {
     const editor = authenticatedPage.getByTestId('reply-input');
     await authExpect(editor.locator('aside[data-quote-type="reply"]')).toHaveAttribute('data-reply-id', String(hostReplyId));
     await editor.press('End');
-    await editor.pressSequentially(`Quoted on the resource page @test`);
-    const mentionOption = authenticatedPage.getByRole('option', { name: /@testuser/ });
+    await editor.pressSequentially(`Quoted on the resource page @e2e`);
+    const mentionOption = authenticatedPage.getByRole('option', { name: /@e2e_admin/ });
     await authExpect(mentionOption).toBeVisible();
     await mentionOption.click();
-    await authExpect(editor.locator('[data-mention-user-id="1"]')).toBeVisible();
+    await authExpect(editor.locator(`[data-mention-user-id="${admin.userId ?? 1}"]`)).toBeVisible();
 
     const resourceReplyText = `E2E resource rich reply ${stamp}`;
     await editor.press('End');
@@ -169,7 +174,8 @@ authTest.describe('Resource Submission Flow', () => {
     await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await waitForResourceFormReady(authenticatedPage);
 
-    await authenticatedPage.getByTestId('resource-type-upload').locator('input').check({ force: true });
+    await authenticatedPage.getByTestId('resource-type-upload').click();
+    await authExpect(authenticatedPage.getByTestId('resource-type-upload').locator('input')).toBeChecked();
     await authenticatedPage.getByTestId('resource-title-input').fill(title);
     await authenticatedPage.getByTestId('resource-version-input').fill('2.0.0');
     await authenticatedPage.getByTestId('resource-description-input').fill('Uploaded resource submitted by Playwright.');

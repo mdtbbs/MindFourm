@@ -12,7 +12,7 @@ import { test, expect } from '../fixtures/page-objects/base.po';
 import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
 import type { APIRequestContext } from '@playwright/test';
 
-import { createPublishedPost } from '../helpers/content.helpers';
+import { approveAsAdmin, createPublishedPost } from '../helpers/content.helpers';
 
 let fixturePostId: number | null = null;
 let fixturePostTitle: string | null = null;
@@ -53,11 +53,11 @@ authTest.beforeAll(async ({ request }) => {
 });
 
 test.describe('Public Post Viewing', () => {
-  test('should display post list on homepage', async ({ homePage }) => {
+  test('should display post list on homepage', async ({ page, homePage }) => {
     await homePage.navigate();
 
     // Wait for posts to load
-    await homePage.page.waitForTimeout(1000);
+    await page.waitForTimeout(1000);
 
     // Check for post cards
     const postCards = await homePage.getPostCardCount();
@@ -179,7 +179,7 @@ authTest.describe('Post Creation (Authenticated)', () => {
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
     }
 
-    await authenticatedPage.getByRole('button', { name: '更多编辑工具' }).click();
+    await authenticatedPage.locator('summary[aria-label="更多编辑工具"]').click();
     await expect(authenticatedPage.getByTestId('rich-task-list')).toBeVisible();
     await expect(authenticatedPage.getByTitle('Markdown 源码')).toHaveCount(0);
   });
@@ -198,7 +198,7 @@ authTest.describe('Post Creation (Authenticated)', () => {
     await authExpect(contentInput).toBeVisible();
   });
 
-  authTest('should create a new post', async ({ authenticatedPage }) => {
+  authTest('should create a new post', async ({ authenticatedPage, request }) => {
     await authenticatedPage.goto('/posts/new', { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Fill in post details
@@ -221,6 +221,10 @@ authTest.describe('Post Creation (Authenticated)', () => {
 
     // Verify post was created
     authExpect(authenticatedPage.url()).toContain('/posts/');
+    const postId = Number(new URL(authenticatedPage.url()).pathname.split('/').pop());
+    expect(Number.isSafeInteger(postId)).toBeTruthy();
+    await approveAsAdmin(request, 'post', postId);
+    await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
     authExpect(await authenticatedPage.locator('h1').textContent()).toContain(uniqueTitle);
     await authExpect(authenticatedPage.locator('[data-testid="post-content"] code')).toHaveText('inline code');
   });
@@ -242,7 +246,9 @@ authTest.describe('Post Creation (Authenticated)', () => {
     // Refresh page
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
 
-    // Draft should be restored
+    // The editor asks before replacing new work with a saved local draft.
+    await authExpect(authenticatedPage.getByRole('button', { name: '恢复草稿' })).toBeVisible();
+    await authenticatedPage.getByRole('button', { name: '恢复草稿' }).click();
     await authExpect(titleInput).toBeVisible();
     const titleValue = await titleInput.inputValue();
     authExpect(titleValue).toContain('Draft Test Post');
@@ -257,9 +263,8 @@ authTest.describe('Post Creation (Authenticated)', () => {
     await publishButton.click();
 
     // Should show validation error
-    const errorMessage = authenticatedPage.locator('[data-testid="error-message"]');
-    await authExpect(errorMessage).toBeVisible();
-    authExpect(await errorMessage.textContent()).toBeTruthy();
+    await authExpect(authenticatedPage.getByText('请输入帖子标题', { exact: true })).toBeVisible();
+    await authExpect(authenticatedPage.getByText('请输入帖子内容', { exact: true })).toBeVisible();
   });
 });
 

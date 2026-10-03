@@ -27,12 +27,12 @@ test('Developer Center serves the Public V1 contract without private routes', as
   expect(paths.some((path) => path.includes('/relay-agent/'))).toBe(false);
 
   await page.goto('/api/v1', { waitUntil: 'domcontentloaded' });
-  await expect(page.locator('body')).toContainText('MDTBBS API');
-  await expect(page.locator('body')).toContainText('Install a Pack');
+  await expect(page.locator('body')).toContainText('MDTBBS 开发者文档');
+  await expect(page.locator('body')).toContainText('公开 API v1.0.0');
 });
 
 adminTest('staff can open the Admin dashboard shell and navigation', async ({ authenticatedPage }) => {
   await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded' });
-  await adminExpect(authenticatedPage.locator('[data-testid="admin-sidebar"]')).toBeVisible();
-  await adminExpect(authenticatedPage.locator('.admin-content')).toBeVisible();
+  await adminExpect(authenticatedPage.locator('.admin-v2-sidebar-stack')).toBeVisible();
+  await adminExpect(authenticatedPage.locator('.admin-v2-workspace')).toBeVisible();
 });

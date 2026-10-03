@@ -93,13 +93,19 @@ async function cleanup() {
 
     // 3. Resource bookmarks — CASCADE on resource delete covers this, but
     //    deleting explicitly keeps the log output honest.
-    const [bmResult] = await connection.execute(
-      `DELETE FROM resource_bookmarks
-         WHERE resource_id IN (
-           SELECT id FROM resources
-            WHERE title LIKE 'E2E %' OR title LIKE 'MFL %')`,
+    const [bookmarkTables] = await connection.execute(
+      `SELECT 1 FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = 'resource_bookmarks' LIMIT 1`,
     );
-    log('resource_bookmarks', (bmResult as any).affectedRows);
+    if ((bookmarkTables as any[]).length > 0) {
+      const [bmResult] = await connection.execute(
+        `DELETE FROM resource_bookmarks
+           WHERE resource_id IN (
+             SELECT id FROM resources
+              WHERE title LIKE 'E2E %' OR title LIKE 'MFL %')`,
+      );
+      log('resource_bookmarks', (bmResult as any).affectedRows);
+    }
 
     // Canonical resource discussions are ordinary forum Posts and Replies linked
     // by resources.discussion_thread_id. Remove their E2E rows before deleting the

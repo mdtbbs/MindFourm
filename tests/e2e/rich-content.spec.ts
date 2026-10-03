@@ -1,4 +1,5 @@
 import { test as authTest, expect } from '../fixtures/auth.fixture';
+import { TEST_USERS } from '../fixtures/test-users';
 import {
   API_URL,
   approveAsAdmin,
@@ -94,7 +95,7 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
         { type: 'paragraph', content: [
           { type: 'text', text: 'bold rich content', marks: [{ type: 'bold' }, { type: 'textColor', attrs: { color: '#336699' } }, { type: 'fontSize', attrs: { size: '18px' } }] },
           { type: 'text', text: ' 🌻' },
-          { type: 'mention', attrs: { userId: 1, username: 'snapshot-will-be-canonicalized' } },
+          { type: 'mention', attrs: { userId: TEST_USERS.admin.id, username: 'snapshot-will-be-canonicalized' } },
         ] },
         { type: 'bulletList', attrs: { tight: true }, content: [{ type: 'listItem', content: [paragraph('tight bullet')] }] },
         { type: 'orderedList', attrs: { start: 1, tight: true }, content: [{ type: 'listItem', content: [paragraph('ordered item')] }] },
@@ -104,7 +105,7 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
         ] },
         { type: 'blockquote', content: [paragraph('quoted paragraph')] },
         { type: 'codeBlock', attrs: { language: 'ts' }, content: [{ type: 'text', text: 'const schemaVersion = 2;' }] },
-        { type: 'image', attrs: { src: '/favicon.ico', alt: 'schema fixture', title: null, width: null, height: null } },
+        { type: 'paragraph', content: [{ type: 'image', attrs: { src: '/favicon.ico', alt: 'schema fixture', title: null, width: null, height: null } }] },
         { type: 'table', content: [{ type: 'tableRow', content: [
           { type: 'tableHeader', attrs: { colspan: 1, rowspan: 1, colwidth: null, align: null }, content: [paragraph('header')] },
           { type: 'tableCell', attrs: { colspan: 1, rowspan: 1, colwidth: null, align: null }, content: [paragraph('block cell')] },
@@ -148,8 +149,8 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
   authTest('4. mention renders as a user link with the canonical username', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const mention = authenticatedPage.getByTestId('rich-mention');
-    await expect(mention).toHaveAttribute('href', '/users/1');
-    await expect(mention).toContainText('@testuser');
+    await expect(mention).toHaveAttribute('href', `/users/${TEST_USERS.admin.id}`);
+    await expect(mention).toContainText(`@${TEST_USERS.admin.username}`);
   });
 
   authTest('5. Unicode emoji remains inline text', async ({ authenticatedPage }) => {
