@@ -20,6 +20,8 @@ async function exportOpenApi() {
     logger: ['error'],
     bodyParser: false,
   });
+  // Match production bootstrap so the exported contract catches prefix drift.
+  app.setGlobalPrefix('api');
 
   console.log('📝 正在生成 OpenAPI V1 文档...');
 

@@ -190,6 +190,10 @@ export function createInternalV1OpenApiDocument(app: INestApplication): OpenAPIO
     .build();
 
   const document = SwaggerModule.createDocument(app, config, {
+    // The API's global `/api` prefix is already represented by the OpenAPI
+    // server URL above. Keep route paths relative to that server in both the
+    // running application and offline contract export.
+    ignoreGlobalPrefix: true,
     include: [
       CapabilitiesModule,
       MobileAuthV1Module,
