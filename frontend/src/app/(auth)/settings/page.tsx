@@ -121,6 +121,31 @@ export default function SettingsPage() {
 
         <h1 className="text-2xl font-bold mb-6">{t('emailSettings.title')}</h1>
 
+        {siteProfile.features.phoneVerification && (
+          <section className="mb-6 border border-[var(--border)] bg-[var(--bg-card)] p-5" aria-labelledby="phone-verification-status-title">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 id="phone-verification-status-title" className="text-lg font-semibold">手机号安全验证</h2>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  用于国内站内容发布和部分社区互动功能的账号安全验证。
+                </p>
+              </div>
+              {user?.phone_verified ? (
+                <span className="border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+                  已验证
+                </span>
+              ) : (
+                <Link
+                  href="/verify-phone?redirect=%2Fsettings"
+                  className="border border-[var(--primary)] px-3 py-1.5 text-sm font-medium text-[var(--primary)] hover:bg-[var(--primary)]/5"
+                >
+                  去验证
+                </Link>
+              )}
+            </div>
+          </section>
+        )}
+
         {siteProfile.contentLanguagePreference && <section className="card mb-6 p-6" aria-labelledby="language-settings-title">
           <h2 id="language-settings-title" className="text-lg font-semibold">{t('languageSettings.title')}</h2>
           <p className="mt-1 text-sm text-muted-foreground">{t('languageSettings.description')}</p>
