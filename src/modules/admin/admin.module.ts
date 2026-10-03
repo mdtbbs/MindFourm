@@ -13,6 +13,7 @@ import { UploadsModule } from '../uploads/uploads.module';
 import { PointsModule } from '../points/points.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply, SessionAudit } from '@entities/index';
+import { EventsModule } from '../events/events.module';
 import { PostsModule } from '../posts/posts.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { PostsModule } from '../posts/posts.module';
     PointsModule,
     AdminNotificationsModule,
     PostsModule,
+    EventsModule,
   ],
   controllers: [AdminController],
   providers: [AdminService],

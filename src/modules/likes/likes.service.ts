@@ -5,6 +5,7 @@ import { PostLike } from '@entities/post-like.entity';
 import { ReplyLike } from '@entities/reply-like.entity';
 import { Post } from '@entities/post.entity';
 import { Reply } from '@entities/reply.entity';
+import { BatchViewer, BatchTargetType, visibleBatchTargets } from '@common/utils/batch-targets.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PointsService } from '../points/points.service';
 
@@ -23,6 +24,24 @@ export class LikesService {
     private pointsService: PointsService,
     private dataSource: DataSource,
   ) {}
+
+  async getForTargets(type: BatchTargetType, ids: number[], viewer?: BatchViewer): Promise<Record<number, { liked: boolean; count: number }>> {
+    const visible = await visibleBatchTargets(this.postRepo, this.replyRepo, type, ids, viewer);
+    if (!visible.length) return {};
+    const result: Record<number, { liked: boolean; count: number }> = {};
+    for (const row of visible) result[row.id] = { liked: false, count: row.like_count };
+    if (viewer) {
+      const field = type === 'post' ? 'post_id' : 'reply_id';
+      const repo = type === 'post' ? this.postLikeRepo : this.replyLikeRepo;
+      const likes = await repo.createQueryBuilder('liked')
+        .select(`liked.${field}`, 'id')
+        .where('liked.user_id = :viewerId', { viewerId: viewer.id })
+        .andWhere(`liked.${field} IN (:...ids)`, { ids: visible.map((row) => row.id) })
+        .getRawMany<{ id: number }>();
+      for (const row of likes) if (result[row.id]) result[row.id].liked = true;
+    }
+    return result;
+  }
 
   async likePost(userId: number, postId: number): Promise<void> {
     const queryRunner = this.dataSource.createQueryRunner();

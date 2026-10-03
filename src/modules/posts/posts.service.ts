@@ -13,8 +13,6 @@ import {
   Brackets,
   In,
   IsNull,
-  LessThan,
-  MoreThan,
   Like,
 } from 'typeorm';
 import { Post, type PostSource } from '@entities/post.entity';
@@ -35,13 +33,14 @@ import { SettingsService } from '../settings/settings.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostsDto } from './dto/query-posts.dto';
-import { PostDetailDto, PostDetailReply, PostDetailService } from './post-detail.service';
+import { PostDetailDto, PostDetailService } from './post-detail.service';
 import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { collectDraftAttachmentTokens, collectTiptapMentionIds, replaceDraftAttachmentTokens, resolveContentSource } from '@common/utils/tiptap-content.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
+import { selectPostCards, hydratePostCardExcerpts } from '@common/utils/post-card-query.util';
+import { applyPostVisibility } from '@common/utils/post-visibility.util';
 import { escapeLike } from '@common/utils/search.util';
 import {
-  MAX_REPLY_DEPTH,
   NOTIFICATION_TYPES,
   REPLY_STATUS,
   VISIBLE_REPLY_STATUSES,
@@ -52,6 +51,8 @@ import { ContentSafetyService } from '../content-safety/content-safety.service';
 import { normalizePostTitle } from '@common/utils/post-title.util';
 import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { EventsService } from '../events/events.service';
+import { OutboxEvent } from '@entities/outbox-event.entity';
 
 @Injectable()
 export class PostsService {
@@ -85,7 +86,50 @@ export class PostsService {
     private contentSafety?: ContentSafetyService,
     @Optional() private customEmojis?: CustomEmojisService,
     @Optional() private attachmentsService?: AttachmentsService,
+    @Optional() private events?: EventsService,
   ) {}
+
+  onModuleInit(): void {
+    this.events?.register('ForumPostPublished', async event => this.deliverPublishedPostEffects(event));
+    this.events?.register('ForumPostMentionsAdded', async event => this.deliverPostMentionEffects(event));
+  }
+
+  private async deliverPublishedPostEffects(event: OutboxEvent): Promise<void> {
+    const post = await this.postRepository.findOne({ where: { id: event.aggregate_id }, select: {
+      id: true, user_id: true, status: true, source: true, content: true, content_json: true,
+    } });
+    if (!post || post.status !== 'published') return;
+    if (post.source === 'USER') await this.pointsService.awardPoints(post.user_id, 'create_post', 'post', post.id, true);
+    const scope = `post-published:${post.id}`;
+    const storedMentionIds = post.content_json ? collectTiptapMentionIds(post.content_json) : [];
+    const ids = event.payload_json.mention_user_ids === undefined
+      ? (storedMentionIds.length ? storedMentionIds : null)
+      : event.payload_json.mention_user_ids;
+    if (ids !== null) await this.notificationsService.notifyMentionedUserIds(ids, post.id, post.user_id, post.content, undefined, [post.user_id], true, scope);
+    else await this.notificationsService.notifyMentionedUsers(post.content, post.id, post.user_id, undefined, [post.user_id], true, scope);
+  }
+
+  private async deliverPostMentionEffects(event: OutboxEvent): Promise<void> {
+    const post = await this.postRepository.findOne({ where: { id: event.aggregate_id }, select: { id: true, status: true, content: true } });
+    if (!post || post.status !== 'published') return;
+    const actorId = Number(event.payload_json.actor_id);
+    await this.notificationsService.notifyMentionedUserIds(event.payload_json.mention_user_ids, post.id, actorId, post.content, undefined, [actorId], true, `post-mention-event:${event.id}`);
+  }
+
+  private selectPostCards(qb: ReturnType<Repository<Post>['createQueryBuilder']>): void {
+    selectPostCards(qb);
+  }
+
+  private hydrateCardExcerpts(result: { entities: Post[]; raw: any[] }): Post[] {
+    return hydratePostCardExcerpts(result);
+  }
+
+  private cardQuery() {
+    const qb = this.postRepository.createQueryBuilder('post')
+      .leftJoinAndSelect('post.user', 'user').leftJoinAndSelect('post.category', 'category');
+    this.selectPostCards(qb);
+    return applyPostVisibility(qb, 'post', undefined, 'published');
+  }
 
   /**
    * Create a new post with tags in a transaction
@@ -217,19 +261,24 @@ export class PostsService {
         })
         : null;
 
+      if (this.events && savedPost.status === 'published') {
+        await this.events.publish({ eventKey: 'ForumPostPublished', aggregateType: 'Post', aggregateId: savedPost.id,
+          payload: { post_id: savedPost.id, mention_user_ids: richJsonWrite ? collectTiptapMentionIds(savedPost.content_json) : null },
+        }, manager);
+      }
       return { post: result ?? savedPost, authorUsername: author?.username ?? null };
     });
 
     // Invalidating the cache before the commit let a concurrent reader repopulate
     // it from pre-commit state, where it then survived the full 5-minute TTL.
-    await this.invalidatePostCache(post.id);
+    await this.invalidatePostCache(post.id).catch(error => console.warn('Post cache invalidation failed after commit:', error.message));
     if (this.contentSafety) {
       await this.contentSafety.recordFlag({ userId, targetType: 'post', targetId: post.id, risk, ipAddress: provenance.ipAddress }).catch(() => undefined);
     }
 
     // Award points for creating post
-    if (post.status === 'published' && post.source === 'USER') {
-      await this.pointsService.awardPoints(userId, 'create_post', 'post', post.id);
+    if (!this.events && post.status === 'published' && post.source === 'USER') {
+      await this.pointsService.awardPoints(userId, 'create_post', 'post', post.id).catch(error => console.warn('Post points failed after commit:', error.message));
     } else if (post.status === 'pending') {
       this.adminNotificationsService.publishModerationPending({
         item_type: 'post',
@@ -249,7 +298,7 @@ export class PostsService {
     );
 
     // Handle @mentions in post content (only for published posts)
-    if (post.status === 'published' && content) {
+    if (!this.events && post.status === 'published' && content) {
       const notify = richJsonWrite
         ? this.notificationsService.notifyMentionedUserIds(collectTiptapMentionIds(post.content_json), post.id, userId, content, undefined, [userId])
         : this.notificationsService.notifyMentionedUsers(content, post.id, userId, undefined, [userId]);
@@ -291,6 +340,8 @@ export class PostsService {
         content_html: true,
         content_json: true,
         content_text: true,
+        content_schema_version: true,
+        location_label: true,
         status: true,
         is_pinned: true,
         is_locked: true,
@@ -344,7 +395,7 @@ export class PostsService {
    * meant it never ran for the controller (which passed no user) and could be
    * bypassed entirely by logging out.
    */
-  private async assertPostVisible(
+  async assertPostVisible(
     post: { status?: string; user_id?: number; required_group_id?: number | null },
     viewer?: { id: number; role: string },
   ): Promise<void> {
@@ -397,6 +448,7 @@ export class PostsService {
     const qb = this.postRepository.createQueryBuilder('post')
       .leftJoinAndSelect('post.user', 'user')
       .leftJoinAndSelect('post.category', 'category');
+    this.selectPostCards(qb);
 
     if (category_id) {
       qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
@@ -431,19 +483,7 @@ export class PostsService {
       qb.andWhere('post.content_language = :contentLanguage', { contentLanguage: content_language.trim() });
     }
 
-    // Status filtering: admins see published + pending; regular users see published + own pending
-    if (status) {
-      qb.andWhere('post.status = :status', { status });
-    } else if (currentUser && ['admin', 'moderator'].includes(currentUser.role)) {
-      qb.andWhere('post.status IN (:...visibleStatuses)', { visibleStatuses: ['published', 'pending'] });
-    } else if (currentUser) {
-      qb.andWhere(
-        '(post.status = :publishedStatus OR (post.status = :pendingStatus AND post.user_id = :currentUserId))',
-        { publishedStatus: 'published', pendingStatus: 'pending', currentUserId: currentUser.id },
-      );
-    } else {
-      qb.andWhere('post.status = :status', { status: 'published' });
-    }
+    applyPostVisibility(qb, 'post', currentUser, status);
 
     const sortDirection = order === 'ASC' ? 'ASC' : 'DESC';
     if (sort === 'last_activity_at') {
@@ -452,9 +492,11 @@ export class PostsService {
       const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
       qb.orderBy(`post.${sortField}`, sortDirection);
     }
-    qb.skip(skip).take(limit);
+    qb.addOrderBy('post.id', sortDirection).skip(skip).take(limit);
 
-    const [posts, total] = await qb.getManyAndCount();
+    const cards = await qb.getRawAndEntities();
+    const total = await qb.getCount();
+    const posts = this.hydrateCardExcerpts(cards);
 
     const data = await this.postSummaryService.toSummaryList(posts);
     const totalPages = Math.ceil(total / limit);
@@ -493,6 +535,7 @@ export class PostsService {
     const qb = this.postRepository.createQueryBuilder('post')
       .leftJoinAndSelect('post.user', 'user')
       .leftJoinAndSelect('post.category', 'category');
+    this.selectPostCards(qb);
 
     if (category_id) {
       qb.andWhere('post.category_id = :categoryId', { categoryId: category_id });
@@ -522,19 +565,10 @@ export class PostsService {
         .andWhere('serverRelation.target_id = :serverId', { serverId: String(server_id) });
     }
 
-    // Status filtering: admins see published + pending; regular users see published + own pending
-    if (status) {
-      qb.andWhere('post.status = :status', { status });
-    } else if (currentUser && ['admin', 'moderator'].includes(currentUser.role)) {
-      qb.andWhere('post.status IN (:...visibleStatuses)', { visibleStatuses: ['published', 'pending'] });
-    } else if (currentUser) {
-      qb.andWhere(
-        '(post.status = :publishedStatus OR (post.status = :pendingStatus AND post.user_id = :currentUserId))',
-        { publishedStatus: 'published', pendingStatus: 'pending', currentUserId: currentUser.id },
-      );
-    } else {
-      qb.andWhere('post.status = :status', { status: 'published' });
-    }
+    applyPostVisibility(qb, 'post', currentUser, status);
+    const sortField = ['created_at', 'updated_at', 'last_activity_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
+    const dateSort = ['created_at', 'updated_at', 'last_activity_at'].includes(sortField);
+    const sortDirection = order === 'ASC' ? 'ASC' : 'DESC';
 
     // Decode cursor for pagination
     if (cursor) {
@@ -544,11 +578,11 @@ export class PostsService {
           throw new BadRequestException('无效分页游标');
         }
         const cursorValue =
-          sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
-        const idValue = parseInt(decoded[1]);
-        const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
+          dateSort ? new Date(Number(decoded[0])) : Number(decoded[0]);
+        const idValue = Number(decoded[1]);
+        if (!Number.isSafeInteger(idValue) || idValue < 1 || !Number.isSafeInteger(Number(decoded[0])) || (dateSort && !Number.isFinite((cursorValue as Date).getTime()))) throw new BadRequestException('无效分页游标');
 
-        if (order === 'DESC') {
+        if (sortDirection === 'DESC') {
           qb.andWhere(
             `(post.${sortField} < :cursorValue OR (post.${sortField} = :cursorValue AND post.id < :cursorId))`,
             { cursorValue, cursorId: idValue },
@@ -565,12 +599,11 @@ export class PostsService {
       }
     }
 
-    const sortField = ['created_at', 'updated_at', 'view_count', 'like_count'].includes(sort) ? sort : 'created_at';
-    qb.orderBy(`post.${sortField}`, order === 'ASC' ? 'ASC' : 'DESC')
-      .addOrderBy('post.id', order === 'ASC' ? 'ASC' : 'DESC')
+    qb.orderBy(`post.${sortField}`, sortDirection)
+      .addOrderBy('post.id', sortDirection)
       .take(limit + 1);
 
-    const posts = await qb.getMany();
+    const posts = this.hydrateCardExcerpts(await qb.getRawAndEntities());
 
     const hasMore = posts.length > limit;
     if (hasMore) {
@@ -582,9 +615,9 @@ export class PostsService {
     if (hasMore && posts.length > 0) {
       const lastPost = posts[posts.length - 1];
       const cursorValue =
-        sort === 'created_at'
-          ? lastPost.created_at.getTime().toString()
-          : lastPost[sort].toString();
+        dateSort
+          ? new Date(lastPost[sortField]).getTime().toString()
+          : String(lastPost[sortField]);
       nextCursor = encodeCursor(cursorValue, lastPost.id.toString());
     }
 
@@ -787,18 +820,30 @@ export class PostsService {
         }
       }
 
-      // Return updated post
-      return manager.findOne(Post, {
-        where: { id },
-        relations: ['user', 'category', 'postTags', 'postTags.tag'],
+      // Store delivery work with the edit so failures after commit cannot turn
+      // a successful edit into a 500 and induce a duplicate submission.
+      const updatedPost = await manager.findOne(Post, {
+        where: { id }, relations: ['user', 'category', 'postTags', 'postTags.tag'],
       });
+      if (this.events && updatedPost?.status === 'published') {
+        if (post.status !== 'published') {
+          await this.events.publish({ eventKey: 'ForumPostPublished', aggregateType: 'Post', aggregateId: id,
+            payload: { post_id: id, mention_user_ids: richJsonWrite ? collectTiptapMentionIds(updatedPost.content_json) : null },
+          }, manager);
+        } else if (newlyMentionedUserIds.length) {
+          await this.events.publish({ eventKey: 'ForumPostMentionsAdded', aggregateType: 'Post', aggregateId: id,
+            payload: { post_id: id, actor_id: userId, mention_user_ids: newlyMentionedUserIds },
+          }, manager);
+        }
+      }
+      return updatedPost;
     });
 
     // After the commit, for the same reason as in `create`: invalidating first lets
     // a concurrent reader re-cache the pre-update row for the whole TTL.
-    await this.invalidatePostCache(id);
+    await this.invalidatePostCache(id).catch(error => console.warn('Post cache invalidation failed after commit:', error.message));
 
-    if (result?.status === 'published' && newlyMentionedUserIds.length) {
+    if (!this.events && result?.status === 'published' && newlyMentionedUserIds.length) {
       await this.notificationsService.notifyMentionedUserIds(
         newlyMentionedUserIds,
         id,
@@ -806,7 +851,7 @@ export class PostsService {
         result.content,
         undefined,
         [userId],
-      );
+      ).catch(error => console.warn('Post mention delivery failed after commit:', error.message));
     }
 
     // Execute "after" hook
@@ -1108,88 +1153,52 @@ export class PostsService {
     });
   }
 
-  /**
-   * One page of reply threads.
-   *
-   * Pagination applies to root replies, and every descendant of the roots on this page
-   * is returned alongside them. Paginating the flat list — which is what this used to do
-   * — split threads across page boundaries, so a nested reply could land on a page
-   * without its parent and the client had no way to reconstruct the conversation.
-   *
-   * `total` remains the count of *all* replies because the UI presents it as "回复 (N)".
-   * `rootTotal` is what the page count is derived from.
-   */
-  async getReplies(postId: number, limit: number = 20, page: number = 1): Promise<{
-    data: PostDetailReply[];
-    total: number;
-    rootTotal: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  }> {
-    const skip = (page - 1) * limit;
-    const visible = In(VISIBLE_REPLY_STATUSES);
-    const select = {
-      id: true,
-      post_id: true,
-      user_id: true,
-      parent_reply_id: true,
-      content: true,
-      content_html: true,
-      content_json: true,
-      content_text: true,
-      status: true,
-      like_count: true,
-      created_at: true,
-      updated_at: true,
-      user: {
-        id: true,
-        mindauth_id: true,
-        username: true,
-        avatar_url: true,
-        role: true,
-      },
-    } as const;
+  /** Root pages have a hard bound; each branch is expanded through its own child page. */
+  async getReplies(postId: number, limit = 20, page = 1) {
+    const bounded = this.replyPage(limit, page);
+    const result = await this.loadReplyPage(postId, null, bounded.limit, bounded.page);
+    const total = await this.replyRepository.count({ where: { post_id: postId, status: In(VISIBLE_REPLY_STATUSES) } });
+    return { ...result, total, rootTotal: result.total };
+  }
 
-    const [roots, rootTotal] = await this.replyRepository.findAndCount({
-      where: { post_id: postId, parent_reply_id: IsNull(), status: visible },
-      relations: ['user'],
-      select,
-      order: { created_at: 'ASC' },
-      skip,
-      take: limit,
+  /** The controller authorizes the post before exposing this branch. */
+  async getReplyChildren(postId: number, parentReplyId: number, limit = 20, page = 1) {
+    const parent = await this.replyRepository.findOne({
+      where: { id: parentReplyId, post_id: postId, status: In(VISIBLE_REPLY_STATUSES) }, select: { id: true },
     });
+    if (!parent) throw new NotFoundException('回复不存在');
+    const bounded = this.replyPage(limit, page);
+    return this.loadReplyPage(postId, parentReplyId, bounded.limit, bounded.page);
+  }
 
-    // Descend one level per query. Bounded by MAX_REPLY_DEPTH so a parent cycle
-    // introduced by bad data cannot turn this into an unbounded loop.
-    const descendants: Reply[] = [];
-    let frontier = roots.map((reply) => reply.id);
-    for (let depth = 1; depth < MAX_REPLY_DEPTH && frontier.length > 0; depth += 1) {
-      const level = await this.replyRepository.find({
-        where: { post_id: postId, parent_reply_id: In(frontier), status: visible },
-        relations: ['user'],
-        select,
-        order: { created_at: 'ASC' },
-      });
-      if (level.length === 0) break;
-      descendants.push(...level);
-      frontier = level.map((reply) => reply.id);
-    }
-
-    const total = await this.replyRepository.count({
-      where: { post_id: postId, status: visible },
-    });
-
-    const data = await this.postDetailService.toReplies([...roots, ...descendants]);
-
+  private replyPage(limit: number, page: number) {
     return {
-      data,
-      total,
-      rootTotal,
-      page,
-      limit,
-      totalPages: Math.max(1, Math.ceil(rootTotal / limit)),
+      limit: Math.min(50, Math.max(1, Math.trunc(Number(limit)) || 20)),
+      page: Math.min(1000000, Math.max(1, Math.trunc(Number(page)) || 1)),
     };
+  }
+
+  private async loadReplyPage(postId: number, parentReplyId: number | null, limit: number, page: number) {
+    const [rows, total] = await this.replyRepository.findAndCount({
+      where: { post_id: postId, parent_reply_id: parentReplyId === null ? IsNull() : parentReplyId, status: In(VISIBLE_REPLY_STATUSES) },
+      relations: ['user'],
+      select: {
+        id: true, post_id: true, user_id: true, parent_reply_id: true, content: true,
+        content_html: true, content_json: true, content_schema_version: true, content_text: true,
+        status: true, like_count: true, location_label: true, created_at: true, updated_at: true,
+        user: { id: true, mindauth_id: true, username: true, avatar_url: true, role: true },
+      },
+      order: { created_at: 'ASC', id: 'ASC' }, skip: (page - 1) * limit, take: limit,
+    });
+    const counts = rows.length ? await this.replyRepository.createQueryBuilder('reply')
+      .select('reply.parent_reply_id', 'parent_id').addSelect('COUNT(reply.id)', 'count')
+      .where('reply.post_id = :postId', { postId })
+      .andWhere('reply.parent_reply_id IN (:...ids)', { ids: rows.map(reply => reply.id) })
+      .andWhere('reply.status IN (:...statuses)', { statuses: VISIBLE_REPLY_STATUSES })
+      .groupBy('reply.parent_reply_id').getRawMany<{ parent_id: number; count: string }>() : [];
+    const countMap = new Map(counts.map(row => [Number(row.parent_id), Number(row.count)]));
+    const data = (await this.postDetailService.toReplies(rows)).map(reply => ({ ...reply, child_count: countMap.get(reply.id) || 0 }));
+    return { data, total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
   }
 
   /**
@@ -1285,43 +1294,9 @@ export class PostsService {
    * Search posts by title or content
    */
   async search(query: string, limit: number = 20): Promise<PostSummaryDto[]> {
-    const posts = await this.postRepository.find({
-      where: [
-        { title: Like(`%${escapeLike(query)}%`), status: 'published' },
-        { content: Like(`%${escapeLike(query)}%`), status: 'published' },
-      ],
-      relations: ['user', 'category'],
-      select: {
-        id: true,
-        user_id: true,
-        category_id: true,
-          post_type: true,
-        title: true,
-        content: true,
-        status: true,
-        is_pinned: true,
-        view_count: true,
-        like_count: true,
-        created_at: true,
-        updated_at: true,
-        user: {
-          id: true,
-          mindauth_id: true,
-          username: true,
-          avatar_url: true,
-          role: true,
-        },
-        category: {
-          id: true,
-          name: true,
-          slug: true,
-          color: true,
-          icon: true,
-        },
-      },
-      take: limit,
-      order: { created_at: 'DESC' },
-    });
+    const qb = this.cardQuery().andWhere("(post.title LIKE :term OR COALESCE(NULLIF(post.content_text, ''), post.content) LIKE :term)", { term: `%${escapeLike(query)}%` })
+      .orderBy('post.created_at', 'DESC').addOrderBy('post.id', 'DESC').take(Math.min(50, Math.max(1, limit)));
+    const posts = this.hydrateCardExcerpts(await qb.getRawAndEntities());
 
     return this.postSummaryService.toSummaryList(posts);
   }
@@ -1340,43 +1315,15 @@ export class PostsService {
     limit: number;
     totalPages: number;
   }> {
+    limit = Math.min(50, Math.max(1, Math.trunc(Number(limit)) || 20));
+    page = Math.max(1, Math.trunc(Number(page)) || 1);
     const skip = (page - 1) * limit;
 
-    const [posts, total] = await this.postRepository.findAndCount({
-      where: { user_id: userId, status: 'published', source: 'USER' },
-      relations: ['user', 'category'],
-      select: {
-        id: true,
-        user_id: true,
-        category_id: true,
-          post_type: true,
-        title: true,
-        content: true,
-        status: true,
-        is_pinned: true,
-        view_count: true,
-        like_count: true,
-        created_at: true,
-        updated_at: true,
-        user: {
-          id: true,
-          mindauth_id: true,
-          username: true,
-          avatar_url: true,
-          role: true,
-        },
-        category: {
-          id: true,
-          name: true,
-          slug: true,
-          color: true,
-          icon: true,
-        },
-      },
-      order: { created_at: 'DESC' },
-      skip,
-      take: limit,
-    });
+    const qb = this.cardQuery().andWhere('post.user_id = :userId AND post.source = :source', { userId, source: 'USER' })
+      .orderBy('post.created_at', 'DESC').addOrderBy('post.id', 'DESC').skip(skip).take(Math.min(50, Math.max(1, limit)));
+    const cards = await qb.getRawAndEntities();
+    const total = await qb.getCount();
+    const posts = this.hydrateCardExcerpts(cards);
 
     const data = await this.postSummaryService.toSummaryList(posts);
     const totalPages = Math.ceil(total / limit);
@@ -1397,43 +1344,9 @@ export class PostsService {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
 
-    const posts = await this.postRepository.find({
-      where: {
-        status: 'published',
-        created_at: MoreThan(yesterday),
-      },
-      relations: ['user', 'category'],
-      select: {
-        id: true,
-        user_id: true,
-        category_id: true,
-          post_type: true,
-        title: true,
-        content: true,
-        status: true,
-        is_pinned: true,
-        view_count: true,
-        like_count: true,
-        created_at: true,
-        updated_at: true,
-        user: {
-          id: true,
-          mindauth_id: true,
-          username: true,
-          avatar_url: true,
-          role: true,
-        },
-        category: {
-          id: true,
-          name: true,
-          slug: true,
-          color: true,
-          icon: true,
-        },
-      },
-      order: { view_count: 'DESC' },
-      take: limit,
-    });
+    const qb = this.cardQuery().andWhere('post.created_at > :yesterday', { yesterday })
+      .orderBy('post.view_count', 'DESC').addOrderBy('post.id', 'DESC').take(Math.min(50, Math.max(1, limit)));
+    const posts = this.hydrateCardExcerpts(await qb.getRawAndEntities());
 
     return this.postSummaryService.toSummaryList(posts);
   }
@@ -1442,45 +1355,10 @@ export class PostsService {
    * Get pinned posts in a category
    */
   async getPinned(categoryId?: number): Promise<PostSummaryDto[]> {
-    const where: any = { is_pinned: 1, status: 'published' };
-
-    if (categoryId) {
-      where.category_id = categoryId;
-    }
-
-    const posts = await this.postRepository.find({
-      where,
-      relations: ['user', 'category'],
-      select: {
-        id: true,
-        user_id: true,
-        category_id: true,
-          post_type: true,
-        title: true,
-        content: true,
-        status: true,
-        is_pinned: true,
-        view_count: true,
-        like_count: true,
-        created_at: true,
-        updated_at: true,
-        user: {
-          id: true,
-          mindauth_id: true,
-          username: true,
-          avatar_url: true,
-          role: true,
-        },
-        category: {
-          id: true,
-          name: true,
-          slug: true,
-          color: true,
-          icon: true,
-        },
-      },
-      order: { created_at: 'DESC' },
-    });
+    const qb = this.cardQuery().andWhere('post.is_pinned = :pinned', { pinned: 1 });
+    if (categoryId) qb.andWhere('post.category_id = :categoryId', { categoryId });
+    qb.orderBy('post.created_at', 'DESC').addOrderBy('post.id', 'DESC').take(50);
+    const posts = this.hydrateCardExcerpts(await qb.getRawAndEntities());
 
     return this.postSummaryService.toSummaryList(posts);
   }

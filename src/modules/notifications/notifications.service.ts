@@ -19,6 +19,7 @@ import {
   type EmailTemplateEventKey,
 } from './email.templates';
 import { SettingsService } from '../settings/settings.service';
+import { isDuplicateKeyError } from '@common/utils/db-error.util';
 import { NotificationStreamService } from './notification-stream.service';
 import { TemplateService } from './template.service';
 import { SiteConfigService } from '../../config/site-profile';
@@ -256,8 +257,14 @@ export class NotificationsService {
     reply_id?: number;
     content?: string;
     emailEvent?: EmailTemplateEventKey | false;
+    /** Stable internal event scope; editor calls omit it to retain re-mention behavior. */
+    deduplicationKey?: string;
   }): Promise<Notification> {
-    const notification = this.notificationRepository.create({
+    const deduplicationKey = data.deduplicationKey ?? (data.reply_id && ['reply', 'mention'].includes(data.type)
+      ? `reply:${data.reply_id}:${data.type}:${data.user_id}` : null);
+    let duplicate = false;
+    let notification = this.notificationRepository.create({
+      deduplication_key: deduplicationKey,
       user_id: data.user_id,
       type: data.type,
       actor_id: data.actor_id,
@@ -266,9 +273,17 @@ export class NotificationsService {
       content: data.content,
       is_read: 0,
     });
-    await this.notificationRepository.save(notification);
+    try {
+      await this.notificationRepository.save(notification);
+    } catch (error) {
+      if (!deduplicationKey || !isDuplicateKeyError(error)) throw error;
+      const existing = await this.notificationRepository.findOne({ where: { deduplication_key: deduplicationKey } });
+      if (!existing) throw error;
+      notification = existing;
+      duplicate = true;
+    }
 
-    if (data.emailEvent !== false) {
+    if (!duplicate && data.emailEvent !== false) {
       await this.sendEmailForNotification(notification, data.actor_id, data.emailEvent);
     }
 
@@ -424,7 +439,7 @@ export class NotificationsService {
     }
 
     // Don't notify the author if they are the actor.
-    if (post.user_id === data.actor_id) {
+    if (post.user_id === data.actor_id || !await this.canReceivePostNotification(postId, post.user_id)) {
       return;
     }
 
@@ -438,12 +453,33 @@ export class NotificationsService {
     });
   }
 
+  async canReceivePostNotification(postId: number, userId: number): Promise<boolean> {
+    return (await this.eligibleMentionIds([userId], postId)).includes(userId);
+  }
+
+  /** A mention must not email restricted body text to a recipient outside its group. */
+  private async eligibleMentionIds(ids: number[], postId: number): Promise<number[]> {
+    if (!ids.length) return [];
+    const post = await this.postRepository.findOne({ where: { id: postId }, select: ['id', 'status', 'required_group_id'] });
+    if (!post || post.status !== 'published') return [];
+    if (!post.required_group_id) return ids;
+    const rows = await this.userRepository.createQueryBuilder('recipient')
+      .select(['recipient.id'])
+      .where('recipient.id IN (:...recipientIds)', { recipientIds: ids })
+      .andWhere(`(recipient.role IN (:...staffRoles) OR EXISTS (SELECT 1 FROM group_members mention_member WHERE mention_member.group_id = :groupId AND mention_member.user_id = recipient.id))`, {
+        staffRoles: ['admin', 'moderator'], groupId: post.required_group_id,
+      }).getMany();
+    return rows.map((row) => row.id);
+  }
+
   async notifyMentionedUsers(
     content: string,
     postId: number,
     actorId: number,
     replyId?: number,
     skipUserIds: number[] = [],
+    strict = false,
+    deduplicationScope?: string,
   ): Promise<Notification[]> {
     // Parse @username mentions using regex.
     const mentionRegex = /@(\w+)/g;
@@ -458,31 +494,7 @@ export class NotificationsService {
       where: usernames.map((username) => ({ username })),
     });
 
-    const notifications: Notification[] = [];
-    skipUserIds.push(actorId);
-
-    for (const user of mentionedUsers) {
-      if (skipUserIds.includes(user.id)) {
-        continue;
-      }
-
-      try {
-        const notification = await this.create({
-          user_id: user.id,
-          type: 'mention',
-          actor_id: actorId,
-          post_id: postId,
-          reply_id: replyId,
-          content,
-        });
-        notifications.push(notification);
-      } catch (error) {
-        // Continue processing other mentions even if one fails.
-        this.logger.warn(`Failed to notify user ${user.id}: ${(error as Error).message}`);
-      }
-    }
-
-    return notifications;
+    return this.notifyMentionedUserIds(mentionedUsers.map((user) => user.id), postId, actorId, content, replyId, skipUserIds, strict, deduplicationScope);
   }
 
   /** Notify from validated schema-v2 mention identities, deduped by user id. */
@@ -493,10 +505,14 @@ export class NotificationsService {
     content: string,
     replyId?: number,
     skipUserIds: number[] = [],
+    strict = false,
+    deduplicationScope?: string,
   ): Promise<Notification[]> {
     const uniqueIds = [...new Set(userIds)].filter((id) => Number.isSafeInteger(id) && id > 0 && id !== actorId && !skipUserIds.includes(id));
     if (!uniqueIds.length) return [];
-    const users = await this.userRepository.find({ where: { id: In(uniqueIds) }, select: { id: true } });
+    const eligibleIds = await this.eligibleMentionIds(uniqueIds, postId);
+    if (!eligibleIds.length) return [];
+    const users = await this.userRepository.find({ where: { id: In(eligibleIds) }, select: { id: true } });
     const notifications: Notification[] = [];
     for (const user of users) {
       if (this.userBlocks) {
@@ -510,12 +526,14 @@ export class NotificationsService {
         notifications.push(await this.create({
           user_id: user.id,
           type: 'mention',
+          ...(deduplicationScope ? { deduplicationKey: `${deduplicationScope}:mention:${user.id}` } : {}),
           actor_id: actorId,
           post_id: postId,
           reply_id: replyId,
           content,
         }));
       } catch (error) {
+        if (strict) throw error;
         this.logger.warn(`Failed to notify mentioned user ${user.id}: ${(error as Error).message}`);
       }
     }

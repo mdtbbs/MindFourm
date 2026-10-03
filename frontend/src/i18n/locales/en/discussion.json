@@ -36,7 +36,9 @@
   "replySection": {
     "aria": "Replies",
     "title": "Replies ({count})",
-    "empty": "No replies yet. Start the conversation."
+    "empty": "No replies yet. Start the conversation.",
+    "expandChildren": "Load replies ({count})",
+    "loadFailed": "Could not load replies. Please retry."
   },
   "replyItem": {
     "reply": "Reply",

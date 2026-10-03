@@ -298,6 +298,90 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /** Update timing counters and maxima in one atomic round trip. */
+  async aggregateHash(key: string, increments: Array<[string, number]>, maxima: Array<[string, number]>, ttlSeconds: number): Promise<void> {
+    await this.withFallback(
+      async () => { await this.client.eval(`
+        local increments = cjson.decode(ARGV[1])
+        local maxima = cjson.decode(ARGV[2])
+        for _, item in ipairs(increments) do redis.call('HINCRBY', KEYS[1], item[1], item[2]) end
+        for _, item in ipairs(maxima) do
+          if item[2] > tonumber(redis.call('HGET', KEYS[1], item[1]) or '0') then redis.call('HSET', KEYS[1], item[1], item[2]) end
+        end
+        redis.call('EXPIRE', KEYS[1], ARGV[3])
+        return 1
+      `, 1, key, JSON.stringify(increments), JSON.stringify(maxima), ttlSeconds); },
+      () => {
+        for (const [field, increment] of increments) this.fallback.hset(key, field, String(Number(this.fallback.hget(key, field) || 0) + increment));
+        for (const [field, value] of maxima) if (value > Number(this.fallback.hget(key, field) || 0)) this.fallback.hset(key, field, String(value));
+        this.fallback.expire(key, ttlSeconds);
+      },
+    );
+  }
+
+  /** Read revocable session state every time; renew at most once per minute. */
+  async readSessionAndRenew(key: string, ttlSeconds: number): Promise<Record<string, string>> {
+    return this.withFallback(
+      async () => {
+        const fields = await this.client.eval(`
+          local fields = redis.call('HGETALL', KEYS[1])
+          if redis.call('HEXISTS', KEYS[1], 'userId') == 1 and redis.call('TTL', KEYS[1]) < tonumber(ARGV[1]) - 60 then
+            redis.call('EXPIRE', KEYS[1], ARGV[1])
+          end
+          return fields
+        `, 1, key, ttlSeconds) as string[];
+        const hash: Record<string, string> = {};
+        for (let i = 0; i < fields.length; i += 2) hash[fields[i]] = fields[i + 1];
+        return hash;
+      },
+      () => {
+        const hash = this.fallback.hgetall(key);
+        if (hash.userId && this.fallback.ttl(key) < ttlSeconds - 60) this.fallback.expire(key, ttlSeconds);
+        return hash;
+      },
+    );
+  }
+
+  /** Bounded rolling distinct-user activity; no tokens or IP addresses are retained. */
+  async recordUserActivity(userId: number, now = Date.now()): Promise<void> {
+    const key = 'stats:active-users';
+    await this.withFallback(
+      async () => { await this.client.eval(`
+        local previous = tonumber(redis.call('ZSCORE', KEYS[1], ARGV[1]) or '0')
+        if tonumber(ARGV[2]) - previous >= 60000 then
+          redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
+          redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', tonumber(ARGV[2]) - 86400000)
+          redis.call('EXPIRE', KEYS[1], 90000)
+          redis.call('SET', KEYS[2], ARGV[2], 'NX')
+          redis.call('EXPIRE', KEYS[2], 90000)
+        end
+        return 1
+      `, 2, key, 'stats:active-users:observed-since', String(userId), now); },
+      () => {
+        // Individual expiring keys keep the fallback bounded without a sorted-set scan.
+        this.fallback.set(`stats:active-user:${userId}`, String(now), 24 * 60 * 60);
+        this.fallback.setIfAbsent('stats:activity-observed-since', String(now), 90000);
+        this.fallback.expire('stats:activity-observed-since', 90000);
+      },
+    );
+  }
+
+  async activeUserStats(now = Date.now()): Promise<{ count: number; observedSince: string; complete: boolean }> {
+    const [count, started] = await this.withFallback(
+      async () => await this.client.eval(`
+        redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', tonumber(ARGV[1]) - 86400000)
+        return { redis.call('ZCARD', KEYS[1]), redis.call('GET', KEYS[2]) or ARGV[1] }
+      `, 2, 'stats:active-users', 'stats:active-users:observed-since', now) as [number, string],
+      () => [this.fallback.keys('stats:active-user:*').length, this.fallback.get('stats:activity-observed-since') || String(now)] as [number, string],
+    );
+    const since = Number(started);
+    return { count: Number(count), observedSince: new Date(since).toISOString(), complete: now - since >= 86400000 };
+  }
+
+  async countActiveUsers(now = Date.now()): Promise<number> {
+    return (await this.activeUserStats(now)).count;
+  }
+
   async hgetall(key: string): Promise<Record<string, string>> {
     return this.withFallback(
       () => this.client.hgetall(key),

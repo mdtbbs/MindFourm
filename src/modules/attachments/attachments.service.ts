@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, IsNull, LessThan, MoreThan, Repository } from 'typeorm';
+import { BatchViewer, visibleBatchTargets } from '@common/utils/batch-targets.util';
 import { Attachment } from '@entities/attachment.entity';
 import { Post } from '@entities/post.entity';
 import { Reply } from '@entities/reply.entity';
@@ -201,6 +202,21 @@ export class AttachmentsService {
       where: { post_id: postId, status: 'approved', deleted_at: IsNull() },
       order: { created_at: 'ASC' },
     });
+  }
+
+  async getByReplyIds(ids: number[], viewer?: BatchViewer): Promise<Record<number, Partial<Attachment>[]>> {
+    const visible = await visibleBatchTargets(this.postRepository, this.replyRepository, 'reply', ids, viewer);
+    const result: Record<number, Partial<Attachment>[]> = {};
+    for (const row of visible) result[row.id] = [];
+    if (!visible.length) return result;
+    const rows = await this.attachmentRepository.find({
+      where: { reply_id: In(visible.map((row) => row.id)), status: 'approved', deleted_at: IsNull() },
+      select: ['id', 'post_id', 'reply_id', 'file_name', 'file_size', 'mime_type', 'download_count',
+        'renderer_status', 'renderer_resource_id', 'renderer_error_code', 'created_at'],
+      order: { created_at: 'ASC' },
+    });
+    for (const row of rows) if (result[row.reply_id]) result[row.reply_id].push(row);
+    return result;
   }
 
   async getByReplyId(replyId: number): Promise<Attachment[]> {

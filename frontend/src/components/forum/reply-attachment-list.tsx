@@ -1,17 +1,19 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useUserStore } from '@/store/user-store';
+import { useEffect } from 'react';
 import AttachmentList from '@/components/forum/attachment-list';
-import { attachmentApi } from '@/lib/api/client';
-import type { Attachment } from '@/types';
+import { useReplyAttachments, useReplyAttachmentStore } from '@/store/reply-attachment-store';
 import { omitEmbeddedAttachments } from '@/lib/tiptap/attachment-projection';
 
 export default function ReplyAttachmentList({ replyId, contentJson }: { replyId: number; contentJson?: unknown }) {
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const viewerId = useUserStore((state) => state.user?.id);
+  const attachments = useReplyAttachments(replyId);
+  const ensure = useReplyAttachmentStore((state) => state.ensure);
 
   useEffect(() => {
-    attachmentApi.getByReply(replyId).then(setAttachments).catch(() => setAttachments([]));
-  }, [replyId]);
+    ensure(replyId);
+  }, [replyId, ensure, viewerId]);
 
   return <AttachmentList attachments={omitEmbeddedAttachments(attachments, contentJson)} />;
 }

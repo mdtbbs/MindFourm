@@ -41,6 +41,9 @@ export const reactionApi = {
   listFor: (targetType: ReactionTargetType, targetId: number) =>
     requestJson<{ reactions: ReactionSummary[] }>(`/api/reactions/${targetType}/${targetId}`),
 
+  listBatch: (type: ReactionTargetType, ids: number[]) =>
+    requestJson<{ reactions: Record<number, ReactionSummary[]> }>(`/api/reactions/${type}/batch?ids=${ids.join(',')}`),
+
   /** Toggle — reacting again with the same emoji removes it. Returns the fresh aggregate. */
   toggle: (targetType: ReactionTargetType, targetId: number, emoji: string) =>
     requestJson<{ reactions: ReactionSummary[] }>(`/api/reactions/${targetType}/${targetId}`, {

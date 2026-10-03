@@ -208,3 +208,72 @@ describe('AdminService', () => {
     expect(postRepository.update).toHaveBeenNthCalledWith(2, [240, 241], { is_pinned: 0 });
   });
 });
+
+describe('AdminService durable post approval', () => {
+  it('locks the pending post and records publication with the same transaction; duplicate approval does not enqueue again', async () => {
+    const { service, pointsService } = createService();
+    const row = { id: 33, user_id: 7, status: 'pending' };
+    const manager = { findOne: jest.fn(async () => row), update: jest.fn(async (_entity, _id, change) => { Object.assign(row, change); }) };
+    const events = { publish: jest.fn().mockResolvedValue({ id: 1 }) };
+    (service as any).dataSource = { transaction: async (work: any) => work(manager) };
+    (service as any).events = events;
+    await expect(service.approvePost(33)).resolves.toBeUndefined();
+    await expect(service.approvePost(33)).resolves.toBeUndefined();
+    expect(manager.findOne).toHaveBeenCalledWith(expect.anything(), { where: { id: 33 }, lock: { mode: 'pessimistic_write' } });
+    expect(events.publish).toHaveBeenCalledTimes(1);
+    expect(events.publish).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'ForumPostPublished', aggregateId: 33 }), manager);
+    expect(pointsService.awardPoints).not.toHaveBeenCalled();
+  });
+});
+
+describe('Admin reply approval outbox', () => {
+  it('approves and enqueues within one row-locked transaction', async () => {
+    const { service, pointsService, postActivityService } = createService();
+    const row = { id: 9, post_id: 88, status: 'pending' };
+    const manager = { findOne: jest.fn(async () => row), update: jest.fn(async () => undefined) };
+    const events = { publish: jest.fn(async () => undefined) };
+    (service as any).events = events;
+    (service as any).dataSource = { transaction: (run: any) => run(manager) };
+    await service.approveReply(9);
+    expect(manager.findOne).toHaveBeenCalledWith(expect.anything(), { where: { id: 9 }, lock: { mode: 'pessimistic_write' } });
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 9, { status: 'published' });
+    expect(events.publish).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'ForumReplyPublished', aggregateId: 9 }), manager);
+    expect(pointsService.awardPoints).not.toHaveBeenCalled();
+    expect(postActivityService.markPostActive).not.toHaveBeenCalled();
+  });
+
+  it('does not re-enqueue an already published reply and does not commit if enqueue fails', async () => {
+    const { service } = createService();
+    const row = { id: 9, post_id: 88, status: 'published' };
+    const manager = { findOne: jest.fn(async () => row), update: jest.fn(async () => undefined) };
+    const events = { publish: jest.fn(async () => { throw new Error('outbox unavailable'); }) };
+    let committed = false;
+    (service as any).events = events;
+    (service as any).dataSource = { transaction: async (run: any) => { const result = await run(manager); committed = true; return result; } };
+    await service.approveReply(9);
+    expect(events.publish).not.toHaveBeenCalled();
+    row.status = 'pending'; committed = false;
+    await expect(service.approveReply(9)).rejects.toThrow('outbox unavailable');
+    expect(committed).toBe(false);
+  });
+});
+
+describe('AdminService approval outbox failures', () => {
+  it('does not commit publication if the outbox insertion fails, allowing approval to be retried', async () => {
+    const { service, pointsService } = createService();
+    const stored = { id: 33, user_id: 7, status: 'pending' };
+    let committed = false;
+    const events = { publish: jest.fn().mockRejectedValue(new Error('outbox write failed')) };
+    (service as any).events = events;
+    (service as any).dataSource = { transaction: async (work: any) => {
+      const staged = { ...stored };
+      const manager = { findOne: async () => staged, update: async (_entity: unknown, _id: number, change: object) => { Object.assign(staged, change); } };
+      await work(manager);
+      Object.assign(stored, staged); committed = true;
+    } };
+    await expect(service.approvePost(33)).rejects.toThrow('outbox write failed');
+    expect(committed).toBe(false);
+    expect(stored.status).toBe('pending');
+    expect(pointsService.awardPoints).not.toHaveBeenCalled();
+  });
+});

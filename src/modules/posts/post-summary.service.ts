@@ -91,7 +91,7 @@ export class PostSummaryService {
       source: post.source || 'USER',
       slug: post.slug ?? null,
       title: post.title,
-      excerpt: this.buildExcerpt(post.content),
+      excerpt: this.buildExcerpt(post.content_text || post.content),
       status: post.status,
       is_pinned: Boolean(post.is_pinned),
       is_locked: Boolean(post.is_locked),

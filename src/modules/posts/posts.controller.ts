@@ -100,6 +100,20 @@ export class PostsController {
     });
   }
 
+  @Get(':postId/replies/:replyId/children')
+  @UseGuards(JwtAuthGuard)
+  @OptionalAuth()
+  async getReplyChildren(
+    @Param('postId', ParseIntPipe) postId: number,
+    @Param('replyId', ParseIntPipe) replyId: number,
+    @Query() query: QueryPostPageDto,
+    @Req() req: any,
+  ) {
+    await this.postsService.assertQuoteVisible(postId, req?.user, replyId);
+    const result = await this.postsService.getReplyChildren(postId, replyId, query.limit ?? 20, query.page ?? 1);
+    return { data: result.data, pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages } };
+  }
+
   @Get(':postId/replies/:replyId/quote-availability')
   @UseGuards(JwtAuthGuard)
   @OptionalAuth()

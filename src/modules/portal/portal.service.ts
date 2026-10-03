@@ -7,6 +7,9 @@ import { Notice } from '@entities/notice.entity';
 import { RedisService } from '@database/redis.service';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
 import { PortalSectionRegistry } from './portal-section.registry';
+import { selectPostCards, hydratePostCardExcerpts } from '../../common/utils/post-card-query.util';
+import { applyPublicPostVisibility } from '../../common/utils/post-visibility.util';
+import { withTimeout } from '@common/utils/with-timeout.util';
 
 /** The legacy `/v1/portal` surface; kept while `/v1/home` becomes the web read model. */
 export type PortalModule = { key: string; title: string; hidden: boolean; items: any[] };
@@ -29,7 +32,7 @@ export type HomeData = {
 };
 
 type CachedHomeData = HomeData & { cached_at: string };
-const HOME_CACHE_KEY = 'cache:home:v1';
+const HOME_CACHE_KEY = 'cache:home:v2';
 const HOME_CACHE_FRESH_SECONDS = 60;
 const HOME_CACHE_STALE_SECONDS = 10 * 60;
 
@@ -41,6 +44,7 @@ const HOME_CACHE_STALE_SECONDS = 10 * 60;
 export class PortalService {
   private readonly logger = new Logger(PortalService.name);
   private refreshInFlight: Promise<void> | null = null;
+  private coldBuildInFlight: Promise<HomeData> | null = null;
 
   constructor(
     @InjectRepository(Post) private readonly postRepo: Repository<Post>,
@@ -73,9 +77,12 @@ export class PortalService {
       this.scheduleRefresh(cached);
       return this.withCacheState(cached, 'stale');
     }
-    const home = await this.buildHomeData();
-    await this.writeCachedHome(home);
-    return home;
+    if (!this.coldBuildInFlight) {
+      this.coldBuildInFlight = this.buildHomeData()
+        .then(async (home) => { await this.writeCachedHome(home); return home; })
+        .finally(() => { this.coldBuildInFlight = null; });
+    }
+    return this.coldBuildInFlight;
   }
 
   private toPortalModule(key: string, title: string, items: any[]): PortalModule {
@@ -84,10 +91,13 @@ export class PortalService {
 
   private async buildHomeData(previous?: HomeData): Promise<HomeData> {
     const results = await Promise.allSettled([
-      this.getLatestCommunityDiscussions(), this.sectionRegistry.getSection<HomeResource>('resources'), this.getNews(), this.getNotices(),
-      this.sectionRegistry.getSection<HomeDeveloperEntry>('development:issues'),
-      this.sectionRegistry.getSection<HomeDeveloperEntry>('development:pull_requests'),
-    ]);
+      withTimeout(this.getLatestCommunityDiscussions(), 2500, 'Home discussions'),
+      withTimeout(this.sectionRegistry.getSection<HomeResource>('resources'), 2500, 'Home resources'),
+      withTimeout(this.getNews(), 2500, 'Home news'),
+      withTimeout(this.getNotices(), 2500, 'Home notices'),
+      withTimeout(this.sectionRegistry.getSection<HomeDeveloperEntry>('development:issues'), 2500, 'Home issues'),
+      withTimeout(this.sectionRegistry.getSection<HomeDeveloperEntry>('development:pull_requests'), 2500, 'Home pull requests'),
+    ] as const);
     return {
       discussions: this.sectionFrom(results[0], previous?.discussions),
       resources: this.sectionFrom(results[1], previous?.resources),
@@ -113,7 +123,7 @@ export class PortalService {
       ...section,
       // Never turn a known failed, empty module into a deceptively successful one
       // merely because the aggregate cache itself is readable.
-      state: section.state === 'unavailable' ? 'unavailable' : state,
+      state: section.state === 'unavailable' ? 'unavailable' : section.state === 'stale' ? 'stale' : state,
     });
     return {
       discussions: applyState(cached.discussions), resources: applyState(cached.resources),
@@ -152,7 +162,11 @@ export class PortalService {
   }
 
   private async getLatestCommunityDiscussions(): Promise<PostSummaryDto[]> {
-    const posts = await this.postRepo.find({ where: { status: 'published', source: 'USER' }, relations: ['user', 'category'], order: { last_activity_at: 'DESC', id: 'DESC' }, take: 6 });
+    const qb = this.postRepo.createQueryBuilder('post').leftJoin('post.user', 'user').leftJoin('post.category', 'category');
+    selectPostCards(qb);
+    applyPublicPostVisibility(qb);
+    qb.andWhere('post.source = :source', { source: 'USER' }).orderBy('post.last_activity_at', 'DESC').addOrderBy('post.id', 'DESC').take(6).maxExecutionTime(2500);
+    const posts = hydratePostCardExcerpts(await qb.getRawAndEntities());
     return this.postSummaryService.toSummaryList(posts);
   }
 
@@ -162,7 +176,7 @@ export class PortalService {
   }
 
   private async getNotices(): Promise<HomeNotice[]> {
-    const rows = await this.noticeRepo.createQueryBuilder('notice').where('notice.deleted_at IS NULL').andWhere('notice.status = :status', { status: 'published' })
+    const rows = await this.noticeRepo.createQueryBuilder('notice').select(['notice.id', 'notice.public_id', 'notice.title', 'notice.excerpt', 'notice.published_at']).maxExecutionTime(2500).where('notice.deleted_at IS NULL').andWhere('notice.status = :status', { status: 'published' })
       .andWhere('notice.published_at IS NOT NULL AND notice.published_at <= NOW()').orderBy('notice.is_pinned', 'DESC').addOrderBy('notice.published_at', 'DESC').take(3).getMany();
     return rows.map((notice) => ({ id: notice.id, public_id: notice.public_id, title: notice.title, excerpt: notice.excerpt, published_at: notice.published_at?.toISOString() || null }));
   }

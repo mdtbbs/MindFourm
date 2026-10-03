@@ -36,7 +36,9 @@
   "replySection": {
     "aria": "返信",
     "title": "返信（{count}）",
-    "empty": "返信はまだありません。最初の返信を投稿しましょう。"
+    "empty": "返信はまだありません。最初の返信を投稿しましょう。",
+    "expandChildren": "返信を表示（{count}）",
+    "loadFailed": "返信を読み込めませんでした。再試行してください。"
   },
   "replyItem": {
     "reply": "返信",

@@ -29,6 +29,7 @@ interface ReactionBarProps {
  */
 export default function ReactionBar({ targetType, targetId, className = '' }: ReactionBarProps) {
   const { t, locale } = useI18n();
+  const viewerId = useUserStore((state) => state.user?.id);
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
   const showError = useToastStore((state) => state.showError);
   const showInfo = useToastStore((state) => state.showInfo);
@@ -46,7 +47,7 @@ export default function ReactionBar({ targetType, targetId, className = '' }: Re
 
   useEffect(() => {
     ensureReactions(targetType, targetId);
-  }, [ensureReactions, targetType, targetId]);
+  }, [ensureReactions, targetType, targetId, viewerId]);
 
   // Move focus into the picker on open so keyboard users reach the emojis without
   // tabbing, and so Escape has somewhere obvious to return from.

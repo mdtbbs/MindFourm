@@ -7,6 +7,7 @@
  * collected, deduplicated, and issued together.
  */
 
+import { fetchInBatches } from '@/lib/api/batch';
 import { create } from 'zustand';
 import {
   REACTION_EMOJIS,
@@ -47,6 +48,8 @@ const EMPTY_REACTIONS: readonly ReactionSummary[] = [];
 const pending: Record<ReactionTargetType, Set<number>> = { post: new Set(), reply: new Set() };
 const inFlight: Record<ReactionTargetType, Set<number>> = { post: new Set(), reply: new Set() };
 let flushScheduled = false;
+let viewerGeneration = 0;
+const mutations = new Map<string, number>();
 let emojisRequested = false;
 
 /**
@@ -95,31 +98,13 @@ function commitReactions(
   });
 }
 
-/**
- * Fetch several targets' aggregates and commit them in a single update.
- *
- * No batch endpoint exists yet, so this issues one request per id in parallel. When one
- * lands, only this function's body changes — callers already hand it a deduplicated id
- * list, and the commit is already write-once for the whole batch.
- */
+/** One HTTP request per 100 targets; old viewers cannot repopulate the cache. */
 async function fetchReactionsFor(type: ReactionTargetType, ids: number[]): Promise<void> {
-  if (ids.length === 0) return;
-
-  const results = await Promise.allSettled(
-    ids.map(async (id) => ({ id, reactions: (await reactionApi.listFor(type, id)).reactions })),
-  );
-
-  // A rejected id contributes nothing: the bar keeps whatever it had, rather than
-  // being blanked by another user's request failing.
-  commitReactions(
-    type,
-    results
-      .filter(
-        (result): result is PromiseFulfilledResult<{ id: number; reactions: ReactionSummary[] }> =>
-          result.status === 'fulfilled',
-      )
-      .map((result) => result.value),
-  );
+  const generation = viewerGeneration;
+  const versions = new Map(ids.map((id) => [id, mutations.get(`${type}:${id}`) ?? 0]));
+  const rows = await fetchInBatches(ids, async (chunk) => (await reactionApi.listBatch(type, chunk)).reactions);
+  if (generation !== viewerGeneration) return;
+  commitReactions(type, ids.filter((id) => versions.get(id) === (mutations.get(`${type}:${id}`) ?? 0)).map((id) => ({ id, reactions: rows[id] ?? [] })));
 }
 
 function scheduleFlush(): void {
@@ -128,6 +113,7 @@ function scheduleFlush(): void {
 
   queueMicrotask(() => {
     flushScheduled = false;
+    const generation = viewerGeneration;
     const batches: Array<{ type: ReactionTargetType; ids: number[] }> = [
       { type: 'post', ids: [...pending.post] },
       { type: 'reply', ids: [...pending.reply] },
@@ -142,6 +128,7 @@ function scheduleFlush(): void {
     void Promise.allSettled(
       batches.map(({ type, ids }) => fetchReactionsFor(type, ids)),
     ).finally(() => {
+      if (generation !== viewerGeneration) return;
       for (const { type, ids } of batches) {
         ids.forEach((id) => inFlight[type].delete(id));
       }
@@ -178,6 +165,10 @@ export const useReactionStore = create<ReactionState>((set, get) => ({
   },
 
   toggleReaction: async (type, id, emoji) => {
+    const generation = viewerGeneration;
+    const key = `${type}:${id}`;
+    const version = (mutations.get(key) ?? 0) + 1;
+    mutations.set(key, version);
     const previous = (type === 'post' ? get().postReactions : get().replyReactions).get(id) ?? [];
     commitReactions(type, [{ id, reactions: applyToggle(previous, emoji, get().emojis) }]);
 
@@ -185,9 +176,9 @@ export const useReactionStore = create<ReactionState>((set, get) => ({
       const { reactions } = await reactionApi.toggle(type, id, emoji);
       // The server recomputes the aggregate with SQL COUNT, so this also picks up
       // reactions other users made while the request was in flight.
-      commitReactions(type, [{ id, reactions }]);
+      if (generation === viewerGeneration && mutations.get(key) === version) commitReactions(type, [{ id, reactions }]);
     } catch (error) {
-      commitReactions(type, [{ id, reactions: [...previous] }]);
+      if (generation === viewerGeneration && mutations.get(key) === version) commitReactions(type, [{ id, reactions: [...previous] }]);
       throw error;
     }
   },
@@ -203,6 +194,8 @@ export function useReactions(type: ReactionTargetType, id: number): readonly Rea
 // The `reacted` flags are per-viewer, so the cached aggregates must not survive a
 // logout — the next person signing in on this browser would inherit them.
 registerUserScopedReset(() => {
+  viewerGeneration += 1;
+  mutations.clear();
   pending.post.clear();
   pending.reply.clear();
   inFlight.post.clear();

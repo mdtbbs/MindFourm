@@ -23,7 +23,8 @@
     "latest": "Latest",
     "recentSearches": "Recent searches",
     "clearHistory": "Clear",
-    "popularSearches": "Popular searches"
+    "popularSearches": "Popular searches",
+    "partialResults": "Some search categories are temporarily unavailable. Available results are shown below. Please retry later."
   },
   "notices": {
     "title": "Community notices",
@@ -54,13 +55,27 @@
     "browseDescription": "Browse discussions by community, creation, gameplay, and site operations.",
     "empty": "No categories yet",
     "postCount": "{count} discussions",
-    "groups": { "community": "Community", "creation": "Creation", "game": "Game", "meta": "Site operations", "other": "Other" }
+    "groups": {
+      "community": "Community",
+      "creation": "Creation",
+      "game": "Game",
+      "meta": "Site operations",
+      "other": "Other"
+    }
   },
   "contentLanguage": {
     "label": "Content language",
     "unknown": "Not specified",
     "hint": "Choose the language used in this post or resource.",
-    "languages": { "en": "English", "ru": "Russian", "ja": "Japanese", "zh-CN": "Chinese (Simplified)", "es": "Spanish", "de": "German", "other": "Other" }
+    "languages": {
+      "en": "English",
+      "ru": "Russian",
+      "ja": "Japanese",
+      "zh-CN": "Chinese (Simplified)",
+      "es": "Spanish",
+      "de": "German",
+      "other": "Other"
+    }
   },
   "discoverPage": {
     "title": "Discover",
@@ -74,7 +89,11 @@
     "noticesDescription": "Read the latest notices and events",
     "summary": "Resources: {resources} · Discussions: {discussions}"
   },
-  "tagsPage": { "title": "Tags", "description": "Browse all discussion tags", "empty": "There are no tags yet." },
+  "tagsPage": {
+    "title": "Tags",
+    "description": "Browse all discussion tags",
+    "empty": "There are no tags yet."
+  },
   "tagPage": {
     "title": "Tag: {tag}",
     "pageTitle": "Tag: {tag} · Page {page}",

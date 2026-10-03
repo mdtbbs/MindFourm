@@ -23,7 +23,8 @@
     "latest": "最新",
     "recentSearches": "最近の検索",
     "clearHistory": "消去",
-    "popularSearches": "人気の検索"
+    "popularSearches": "人気の検索",
+    "partialResults": "一部の検索カテゴリは現在利用できません。取得できた結果を表示しています。しばらくしてから再試行してください。"
   },
   "notices": {
     "title": "コミュニティのお知らせ",
@@ -54,13 +55,27 @@
     "browseDescription": "コミュニティ、創作、ゲーム、サイト運営のディスカッションを閲覧できます。",
     "empty": "カテゴリはまだありません",
     "postCount": "ディスカッション {count} 件",
-    "groups": { "community": "コミュニティ", "creation": "創作", "game": "ゲーム", "meta": "サイト運営", "other": "その他" }
+    "groups": {
+      "community": "コミュニティ",
+      "creation": "創作",
+      "game": "ゲーム",
+      "meta": "サイト運営",
+      "other": "その他"
+    }
   },
   "contentLanguage": {
     "label": "コンテンツの言語",
     "unknown": "指定しない",
     "hint": "投稿またはリソースの言語を選択してください。",
-    "languages": { "en": "英語", "ru": "ロシア語", "ja": "日本語", "zh-CN": "中国語（簡体字）", "es": "スペイン語", "de": "ドイツ語", "other": "その他" }
+    "languages": {
+      "en": "英語",
+      "ru": "ロシア語",
+      "ja": "日本語",
+      "zh-CN": "中国語（簡体字）",
+      "es": "スペイン語",
+      "de": "ドイツ語",
+      "other": "その他"
+    }
   },
   "discoverPage": {
     "title": "見つける",
@@ -74,7 +89,11 @@
     "noticesDescription": "最新のお知らせやイベントを見る",
     "summary": "リソース: {resources} · ディスカッション: {discussions}"
   },
-  "tagsPage": { "title": "タグ", "description": "ディスカッションのタグ一覧", "empty": "タグはまだありません。" },
+  "tagsPage": {
+    "title": "タグ",
+    "description": "ディスカッションのタグ一覧",
+    "empty": "タグはまだありません。"
+  },
   "tagPage": {
     "title": "タグ: {tag}",
     "pageTitle": "タグ: {tag} · {page} ページ",

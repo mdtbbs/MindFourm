@@ -32,7 +32,7 @@ module.exports = {
       'ts-jest',
       {
         // allowJs lets the ESM dependencies above be compiled down to CJS.
-        tsconfig: { allowJs: true, module: 'commonjs', target: 'es2022' },
+        tsconfig: { allowJs: true, module: 'commonjs', target: 'es2022', jsx: 'react-jsx' },
         diagnostics: false,
       },
     ],
@@ -42,6 +42,9 @@ module.exports = {
     `node_modules[\\\\/](?!(${ESM_ONLY_DEPS.join('|')})[\\\\/])`,
   ],
   moduleNameMapper: {
+    '^react/(.*)$': '<rootDir>/frontend/node_modules/react/$1',
+    '^react$': '<rootDir>/frontend/node_modules/react',
+    '^react-dom/(.*)$': '<rootDir>/frontend/node_modules/react-dom/$1',
     '^@/(.*)$': '<rootDir>/frontend/src/$1',
     '^@entities/(.*)$': '<rootDir>/src/entities/$1',
     '^@common/(.*)$': '<rootDir>/src/common/$1',

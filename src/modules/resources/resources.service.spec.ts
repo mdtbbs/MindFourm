@@ -100,6 +100,8 @@ function createService(overrides: {
     leftJoin: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    maxExecutionTime: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
@@ -113,7 +115,6 @@ function createService(overrides: {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn(),
     update: jest.fn().mockResolvedValue(undefined),
-    query: jest.fn().mockResolvedValue([]),
     query: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     create: jest.fn().mockImplementation((value: unknown) => value),
@@ -259,7 +260,8 @@ describe('ResourcesService', () => {
   it('orders trending public resources from the last seven days of persisted grants, likes, and favorites', async () => {
     const { service, defaultQb } = createService();
     await service.getList({ limit: 20 } as any, { scope: 'public', trendingOnly: true });
-    expect(defaultQb.addSelect).toHaveBeenCalledWith(expect.stringContaining("DATE_SUB(NOW(), INTERVAL 7 DAY)"), 'trending_score');
+    expect(defaultQb.leftJoin).toHaveBeenCalledWith(expect.stringContaining("DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id"), 'download_trend', 'download_trend.resource_id = resource.id');
+    expect(defaultQb.addSelect).toHaveBeenCalledWith(expect.stringContaining('COALESCE(download_trend.score'), 'trending_score');
     expect(defaultQb.orderBy).toHaveBeenCalledWith('trending_score', 'DESC');
   });
 
@@ -661,4 +663,13 @@ describe('ResourcesService', () => {
     await expect(service.updateStatus(33, 'approved')).rejects.toThrow('资源文件不存在或已失效，请重新上传后再审核');
     expect(resourceRepository.update).not.toHaveBeenCalled();
   });
+  it('retains explicit version compatibility while dropping private storage fields', () => {
+    const { service } = createService();
+    const compatibility = [{ runtime: 'mindustry', min_version_value: '160', max_version_value: null }];
+    const normalized = (service as any).normalizeVersion({ id: 1, status: 'published', version: 'v1', compatibility, file_path: '/private/file', reviewed_by_user_id: 42 });
+    expect(normalized.compatibility).toEqual(compatibility);
+    expect(normalized).not.toHaveProperty('file_path');
+    expect(normalized).not.toHaveProperty('reviewed_by_user_id');
+  });
+
 });

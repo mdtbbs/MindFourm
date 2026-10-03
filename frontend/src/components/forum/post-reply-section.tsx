@@ -51,7 +51,7 @@ export default function PostReplySection({
       const detail = (event as CustomEvent<{ postId: number; type: 'update' | 'delete' | 'best'; reply?: Reply; replyId?: number | null }>).detail;
       if (detail?.postId !== postId) return;
       if (detail.type === 'update' && detail.reply) {
-        setReplies((current) => current.map((item) => item.id === detail.reply!.id ? detail.reply! : item));
+        setReplies((current) => current.map((item) => item.id === detail.reply!.id ? { ...item, ...detail.reply! } : item));
       }
       if (detail.type === 'delete' && detail.replyId) {
         setReplies((current) => current.filter((item) => item.id !== detail.replyId));

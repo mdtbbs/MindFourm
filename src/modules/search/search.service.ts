@@ -9,8 +9,11 @@ import { SearchAudit } from '@entities/search-audit.entity';
 import { GroupMember } from '@entities/group-member.entity';
 import { KnowledgeArticle } from '@entities/knowledge-article.entity';
 import { RedisService } from '../../database/redis.service';
+import { withTimeout } from '../../common/utils/with-timeout.util';
 import { escapeLike } from '../../common/utils/search.util';
 import { PostSummaryDto, PostSummaryService } from '../posts/post-summary.service';
+import { applyPostVisibility } from '@common/utils/post-visibility.util';
+import { selectPostCards, hydratePostCardExcerpts } from '@common/utils/post-card-query.util';
 import { SearchProviderRegistry } from './search-provider.registry';
 
 export type SearchViewer = { id: number; role: string } | undefined;
@@ -149,113 +152,30 @@ export class SearchService {
     query: string,
     options: { page?: number; limit?: number; category?: string; categoryId?: number; sort?: string },
     viewer?: SearchViewer,
-  ): Promise<{
-    data: PostSummaryDto[];
-    pagination: {
-      page: number;
-      limit: number;
-      total: number;
-      totalPages: number;
-    };
-  }> {
-    const page = options.page || 1;
-    const limit = Math.min(options.limit || 20, 50);
-
-    const qb = this.postRepository
-      .createQueryBuilder('p')
-      .leftJoinAndSelect('p.user', 'user')
-      .leftJoinAndSelect('p.category', 'category')
-      .select([
-        'p.id',
-        'p.user_id',
-        'p.category_id',
-        'p.post_type',
-        'p.title',
-        'p.content',
-        'p.status',
-        'p.is_pinned',
-        'p.is_locked',
-        'p.view_count',
-        'p.like_count',
-        'p.created_at',
-        'p.updated_at',
-        'user.id',
-        'user.mindauth_id',
-        'user.role',
-        'category.id',
-        'category.name',
-        'category.slug',
-      ])
-      .where('p.status = :status', { status: 'published' });
-
-    // Search is a discovery endpoint, so it must enforce the same group wall as
-    // the post reader. Never let a keyword turn a group-only discussion into an
-    // anonymous preview. Staff may search every published discussion; members can
-    // search only the groups they actually joined.
-    if (!viewer || !['admin', 'moderator'].includes(viewer.role)) {
-      const memberships = viewer
-        ? await this.groupMemberRepository.find({ where: { user_id: viewer.id }, select: ['group_id'] })
-        : [];
-      const groupIds = memberships.map((membership) => membership.group_id);
-      if (groupIds.length) {
-        qb.andWhere('(p.required_group_id IS NULL OR p.required_group_id IN (:...groupIds))', { groupIds });
-      } else {
-        qb.andWhere('p.required_group_id IS NULL');
-      }
-    }
-
-    // `posts` has no schema migration that guarantees a matching FULLTEXT
-    // index in every deployed database. Running MATCH() optimistically makes
-    // the public V1 reader fail with ER_FT_MATCHING_KEY_NOT_FOUND instead of
-    // returning a normal search response. Keep the established LIKE path as
-    // the contract-safe baseline until an index migration is introduced.
-    const usePostFullText = false;
-    if (usePostFullText) {
-      qb.andWhere(
-        'MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)',
-        { query },
-      );
-    } else {
-      qb.andWhere(
-        '(p.title LIKE :query OR p.content LIKE :query)',
-        { query: `%${escapeLike(query)}%` },
-      );
-    }
-
-    if (options.category) {
-      qb.andWhere('category.slug = :category', { category: options.category });
-    }
-    if (options.categoryId) {
-      qb.andWhere('category.id = :categoryId', { categoryId: options.categoryId });
-    }
-
+  ): Promise<{ data: PostSummaryDto[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+    const page = Math.min(10000, Math.max(1, Math.trunc(Number(options.page)) || 1));
+    const limit = Math.min(50, Math.max(1, Math.trunc(Number(options.limit)) || 20));
+    const qb = this.postRepository.createQueryBuilder('p')
+      .leftJoinAndSelect('p.user', 'user').leftJoinAndSelect('p.category', 'category')
+      .maxExecutionTime(2500);
+    selectPostCards(qb, 'p');
+    applyPostVisibility(qb, 'p', viewer, 'published');
+    // Keep LIKE semantics for legacy Markdown rows; deployed schemas do not yet
+    // guarantee a FULLTEXT index. The selected card still reads only a body prefix.
+    qb.andWhere('(p.title LIKE :query OR p.content LIKE :query)', { query: `%${escapeLike(query)}%` });
+    if (options.category) qb.andWhere('category.slug = :category', { category: options.category });
+    if (options.categoryId) qb.andWhere('category.id = :categoryId', { categoryId: options.categoryId });
+    const direction = options.sort === 'oldest' ? 'ASC' : 'DESC';
     if (options.sort === 'relevance') {
-      if (usePostFullText) {
-        qb.orderBy('MATCH(p.title, p.content) AGAINST(:query IN NATURAL LANGUAGE MODE)', 'DESC');
-      } else {
-        qb.orderBy('CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END', 'DESC');
-      }
-      qb.addOrderBy('p.created_at', 'DESC');
-    } else if (options.sort === 'oldest') {
-      qb.orderBy('p.created_at', 'ASC');
-    } else {
-      qb.orderBy('p.created_at', 'DESC');
-    }
-
-    qb.skip((page - 1) * limit).take(limit);
-
-    const [posts, total] = await qb.getManyAndCount();
+      qb.addSelect('CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END', 'search_title_match')
+        .orderBy('search_title_match', 'DESC').addOrderBy('p.created_at', 'DESC');
+    } else qb.orderBy('p.created_at', direction);
+    qb.addOrderBy('p.id', direction).skip((page - 1) * limit).take(limit);
+    const cards = await qb.getRawAndEntities();
+    const total = await qb.getCount();
+    const posts = hydratePostCardExcerpts(cards, 'p');
     const data = await this.postSummaryService.toSummaryList(posts);
-
-    return {
-      data,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };
   }
 
   async searchUsers(query: string, limit: number = 20) {
@@ -285,21 +205,32 @@ export class SearchService {
   async searchUnified(query: string, viewer?: SearchViewer, limit = 10): Promise<{
     groups: UnifiedSearchGroups;
     total_by_type: Record<keyof UnifiedSearchGroups, number>;
+    unavailable: Array<keyof UnifiedSearchGroups>;
   }> {
     const normalized = query.trim();
     const resultLimit = Math.max(1, Math.min(limit, 20));
-    const [postResult, users, wiki, resources, servers, gameVersions, developerFeed] = await Promise.all([
-      this.searchPosts(normalized, { page: 1, limit: resultLimit, sort: 'relevance' }, viewer),
+    const keys = ['posts', 'users', 'wiki', 'resources', 'servers', 'game_versions', 'developer_feed'] as const;
+    const work = [
+      this.searchPosts(normalized, { page: 1, limit: resultLimit, sort: 'relevance' }, viewer).then((result) => result.data),
       this.searchUsers(normalized, resultLimit),
       this.searchWiki(normalized, resultLimit),
       this.providerRegistry?.search('resources', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
       this.providerRegistry?.search('servers', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
       this.providerRegistry?.search('game_versions', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
       this.providerRegistry?.search('developer_feed', normalized, { limit: resultLimit, viewer }) || Promise.resolve([]),
-    ]);
-    const groups: UnifiedSearchGroups = { users, posts: postResult.data, resources, servers,
-      game_versions: gameVersions, wiki, developer_feed: developerFeed };
-    return { groups, total_by_type: Object.fromEntries(
+    ];
+    const results = await Promise.allSettled(work.map((promise, index) => withTimeout<unknown[]>(promise, 2500, `Search ${keys[index]}`)));
+    const groups = {} as UnifiedSearchGroups;
+    const unavailable: Array<keyof UnifiedSearchGroups> = [];
+    results.forEach((result, index) => {
+      const key = keys[index];
+      (groups[key] as unknown[]) = result.status === 'fulfilled' ? result.value : [];
+      if (result.status === 'rejected') {
+        unavailable.push(key);
+        this.logger.warn(`Search provider ${key} unavailable: ${result.reason instanceof Error ? result.reason.message : 'unknown error'}`);
+      }
+    });
+    return { groups, unavailable, total_by_type: Object.fromEntries(
       Object.entries(groups).map(([type, values]) => [type, values.length]),
     ) as Record<keyof UnifiedSearchGroups, number> };
   }
@@ -357,7 +288,7 @@ export class SearchService {
       return (await this.removeBlockedPopularSearches(JSON.parse(cached))).slice(0, limit);
     }
 
-    const popular = await this.redisService.zRevRange('search:popular', 0, -1);
+    const popular = await this.redisService.zRevRange('search:popular', 0, 199);
     const visible = (await this.removeBlockedPopularSearches(popular)).slice(0, limit);
 
     this.redisService.set('search:popular:cached', JSON.stringify(visible), 300)

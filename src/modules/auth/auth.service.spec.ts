@@ -9,6 +9,7 @@ describe('AuthService phone status sync', () => {
     };
     const redisService = {
       hgetall: jest.fn(),
+      recordUserActivity: jest.fn().mockResolvedValue(undefined),
     };
     const legalAcceptanceRepository = {
       findOne: jest.fn(),
@@ -187,6 +188,7 @@ describe('AuthService unified client principal resolver', () => {
       get: jest.fn(async (key: string) => cache.get(key) || null),
       set: jest.fn(async (key: string, value: string, _ttl?: number) => { cache.set(key, value); return 'OK'; }),
       del: jest.fn(async (key: string) => cache.delete(key) ? 1 : 0),
+      recordUserActivity: jest.fn().mockResolvedValue(undefined),
     };
     const service = new AuthService(
       { findOne: jest.fn() } as any, {} as any, {} as any, redisService as any,
@@ -273,5 +275,48 @@ describe('AuthService unified client principal resolver', () => {
     jest.spyOn(service, 'getUserInfo').mockResolvedValue({ id: 22, username: 'writer', email: null, avatar_url: '' });
     repository.findOne.mockResolvedValue(null);
     await expect(service.resolveMindAuthBearer('opaque-value')).rejects.toMatchObject({ response: expect.objectContaining({ code: 'INSUFFICIENT_SCOPE' }) });
+  });
+});
+
+describe('AuthService request and session performance', () => {
+  const create = () => {
+    const users = { findOne: jest.fn().mockResolvedValue({ id: 7 }) };
+    const redis = { readSessionAndRenew: jest.fn().mockResolvedValue({ userId: '7' }), recordUserActivity: jest.fn().mockResolvedValue(undefined) };
+    const mobile = { findOne: jest.fn(), update: jest.fn().mockResolvedValue({ affected: 1 }) };
+    const jwt = { verifyAsync: jest.fn().mockResolvedValue({ sid: 'sid', sub: 7 }) };
+    const auth = new AuthService(users as any, {} as any, {} as any, redis as any, { get: jest.fn() } as any, {} as any, {} as any, {} as any, mobile as any, {} as any, jwt as any);
+    return { auth, users, redis, mobile };
+  };
+
+  it('shares concurrent identity resolution within one request, but checks a new request again', async () => {
+    const { auth, redis } = create();
+    const request = { cookies: { forum_session: 'session' }, user: { id: 999 } };
+    const resolved = await Promise.all([auth.resolveRequestUser(request), auth.resolveRequestUser(request)]);
+    expect(resolved).toEqual([{ id: 7 }, { id: 7 }]);
+    expect(redis.readSessionAndRenew).toHaveBeenCalledTimes(1);
+    expect(redis.recordUserActivity).toHaveBeenCalledTimes(1);
+    redis.readSessionAndRenew.mockResolvedValue({});
+    expect(await auth.resolveRequestUser({ cookies: { forum_session: 'session' } })).toBeNull();
+    expect(redis.readSessionAndRenew).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not query or renew a session when no credential is supplied', async () => {
+    const { auth, redis, users } = create();
+    expect(await auth.verifySession(undefined as any)).toBeNull();
+    expect(redis.readSessionAndRenew).not.toHaveBeenCalled();
+    expect(users.findOne).not.toHaveBeenCalled();
+  });
+
+  it('reads device revocation on every access while throttling last-seen writes', async () => {
+    const { auth, mobile } = create();
+    mobile.findOne.mockResolvedValue({ id: 'sid', user: { id: 7 }, last_seen_at: new Date() });
+    expect(await auth.verifyMobileAccessToken('token')).toEqual({ id: 7 });
+    expect(mobile.update).not.toHaveBeenCalled();
+    mobile.findOne.mockResolvedValue({ id: 'sid', user: { id: 7 }, last_seen_at: new Date(Date.now() - 120_000) });
+    expect(await auth.verifyMobileAccessToken('token')).toEqual({ id: 7 });
+    expect(mobile.update).toHaveBeenCalledTimes(1);
+    mobile.findOne.mockResolvedValue(null);
+    expect(await auth.verifyMobileAccessToken('token')).toBeNull();
+    expect(mobile.findOne).toHaveBeenCalledTimes(3);
   });
 });

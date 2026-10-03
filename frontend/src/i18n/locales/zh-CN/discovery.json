@@ -23,7 +23,8 @@
     "latest": "最新",
     "recentSearches": "最近搜索",
     "clearHistory": "清空",
-    "popularSearches": "热门搜索"
+    "popularSearches": "热门搜索",
+    "partialResults": "部分搜索分类暂时不可用，以下显示已获取的结果。请稍后重试。"
   },
   "notices": {
     "title": "公告中心",
@@ -54,13 +55,27 @@
     "browseDescription": "按社区、创作、游戏和站务浏览讨论。",
     "empty": "暂无板块",
     "postCount": "{count} 个主题",
-    "groups": { "community": "社区", "creation": "创作", "game": "游戏", "meta": "站务", "other": "其他" }
+    "groups": {
+      "community": "社区",
+      "creation": "创作",
+      "game": "游戏",
+      "meta": "站务",
+      "other": "其他"
+    }
   },
   "contentLanguage": {
     "label": "内容语言",
     "unknown": "不指定",
     "hint": "选择帖子或资源正文使用的语言。",
-    "languages": { "en": "英语", "ru": "俄语", "ja": "日语", "zh-CN": "简体中文", "es": "西班牙语", "de": "德语", "other": "其他" }
+    "languages": {
+      "en": "英语",
+      "ru": "俄语",
+      "ja": "日语",
+      "zh-CN": "简体中文",
+      "es": "西班牙语",
+      "de": "德语",
+      "other": "其他"
+    }
   },
   "discoverPage": {
     "title": "发现",
@@ -74,7 +89,11 @@
     "noticesDescription": "查看最新公告和活动",
     "summary": "资源：{resources} · 讨论：{discussions}"
   },
-  "tagsPage": { "title": "标签", "description": "浏览所有讨论标签", "empty": "暂无标签。" },
+  "tagsPage": {
+    "title": "标签",
+    "description": "浏览所有讨论标签",
+    "empty": "暂无标签。"
+  },
   "tagPage": {
     "title": "标签：{tag}",
     "pageTitle": "标签：{tag} · 第 {page} 页",

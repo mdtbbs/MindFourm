@@ -1,6 +1,7 @@
 import {
-  Controller, Get, Post, Delete, Param, Query, UseGuards, Req, ParseIntPipe,
+  Controller, Get, Post, Delete, Param, Query, UseGuards, Req, ParseIntPipe, Header,
 } from '@nestjs/common';
+import { parseBatchIds } from '@common/utils/batch-targets.util';
 import { LikesService } from './likes.service';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { Public, OptionalAuth } from '@common/decorators/public.decorator';
@@ -9,6 +10,22 @@ import type { Request } from 'express';
 @Controller('likes')
 export class LikesController {
   constructor(private readonly likesService: LikesService) {}
+
+  @Get('posts/batch')
+  @Header('Cache-Control', 'private, no-store')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async postBatch(@Query('ids') ids: string, @Req() req: Request) {
+    return this.likesService.getForTargets('post', parseBatchIds(ids), (req as any).user);
+  }
+
+  @Get('replies/batch')
+  @Header('Cache-Control', 'private, no-store')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async replyBatch(@Query('ids') ids: string, @Req() req: Request) {
+    return this.likesService.getForTargets('reply', parseBatchIds(ids), (req as any).user);
+  }
 
   @Post('posts/:postId')
   @UseGuards(JwtAuthGuard)
@@ -31,13 +48,11 @@ export class LikesController {
    * probe whether a given user had liked a given post.
    */
   @Get('posts/:postId')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
   async checkPostLike(@Param('postId', ParseIntPipe) postId: number, @Req() req: Request) {
-    const uid = (req as any).user?.id;
-    const isLiked = uid ? await this.likesService.isPostLiked(uid, postId) : false;
-    const likeCount = await this.likesService.getPostLikeCount(postId);
-    return { liked: isLiked, count: likeCount };
+    return (await this.likesService.getForTargets('post', [postId], (req as any).user))[postId] ?? { liked: false, count: 0 };
   }
 
   @Get('posts')
@@ -61,13 +76,11 @@ export class LikesController {
   }
 
   @Get('replies/:replyId')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
   async checkReplyLike(@Param('replyId', ParseIntPipe) replyId: number, @Req() req: Request) {
-    const uid = (req as any).user?.id;
-    const isLiked = uid ? await this.likesService.isReplyLiked(uid, replyId) : false;
-    const likeCount = await this.likesService.getReplyLikeCount(replyId);
-    return { liked: isLiked, count: likeCount };
+    return (await this.likesService.getForTargets('reply', [replyId], (req as any).user))[replyId] ?? { liked: false, count: 0 };
   }
 
   @Get('users/:userId/count')

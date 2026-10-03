@@ -5,13 +5,13 @@ import { POST_SOURCES, type PostSource } from '@entities/post.entity';
 export class QueryPostsDto {
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
   page?: number = 1;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
+  @IsInt()
   @Min(1)
   @Max(50)
   limit?: number = 20;

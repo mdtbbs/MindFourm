@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, Req, Optional } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards, Query, Req, Optional, ParseIntPipe } from '@nestjs/common';
 import { RepliesService } from './replies.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { UpdateReplyDto } from './dto/update-reply.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LogsService } from '../logs/logs.service';
 import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
+import { OptionalAuth } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { CommunityChallengeService } from '../community-challenges/community-challenge.service';
 
@@ -17,8 +18,11 @@ export class RepliesController {
   ) {}
 
   @Get()
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
   async getRepliesByPost(
-    @Param('postId') postId: number,
+    @Param('postId', ParseIntPipe) postId: number,
+    @Req() req: any,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
@@ -26,6 +30,7 @@ export class RepliesController {
       Number(postId),
       page ? Number(page) : 1,
       limit ? Number(limit) : 20,
+      req.user,
     );
   }
 
@@ -85,8 +90,10 @@ export class RepliesControllerMain {
   ) {}
 
   @Get(':id')
-  async getReplyById(@Param('id') id: number) {
-    return this.repliesService.findById(Number(id));
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getReplyById(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
+    return this.repliesService.findById(id, req.user);
   }
 
   @UseGuards(JwtAuthGuard)

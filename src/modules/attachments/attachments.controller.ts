@@ -4,6 +4,8 @@ import {
   Get,
   Delete,
   Param,
+  Query,
+  Header,
   Body,
   UseInterceptors,
   UploadedFiles,
@@ -21,13 +23,14 @@ import { extname } from 'path';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { parseBatchIds } from '@common/utils/batch-targets.util';
 import { AttachmentsService } from './attachments.service';
 import { ForgePreviewService } from './forge-preview.service';
 import { UploadAttachmentDto } from './dto/upload-attachment.dto';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
 import { Roles } from '@common/decorators/roles.decorator';
-import { Public } from '@common/decorators/public.decorator';
+import { Public, OptionalAuth } from '@common/decorators/public.decorator';
 import type { Request, Response } from 'express';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
@@ -231,6 +234,14 @@ export class AttachmentsController {
   @Public()
   async getByPost(@Param('postId', ParseIntPipe) postId: number) {
     return this.attachmentsService.getByPostId(postId);
+  }
+
+  @Get('replies/batch')
+  @Header('Cache-Control', 'private, no-store')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getReplyBatch(@Query('ids') ids: string, @Req() req: Request) {
+    return this.attachmentsService.getByReplyIds(parseBatchIds(ids), (req as any).user);
   }
 
   @Get('reply/:replyId')

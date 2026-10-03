@@ -1,7 +1,8 @@
 import {
-  Controller, Get, Post, Body, Param, Req, UseGuards, ParseIntPipe,
+  Controller, Get, Post, Body, Param, Req, UseGuards, ParseIntPipe, Query, Header,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { parseBatchIds } from '@common/utils/batch-targets.util';
 import { ReactionsService } from './reactions.service';
 import { ToggleReactionDto } from './dto/toggle-reaction.dto';
 import { REACTION_EMOJIS } from './reaction-emojis';
@@ -10,7 +11,7 @@ import { Public, OptionalAuth } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 
 interface MaybeAuthenticatedRequest extends Request {
-  user?: { id: number };
+  user?: { id: number; role: string };
 }
 
 @Controller('reactions')
@@ -41,6 +42,14 @@ export class ReactionsController {
     return { reactions };
   }
 
+  @Get(':targetType/batch')
+  @Header('Cache-Control', 'private, no-store')
+  @OptionalAuth()
+  @UseGuards(JwtAuthGuard)
+  async getBatch(@Param('targetType') type: string, @Query('ids') ids: string, @Req() req: MaybeAuthenticatedRequest) {
+    return { reactions: await this.reactionsService.getVisibleForTargets(type, parseBatchIds(ids), req.user) };
+  }
+
   /**
    * Public, but the `reacted` flag comes from the session when there is one.
    *
@@ -48,6 +57,7 @@ export class ReactionsController {
    * had reacted to a given post.
    */
   @Get(':targetType/:targetId')
+  @Header('Cache-Control', 'private, no-store')
   @OptionalAuth()
   @UseGuards(JwtAuthGuard)
   async getForTarget(
@@ -55,11 +65,7 @@ export class ReactionsController {
     @Param('targetId', ParseIntPipe) targetId: number,
     @Req() req: MaybeAuthenticatedRequest,
   ) {
-    const reactions = await this.reactionsService.getForTarget(
-      targetType,
-      targetId,
-      req.user?.id,
-    );
-    return { reactions };
+    const reactions = await this.reactionsService.getVisibleForTargets(targetType, [targetId], req.user);
+    return { reactions: reactions[targetId] ?? [] };
   }
 }

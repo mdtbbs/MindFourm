@@ -6477,6 +6477,11 @@
                           "is_owner"
                         ],
                         "properties": {
+                          "child_count": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "直接子回复数；通过子回复分页接口展开。"
+                          },
                           "id": {
                             "type": "integer",
                             "example": 456,
@@ -6929,6 +6934,11 @@
                       "is_owner"
                     ],
                     "properties": {
+                      "child_count": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "直接子回复数；通过子回复分页接口展开。"
+                      },
                       "id": {
                         "type": "integer",
                         "example": 456,
@@ -7222,6 +7232,227 @@
           "v1-thread-writes"
         ],
         "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/threads/{id}/replies/{replyId}/children": {
+      "get": {
+        "operationId": "ThreadsV1Controller_getReplyChildren",
+        "x-oauth-scopes-if-bearer": [
+          "forum.read"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "replyId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "每页子回复数，最多 50。",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "子回复页码，从 1 开始。",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前回复的直接子回复；通过 child_count 继续展开，分页信息放在 meta.pagination。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "post_id",
+                      "user_id",
+                      "parent_reply_id",
+                      "content",
+                      "content_format",
+                      "content_html",
+                      "content_json",
+                      "content_schema_version",
+                      "content_text",
+                      "status",
+                      "like_count",
+                      "created_at",
+                      "updated_at",
+                      "author_mindauth_id",
+                      "author_role",
+                      "author_name",
+                      "author_avatar_url",
+                      "location_label"
+                    ],
+                    "properties": {
+                      "child_count": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "description": "直接子回复数；通过子回复分页接口展开。"
+                      },
+                      "id": {
+                        "type": "integer",
+                        "example": 456,
+                        "description": "回复 ID。"
+                      },
+                      "post_id": {
+                        "type": "integer",
+                        "example": 123,
+                        "description": "所属讨论 ID。"
+                      },
+                      "user_id": {
+                        "type": "integer",
+                        "example": 45,
+                        "description": "作者的论坛用户 ID。"
+                      },
+                      "parent_reply_id": {
+                        "type": "integer",
+                        "nullable": true,
+                        "example": null,
+                        "description": "父回复 ID；直接回复讨论时为 null。"
+                      },
+                      "content": {
+                        "type": "string",
+                        "example": "可以试试把电力区放在地图中央。",
+                        "description": "纯文本兼容正文。"
+                      },
+                      "content_format": {
+                        "type": "string",
+                        "enum": [
+                          "tiptap_json"
+                        ],
+                        "example": "tiptap_json",
+                        "description": "正文规范。"
+                      },
+                      "content_html": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": "<p>可以试试把电力区放在地图中央。</p>",
+                        "description": "服务端生成的安全 HTML。"
+                      },
+                      "content_json": {
+                        "type": "object",
+                        "nullable": true,
+                        "example": {
+                          "type": "doc",
+                          "content": [
+                            {
+                              "type": "paragraph",
+                              "content": [
+                                {
+                                  "type": "text",
+                                  "text": "可以试试把电力区放在地图中央。"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        "description": "Rich Content Schema v2 文档。"
+                      },
+                      "content_schema_version": {
+                        "type": "integer",
+                        "example": 2,
+                        "description": "content_json 的 Schema 版本。"
+                      },
+                      "content_text": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": "可以试试把电力区放在地图中央。",
+                        "description": "供搜索和纯文本客户端使用的正文投影。"
+                      },
+                      "status": {
+                        "type": "string",
+                        "example": "published",
+                        "description": "回复状态。"
+                      },
+                      "like_count": {
+                        "type": "integer",
+                        "example": 3,
+                        "description": "点赞数。"
+                      },
+                      "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-09-30T12:30:00.000Z",
+                        "description": "创建时间（ISO 8601）。"
+                      },
+                      "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2026-09-30T12:30:00.000Z",
+                        "description": "最后更新时间（ISO 8601）。"
+                      },
+                      "author_mindauth_id": {
+                        "type": "integer",
+                        "nullable": true,
+                        "example": 789,
+                        "description": "MindAuth 账号 ID。"
+                      },
+                      "author_role": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": "user",
+                        "description": "论坛角色。"
+                      },
+                      "author_name": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": "builder",
+                        "description": "作者用户名。"
+                      },
+                      "author_avatar_url": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": null,
+                        "description": "作者头像 URL。"
+                      },
+                      "location_label": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": null,
+                        "description": "作者发布时的地区标签。"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：forum.read"
+          }
+        },
+        "tags": [
+          "v1-threads"
+        ],
+        "security": [
+          {},
           {
             "MindAuthBearer": []
           }

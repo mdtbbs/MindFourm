@@ -162,6 +162,7 @@ export interface CreatePostInput {
 
 // Reply types
 export interface Reply {
+  child_count?: number;
   id: number;
   post_id: number;
   user_id: number;
@@ -241,6 +242,8 @@ export interface AdminStats {
   total_users: number;
   total_resources: number;
   active_24h: number;
+  active_24h_observed_since?: string;
+  active_24h_complete?: boolean;
   today_posts: number;
   today_community_posts: number;
   today_automated_posts: number;

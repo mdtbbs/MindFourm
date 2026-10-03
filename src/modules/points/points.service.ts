@@ -32,6 +32,7 @@ export class PointsService {
     action: string,
     targetType?: string,
     targetId?: number,
+    deduplicate = false,
   ): Promise<PointLog | null> {
     const rule = await this.pointRuleRepo.findOne({
       where: { action, is_active: 1 },
@@ -46,6 +47,13 @@ export class PointsService {
     }
 
     return this.dataSource.transaction(async (manager) => {
+      if (deduplicate && targetType && targetId) {
+        // A per-user row lock protects the check and award across worker retries.
+        const user = await manager.findOne(User, { where: { id: userId }, lock: { mode: 'pessimistic_write' } });
+        if (!user) throw new NotFoundException('User not found');
+        const previous = await manager.findOne(PointLog, { where: { user_id: userId, action, target_type: targetType, target_id: targetId } });
+        if (previous) return previous;
+      }
       // Update user points
       await manager.increment(User, { id: userId }, 'total_points', rule.points);
       await manager.increment(User, { id: userId }, 'available_points', rule.points);

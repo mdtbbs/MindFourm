@@ -87,8 +87,8 @@ export class ThreadsV1Controller {
         total_pages: result.pagination.totalPages, has_more: result.pagination.page < result.pagination.totalPages,
       });
     }
-    const items = await this.threadAdapter.listThreadsV1({ limit, offset, categoryId: query.category_id });
-    const total = await this.threadAdapter.countThreadsV1(query.category_id);
+    const items = await this.threadAdapter.listThreadsV1({ limit, offset, categoryId: query.category_id, viewer: req.user });
+    const total = await this.threadAdapter.countThreadsV1(query.category_id, req.user);
     const pages = Math.ceil(total / limit);
     return this.withPagination(items, { page: Math.floor(offset / limit) + 1, limit, total, total_pages: pages, has_more: offset + items.length < total });
   }
@@ -100,7 +100,7 @@ export class ThreadsV1Controller {
   async getThread(@Param('id', new ParseIntPipe()) id: number, @Req() req?: any): Promise<V1ThreadDto | unknown> {
     // Existing tests and isolated adapter consumers retain the old minimal form;
     // the running module returns that stable shape plus additive detail fields.
-    const thread = await this.threadAdapter.getThreadV1(id);
+    const thread = await this.threadAdapter.getThreadV1(id, req?.user);
     if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, '讨论不存在或不可见', false);
     if (!this.postsService) return thread;
     const [detail, replies] = await Promise.all([
@@ -151,7 +151,7 @@ export class ThreadsV1Controller {
     @Query('limit') limitText = '20',
     @Req() req?: any,
   ) {
-    const thread = await this.threadAdapter.getThreadV1(id);
+    const thread = await this.threadAdapter.getThreadV1(id, req?.user);
     if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, '讨论不存在或不可见', false);
     if (!this.postsService) throw new ApiV1Exception('REPLIES_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '回复暂不可用', true);
     const page = Math.max(1, Number.parseInt(pageText, 10) || 1);
@@ -161,6 +161,28 @@ export class ThreadsV1Controller {
     return this.withPagination(items, {
       page: result.page, limit: result.limit, total: result.total,
       total_pages: result.totalPages, has_more: result.page < result.totalPages,
+    });
+  }
+
+  @Get(':id/replies/:replyId/children')
+  @OptionalAuth()
+  @OAuthOptionalProtected('forum.read')
+  @ApiQuery({ name: 'page', required: false, type: Number, description: '子回复页码，从 1 开始。' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: '每页子回复数，最多 50。' })
+  @ApiOkResponse({ description: '当前回复的直接子回复；通过 child_count 继续展开，分页信息放在 meta.pagination。', schema: { type: 'array', items: THREAD_REPLY_SCHEMA } })
+  async getReplyChildren(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('replyId', ParseIntPipe) replyId: number,
+    @Query('page') pageText = '1',
+    @Query('limit') limitText = '20',
+    @Req() req?: any,
+  ) {
+    const thread = await this.threadAdapter.getThreadV1(id, req?.user);
+    if (!thread) throw new ApiV1Exception('THREAD_NOT_FOUND', HttpStatus.NOT_FOUND, '讨论不存在或不可见', false);
+    if (!this.postsService) throw new ApiV1Exception('REPLIES_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '回复暂不可用', true);
+    const result = await this.postsService.getReplyChildren(id, replyId, Number(limitText), Number(pageText));
+    return this.withPagination(result.data.map(reply => ({ ...reply, is_owner: req?.user?.id === reply.user_id })), {
+      page: result.page, limit: result.limit, total: result.total, total_pages: result.totalPages, has_more: result.page < result.totalPages,
     });
   }
 

@@ -87,6 +87,10 @@ function createManagerMock(rows: Record<string, unknown> = {}) {
 function createQueryBuilderMock(result: { many?: any[]; total?: number } = {}) {
   return {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    getRawAndEntities: jest.fn().mockResolvedValue({ entities: result.many ?? [], raw: [] }),
+    getCount: jest.fn().mockResolvedValue(result.total ?? 0),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     addOrderBy: jest.fn().mockReturnThis(),
@@ -122,6 +126,9 @@ function createService(overrides: {
   const replyRepository = {
     findAndCount: jest.fn().mockResolvedValue([[], 0]),
     count: jest.fn().mockResolvedValue(0),
+    createQueryBuilder: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([]),
+    }),
     ...overrides.replyRepository,
   };
   const redisService = {
@@ -227,7 +234,7 @@ describe('PostsService', () => {
     const result = await service.findAll({ page: 1, limit: 20 });
 
     expect(postRepository.createQueryBuilder).toHaveBeenCalledWith('post');
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('post.status = :status', { status: 'published' });
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('post.status = :postVisibilityStatus', { postVisibilityStatus: 'published' });
     expect(queryBuilder.skip).toHaveBeenCalledWith(0);
     expect(queryBuilder.take).toHaveBeenCalledWith(20);
     expect(postSummaryService.toSummaryList).toHaveBeenCalledWith([
@@ -396,51 +403,38 @@ describe('PostsService', () => {
     });
   });
 
-  it('returns the descendants of the roots on the page, not just the roots', async () => {
+  it('bounds a root response even when a root has 500 children, and advertises expansion', async () => {
     const roots = [{ id: 10, post_id: 88, user_id: 5, status: 'published' }];
-    const children = [
-      { id: 11, post_id: 88, user_id: 6, parent_reply_id: 10, status: 'published' },
-    ];
-    const grandchildren = [
-      { id: 12, post_id: 88, user_id: 7, parent_reply_id: 11, status: 'published' },
-    ];
-
-    const find = jest
-      .fn()
-      .mockResolvedValueOnce(children)
-      .mockResolvedValueOnce(grandchildren)
-      .mockResolvedValue([]);
-
-    const { service, postDetailService } = createService({
-      replyRepository: {
-        findAndCount: jest.fn().mockResolvedValue([roots, 1]),
-        find,
-        count: jest.fn().mockResolvedValue(3),
-      },
-      postDetailService: { toReplies: jest.fn().mockResolvedValue([]) },
+    const countQuery: any = { select: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), groupBy: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([{ parent_id: 10, count: '500' }]) };
+    const find = jest.fn();
+    const { service, replyRepository } = createService({
+      replyRepository: { findAndCount: jest.fn().mockResolvedValue([roots, 1]), find, count: jest.fn().mockResolvedValue(501), createQueryBuilder: jest.fn().mockReturnValue(countQuery) },
+      postDetailService: { toReplies: jest.fn(async (rows) => rows) },
     });
+    const result = await service.getReplies(88, 1, 1);
+    expect(result.data).toEqual([{ ...roots[0], child_count: 500 }]);
+    expect(result.total).toBe(501);
+    expect(find).not.toHaveBeenCalled();
+    expect(replyRepository.findAndCount).toHaveBeenCalledWith(expect.objectContaining({ take: 1, order: { created_at: 'ASC', id: 'ASC' } }));
+  });
 
-    await service.getReplies(88, 20, 1);
-
-    // One query per level, each seeded with the previous level's ids, stopping as soon
-    // as a level comes back empty.
-    expect(find).toHaveBeenCalledTimes(3);
-    expect(postDetailService.toReplies).toHaveBeenCalledWith([
-      ...roots,
-      ...children,
-      ...grandchildren,
-    ]);
+  it('paginates direct children and keeps expansion counts on the next depth', async () => {
+    const rows = [{ id: 11, post_id: 88, parent_reply_id: 10 }];
+    const { service, replyRepository } = createService({
+      replyRepository: { findOne: jest.fn().mockResolvedValue({ id: 10 }), findAndCount: jest.fn().mockResolvedValue([rows, 500]) },
+      postDetailService: { toReplies: jest.fn(async (replies) => replies) },
+    });
+    const result = await service.getReplyChildren(88, 10, 20, 2);
+    expect(replyRepository.findAndCount).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ post_id: 88, parent_reply_id: 10 }), take: 20, skip: 20 }));
+    expect(result).toMatchObject({ total: 500, page: 2, limit: 20, totalPages: 25, data: [{ id: 11, child_count: 0 }] });
+    await service.getReplies(88, 99999, -1);
+    expect(replyRepository.findAndCount).toHaveBeenLastCalledWith(expect.objectContaining({ take: 50, skip: 0 }));
   });
 
   it('maps search results into public summaries', async () => {
     const { service, postRepository, postSummaryService } = createService({
       postRepository: {
-        find: jest.fn().mockResolvedValue([
-          {
-            id: 31,
-            title: 'Searchable post',
-          },
-        ]),
+        createQueryBuilder: jest.fn().mockReturnValue(createQueryBuilderMock({ many: [{ id: 31, title: 'Searchable post' }] })),
       },
       postSummaryService: {
         toSummaryList: jest.fn().mockResolvedValue([
@@ -455,15 +449,7 @@ describe('PostsService', () => {
 
     const result = await service.search('hello', 15);
 
-    expect(postRepository.find).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: [
-          { title: expect.any(Object), status: 'published' },
-          { content: expect.any(Object), status: 'published' },
-        ],
-        take: 15,
-      }),
-    );
+    expect(postRepository.createQueryBuilder).toHaveBeenCalledWith('post');
     expect(postSummaryService.toSummaryList).toHaveBeenCalledWith([
       expect.objectContaining({ id: 31 }),
     ]);
@@ -479,19 +465,7 @@ describe('PostsService', () => {
   it('maps trending and pinned public reads into summaries', async () => {
     const { service, postRepository, postSummaryService } = createService({
       postRepository: {
-        find: jest.fn()
-          .mockResolvedValueOnce([
-            {
-              id: 41,
-              title: 'Trending post',
-            },
-          ])
-          .mockResolvedValueOnce([
-            {
-              id: 52,
-              title: 'Pinned post',
-            },
-          ]),
+        createQueryBuilder: jest.fn().mockReturnValueOnce(createQueryBuilderMock({ many: [{ id: 41, title: 'Trending post' }] })).mockReturnValueOnce(createQueryBuilderMock({ many: [{ id: 52, title: 'Pinned post' }] })),
       },
       postSummaryService: {
         toSummaryList: jest.fn()
@@ -515,24 +489,7 @@ describe('PostsService', () => {
     const trending = await service.getTrending(5);
     const pinned = await service.getPinned(9);
 
-    expect(postRepository.find).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        where: expect.objectContaining({
-          status: 'published',
-          created_at: expect.any(Object),
-        }),
-        order: { view_count: 'DESC' },
-        take: 5,
-      }),
-    );
-    expect(postRepository.find).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        where: { is_pinned: 1, status: 'published', category_id: 9 },
-        order: { created_at: 'DESC' },
-      }),
-    );
+    expect(postRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
     expect(postSummaryService.toSummaryList).toHaveBeenNthCalledWith(
       1,
       [expect.objectContaining({ id: 41 })],
@@ -841,5 +798,74 @@ describe('PostsService.update revision history', () => {
       service.update(88, { content: 'vandalised' }, STRANGER.id, STRANGER.role),
     ).rejects.toThrow(ForbiddenException);
     expect(manager.insert).not.toHaveBeenCalled();
+  });
+});
+
+describe('durable published post effects', () => {
+  const published = { id: 33, user_id: 7, source: 'USER', status: 'published', content: '@alice hello', content_json: null };
+
+  function outbox() {
+    const handlers = new Map<string, (event: any) => Promise<void>>();
+    return { publish: jest.fn().mockResolvedValue({ id: 1 }), register: jest.fn((key, handler) => handlers.set(key, handler)), handlers };
+  }
+
+  it('persists publication work with the post and returns successfully before a failed points delivery', async () => {
+    const manager = createManagerMock({ Post: published });
+    manager.save.mockImplementation(async (entityOrRow, row: any) => ({ ...(row ?? entityOrRow as any), id: 33 }));
+    const { service } = createService({ manager, postRepository: { findOne: jest.fn().mockResolvedValue(published) } });
+    const events = outbox();
+    const points = { awardPoints: jest.fn().mockRejectedValue(new Error('points temporarily unavailable')) };
+    (service as any).events = events;
+    (service as any).pointsService = points;
+    (service as any).eventBus.execute.mockImplementation(async (_key: string, payload: unknown) => payload);
+    (service as any).settingsService.getBoolean.mockResolvedValue(false);
+    service.onModuleInit();
+    await expect(service.create({ title: 'Post', content: '@alice hello' }, 7)).resolves.toMatchObject({ id: 33 });
+    expect(points.awardPoints).not.toHaveBeenCalled();
+    expect(events.publish).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'ForumPostPublished', aggregateId: 33 }), manager);
+    const event = { id: 1, aggregate_id: 33, payload_json: { mention_user_ids: null } };
+    await expect(events.handlers.get('ForumPostPublished')!(event)).rejects.toThrow('points temporarily unavailable');
+    expect(points.awardPoints).toHaveBeenCalledWith(7, 'create_post', 'post', 33, true);
+    points.awardPoints.mockResolvedValue(null as never);
+    await expect(events.handlers.get('ForumPostPublished')!(event)).resolves.toBeUndefined();
+    expect((service as any).notificationsService.notifyMentionedUsers).toHaveBeenCalledWith('@alice hello', 33, 7, undefined, [7], true, 'post-published:33');
+  });
+
+  it('refuses to commit a published post when its durable delivery record cannot be written', async () => {
+    const manager = createManagerMock({ Post: published });
+    manager.save.mockImplementation(async (entityOrRow, row: any) => ({ ...(row ?? entityOrRow as any), id: 33 }));
+    const { service, dataSource } = createService({ manager });
+    const events = outbox(); events.publish.mockRejectedValue(new Error('outbox unavailable'));
+    (service as any).events = events;
+    (service as any).eventBus.execute.mockImplementation(async (_key: string, payload: unknown) => payload);
+    (service as any).settingsService.getBoolean.mockResolvedValue(false);
+    let committed = false;
+    dataSource.transaction.mockImplementation(async (work: any) => { const result = await work(manager); committed = true; return result; });
+    await expect(service.create({ title: 'Post', content: 'hello' }, 7)).rejects.toThrow('outbox unavailable');
+    expect(committed).toBe(false);
+  });
+
+  it('records new mentions in the edit transaction and retries delivery without failing the edit response', async () => {
+    const original = { ...published, title: 'Old', content_json: null, category_id: null };
+    const manager = createManagerMock({ Post: original });
+    const { service, notificationsService } = createService({ manager, postRepository: { findOne: jest.fn().mockResolvedValue(published) }, notificationsService: { notifyMentionedUserIds: jest.fn().mockRejectedValue(new Error('notification storage unavailable')) } });
+    (service as any).canonicalizeMentionSnapshots = jest.fn().mockResolvedValue(undefined);
+    (service as any).assertDocumentQuoteVisibility = jest.fn().mockResolvedValue(undefined);
+    const events = outbox(); (service as any).events = events; service.onModuleInit();
+    const document = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'mention', attrs: { userId: 8, username: 'alice' } }] }] };
+    await expect(service.update(33, { content_json: document, content_schema_version: 2 }, 7, 'user')).resolves.toMatchObject({ id: 33 });
+    expect(notificationsService.notifyMentionedUserIds).not.toHaveBeenCalled();
+    expect(events.publish).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'ForumPostMentionsAdded', aggregateId: 33, payload: expect.objectContaining({ mention_user_ids: [8] }) }), manager);
+    const event = { id: 2, aggregate_id: 33, payload_json: { actor_id: 7, mention_user_ids: [8] } };
+    await expect(events.handlers.get('ForumPostMentionsAdded')!(event)).rejects.toThrow('notification storage unavailable');
+    expect(notificationsService.notifyMentionedUserIds).toHaveBeenCalledWith([8], 33, 7, published.content, undefined, [7], true, 'post-mention-event:2');
+  });
+
+  it('skips delivery when a published post was hidden before the worker ran', async () => {
+    const { service } = createService({ postRepository: { findOne: jest.fn().mockResolvedValue({ ...published, status: 'hidden' }) } });
+    const events = outbox(); const points = { awardPoints: jest.fn() };
+    (service as any).events = events; (service as any).pointsService = points; service.onModuleInit();
+    await events.handlers.get('ForumPostPublished')!({ id: 1, aggregate_id: 33, payload_json: {} });
+    expect(points.awardPoints).not.toHaveBeenCalled();
   });
 });

@@ -13,6 +13,8 @@ export interface DashboardStats {
   total_users: number;
   total_resources: number;
   active_24h: number;
+  active_24h_observed_since: string;
+  active_24h_complete: boolean;
   today_posts: number;
   today_community_posts: number;
   today_automated_posts: number;
@@ -36,6 +38,22 @@ export interface ForumOverviewStats {
 
 @Injectable()
 export class StatsService {
+  private readonly cache = new Map<string, { expires: number; value: unknown }>();
+  private readonly inFlight = new Map<string, Promise<unknown>>();
+
+  private cached<T>(key: string, build: () => Promise<T>): Promise<T> {
+    const entry = this.cache.get(key);
+    if (entry && entry.expires > Date.now()) return Promise.resolve(entry.value as T);
+    const running = this.inFlight.get(key);
+    if (running) return running as Promise<T>;
+    const promise = build().then((value) => {
+      this.cache.set(key, { expires: Date.now() + 15_000, value });
+      return value;
+    }).finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+
   constructor(
     @InjectRepository(Post)
     private postRepository: Repository<Post>,
@@ -55,33 +73,38 @@ export class StatsService {
   /**
    * Get dashboard statistics in a single query
    */
-  async getDashboardStats(): Promise<DashboardStats> {
+  getDashboardStats(): Promise<DashboardStats> {
+    return this.cached('dashboard', () => this.buildDashboardStats());
+  }
+
+  private async buildDashboardStats(): Promise<DashboardStats> {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const [statsRows, sessionCount, activity7d, resourceTypeBreakdown] = await Promise.all([
       this.postRepository.query(`
-        SELECT
-          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source = 'USER') as total_posts,
-          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source = 'USER') as community_posts,
-          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source <> 'USER') as automated_posts,
-          (SELECT COUNT(*) FROM replies WHERE status = 'published') as total_replies,
-          (SELECT COUNT(*) FROM users) as total_users,
-          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL) as total_resources,
-          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND created_at >= ?) as today_posts,
-          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source = 'USER' AND created_at >= ?) as today_community_posts,
-          (SELECT COUNT(*) FROM posts WHERE status = 'published' AND source <> 'USER' AND created_at >= ?) as today_automated_posts,
-          (SELECT COUNT(*) FROM replies WHERE status = 'published' AND created_at >= ?) as today_replies,
-          (SELECT COUNT(*) FROM users WHERE created_at >= ?) as today_users,
-          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND created_at >= ?) as today_resources,
-          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND status = 'pending') as pending_resources,
+        SELECT p.*, r.*, u.*, a.*,
           (SELECT COUNT(*) FROM reports WHERE status = 'pending') as pending_reports,
           (SELECT AVG(TIMESTAMPDIFF(SECOND, created_at, handled_at)) / 3600 FROM reports WHERE status IN ('resolved', 'dismissed') AND handled_at IS NOT NULL AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) as average_report_resolution_hours,
           (SELECT COUNT(*) FROM search_history WHERE results_count = 0 AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as zero_result_searches_7d
+        FROM (
+          SELECT SUM(source = 'USER') as total_posts, SUM(source = 'USER') as community_posts,
+            SUM(source <> 'USER') as automated_posts, SUM(created_at >= ?) as today_posts,
+            SUM(source = 'USER' AND created_at >= ?) as today_community_posts,
+            SUM(source <> 'USER' AND created_at >= ?) as today_automated_posts
+          FROM posts WHERE deleted_at IS NULL AND status = 'published'
+        ) p CROSS JOIN (
+          SELECT COUNT(*) as total_replies, SUM(created_at >= ?) as today_replies
+          FROM replies WHERE deleted_at IS NULL AND status = 'published'
+        ) r CROSS JOIN (
+          SELECT COUNT(*) as total_users, SUM(created_at >= ?) as today_users FROM users
+        ) u CROSS JOIN (
+          SELECT COUNT(*) as total_resources, SUM(created_at >= ?) as today_resources,
+            SUM(status = 'pending') as pending_resources FROM resources WHERE deleted_at IS NULL
+        ) a
       `, [today, today, today, today, today, today]),
-      // SCAN rather than KEYS: this is served on request paths, and KEYS blocks the
-      // whole Redis instance for the duration of the scan.
-      this.redisService.countKeys('session:*'),
+      // Rolling 24-hour distinct authenticated users, including mobile/OAuth clients.
+      this.redisService.activeUserStats(),
       this.get7DayActivity(),
       this.getResourceTypeBreakdown(),
     ]);
@@ -94,8 +117,10 @@ export class StatsService {
       total_replies: this.parseCount(stats?.total_replies),
       total_users: this.parseCount(stats?.total_users),
       total_resources: this.parseCount(stats?.total_resources),
-      // Counts every live session (7-day TTL), not strictly 24-hour activity.
-      active_24h: sessionCount,
+      // Multiple sessions for the same user count once.
+      active_24h: sessionCount.count,
+      active_24h_observed_since: sessionCount.observedSince,
+      active_24h_complete: sessionCount.complete,
       today_posts: this.parseCount(stats?.today_posts),
       today_community_posts: this.parseCount(stats?.today_community_posts),
       today_automated_posts: this.parseCount(stats?.today_automated_posts),
@@ -113,16 +138,20 @@ export class StatsService {
     };
   }
 
-  async getForumOverview(): Promise<ForumOverviewStats> {
+  getForumOverview(): Promise<ForumOverviewStats> {
+    return this.cached('overview', () => this.buildForumOverview());
+  }
+
+  private async buildForumOverview(): Promise<ForumOverviewStats> {
     const publicResourceStatusesSql = PUBLIC_RESOURCE_STATUSES.map((status) => `'${status}'`).join(', ');
 
     const [statsRows] = await Promise.all([
       this.postRepository.query(`
         SELECT
-          (SELECT COUNT(*) FROM posts WHERE status = 'published') as total_posts,
-          (SELECT COUNT(*) FROM replies WHERE status = 'published') as total_replies,
+          (SELECT COUNT(*) FROM posts WHERE deleted_at IS NULL AND status = 'published') as total_posts,
+          (SELECT COUNT(*) FROM replies WHERE deleted_at IS NULL AND status = 'published') as total_replies,
           (SELECT COUNT(*) FROM users) as total_users,
-          (SELECT COUNT(*) FROM resources WHERE status IN (${publicResourceStatusesSql})) as total_resources
+          (SELECT COUNT(*) FROM resources WHERE deleted_at IS NULL AND status IN (${publicResourceStatusesSql})) as total_resources
       `),
     ]);
 
@@ -157,7 +186,7 @@ export class StatsService {
         UNION ALL SELECT DATE_SUB(CURDATE(), INTERVAL 1 DAY)
         UNION ALL SELECT CURDATE()
       ) d
-      LEFT JOIN posts p ON DATE(p.created_at) = d.date AND p.status = 'published' AND p.source = 'USER'
+      LEFT JOIN posts p ON p.created_at >= d.date AND p.created_at < DATE_ADD(d.date, INTERVAL 1 DAY) AND p.deleted_at IS NULL AND p.status = 'published' AND p.source = 'USER'
       GROUP BY d.date
       ORDER BY d.date ASC
     `);

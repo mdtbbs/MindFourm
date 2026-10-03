@@ -13,6 +13,7 @@ import { LogsModule } from '../logs/logs.module';
 import { AdminNotificationsModule } from '../admin-notifications/admin-notifications.module';
 import { PostsModule } from '../posts/posts.module';
 import { CustomEmojisModule } from '../custom-emojis/custom-emojis.module';
+import { EventsModule } from '../events/events.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
 
 @Module({
@@ -27,6 +28,7 @@ import { AttachmentsModule } from '../attachments/attachments.module';
     PostsModule,
     CustomEmojisModule,
     AttachmentsModule,
+    EventsModule,
   ],
   providers: [RepliesService],
   controllers: [RepliesController, RepliesControllerMain],

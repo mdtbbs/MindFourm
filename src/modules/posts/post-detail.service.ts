@@ -15,6 +15,7 @@ export interface PostDetailTag {
 }
 
 export interface PostDetailReply {
+  child_count?: number;
   id: number;
   post_id: number;
   user_id: number;

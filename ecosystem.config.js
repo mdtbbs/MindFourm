@@ -10,17 +10,14 @@
  * Several pieces of state are per-process, so a second worker would break them
  * silently rather than loudly:
  *
- *   • User notification SSE keeps its subscriptions in an in-process Map
- *     (notifications.controller.ts). A notification produced on worker A never
- *     reaches a client connected to worker B. The admin-side stream already uses
- *     Redis pub/sub and would be fine — the user-side one has to be migrated the
- *     same way first.
+ *   • User notification SSE now fans out via Redis pub/sub; connection maps stay
+ *     local to each worker. Redis outages intentionally degrade to local delivery.
  *   • SettingsService and BansService cache in process memory with a TTL, so an
  *     admin's change stays invisible to the sibling worker until it expires.
  *   • main.ts runs schema/seed bootstrapping before listen; two workers would race
  *     each other through it.
  *
- * Raise `instances` only after those three are addressed.
+ * Raise `instances` only after bootstrapping and cache coordination are addressed.
  */
 module.exports = {
   apps: [

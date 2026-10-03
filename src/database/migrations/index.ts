@@ -1,3 +1,4 @@
+import { ForumPerformance1720000190000 } from './1720000190000-ForumPerformance';
 import { BaselineSchema1720000000000 } from './1720000000000-BaselineSchema';
 import { NormalizeReplyStatus1720000001000 } from './1720000001000-NormalizeReplyStatus';
 import { AddMissingIndexes1720000002000 } from './1720000002000-AddMissingIndexes';
@@ -139,4 +140,5 @@ export const migrations = [
   CloudSavesV11720000160000,
   MultiplayerJoinApprovalDurability1720000170000,
   MultiplayerJoinIntentRecovery1720000180000,
+  ForumPerformance1720000190000,
 ];

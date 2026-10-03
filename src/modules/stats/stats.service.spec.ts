@@ -67,7 +67,7 @@ describe('StatsService', () => {
         ]),
     };
     const redisService = {
-      countKeys: jest.fn().mockResolvedValue(2),
+      activeUserStats: jest.fn().mockResolvedValue({ count: 2, observedSince: '2026-10-02T00:00:00Z', complete: true }),
     };
 
     const service = new StatsService(
@@ -86,6 +86,8 @@ describe('StatsService', () => {
       total_users: 56,
       total_resources: 7,
       active_24h: 2,
+      active_24h_observed_since: '2026-10-02T00:00:00Z',
+      active_24h_complete: true,
       today_posts: 2,
       today_community_posts: 1,
       today_automated_posts: 1,
@@ -100,10 +102,14 @@ describe('StatsService', () => {
       resource_type_breakdown: [{ type: 'map', count: 4 }, { type: 'mod', count: 3 }],
     });
 
+    // Both repeated and concurrent requests reuse this bounded aggregate.
+    await Promise.all([service.getDashboardStats(), service.getDashboardStats()]);
     expect(postRepository.query).toHaveBeenCalledTimes(3);
-    expect(postRepository.query.mock.calls[0][0]).toContain("status = 'published' AND source = 'USER'");
+    expect(postRepository.query.mock.calls[0][0]).toContain('deleted_at IS NULL');
+    expect(postRepository.query.mock.calls[1][0]).not.toContain('DATE(p.created_at)');
+    expect(postRepository.query.mock.calls[0][0]).toContain("FROM posts WHERE deleted_at IS NULL AND status = 'published'");
     expect(postRepository.query.mock.calls[1][0]).toContain("p.status = 'published' AND p.source = 'USER'");
-    expect(redisService.countKeys).toHaveBeenCalledWith('session:*');
+    expect(redisService.activeUserStats).toHaveBeenCalledWith();
   });
 
   it('returns homepage overview stats with only safe public totals', async () => {
@@ -122,7 +128,7 @@ describe('StatsService', () => {
       query: jest.fn(),
     };
     const redisService = {
-      countKeys: jest.fn(),
+      activeUserStats: jest.fn(),
     };
 
     const service = new StatsService(
@@ -144,7 +150,7 @@ describe('StatsService', () => {
     expect(postRepository.query.mock.calls[0][0]).toContain("status IN ('approved', 'published')");
     expect(sessionAuditRepository.query).not.toHaveBeenCalled();
     expect(userRepository.query).not.toHaveBeenCalled();
-    expect(redisService.countKeys).not.toHaveBeenCalled();
+    expect(redisService.activeUserStats).not.toHaveBeenCalled();
   });
 
   it('returns homepage overview stats without falling back to latest-registration metadata', async () => {
@@ -163,7 +169,7 @@ describe('StatsService', () => {
       query: jest.fn().mockResolvedValue([]),
     };
     const redisService = {
-      countKeys: jest.fn().mockResolvedValue(0),
+      activeUserStats: jest.fn().mockResolvedValue(0),
     };
 
     const service = new StatsService(
@@ -183,6 +189,6 @@ describe('StatsService', () => {
 
     expect(sessionAuditRepository.query).not.toHaveBeenCalled();
     expect(userRepository.query).not.toHaveBeenCalled();
-    expect(redisService.countKeys).not.toHaveBeenCalled();
+    expect(redisService.activeUserStats).not.toHaveBeenCalled();
   });
 });

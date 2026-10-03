@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { Category } from '@entities/category.entity';
 import { ConfigService } from '@nestjs/config';
@@ -38,7 +38,7 @@ export class RssService {
       || this.configService.get<string>('app.frontendUrl')
       || 'http://localhost:3000';
     const posts = await this.postRepo.find({
-      where: { status: 'published' },
+      where: { status: 'published', required_group_id: IsNull() },
       relations: ['user', 'category'],
       order: { created_at: 'DESC' },
       take: 50,
@@ -76,7 +76,7 @@ export class RssService {
     if (!category) throw new Error('Category not found');
 
     const posts = await this.postRepo.find({
-      where: { status: 'published', category_id: category.id },
+      where: { status: 'published', required_group_id: IsNull(), category_id: category.id },
       relations: ['user'],
       order: { created_at: 'DESC' },
       take: 50,

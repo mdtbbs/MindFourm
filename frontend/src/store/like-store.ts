@@ -5,6 +5,7 @@
  * Supports both post likes and reply likes
  */
 
+import { fetchInBatches } from '@/lib/api/batch';
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { likeApi } from '@/lib/api/client';
@@ -56,17 +57,30 @@ interface LikeState {
 
 const DEFAULT_LIKE_INFO: LikeInfo = { liked: false, count: 0 };
 
-/**
- * Ids awaiting a like-state fetch, collected within one tick.
- *
- * Each LikeButton asks for its own state on mount; without coalescing, a 20-post
- * page would fire 20 separate round trips (the previous `fetchPostLikeStates` even
- * awaited them one at a time, serially). Requests still go out per id — the backend
- * has no batch endpoint yet — but they are deduplicated and issued in parallel.
- */
+/** Collect button mounts into one bounded HTTP request per target type. */
 const pendingFetches = { post: new Set<number>(), reply: new Set<number>() };
 const inFlight = { post: new Set<number>(), reply: new Set<number>() };
 let flushScheduled = false;
+let viewerGeneration = 0;
+const mutations = new Map<string, number>();
+
+async function fetchLikeStates(type: 'post' | 'reply', ids: number[]): Promise<void> {
+  const generation = viewerGeneration;
+  const versions = new Map(ids.map((id) => [id, mutations.get(`${type}:${id}`) ?? 0]));
+  try {
+    const rows = await fetchInBatches(ids, (chunk) => likeApi.checkBatch(type, chunk));
+    if (generation !== viewerGeneration) return;
+    useLikeStore.setState((state) => {
+      const next = new Map(type === 'post' ? state.postLikes : state.replyLikes);
+      for (const id of ids) {
+        if (versions.get(id) === (mutations.get(`${type}:${id}`) ?? 0)) next.set(id, rows[id] ?? { liked: false, count: 0 });
+      }
+      return type === 'post' ? { postLikes: next } : { replyLikes: next };
+    });
+  } catch (error) {
+    console.error('Failed to fetch like states:', error);
+  }
+}
 
 export const useLikeStore = create<LikeState>((set, get) => ({
   postLikes: new Map(),
@@ -81,6 +95,10 @@ export const useLikeStore = create<LikeState>((set, get) => ({
       return;
     }
 
+    const generation = viewerGeneration;
+    const key = `post:${postId}`;
+    const version = (mutations.get(key) ?? 0) + 1;
+    mutations.set(key, version);
     const currentState = get().postLikes.get(postId) || DEFAULT_LIKE_INFO;
 
     // Optimistic update
@@ -100,7 +118,8 @@ export const useLikeStore = create<LikeState>((set, get) => ({
         await likeApi.unlikePost(postId);
       }
     } catch (error) {
-      // Revert on error
+      // Revert on error only for the viewer who started the action.
+      if (generation !== viewerGeneration || mutations.get(key) !== version) return;
       set((state) => ({
         postLikes: new Map(state.postLikes).set(postId, currentState),
       }));
@@ -112,36 +131,8 @@ export const useLikeStore = create<LikeState>((set, get) => ({
     return get().postLikes.get(postId) || DEFAULT_LIKE_INFO;
   },
 
-  fetchPostLikeState: async (postId: number) => {
-    try {
-      const state = await likeApi.checkPostLike(postId);
-      set((storeState) => ({
-        postLikes: new Map(storeState.postLikes).set(postId, state),
-      }));
-    } catch (error) {
-      console.error('Failed to fetch post like state:', error);
-    }
-  },
-
-  fetchPostLikeStates: async (postIds: number[]) => {
-    const userStore = useUserStore.getState();
-    if (!userStore.isAuthenticated || postIds.length === 0) return;
-
-    // Parallel, not the previous serial await-per-id.
-    const results = await Promise.allSettled(
-      postIds.map(async (postId) => ({ postId, state: await likeApi.checkPostLike(postId) })),
-    );
-
-    set((storeState) => {
-      const postLikes = new Map(storeState.postLikes);
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          postLikes.set(result.value.postId, result.value.state);
-        }
-      }
-      return { postLikes };
-    });
-  },
+  fetchPostLikeState: (id) => fetchLikeStates('post', [id]),
+  fetchPostLikeStates: (ids) => fetchLikeStates('post', ids),
 
   setPostLikeState: (postId: number, info: LikeInfo) => {
     set((state) => ({
@@ -156,6 +147,10 @@ export const useLikeStore = create<LikeState>((set, get) => ({
       return;
     }
 
+    const generation = viewerGeneration;
+    const key = `reply:${replyId}`;
+    const version = (mutations.get(key) ?? 0) + 1;
+    mutations.set(key, version);
     const currentState = get().replyLikes.get(replyId) || DEFAULT_LIKE_INFO;
 
     // Optimistic update
@@ -175,7 +170,8 @@ export const useLikeStore = create<LikeState>((set, get) => ({
         await likeApi.unlikeReply(replyId);
       }
     } catch (error) {
-      // Revert on error
+      // Revert on error only for the viewer who started the action.
+      if (generation !== viewerGeneration || mutations.get(key) !== version) return;
       set((state) => ({
         replyLikes: new Map(state.replyLikes).set(replyId, currentState),
       }));
@@ -187,16 +183,7 @@ export const useLikeStore = create<LikeState>((set, get) => ({
     return get().replyLikes.get(replyId) || DEFAULT_LIKE_INFO;
   },
 
-  fetchReplyLikeState: async (replyId: number) => {
-    try {
-      const state = await likeApi.checkReplyLike(replyId);
-      set((storeState) => ({
-        replyLikes: new Map(storeState.replyLikes).set(replyId, state),
-      }));
-    } catch (error) {
-      console.error('Failed to fetch reply like state:', error);
-    }
-  },
+  fetchReplyLikeState: (id) => fetchLikeStates('reply', [id]),
 
   setReplyLikeState: (replyId: number, info: LikeInfo) => {
     set((state) => ({
@@ -206,9 +193,10 @@ export const useLikeStore = create<LikeState>((set, get) => ({
 
   // User stats
   fetchUserLikeCount: async (userId: number) => {
+    const generation = viewerGeneration;
     try {
       const result = await likeApi.getUserLikeCount(userId);
-      set({ userLikeCount: result.count });
+      if (generation === viewerGeneration) set({ userLikeCount: result.count });
     } catch (error) {
       console.error('Failed to fetch user like count:', error);
     }
@@ -237,6 +225,7 @@ export const useLikeStore = create<LikeState>((set, get) => ({
     // Coalesce every button that mounted in this tick into one burst.
     queueMicrotask(() => {
       flushScheduled = false;
+      const generation = viewerGeneration;
       const postIds = [...pendingFetches.post];
       const replyIds = [...pendingFetches.reply];
       pendingFetches.post.clear();
@@ -245,11 +234,11 @@ export const useLikeStore = create<LikeState>((set, get) => ({
       postIds.forEach((postId) => inFlight.post.add(postId));
       replyIds.forEach((replyId) => inFlight.reply.add(replyId));
 
-      const store = useLikeStore.getState();
       Promise.allSettled([
-        postIds.length ? store.fetchPostLikeStates(postIds) : Promise.resolve(),
-        ...replyIds.map((replyId) => store.fetchReplyLikeState(replyId)),
+        fetchLikeStates('post', postIds),
+        fetchLikeStates('reply', replyIds),
       ]).finally(() => {
+        if (generation !== viewerGeneration) return;
         postIds.forEach((postId) => inFlight.post.delete(postId));
         replyIds.forEach((replyId) => inFlight.reply.delete(replyId));
       });
@@ -259,6 +248,8 @@ export const useLikeStore = create<LikeState>((set, get) => ({
 
 // The `liked` flags are per-viewer, so they must not survive a logout.
 registerUserScopedReset(() => {
+  viewerGeneration += 1;
+  mutations.clear();
   pendingFetches.post.clear();
   pendingFetches.reply.clear();
   inFlight.post.clear();

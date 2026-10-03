@@ -32,6 +32,10 @@ export const useUserStore = create<UserState>()(
       isLoading: true,
 
       setUser: (user) => {
+        if (get().user?.id !== user?.id) {
+          resetApiCache();
+          clearUserScopedState();
+        }
         set({
           user,
           isAuthenticated: !!user,

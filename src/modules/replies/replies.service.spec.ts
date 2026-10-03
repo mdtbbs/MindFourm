@@ -220,3 +220,79 @@ describe('RepliesService.createReplyForPost', () => {
     ).rejects.toThrow(NotFoundException);
   });
 });
+
+describe('Reply publication durability and privacy', () => {
+  it('writes the reply and its event in the same transaction and returns before effects', async () => {
+    const { service, notificationsService, pointsService, replyRepository } = createService();
+    const manager = { save: jest.fn(async (_entity, reply) => reply), update: jest.fn() };
+    const events = { publish: jest.fn(async () => undefined) };
+    (service as any).events = events;
+    (service as any).dataSource = { transaction: (run: any) => run(manager) };
+    await expect(service.createReplyForPost(88, { content: 'durable' }, REPLIER_ID)).resolves.toMatchObject({ id: 501 });
+    expect(events.publish).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'ForumReplyPublished', aggregateId: 501 }), manager);
+    expect(replyRepository.save).not.toHaveBeenCalled();
+    expect(notificationsService.create).not.toHaveBeenCalled();
+    expect(pointsService.awardPoints).not.toHaveBeenCalled();
+  });
+
+  it('does not commit the reply when enqueuing its durable event fails', async () => {
+    const { service } = createService();
+    let committed = false;
+    (service as any).events = { publish: jest.fn(async () => { throw new Error('outbox write failed'); }) };
+    (service as any).dataSource = { transaction: async (run: any) => { const result = await run({ save: async (_entity: any, reply: any) => reply }); committed = true; return result; } };
+    await expect(service.createReplyForPost(88, { content: 'durable' }, REPLIER_ID)).rejects.toThrow('outbox write failed');
+    expect(committed).toBe(false);
+  });
+
+  it('keeps post-commit cache/notification failures from becoming a reply creation error', async () => {
+    const { service, notificationsService, redisService, postActivityService } = createService();
+    redisService.del.mockRejectedValue(new Error('Redis unavailable'));
+    notificationsService.create.mockRejectedValue(new Error('notification unavailable'));
+    postActivityService.markPostActive.mockRejectedValue(new Error('activity unavailable'));
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await expect(service.createReplyForPost(88, { content: 'durable' }, REPLIER_ID)).resolves.toMatchObject({ status: 'published' });
+    warn.mockRestore();
+  });
+
+  it('propagates strict mention failure from the durable handler and retries points only after mentions succeed', async () => {
+    const { service, replyRepository, notificationsService, pointsService } = createService();
+    replyRepository.findOne.mockResolvedValue({ id: 501, post_id: 88, user_id: REPLIER_ID, status: 'published', content: 'hello', created_at: new Date() });
+    (notificationsService as any).canReceivePostNotification = jest.fn(async () => true);
+    notificationsService.notifyMentionedUsers.mockRejectedValueOnce(new Error('mention unavailable'));
+    let handler!: (event: any) => Promise<void>;
+    (service as any).events = { register: (_key: any, run: any) => { handler = run; } };
+    service.onModuleInit();
+    await expect(handler({ aggregate_id: 501 })).rejects.toThrow('mention unavailable');
+    expect(pointsService.awardPoints).not.toHaveBeenCalled();
+    await handler({ aggregate_id: 501 });
+    expect(pointsService.awardPoints).toHaveBeenCalledWith(REPLIER_ID, 'create_reply', 'reply', 501, true);
+    expect(notificationsService.notifyMentionedUsers).toHaveBeenLastCalledWith('hello', 88, REPLIER_ID, 501, [], true);
+  });
+
+  it('rejects nonmember creation at the group wall before saving', async () => {
+    const { service, replyRepository } = createService({ post: { ...OPEN_POST, required_group_id: 4 } });
+    await expect(service.createReplyForPost(88, { content: 'private' }, REPLIER_ID)).rejects.toThrow(ForbiddenException);
+    expect(replyRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('hides pending replies from anonymous readers and bounds the legacy reply list', async () => {
+    const { service, replyRepository } = createService();
+    replyRepository.findOne.mockResolvedValue({ id: 501, status: 'pending', user_id: REPLIER_ID, post_id: 88 });
+    await expect(service.findById(501)).rejects.toThrow(NotFoundException);
+    await service.getByPostId(88, 1, 999);
+    expect(replyRepository.findAndCount).toHaveBeenCalledWith(expect.objectContaining({ take: 50 }));
+    await expect(service.getByPostId(88, -1, 20)).rejects.toThrow();
+  });
+});
+
+it('explicit empty JSON mentions do not fall back to markdown @username parsing', async () => {
+  const { service, replyRepository, notificationsService } = createService();
+  replyRepository.findOne.mockResolvedValue({ id: 501, post_id: 88, user_id: REPLIER_ID, status: 'published', content: '@username literal', created_at: new Date() });
+  (notificationsService as any).canReceivePostNotification = jest.fn(async () => true);
+  let handler!: (event: any) => Promise<void>;
+  (service as any).events = { register: (_key: any, run: any) => { handler = run; } };
+  service.onModuleInit();
+  await handler({ aggregate_id: 501, payload_json: { mention_user_ids: [] } });
+  expect(notificationsService.notifyMentionedUsers).not.toHaveBeenCalled();
+  expect(notificationsService.notifyMentionedUserIds).toHaveBeenCalledWith([], 88, REPLIER_ID, '@username literal', 501, [], true);
+});

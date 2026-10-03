@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import axios from 'axios';
 import * as crypto from 'crypto';
@@ -135,6 +135,7 @@ const LEGACY_FIRST_PARTY_SCOPES = [
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly requestUsers = new WeakMap<object, Promise<User | null>>();
   private readonly sessionTtl = 7 * 24 * 60 * 60; // 7 days in seconds
 
   constructor(
@@ -334,12 +335,36 @@ export class AuthService {
       });
       const session = await this.mobileSessionRepository.findOne({ where: { id: payload.sid, user_id: payload.sub, revoked_at: IsNull() }, relations: { user: true } });
       if (!session) return null;
-      void this.mobileSessionRepository.update(session.id, { last_seen_at: new Date() });
+      // Revocation is still checked above on every request. Last-seen writes are
+      // infrequent and conditional, so concurrent workers cannot undo a revocation.
+      if (!session.last_seen_at || Date.now() - session.last_seen_at.getTime() >= 60_000) {
+        void this.mobileSessionRepository.update({
+          id: session.id, revoked_at: IsNull(),
+          last_seen_at: session.last_seen_at ? LessThanOrEqual(new Date(Date.now() - 60_000)) : IsNull(),
+        }, { last_seen_at: new Date() })
+          .catch(() => this.logger.warn('Unable to update mobile session activity'));
+      }
       return session.user;
     } catch { return null; }
   }
 
-  async resolveRequestUser(request: any): Promise<User | null> {
+  resolveRequestUser(request: any): Promise<User | null> {
+    // Share only server-validated results within this request; request.user is
+    // deliberately ignored. Ban and scope guards continue checking each route.
+    const existing = this.requestUsers.get(request);
+    if (existing) return existing;
+    const resolving = this.resolveRequestUserUncached(request).then(async (user) => {
+      if (user) {
+        try { await this.redisService.recordUserActivity(user.id); }
+        catch { this.logger.warn('Unable to record authenticated activity'); }
+      }
+      return user;
+    });
+    this.requestUsers.set(request, resolving);
+    return resolving;
+  }
+
+  private async resolveRequestUserUncached(request: any): Promise<User | null> {
     const sessionToken = request.cookies?.forum_session;
     if (sessionToken) {
       const user = await this.verifySession(sessionToken);
@@ -992,14 +1017,12 @@ export class AuthService {
 
   async verifySession(sessionToken: string): Promise<User | null> {
     const sessionKey = `session:${sessionToken}`;
-    const sessionData = await this.redisService.hgetall(sessionKey);
+    if (!sessionToken) return null;
+    const sessionData = await this.redisService.readSessionAndRenew(sessionKey, this.sessionTtl);
 
     if (!sessionData || !sessionData.userId) {
       return null;
     }
-
-    // Sliding window: refresh TTL on each successful verification
-    await this.redisService.expire(sessionKey, this.sessionTtl);
 
     const userId = parseInt(sessionData.userId, 10);
     const user = await this.usersRepository.findOne({

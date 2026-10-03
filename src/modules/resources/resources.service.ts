@@ -32,6 +32,7 @@ import { ConsumedResourcePreviewDraft, ResourcePreviewService } from './resource
 import { ResourceDuplicateService, RESOURCE_DUPLICATE_STATUSES } from './resource-duplicate.service';
 import { SiteConfigService } from '@config/site-profile';
 import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
+import { toPublicResource, RESOURCE_CARD_COLUMNS } from './resource-public.dto';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -124,37 +125,20 @@ export class ResourcesService {
 
   private normalizeVersion(version: ResourceVersion) {
     return {
-      ...version,
+      ...Object.fromEntries(['id', 'public_id', 'resource_id', 'version', 'file_name', 'file_size', 'mime_type', 'content_hash', 'content', 'content_html', 'created_at', 'release_channel', 'status', 'release_notes_markdown', 'published_at', 'is_legacy_root_release', 'compatibility'].filter((key) => Object.prototype.hasOwnProperty.call(version, key)).map((key) => [key, (version as any)[key]])),
+      ...(!['approved', 'published'].includes(version.status || '') ? { reject_reason: version.reject_reason || null } : {}),
       file_size: version.file_size || 0,
       checksum: (version as any).content_hash || null,
       release_notes: (version as any).release_notes_markdown || version.content || null,
     };
   }
 
-  private normalizeResource(resource: Resource, versions?: ResourceVersion[]) {
-    return {
-      ...resource,
-      is_public: resource.is_public === 1,
-      use_mfl: resource.use_mfl === 1,
-      file_size: resource.file_size || 0,
-      slug: resource.slug || null,
-      rating_count: resource.rating_count || 0,
-      rating_sum: resource.rating_sum || 0,
-      rating_average: Number(resource.rating_average) || 0,
-      comment_count: Number((resource as Resource & { comment_count?: number }).comment_count) || 0,
-      username: resource.user?.username || '',
-      avatar_url: resource.user?.avatar_url || null,
-      category_name: resource.category?.name || null,
-      category_icon: resource.category?.icon || null,
-      metadata: normalizeResourceMetadata(resource.metadata_json),
-      renderer_metadata: resource.renderer_metadata_json || null,
-      preview_url: resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null,
-      versions: versions?.map((version) => this.normalizeVersion(version)),
-    };
+  private normalizeResource(resource: Resource, versions?: ResourceVersion[], card = false) {
+    return { ...toPublicResource(resource, card), versions: versions?.map((version) => this.normalizeVersion(version)) };
   }
 
   /** One grouped query for a resource batch; never count comments per row. */
-  private async normalizeResources(resources: Resource[]): Promise<any[]> {
+  private async normalizeResources(resources: Resource[], card = false): Promise<any[]> {
     if (resources.length === 0) return [];
     const ids = resources.map(({ id }) => id);
     const rows = await this.dataSource.query(
@@ -167,7 +151,7 @@ export class ResourcesService {
     const counts = new Map(rows.map((row) => [Number(row.resource_id), Number(row.comment_count)]));
     return resources.map((resource) => this.normalizeResource({ ...resource,
       comment_count: counts.get(resource.id) || 0,
-    } as Resource));
+    } as Resource, undefined, card));
   }
 
   private async normalizeOneResource(resource: Resource, versions?: ResourceVersion[]) {
@@ -797,18 +781,23 @@ export class ResourcesService {
         .createQueryBuilder('resource')
         .leftJoinAndSelect('resource.user', 'user')
         .leftJoin('resource.category', 'category')
+        .select(RESOURCE_CARD_COLUMNS)
+        .addSelect("LEFT(COALESCE(NULLIF(resource.summary, ''), resource.description), 360)", 'resource_card_description')
+        .maxExecutionTime(2500)
         .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
         .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
         .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 });
 
       if (options.featuredOnly) qb.andWhere('resource.is_featured = 1');
 
-      const trendScore = `(
-        (SELECT COUNT(*) * 3 FROM download_events de WHERE de.resource_id = resource.id AND de.event_type = 'granted' AND de.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) +
-        (SELECT COUNT(*) * 2 FROM resource_likes rl WHERE rl.resource_id = resource.id AND rl.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) +
-        (SELECT COUNT(*) * 2 FROM resource_favorites rf WHERE rf.resource_id = resource.id AND rf.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))
-      )`;
-      if (options.trendingOnly) qb.addSelect(trendScore, 'trending_score');
+      // Aggregate each event window once, instead of rescanning it for each card.
+      const trendScore = '(COALESCE(download_trend.score, 0) + COALESCE(like_trend.score, 0) + COALESCE(favorite_trend.score, 0))';
+      if (options.trendingOnly) {
+        qb.leftJoin("(SELECT resource_id, COUNT(*) * 3 AS score FROM download_events WHERE event_type = 'granted' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)", 'download_trend', 'download_trend.resource_id = resource.id')
+          .leftJoin('(SELECT resource_id, COUNT(*) * 2 AS score FROM resource_likes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)', 'like_trend', 'like_trend.resource_id = resource.id')
+          .leftJoin('(SELECT resource_id, COUNT(*) * 2 AS score FROM resource_favorites WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY resource_id)', 'favorite_trend', 'favorite_trend.resource_id = resource.id')
+          .addSelect(trendScore, 'trending_score');
+      }
 
       if (category_id) {
         qb.andWhere('resource.category_id = :categoryId', { categoryId: category_id });
@@ -832,7 +821,7 @@ export class ResourcesService {
 
       if (planet?.trim()) {
         qb.andWhere(
-          `JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.planet')) = :resourcePlanet`,
+          `resource.filter_planet = :resourcePlanet`,
           { resourcePlanet: planet.trim() },
         );
       }
@@ -844,13 +833,13 @@ export class ResourcesService {
       }
       if (width !== undefined) {
         qb.andWhere(
-          `CAST(JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.width')) AS UNSIGNED) = :resourceWidth`,
+          `resource.filter_width = :resourceWidth`,
           { resourceWidth: width },
         );
       }
       if (height !== undefined) {
         qb.andWhere(
-          `CAST(JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.height')) AS UNSIGNED) = :resourceHeight`,
+          `resource.filter_height = :resourceHeight`,
           { resourceHeight: height },
         );
       }
@@ -896,7 +885,7 @@ export class ResourcesService {
             if (!Number.isFinite(cursorScore) || !Number.isSafeInteger(idValue)) throw new Error('invalid cursor');
             qb.andWhere(`(${trendScore} < :cursorScore OR (${trendScore} = :cursorScore AND resource.id < :idValue))`, { cursorScore, idValue });
           } else {
-            const cursorValue = sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
+            const cursorValue = ['created_at', 'updated_at'].includes(sort) ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
             qb.andWhere(
               `(resource.${sort} ${direction === 'ASC' ? '>' : '<'} :cursorValue OR (resource.${sort} = :cursorValue AND resource.id ${direction === 'ASC' ? '>' : '<'} :idValue))`,
               { cursorValue, idValue },
@@ -911,10 +900,15 @@ export class ResourcesService {
       else qb.orderBy(`resource.${sort}`, direction).addOrderBy('resource.id', direction);
       qb.take(Number(limit) + 1);
 
-      const selected = options.trendingOnly ? await qb.getRawAndEntities() : null;
-      const resources = selected
-        ? selected.entities.map((entity, index) => Object.assign(entity, { trending_score: Number(selected.raw[index]?.trending_score) || 0 }))
-        : await qb.getMany();
+      const selected = await qb.getRawAndEntities();
+      const cards = new Map(selected.raw.map((row) => [Number(row.resource_id), row]));
+      const resources = selected.entities.map((entity) => {
+        const row = cards.get(entity.id);
+        return Object.assign(entity, {
+          description: row?.resource_card_description || null,
+          ...(options.trendingOnly ? { trending_score: Number(row?.trending_score) || 0 } : {}),
+        });
+      });
 
       const hasMore = resources.length > Number(limit);
       if (hasMore) {
@@ -926,14 +920,14 @@ export class ResourcesService {
         const lastResource = resources[resources.length - 1];
         const cursorValue = options.trendingOnly
           ? String((lastResource as Resource & { trending_score: number }).trending_score)
-          : sort === 'created_at'
-            ? lastResource.created_at.getTime().toString()
+          : ['created_at', 'updated_at'].includes(sort)
+            ? (lastResource[sort] as Date).getTime().toString()
             : lastResource[sort].toString();
         nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
       }
 
       return {
-        data: await this.normalizeResources(resources),
+        data: await this.normalizeResources(resources, true),
         next_cursor: nextCursor,
         has_more: hasMore,
       };
@@ -963,7 +957,7 @@ export class ResourcesService {
       try {
         const decoded = decodeCursor(cursor);
         const cursorValue =
-          sort === 'created_at' ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
+          ['created_at', 'updated_at'].includes(sort) ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
         const idValue = parseInt(decoded[1]);
 
         cursorCondition = [
@@ -996,8 +990,8 @@ export class ResourcesService {
     if (hasMore && resources.length > 0) {
       const lastResource = resources[resources.length - 1];
       const cursorValue =
-        sort === 'created_at'
-          ? lastResource.created_at.getTime().toString()
+        ['created_at', 'updated_at'].includes(sort)
+          ? (lastResource[sort] as Date).getTime().toString()
           : lastResource[sort].toString();
       nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
     }

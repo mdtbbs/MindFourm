@@ -5,6 +5,7 @@ import { Reaction, ReactionTargetType } from '@entities/reaction.entity';
 import { Post } from '@entities/post.entity';
 import { Reply } from '@entities/reply.entity';
 import { isDuplicateKeyError } from '@common/utils/db-error.util';
+import { BatchViewer, visibleBatchTargets } from '@common/utils/batch-targets.util';
 import { emojiSortIndex, isAllowedEmoji } from './reaction-emojis';
 
 export interface ReactionSummary {
@@ -101,6 +102,12 @@ export class ReactionsService {
   ): Promise<ReactionSummary[]> {
     const grouped = await this.getForTargets(targetType, [targetId], viewerId);
     return grouped[targetId] ?? [];
+  }
+
+  async getVisibleForTargets(type: string, ids: number[], viewer?: BatchViewer) {
+    const targetType = parseTargetType(type);
+    const visible = await visibleBatchTargets(this.postRepo, this.replyRepo, targetType, ids, viewer);
+    return this.getForTargets(targetType, visible.map((row) => row.id), viewer?.id);
   }
 
   /**

@@ -6,6 +6,7 @@ import { Reply } from './reply.entity';
 // The unread badge and the notification list are both (user_id, is_read) filters
 // ordered by created_at, and they run on nearly every authenticated page view.
 @Index('idx_notifications_user_read_created', ['user_id', 'is_read', 'created_at'])
+@Index('uq_notifications_deduplication', ['deduplication_key'], { unique: true })
 @Entity('notifications')
 export class Notification {
   @PrimaryGeneratedColumn()
@@ -31,6 +32,9 @@ export class Notification {
 
   @Column({ default: 0 })
   is_read: number;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  deduplication_key: string | null;
 
   @CreateDateColumn()
   created_at: Date;

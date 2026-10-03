@@ -528,6 +528,8 @@ export interface PostRevisionDetail extends PostRevisionSummary {
 
 // Reply APIs
 export const replyApi = {
+  getChildren: (postId: number, replyId: number, page = 1, limit = 20) =>
+    request<ReplyListResponse>(`/api/posts/${postId}/replies/${replyId}/children${buildQueryString({ page, limit })}`),
   getByPost: (postId: number, params?: { page?: number; limit?: number }) =>
     request<ReplyListResponse>(`/api/posts/${postId}/replies${buildQueryString({
       page: params?.page,
@@ -1118,6 +1120,8 @@ export const adminNotificationApi = {
 
 // Like APIs
 export const likeApi = {
+  checkBatch: (type: 'post' | 'reply', ids: number[]) =>
+    request<Record<number, { liked: boolean; count: number }>>(`/api/likes/${type === 'post' ? 'posts' : 'replies'}/batch?ids=${ids.join(',')}`),
   // Post likes
   likePost: (postId: number) =>
     request<{ message: string }>(`/api/likes/posts/${postId}`, { method: 'POST' }),
@@ -1145,6 +1149,8 @@ export const likeApi = {
 
 // Attachment APIs
 export const attachmentApi = {
+  getByReplies: (ids: number[]) =>
+    request<Record<number, Attachment[]>>(`/api/attachments/replies/batch?ids=${ids.join(',')}`, { skipCache: true }),
   createDrafts: (formData: FormData) =>
     request<{ drafts: AttachmentDraft[] }>('/api/attachments/drafts', {
       method: 'POST',

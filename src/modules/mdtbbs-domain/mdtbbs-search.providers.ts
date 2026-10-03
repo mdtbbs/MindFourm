@@ -14,13 +14,16 @@ export class MdtbbsResourceSearchProvider implements SearchProvider, OnModuleIni
   constructor(@InjectRepository(Resource) private readonly repo: Repository<Resource>, private readonly registry: SearchProviderRegistry) {}
   onModuleInit(): void { this.registry.register(this); }
   async search(query: string, options: SearchOptions): Promise<SearchResultGroup> {
-    const qb = this.repo.createQueryBuilder('r').leftJoinAndSelect('r.user', 'user').leftJoinAndSelect('r.category', 'category')
+    const qb = this.repo.createQueryBuilder('r').leftJoin('r.user', 'user').leftJoin('r.category', 'category')
+      .select(['r.id', 'r.title', 'r.resource_type', 'r.version', 'r.slug', 'r.download_count', 'r.rating_average', 'r.rating_count', 'r.user_id', 'r.created_at', 'user.id', 'user.username', 'category.id', 'category.name'])
+      .addSelect("LEFT(COALESCE(NULLIF(r.summary, ''), r.description), 360)", 'resource_card_description')
+      .maxExecutionTime(2500)
       .where('r.status = :status', { status: 'approved' }).andWhere('r.is_public = :public', { public: 1 })
       .andWhere('(category.id IS NULL OR category.is_active = :active)', { active: 1 });
     qb.andWhere('(r.title LIKE :query OR r.description LIKE :query)', { query: `%${escapeLike(query)}%` });
-    const resources = await qb.orderBy('r.download_count', 'DESC').addOrderBy('r.rating_average', 'DESC')
-      .addOrderBy('r.created_at', 'DESC').take(options.limit).getMany();
-    return { items: resources.map((r) => ({ id: r.id, title: r.title, description: r.description, resource_type: r.resource_type,
+    const selected = await qb.orderBy('r.download_count', 'DESC').addOrderBy('r.rating_average', 'DESC')
+      .addOrderBy('r.created_at', 'DESC').take(options.limit).getRawAndEntities();
+    return { items: selected.entities.map((r, index) => ({ id: r.id, title: r.title, description: selected.raw[index]?.resource_card_description || null, resource_type: r.resource_type,
       version: r.version, slug: r.slug, download_count: r.download_count, rating_average: r.rating_average,
       rating_count: r.rating_count, category_name: r.category?.name || null, username: r.user?.username || null,
       user_id: r.user_id, created_at: r.created_at })) };
@@ -35,7 +38,7 @@ export class MdtbbsGameServerSearchProvider implements SearchProvider, OnModuleI
   async search(query: string, options: SearchOptions): Promise<SearchResultGroup> {
     const escaped = `%${escapeLike(query)}%`;
     const items = await this.repo.createQueryBuilder('server')
-      .select(['server.id', 'server.public_id', 'server.name', 'server.slug', 'server.description', 'server.status'])
+      .select(['server.id', 'server.public_id', 'server.name', 'server.slug', 'server.description', 'server.status']).maxExecutionTime(2500)
       .where('server.is_public = :public', { public: true }).andWhere('server.status = :status', { status: 'active' })
       .andWhere('(server.name LIKE :query OR server.slug LIKE :query OR server.description LIKE :query)', { query: escaped })
       .orderBy('server.name', 'ASC').take(options.limit).getMany();
@@ -68,7 +71,7 @@ export class MdtbbsDeveloperFeedSearchProvider implements SearchProvider, OnModu
     const items = await this.repo.createQueryBuilder('feed').select([
       'feed.id', 'feed.provider', 'feed.repository', 'feed.item_type', 'feed.external_id', 'feed.state',
       'feed.summary', 'feed.source_url', 'feed.author_login', 'feed.updated_at',
-    ]).where('feed.is_indexable = :indexable', { indexable: true })
+    ]).maxExecutionTime(2500).where('feed.is_indexable = :indexable', { indexable: true })
       .andWhere('(feed.summary LIKE :query OR feed.repository LIKE :query OR feed.author_login LIKE :query)', { query: `%${escapeLike(query)}%` })
       .orderBy('feed.updated_at', 'DESC').take(options.limit).getMany();
     return { items };

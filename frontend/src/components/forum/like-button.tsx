@@ -33,7 +33,7 @@ export function LikeButton({ type, id, initialCount = 0, className = '', showCou
   useEffect(() => {
     seedLikeState(type, id, initialCount);
     ensureLikeState(type, id);
-  }, [type, id, initialCount, seedLikeState, ensureLikeState]);
+  }, [type, id, initialCount, seedLikeState, ensureLikeState, user?.id]);
 
   // Read the map directly so "not loaded yet" is distinguishable from a real zero:
   // falling back to `initialCount` whenever the count is 0 would resurrect a stale

@@ -149,6 +149,10 @@ function createService(overrides: {
   dataSource?: Record<string, jest.Mock>;
 } = {}) {
   const defaultQb = {
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    maxExecutionTime: jest.fn().mockReturnThis(),
+    getRawAndEntities: jest.fn().mockResolvedValue({ entities: [], raw: [] }),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
@@ -683,7 +687,7 @@ describe('ResourcesService - Public Visibility', () => {
         },
       ];
       const { service, defaultQb } = createService();
-      defaultQb.getMany.mockResolvedValue(fakeResources);
+      defaultQb.getRawAndEntities.mockResolvedValue({ entities: fakeResources, raw: fakeResources.map(r => ({ resource_id: r.id, resource_card_description: 'Summary' })) });
 
       const result = await service.getList(baseQuery, { scope: 'public' });
 

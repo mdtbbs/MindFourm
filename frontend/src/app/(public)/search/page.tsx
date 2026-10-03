@@ -37,6 +37,7 @@ type UnifiedSearchResult = {
     developer_feed: Array<{ id: number; provider: string; repository: string; item_type: string; external_id: string; state: string; summary: string | null; source_url: string; author_login: string }>;
   };
   total_by_type: Record<string, number>;
+  unavailable?: string[];
 };
 
 const emptyResult: UnifiedSearchResult = {
@@ -98,8 +99,9 @@ export default async function SearchPage({
         )}
       </div>
 
+      {!!result.unavailable?.length && <p role="status" className="mb-4 text-sm text-[var(--text-secondary)]">{t('searchPage.partialResults')}</p>}
       {totalResults === 0 ? (
-        <EmptyState title={query ? t('searchPage.emptyResults') : t('searchPage.enterQuery')} className="border-0 bg-transparent" />
+        <EmptyState title={result.unavailable?.length ? t('searchPage.searchFailedDescription') : query ? t('searchPage.emptyResults') : t('searchPage.enterQuery')} className="border-0 bg-transparent" />
       ) : (
         <div className="space-y-6">
           {groups.users.length > 0 && (

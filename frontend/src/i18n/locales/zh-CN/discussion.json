@@ -36,7 +36,9 @@
   "replySection": {
     "aria": "回复",
     "title": "回复 ({count})",
-    "empty": "暂无回复，快来抢沙发吧"
+    "empty": "暂无回复，快来抢沙发吧",
+    "expandChildren": "展开子回复（{count}）",
+    "loadFailed": "子回复加载失败，请重试。"
   },
   "replyItem": {
     "reply": "回复",

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, LessThan } from 'typeorm';
 import { Post, User, Category, Tag, PostTag, Ban, Setting, OperationLog, Reply, SessionAudit } from '@entities/index';
@@ -12,6 +12,7 @@ import { PointsService } from '../points/points.service';
 import { RedisService } from '../../database/redis.service';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { EventsService } from '../events/events.service';
 import { PostActivityService } from '../posts/post-activity.service';
 
 @Injectable()
@@ -47,6 +48,7 @@ export class AdminService {
     private pointsService: PointsService,
     private redisService: RedisService,
     private postActivityService: PostActivityService,
+    @Optional() private events?: EventsService,
   ) {}
 
   private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
@@ -419,15 +421,24 @@ export class AdminService {
    * Approve a post (set status to published)
    */
   async approvePost(id: number): Promise<void> {
-    const post = await this.postRepository.findOne({ where: { id } });
-    if (!post) {
-      throw new NotFoundException('Post not found');
+    if (this.events) {
+      await this.dataSource.transaction(async manager => {
+        const post = await manager.findOne(Post, { where: { id }, lock: { mode: 'pessimistic_write' } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.status === 'published') return;
+        await manager.update(Post, id, { status: 'published' });
+        await this.events!.publish({ eventKey: 'ForumPostPublished', aggregateType: 'Post', aggregateId: id,
+          payload: { post_id: id },
+        }, manager);
+      });
+      await this.invalidatePostCache(id).catch(error => console.warn('Approved post cache invalidation failed:', error.message));
+      return;
     }
+    const post = await this.postRepository.findOne({ where: { id } });
+    if (!post) throw new NotFoundException('Post not found');
     await this.postRepository.update(id, { status: 'published' });
     await this.invalidatePostCache(id);
-    if (post.status !== 'published') {
-      await this.pointsService.awardPoints(post.user_id, 'create_post', 'post', post.id);
-    }
+    if (post.status !== 'published') await this.pointsService.awardPoints(post.user_id, 'create_post', 'post', post.id).catch(error => console.warn('Approved post points failed after commit:', error.message));
   }
 
   /**
@@ -444,16 +455,27 @@ export class AdminService {
   }
 
   async approveReply(id: number): Promise<void> {
+    if (this.events) {
+      const reply = await this.dataSource.transaction(async (manager) => {
+        const row = await manager.findOne(Reply, { where: { id }, lock: { mode: 'pessimistic_write' } });
+        if (!row) throw new NotFoundException('Reply not found');
+        if (row.status === 'published') return row;
+        await manager.update(Reply, id, { status: 'published' });
+        await this.events!.publish({ eventKey: 'ForumReplyPublished', aggregateType: 'Reply', aggregateId: id, payload: { reply_id: id } }, manager);
+        return row;
+      });
+      await this.invalidatePostCache(reply.post_id).catch((error) => console.warn('Approved reply cache invalidation failed:', error.message));
+      return;
+    }
+    // Compatibility with isolated embedders that do not install the events module.
     const reply = await this.replyRepository.findOne({ where: { id } });
-    if (!reply) {
-      throw new NotFoundException('Reply not found');
-    }
+    if (!reply) throw new NotFoundException('Reply not found');
     await this.replyRepository.update(id, { status: 'published' });
-    await this.postActivityService.markPostActive(reply.post_id);
-    await this.invalidatePostCache(reply.post_id);
-    if (reply.status !== 'published') {
-      await this.pointsService.awardPoints(reply.user_id, 'create_reply', 'reply', reply.id);
-    }
+    try {
+      await this.postActivityService.markPostActive(reply.post_id);
+      await this.invalidatePostCache(reply.post_id);
+      if (reply.status !== 'published') await this.pointsService.awardPoints(reply.user_id, 'create_reply', 'reply', reply.id);
+    } catch (error) { console.warn('Approved reply effects failed after commit:', (error as Error).message); }
   }
 
   async rejectReply(id: number): Promise<void> {

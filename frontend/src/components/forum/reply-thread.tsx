@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { replyApi } from '@/lib/api/client';
+import { useI18n } from '@/i18n/provider';
 import ReplyItem from '@/components/forum/reply-item';
 import type { Reply } from '@/types';
 
@@ -14,8 +17,8 @@ export interface ReplyNode {
 /**
  * Arrange a flat reply list into threads.
  *
- * The API returns every reply on the page plus all descendants of that page's roots, so
- * a parent is always present for any child in the list. A child whose parent is absent
+ * The API pages root replies separately from child replies. Expanded branches are
+ * merged into this tree without changing the root floor numbering. A child whose parent is absent
  * anyway — deleted mid-request, or deeper than the server expands — is promoted to a
  * root rather than dropped, because silently losing a reply is worse than showing it at
  * the wrong indent.
@@ -77,36 +80,65 @@ export default function ReplyThread({
   return (
     <div className={depth === 0 ? 'space-y-4' : 'mt-3 space-y-3'}>
       {nodes.map((node) => (
-        <div key={node.reply.id}>
-          <ReplyItem
-            reply={node.reply}
-            floor={node.floor}
-            postId={postId}
-            isNested={depth > 0}
-            canAcceptAnswer={canAcceptAnswer}
-            isBestReply={bestReplyId === node.reply.id}
-            isOriginalPoster={node.reply.user_id === postOwnerId}
-          />
-          {node.children.length > 0 && (
-            // Indentation stops growing past a few levels so deep threads stay readable
-            // on narrow screens instead of collapsing into a sliver of text.
-            <div
-              className={`border-l-2 border-[var(--border)] pl-3 sm:pl-4 ${
-                depth < 3 ? 'ml-3 sm:ml-6' : 'ml-1 sm:ml-2'
-              }`}
-            >
-              <ReplyThread
-                nodes={node.children}
-                postId={postId}
-                canAcceptAnswer={canAcceptAnswer}
-                bestReplyId={bestReplyId}
-                postOwnerId={postOwnerId}
-                depth={depth + 1}
-              />
-            </div>
-          )}
-        </div>
+        <ReplyBranch key={node.reply.id} node={node} postId={postId} canAcceptAnswer={canAcceptAnswer}
+          bestReplyId={bestReplyId} postOwnerId={postOwnerId} depth={depth} />
       ))}
+    </div>
+  );
+}
+
+
+function ReplyBranch({ node, postId, canAcceptAnswer, bestReplyId, postOwnerId, depth = 0 }: Omit<ReplyThreadProps, 'nodes'> & { node: ReplyNode }) {
+  const { t } = useI18n();
+  const [loaded, setLoaded] = useState<Reply[]>([]);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(Boolean(node.reply.child_count));
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const onMutation = (event: Event) => {
+      const detail = (event as CustomEvent<{ postId: number; type: string; reply?: Reply; replyId?: number }>).detail;
+      if (detail?.postId !== postId) return;
+      if (detail.type === 'update' && detail.reply) setLoaded(current => current.map(reply => reply.id === detail.reply!.id ? { ...reply, ...detail.reply } : reply));
+      if (detail.type === 'delete') setLoaded(current => current.filter(reply => reply.id !== detail.replyId));
+    };
+    window.addEventListener('mdtbbs:reply-mutation', onMutation);
+    return () => window.removeEventListener('mdtbbs:reply-mutation', onMutation);
+  }, [postId]);
+  const loadMore = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      const result = await replyApi.getChildren(postId, node.reply.id, page + 1, 20);
+      setLoaded(current => [...new Map([...current, ...result.data].map(reply => [reply.id, reply])).values()]);
+      setPage(result.pagination.page);
+      setHasMore(result.pagination.page < result.pagination.totalPages);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t('replySection.loadFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+  const children = [...new Map([...node.children, ...buildReplyTree(loaded)].map(child => [child.reply.id, child])).values()];
+  return (
+    <div>
+      <ReplyItem reply={node.reply} floor={depth > 0 ? null : node.floor} postId={postId} isNested={depth > 0}
+        canAcceptAnswer={canAcceptAnswer} isBestReply={bestReplyId === node.reply.id}
+        isOriginalPoster={node.reply.user_id === postOwnerId} />
+      {(children.length > 0 || hasMore) && (
+        <div className={`border-l-2 border-[var(--border)] pl-3 sm:pl-4 ${depth < 3 ? 'ml-3 sm:ml-6' : 'ml-1 sm:ml-2'}`}>
+          <ReplyThread nodes={children} postId={postId} canAcceptAnswer={canAcceptAnswer}
+            bestReplyId={bestReplyId} postOwnerId={postOwnerId} depth={depth + 1} />
+          {hasMore && (
+            <button type="button" disabled={loading} onClick={loadMore}
+              className="mt-3 text-sm text-[var(--primary)] hover:underline disabled:opacity-50">
+              {loading ? t('common.loading') : t('replySection.expandChildren', { count: node.reply.child_count ?? 0 })}
+            </button>
+          )}
+          {error && <p role="alert" className="mt-2 text-sm text-red-500">{error}</p>}
+        </div>
+      )}
     </div>
   );
 }

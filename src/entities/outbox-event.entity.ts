@@ -30,6 +30,9 @@ export class OutboxEvent {
   @Column({ type: 'datetime', nullable: true })
   processed_at: Date | null;
 
+  @Column({ type: 'datetime', nullable: true })
+  next_attempt_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 }

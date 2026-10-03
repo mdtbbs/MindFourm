@@ -91,6 +91,7 @@ export const THREAD_REPLY_SCHEMA: any = {
     'updated_at', 'author_mindauth_id', 'author_role', 'author_name', 'author_avatar_url', 'location_label',
   ],
   properties: {
+    child_count: { type: 'integer', minimum: 0, description: '直接子回复数；通过子回复分页接口展开。' },
     id: { type: 'integer', example: 456, description: '回复 ID。' },
     post_id: { type: 'integer', example: 123, description: '所属讨论 ID。' },
     user_id: { type: 'integer', example: 45, description: '作者的论坛用户 ID。' },

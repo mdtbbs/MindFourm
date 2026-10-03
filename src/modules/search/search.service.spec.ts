@@ -45,6 +45,10 @@ function createQueryBuilder(posts: any[], total: number) {
   return {
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    maxExecutionTime: jest.fn().mockReturnThis(),
+    getRawAndEntities: jest.fn().mockResolvedValue({ entities: posts, raw: posts.map(post => ({ p_id: post.id, post_card_excerpt: 'bounded search excerpt' })) }),
+    getCount: jest.fn().mockResolvedValue(total),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
@@ -160,40 +164,24 @@ describe('SearchService', () => {
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('category.slug = :category', {
       category: 'general',
     });
-    expect(queryBuilder.select).toHaveBeenCalledWith([
-      'p.id',
-      'p.user_id',
-      'p.category_id',
-      'p.post_type',
-      'p.title',
-      'p.content',
-      'p.status',
-      'p.is_pinned',
-      'p.is_locked',
-      'p.view_count',
-      'p.like_count',
-      'p.created_at',
-      'p.updated_at',
-      'user.id',
-      'user.mindauth_id',
-      'user.role',
-      'category.id',
-      'category.name',
-      'category.slug',
-    ]);
+    expect(queryBuilder.select).toHaveBeenCalledWith(expect.arrayContaining(['p.id', 'p.source', 'p.slug', 'p.last_activity_at', 'user.username', 'user.avatar_url', 'category.color', 'category.icon']));
+    expect(queryBuilder.select).toHaveBeenCalledWith(expect.not.arrayContaining(['p.content', 'p.content_html', 'p.content_json']));
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith(expect.stringContaining('LEFT('), 'post_card_excerpt');
+    expect(queryBuilder.maxExecutionTime).toHaveBeenCalledWith(2500);
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
       '(p.title LIKE :query OR p.content LIKE :query)',
       { query: '%guide%' },
     );
     expect(queryBuilder.orderBy).toHaveBeenCalledWith(
-      'CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END',
+      'search_title_match',
       'DESC',
     );
+    expect(queryBuilder.addSelect).toHaveBeenCalledWith('CASE WHEN p.title LIKE :query THEN 1 ELSE 0 END', 'search_title_match');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('p.created_at', 'DESC');
     expect(queryBuilder.skip).toHaveBeenCalledWith(10);
     expect(queryBuilder.take).toHaveBeenCalledWith(10);
     expect(postSummaryService.toSummaryList).toHaveBeenCalledWith([
-      expect.objectContaining({ id: 17 }),
+      expect.objectContaining({ id: 17, content_text: 'bounded search excerpt' }),
     ]);
     expect(result).toMatchObject({
       data: [
@@ -210,6 +198,15 @@ describe('SearchService', () => {
         totalPages: 2,
       },
     });
+  });
+
+  it('bounds malformed internal pagination arguments and preserves LIKE escaping', async () => {
+    const { service, queryBuilder } = createService();
+    const result = await service.searchPosts('50%_\\', { page: -5, limit: 5000 });
+    expect(result.pagination).toMatchObject({ page: 1, limit: 50 });
+    expect(queryBuilder.skip).toHaveBeenCalledWith(0);
+    expect(queryBuilder.take).toHaveBeenCalledWith(50);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('(p.title LIKE :query OR p.content LIKE :query)', { query: '%50\\%\\_\\\\%' });
   });
 
   it('returns a stable empty page when a page is beyond the last result', async () => {
@@ -255,7 +252,7 @@ describe('SearchService', () => {
 
     await service.searchPosts('private', { page: 1, limit: 10 });
 
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('p.required_group_id IS NULL');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith('p.required_group_id IS NULL', undefined);
   });
 
   it('allows a signed-in member to search only their own group discussions', async () => {
@@ -265,10 +262,10 @@ describe('SearchService', () => {
 
     await service.searchPosts('mod', { page: 1, limit: 10 }, { id: 92, role: 'user' });
 
-    expect(groupMemberRepository.find).toHaveBeenCalledWith({ where: { user_id: 92 }, select: ['group_id'] });
+    expect(groupMemberRepository.find).not.toHaveBeenCalled();
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      '(p.required_group_id IS NULL OR p.required_group_id IN (:...groupIds))',
-      { groupIds: [4, 9] },
+      expect.stringContaining('post_visibility_member.group_id = p.required_group_id'),
+      { postVisibilityUser: 92 },
     );
   });
 
@@ -295,4 +292,27 @@ describe('SearchService', () => {
     }));
     expect(providerRegistry.search).toHaveBeenCalledWith('game_versions', '160.4', { limit: 10, viewer: undefined });
   });
+  it('keeps other search groups when one provider fails and marks missing groups', async () => {
+    const providers = { search: jest.fn((key: string) => key === 'resources' ? Promise.reject(new Error('down')) : Promise.resolve([{ id: 1 }])) };
+    const { service } = createService({ providerRegistry: providers });
+    const result = await service.searchUnified('guide');
+    expect(result.groups.resources).toEqual([]);
+    expect(result.groups.posts).toHaveLength(1);
+    expect(result.groups.servers).toHaveLength(1);
+    expect(result.unavailable).toEqual(['resources']);
+  });
+
+  it('bounds an unresponsive provider without losing successful search groups', async () => {
+    jest.useFakeTimers();
+    try {
+      const providers = { search: jest.fn((key: string) => key === 'resources' ? new Promise<unknown[]>(() => {}) : Promise.resolve([])) };
+      const { service } = createService({ providerRegistry: providers });
+      const pending = service.searchUnified('guide');
+      await jest.advanceTimersByTimeAsync(2500);
+      const result = await pending;
+      expect(result.unavailable).toEqual(['resources']);
+      expect(result.groups.posts).toHaveLength(1);
+    } finally { jest.useRealTimers(); }
+  });
+
 });

@@ -295,8 +295,9 @@ Two traps, both of which shipped:
 - **Never declare optional numeric query params with `@Query('page', new ParseIntPipe({ optional: true }))`.** Under the global `ValidationPipe` that rejects a request which simply omits the parameter, so the endpoint 400s on its own default call. Use a class-transformer DTO — see `modules/posts/dto/query-post-lists.dto.ts`.
 - **A timestamp cursor must reach the driver as a `Date`, not an ISO string.** `created_at < '2026-07-26T19:07:14.726Z'` matches zero DATETIME rows in MySQL without erroring or warning, so pagination silently stops after page one. `common/utils/date-cursor.util.ts` exists for this.
 
-Reply pagination applies to **root replies**, returning all descendants of the roots on
-that page; paginating the flat list split threads across page boundaries.
+Reply pagination applies to **root replies** (maximum 50 per page). Root cards include
+`child_count`; descendants are fetched lazily through paginated children endpoints
+(maximum 50 direct children per page), recursively. Never preload an entire reply tree.
 
 ### Validation
 - `class-validator` DTOs with `whitelist: true`, `forbidNonWhitelisted: true`, `transform: true`
