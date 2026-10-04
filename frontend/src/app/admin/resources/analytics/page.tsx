@@ -111,7 +111,7 @@ export default function ResourceAnalyticsPage() {
                   <div className="h-5 bg-surface-50">
                     <div className="h-full min-w-0 bg-primary-500/75" style={{ width: `${Math.max(day.pv ? 1 : 0, (day.pv / maxDailyViews) * 100)}%` }} />
                   </div>
-                  <span className="text-right tabular-nums text-surface-700" title={`${number.format(day.uv)} UV`}>{number.format(day.pv)} PV</span>
+                  <span className="text-right tabular-nums text-surface-700" title={`${number.format(day.uv)} 位访客`}>{number.format(day.pv)} 次浏览</span>
                 </div>
               ))}
             </div>

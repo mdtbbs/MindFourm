@@ -160,7 +160,7 @@ export function Medal({
                 {name}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                Lv.{level}
+                等级 {level}
               </div>
             </div>
           </div>

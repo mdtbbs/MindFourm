@@ -17,6 +17,7 @@
     "locked": "このディスカッションはロックされており、新しい返信はできません。"
   },
   "replyEditor": {
+    "loading": "返信エディターを読み込み中…",
     "title": "返信を書く",
     "replyTitle": "返信",
     "quoteTitle": "返信を引用",

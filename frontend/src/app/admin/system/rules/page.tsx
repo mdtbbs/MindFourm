@@ -37,7 +37,7 @@ export default function RulesPage() {
 
   const update = (k: string, v: string) => setValues((p) => ({ ...p, [k]: v }));
 
-  if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading) return <div className="py-8 text-center text-surface-500">加载中…</div>;
 
   return (
     <div className="space-y-6">
@@ -65,7 +65,7 @@ export default function RulesPage() {
           ))}
         </div>
         <div className="px-6 py-4 border-t border-surface-200 flex gap-2 justify-end">
-          <Button variant="ghost" onClick={fetchSettings}>Reset</Button>
+          <Button variant="ghost" onClick={fetchSettings}>重置</Button>
           <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
         </div>
       </div>

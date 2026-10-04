@@ -100,6 +100,7 @@
       "server_plugin": "服务器插件",
       "development_tool": "工具",
       "texture_ui": "材质与界面",
+      "pack": "资源包",
       "other": "其他"
     }
   },

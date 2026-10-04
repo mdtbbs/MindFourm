@@ -470,7 +470,7 @@ export function ServerCard({
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 500, color: pingColors(stats.ping) }}>
-                  {stats.ping}ms
+                  {stats.ping} 毫秒
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>延迟</div>
               </motion.div>
@@ -534,7 +534,7 @@ export function ServerCard({
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {owner && (
               <span>
-                Owner: <motion.span
+                服主：<motion.span
                   whileHover={{ color: 'var(--primary-dark)' }}
                   style={{ color: 'var(--primary)', cursor: 'pointer' }}
                 >

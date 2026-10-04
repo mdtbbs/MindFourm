@@ -44,7 +44,7 @@ export default function BasicSettingsPage() {
 
   const update = (key: string, val: string) => setValues((prev) => ({ ...prev, [key]: val }));
 
-  if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading) return <div className="py-8 text-center text-surface-500">加载中…</div>;
 
   return (
     <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>

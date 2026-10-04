@@ -103,7 +103,7 @@ export default function FooterSettingsPage() {
     }
   };
 
-  if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading) return <div className="py-8 text-center text-surface-500">加载中…</div>;
 
   return (
     <div className={`bg-white border border-surface-200 ${unsaved.isDirty || unsaved.isSaving || unsaved.isSaved || unsaved.error ? 'pb-24' : ''}`}>
@@ -202,7 +202,7 @@ export default function FooterSettingsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">URL</label>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-surface-600 mb-2">链接地址</label>
                     <input
                       className="w-full px-3 py-2 border border-surface-200 rounded text-sm focus:outline-none focus:border-surface-400"
                       value={link.href}

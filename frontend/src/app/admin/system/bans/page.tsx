@@ -38,7 +38,7 @@ export default function BansPage() {
     catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
   };
 
-  if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading) return <div className="py-8 text-center text-surface-500">加载中…</div>;
 
   return (
     <div className="space-y-4">
@@ -58,7 +58,7 @@ export default function BansPage() {
           <div>
             <label className="block text-xs text-surface-500 mb-1">类型</label>
             <select className="px-3 py-2 border border-surface-200 rounded text-sm" value={form.ban_type} onChange={(e) => setForm({ ...form, ban_type: e.target.value as CreateBanInput['ban_type'] })}>
-              <option value="ip">IP</option>
+              <option value="ip">IP 地址</option>
               <option value="ip_range">IP 范围</option>
               <option value="user">用户</option>
             </select>

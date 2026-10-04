@@ -45,7 +45,7 @@ export default function CleanupPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
   };
 
-  if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading) return <div className="py-8 text-center text-surface-500">加载中…</div>;
 
   return (
     <div className="space-y-6">
@@ -100,7 +100,7 @@ export default function CleanupPage() {
           </div>
         </div>
         <div className="px-6 py-4 border-t border-surface-200 flex justify-end gap-2">
-          <Button variant="ghost" onClick={fetchSettings}>Reset</Button>
+          <Button variant="ghost" onClick={fetchSettings}>重置</Button>
           <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
         </div>
       </div>

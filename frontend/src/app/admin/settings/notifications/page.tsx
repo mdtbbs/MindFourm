@@ -83,7 +83,7 @@ export default function NotificationSettingsPage() {
   };
 
   if (loading) {
-    return <div className="py-8 text-center text-surface-500">Loading...</div>;
+    return <div className="py-8 text-center text-surface-500">加载中…</div>;
   }
 
   return (
@@ -142,7 +142,7 @@ export default function NotificationSettingsPage() {
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block text-sm text-surface-700">
-              <span className="mb-2 block">Webhook URL</span>
+              <span className="mb-2 block">Webhook 地址</span>
               <input
                 type="url"
                 value={values.admin_notifications_webhook_url ?? ''}

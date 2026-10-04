@@ -45,7 +45,7 @@ function displayMetadata(metadata: Record<string, unknown> | null, t: (key: stri
   const build = metadata.map_build_metadata as { stored_game_build?: unknown } | undefined;
   if (typeof build?.stored_game_build === 'number') entries.push([t('resourceWorkbench.metadataFileBuild'), String(build.stored_game_build)]);
   const compatibility = metadata.compatibility as { minimum_supported_build?: unknown } | undefined;
-  if (typeof compatibility?.minimum_supported_build === 'number') entries.push([t('resourceWorkbench.metadataCompatibility'), `≥ Build ${compatibility.minimum_supported_build}`]);
+  if (typeof compatibility?.minimum_supported_build === 'number') entries.push([t('resourceWorkbench.metadataCompatibility'), `≥ 构建号 ${compatibility.minimum_supported_build}`]);
   return entries;
 }
 

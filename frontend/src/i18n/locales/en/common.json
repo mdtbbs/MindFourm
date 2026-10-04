@@ -33,6 +33,7 @@
     "gameServers": "Game servers"
   },
   "navigation": {
+    "siteNavigation": "Site navigation",
     "discover": "Discover",
     "developers": "Developers",
     "home": "Home",
@@ -50,6 +51,11 @@
     "notifications": "Notifications",
     "friends": "Friends",
     "settings": "Settings",
+    "profile": "Profile",
+    "admin": "Admin dashboard",
+    "logout": "Log out",
+    "register": "Register",
+    "login": "Log in",
     "publishDiscussion": "Start a discussion",
     "publishResource": "Upload a resource"
   },
@@ -85,6 +91,7 @@
       "server_plugin": "Server plugins",
       "development_tool": "Development tools",
       "texture_ui": "Textures and UI",
+      "pack": "Resource packs",
       "other": "Other"
     }
   },

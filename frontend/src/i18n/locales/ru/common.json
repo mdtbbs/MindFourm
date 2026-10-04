@@ -33,6 +33,7 @@
     "gameServers": "Игровые серверы"
   },
   "navigation": {
+    "siteNavigation": "Навигация сайта",
     "discover": "Обзор",
     "developers": "Разработчикам",
     "home": "Главная",
@@ -50,6 +51,11 @@
     "notifications": "Уведомления",
     "friends": "Друзья",
     "settings": "Настройки",
+    "profile": "Профиль",
+    "admin": "Панель администратора",
+    "logout": "Выйти",
+    "register": "Регистрация",
+    "login": "Войти",
     "publishDiscussion": "Начать обсуждение",
     "publishResource": "Загрузить ресурс"
   },
@@ -85,6 +91,7 @@
       "server_plugin": "Плагины серверов",
       "development_tool": "Инструменты разработки",
       "texture_ui": "Текстуры и интерфейс",
+      "pack": "Пакеты ресурсов",
       "other": "Другое"
     }
   },

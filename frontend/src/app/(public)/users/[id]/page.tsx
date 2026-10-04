@@ -209,7 +209,7 @@ export default async function UserProfilePage({
                   <Badge variant={roleVariant}>{roleName}</Badge>
                 </div>
                 {profile.bio && <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{profile.bio}</p>}
-                <p className="mt-2 text-xs text-[var(--text-muted)]">UID {new Intl.NumberFormat(locale).format(profile.id)}{profile.created_at ? ` · ${t('userProfile.joined', { date: localizedDate(profile.created_at, locale) })}` : ''}</p>
+                <p className="mt-2 text-xs text-[var(--text-muted)]">用户编号 {new Intl.NumberFormat(locale).format(profile.id)}{profile.created_at ? ` · ${t('userProfile.joined', { date: localizedDate(profile.created_at, locale) })}` : ''}</p>
                 {profile.level && <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
                   {profile.level.icon ? <img src={profile.level.icon} alt="" className="h-4 w-4" /> : <Star className="h-3.5 w-3.5" style={{ color: profile.level.color || 'var(--primary)' }} />}
                   <span>{profile.level.name}</span>

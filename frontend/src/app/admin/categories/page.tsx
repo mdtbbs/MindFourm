@@ -83,7 +83,7 @@ export default function CategoriesPage() {
               <thead>
                 <tr className="border-b border-surface-200 bg-surface-50">
                   <th className="text-left px-4 py-3 font-medium text-surface-600">名称</th>
-                  <th className="text-left px-4 py-3 font-medium text-surface-600">Slug</th>
+                  <th className="text-left px-4 py-3 font-medium text-surface-600">短链接标识</th>
                   <th className="text-left px-4 py-3 font-medium text-surface-600">排序</th>
                   <th className="text-left px-4 py-3 font-medium text-surface-600">分组</th>
                   <th className="text-left px-4 py-3 font-medium text-surface-600">展示</th>

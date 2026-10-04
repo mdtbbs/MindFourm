@@ -100,6 +100,7 @@
       "server_plugin": "サーバープラグイン",
       "development_tool": "ツール",
       "texture_ui": "テクスチャ・UI",
+      "pack": "リソースパック",
       "other": "その他"
     }
   },
