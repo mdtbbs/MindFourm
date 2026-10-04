@@ -119,8 +119,8 @@ authTest.describe('Resource Submission Flow', () => {
 
     const editor = authenticatedPage.getByTestId('reply-input');
     await authExpect(editor.locator('aside[data-quote-type="reply"]')).toHaveAttribute('data-reply-id', String(hostReplyId));
-    await editor.press('Control+End');
-    await editor.pressSequentially(` Quoted on the resource page @${TEST_USERS.admin.username}`);
+    await editor.locator('p').last().click();
+    await authenticatedPage.keyboard.type(`Quoted on the resource page @${TEST_USERS.admin.username}`, { delay: 10 });
     const mentionOption = authenticatedPage.getByRole('option', { name: new RegExp(`@${TEST_USERS.admin.username}`) });
     await authExpect(mentionOption).toBeVisible();
     await mentionOption.click();

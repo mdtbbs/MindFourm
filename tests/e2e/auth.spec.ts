@@ -118,7 +118,7 @@ test.describe('Public Authentication Checks', () => {
       async () => {
         await page.locator('header a[href="/login"]').click();
       },
-      '/authorize',
+      '/login',
       '/search?q=oauth',
     );
   });
