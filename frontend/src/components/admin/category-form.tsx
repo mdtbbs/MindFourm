@@ -87,9 +87,9 @@ export default function CategoryForm({ category, categories = [], onSuccess }: C
       newErrors.name = '分类名称不能为空';
     }
     if (!values.slug.trim()) {
-      newErrors.slug = ' Slug 不能为空';
+      newErrors.slug = '短链接标识不能为空';
     } else if (!/^[a-z0-9-]+$/.test(values.slug)) {
-      newErrors.slug = 'Slug 只能包含小写字母、数字和连字符';
+      newErrors.slug = '短链接标识只能包含小写字母、数字和连字符';
     }
     if (values.sort_order === '' || isNaN(Number(values.sort_order))) {
       newErrors.sort_order = '排序必须为有效数字';
@@ -171,7 +171,7 @@ export default function CategoryForm({ category, categories = [], onSuccess }: C
             disabled={isSubmitting}
           />
           <Input
-            label="Slug"
+            label="短链接标识"
             value={values.slug}
             onChange={(e) => handleChange('slug', e.target.value)}
             error={errors.slug}

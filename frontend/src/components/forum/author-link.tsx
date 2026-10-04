@@ -80,7 +80,7 @@ export default function AuthorLink({
   const initial = displayName.trim().charAt(0).toUpperCase() || '#';
   const roleLabel = getRoleLabel(role);
   const classes = sizeClasses[size];
-  const meta = `UID ${userId}`;
+  const meta = `用户编号 ${userId}`;
 
   return (
     <Link

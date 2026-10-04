@@ -50,7 +50,7 @@ export default function RateLimitsPage() {
 
   const update = (k: string, v: string) => setValues((p) => ({ ...p, [k]: v }));
 
-  if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading) return <div className="py-8 text-center text-surface-500">加载中…</div>;
 
   return (
     <div className="space-y-6">

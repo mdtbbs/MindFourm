@@ -33,6 +33,7 @@
     "gameServers": "游戏服务器"
   },
   "navigation": {
+    "siteNavigation": "网站导航",
     "discover": "发现",
     "developers": "开发者",
     "home": "首页",
@@ -50,6 +51,11 @@
     "notifications": "通知",
     "friends": "好友",
     "settings": "设置",
+    "profile": "个人主页",
+    "admin": "管理后台",
+    "logout": "退出登录",
+    "register": "注册",
+    "login": "登录",
     "publishDiscussion": "发布讨论",
     "publishResource": "上传资源"
   },
@@ -85,6 +91,7 @@
       "server_plugin": "服务器插件",
       "development_tool": "开发工具",
       "texture_ui": "材质与界面",
+      "pack": "资源包",
       "other": "其他"
     }
   },

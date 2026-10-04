@@ -17,6 +17,7 @@
     "locked": "This discussion is locked and no longer accepts replies."
   },
   "replyEditor": {
+    "loading": "Loading reply editor…",
     "title": "Write a reply",
     "replyTitle": "Reply",
     "quoteTitle": "Quote a reply",

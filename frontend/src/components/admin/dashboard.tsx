@@ -146,7 +146,7 @@ export default function Dashboard() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-surface-400">Admin 2.0</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-surface-400">管理后台 2.0</div>
           <h1 className="mt-1 text-2xl font-semibold text-surface-900">工作台</h1>
           <p className="mt-1 text-sm text-surface-500">先处理需要人介入的事情，再看趋势和运行数据。</p>
         </div>
@@ -269,7 +269,7 @@ export default function Dashboard() {
             <ActiveUsersMetric stats={stats} />
             <div className="flex items-center justify-between px-4 py-3 text-sm">
               <dt className="text-surface-500">P95 响应</dt>
-              <dd className="font-mono text-xs text-surface-800">{performance ? `${performance.estimated_p95_ms} ms` : '—'}</dd>
+              <dd className="font-mono text-xs text-surface-800">{performance ? `${performance.estimated_p95_ms} 毫秒` : '—'}</dd>
             </div>
             <div className="flex items-center justify-between px-4 py-3 text-sm">
               <dt className="text-surface-500">慢请求</dt>

@@ -103,7 +103,7 @@ export default function AdminLogsPage() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold text-surface-900">操作日志</h2>
         <p className="text-sm text-surface-500 mt-1">查看系统管理员操作记录</p>
-        {requestId ? <p className="mt-2 text-xs text-surface-500">request_id: <code>{requestId}</code></p> : null}
+        {requestId ? <p className="mt-2 text-xs text-surface-500">请求编号：<code>{requestId}</code></p> : null}
         {rollbackMessage ? <p className="mt-2 text-sm text-surface-700" role="status">{rollbackMessage}</p> : null}
       </div>
 
@@ -127,7 +127,7 @@ export default function AdminLogsPage() {
                 <thead className="bg-surface-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
-                      ID
+                      编号
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-surface-500 uppercase tracking-wider">
                       用户 ID

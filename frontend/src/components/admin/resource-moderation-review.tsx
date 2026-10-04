@@ -70,7 +70,7 @@ export default function ResourceModerationReview({ resource }: { resource: Resou
           <h5 className="mb-2 font-semibold text-surface-800 dark:text-gray-200">文件完整性</h5>
           <dl className="grid gap-2 sm:grid-cols-2">
             {resource.file_name ? <div><dt className="text-surface-400">文件</dt><dd className="break-all">{resource.file_name}</dd></div> : null}
-            {resource.file_size ? <div><dt className="text-surface-400">大小</dt><dd>{resource.file_size.toLocaleString()} bytes</dd></div> : null}
+            {resource.file_size ? <div><dt className="text-surface-400">大小</dt><dd>{resource.file_size.toLocaleString()} 字节</dd></div> : null}
             {integrityStatus ? <div><dt className="text-surface-400">校验状态</dt><dd>{integrityStatus}</dd></div> : null}
             {resource.content_hash ? <div className="sm:col-span-2"><dt className="text-surface-400">{resource.hash_algorithm || 'SHA-256'}</dt><dd className="break-all font-mono">{resource.content_hash}</dd></div> : null}
           </dl>

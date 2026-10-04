@@ -101,7 +101,7 @@ export default function Toast({ id, message, type, onDismiss, duration = 4000, d
           onClick={dismiss}
           data-toast-dismiss
           className="ml-1 shrink-0 rounded p-0.5 opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-offset-2"
-          aria-label="Dismiss notification"
+          aria-label="关闭通知"
         >
           <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />

@@ -198,7 +198,7 @@ export default function AdminGroupsPage() {
           <h2 className="text-sm font-semibold mb-4">{editing ? '编辑用户组' : '添加用户组'}</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="text-xs font-medium">名称 *<input className="mt-1 w-full px-3 py-2 border rounded text-sm" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
-            <label className="text-xs font-medium">Slug<input className="mt-1 w-full px-3 py-2 border rounded text-sm" value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} /></label>
+            <label className="text-xs font-medium">短链接标识<input className="mt-1 w-full px-3 py-2 border rounded text-sm" value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} /></label>
             <label className="text-xs font-medium">图标 URL<input className="mt-1 w-full px-3 py-2 border rounded text-sm" value={form.icon} onChange={e => setForm({ ...form, icon: e.target.value })} /></label>
             <label className="text-xs font-medium">颜色<input type="text" className="mt-1 w-full px-3 py-2 border rounded text-sm" value={form.color} onChange={e => setForm({ ...form, color: e.target.value })} placeholder="#3b82f6" /></label>
             <label className="text-xs font-medium">排序<input type="number" min="0" className="mt-1 w-full px-3 py-2 border rounded text-sm" value={form.sort_order ?? 0} onChange={e => setForm({ ...form, sort_order: Number(e.target.value) })} /></label>

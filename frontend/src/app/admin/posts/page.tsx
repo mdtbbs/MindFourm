@@ -301,7 +301,7 @@ export default function AdminPostsPage() {
                     className="h-4 w-4 accent-surface-900"
                   />
                 </th>
-                <th className="px-4 py-3 font-semibold">ID</th>
+                <th className="px-4 py-3 font-semibold">编号</th>
                 <th className="px-4 py-3 font-semibold">标题</th>
                 <th className="px-4 py-3 font-semibold">状态</th>
                 <th className="px-4 py-3 font-semibold">分类</th>

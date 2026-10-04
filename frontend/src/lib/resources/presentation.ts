@@ -56,7 +56,7 @@ export function resourceCardFacts(resource: Resource): Array<{ label: string; va
     const platforms = resource.metadata?.compatibility || [];
     if (platforms.length) facts.push({ label: '平台', value: platforms.slice(0, 2).join('、') });
   } else if (resource.resource_kind === 'game_version') {
-    const build = typeof metadata.build === 'number' ? `Build ${metadata.build}` : typeof metadata.version === 'string' ? metadata.version : null;
+    const build = typeof metadata.build === 'number' ? `构建号 ${metadata.build}` : typeof metadata.version === 'string' ? metadata.version : null;
     if (build) facts.push({ label: '游戏版本', value: build });
     if (typeof metadata.channel === 'string' && metadata.channel) facts.push({ label: '渠道', value: metadata.channel });
     const platforms = resource.metadata?.compatibility || [];
