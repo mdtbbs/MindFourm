@@ -89,7 +89,7 @@ test.describe('Public Post Viewing', () => {
     await page.goto(`/posts/${fixturePostId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Check for post title
-    await expect(page.getByText('Fixture post', { exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('main h1').first()).toHaveText('Fixture post', { timeout: 30000 });
 
     // Check for post content
     const content = page.locator('[data-testid="post-content"]');
