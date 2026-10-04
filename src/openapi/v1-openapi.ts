@@ -29,6 +29,46 @@ import { PUBLIC_V1_OPERATION_ALLOWLIST } from './public-v1-operation-allowlist';
 const OPENAPI_METHODS = ['get', 'post', 'put', 'patch', 'delete', 'options', 'head', 'trace'] as const;
 const PUBLIC_OPERATION_KEYS = new Set(PUBLIC_V1_OPERATION_ALLOWLIST);
 
+const PUBLIC_V1_ERROR_SCHEMA = {
+  type: 'object',
+  required: ['error', 'meta'],
+  properties: {
+    error: {
+      type: 'object',
+      required: ['code', 'message', 'retryable', 'details', 'documentation_url'],
+      properties: {
+        code: { type: 'string', example: 'RATE_LIMITED', description: '稳定错误码；客户端控制流应读取此字段。' },
+        message: { type: 'string', example: '请求过于频繁', description: '面向用户的文字，可能本地化。' },
+        retryable: { type: 'boolean', example: true, description: '调用方是否可以在等待后安全重试。' },
+        details: { type: 'array', items: {}, description: '与错误相关的结构化补充信息。' },
+        documentation_url: { type: 'string', format: 'uri', example: 'https://mdtbbs.cn/api/v1/docs/errors#rate-limited', description: '稳定错误文档链接，片段标识由 error.code 生成。' },
+      },
+    },
+    meta: {
+      type: 'object', required: ['request_id'],
+      properties: { request_id: { type: 'string', example: 'req_...' } },
+    },
+  },
+};
+
+function attachPublicV1ErrorSchema(document: OpenAPIObject): void {
+  document.components ||= {};
+  document.components.schemas ||= {};
+  (document.components.schemas as any).PublicV1ErrorEnvelope = PUBLIC_V1_ERROR_SCHEMA;
+
+  for (const pathItem of Object.values(document.paths || {})) {
+    for (const method of OPENAPI_METHODS) {
+      const operation = (pathItem as any)[method];
+      if (!operation) continue;
+      operation.responses ||= {};
+      operation.responses.default ||= {
+        description: 'Public V1 error envelope',
+        content: { 'application/json': { schema: { $ref: '#/components/schemas/PublicV1ErrorEnvelope' } } },
+      };
+    }
+  }
+}
+
 function keepOnlyV1Paths(document: OpenAPIObject): OpenAPIObject {
   // Several feature modules still contain both legacy and V1 controllers.
   // `include` works at module granularity, so Swagger would otherwise leak
@@ -162,6 +202,7 @@ export function filterPublicV1Operations(document: OpenAPIObject): OpenAPIObject
   }
 
   document.paths = paths;
+  attachPublicV1ErrorSchema(document);
   const publicTags = new Set<string>();
   for (const pathItem of Object.values(paths)) {
     for (const method of OPENAPI_METHODS) {

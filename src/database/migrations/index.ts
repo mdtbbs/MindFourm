@@ -3,6 +3,8 @@ import { ResourceViewsAnalytics1720000200000 } from './1720000200000-ResourceVie
 import { AddPreferredContentLanguage1720000210000 } from './1720000210000-AddPreferredContentLanguage';
 import { ResourcePackItems1720000220000 } from './1720000220000-ResourcePackItems';
 import { UnifyResourceDiscussions1720000230000 } from './1720000230000-UnifyResourceDiscussions';
+import { SecurityAccessLogs1720000240000 } from './1720000240000-SecurityAccessLogs';
+import { MessagePrivacySetting1720000250000 } from './1720000250000-MessagePrivacySetting';
 import { BaselineSchema1720000000000 } from './1720000000000-BaselineSchema';
 import { NormalizeReplyStatus1720000001000 } from './1720000001000-NormalizeReplyStatus';
 import { AddMissingIndexes1720000002000 } from './1720000002000-AddMissingIndexes';
@@ -149,4 +151,6 @@ export const migrations = [
   AddPreferredContentLanguage1720000210000,
   ResourcePackItems1720000220000,
   UnifyResourceDiscussions1720000230000,
+  SecurityAccessLogs1720000240000,
+  MessagePrivacySetting1720000250000,
 ];

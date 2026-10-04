@@ -134,6 +134,13 @@ public final class RendererVisualRegression {
             String metadata = MapRenderer.schematicMetadata(roundTrip, List.of(), formatVersion);
             require(metadata.contains("\"schematic_format_version\":" + formatVersion), names[index] + " metadata must expose the schematic file format");
             require(metadata.contains("\"parser_runtime\""), names[index] + " metadata must identify its parser runtime");
+            double expectedBuildSeconds = roundTrip.tiles.first().block.buildTime / 60d;
+            double reportedBuildSeconds = Double.parseDouble(jsonField(metadata, "estimated_build_time_seconds", "null"));
+            require(Math.abs(reportedBuildSeconds - expectedBuildSeconds) < 0.000001d,
+                names[index] + " metadata must estimate build time from resolved Mindustry block build times");
+            String incompleteEstimate = MapRenderer.schematicMetadata(roundTrip, List.of("unknown-content"), formatVersion);
+            require(incompleteEstimate.contains("\"estimated_build_time_seconds\":null"),
+                names[index] + " metadata must not report a partial estimate when content is unknown");
             BufferedImage image = MapRenderer.renderSchematicImage(roundTrip);
             require(image.getWidth() > 0 && image.getHeight() > 0, names[index] + " preview must be non-empty");
         }

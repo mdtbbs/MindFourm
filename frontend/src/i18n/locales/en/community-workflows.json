@@ -390,5 +390,52 @@
       "error": "Error",
       "info": "Info"
     }
+  },
+  "messagePrivacy": {
+    "title": "Private message privacy",
+    "description": "Choose who can message you. Existing blocks and bans always take precedence.",
+    "allowMessages": "Who can message you",
+    "everyone": "Everyone",
+    "friends": "Friends only",
+    "nobody": "Nobody",
+    "save": "Save privacy setting",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "loadFailed": "Could not load message privacy settings.",
+    "saveFailed": "Could not update message privacy settings."
+  },
+  "adminSecurityAccessLogs": {
+    "title": "Security access logs",
+    "retention": "Retention follows the admin cleanup setting (default: 90 days). IP addresses are visible to administrators only.",
+    "loadFailed": "Could not load security access logs.",
+    "search": "Search",
+    "clear": "Clear filters",
+    "total": "{count} records",
+    "loading": "Loading security access logs…",
+    "empty": "No matching records.",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page} of {total}",
+    "filter": {
+      "request_id": "Request ID",
+      "user_id": "User ID",
+      "ip_address": "IP address",
+      "route": "Route",
+      "resource_id": "Resource ID",
+      "status_code": "Status",
+      "from": "From date",
+      "to": "To date"
+    },
+    "column": {
+      "time": "Time",
+      "status": "Status",
+      "method": "Method",
+      "route": "Route",
+      "resource": "Resource",
+      "user": "User ID",
+      "ip": "IP address",
+      "request": "Request ID",
+      "agent": "User agent"
+    }
   }
 }

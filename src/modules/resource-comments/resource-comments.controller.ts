@@ -10,6 +10,7 @@ import {
   Req,
   UseGuards,
   Request,
+  Optional,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { ResourceCommentsService } from './resource-comments.service';
@@ -17,10 +18,15 @@ import { CreateResourceCommentDto } from './dto/create-resource-comment.dto';
 import { UpdateResourceCommentDto } from './dto/update-resource-comment.dto';
 import { Public } from '@common/decorators/public.decorator';
 import { getClientIp, getClientRegion } from '@common/utils/client-context.util';
+import { RateLimit } from '@common/decorators/rate-limit.decorator';
+import { CommunityChallengeService } from '../community-challenges/community-challenge.service';
 
 @Controller()
 export class ResourceCommentsController {
-  constructor(private readonly service: ResourceCommentsService) {}
+  constructor(
+    private readonly service: ResourceCommentsService,
+    @Optional() private readonly communityChallenge?: CommunityChallengeService,
+  ) {}
 
   @Get('resources/:id/comments')
   @Public()
@@ -38,13 +44,25 @@ export class ResourceCommentsController {
 
   @Post('resources/:id/comments')
   @UseGuards(JwtAuthGuard)
+  @RateLimit({ max: 20, window: 60 })
   async createComment(
     @Param('id') resourceId: string,
     @Body() dto: CreateResourceCommentDto,
     @Request() req,
   ) {
+    const ipAddress = getClientIp(req);
+    await this.communityChallenge?.enforceContentAction({
+      action: 'forum.reply.create',
+      text: dto.content || '',
+      actorId: req.user.id,
+      remoteIp: ipAddress,
+      proof: {
+        token: req.headers?.['x-forum-challenge-token'],
+        response: req.headers?.['x-forum-challenge-response'],
+      },
+    });
     return this.service.create(parseInt(resourceId), req.user.id, dto, {
-      ipAddress: getClientIp(req),
+      ipAddress,
       locationLabel: getClientRegion(req),
     });
   }

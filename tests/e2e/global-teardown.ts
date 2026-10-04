@@ -93,13 +93,39 @@ async function cleanup() {
 
     // 3. Resource bookmarks — CASCADE on resource delete covers this, but
     //    deleting explicitly keeps the log output honest.
-    const [bmResult] = await connection.execute(
-      `DELETE FROM resource_bookmarks
-         WHERE resource_id IN (
-           SELECT id FROM resources
-            WHERE title LIKE 'E2E %' OR title LIKE 'MFL %')`,
+    const [bookmarkTables] = await connection.execute(
+      `SELECT 1 FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = 'resource_bookmarks' LIMIT 1`,
     );
-    log('resource_bookmarks', (bmResult as any).affectedRows);
+    if ((bookmarkTables as any[]).length > 0) {
+      const [bmResult] = await connection.execute(
+        `DELETE FROM resource_bookmarks
+           WHERE resource_id IN (
+             SELECT id FROM resources
+              WHERE title LIKE 'E2E %' OR title LIKE 'MFL %')`,
+      );
+      log('resource_bookmarks', (bmResult as any).affectedRows);
+    }
+
+    // Canonical resource discussions are ordinary forum Posts and Replies linked
+    // by resources.discussion_thread_id. Remove their E2E rows before deleting the
+    // owning resources so the seeded comments do not remain as orphan threads.
+    const [discussionReplies] = await connection.execute(
+      `DELETE FROM replies
+         WHERE post_id IN (
+           SELECT discussion_thread_id FROM resources
+            WHERE title LIKE 'E2E Resource rich discussion %'
+              AND discussion_thread_id IS NOT NULL)`,
+    );
+    log('resource discussion replies', (discussionReplies as any).affectedRows);
+    const [discussionPosts] = await connection.execute(
+      `DELETE FROM posts
+         WHERE id IN (
+           SELECT discussion_thread_id FROM resources
+            WHERE title LIKE 'E2E Resource rich discussion %'
+              AND discussion_thread_id IS NOT NULL)`,
+    );
+    log('resource discussion posts', (discussionPosts as any).affectedRows);
 
     // 4. Resources — FK cascades clean up resource_versions, resource_comments,
     //    resource_downloads, resource_ratings, resource_favorites, etc.

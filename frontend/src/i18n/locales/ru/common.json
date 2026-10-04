@@ -202,7 +202,8 @@
   },
   "adminNavigation": {
     "item": {
-      "resource-analytics": "Статистика ресурсов"
+      "resource-analytics": "Статистика ресурсов",
+      "security-access-logs": "Журнал обращений безопасности"
     }
   },
   "legal": {

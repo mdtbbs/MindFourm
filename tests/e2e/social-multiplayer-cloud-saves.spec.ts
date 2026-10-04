@@ -189,6 +189,14 @@ authTest.describe('Friends, Multiplayer, and Cloud Saves product API flows', () 
   authTest.describe.configure({ mode: 'serial' });
   authTest.skip(({ browserName }) => browserName !== 'chromium', 'These API-backed E2E flows use the shared seeded accounts and run once on Chromium.');
 
+  authTest.beforeAll(async ({ request }) => {
+    // Capture the real IDs: isolated CI databases do not contain the historical
+    // fixture accounts that used to occupy user IDs 1, 2, and 3.
+    await testLogin(request, 'admin');
+    await testLogin(request, 'user');
+    await testLogin(request, 'moderator');
+  });
+
   authTest('friends can see a live Presence connection and heartbeat', async ({ authenticatedPage, request }) => {
     const userHeaders = await pageSessionHeaders(authenticatedPage);
     const adminHeaders = await adminSessionHeaders(request);

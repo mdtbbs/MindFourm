@@ -38,6 +38,7 @@ describe('AllExceptionsFilter', () => {
         message: '资源文件暂不可用',
         retryable: true,
         details: [{ field: 'availability_status' }],
+        documentation_url: 'https://mdtbbs.cn/api/v1/docs/errors#resource-file-not-ready',
       },
       meta: { request_id: 'req-500' },
     });
@@ -59,7 +60,10 @@ describe('AllExceptionsFilter', () => {
     const { host, json } = hostFor('/api/v1/game-content/maps');
     filter.catch(new BadRequestException({ code: 'INVALID_MAP', message: '地图文件无效' }), host);
     expect(json).toHaveBeenCalledWith({
-      error: { code: 'INVALID_MAP', message: '地图文件无效', retryable: false, details: [] },
+      error: {
+        code: 'INVALID_MAP', message: '地图文件无效', retryable: false, details: [],
+        documentation_url: 'https://mdtbbs.cn/api/v1/docs/errors#invalid-map',
+      },
       meta: { request_id: 'req-500' },
     });
   });

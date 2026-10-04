@@ -599,6 +599,8 @@ export interface MindustryRendererMetadata {
   block_positions?: Array<{ block?: string; x?: number; y?: number; rotation?: number; config?: unknown }>;
   block_positions_truncated?: boolean;
   requirements?: Array<{ item?: string; amount?: number }>;
+  estimated_build_time_seconds?: number | null;
+  estimated_build_time_method?: string;
   power_production?: number;
   power_consumption?: number;
   net_power?: number;

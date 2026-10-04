@@ -33,9 +33,9 @@ describe('PacksService pinned membership', () => {
     };
     const resourceRepo: any = {
       findOne: jest.fn(async ({ where }: any) => where.public_id === 'pack-public' || where.id === 1 ? pack : where.id === 2 ? target : null),
-      find: jest.fn(async () => options.dependencyResources || []),
+      find: jest.fn(async () => [target, ...(options.dependencyResources || [])]),
     };
-    const categoryRepo = { findOne: jest.fn() };
+    const categoryRepo = { findOne: jest.fn(), find: jest.fn(async () => []) };
     const versionRepo = {
       findOne: jest.fn(async ({ where }: any) => {
         if (where.public_id === 'pack-version-public' && where.resource_id === 1) return { ...packVersion, status: options.packVersionStatus || packVersion.status };
@@ -44,6 +44,8 @@ describe('PacksService pinned membership', () => {
         if (where.id === 22) return targetVersion;
         return null;
       }),
+      find: jest.fn(async ({ where }: any) => options.targetVersionStatus === 'pending' && where.status === 'published'
+        ? [] : [{ ...targetVersion, status: options.targetVersionStatus || targetVersion.status }]),
     };
     const fileRepo = { find: jest.fn(async () => [primaryFile]) };
     const dependencyRepo = { find: jest.fn(async () => options.dependencies || []) };
@@ -57,7 +59,7 @@ describe('PacksService pinned membership', () => {
       fileRepo as any, dependencyRepo as any, compatibilityRepo as any,
       dataSource as any, capabilities as any, downloadGrants as any,
     );
-    return { service, itemRepo, resourceRepo, versionRepo, fileRepo, dataSource, manager, capabilities, downloadGrants };
+    return { service, itemRepo, resourceRepo, categoryRepo, versionRepo, fileRepo, dependencyRepo, compatibilityRepo, dataSource, manager, capabilities, downloadGrants };
   }
 
   it('requires an exact published version when replacing Pack membership', async () => {
@@ -94,7 +96,7 @@ describe('PacksService pinned membership', () => {
         download_url: '/api/v1/resources/map-public/versions/map-version-v3/files/map-file-public/download',
       }],
     });
-    expect(versionRepo.findOne).toHaveBeenCalledWith({ where: { id: 22, status: 'published' } });
+    expect(versionRepo.find).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(manifest)).not.toContain('latest_published_version_id');
     expect(JSON.stringify(manifest)).not.toMatch(/"(?:id|resource_id|version_id|file_id)"\s*:/);
   });
@@ -112,6 +114,54 @@ describe('PacksService pinned membership', () => {
 
     expect(manifest.members[0].dependencies[0].resource_public_id).toBeNull();
     expect(JSON.stringify(manifest)).not.toContain('private-dependency-public-id');
+  });
+
+  it('resolves 100 pinned members with a bounded number of batch repository reads and stable order', async () => {
+    const memberships = Array.from({ length: 100 }, (_, index) => ({
+      id: 1000 + index, pack_version_id: 11, member_resource_version_id: 200 + index, sort_order: index,
+    }));
+    const memberVersions = memberships.map((membership, index) => ({
+      id: membership.member_resource_version_id, public_id: `version-${index}`, resource_id: 300 + index,
+      version: `1.${index}.0`, status: 'published',
+    })).reverse();
+    const memberResources = memberships.map((membership, index) => ({
+      id: 300 + index, public_id: `resource-${index}`, resource_kind: 'map', title: `Map ${index}`,
+      status: 'approved', is_public: 1, visibility: 'public', category_id: null, merged_into_resource_id: null,
+    }));
+    const memberFiles = memberships.map((membership, index) => ({
+      ...primaryFile, id: 400 + index, public_id: `file-${index}`,
+      resource_version_id: membership.member_resource_version_id,
+      original_filename: `map-${index}.msav`,
+    }));
+    const itemRepo = { find: jest.fn(async () => memberships) };
+    const resourceRepo: any = {
+      findOne: jest.fn(async ({ where }: any) => where.public_id === 'pack-public' || where.id === 1 ? pack : null),
+      find: jest.fn(async () => memberResources),
+    };
+    const categoryRepo = { findOne: jest.fn(), find: jest.fn(async () => []) };
+    const versionRepo = {
+      findOne: jest.fn(async ({ where }: any) => where.public_id === 'pack-version-public' ? packVersion : null),
+      find: jest.fn(async () => memberVersions),
+    };
+    const fileRepo = { find: jest.fn(async () => memberFiles) };
+    const dependencyRepo = { find: jest.fn(async () => []) };
+    const compatibilityRepo = { find: jest.fn(async () => []) };
+    const capabilities = { getCapabilities: jest.fn(async () => ({ resources: { read: true, download: true, upload: true } })) };
+    const service = new PacksService(
+      itemRepo as any, resourceRepo, categoryRepo as any, versionRepo as any, fileRepo as any,
+      dependencyRepo as any, compatibilityRepo as any, {} as any, capabilities as any, {} as any,
+    );
+
+    const manifest = await service.getManifest('pack-public', 'pack-version-public');
+
+    const repositoryCalls = [itemRepo, resourceRepo, categoryRepo, versionRepo, fileRepo, dependencyRepo, compatibilityRepo]
+      .flatMap((repo: any) => ['find', 'findOne'].map((method) => repo[method]?.mock.calls.length || 0))
+      .reduce((sum, count) => sum + count, 0);
+    expect(repositoryCalls).toBeLessThanOrEqual(9);
+    expect(manifest.members).toHaveLength(100);
+    expect(manifest.members[0].name).toBe('Map 0');
+    expect(manifest.members[99].name).toBe('Map 99');
+    expect(JSON.stringify(manifest)).not.toMatch(/"(?:id|resource_id|version_id|file_id)"\s*:/);
   });
 
   it('issues batch grants only for the Pack-pinned file versions through DownloadGrantService', async () => {

@@ -13,6 +13,7 @@
  */
 
 import type { APIRequestContext } from '@playwright/test';
+import { recordTestUser } from '../fixtures/test-users';
 
 const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
 
@@ -21,6 +22,7 @@ export type TestUserType = 'admin' | 'moderator' | 'user';
 export interface SessionCookies {
   cookieHeader: string;
   csrfToken: string;
+  userId: number;
 }
 
 /**
@@ -55,6 +57,13 @@ export async function testLogin(
     throw new Error(`test-login failed for ${userType}: ${response.status()}`);
   }
 
+  const loginResult = await response.json();
+  const userId = Number(loginResult?.userId);
+  recordTestUser(userType, userId);
+  if (!Number.isSafeInteger(userId) || userId < 1) {
+    throw new Error(`test-login returned no user id for ${userType}`);
+  }
+
   const jar = await request.storageState();
   const cookies = new Map(jar.cookies.map((cookie) => [cookie.name, cookie.value]));
   const csrfToken = cookies.get('csrf_token');
@@ -67,6 +76,7 @@ export async function testLogin(
   const session: SessionCookies = {
     cookieHeader: `csrf_token=${csrfToken}; forum_session=${sessionToken}`,
     csrfToken,
+    userId,
   };
   sessionCache.set(userType, session);
   return session;

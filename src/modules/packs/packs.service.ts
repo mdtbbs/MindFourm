@@ -70,7 +70,7 @@ export class PacksService {
     return { pack, version };
   }
 
-  private async assertPublicResource(resource: Resource): Promise<void> {
+  private async assertPublicResource(resource: Resource, activeCategoryIds?: Set<number>): Promise<void> {
     if (
       Number(resource.is_public) !== 1
       || !PUBLIC_RESOURCE_STATUSES.has(resource.status || '')
@@ -80,8 +80,12 @@ export class PacksService {
     ) throw new NotFoundException('资源不存在或不可见');
 
     if (resource.category_id) {
-      const category = await this.categoryRepo.findOne({ where: { id: resource.category_id } });
-      if (!category || Number(category.is_active) !== 1) throw new NotFoundException('资源不存在或不可见');
+      if (activeCategoryIds) {
+        if (!activeCategoryIds.has(Number(resource.category_id))) throw new NotFoundException('资源不存在或不可见');
+      } else {
+        const category = await this.categoryRepo.findOne({ where: { id: resource.category_id } });
+        if (!category || Number(category.is_active) !== 1) throw new NotFoundException('资源不存在或不可见');
+      }
     }
   }
 
@@ -156,16 +160,66 @@ export class PacksService {
 
   private async resolvePublicManifestItems(packVersionId: number): Promise<ResolvedPackItem[]> {
     const memberships = await this.itemRepo.find({ where: { pack_version_id: packVersionId }, order: { sort_order: 'ASC', id: 'ASC' } });
-    const resolved = await Promise.all(memberships.map(async (membership) => {
-      const version = await this.versionRepo.findOne({ where: { id: membership.member_resource_version_id, status: 'published' } });
-      if (!version || !version.public_id) throw new NotFoundException('Pack 清单包含不可用的固定版本');
-      const resource = await this.resourceRepo.findOne({ where: { id: version.resource_id } });
-      if (!resource) throw new NotFoundException('Pack 清单包含不可见资源');
-      await this.assertPublicResource(resource);
-      const pinned = await this.resolvePinnedVersion(version.public_id);
-      return { membership, version, resource, file: pinned.file };
-    }));
-    return resolved;
+    if (!memberships.length) return [];
+
+    const memberVersionIds = [...new Set(memberships.map((membership) => Number(membership.member_resource_version_id)))];
+    const versions = await this.versionRepo.find({ where: { id: In(memberVersionIds), status: 'published' } });
+    const versionById = new Map(versions.map((version) => [Number(version.id), version]));
+    if (memberVersionIds.some((id) => !versionById.get(id)?.public_id)) {
+      throw new NotFoundException('Pack 清单包含不可用的固定版本');
+    }
+
+    const resourceIds = [...new Set(versions.map((version) => Number(version.resource_id)))];
+    const resources = await this.resourceRepo.find({ where: { id: In(resourceIds) } });
+    const resourceById = new Map(resources.map((resource) => [Number(resource.id), resource]));
+    const memberResources = versions.map((version) => resourceById.get(Number(version.resource_id)));
+    if (memberResources.some((resource) => !resource)) throw new NotFoundException('Pack 清单包含不可见资源');
+
+    const primaryFiles = await this.fileRepo.find({
+      where: {
+        resource_version_id: In(memberVersionIds),
+        role: 'primary',
+        availability_status: 'available',
+      },
+      order: { sort_order: 'ASC', id: 'ASC' },
+    });
+    const fileByVersion = new Map<number, ResourceFile>();
+    for (const file of primaryFiles) {
+      if (!fileByVersion.has(Number(file.resource_version_id))
+        && file.public_id && this.isSha256(file.hash_algorithm, file.content_hash)) {
+        fileByVersion.set(Number(file.resource_version_id), file);
+      }
+    }
+    if (memberVersionIds.some((id) => !fileByVersion.has(id))) {
+      throw new NotFoundException('Pack 清单包含不可用的固定版本');
+    }
+
+    const dependencies = await this.dependencyRepo.find({
+      where: { resource_version_id: In(memberVersionIds) },
+      order: { sort_order: 'ASC', id: 'ASC' },
+    });
+    const dependencyTargetIds = [...new Set(dependencies
+      .map((item) => Number(item.target_resource_id))
+      .filter((id) => Number.isInteger(id) && id > 0))];
+    const dependencyTargets = dependencyTargetIds.length
+      ? await this.resourceRepo.find({ where: { id: In(dependencyTargetIds) } })
+      : [];
+    const categoryIds = [...new Set([...memberResources, ...dependencyTargets]
+      .map((resource) => Number(resource?.category_id))
+      .filter((id) => Number.isInteger(id) && id > 0))];
+    const activeCategoryIds = categoryIds.length
+      ? new Set((await this.categoryRepo.find({ where: { id: In(categoryIds), is_active: 1 } }))
+        .filter((category) => Number(category.is_active) === 1)
+        .map((category) => Number(category.id)))
+      : new Set<number>();
+
+    for (const resource of memberResources as Resource[]) await this.assertPublicResource(resource, activeCategoryIds);
+
+    return memberships.map((membership) => {
+      const version = versionById.get(Number(membership.member_resource_version_id))!;
+      const resource = resourceById.get(Number(version.resource_id))!;
+      return { membership, version, resource, file: fileByVersion.get(Number(version.id))! };
+    });
   }
 
   private gameVersion(compatibilities: ResourceVersionCompatibility[]): string | null {
@@ -196,8 +250,16 @@ export class PacksService {
     const targetResources = dependencyTargetIds.length
       ? await this.resourceRepo.find({ where: { id: In(dependencyTargetIds) } })
       : [];
+    const targetCategoryIds = [...new Set(targetResources
+      .map((resource) => Number(resource.category_id))
+      .filter((id) => Number.isInteger(id) && id > 0))];
+    const activeTargetCategoryIds = targetCategoryIds.length
+      ? new Set((await this.categoryRepo.find({ where: { id: In(targetCategoryIds), is_active: 1 } }))
+        .filter((category) => Number(category.is_active) === 1)
+        .map((category) => Number(category.id)))
+      : new Set<number>();
     const targetPublicIds = new Map<number, string | null>();
-    await Promise.all(targetResources.map(async (resource) => {
+    targetResources.forEach((resource) => {
       let publicId: string | null = null;
       const visible = Number(resource.is_public) === 1
         && PUBLIC_RESOURCE_STATUSES.has(resource.status || '')
@@ -205,13 +267,12 @@ export class PacksService {
         && resource.merged_into_resource_id == null
         && Boolean(resource.public_id);
       if (visible && resource.category_id) {
-        const category = await this.categoryRepo.findOne({ where: { id: resource.category_id } });
-        if (category && Number(category.is_active) === 1) publicId = resource.public_id;
+        if (activeTargetCategoryIds.has(Number(resource.category_id))) publicId = resource.public_id;
       } else if (visible) {
         publicId = resource.public_id;
       }
       targetPublicIds.set(resource.id, publicId);
-    }));
+    });
 
     return {
       schema_version: 1,

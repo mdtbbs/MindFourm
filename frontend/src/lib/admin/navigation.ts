@@ -178,6 +178,7 @@ export const adminNavSections: AdminNavSection[] = [
       { key: 'rate-limits', label: '限流设置', href: '/admin/system/rate-limits', icon: Clock3, roles: adminOnly },
       { key: 'performance', label: '性能监控', href: '/admin/system/performance', icon: Gauge, roles: adminOnly },
       { key: 'logs', label: '操作日志', href: '/admin/logs', icon: ScrollText, roles: adminOnly },
+      { key: 'security-access-logs', label: '安全访问日志', href: '/admin/security-access-logs', icon: ShieldCheck, roles: adminOnly, keywords: ['IP', 'request_id', 'security'] },
       { key: 'cleanup', label: '数据维护', href: '/admin/system/cleanup', icon: Trash2, roles: adminOnly },
     ],
   },

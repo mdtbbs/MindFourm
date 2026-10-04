@@ -27,8 +27,9 @@ const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
 interface ReplyEditorProps {
   postId: number;
   onSubmit: (content: string, parentReplyId?: number, contentJson?: Record<string, unknown>, proof?: CommunityChallengeProof) => Promise<Reply | void>;
-  quoteReply?: Reply | null;
-  replyToReply?: Reply | null;
+  quoteReply?: Pick<Reply, 'id'> | null;
+  replyToReply?: Pick<Reply, 'id'> | null;
+  replyToLabel?: string;
   /** Clears the quote / reply-to target without submitting. */
   onCancelTarget?: () => void;
 }
@@ -38,6 +39,7 @@ export default function ReplyEditor({
   onSubmit,
   quoteReply,
   replyToReply,
+  replyToLabel,
   onCancelTarget,
 }: ReplyEditorProps) {
   const [content, setContent] = useState('');
@@ -174,7 +176,7 @@ export default function ReplyEditor({
         {(quoteReply || replyToReply) && (
           <div className="mb-4 flex items-start justify-between gap-3 p-3 bg-surface-50 dark:bg-gray-800 border-l-4 border-primary-500 text-sm text-surface-600 dark:text-gray-300">
             <span>
-              {quoteReply ? t('replyEditor.quoteTarget', { id: quoteReply.id }) : t('replyEditor.replyTarget', { id: replyToReply!.id })}
+              {quoteReply ? t('replyEditor.quoteTarget', { id: quoteReply.id }) : replyToLabel || t('replyEditor.replyTarget', { id: replyToReply!.id })}
             </span>
             {onCancelTarget && (
               <button

@@ -60,6 +60,29 @@ describe('ResourceCommentsService forum adapter', () => {
     );
   });
 
+  it('projects Rich Content and quote-capable replies into the same canonical RepliesService write path', async () => {
+    const { service, replies, manager } = setup();
+    const contentJson = {
+      type: 'doc',
+      content: [
+        { type: 'replyQuote', attrs: { postId: 501, replyId: 5 } },
+        { type: 'paragraph', content: [{ type: 'text', text: '@builder looks good' }] },
+      ],
+    };
+
+    await service.create(70, 9, {
+      content: '@builder looks good', content_json: contentJson, content_schema_version: 2, parent_comment_id: 5,
+    } as any);
+
+    expect(replies.createReplyForPost).toHaveBeenCalledWith(501, {
+      content: '@builder looks good',
+      content_json: contentJson,
+      content_schema_version: 2,
+      parent_reply_id: 5,
+    }, 9, {});
+    expect(manager.query.mock.calls.some(([sql]) => /(?:INSERT|UPDATE|DELETE)\s+resource_comments/i.test(sql))).toBe(false);
+  });
+
   it('creates the system resource header separately and seeds the initial thread body from author content', async () => {
     const { service, manager } = setup();
     manager.query.mockImplementation(async (sql: string) => {

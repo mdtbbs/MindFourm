@@ -61,6 +61,10 @@ function createService(overrides: Record<string, any> = {}) {
     create: jest.fn().mockResolvedValue(undefined),
     ...overrides.notificationsService,
   };
+  const socialPolicyService = {
+    canPerform: jest.fn().mockResolvedValue(true),
+    ...overrides.socialPolicyService,
+  };
   const service = new MessagesService(
     messageRepo as any,
     { findOne: jest.fn() } as any,
@@ -70,9 +74,10 @@ function createService(overrides: Record<string, any> = {}) {
     notificationsService as any,
     userBlocksService as any,
     (overrides.dataSource ?? {}) as any,
+    socialPolicyService as any,
   );
 
-  return { service, messageRepo, groupChatMemberRepo, userBlocksService, notificationsService };
+  return { service, messageRepo, groupChatMemberRepo, userBlocksService, notificationsService, socialPolicyService };
 }
 
 /** Query runner double for the paths that open a transaction. */
@@ -294,6 +299,25 @@ describe('MessagesService.getGroupMessages pagination', () => {
   });
 });
 
+describe('MessagesService private conversation block policy', () => {
+  it('refuses to read a conversation when its recipient blocked the caller', async () => {
+    const { service, messageRepo, userBlocksService } = createService({
+      userBlocksService: { assertNotBlocked: jest.fn().mockRejectedValue(new ForbiddenException('blocked')) },
+    });
+    await expect(service.getConversation(7, 9, 50)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(userBlocksService.assertNotBlocked).toHaveBeenCalledWith(7, 9);
+    expect(messageRepo.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('filters a blocked recipient out of conversation summaries in the database query', async () => {
+    const query = jest.fn().mockResolvedValue([]);
+    const { service } = createService({ dataSource: { query } });
+    await service.getConversations(7, 50);
+    expect(query.mock.calls[0][0]).toContain('NOT EXISTS (SELECT 1 FROM user_blocks blocked');
+    expect(query.mock.calls[0][1]).toEqual(expect.arrayContaining([7]));
+  });
+});
+
 describe('MessagesService.create block enforcement', () => {
   it('refuses a direct message when the recipient has blocked the sender', async () => {
     const queryRunner = createQueryRunnerMock();
@@ -310,6 +334,19 @@ describe('MessagesService.create block enforcement', () => {
     // Checked with (sender, recipient) so that the block only stops the blocked
     // direction, and checked before the insert rather than after it.
     expect(userBlocksService.assertNotBlocked).toHaveBeenCalledWith(1, 2);
+    expect(queryRunner.manager.save).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+  });
+
+  it('refuses a direct message when the recipient privacy setting excludes the sender', async () => {
+    const queryRunner = createQueryRunnerMock();
+    const { service, socialPolicyService } = createService({
+      dataSource: { createQueryRunner: () => queryRunner },
+      socialPolicyService: { canPerform: jest.fn().mockResolvedValue(false) },
+    });
+
+    await expect(service.create({ recipient_id: 2, content: 'hi' }, 1)).rejects.toBeInstanceOf(ForbiddenException);
+    expect(socialPolicyService.canPerform).toHaveBeenCalledWith(1, 2, 'allow_messages');
     expect(queryRunner.manager.save).not.toHaveBeenCalled();
     expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
   });

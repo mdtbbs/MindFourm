@@ -309,6 +309,10 @@ export function UnifiedHeader({
                 {onRegister && (
                   <Link
                     href="/register"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onRegister();
+                    }}
                     className="hidden bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] lg:inline-flex"
                   >
                     {labels.register || "注册"}
@@ -317,6 +321,10 @@ export function UnifiedHeader({
                 {onLogin && (
                   <Link
                     href="/login"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onLogin();
+                    }}
                     className="hidden text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)] lg:inline-flex"
                   >
                     {labels.login || "登录"}

@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth/context';
 import { notificationApi } from '@/lib/api/client';
 import Link from 'next/link';
 import { useI18n } from '@/i18n/provider';
-import { fetchV1 } from '@/lib/api/v1/transport';
+import { fetchV1, requestV1 } from '@/lib/api/v1/transport';
 import { userApi } from '@/lib/api/client';
 import { localeNames, type Locale } from '@/i18n';
 import { siteProfile } from '@/config/site-profile';
@@ -17,6 +17,8 @@ interface EmailPreferences {
   system_email: boolean;
   digest_email: boolean;
 }
+
+type MessagePrivacy = 'everyone' | 'friends' | 'nobody';
 
 const EMAIL_OPTIONS: { key: keyof EmailPreferences; label: string; description: string }[] = [
   { key: 'reply_email', label: 'replyLabel', description: 'replyDescription' },
@@ -43,11 +45,24 @@ export default function SettingsPage() {
   const [preferredContentLanguage, setPreferredContentLanguage] = useState(user?.preferred_content_language || '');
   const [contentLanguageSaving, setContentLanguageSaving] = useState(false);
   const [contentLanguageSaved, setContentLanguageSaved] = useState(false);
+  const [messagePrivacy, setMessagePrivacy] = useState<MessagePrivacy>('everyone');
+  const [messagePrivacyLoading, setMessagePrivacyLoading] = useState(true);
+  const [messagePrivacySaving, setMessagePrivacySaving] = useState(false);
+  const [messagePrivacySaved, setMessagePrivacySaved] = useState(false);
+  const [messagePrivacyError, setMessagePrivacyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     loadPreferences();
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchV1<{ allow_messages?: MessagePrivacy }>('/social/privacy')
+      .then((settings) => setMessagePrivacy(settings.allow_messages || 'everyone'))
+      .catch((error) => setMessagePrivacyError(error instanceof Error ? error.message : t('messagePrivacy.loadFailed')))
+      .finally(() => setMessagePrivacyLoading(false));
+  }, [isAuthenticated, t]);
 
   useEffect(() => {
     if (user?.preferred_content_language) setPreferredContentLanguage(user.preferred_content_language);
@@ -103,6 +118,20 @@ export default function SettingsPage() {
       console.error('Failed to save preferences:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveMessagePrivacy = async () => {
+    setMessagePrivacySaving(true);
+    setMessagePrivacyError(null);
+    try {
+      await requestV1('/social/privacy', { method: 'PATCH', body: JSON.stringify({ allow_messages: messagePrivacy }) });
+      setMessagePrivacySaved(true);
+      window.setTimeout(() => setMessagePrivacySaved(false), 3000);
+    } catch (error) {
+      setMessagePrivacyError(error instanceof Error ? error.message : t('messagePrivacy.saveFailed'));
+    } finally {
+      setMessagePrivacySaving(false);
     }
   };
 
@@ -182,6 +211,9 @@ export default function SettingsPage() {
           >
             {t('emailSettings.blockedUsers')}
           </Link>
+          <Link href="#message-privacy" className="rounded-lg bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]">
+            {t('messagePrivacy.title')}
+          </Link>
           {cloudSavesEnabled && <Link
             href="/settings/cloud-saves"
             className="rounded-lg bg-[var(--bg-elevated)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--text)]"
@@ -189,6 +221,28 @@ export default function SettingsPage() {
             {t('cloudSaves.title')}
           </Link>}
         </nav>
+
+        <section id="message-privacy" className="card mb-6 p-6" aria-labelledby="message-privacy-title">
+          <h2 id="message-privacy-title" className="text-lg font-semibold">{t('messagePrivacy.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('messagePrivacy.description')}</p>
+          {messagePrivacyError && <p role="alert" className="mt-3 text-sm text-red-600">{messagePrivacyError}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <label htmlFor="allow-messages" className="text-sm font-medium">{t('messagePrivacy.allowMessages')}</label>
+            <select
+              id="allow-messages"
+              value={messagePrivacy}
+              disabled={messagePrivacyLoading || messagePrivacySaving}
+              onChange={(event) => { setMessagePrivacy(event.target.value as MessagePrivacy); setMessagePrivacySaved(false); }}
+              className="min-w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]"
+            >
+              {(['everyone', 'friends', 'nobody'] as const).map((value) => <option key={value} value={value}>{t(`messagePrivacy.${value}`)}</option>)}
+            </select>
+            <button type="button" onClick={saveMessagePrivacy} disabled={messagePrivacyLoading || messagePrivacySaving} className="btn btn-primary">
+              {messagePrivacySaving ? t('messagePrivacy.saving') : t('messagePrivacy.save')}
+            </button>
+            {messagePrivacySaved && <span role="status" className="text-sm text-success">{t('messagePrivacy.saved')}</span>}
+          </div>
+        </section>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
