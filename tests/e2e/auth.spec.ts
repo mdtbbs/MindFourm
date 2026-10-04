@@ -85,7 +85,7 @@ test.describe('Public Authentication Checks', () => {
 
   test('should show login link for unauthenticated users', async ({ page, homePage }) => {
     await homePage.navigate();
-    await expect(page.locator('a[href="/login"]')).toBeVisible();
+    await expect(page.locator('header a[href="/login"]')).toBeVisible();
   });
 
   test('should preserve protected route in login redirect', async ({ page }) => {
@@ -116,7 +116,7 @@ test.describe('Public Authentication Checks', () => {
     await expectMindAuthRedirect(
       page,
       async () => {
-        await page.locator('a[href="/login"]').last().click();
+        await page.locator('header a[href="/login"]').click();
       },
       '/authorize',
       '/search?q=oauth',
@@ -129,7 +129,7 @@ test.describe('Public Authentication Checks', () => {
     await expectMindAuthRedirect(
       page,
       async () => {
-        await page.locator('a[href="/register"]').last().click();
+        await page.locator('header a[href="/register"]').click();
       },
       '/register',
       '/groups?tab=recent',

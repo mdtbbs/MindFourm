@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures/page-objects/base.po';
-import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
+import { test as authTest, expect as authExpect, TEST_USERS } from '../fixtures/auth.fixture';
 import { API_URL, approveAsAdmin, testLogin } from '../helpers/content.helpers';
 
 function uniqueResourceName(prefix: string): string {
@@ -119,9 +119,9 @@ authTest.describe('Resource Submission Flow', () => {
 
     const editor = authenticatedPage.getByTestId('reply-input');
     await authExpect(editor.locator('aside[data-quote-type="reply"]')).toHaveAttribute('data-reply-id', String(hostReplyId));
-    await editor.press('End');
-    await editor.pressSequentially(`Quoted on the resource page @e2e`);
-    const mentionOption = authenticatedPage.getByRole('option', { name: /@e2e_admin/ });
+    await editor.press('Control+End');
+    await editor.pressSequentially(` Quoted on the resource page @${TEST_USERS.admin.username}`);
+    const mentionOption = authenticatedPage.getByRole('option', { name: new RegExp(`@${TEST_USERS.admin.username}`) });
     await authExpect(mentionOption).toBeVisible();
     await mentionOption.click();
     await authExpect(editor.locator(`[data-mention-user-id="${admin.userId ?? 1}"]`)).toBeVisible();

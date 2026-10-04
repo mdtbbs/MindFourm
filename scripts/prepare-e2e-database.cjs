@@ -31,6 +31,21 @@ async function prepare() {
     // Materialize the currently deployed entity schema in the disposable E2E DB.
     await dataSource.synchronize(false);
 
+    // This historical migration owns integrity claim tables that are not mapped
+    // as TypeORM entities. Synchronization cannot create them, but runtime
+    // resource uploads need them when claiming file hashes.
+    const integrityMigration = migrations
+      .map((Migration) => new Migration())
+      .find((migration) => migration.name === 'ResourceIntegrityAndMerge1720000110000');
+    if (!integrityMigration) throw new Error('Resource integrity migration is missing from the migration registry.');
+    const queryRunner = dataSource.createQueryRunner();
+    await queryRunner.connect();
+    try {
+      await integrityMigration.up(queryRunner);
+    } finally {
+      await queryRunner.release();
+    }
+
     // Revert only the schema changes introduced by this release so its actual
     // migrations, rather than entity synchronization, create them below.
     await dataSource.query('DROP TABLE IF EXISTS `security_access_logs`');
