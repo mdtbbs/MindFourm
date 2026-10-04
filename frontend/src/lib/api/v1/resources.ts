@@ -140,6 +140,30 @@ export type ResourceWorkbenchV2Stats = {
   rating_average: number;
 };
 
+export type ResourceWorkbenchV2ModContent = {
+  public_id: string;
+  content_type: string;
+  internal_name: string;
+  display_name: string | null;
+  description: string | null;
+  icon_url: string | null;
+  properties: Record<string, unknown>;
+  version_public_id: string;
+};
+
+export type ResourceWorkbenchV2Localization = {
+  locale: string;
+  translated_count: number;
+  total_count: number;
+  percentage: number;
+  missing_keys: string[];
+};
+
+export type ResourceWorkbenchV2Page<T> = {
+  items: T[];
+  pagination: { next_cursor: string | null; has_more: boolean };
+};
+
 /** Owner-aware, read-only data contract for the Resource Center workbench. */
 export type ResourceWorkbenchV2Response = {
   resource: {
@@ -518,6 +542,65 @@ export async function getResourceWorkbenchV2(
     `/resources/${encodeURIComponent(publicId)}/workbench`,
     options,
   );
+}
+
+/** Fetch the analysis attached to one published resource version. */
+export async function getResourceWorkbenchV2Analysis(
+  publicId: string,
+  kind: 'mod' | 'map' | 'schematic',
+  versionPublicId: string,
+  options?: FetchV1Options,
+): Promise<ResourceWorkbenchV2Analysis | null> {
+  const kindPath = kind === 'mod' ? 'mods' : kind === 'map' ? 'maps' : 'schematics';
+  const query = new URLSearchParams({ version_public_id: versionPublicId });
+  const result = await fetchV1<{ analysis: ResourceWorkbenchV2Analysis | null }>(
+    `/resources/${kindPath}/${encodeURIComponent(publicId)}/analysis?${query.toString()}`,
+    options,
+  );
+  return result.analysis;
+}
+
+/** Fetch one page of a versioned Mod Content index. */
+export async function getResourceWorkbenchV2ModContents(
+  publicId: string,
+  versionPublicId: string,
+  cursor?: string,
+  options?: FetchV1Options,
+): Promise<ResourceWorkbenchV2Page<ResourceWorkbenchV2ModContent>> {
+  const query = new URLSearchParams({ version_public_id: versionPublicId, limit: '100' });
+  if (cursor) query.set('cursor', cursor);
+  return fetchV1<ResourceWorkbenchV2Page<ResourceWorkbenchV2ModContent>>(
+    `/resources/mods/${encodeURIComponent(publicId)}/contents?${query.toString()}`,
+    options,
+  );
+}
+
+/** Fetch one page of versioned Mod localization coverage. */
+export async function getResourceWorkbenchV2Localizations(
+  publicId: string,
+  versionPublicId: string,
+  cursor?: string,
+  options?: FetchV1Options,
+): Promise<ResourceWorkbenchV2Page<ResourceWorkbenchV2Localization>> {
+  const query = new URLSearchParams({ version_public_id: versionPublicId, limit: '100' });
+  if (cursor) query.set('cursor', cursor);
+  return fetchV1<ResourceWorkbenchV2Page<ResourceWorkbenchV2Localization>>(
+    `/resources/mods/${encodeURIComponent(publicId)}/localizations?${query.toString()}`,
+    options,
+  );
+}
+
+/** Fetch the first Content and localization pages for the workbench. */
+export async function getResourceWorkbenchV2ModIndex(
+  publicId: string,
+  versionPublicId: string,
+  options?: FetchV1Options,
+): Promise<{ contents: ResourceWorkbenchV2Page<ResourceWorkbenchV2ModContent>; localizations: ResourceWorkbenchV2Page<ResourceWorkbenchV2Localization> }> {
+  const [contents, localizations] = await Promise.all([
+    getResourceWorkbenchV2ModContents(publicId, versionPublicId, undefined, options),
+    getResourceWorkbenchV2Localizations(publicId, versionPublicId, undefined, options),
+  ]);
+  return { contents, localizations };
 }
 
 /** Analyze a prospective release without creating a resource version. */

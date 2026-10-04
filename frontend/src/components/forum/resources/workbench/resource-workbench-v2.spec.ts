@@ -8,6 +8,9 @@ import {
   getResourceV2ModCompatibility,
   getResourceV2ModConflicts,
   getResourceV2VersionDiff,
+  getResourceWorkbenchV2Analysis,
+  getResourceWorkbenchV2ModContents,
+  getResourceWorkbenchV2ModIndex,
   getResourceWorkbenchV2,
   submitResourceV2MapFeedback,
   submitResourceV2ModCompatibilityReport,
@@ -38,6 +41,9 @@ jest.mock('@/lib/api/v1/resource-report-attachments', () => ({
 jest.mock('@/lib/api/v1/resources', () => ({
   ...jest.requireActual('@/lib/api/v1/resources'),
   getResourceWorkbenchV2: jest.fn(),
+  getResourceWorkbenchV2Analysis: jest.fn(),
+  getResourceWorkbenchV2ModContents: jest.fn(),
+  getResourceWorkbenchV2ModIndex: jest.fn(),
   getResourceV2MapFeedback: jest.fn(),
   getResourceV2ModCompatibility: jest.fn(),
   getResourceV2ModConflicts: jest.fn(),
@@ -63,7 +69,36 @@ jest.mock('@/i18n/provider', () => {
     'resourceWorkbenchV2.parserDetails': 'Parsed details',
     'resourceWorkbenchV2.noVersions': 'No published versions are available.',
     'resourceWorkbenchV2.analysisEmpty': 'No structured analysis is available yet.',
+    'resourceWorkbenchV2.analysisLoading': 'Loading analysis for this version…',
+    'resourceWorkbenchV2.analysisLoadFailed': 'Could not load analysis',
+    'resourceWorkbenchV2.kindAnalysis': 'Resource analysis details',
+    'resourceWorkbenchV2.modAnalysisDetails': 'Mod content and manifest',
+    'resourceWorkbenchV2.indexedContentCount': 'Indexed content entries',
+    'resourceWorkbenchV2.localizationCount': 'Localization files',
+    'resourceWorkbenchV2.modContentIndex': 'Mod Content index',
+    'resourceWorkbenchV2.indexLoading': 'Loading the Content index…',
+    'resourceWorkbenchV2.indexLoadFailed': 'Could not load the Content index',
+    'resourceWorkbenchV2.noIndexedContent': 'No indexed Content entries are available.',
+    'resourceWorkbenchV2.loadMoreContent': 'Load more Content',
+    'resourceWorkbenchV2.loadingMore': 'Loading more…',
+    'resourceWorkbenchV2.localizationCoverage': 'Localization coverage',
+    'resourceWorkbenchV2.noLocalizationCoverage': 'No localization coverage data is available.',
+    'resourceWorkbenchV2.translatedKeys': 'translated keys',
+    'resourceWorkbenchV2.missingKeys': 'Missing keys',
+    'resourceWorkbenchV2.schematicAnalysis': 'Blueprint production analysis',
+    'resourceWorkbenchV2.mapAnalysis': 'Map balance and wave analysis',
+    'resourceWorkbenchV2.productionEstimate': 'Theoretical production estimate',
+    'resourceWorkbenchV2.measured': 'Measured',
+    'resourceWorkbenchV2.available': 'Available',
+    'resourceWorkbenchV2.bottlenecks': 'Potential bottlenecks',
+    'resourceWorkbenchV2.analysisWarnings': 'Analysis notes',
+    'resourceWorkbenchV2.difficulty': 'Estimated difficulty',
+    'resourceWorkbenchV2.confidence': 'Confidence',
+    'resourceWorkbenchV2.resourceBalance': 'Resource balance indicators',
+    'resourceWorkbenchV2.pathAnalysis': 'Spawn and core distance indicators',
+    'resourceWorkbenchV2.waves': 'Wave groups',
     'resourceWorkbenchV2.noFindings': 'This analysis has no findings.',
+    'resourceWorkbenchV2.estimated': 'Estimated',
     'resourceWorkbenchV2.versionSummary': 'Summary',
     'resourceWorkbenchV2.files': 'Files',
     'resourceWorkbenchV2.versionTabs': 'Version sections',
@@ -223,6 +258,9 @@ jest.mock('next/link', () => {
 });
 
 const mockGetWorkbench = getResourceWorkbenchV2 as jest.MockedFunction<typeof getResourceWorkbenchV2>;
+const mockGetAnalysis = getResourceWorkbenchV2Analysis as jest.MockedFunction<typeof getResourceWorkbenchV2Analysis>;
+const mockGetModContents = getResourceWorkbenchV2ModContents as jest.MockedFunction<typeof getResourceWorkbenchV2ModContents>;
+const mockGetModIndex = getResourceWorkbenchV2ModIndex as jest.MockedFunction<typeof getResourceWorkbenchV2ModIndex>;
 const mockGetMapFeedback = getResourceV2MapFeedback as jest.MockedFunction<typeof getResourceV2MapFeedback>;
 const mockGetModCompatibility = getResourceV2ModCompatibility as jest.MockedFunction<typeof getResourceV2ModCompatibility>;
 const mockGetModConflicts = getResourceV2ModConflicts as jest.MockedFunction<typeof getResourceV2ModConflicts>;
@@ -383,6 +421,12 @@ describe('ResourceWorkbenchV2', () => {
 
   beforeEach(() => {
     mockGetWorkbench.mockReset();
+    mockGetAnalysis.mockReset().mockResolvedValue(null);
+    mockGetModContents.mockReset().mockResolvedValue({ items: [], pagination: { next_cursor: null, has_more: false } });
+    mockGetModIndex.mockReset().mockResolvedValue({
+      contents: { items: [], pagination: { next_cursor: null, has_more: false } },
+      localizations: { items: [], pagination: { next_cursor: null, has_more: false } },
+    });
     mockGetMapFeedback.mockReset().mockResolvedValue({ resource_public_id: 'resource-id', version_public_id: 'version-id', aggregate: { feedback_count: 0, difficulty_average: null, resource_sufficiency_average: null, balance_average: null, multiplayer_experience_average: null } });
     mockGetModCompatibility.mockReset().mockResolvedValue({ items: [], reports: [] });
     mockGetModConflicts.mockReset().mockResolvedValue({ items: [], pagination: { next_cursor: null, has_more: false } });
@@ -433,6 +477,52 @@ describe('ResourceWorkbenchV2', () => {
     expect(container.textContent).toContain('Mod parser details');
     expect(container.textContent).toContain('example-mod');
     expect(container.textContent).toContain('1.2.3');
+  });
+
+  it('shows the selected Mod version Content index and localization coverage', async () => {
+    const fixture = workbench('mod', { versions: [version('mod-version', '1.2.3', 1, true)] });
+    mockGetModIndex.mockResolvedValue({
+      contents: {
+        items: [{ public_id: 'content-id', content_type: 'block', internal_name: 'example-conveyor', display_name: 'Example Conveyor', description: 'A sample block', icon_url: null, properties: { health: 100 }, version_public_id: 'mod-version' }],
+        pagination: { next_cursor: null, has_more: false },
+      },
+      localizations: {
+        items: [{ locale: 'zh_CN', translated_count: 84, total_count: 100, percentage: 84, missing_keys: ['block.example.name'] }],
+        pagination: { next_cursor: null, has_more: false },
+      },
+    });
+    await mount(fixture);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(mockGetModIndex).toHaveBeenCalledWith(fixture.resource.public_id, 'mod-version', expect.any(Object));
+    expect(container.textContent).toContain('Example Conveyor');
+    expect(container.textContent).toContain('example-conveyor');
+    expect(container.textContent).toContain('zh_CN');
+    expect(container.textContent).toContain('84%');
+    expect(container.textContent).toContain('block.example.name');
+  });
+
+  it('loads the next page of Mod Content index entries', async () => {
+    const fixture = workbench('mod', { versions: [version('mod-version', '1.2.3', 1, true)] });
+    mockGetModIndex.mockResolvedValue({
+      contents: {
+        items: [{ public_id: 'content-1', content_type: 'block', internal_name: 'first-block', display_name: null, description: null, icon_url: null, properties: {}, version_public_id: 'mod-version' }],
+        pagination: { next_cursor: 'content-cursor-2', has_more: true },
+      },
+      localizations: { items: [], pagination: { next_cursor: null, has_more: false } },
+    });
+    mockGetModContents.mockResolvedValue({
+      items: [{ public_id: 'content-2', content_type: 'unit', internal_name: 'second-unit', display_name: null, description: null, icon_url: null, properties: {}, version_public_id: 'mod-version' }],
+      pagination: { next_cursor: null, has_more: false },
+    });
+    await mount(fixture);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(container.textContent).toContain('first-block');
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Load more Content') || null);
+
+    expect(mockGetModContents).toHaveBeenCalledWith(fixture.resource.public_id, 'mod-version', 'content-cursor-2');
+    expect(container.textContent).toContain('second-unit');
   });
 
   it.each([
@@ -504,21 +594,23 @@ describe('ResourceWorkbenchV2', () => {
   it('shows structured analysis findings and a retryable error state', async () => {
     const fixture = workbench('mod', {
       analysis: {
-        kind: 'mod-static-analysis',
+        kind: 'mod',
         status: 'complete',
         parser_version: 'mod-parser-1',
         started_at: '2026-10-01T00:00:00.000Z',
         completed_at: '2026-10-01T00:00:01.000Z',
         summary: { content_count: 3 },
         findings: [{ key: 'manifest.author', severity: 'WARNING', message: 'Author metadata is missing.', field_path: 'mod.json.author', ignored: false, ignore_reason: null, actor: null, timestamp: null }],
-        data: null,
+        data: { manifest: { display_name: 'Example manifest', main: 'example.Main' }, indexed_content_count: 3, localization_count: 2 },
       },
     });
     await mount(fixture);
     await click(container.querySelector('button[aria-expanded="false"]'));
     await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Analysis') || null);
-    expect(container.textContent).toContain('mod-static-analysis');
+    expect(container.textContent).toContain('mod-parser-1');
     expect(container.textContent).toContain('Author metadata is missing.');
+    expect(container.textContent).toContain('Example manifest');
+    expect(container.textContent).toContain('3');
 
     if (root) await act(async () => root?.unmount());
     root = null;
@@ -532,6 +624,58 @@ describe('ResourceWorkbenchV2', () => {
     expect(container.textContent).toContain('Could not load the resource workbench');
     expect(container.querySelector('[role="alert"]')).not.toBeNull();
     expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent?.includes('Retry'))).toBe(true);
+  });
+
+  it.each([
+    ['schematic', { complete: true, available: true, estimated: true, production: { mode: 'theoretical', items: { graphite: { produced: 6, consumed: 4, net: 2 } } }, bottlenecks: [{ code: 'input-shortage', item: 'coal' }], warnings: [] }, 'Blueprint production analysis', 'graphite: produced: 6 · consumed: 4 · net: 2'],
+    ['map', { estimated: true, estimated_difficulty: 16, difficulty_confidence: 'low', resource_balance: { available: true, resource_entry_count: 3 }, path_analysis: { available: true, average_spawn_to_core_distance: 24 }, waves: [{ wave_start: 1, wave_end: 5, enemy_count: 8, boss_count: 1 }], warnings: [] }, 'Map balance and wave analysis', 'wave_start: 1 · wave_end: 5 · enemy_count: 8 · boss_count: 1'],
+  ] as Array<['schematic' | 'map', Record<string, unknown>, string, string]>)('renders the %s analysis workspace details', async (kind, data, heading, detail) => {
+    const fixture = workbench(kind, {
+      versions: [version(`${kind}-version`, '1.0.0', 1, true)],
+      analysis: {
+        kind,
+        status: 'completed',
+        parser_version: 'kind-parser-1',
+        started_at: null,
+        completed_at: null,
+        summary: null,
+        findings: [],
+        data,
+      },
+    });
+    await mount(fixture);
+    await click(container.querySelector('button[aria-expanded="false"]'));
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Analysis') || null);
+
+    expect(container.textContent).toContain(heading);
+    expect(container.textContent).toContain(detail);
+  });
+
+  it('loads analysis for the newly selected version', async () => {
+    const fixture = workbench('mod', {
+      versions: [version('version-1', '1.0.0', 1), version('version-2', '2.0.0', 2, true)],
+      analysis: {
+        kind: 'mod', status: 'completed', parser_version: 'mod-parser-1', started_at: null, completed_at: null,
+        summary: null, findings: [], data: { manifest: { display_name: 'Recommended manifest' }, indexed_content_count: 4, localization_count: 1 },
+      },
+    });
+    mockGetAnalysis.mockResolvedValue({
+      kind: 'mod', status: 'completed', parser_version: 'mod-parser-1', started_at: null, completed_at: null,
+      summary: null, findings: [], data: { manifest: { display_name: 'Version one manifest' }, indexed_content_count: 2, localization_count: 3 },
+    });
+    await mount(fixture);
+    expect(container.textContent).toContain('Recommended manifest');
+
+    await act(async () => {
+      const versionSelect = container.querySelector('#workbench-version') as HTMLSelectElement;
+      versionSelect.value = 'version-1';
+      versionSelect.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(mockGetAnalysis).toHaveBeenCalledWith(fixture.resource.public_id, 'mod', 'version-1', expect.any(Object));
+    expect(container.textContent).toContain('Version one manifest');
+    expect(container.textContent).not.toContain('Recommended manifest');
   });
 
   it.each([

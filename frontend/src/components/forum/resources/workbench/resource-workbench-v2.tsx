@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Activity, AlertCircle, Boxes, Check, ChevronDown, CircleHelp, FileArchive, Map, Package,
@@ -8,9 +8,15 @@ import {
 } from 'lucide-react';
 import {
   getResourceV2VersionDiff,
+  getResourceWorkbenchV2Analysis,
+  getResourceWorkbenchV2ModContents,
+  getResourceWorkbenchV2ModIndex,
   getResourceWorkbenchV2,
   type ResourceWorkbenchV2Analysis,
   type ResourceWorkbenchV2File,
+  type ResourceWorkbenchV2Localization,
+  type ResourceWorkbenchV2ModContent,
+  type ResourceWorkbenchV2Page,
   type ResourceWorkbenchV2Response,
   type ResourceWorkbenchV2Version,
   type ResourceV2VersionDiff,
@@ -46,11 +52,29 @@ function displayValue(value: unknown): string {
   return '';
 }
 
+function displayDetailsValue(value: unknown, depth = 0): string {
+  if (value === null || value === undefined) return '';
+  const scalar = displayValue(value);
+  if (scalar) return scalar;
+  if (depth >= 2) return '';
+  if (Array.isArray(value)) {
+    const items = value.slice(0, 20).map((item) => displayDetailsValue(item, depth + 1)).filter(Boolean);
+    return `${items.join(' · ')}${value.length > 20 ? ' …' : ''}`;
+  }
+  if (isRecord(value)) {
+    return Object.entries(value).slice(0, 20).map(([key, item]) => {
+      const text = displayDetailsValue(item, depth + 1);
+      return text ? `${key}: ${text}` : '';
+    }).filter(Boolean).join(' · ');
+  }
+  return '';
+}
+
 function SummaryRows({ value }: { value: Record<string, unknown> | null }) {
   if (!value) return null;
-  const rows = Object.entries(value).filter(([, item]) => displayValue(item) !== '');
+  const rows = Object.entries(value).filter(([, item]) => displayDetailsValue(item) !== '');
   if (rows.length === 0) return null;
-  return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{key}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayValue(item)}</dd></div>)}</dl>;
+  return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(item)}</dd></div>)}</dl>;
 }
 
 function FoldCard({ title, children, open = false }: { title: string; children: React.ReactNode; open?: boolean }) {
@@ -95,7 +119,9 @@ function FileRow({ file, labels }: { file: ResourceWorkbenchV2File; labels: Reco
   </li>;
 }
 
-function AnalysisPanel({ analysis, labels }: { analysis: ResourceWorkbenchV2Analysis | null; labels: Record<string, string> }) {
+function AnalysisPanel({ analysis, loading, error, labels }: { analysis: ResourceWorkbenchV2Analysis | null; loading: boolean; error: string; labels: Record<string, string> }) {
+  if (loading) return <div role="status" className="rounded-lg bg-[var(--bg-elevated)] p-4 text-sm text-[var(--text-muted)]">{labels.analysisLoading}</div>;
+  if (error) return <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-700 dark:text-red-300">{labels.analysisLoadFailed}: {error}</div>;
   if (!analysis) return <EmptyState>{labels.analysisEmpty}</EmptyState>;
   const severityTone: Record<string, string> = {
     ERROR: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300',
@@ -109,6 +135,7 @@ function AnalysisPanel({ analysis, labels }: { analysis: ResourceWorkbenchV2Anal
       {analysis.parser_version && <span className="text-xs text-[var(--text-muted)]">{labels.parser}: {analysis.parser_version}</span>}
     </div>
     <SummaryRows value={analysis.summary} />
+    {analysis.data && <KindAnalysisDetails analysis={analysis} labels={labels} />}
     {analysis.findings.length ? <ul className="space-y-2">{analysis.findings.map((finding, index) => <li key={`${finding.key}:${finding.timestamp || index}`} className={`rounded-lg border p-3 ${severityTone[finding.severity] || severityTone.INFO}`}>
       <div className="flex flex-wrap items-center gap-2"><span className="text-[11px] font-bold tracking-wide">{finding.severity}</span>{finding.ignored && <span className="rounded bg-black/5 px-1.5 py-0.5 text-[11px]">{labels.ignored}</span>}{finding.field_path && <code className="break-all text-xs">{finding.field_path}</code>}</div>
       <p className="mt-1 text-sm">{finding.message}</p>
@@ -117,11 +144,107 @@ function AnalysisPanel({ analysis, labels }: { analysis: ResourceWorkbenchV2Anal
   </div>;
 }
 
-function ModDetails({ data, parserVersion, labels }: { data: Record<string, unknown> | undefined; parserVersion: string | null; labels: Record<string, string> }) {
+function KindAnalysisDetails({ analysis, labels }: { analysis: ResourceWorkbenchV2Analysis; labels: Record<string, string> }) {
+  const data = analysis.data || {};
+  if (analysis.kind === 'mod') {
+    const manifest = recordValue(data.manifest);
+    return <section aria-label={labels.kindAnalysis} className="space-y-3 rounded-xl border border-[var(--border)] p-4">
+      <h3 className="font-semibold text-[var(--text)]">{labels.modAnalysisDetails}</h3>
+      <SummaryRows value={{ indexed_content_count: data.indexed_content_count, localization_count: data.localization_count, ...manifest }} />
+    </section>;
+  }
+  if (analysis.kind === 'schematic') {
+    const production = recordValue(data.production);
+    const bottlenecks = Array.isArray(data.bottlenecks) ? data.bottlenecks : [];
+    const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+    return <section aria-label={labels.kindAnalysis} className="space-y-4 rounded-xl border border-[var(--border)] p-4">
+      <h3 className="font-semibold text-[var(--text)]">{labels.schematicAnalysis}</h3>
+      <div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{labels.productionEstimate}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{data.estimated === false ? labels.measured : labels.estimated}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{data.available === true ? labels.available : labels.unavailable}</span></div>
+      {production && <SummaryRows value={production} />}
+      {bottlenecks.length > 0 && <DetailList title={labels.bottlenecks} values={bottlenecks} />}
+      {warnings.length > 0 && <DetailList title={labels.analysisWarnings} values={warnings} />}
+    </section>;
+  }
+  if (analysis.kind !== 'map') return null;
+  const balance = recordValue(data.resource_balance);
+  const path = recordValue(data.path_analysis);
+  const waves = Array.isArray(data.waves) ? data.waves : [];
+  const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+  return <section aria-label={labels.kindAnalysis} className="space-y-4 rounded-xl border border-[var(--border)] p-4">
+    <h3 className="font-semibold text-[var(--text)]">{labels.mapAnalysis}</h3>
+    <div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{labels.difficulty}: {displayValue(data.estimated_difficulty) || labels.unknown}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{labels.confidence}: {displayValue(data.difficulty_confidence) || labels.unknown}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{labels.estimated}</span></div>
+    {balance && <div><h4 className="mb-2 text-sm font-semibold text-[var(--text)]">{labels.resourceBalance}</h4><SummaryRows value={balance} /></div>}
+    {path && <div><h4 className="mb-2 text-sm font-semibold text-[var(--text)]">{labels.pathAnalysis}</h4><SummaryRows value={path} /></div>}
+    {waves.length > 0 && <DetailList title={labels.waves} values={waves} />}
+    {warnings.length > 0 && <DetailList title={labels.analysisWarnings} values={warnings} />}
+  </section>;
+}
+
+function DetailList({ title, values }: { title: string; values: unknown[] }) {
+  const shown = values.slice(0, 20);
+  return <div><h4 className="mb-2 text-sm font-semibold text-[var(--text)]">{title}</h4><ul className="space-y-2">{shown.map((value, index) => <li key={`${displayDetailsValue(value)}:${index}`} className="break-words rounded-lg bg-[var(--bg-elevated)] p-3 text-sm text-[var(--text-secondary)]">{displayDetailsValue(value)}</li>)}</ul>{values.length > shown.length && <p className="mt-2 text-xs text-[var(--text-muted)]">{values.length - shown.length} …</p>}</div>;
+}
+
+function ModDetails({ data, analysis, publicId, versionPublicId, parserVersion, labels }: { data: Record<string, unknown> | undefined; analysis: ResourceWorkbenchV2Analysis | null; publicId: string; versionPublicId: string | null; parserVersion: string | null; labels: Record<string, string> }) {
+  const versionRef = useRef(versionPublicId);
+  versionRef.current = versionPublicId;
+  const [contents, setContents] = useState<ResourceWorkbenchV2ModContent[]>([]);
+  const [localizations, setLocalizations] = useState<ResourceWorkbenchV2Localization[]>([]);
+  const [contentPagination, setContentPagination] = useState<ResourceWorkbenchV2Page<ResourceWorkbenchV2ModContent>['pagination']>({ next_cursor: null, has_more: false });
+  const [indexLoading, setIndexLoading] = useState(Boolean(versionPublicId));
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [indexError, setIndexError] = useState('');
   const modId = displayValue(data?.mod_id);
   const version = displayValue(data?.version);
   const gameVersions = Array.isArray(data?.game_versions) ? data.game_versions.filter((item): item is string => typeof item === 'string') : [];
   const dependencies = Array.isArray(data?.dependencies) ? data.dependencies : [];
+  const analysisData = analysis?.data || null;
+  const manifest = recordValue(analysisData?.manifest);
+
+  useEffect(() => {
+    if (!versionPublicId) {
+      setContents([]);
+      setLocalizations([]);
+      setContentPagination({ next_cursor: null, has_more: false });
+      setIndexLoading(false);
+      setLoadingMore(false);
+      setIndexError('');
+      return;
+    }
+    const controller = new AbortController();
+    setIndexLoading(true);
+    setLoadingMore(false);
+    setIndexError('');
+    void getResourceWorkbenchV2ModIndex(publicId, versionPublicId, { signal: controller.signal })
+      .then((result) => {
+        setContents(result.contents.items);
+        setLocalizations(result.localizations.items);
+        setContentPagination(result.contents.pagination);
+      })
+      .catch((caught) => {
+        if (!controller.signal.aborted) setIndexError(caught instanceof Error ? caught.message : labels.indexLoadFailed);
+      })
+      .finally(() => { if (!controller.signal.aborted) setIndexLoading(false); });
+    return () => controller.abort();
+  }, [labels.indexLoadFailed, publicId, versionPublicId]);
+
+  const loadMoreContent = async () => {
+    if (!versionPublicId || !contentPagination.next_cursor || loadingMore) return;
+    const requestedVersion = versionPublicId;
+    setLoadingMore(true);
+    setIndexError('');
+    try {
+      const page = await getResourceWorkbenchV2ModContents(publicId, requestedVersion, contentPagination.next_cursor);
+      if (versionRef.current !== requestedVersion) return;
+      setContents((current) => [...current, ...page.items]);
+      setContentPagination(page.pagination);
+    } catch (caught) {
+      if (versionRef.current === requestedVersion) setIndexError(caught instanceof Error ? caught.message : labels.indexLoadFailed);
+    } finally {
+      if (versionRef.current === requestedVersion) setLoadingMore(false);
+    }
+  };
+
   return <FoldCard title={labels.modDetails} open>
     {!data ? <EmptyState>{labels.modEmpty}</EmptyState> : <div className="space-y-4">
       <div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{labels.parser}: {parserVersion || labels.unknown}</span></div>
@@ -136,29 +259,46 @@ function ModDetails({ data, parserVersion, labels }: { data: Record<string, unkn
         const constraint = displayValue(dependency?.version) || displayValue(dependency?.version_constraint);
         return <li key={`${name}:${index}`} className="break-all rounded bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]">{name || labels.unknown}{constraint && <span className="ml-2 font-mono text-xs text-[var(--text-muted)]">{constraint}</span>}</li>;
       })}</ul> : <EmptyState>{labels.noDependencies}</EmptyState>}</div>
+      {analysisData && <div className="space-y-3 border-t border-[var(--border)] pt-4">
+        <h4 className="text-sm font-semibold text-[var(--text)]">{labels.modAnalysisDetails}</h4>
+        <dl className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{labels.indexedContentCount}</dt><dd className="mt-1 text-sm text-[var(--text)]">{displayValue(analysisData.indexed_content_count) || '0'}</dd></div>
+          <div className="rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{labels.localizationCount}</dt><dd className="mt-1 text-sm text-[var(--text)]">{displayValue(analysisData.localization_count) || '0'}</dd></div>
+        </dl>
+        {manifest && <SummaryRows value={manifest} />}
+      </div>}
+      <div className="space-y-4 border-t border-[var(--border)] pt-4">
+        <h4 className="text-sm font-semibold text-[var(--text)]">{labels.modContentIndex}</h4>
+        {indexLoading ? <div role="status" className="text-sm text-[var(--text-muted)]">{labels.indexLoading}</div>
+          : indexError ? <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">{labels.indexLoadFailed}: {indexError}</div>
+            : <>
+              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.indexedContentCount}</h5>{contents.length ? <ul className="mt-2 space-y-2">{contents.map((item) => <li key={item.public_id} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[var(--bg-card)] px-2 py-1 text-[11px]">{item.content_type}</span><span className="break-all text-sm font-medium text-[var(--text)]">{item.display_name || item.internal_name}</span>{item.display_name && item.display_name !== item.internal_name && <code className="break-all text-xs text-[var(--text-muted)]">{item.internal_name}</code>}</div>{item.description && <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--text-secondary)]">{item.description}</p>}</li>)}</ul> : <EmptyState>{labels.noIndexedContent}</EmptyState>}{contentPagination.has_more && <button type="button" disabled={loadingMore} onClick={() => void loadMoreContent()} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--primary)] disabled:opacity-60">{loadingMore ? labels.loadingMore : labels.loadMoreContent}</button>}</div>
+              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.localizationCoverage}</h5>{localizations.length ? <ul className="mt-2 grid gap-2 sm:grid-cols-2">{localizations.map((item) => <li key={item.locale} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm text-[var(--text)]">{item.locale}</span><span className="text-sm font-semibold tabular-nums text-[var(--text)]">{item.percentage}%</span></div><p className="mt-1 text-xs text-[var(--text-muted)]">{item.translated_count} / {item.total_count} {labels.translatedKeys}</p>{item.missing_keys.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-xs text-[var(--primary)]">{labels.missingKeys} ({item.missing_keys.length})</summary><ul className="mt-2 space-y-1">{item.missing_keys.slice(0, 12).map((key) => <li key={key} className="break-all font-mono text-[11px] text-[var(--text-muted)]">{key}</li>)}</ul></details>}</li>)}</ul> : <EmptyState>{labels.noLocalizationCoverage}</EmptyState>}</div>
+            </>}
+      </div>
     </div>}
   </FoldCard>;
 }
 
-function ResourceFacts({ workbench, labels }: { workbench: ResourceWorkbenchV2Response; labels: Record<string, string> }) {
+function ResourceFacts({ workbench, analysis, versionPublicId, labels }: { workbench: ResourceWorkbenchV2Response; analysis: ResourceWorkbenchV2Analysis | null; versionPublicId: string | null; labels: Record<string, string> }) {
   const { resource } = workbench;
   const metadata = (resource.renderer?.public_metadata ?? resource.metadata) as V1ResourceMetadata;
   const map = metadata?.map;
   const schematic = metadata?.schematic;
   const mod = metadata?.mod;
   if (resource.resource_kind === 'mod') {
-    return <ModDetails data={mod as Record<string, unknown> | undefined} parserVersion={resource.renderer?.parser_version || null} labels={labels} />;
+    return <ModDetails data={mod as Record<string, unknown> | undefined} analysis={analysis} publicId={resource.public_id} versionPublicId={versionPublicId} parserVersion={resource.renderer?.parser_version || null} labels={labels} />;
   }
   const data = resource.resource_kind === 'map' ? map : resource.resource_kind === 'schematic' ? schematic : undefined;
   if (!data) return <FoldCard title={labels.parserDetails}><EmptyState>{labels.detailsEmpty}</EmptyState></FoldCard>;
-  const entries = Object.entries(data as Record<string, unknown>).filter(([, value]) => displayValue(value) !== '' && !Array.isArray(value));
+  const entries = Object.entries(data as Record<string, unknown>).filter(([, value]) => displayDetailsValue(value) !== '' && !Array.isArray(value));
   const arrays = Object.entries(data as Record<string, unknown>).filter(([, value]) => Array.isArray(value));
   return <FoldCard title={labels.parserDetails} open>
     <div className="space-y-4">
       {resource.renderer?.parser_version && <p className="text-xs text-[var(--text-muted)]">{labels.parser}: {resource.renderer.parser_version}</p>}
-      <dl className="grid gap-3 sm:grid-cols-2">{entries.map(([key, value]) => <div key={key}><dt className="text-xs text-[var(--text-muted)]">{key}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayValue(value)}</dd></div>)}</dl>
+      <dl className="grid gap-3 sm:grid-cols-2">{entries.map(([key, value]) => <div key={key}><dt className="text-xs text-[var(--text-muted)]">{key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(value)}</dd></div>)}</dl>
       {arrays.map(([key, value]) => <div key={key}><h4 className="text-xs font-semibold text-[var(--text-muted)]">{key}</h4><div className="mt-2 flex flex-wrap gap-1.5">{(value as unknown[]).map((item, index) => {
-        const label = displayValue(item) || (isRecord(item) ? displayValue(item.item) || displayValue(item.name) : '');
+        const label = displayDetailsValue(item);
         return label ? <span key={`${label}:${index}`} className="rounded bg-[var(--bg-elevated)] px-2 py-1 text-xs">{label}</span> : null;
       })}</div></div>)}
     </div>
@@ -308,6 +448,9 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
   const [loading, setLoading] = useState(true);
   const [activeSection, setActiveSection] = useState<SectionKey>('overview');
   const [selectedVersionId, setSelectedVersionId] = useState('');
+  const [selectedAnalysis, setSelectedAnalysis] = useState<ResourceWorkbenchV2Analysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState('');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const refreshWorkbench = useCallback(async (preferredVersionId?: string, signal?: AbortSignal) => {
@@ -343,6 +486,46 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
   }, [load]);
 
   const selectedVersion = useMemo(() => workbench?.versions.find((version) => version.public_id === selectedVersionId) || workbench?.versions.find((version) => version.recommended) || workbench?.versions[0] || null, [selectedVersionId, workbench]);
+  useEffect(() => {
+    if (!workbench) {
+      setSelectedAnalysis(null);
+      setAnalysisLoading(false);
+      setAnalysisError('');
+      return;
+    }
+    if (!selectedVersion) {
+      setSelectedAnalysis(workbench.analysis);
+      setAnalysisLoading(false);
+      setAnalysisError('');
+      return;
+    }
+    const defaultVersion = workbench.versions.find((version) => version.recommended) || workbench.versions[0];
+    if (selectedVersion.public_id === defaultVersion?.public_id) {
+      setSelectedAnalysis(workbench.analysis);
+      setAnalysisLoading(false);
+      setAnalysisError('');
+      return;
+    }
+
+    if (!['mod', 'map', 'schematic'].includes(workbench.resource.resource_kind)) {
+      setSelectedAnalysis(null);
+      setAnalysisLoading(false);
+      setAnalysisError('');
+      return;
+    }
+
+    const controller = new AbortController();
+    setSelectedAnalysis(null);
+    setAnalysisLoading(true);
+    setAnalysisError('');
+    void getResourceWorkbenchV2Analysis(publicId, workbench.resource.resource_kind as 'mod' | 'map' | 'schematic', selectedVersion.public_id, { signal: controller.signal })
+      .then((result) => setSelectedAnalysis(result))
+      .catch((caught) => {
+        if (!controller.signal.aborted) setAnalysisError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.analysisLoadFailed'));
+      })
+      .finally(() => { if (!controller.signal.aborted) setAnalysisLoading(false); });
+    return () => controller.abort();
+  }, [publicId, selectedVersion, t, workbench]);
   const canPublish = Boolean(workbench?.permissions.can_manage)
     && ['owner', 'maintainer', 'publisher'].includes(workbench?.permissions.role || '');
   const canEditProfile = Boolean(workbench?.permissions.can_manage)
@@ -468,11 +651,13 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
                 status: { processing: t('resourceWorkbenchV2.rendererProcessing'), ready: t('resourceWorkbenchV2.rendererReady'), failed: t('resourceWorkbenchV2.rendererFailed'), unavailable: t('resourceWorkbenchV2.rendererUnavailable'), none: t('resourceWorkbenchV2.rendererNone') },
               }}
             />}
-            <ResourceFacts workbench={workbench} labels={{
+            <ResourceFacts workbench={workbench} versionPublicId={selectedVersion?.public_id || null} labels={{
               modDetails: t('resourceWorkbenchV2.modDetails'), modEmpty: t('resourceWorkbenchV2.modEmpty'), parser: t('resourceWorkbenchV2.parser'), unknown: t('resourceWorkbenchV2.unknown'),
               modId: t('resourceWorkbenchV2.modId'), version: t('resourceWorkbenchV2.version'), gameVersions: t('resourceWorkbenchV2.gameVersions'), dependencies: t('resourceWorkbenchV2.dependencies'), noDependencies: t('resourceWorkbenchV2.noDependencies'),
+              modAnalysisDetails: t('resourceWorkbenchV2.modAnalysisDetails'), indexedContentCount: t('resourceWorkbenchV2.indexedContentCount'), localizationCount: t('resourceWorkbenchV2.localizationCount'),
+              modContentIndex: t('resourceWorkbenchV2.modContentIndex'), indexLoading: t('resourceWorkbenchV2.indexLoading'), indexLoadFailed: t('resourceWorkbenchV2.indexLoadFailed'), noIndexedContent: t('resourceWorkbenchV2.noIndexedContent'), loadMoreContent: t('resourceWorkbenchV2.loadMoreContent'), loadingMore: t('resourceWorkbenchV2.loadingMore'), localizationCoverage: t('resourceWorkbenchV2.localizationCoverage'), noLocalizationCoverage: t('resourceWorkbenchV2.noLocalizationCoverage'), translatedKeys: t('resourceWorkbenchV2.translatedKeys'), missingKeys: t('resourceWorkbenchV2.missingKeys'),
               parserDetails: t('resourceWorkbenchV2.parserDetails'), detailsEmpty: t('resourceWorkbenchV2.detailsEmpty'),
-            }} />
+            }} analysis={selectedAnalysis} />
             <FoldCard title={t('resourceWorkbenchV2.about')} open><div className="space-y-3 text-sm leading-6 text-[var(--text-secondary)]">{resource.description ? <p className="whitespace-pre-wrap">{resource.description}</p> : resource.content_text ? <p className="whitespace-pre-wrap">{resource.content_text}</p> : <EmptyState>{t('resourceWorkbenchV2.noDescription')}</EmptyState>}<div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.visibility')}: {resource.visibility}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.renderer')}: {rendererStatus}</span></div></div></FoldCard>
             <FoldCard title={t('resourceWorkbenchV2.versionWorkspace')} open>
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><label htmlFor="workbench-version" className="text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbenchV2.selectVersion')}</label><select id="workbench-version" value={selectedVersion?.public_id || ''} onChange={(event) => setSelectedVersionId(event.target.value)} disabled={workbench.versions.length === 0} className="min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text)] sm:max-w-sm">{workbench.versions.length === 0 && <option value="">{t('resourceWorkbenchV2.noVersions')}</option>}{workbench.versions.map((version) => <option key={version.public_id} value={version.public_id}>{version.display_version || version.version}{version.recommended ? ` · ${t('resourceWorkbenchV2.recommended')}` : ''}</option>)}</select></div>
@@ -498,7 +683,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
 
           {activeSection === 'compatibility' && <FoldCard title={t('resourceWorkbenchV2.compatibility')} open><div className="space-y-5"><div className="flex flex-wrap items-center gap-2"><label htmlFor="compat-version" className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.selectVersion')}</label><select id="compat-version" value={selectedVersion?.public_id || ''} onChange={(event) => setSelectedVersionId(event.target.value)} disabled={workbench.versions.length === 0} className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm">{workbench.versions.map((version) => <option key={version.public_id} value={version.public_id}>{version.display_version || version.version}</option>)}</select></div>{selectedVersion ? <CompatibilityPanel version={selectedVersion} labels={sharedLabels} /> : <EmptyState>{t('resourceWorkbenchV2.noVersions')}</EmptyState>}</div></FoldCard>}
 
-          {activeSection === 'analysis' && <FoldCard title={t('resourceWorkbenchV2.analysis')} open><AnalysisPanel analysis={workbench.analysis} labels={{ analysisEmpty: t('resourceWorkbenchV2.analysisEmpty'), parser: t('resourceWorkbenchV2.parser'), ignored: t('resourceWorkbenchV2.ignored'), noFindings: t('resourceWorkbenchV2.noFindings') }} /></FoldCard>}
+          {activeSection === 'analysis' && <FoldCard title={t('resourceWorkbenchV2.analysis')} open><AnalysisPanel analysis={selectedAnalysis} loading={analysisLoading} error={analysisError} labels={{ analysisEmpty: t('resourceWorkbenchV2.analysisEmpty'), analysisLoading: t('resourceWorkbenchV2.analysisLoading'), analysisLoadFailed: t('resourceWorkbenchV2.analysisLoadFailed'), parser: t('resourceWorkbenchV2.parser'), ignored: t('resourceWorkbenchV2.ignored'), noFindings: t('resourceWorkbenchV2.noFindings'), kindAnalysis: t('resourceWorkbenchV2.kindAnalysis'), modAnalysisDetails: t('resourceWorkbenchV2.modAnalysisDetails'), schematicAnalysis: t('resourceWorkbenchV2.schematicAnalysis'), mapAnalysis: t('resourceWorkbenchV2.mapAnalysis'), productionEstimate: t('resourceWorkbenchV2.productionEstimate'), estimated: t('resourceWorkbenchV2.estimated'), measured: t('resourceWorkbenchV2.measured'), available: t('resourceWorkbenchV2.available'), unavailable: t('resourceWorkbenchV2.unavailable'), bottlenecks: t('resourceWorkbenchV2.bottlenecks'), analysisWarnings: t('resourceWorkbenchV2.analysisWarnings'), difficulty: t('resourceWorkbenchV2.difficulty'), confidence: t('resourceWorkbenchV2.confidence'), resourceBalance: t('resourceWorkbenchV2.resourceBalance'), pathAnalysis: t('resourceWorkbenchV2.pathAnalysis'), waves: t('resourceWorkbenchV2.waves'), unknown: t('resourceWorkbenchV2.unknown') }} /></FoldCard>}
 
           {activeSection === 'community' && <>
             <FoldCard title={t('resourceWorkbenchV2.communityStats')} open><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{[
