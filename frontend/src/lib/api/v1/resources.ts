@@ -6,7 +6,7 @@
  * exact field names — no camelCase conversion, no optional fallbacks.
  */
 
-import { fetchV1, requestV1, type FetchV1Options } from './transport';
+import { fetchV1, requestV1, requestV1Blob, type FetchV1Options } from './transport';
 
 export type V1VersionSummary = {
   public_id: string;
@@ -92,6 +92,7 @@ export type ResourceWorkbenchV2Version = {
   game_version_max: string | null;
   status: string;
   published_at: string | null;
+  preview_url?: string | null;
   compatibility: ResourceWorkbenchV2Compatibility[];
   dependencies: ResourceWorkbenchV2Dependency[];
   files: ResourceWorkbenchV2File[];
@@ -118,6 +119,7 @@ export type ResourceWorkbenchV2Analysis = {
 };
 
 export type ResourceWorkbenchV2Relation = {
+  relation_direction: 'outgoing' | 'incoming';
   relation_type: string;
   relation_context: 'opening' | 'production' | 'defense' | 'logistics' | 'general';
   resource: {
@@ -126,6 +128,7 @@ export type ResourceWorkbenchV2Relation = {
     resource_kind: string;
   };
   version_public_id: string | null;
+  version: string | null;
 };
 
 export type ResourceWorkbenchV2Stats = {
@@ -269,6 +272,20 @@ export type ResourceWorkbenchV2ResourcePatchResponse = {
 export type ResourceV2PagedResult<T> = {
   items: T[];
   pagination: { next_cursor: string | null; has_more: boolean };
+};
+
+export type ResourceV2SchematicBlockPosition = { x: number | null; y: number | null; rotation: number | null };
+export type ResourceV2SchematicBlock = {
+  internal_name: string;
+  display_name: string | null;
+  count: number;
+  positions: ResourceV2SchematicBlockPosition[];
+};
+export type ResourceV2SchematicBlockPageOptions = FetchV1Options & { cursor?: string; limit?: number };
+export type ResourceV2SchematicTransformInput = {
+  rotation_quarters: number;
+  mirror_x: boolean;
+  delete_positions: Array<{ x: number; y: number }>;
 };
 
 export type ResourceV2MapFeedbackAggregate = {
@@ -452,6 +469,11 @@ export type V1ResourceMetadata = {
     planets: string[];
     game_modes: string[];
     required_mods: string[];
+    wave_groups?: Array<Record<string, unknown>>;
+    cores?: Array<Record<string, unknown>>;
+    core_count?: number | null;
+    tile_layers?: Record<string, unknown>;
+    tile_layers_truncated?: boolean;
   };
   schematic?: {
     name: string | null;
@@ -460,6 +482,8 @@ export type V1ResourceMetadata = {
     height: number | null;
     blocks: number | null;
     requirements: unknown[];
+    block_positions?: Array<{ block?: string; x?: number; y?: number; rotation?: number; config?: unknown }>;
+    block_positions_truncated?: boolean;
   };
   mod?: {
     mod_id: string | null;
@@ -504,6 +528,33 @@ export async function analyzeResourceWorkbenchVersionV2(
   return requestV1<ResourceWorkbenchV2VersionAnalysisResponse>(
     `/resources/${encodeURIComponent(publicId)}/versions/analyze`,
     { method: 'POST', body: formData },
+  );
+}
+
+/** Fetch version-specific schematic positions for the light editor. */
+export async function getResourceV2SchematicBlocks(
+  publicId: string,
+  versionPublicId: string,
+  options?: ResourceV2SchematicBlockPageOptions,
+): Promise<ResourceV2PagedResult<ResourceV2SchematicBlock>> {
+  const query = new URLSearchParams({ version_public_id: versionPublicId });
+  if (options?.limit !== undefined) query.set('limit', String(options.limit));
+  if (options?.cursor) query.set('cursor', options.cursor);
+  return fetchV1<ResourceV2PagedResult<ResourceV2SchematicBlock>>(
+    `/resources/schematics/${encodeURIComponent(publicId)}/blocks?${query.toString()}`,
+    options,
+  );
+}
+
+/** Export a transformed copy of a published schematic through the official renderer. */
+export async function exportResourceWorkbenchSchematicV2(
+  publicId: string,
+  versionPublicId: string,
+  input: ResourceV2SchematicTransformInput,
+): Promise<Blob> {
+  return requestV1Blob(
+    `/resources/${encodeURIComponent(publicId)}/versions/${encodeURIComponent(versionPublicId)}/schematic-editor/export`,
+    { method: 'POST', body: JSON.stringify(input) },
   );
 }
 

@@ -103,6 +103,30 @@ describe('schematic and map metadata analyzers', () => {
     ]));
   });
 
+  it('estimates wave health and air ratio from official unit metadata and flags strength spikes heuristically', () => {
+    const result = analyzeMapMetadata({
+      wave_groups: [
+        { unit: 'dagger', begin: 1, end: 1, amount: 2, unit_health: 100, shields: 0, flying: false },
+        { unit: 'flare', begin: 2, end: 2, amount: 5, unit_health: 200, shields: 10, flying: true, boss: true },
+      ],
+    });
+
+    expect(result.waves).toEqual([
+      expect.objectContaining({ wave_start: 1, enemy_count: 2, estimated_health: 200, air_ratio: 0, boss_count: 0, is_spike: false }),
+      expect.objectContaining({ wave_start: 2, enemy_count: 5, estimated_health: 1050, air_ratio: 1, boss_count: 5, is_spike: true }),
+    ]);
+    expect(result.analysis.warnings_json).toContainEqual(expect.objectContaining({ code: 'WAVE_SPIKES_HEURISTIC' }));
+  });
+
+  it('preserves open-ended renderer waves without multiplying counts by the integer sentinel', () => {
+    const result = analyzeMapMetadata({ wave_groups: [{ unit: 'dagger', begin: 3, end: 2_147_483_647, amount: 2, unit_health: 100, flying: false }] });
+
+    expect(result.waves).toEqual([expect.objectContaining({
+      wave_start: 3, wave_end: 2_147_483_647, enemy_count: 2, estimated_health: 200, air_ratio: 0,
+    })]);
+    expect(result.analysis.estimated_difficulty).toBeLessThan(100);
+  });
+
   it('does not reinterpret renderer spawn counts as coordinates or claim unavailable resource/path data', () => {
     const result = analyzeMapMetadata({
       spawns: 4,

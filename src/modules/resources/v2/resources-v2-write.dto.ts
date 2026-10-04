@@ -1,5 +1,30 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ResourceV2SchematicPositionDto {
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  x!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  y!: number;
+}
+
+export class ResourceV2ExportSchematicDto {
+  @ApiProperty({ minimum: 0, maximum: 3, description: 'Number of 90 degree counter-clockwise rotations.' })
+  @IsInt() @Min(0) @Max(3)
+  rotation_quarters!: number;
+
+  @ApiProperty({ description: 'Reflect the edited schematic horizontally.' })
+  @IsBoolean()
+  mirror_x!: boolean;
+
+  @ApiPropertyOptional({ type: [ResourceV2SchematicPositionDto], maxItems: 10_000 })
+  @IsOptional() @IsArray() @ArrayMaxSize(10_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicPositionDto)
+  delete_positions?: ResourceV2SchematicPositionDto[];
+}
 
 export class ResourceV2CreateVersionDto {
   @ApiProperty({ maxLength: 50, example: '1.2.0' })
@@ -62,8 +87,8 @@ export class ResourceV2CreateRelationDto {
   @IsString() @MaxLength(36)
   target_resource_public_id!: string;
 
-  @ApiProperty({ example: 'recommended_for' })
-  @IsString() @MinLength(2) @MaxLength(40)
+  @ApiProperty({ example: 'recommended_for', enum: ['recommended_for', 'fork_of', 'successor_of', 'related', 'requires', 'compatible_with'] })
+  @IsString() @IsIn(['recommended_for', 'fork_of', 'successor_of', 'related', 'requires', 'compatible_with']) @MinLength(2) @MaxLength(40)
   relation_type!: string;
 
   @ApiPropertyOptional({ enum: ['opening', 'production', 'defense', 'logistics', 'general'], default: 'general' })

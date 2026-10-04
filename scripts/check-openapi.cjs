@@ -71,6 +71,10 @@ try {
     '/v1/resources/maps/{id}/versions/{versionId}/feedback',
     '/v1/resources/mods/{id}/dependency-resolution',
     '/v1/resources/mods/{id}/issue-reports',
+    '/v1/resources/mods/issue-reports/{reportId}/attachments',
+    '/v1/resources/mods/issue-reports/{reportId}/attachments/{attachmentId}',
+    '/v1/resources/mods/compatibility-reports/{reportId}/attachments',
+    '/v1/resources/mods/compatibility-reports/{reportId}/attachments/{attachmentId}',
     '/v1/resources/{id}/review-events',
     '/v1/resources/{id}/versions/{versionId}/analysis/overrides',
     '/v1/resources/{id}/review-annotations',
@@ -269,6 +273,48 @@ try {
       successStatus: '200',
     },
   ];
+  const requiredResourceV2ReportAttachmentOperations = [
+    {
+      key: 'POST /v1/resources/mods/issue-reports/{reportId}/attachments',
+      operationId: 'uploadModIssueReportAttachmentV2', scopes: ['resource.upload'], limit: 10,
+      successStatus: '201', dataSchema: 'ResourceV2ReportAttachmentDto', pathParameters: ['reportId'], mode: 'upload',
+    },
+    {
+      key: 'GET /v1/resources/mods/issue-reports/{reportId}/attachments',
+      operationId: 'listModIssueReportAttachmentsV2', scopes: ['resource.read'], limit: 60,
+      successStatus: '200', dataSchema: 'ResourceV2ReportAttachmentListDto', pathParameters: ['reportId'], mode: 'json',
+    },
+    {
+      key: 'GET /v1/resources/mods/issue-reports/{reportId}/attachments/{attachmentId}',
+      operationId: 'getModIssueReportAttachmentV2', scopes: ['resource.read'], limit: 30,
+      successStatus: '200', pathParameters: ['reportId', 'attachmentId'], mode: 'binary',
+    },
+    {
+      key: 'DELETE /v1/resources/mods/issue-reports/{reportId}/attachments/{attachmentId}',
+      operationId: 'deleteModIssueReportAttachmentV2', scopes: ['resource.upload'], limit: 10,
+      successStatus: '200', dataSchema: 'ResourceV2ReportAttachmentDeleteDto', pathParameters: ['reportId', 'attachmentId'], mode: 'json',
+    },
+    {
+      key: 'POST /v1/resources/mods/compatibility-reports/{reportId}/attachments',
+      operationId: 'uploadModCompatibilityReportAttachmentV2', scopes: ['resource.upload'], limit: 10,
+      successStatus: '201', dataSchema: 'ResourceV2ReportAttachmentDto', pathParameters: ['reportId'], mode: 'upload',
+    },
+    {
+      key: 'GET /v1/resources/mods/compatibility-reports/{reportId}/attachments',
+      operationId: 'listModCompatibilityReportAttachmentsV2', scopes: ['resource.read'], limit: 60,
+      successStatus: '200', dataSchema: 'ResourceV2ReportAttachmentListDto', pathParameters: ['reportId'], mode: 'json',
+    },
+    {
+      key: 'GET /v1/resources/mods/compatibility-reports/{reportId}/attachments/{attachmentId}',
+      operationId: 'getModCompatibilityReportAttachmentV2', scopes: ['resource.read'], limit: 30,
+      successStatus: '200', pathParameters: ['reportId', 'attachmentId'], mode: 'binary',
+    },
+    {
+      key: 'DELETE /v1/resources/mods/compatibility-reports/{reportId}/attachments/{attachmentId}',
+      operationId: 'deleteModCompatibilityReportAttachmentV2', scopes: ['resource.upload'], limit: 10,
+      successStatus: '200', dataSchema: 'ResourceV2ReportAttachmentDeleteDto', pathParameters: ['reportId', 'attachmentId'], mode: 'json',
+    },
+  ];
   const requiredResourceV2ReviewOperations = [
     {
       key: 'GET /v1/resources/{id}/review-events',
@@ -401,6 +447,22 @@ try {
   if (JSON.stringify(relationContextEnum) !== JSON.stringify(['opening', 'production', 'defense', 'logistics', 'general'])) {
     resourceV2Mismatches.push('ResourceV2RelationDto.relation_context must publish the five supported contexts');
   }
+  const relationSchema = generatedPublic.components?.schemas?.ResourceV2RelationDto?.properties || {};
+  if (JSON.stringify(relationSchema.relation_direction?.enum) !== JSON.stringify(['outgoing', 'incoming'])
+      || relationSchema.version_public_id?.format !== 'uuid'
+      || !relationSchema.version) {
+    resourceV2Mismatches.push('ResourceV2RelationDto must expose direction and related published-version identifiers/labels');
+  }
+  const schematicEditorKey = 'POST /v1/resources/{id}/versions/{versionId}/schematic-editor/export';
+  const schematicEditorOperation = generatedPublic.paths?.['/v1/resources/{id}/versions/{versionId}/schematic-editor/export']?.post;
+  if (!schematicEditorOperation || schematicEditorOperation.operationId !== 'exportResourceSchematicEdit'
+      || JSON.stringify(schematicEditorOperation['x-required-scopes']) !== JSON.stringify(['resource.upload'])
+      || schematicEditorOperation['x-rate-limit']?.limit !== 5
+      || schematicEditorOperation['x-rate-limit']?.window_seconds !== 60
+      || schematicEditorOperation.responses?.['200']?.content?.['application/octet-stream']?.schema?.format !== 'binary'
+      || !/Owner\/Maintainer/.test(schematicEditorOperation.description || '')) {
+    resourceV2Mismatches.push(`${schematicEditorKey} must document role, scope, rate limit, and a raw schematic binary response`);
+  }
   for (const key of requiredResourceV2WriteOperations) {
     const [method, route] = key.split(' ');
     const operation = generatedPublic.paths?.[route]?.[method.toLowerCase()];
@@ -438,6 +500,89 @@ try {
         && !/UUID|状态/.test(operation.description || '')) {
       resourceV2Mismatches.push(`${expected.key} must document idempotent upsert semantics and preservation of the report UUID/status`);
     }
+  }
+  for (const expected of requiredResourceV2ReportAttachmentOperations) {
+    const [method, route] = expected.key.split(' ');
+    const operation = generatedPublic.paths?.[route]?.[method.toLowerCase()];
+    if (!operation) {
+      resourceV2Mismatches.push(`${expected.key} missing`);
+      continue;
+    }
+    if (operation.operationId !== expected.operationId) {
+      resourceV2Mismatches.push(`${expected.key} operationId must be ${expected.operationId}`);
+    }
+    if (JSON.stringify(operation['x-required-scopes']) !== JSON.stringify(expected.scopes)) {
+      resourceV2Mismatches.push(`${expected.key} must require ${expected.scopes.join(',')} scope`);
+    }
+    const rateLimit = operation['x-rate-limit'];
+    if (rateLimit?.limit !== expected.limit || rateLimit?.window_seconds !== 60) {
+      resourceV2Mismatches.push(`${expected.key} must declare a ${expected.limit}/60s rate limit`);
+    }
+    if (!operation.responses?.[expected.successStatus]?.description) {
+      resourceV2Mismatches.push(`${expected.key} must document HTTP ${expected.successStatus} success`);
+    }
+    for (const status of ['400', '401', '403', '404']) {
+      if (!operation.responses?.[status]?.description) {
+        resourceV2Mismatches.push(`${expected.key} must document HTTP ${status} error`);
+      }
+    }
+    if (expected.mode === 'upload' && !operation.responses?.['413']?.description) {
+      resourceV2Mismatches.push(`${expected.key} must document HTTP 413 for oversized multipart files`);
+    }
+    const parameters = operation.parameters || [];
+    for (const name of expected.pathParameters) {
+      const parameter = parameters.find((candidate) => candidate.in === 'path' && candidate.name === name);
+      if (!parameter || parameter.schema?.format !== 'uuid') {
+        resourceV2Mismatches.push(`${expected.key} must expose ${name} as a public UUID`);
+      }
+    }
+    if (expected.mode === 'upload') {
+      const request = operation.requestBody?.content?.['multipart/form-data'];
+      const bodySchema = request?.schema;
+      const fileSchema = bodySchema?.properties?.file;
+      if (!bodySchema?.required?.includes('file') || fileSchema?.type !== 'string' || fileSchema?.format !== 'binary') {
+        resourceV2Mismatches.push(`${expected.key} must require one multipart binary file`);
+      }
+      if (!/5\s*MiB/i.test(fileSchema?.description || '')
+          || !/请先清除/.test(operation.description || '')) {
+        resourceV2Mismatches.push(`${expected.key} must document the per-file limit and privacy reminder`);
+      }
+    } else if (expected.mode === 'binary') {
+      const response = operation.responses?.['200']?.content?.['application/octet-stream'];
+      const rawDescription = `${operation.summary || ''} ${operation.description || ''} ${operation.responses?.['200']?.description || ''} ${response?.description || ''}`;
+      if (response?.schema?.format !== 'binary' || !/private|私有/i.test(rawDescription)
+          || !/no-store/i.test(rawDescription)) {
+        resourceV2Mismatches.push(`${expected.key} must document private raw binary with no-store behavior`);
+      }
+    } else {
+      const response = operation.responses?.[expected.successStatus]?.content?.['application/json'];
+      const responseText = JSON.stringify(response?.schema || {});
+      if (!response || !responseText.includes(`#/components/schemas/${expected.dataSchema}`)) {
+        resourceV2Mismatches.push(`${expected.key} must document ${expected.dataSchema}`);
+      }
+    }
+  }
+  const attachmentSchemas = generatedPublic.components?.schemas || {};
+  const attachmentDto = attachmentSchemas.ResourceV2ReportAttachmentDto?.properties || {};
+  for (const field of ['public_id', 'kind', 'name', 'size_bytes', 'mime_type', 'sha256', 'created_at', 'download_url', 'can_delete']) {
+    if (!attachmentDto[field]) resourceV2Mismatches.push(`ResourceV2ReportAttachmentDto must expose ${field}`);
+  }
+  if (attachmentDto.public_id?.format !== 'uuid'
+      || attachmentDto.size_bytes?.maximum !== 5 * 1024 * 1024
+      || !/private authenticated/i.test(attachmentDto.download_url?.description || '')) {
+    resourceV2Mismatches.push('ResourceV2ReportAttachmentDto must publish a bounded file size and private UUID download URL');
+  }
+  for (const privateField of ['id', 'file_path', 'issue_report_id', 'compatibility_report_id', 'uploaded_by_user_id']) {
+    if (attachmentDto[privateField]) resourceV2Mismatches.push(`ResourceV2ReportAttachmentDto must not expose ${privateField}`);
+  }
+  const attachmentListDto = attachmentSchemas.ResourceV2ReportAttachmentListDto?.properties || {};
+  if (!attachmentListDto.items || !attachmentListDto.max_attachments?.example
+      || !attachmentListDto.max_file_size_bytes?.example || !attachmentListDto.max_total_size_bytes?.example) {
+    resourceV2Mismatches.push('ResourceV2ReportAttachmentListDto must expose typed items and upload limits with examples');
+  }
+  const attachmentDeleteDto = attachmentSchemas.ResourceV2ReportAttachmentDeleteDto?.properties || {};
+  if (attachmentDeleteDto.public_id?.format !== 'uuid' || attachmentDeleteDto.deleted?.example !== true) {
+    resourceV2Mismatches.push('ResourceV2ReportAttachmentDeleteDto must document its public UUID result');
   }
   for (const expected of requiredResourceV2ReviewOperations) {
     const [method, route] = expected.key.split(' ');
@@ -523,9 +668,14 @@ try {
         resourceV2Mismatches.push(`${expected.key} must document HTTP ${status} error`);
       }
     }
-    if (!/manual|手动/i.test(`${operation.summary || ''} ${operation.description || ''}`)
-        || /自动同步|scheduled polling|定时任务/i.test(operation.description || '')) {
-      resourceV2Mismatches.push(`${expected.key} must clearly document manual-only GitHub sync behavior`);
+    const syncDescription = `${operation.summary || ''} ${operation.description || ''}`;
+    if (method === 'PUT' && (!/enabled\s*=\s*true/i.test(syncDescription)
+        || !/(15 分钟|15 minutes)/i.test(syncDescription)
+        || !/(暂停|pause)/i.test(syncDescription))) {
+      resourceV2Mismatches.push(`${expected.key} must document opt-in scheduled sync and the manual-confirmation stop behavior`);
+    }
+    if ((method === 'GET' || method === 'POST') && !/(manual|手动)/i.test(syncDescription)) {
+      resourceV2Mismatches.push(`${expected.key} must document the author-triggered operation`);
     }
     const parameters = operation.parameters || [];
     for (const name of expected.pathParameters) {

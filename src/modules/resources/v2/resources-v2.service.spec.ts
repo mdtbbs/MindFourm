@@ -10,12 +10,14 @@ describe('ResourcesV2Service relation projection', () => {
     jest.spyOn(service as any, 'rowsFrom').mockResolvedValue(contexts.map((relation_context, index) => ({
       id: index + 1,
       relation_type: 'recommended_for',
+      relation_direction: index === 0 ? 'outgoing' : 'incoming',
       relation_context,
       created_at: new Date('2026-10-05T00:00:00.000Z'),
       peer_public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240',
       peer_title: 'Example map',
       peer_kind: 'map',
       peer_version_public_id: null,
+      peer_version: null,
     })));
 
     const result = await (service as any).relationPage(resource, { limit: 20 });
@@ -24,6 +26,25 @@ describe('ResourcesV2Service relation projection', () => {
       'opening', 'production', 'defense', 'logistics', 'general', 'general',
     ]);
     expect(result.items.every((item: any) => item.relation_type === 'recommended_for')).toBe(true);
+    expect(result.items.map((item: any) => item.relation_direction)).toEqual([
+      'outgoing', 'incoming', 'incoming', 'incoming', 'incoming', 'incoming',
+    ]);
+    expect(result.items.every((item: any) => item.version === null)).toBe(true);
+  });
+
+  it('returns a published peer version label alongside its public UUID', async () => {
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    jest.spyOn(service as any, 'rowsFrom').mockResolvedValue([{
+      id: 1, relation_type: 'fork_of', relation_direction: 'outgoing', relation_context: 'general',
+      created_at: new Date('2026-10-05T00:00:00.000Z'), peer_public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240',
+      peer_title: 'Upstream Mod', peer_kind: 'mod', peer_version_public_id: '84b37577-d086-4897-a866-658e29e0bd09',
+      peer_version: '2.1.0',
+    }]);
+
+    const result = await (service as any).relationPage({ id: 7 } as Resource, { limit: 20 });
+
+    expect(result.items[0].version_public_id).toBe('84b37577-d086-4897-a866-658e29e0bd09');
+    expect(result.items[0].version).toBe('2.1.0');
   });
 });
 
@@ -75,5 +96,42 @@ describe('ResourcesV2Service community reads', () => {
     expect(JSON.stringify(result)).not.toContain('120');
     expect(JSON.stringify(result)).not.toContain('private-log.txt');
     expect(result.items[0]).not.toHaveProperty('attachment_json');
+  });
+});
+
+describe('ResourcesV2Service map analysis projection', () => {
+  it('includes bounded structured wave summaries for the workbench wave viewer', async () => {
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    jest.spyOn(service as any, 'rowsFrom').mockImplementation(async (_table: string, sql: string) => {
+      if (sql.includes('FROM map_analyses')) return [{
+        difficulty_confidence: 'low', estimated_difficulty: 38,
+        resource_balance_json: { estimated: true }, path_analysis_json: { status: 'partial' }, warnings_json: [],
+      }];
+      if (sql.includes('FROM map_wave_summaries')) return [{
+        wave_start: 8, wave_end: 12, enemy_count: 42, estimated_health: 2400,
+        air_ratio: 0.25, boss_count: 1, strength: 42, is_spike: 1,
+      }];
+      return [];
+    });
+
+    const result = await (service as any).analysisData(70, 'map');
+
+    expect(result.waves).toEqual([{
+      wave_start: 8, wave_end: 12, enemy_count: 42, estimated_health: 2400,
+      air_ratio: 0.25, boss_count: 1, strength: 42, is_spike: true,
+    }]);
+    expect(result.estimated).toBe(true);
+  });
+
+  it('returns wave rows when a map analysis summary is not available', async () => {
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    jest.spyOn(service as any, 'rowsFrom').mockImplementation(async (_table: string, sql: string) => sql.includes('FROM map_wave_summaries')
+      ? [{ wave_start: 2, wave_end: 2, enemy_count: null, estimated_health: null, air_ratio: null, boss_count: 0, strength: null, is_spike: 0 }]
+      : []);
+
+    const result = await (service as any).analysisData(70, 'map');
+
+    expect(result).toMatchObject({ difficulty_confidence: 'estimated', waves: [{ wave_start: 2, wave_end: 2 }] });
+    expect(result.estimated_difficulty).toBeNull();
   });
 });

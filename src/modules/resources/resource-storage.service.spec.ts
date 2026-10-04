@@ -87,4 +87,25 @@ describe('ResourceStorageService', () => {
       .rejects.toThrow('不是有效的 Mindustry .msch 文件');
     await fs.rm(root, { recursive: true, force: true });
   });
+
+  it('limits private evidence access and deletion to quarantine storage', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const quarantinePath = path.join(root, '.quarantine', 'resources', 'report.log');
+    const publicPath = path.join(root, 'resources', 'public.zip');
+    await fs.mkdir(path.dirname(quarantinePath), { recursive: true });
+    await fs.mkdir(path.dirname(publicPath), { recursive: true });
+    await fs.writeFile(quarantinePath, 'private evidence');
+    await fs.writeFile(publicPath, 'public resource');
+
+    await expect(service.readQuarantinedFile(quarantinePath, 1024)).resolves.toEqual(Buffer.from('private evidence'));
+    await expect(service.readQuarantinedFile(publicPath, 1024)).rejects.toThrow('私有附件存储路径无效');
+    await expect(service.removeQuarantinedFile(publicPath)).resolves.toBe(false);
+    await expect(fs.readFile(publicPath, 'utf8')).resolves.toBe('public resource');
+    await expect(service.removeQuarantinedFile(quarantinePath)).resolves.toBe(true);
+    await expect(fs.access(quarantinePath)).rejects.toThrow();
+
+    await fs.rm(root, { recursive: true, force: true });
+  });
 });

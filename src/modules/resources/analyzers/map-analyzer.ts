@@ -82,7 +82,7 @@ export function analyzeMapMetadata(rendererInput: unknown, publisherInput?: unkn
   const spawns = normalizeSpawns(renderer, warnings);
   const cores = normalizeCores(renderer, warnings);
   const waves = normalizeWaves(renderer, warnings);
-  const maxWave = waves.reduce((maximum, item) => Math.max(maximum, item.wave_end), 0);
+  const maxWave = waves.reduce((maximum, item) => Math.max(maximum, item.wave_end > 1_000_000 ? item.wave_start : item.wave_end), 0);
   const estimatedEnemies = waves.reduce((total, item) => total + (item.enemy_count ?? 0), 0);
   const totalBosses = waves.reduce((total, item) => total + item.boss_count, 0);
   const difficulty = waves.length > 0
@@ -209,14 +209,24 @@ function normalizeWaves(renderer: Record<string, unknown>, warnings: AnalyzerWar
   for (const value of source.values) {
     const item = record(value);
     const begin = boundedNumber(item.begin ?? item.wave_start ?? item.start, { min: 0, max: 1_000_000, integer: true });
-    const end = boundedNumber(item.end ?? item.wave_end ?? item.begin ?? item.wave_start ?? item.start, { min: 0, max: 1_000_000, integer: true });
+    const end = boundedNumber(item.end ?? item.wave_end ?? item.begin ?? item.wave_start ?? item.start, { min: 0, max: 4_294_967_295, integer: true });
     const amount = boundedNumber(item.amount ?? item.unit_amount ?? item.unitAmount ?? item.enemy_count, { min: 0, max: 1_000_000, integer: true });
     if (begin === null || end === null || end < begin) continue;
     const spacing = boundedNumber(item.spacing, { min: 1, max: 1_000_000, integer: true }) ?? 1;
-    const waveCount = Math.floor((end - begin) / spacing) + 1;
+    const unbounded = end > 1_000_000;
+    const waveCount = unbounded ? 1 : Math.floor((end - begin) / spacing) + 1;
     const estimatedTotal = amount === null ? null : Math.min(1_000_000_000, amount * waveCount);
+    const unitHealth = boundedNumber(item.unit_health ?? item.health, { min: 0, max: 1_000_000_000 });
+    const shields = boundedNumber(item.shields, { min: 0, max: 1_000_000_000 }) ?? 0;
+    const estimatedHealth = estimatedTotal === null || unitHealth === null
+      ? null
+      : Math.min(1_000_000_000_000, estimatedTotal * (unitHealth + shields));
+    const groupAirRatio = boundedNumber(item.air_ratio, { min: 0, max: 1 })
+      ?? (typeof item.flying === 'boolean' ? (item.flying ? 1 : 0) : null);
+    const airTotal = estimatedTotal !== null && groupAirRatio !== null ? estimatedTotal : null;
+    const airCount = airTotal === null ? null : airTotal * groupAirRatio!;
     const bossCount = item.boss === true || item.is_boss === true
-      ? waveCount
+      ? estimatedTotal ?? waveCount
       : boundedNumber(item.boss_count, { min: 0, max: 1_000_000, integer: true }) ?? 0;
     const key = `${begin}:${end}`;
     const existing = groups.get(key);
@@ -227,6 +237,9 @@ function normalizeWaves(renderer: Record<string, unknown>, warnings: AnalyzerWar
       amount_per_wave: amount,
       ...(boundedString(item.unit ?? item.unit_type, 191) ? { unit: boundedString(item.unit ?? item.unit_type, 191) } : {}),
       ...(boundedString(item.team, 64) ? { team: boundedString(item.team, 64) } : {}),
+      ...(unitHealth === null ? {} : { unit_health: unitHealth, estimated_health: estimatedHealth }),
+      ...(typeof item.flying === 'boolean' ? { flying: item.flying } : {}),
+      ...(item.boss === true || item.is_boss === true ? { boss: true } : {}),
     };
     const details: Record<string, unknown> = {
       estimated: true,
@@ -237,26 +250,53 @@ function normalizeWaves(renderer: Record<string, unknown>, warnings: AnalyzerWar
     };
     if (existing) {
       existing.enemy_count = existing.enemy_count === null || estimatedTotal === null ? null : existing.enemy_count + estimatedTotal;
+      existing.estimated_health = existing.estimated_health === null || estimatedHealth === null
+        ? null : existing.estimated_health + estimatedHealth;
       existing.boss_count += bossCount;
       existing.strength = existing.enemy_count;
+      const previousAirTotal = boundedNumber(existing.details_json?.air_total, { min: 0, max: 1_000_000_000 });
+      const previousAirCount = boundedNumber(existing.details_json?.air_count, { min: 0, max: 1_000_000_000 });
+      existing.air_ratio = previousAirTotal === null || previousAirCount === null || airTotal === null || airCount === null
+        ? null : (previousAirCount + airCount) / (previousAirTotal + airTotal);
       const priorGroups = Array.isArray(existing.details_json?.groups) ? existing.details_json.groups : [];
-      existing.details_json = { ...existing.details_json, group_count: groupCount, groups: [...priorGroups, groupDetail].slice(0, 100) };
+      existing.details_json = {
+        ...existing.details_json, group_count: groupCount,
+        air_total: previousAirTotal === null || airTotal === null ? null : previousAirTotal + airTotal,
+        air_count: previousAirCount === null || airCount === null ? null : previousAirCount + airCount,
+        groups: [...priorGroups, groupDetail].slice(0, 100),
+      };
+      existing.is_spike ||= item.is_spike === true;
     } else {
       groups.set(key, {
         wave_start: begin,
         wave_end: end,
         enemy_count: estimatedTotal,
-        estimated_health: null,
-        air_ratio: boundedNumber(item.air_ratio, { min: 0, max: 1 }),
+        estimated_health: estimatedHealth,
+        air_ratio: airTotal === null || airCount === null ? null : airCount / airTotal,
         boss_count: bossCount,
         strength: estimatedTotal,
         is_spike: item.is_spike === true,
-        details_json: { ...details, groups: [groupDetail] },
+        details_json: { ...details, air_total: airTotal, air_count: airCount, groups: [groupDetail] },
       });
     }
   }
-  if (groups.size > 0) warnings.push(warning('WAVE_SUMMARY_ESTIMATED', 'Wave summaries project renderer spawn groups; unit health, pathing, and in-game modifiers are not simulated.', 'info'));
-  return [...groups.values()].sort((left, right) => left.wave_start - right.wave_start || left.wave_end - right.wave_end).slice(0, 500);
+  const sorted = [...groups.values()].sort((left, right) => left.wave_start - right.wave_start || left.wave_end - right.wave_end).slice(0, 500);
+  let previousPerWaveStrength: number | null = null;
+  let detectedSpike = false;
+  for (const wave of sorted) {
+    const rangeSize = wave.wave_end > 1_000_000 ? 1 : Math.max(1, Math.floor(wave.wave_end - wave.wave_start) + 1);
+    const perWaveStrength = wave.strength === null ? null : wave.strength / rangeSize;
+    if (perWaveStrength !== null && previousPerWaveStrength !== null
+      && perWaveStrength >= previousPerWaveStrength * 1.5
+      && perWaveStrength >= previousPerWaveStrength + 3) {
+      wave.is_spike = true;
+      detectedSpike = true;
+    }
+    if (perWaveStrength !== null) previousPerWaveStrength = perWaveStrength;
+  }
+  if (groups.size > 0) warnings.push(warning('WAVE_SUMMARY_ESTIMATED', 'Wave summaries project spawn groups; unit scaling, pathing, and in-game modifiers are not simulated.', 'info'));
+  if (detectedSpike) warnings.push(warning('WAVE_SPIKES_HEURISTIC', 'Spike markers compare estimated strength per wave between supplied ranges; they are a heuristic.', 'info'));
+  return sorted;
 }
 
 function summarizeBalance(resources: MapResourceRecord[], spawns: MapSpawnRecord[], cores: MapCoreRecord[], waves: MapWaveSummaryRecord[], warnings: AnalyzerWarning[]): Record<string, unknown> {

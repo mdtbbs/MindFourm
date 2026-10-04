@@ -2,6 +2,7 @@ export type PreviewMarker = {
   label: string;
   xPercent: number;
   yPercent: number;
+  layer: 'logistics' | 'liquid' | 'power' | 'input_output' | 'terrain' | 'resources' | 'ores' | 'cores' | 'enemy_spawns' | 'buildings' | 'player_area' | 'other';
 };
 
 function finiteNumber(value: unknown): number | null {
@@ -21,7 +22,17 @@ export function schematicBlockPosition(
     label: `${x}, ${y}`,
     xPercent: ((x + 1.5) / (width + 2)) * 100,
     yPercent: ((height - y + 0.5) / (height + 2)) * 100,
+    layer: 'other',
   };
+}
+
+export function schematicBlockLayer(block: string): PreviewMarker['layer'] {
+  const name = block.toLowerCase();
+  if (/(source|void|unloader|mass-driver)/.test(name)) return 'input_output';
+  if (/(conduit|liquid|pipe|pump)/.test(name)) return 'liquid';
+  if (/(power-node|battery|generator|solar-panel|reactor|turbine|thermal-generator|combustion-generator)/.test(name)) return 'power';
+  if (/(conveyor|router|sorter|junction|duct|overflow-gate|underflow-gate|stack-conveyor)/.test(name)) return 'logistics';
+  return 'other';
 }
 
 export function mapCorePosition(
@@ -36,7 +47,20 @@ export function mapCorePosition(
     label: `${label} (${x}, ${y})`,
     xPercent: (x / width) * 100,
     yPercent: ((height - y) / height) * 100,
+    layer: 'cores',
   };
+}
+
+export function mapTilePosition(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  name: string,
+  layer: Exclude<PreviewMarker['layer'], 'logistics' | 'power' | 'input_output' | 'other'>,
+): PreviewMarker | null {
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
+  return { label: `${name} (${x}, ${y})`, xPercent: (x / width) * 100, yPercent: ((height - y) / height) * 100, layer };
 }
 
 type MetadataRecord = Record<string, unknown>;
@@ -74,15 +98,15 @@ export function getPreviewMarkers(
       const marker = schematicBlockPosition(x, y, width, height);
       if (!marker) return [];
       const block = typeof item?.block === 'string' ? item.block : marker.label;
-      return [{ ...marker, label: `${block} (${marker.label})` }];
+      return [{ ...marker, layer: schematicBlockLayer(block), label: `${block} (${marker.label})` }];
     });
   }
 
   if (kind === 'map') {
     const map = nestedRecord(root, 'map') ?? root;
-    const cores = map.cores;
-    if (!Array.isArray(cores)) return [];
-    return cores.flatMap((raw): PreviewMarker[] => {
+    const markers: PreviewMarker[] = [];
+    const cores = Array.isArray(map.cores) ? map.cores : [];
+    markers.push(...cores.flatMap((raw): PreviewMarker[] => {
       const item = record(raw);
       const x = finiteNumber(item?.x);
       const y = finiteNumber(item?.y);
@@ -90,7 +114,23 @@ export function getPreviewMarkers(
       const team = typeof item?.team === 'string' ? item.team : 'Core';
       const marker = mapCorePosition(x, y, width, height, team);
       return marker ? [marker] : [];
-    });
+    }));
+    const layers = nestedRecord(map, 'tile_layers');
+    const mapLayerKeys = ['terrain', 'resources', 'ores', 'enemy_spawns', 'buildings', 'player_area', 'liquid'] as const;
+    for (const layer of mapLayerKeys) {
+      const values = layers?.[layer];
+      if (!Array.isArray(values)) continue;
+      markers.push(...values.flatMap((raw): PreviewMarker[] => {
+        const item = record(raw);
+        const x = finiteNumber(item?.x);
+        const y = finiteNumber(item?.y);
+        if (x === null || y === null) return [];
+        const name = typeof item?.name === 'string' ? item.name : layer;
+        const marker = mapTilePosition(x, y, width, height, name, layer);
+        return marker ? [marker] : [];
+      }));
+    }
+    return markers;
   }
 
   return [];

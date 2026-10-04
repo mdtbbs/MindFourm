@@ -525,8 +525,16 @@ export class ResourcesV2Service {
     parameters.push(limit + 1);
     const rows = await this.rowsFrom(
       'resource_relations',
-      `SELECT rr.id, rr.relation_type, rr.relation_context, rr.created_at, peer.public_id AS peer_public_id, peer.title AS peer_title, peer.resource_kind AS peer_kind, CASE WHEN version.status = 'published' THEN version.public_id ELSE NULL END AS peer_version_public_id FROM resource_relations rr JOIN resources peer ON peer.id = CASE WHEN rr.source_resource_id = ? THEN rr.target_resource_id ELSE rr.source_resource_id END LEFT JOIN resource_versions version ON version.id = CASE WHEN rr.source_resource_id = ? THEN rr.target_version_id ELSE rr.source_version_id END WHERE ${clauses.join(' AND ')} ORDER BY rr.created_at DESC, rr.id DESC LIMIT ?`,
-      parameters,
+      `SELECT rr.id, rr.relation_type, rr.relation_context, rr.created_at,
+       CASE WHEN rr.source_resource_id = ? THEN 'outgoing' ELSE 'incoming' END AS relation_direction,
+       peer.public_id AS peer_public_id, peer.title AS peer_title, peer.resource_kind AS peer_kind,
+       CASE WHEN version.status = 'published' THEN version.public_id ELSE NULL END AS peer_version_public_id,
+       CASE WHEN version.status = 'published' THEN version.version ELSE NULL END AS peer_version
+       FROM resource_relations rr
+       JOIN resources peer ON peer.id = CASE WHEN rr.source_resource_id = ? THEN rr.target_resource_id ELSE rr.source_resource_id END
+       LEFT JOIN resource_versions version ON version.id = CASE WHEN rr.source_resource_id = ? THEN rr.target_version_id ELSE rr.source_version_id END
+       WHERE ${clauses.join(' AND ')} ORDER BY rr.created_at DESC, rr.id DESC LIMIT ?`,
+      [resource.id, ...parameters],
     );
     const safeRows = rows.filter(row => this.isUuid(row.peer_public_id));
     const hasMore = safeRows.length > limit;
@@ -535,6 +543,7 @@ export class ResourcesV2Service {
     return {
       items: visible.map(row => ({
         relation_type: String(row.relation_type || 'related'),
+        relation_direction: row.relation_direction === 'incoming' ? 'incoming' : 'outgoing',
         relation_context: RELATION_CONTEXTS.includes(row.relation_context) ? row.relation_context : 'general',
         resource: {
           public_id: this.isUuid(row.peer_public_id) ? String(row.peer_public_id) : '',
@@ -542,6 +551,7 @@ export class ResourcesV2Service {
           resource_kind: String(row.peer_kind || 'other'),
         },
         version_public_id: this.isUuid(row.peer_version_public_id) ? String(row.peer_version_public_id) : null,
+        version: typeof row.peer_version === 'string' && row.peer_version.length ? String(row.peer_version) : null,
       })),
       pagination: {
         next_cursor: hasMore && last ? this.encodeCursor({ sort_at: this.iso(last.created_at) || '', id: this.numberValue(last.id) }) : null,
@@ -1260,15 +1270,25 @@ export class ResourcesV2Service {
       } : null;
     }
     if (kind === 'map') {
-      const rows = await this.rowsFrom('map_analyses', 'SELECT difficulty_confidence, estimated_difficulty, resource_balance_json, path_analysis_json, warnings_json FROM map_analyses WHERE resource_version_id = ? LIMIT 1', [versionId]);
+      const [rows, waveRows] = await Promise.all([
+        this.rowsFrom('map_analyses', 'SELECT difficulty_confidence, estimated_difficulty, resource_balance_json, path_analysis_json, warnings_json FROM map_analyses WHERE resource_version_id = ? LIMIT 1', [versionId]),
+        this.rowsFrom('map_wave_summaries', 'SELECT wave_start, wave_end, enemy_count, estimated_health, air_ratio, boss_count, strength, is_spike FROM map_wave_summaries WHERE resource_version_id = ? ORDER BY wave_start ASC, id ASC LIMIT 500', [versionId]),
+      ]);
       const row = rows[0];
-      return row ? {
-        estimated: true, difficulty_confidence: row.difficulty_confidence || 'estimated',
-        estimated_difficulty: this.nullableNumber(row.estimated_difficulty),
-        resource_balance: this.safePublicJson(row.resource_balance_json, null),
-        path_analysis: this.safePublicJson(row.path_analysis_json, null),
-        warnings: this.safePublicJson(row.warnings_json, []),
-      } : null;
+      if (!row && waveRows.length === 0) return null;
+      return {
+        estimated: true, difficulty_confidence: row?.difficulty_confidence || 'estimated',
+        estimated_difficulty: this.nullableNumber(row?.estimated_difficulty),
+        resource_balance: this.safePublicJson(row?.resource_balance_json, null),
+        path_analysis: this.safePublicJson(row?.path_analysis_json, null),
+        warnings: this.safePublicJson(row?.warnings_json, []),
+        waves: waveRows.map(wave => ({
+          wave_start: this.numberValue(wave.wave_start), wave_end: this.numberValue(wave.wave_end),
+          enemy_count: this.nullableNumber(wave.enemy_count), estimated_health: this.nullableNumber(wave.estimated_health),
+          air_ratio: this.nullableNumber(wave.air_ratio), boss_count: this.numberValue(wave.boss_count),
+          strength: this.nullableNumber(wave.strength), is_spike: Number(wave.is_spike) === 1,
+        })),
+      };
     }
     return null;
   }

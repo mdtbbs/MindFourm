@@ -133,6 +133,8 @@ export type V1MapMetadata = {
   core_count: number | null;
   cores: unknown[];
   core_teams: string[];
+  tile_layers: Record<string, unknown>;
+  tile_layers_truncated: boolean;
   required_mods: string[];
 };
 

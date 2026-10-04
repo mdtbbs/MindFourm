@@ -266,10 +266,14 @@ export class ResourceV2ResourceRefDto {
 
 export class ResourceV2RelationDto {
   @ApiProperty({ example: 'requires' }) relation_type!: string;
+  @ApiProperty({ enum: ['outgoing', 'incoming'], description: 'Whether the current resource is the source or target of this relation.' })
+  relation_direction!: 'outgoing' | 'incoming';
   @ApiProperty({ enum: ['opening', 'production', 'defense', 'logistics', 'general'], example: 'production' })
   relation_context!: 'opening' | 'production' | 'defense' | 'logistics' | 'general';
   @ApiProperty({ type: ResourceV2ResourceRefDto }) resource!: ResourceV2ResourceRefDto;
   @ApiProperty({ nullable: true, type: String, format: 'uuid' }) version_public_id!: string | null;
+  @ApiProperty({ nullable: true, type: String, example: '1.4.2', description: 'Published version label for the related resource, when a relation targets a specific version.' })
+  version!: string | null;
 }
 
 export class ResourceV2RelationPageDto extends ResourceV2PageDto {

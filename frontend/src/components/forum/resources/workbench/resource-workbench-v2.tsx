@@ -22,6 +22,7 @@ import ResourcePreviewViewer from './resource-preview-viewer';
 import ResourceProfileEditor from './resource-profile-editor';
 import ResourceReleaseForm from './resource-release-form';
 import ResourceCommunityInteractions from './resource-community-interactions';
+import SchematicLightEditor from './schematic-light-editor';
 
 type SectionKey = 'overview' | 'publish' | 'compatibility' | 'analysis' | 'community' | 'settings';
 type VersionTab = 'summary' | 'files' | 'compatibility' | 'diff';
@@ -344,7 +345,8 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
   const selectedVersion = useMemo(() => workbench?.versions.find((version) => version.public_id === selectedVersionId) || workbench?.versions.find((version) => version.recommended) || workbench?.versions[0] || null, [selectedVersionId, workbench]);
   const canPublish = Boolean(workbench?.permissions.can_manage)
     && ['owner', 'maintainer', 'publisher'].includes(workbench?.permissions.role || '');
-  const canEditProfile = ['owner', 'maintainer'].includes(workbench?.permissions.role || '');
+  const canEditProfile = Boolean(workbench?.permissions.can_manage)
+    && ['owner', 'maintainer'].includes(workbench?.permissions.role || '');
   const sectionItems: Array<{ key: SectionKey; label: string }> = [
     { key: 'overview', label: t('resourceWorkbenchV2.overview') },
     { key: 'publish', label: t('resourceWorkbenchV2.publish') },
@@ -381,6 +383,8 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
   const metadata = resource?.renderer?.public_metadata ?? resource?.metadata;
   const mapMetadata = resource?.metadata.map;
   const schematicMetadata = resource?.metadata.schematic;
+  const analyzedWaveData = workbench?.analysis?.data?.waves;
+  const waveData = Array.isArray(analyzedWaveData) && analyzedWaveData.length > 0 ? analyzedWaveData : mapMetadata?.wave_groups;
   const dimensions = resource?.resource_kind === 'map' ? mapMetadata : resource?.resource_kind === 'schematic' ? schematicMetadata : undefined;
   const previewWidth = dimensions?.width ?? null;
   const previewHeight = dimensions?.height ?? null;
@@ -435,10 +439,32 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
               metadata={metadata}
               width={previewWidth}
               height={previewHeight}
+              waveData={waveData}
               labels={{
                 zoomIn: t('resourceWorkbenchV2.zoomIn'), zoomOut: t('resourceWorkbenchV2.zoomOut'), reset: t('resourceWorkbenchV2.reset'),
                 coordinates: t('resourceWorkbenchV2.coordinates'), approximate: t('resourceWorkbenchV2.approximate'), grid: t('resourceWorkbenchV2.grid'),
                 markers: t('resourceWorkbenchV2.markers'), noMarkers: t('resourceWorkbenchV2.noMarkers'), noPreview: t('resourceWorkbenchV2.noPreview'),
+                inspect: t('resourceWorkbenchV2.inspectBlock'), selected: t('resourceWorkbenchV2.selectedMarker'),
+                layersTitle: t('resourceWorkbenchV2.previewLayers'),
+                layersNote: t('resourceWorkbenchV2.schematicLayerNote'),
+                layersTruncated: t('resourceWorkbenchV2.mapLayersTruncated'),
+                layers: {
+                  logistics: t('resourceWorkbenchV2.layerLogistics'), liquid: t('resourceWorkbenchV2.layerLiquid'),
+                  power: t('resourceWorkbenchV2.layerPower'), input_output: t('resourceWorkbenchV2.layerInputOutput'),
+                  terrain: t('resourceWorkbenchV2.layerTerrain'), resources: t('resourceWorkbenchV2.layerResources'),
+                  ores: t('resourceWorkbenchV2.layerOres'), cores: t('resourceWorkbenchV2.layerCores'),
+                  enemy_spawns: t('resourceWorkbenchV2.layerEnemySpawns'), buildings: t('resourceWorkbenchV2.layerBuildings'),
+                  player_area: t('resourceWorkbenchV2.layerPlayerArea'),
+                },
+                wave: {
+                  title: t('resourceWorkbenchV2.waveViewer'), chart: t('resourceWorkbenchV2.waveStrengthChart'),
+                  range: t('resourceWorkbenchV2.waveRange'), enemies: t('resourceWorkbenchV2.waveEnemies'),
+                  health: t('resourceWorkbenchV2.waveEstimatedHealth'), airRatio: t('resourceWorkbenchV2.waveAirRatio'),
+                  bosses: t('resourceWorkbenchV2.waveBosses'), strength: t('resourceWorkbenchV2.waveStrength'),
+                  spike: t('resourceWorkbenchV2.waveSpike'), estimated: t('resourceWorkbenchV2.estimated'),
+                  openEnded: t('resourceWorkbenchV2.waveOpenEnded'),
+                  empty: t('resourceWorkbenchV2.waveEmpty'), unknown: t('resourceWorkbenchV2.unknown'),
+                },
                 status: { processing: t('resourceWorkbenchV2.rendererProcessing'), ready: t('resourceWorkbenchV2.rendererReady'), failed: t('resourceWorkbenchV2.rendererFailed'), unavailable: t('resourceWorkbenchV2.rendererUnavailable'), none: t('resourceWorkbenchV2.rendererNone') },
               }}
             />}
@@ -452,6 +478,9 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><label htmlFor="workbench-version" className="text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbenchV2.selectVersion')}</label><select id="workbench-version" value={selectedVersion?.public_id || ''} onChange={(event) => setSelectedVersionId(event.target.value)} disabled={workbench.versions.length === 0} className="min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text)] sm:max-w-sm">{workbench.versions.length === 0 && <option value="">{t('resourceWorkbenchV2.noVersions')}</option>}{workbench.versions.map((version) => <option key={version.public_id} value={version.public_id}>{version.display_version || version.version}{version.recommended ? ` · ${t('resourceWorkbenchV2.recommended')}` : ''}</option>)}</select></div>
               <VersionWorkspace version={selectedVersion} locale={locale} kind={resource.resource_kind} publicId={resource.public_id} versions={workbench.versions} labels={{ ...sharedLabels, noVersions: t('resourceWorkbenchV2.noVersions') }} />
             </FoldCard>
+            {resource.resource_kind === 'schematic' && <FoldCard title={t('resourceWorkbenchV2.schematicEditor.title')}>
+              <SchematicLightEditor workbench={workbench} version={selectedVersion} canEdit={canEditProfile} />
+            </FoldCard>}
           </>}
 
           {activeSection === 'publish' && <div className="space-y-4">
@@ -475,7 +504,17 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
             <FoldCard title={t('resourceWorkbenchV2.communityStats')} open><div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{[
               [t('resourceWorkbenchV2.views'), workbench.stats.views], [t('resourceWorkbenchV2.downloads'), workbench.stats.downloads], [t('resourceWorkbenchV2.likes'), workbench.stats.likes], [t('resourceWorkbenchV2.favorites'), workbench.stats.favorites], [t('resourceWorkbenchV2.ratings'), workbench.stats.rating_count], [t('resourceWorkbenchV2.averageRating'), workbench.stats.rating_average],
             ].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-[var(--bg-elevated)] p-3"><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="mt-1 text-xl font-semibold tabular-nums text-[var(--text)]">{Number(value).toLocaleString(locale)}</p></div>)}</div></FoldCard>
-            <FoldCard title={t('resourceWorkbenchV2.relatedResources')} open>{workbench.relations.length ? <ul className="space-y-2">{workbench.relations.map((relation) => <li key={`${relation.relation_type}:${relation.resource.public_id}:${relation.version_public_id || ''}`} className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between"><Link href={`/resources/${encodeURIComponent(relation.resource.public_id)}/workbench`} className="min-w-0 break-words font-medium text-[var(--primary)] hover:underline">{relation.resource.title}</Link><span className="text-xs text-[var(--text-muted)]">{relation.relation_type} · {t(`resourceWorkbenchV2.community.context.${relation.relation_context}`)} · {relation.resource.resource_kind}</span></li>)}</ul> : <EmptyState>{t('resourceWorkbenchV2.noRelations')}</EmptyState>}</FoldCard>
+            <FoldCard title={t('resourceWorkbenchV2.relatedResources')} open>{workbench.relations.length ? <ul className="space-y-2">{workbench.relations.map((relation) => {
+              const relationTypeKey = `resourceWorkbenchV2.community.relationTypes.${relation.relation_type}`;
+              const relationTypeLabel = ['recommended_for', 'fork_of', 'successor_of', 'related'].includes(relation.relation_type)
+                ? t(relationTypeKey)
+                : relation.relation_type;
+              const versionLabel = relation.version || relation.version_public_id;
+              return <li key={`${relation.relation_type}:${relation.resource.public_id}:${relation.version_public_id || ''}`} className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between">
+                <Link href={`/resources/${encodeURIComponent(relation.resource.public_id)}/workbench`} className="min-w-0 break-words font-medium text-[var(--primary)] hover:underline">{relation.resource.title}</Link>
+                <span className="text-xs text-[var(--text-muted)]">{t(`resourceWorkbenchV2.community.relationDirections.${relation.relation_direction}`)} · {relationTypeLabel}{relation.relation_type === 'recommended_for' ? ` · ${t(`resourceWorkbenchV2.community.context.${relation.relation_context}`)}` : ''} · {relation.resource.resource_kind}{versionLabel ? ` · ${t('resourceWorkbenchV2.community.relatedVersion')}: ${versionLabel}` : ''}</span>
+              </li>;
+            })}</ul> : <EmptyState>{t('resourceWorkbenchV2.noRelations')}</EmptyState>}</FoldCard>
             <ResourceCommunityInteractions workbench={workbench} version={selectedVersion} onRelationsChanged={() => { void refreshWorkbench().catch((caught) => setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.loadFailed'))); }} />
           </>}
 

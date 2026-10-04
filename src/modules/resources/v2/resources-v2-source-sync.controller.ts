@@ -24,7 +24,7 @@ export class ResourcesV2SourceSyncController {
   @ApiOperation({
     operationId: 'upsertResourceGithubSourceSyncV2',
     summary: '配置 Mod 的 GitHub Release 来源',
-    description: '仅 Owner/Maintainer 可操作。允许 HTTPS github.com 仓库 URL 与资产名过滤；由作者显式手动触发，配置不会自动轮询或改写 Resource 元数据。',
+    description: '仅 Owner/Maintainer 可操作。允许 HTTPS github.com 仓库 URL 与资产名过滤。enabled=true 表示选择加入每 15 分钟运行的自动轮询和导入；关闭时仍可由作者手动读取和导入。上游资产变更或无法安全验证时会暂停自动同步并通知 Owner，不覆盖已有版本。',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
   @ApiBody({ type: ResourceSourceSyncConfigDto })
@@ -43,7 +43,7 @@ export class ResourcesV2SourceSyncController {
   @ApiOperation({
     operationId: 'listResourceGithubReleasesV2',
     summary: '手动读取 GitHub Release、README 與 License 预览',
-    description: '只读取公开 Mod 的 GitHub 信息；每次最多四个固定 GitHub API 请求、一页 Release。列表不会因开启配置而自动执行，也不会修改 Resource 元数据。',
+    description: '作者手动读取公开 Mod 的 GitHub 信息；每次最多四个固定 GitHub API 请求、一页 Release。开启自动同步后，独立后台任务最多每 15 分钟检查一次，并安全导入符合过滤条件的新版本。',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
   @ApiQuery({ name: 'limit', required: false, schema: { type: 'integer', minimum: 1, maximum: 30 }, example: 20 })
@@ -63,7 +63,7 @@ export class ResourcesV2SourceSyncController {
   @ApiOperation({
     operationId: 'importResourceGithubReleaseV2',
     summary: '显式导入一个 GitHub Release 资产',
-    description: '仅 Owner/Maintainer 可操作。作者通过显式手动调用选择资产；资产通过本地格式校验、进入 quarantine，再由现有 ResourceVersionService 分析并创建不可覆盖的版本/revision。',
+    description: '仅 Owner/Maintainer 可手动操作；启用的后台同步也复用相同导入校验。资产通过本地格式校验、进入 quarantine，再由现有 ResourceVersionService 分析并创建不可覆盖的版本/revision。若已有 tag 对应的上游资产发生变化，后台会暂停并等待人工确认。',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
   @ApiBody({ type: ResourceSourceSyncImportDto })

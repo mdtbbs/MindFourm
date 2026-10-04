@@ -9,7 +9,7 @@ export class ResourceSourceSyncConfigDto {
   @IsString() @IsUrl({ protocols: ['https'], require_protocol: true }, { message: 'repository_url must be an HTTPS URL' }) @MaxLength(500)
   repository_url!: string;
 
-  @ApiProperty({ description: 'Enable the manual release-list and import endpoints for this source. No scheduled polling is configured.' })
+  @ApiProperty({ description: 'Opt in to scheduled GitHub release polling and automatic import (up to once every 15 minutes). Disabled sources still support author-triggered release listing and import.' })
   @IsBoolean()
   enabled!: boolean;
 

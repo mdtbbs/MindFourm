@@ -381,6 +381,8 @@ export class ResourceReadAdapterService {
       core_count: this.numberValue(renderer.core_count),
       cores: this.safeArray(renderer.cores),
       core_teams: this.stringList(renderer.core_teams),
+      tile_layers: this.objectValue(renderer.tile_layers),
+      tile_layers_truncated: renderer.tile_layers_truncated === true,
       required_mods: this.uniqueStrings([
         ...this.stringList(publisher.required_mods),
         ...this.stringList(renderer.mod_dependencies),

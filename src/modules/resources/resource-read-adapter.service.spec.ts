@@ -93,7 +93,11 @@ describe('ResourceReadAdapterService', () => {
         latest_published_version_id: 10, download_count: 42,
         metadata_json: { tags: ['survival'], planets: ['serpulo'] },
         renderer_status: 'ready',
-        renderer_metadata_json: { width: 256, height: 128, spawns: 4, build: 160 },
+        renderer_metadata_json: {
+          width: 256, height: 128, spawns: 4, build: 160,
+          tile_layers: { terrain: [{ x: 1, y: 2, name: 'sand' }], liquid: [] },
+          tile_layers_truncated: true,
+        },
       }),
     };
     const versionRepo = {
@@ -133,6 +137,8 @@ describe('ResourceReadAdapterService', () => {
     expect(result!.metadata.map?.width).toBe(256);
     expect(result!.metadata.map?.planets).toEqual(['serpulo']);
     expect(result!.metadata.map?.stored_game_build).toBeNull();
+    expect(result!.metadata.map?.tile_layers).toEqual({ terrain: [{ x: 1, y: 2, name: 'sand' }], liquid: [] });
+    expect(result!.metadata.map?.tile_layers_truncated).toBe(true);
     expect(result!.attributions).toHaveLength(1);
     expect(result!.attributions[0].role).toBe('submitter');
     expect(result!.latest_version).not.toBeNull();

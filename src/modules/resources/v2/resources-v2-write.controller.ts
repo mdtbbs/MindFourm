@@ -1,20 +1,22 @@
 import {
-  BadRequestException, Body, Controller, Param, Patch, Post, Req, UploadedFile, UseInterceptors, ValidationPipe,
+  BadRequestException, Body, Controller, Param, Patch, Post, Req, Res, UploadedFile, UseInterceptors, ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse, ApiBody, ApiConsumes, ApiCreatedResponse, ApiForbiddenResponse,
-  ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags,
+  ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiProduces, ApiTags,
 } from '@nestjs/swagger';
-import { ApiV1 } from '@common/decorators/api-v1.decorator';
+import { Response } from 'express';
+import { ApiV1, RawHttpResponse } from '@common/decorators/api-v1.decorator';
 import { OAuthProtected } from '@common/decorators/oauth-protected.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
+import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
 import { ResourceStorageService } from '../resource-storage.service';
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourceUploadInterceptor } from '../resources.controller';
 import { ResourcesV2WriteService } from './resources-v2-write.service';
 import {
   ResourceV2CreateRelationDto, ResourceV2CreateVersionDto, ResourceV2InviteMemberDto,
-  ResourceV2PatchProfileDto, ResourceV2TransferOwnerDto,
+  ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2TransferOwnerDto,
 } from './resources-v2-write.dto';
 
 @ApiV1()
@@ -99,6 +101,37 @@ export class ResourcesV2WriteController {
       if (stored?.file_path) await this.storage.removeManaged(stored.file_path).catch(() => undefined);
       throw error;
     }
+  }
+
+  @Post(':id/versions/:versionId/schematic-editor/export')
+  @RawHttpResponse()
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 5, window: 60 })
+  @ApiOperation({ operationId: 'exportResourceSchematicEdit', summary: '安全导出编辑后的蓝图副本', description: 'Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像和删除选中方块。只读取托管版本并返回新文件，不修改原版本。' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
+  @ApiParam({ name: 'versionId', format: 'uuid', description: '已发布 Version public UUID。' })
+  @ApiConsumes('application/json')
+  @ApiBody({ type: ResourceV2ExportSchematicDto })
+  @ApiProduces('application/octet-stream')
+  @ApiOkResponse({ description: 'An official Mindustry .msch serialization as a downloadable file.', schema: { type: 'string', format: 'binary' } })
+  @ApiBadRequestResponse({ description: '操作无效、文件无法解析或含有编辑器不支持安全保留的内容。' })
+  @ApiForbiddenResponse({ description: '当前用户不是该资源的 Owner 或 Maintainer。' })
+  @ApiNotFoundResponse({ description: '资源或已发布版本不存在。' })
+  async exportSchematic(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+    @Body() rawBody: Record<string, any>,
+    @Req() req: any,
+    @Res() response: Response,
+  ) {
+    const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
+      .transform(rawBody || {}, { type: 'body', metatype: ResourceV2ExportSchematicDto }) as ResourceV2ExportSchematicDto;
+    const result = await this.resources.exportSchematic(id, versionId, body, Number(req.user.id));
+    response.setHeader('Content-Type', 'application/octet-stream');
+    response.setHeader('Content-Disposition', attachmentContentDisposition(result.file_name));
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    return response.send(result.data);
   }
 
   @Patch(':id')

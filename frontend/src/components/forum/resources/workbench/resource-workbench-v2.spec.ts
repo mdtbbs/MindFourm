@@ -18,7 +18,22 @@ import {
   type ResourceV2ModIssueReport,
   type ResourceV2VersionDiff,
 } from '@/lib/api/v1/resources';
+import {
+  deleteResourceV2ReportAttachment,
+  downloadResourceV2ReportAttachment,
+  listResourceV2ReportAttachments,
+  uploadResourceV2ReportAttachment,
+  type ResourceV2ReportAttachment,
+} from '@/lib/api/v1/resource-report-attachments';
 import ResourceWorkbenchV2 from './resource-workbench-v2';
+
+jest.mock('@/lib/api/v1/resource-report-attachments', () => ({
+  ...jest.requireActual('@/lib/api/v1/resource-report-attachments'),
+  deleteResourceV2ReportAttachment: jest.fn(),
+  downloadResourceV2ReportAttachment: jest.fn(),
+  listResourceV2ReportAttachments: jest.fn(),
+  uploadResourceV2ReportAttachment: jest.fn(),
+}));
 
 jest.mock('@/lib/api/v1/resources', () => ({
   ...jest.requireActual('@/lib/api/v1/resources'),
@@ -114,7 +129,13 @@ jest.mock('@/i18n/provider', () => {
     'resourceWorkbenchV2.community.loading': 'Loading community reports…',
     'resourceWorkbenchV2.community.loginPhoneRequired': 'Sign in and verify your phone number.',
     'resourceWorkbenchV2.community.privacyReminder': 'Remove private information first.',
-    'resourceWorkbenchV2.community.attachmentsUnavailable': 'Attachments are unavailable.',
+    'resourceWorkbenchV2.community.reportAttachments': 'Attach logs or screenshots',
+    'resourceWorkbenchV2.community.attachmentHelp': 'Up to 10 files, 5 MiB each.',
+    'resourceWorkbenchV2.community.viewAttachments': 'View private attachments',
+    'resourceWorkbenchV2.community.noReportAttachments': 'No attachments are available to display.',
+    'resourceWorkbenchV2.community.attachmentListUnavailable': 'Private attachments are unavailable for your account.',
+    'resourceWorkbenchV2.community.downloadAttachment': 'Download attachment',
+    'resourceWorkbenchV2.community.deleteAttachment': 'Delete attachment',
     'resourceWorkbenchV2.community.compatibilityReports': 'Compatibility reports',
     'resourceWorkbenchV2.community.noCompatibilityReports': 'No compatibility reports yet.',
     'resourceWorkbenchV2.community.submitCompatibility': 'Submit compatibility report',
@@ -212,6 +233,10 @@ const mockSubmitModCompatibility = submitResourceV2ModCompatibilityReport as jes
 const mockSubmitModConflict = submitResourceV2ModConflict as jest.MockedFunction<typeof submitResourceV2ModConflict>;
 const mockSubmitModIssue = submitResourceV2ModIssueReport as jest.MockedFunction<typeof submitResourceV2ModIssueReport>;
 const mockCreateRelation = createResourceV2Relation as jest.MockedFunction<typeof createResourceV2Relation>;
+const mockListReportAttachments = listResourceV2ReportAttachments as jest.MockedFunction<typeof listResourceV2ReportAttachments>;
+const mockUploadReportAttachment = uploadResourceV2ReportAttachment as jest.MockedFunction<typeof uploadResourceV2ReportAttachment>;
+const mockDownloadReportAttachment = downloadResourceV2ReportAttachment as jest.MockedFunction<typeof downloadResourceV2ReportAttachment>;
+const mockDeleteReportAttachment = deleteResourceV2ReportAttachment as jest.MockedFunction<typeof deleteResourceV2ReportAttachment>;
 type TestDom = { window: Window & typeof globalThis & { close: () => void } };
 const { JSDOM } = require('jsdom') as {
   JSDOM: new (html: string, options: { pretendToBeVisual: boolean; url: string }) => TestDom;
@@ -336,7 +361,7 @@ async function submitForm(form: HTMLFormElement | null): Promise<void> {
 async function navigateCommunity(): Promise<void> {
   await click(container.querySelector('button[aria-expanded="false"]'));
   const communityButton = Array.from(container.querySelectorAll('nav[aria-label="Workbench sections"] button'))
-    .find((button) => button.textContent === 'Community');
+    .find((button) => button.textContent === 'Community interactions');
   await click(communityButton || null);
 }
 
@@ -373,6 +398,13 @@ describe('ResourceWorkbenchV2', () => {
     });
     mockSubmitModIssue.mockReset().mockResolvedValue({ public_id: 'issue-id', resource_public_id: 'resource-id', version_public_id: 'version-id', status: 'open' });
     mockCreateRelation.mockReset().mockResolvedValue({ source_resource_public_id: 'resource-id', target_resource_public_id: 'target-id', relation_type: 'recommended_for', relation_context: 'production', created: true });
+    mockListReportAttachments.mockReset().mockResolvedValue({ items: [], max_attachments: 10, max_file_size_bytes: 5 * 1024 * 1024, max_total_size_bytes: 20 * 1024 * 1024 });
+    mockUploadReportAttachment.mockReset().mockResolvedValue({
+      public_id: 'attachment-id', kind: 'log', name: 'client.log', size_bytes: 12, mime_type: 'text/plain',
+      sha256: 'a'.repeat(64), created_at: '2026-10-01T00:00:00.000Z', download_url: '/api/v1/private-attachment', can_delete: true,
+    } satisfies ResourceV2ReportAttachment);
+    mockDownloadReportAttachment.mockReset().mockResolvedValue(new Blob(['log']));
+    mockDeleteReportAttachment.mockReset().mockResolvedValue({ public_id: 'attachment-id', deleted: true });
     container = document.createElement('div');
     document.body.appendChild(container);
   });
@@ -535,7 +567,8 @@ describe('ResourceWorkbenchV2', () => {
 
     expect(container.textContent).toContain('Compatibility reports');
     expect(container.textContent).toContain('Remove private information first.');
-    expect(container.textContent).toContain('Attachments are unavailable.');
+    expect(container.querySelectorAll('input[type="file"]')).toHaveLength(2);
+    expect(container.textContent).toContain('Attach logs or screenshots');
     expect(container.querySelectorAll('form')).toHaveLength(3);
     expect((container.querySelectorAll('form')[0].querySelector('button[type="submit"]') as HTMLButtonElement).className).toContain('w-full');
     await submitForm(container.querySelectorAll('form')[0]);
@@ -563,6 +596,28 @@ describe('ResourceWorkbenchV2', () => {
     }));
   });
 
+  it('uploads a private log attachment to the newly submitted issue report', async () => {
+    const fixture = workbench('mod', { versions: [version('version-1', '1.0.0', 1, true)] });
+    await mount(fixture);
+    await navigateCommunity();
+    const issueForm = container.querySelectorAll('form')[1];
+    await setValue(issueForm.querySelector('input'), 'Crashes after loading');
+    await setValue(issueForm.querySelector('textarea'), 'See attached client log.');
+    const fileInput = issueForm.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new dom.window.File(['crash trace'], 'client.log', { type: 'text/plain' });
+    Object.defineProperty(fileInput, 'files', { configurable: true, value: [file] });
+    await act(async () => Simulate.change(fileInput, { target: { files: [file] } as unknown as EventTarget }));
+
+    await submitForm(issueForm);
+
+    expect(mockSubmitModIssue).toHaveBeenCalledWith(fixture.resource.public_id, 'version-1', {
+      title: 'Crashes after loading', body: 'See attached client log.',
+    });
+    expect(mockListReportAttachments).toHaveBeenCalledWith('issue', 'issue-id');
+    expect(mockUploadReportAttachment).toHaveBeenCalledWith('issue', 'issue-id', file);
+    expect(container.textContent).toContain('reportAndAttachmentsSaved');
+  });
+
   it('shows public issue reports, author responses, and loads the next page', async () => {
     const fixture = workbench('mod', { versions: [version('version-1', '1.0.0', 1, true)] });
     const issue = (id: string, title: string): ResourceV2ModIssueReport => ({
@@ -572,11 +627,23 @@ describe('ResourceWorkbenchV2', () => {
     mockGetModIssueReports
       .mockResolvedValueOnce({ items: [issue('issue-1', 'Loading failure')], pagination: { next_cursor: 'next-cursor', has_more: true } })
       .mockResolvedValueOnce({ items: [issue('issue-2', 'Startup crash')], pagination: { next_cursor: null, has_more: false } });
+    mockListReportAttachments.mockResolvedValueOnce({
+      items: [{
+        public_id: 'private-attachment', kind: 'image', name: 'screenshot.png', size_bytes: 128,
+        mime_type: 'image/png', sha256: 'b'.repeat(64), created_at: '2026-10-01T00:00:00.000Z',
+        download_url: '/api/v1/private-attachment', can_delete: false,
+      }],
+      max_attachments: 10, max_file_size_bytes: 5 * 1024 * 1024, max_total_size_bytes: 20 * 1024 * 1024,
+    });
     await mount(fixture);
     await navigateCommunity();
     await act(async () => { await Promise.resolve(); });
     expect(container.textContent).toContain('Loading failure details');
     expect(container.textContent).toContain('Fixed in the next release.');
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'View private attachments') || null);
+    expect(mockListReportAttachments).toHaveBeenCalledWith('issue', 'issue-1');
+    expect(container.textContent).toContain('screenshot.png');
+    expect(Array.from(container.querySelectorAll('button')).some((button) => button.textContent === 'Delete attachment')).toBe(false);
     await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Load more reports') || null);
     expect(mockGetModIssueReports).toHaveBeenLastCalledWith(fixture.resource.public_id, { limit: 10, cursor: 'next-cursor' });
     expect(container.textContent).toContain('Startup crash details');
@@ -602,14 +669,29 @@ describe('ResourceWorkbenchV2', () => {
     expect(mockSubmitMapFeedback).toHaveBeenCalledWith(fixture.resource.public_id, 'map-version-1', expect.objectContaining({ difficulty: 4 }));
 
     await setValue(container.querySelectorAll('form')[1].querySelector('input'), '44444444-4444-4444-8444-444444444444');
-    const relationContext = container.querySelectorAll('form')[1].querySelector('select');
-    await setValue(relationContext, 'production');
-    await submitForm(container.querySelectorAll('form')[1]);
+    const relationForm = container.querySelectorAll('form')[1];
+    const relationSelects = relationForm.querySelectorAll('select');
+    await setValue(relationSelects[0], 'recommended_for');
+    await setValue(relationSelects[1], 'production');
+    await submitForm(relationForm);
     expect(mockCreateRelation).toHaveBeenCalledWith(fixture.resource.public_id, {
       target_resource_public_id: '44444444-4444-4444-8444-444444444444',
       relation_type: 'recommended_for',
       relation_context: 'production',
       source_version_public_id: 'map-version-1',
+    });
+
+    await setValue(relationForm.querySelector('select'), 'fork_of');
+    const relationInputs = relationForm.querySelectorAll('input');
+    await setValue(relationInputs[0], '55555555-5555-4555-8555-555555555555');
+    await setValue(relationInputs[1], '66666666-6666-4666-8666-666666666666');
+    expect(relationForm.querySelectorAll('input[required]')).toHaveLength(2);
+    await submitForm(relationForm);
+    expect(mockCreateRelation).toHaveBeenLastCalledWith(fixture.resource.public_id, {
+      target_resource_public_id: '55555555-5555-4555-8555-555555555555',
+      relation_type: 'fork_of',
+      source_version_public_id: 'map-version-1',
+      target_version_public_id: '66666666-6666-4666-8666-666666666666',
     });
   });
 });

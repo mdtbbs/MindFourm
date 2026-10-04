@@ -16,6 +16,7 @@ describe('ResourceSourceSyncService', () => {
   let dataSource: any;
   let storage: any;
   let versions: any;
+  let notifications: any;
   let service: ResourceSourceSyncService;
   let fetchSpy: jest.SpyInstance;
 
@@ -71,7 +72,8 @@ describe('ResourceSourceSyncService', () => {
         published_at: '2026-10-05T00:00:00.000Z',
       })),
     };
-    service = new ResourceSourceSyncService(dataSource, storage, versions);
+    notifications = { create: jest.fn().mockResolvedValue({ id: 1 }) };
+    service = new ResourceSourceSyncService(dataSource, storage, versions, notifications);
     fetchSpy = jest.spyOn(globalThis, 'fetch');
   });
 
@@ -98,7 +100,7 @@ describe('ResourceSourceSyncService', () => {
       include_prerelease: true,
       asset_include: ['*.jar', '*.zip'],
       asset_exclude: ['*-sources.jar'],
-      polling: 'manual',
+      polling: 'scheduled',
     });
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
     expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining('ON DUPLICATE KEY UPDATE'), expect.any(Array));
@@ -263,6 +265,154 @@ describe('ResourceSourceSyncService', () => {
     expect(storage.removeManaged).toHaveBeenCalledTimes(1);
     const files = await fs.readdir(quarantineRoot);
     expect(files).toHaveLength(0);
+  });
+
+  it('automatically imports only the newest matching release after explicit opt-in', async () => {
+    const zip = minimalZip();
+    const release = {
+      tag_name: 'v2.0.0', name: 'Latest', body: 'Scheduled release', prerelease: false, draft: false,
+      assets: [{ name: 'mod.jar', size: zip.length, state: 'uploaded', browser_download_url: 'https://github.com/owner/mod/releases/download/v2.0.0/mod.jar' }],
+    };
+    sync.enabled = 1;
+    const scheduled = { ...sync, resource_public_id: RESOURCE_PUBLIC_ID, resource_owner_user_id: 5, resource_title: 'Mod', resource_kind: 'mod' };
+    dataSource.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM resource_source_syncs ss JOIN resources')) return [scheduled];
+      if (sql.includes('FOR UPDATE')) return [{ id: 9 }];
+      if (sql.includes('FROM resource_versions') && sql.includes('ORDER BY COALESCE(published_at')) {
+        return [{ version: 'legacy-local-version', content_hash: '0'.repeat(64), file_name: 'legacy.jar' }];
+      }
+      if (sql.includes('FROM resource_versions')) return [];
+      if (sql.includes('FROM resources')) return [resource];
+      if (sql.includes('FROM resource_members')) return [];
+      if (sql.includes('FROM resource_source_syncs')) return [sync];
+      return [];
+    });
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.hostname === 'api.github.com' && url.pathname.endsWith('/releases')) return jsonResponse([release]);
+      if (url.hostname === 'api.github.com') return jsonResponse(release);
+      return new Response(zip, { status: 200 });
+    });
+
+    await service.pollEnabledGithubSources();
+
+    expect(versions.create).toHaveBeenCalledWith(expect.objectContaining({
+      version: 'v2.0.0', release_channel: 'release', version_mode: 'compatibility',
+    }), expect.any(Object), 5);
+    expect(notifications.create).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(dataSource.query).not.toHaveBeenCalledWith(expect.stringContaining('ORDER BY COALESCE(published_at'), expect.any(Array));
+    expect(fetchSpy.mock.calls.some(([input]) => new URL(String(input)).pathname.endsWith('/releases/tags/legacy-local-version'))).toBe(false);
+  });
+
+  it('pauses on first opt-in when the newest exact remote tag already exists with changed content', async () => {
+    const changedZip = minimalZip();
+    changedZip[4] = 1;
+    sync.enabled = 1;
+    sync.upstream_tag = null;
+    const scheduled = { ...sync, resource_public_id: RESOURCE_PUBLIC_ID, resource_owner_user_id: 5, resource_title: 'Mod', resource_kind: 'mod' };
+    const existingVersion = { version: 'v1.0.0', content_hash: '0'.repeat(64), file_name: 'mod.jar' };
+    dataSource.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM resource_source_syncs ss JOIN resources')) return [scheduled];
+      if (sql.includes('FOR UPDATE')) return [{ id: 9 }];
+      if (sql.includes('FROM resource_versions')) return [existingVersion];
+      if (sql.includes('FROM resources')) return [resource];
+      if (sql.includes('FROM resource_members')) return [];
+      if (sql.includes('FROM resource_source_syncs')) return [sync];
+      return [];
+    });
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      const release = {
+        tag_name: 'v1.0.0', name: 'Release', body: null, prerelease: false, draft: false,
+        assets: [{ name: 'mod.jar', size: changedZip.length, state: 'uploaded', browser_download_url: 'https://github.com/owner/mod/releases/download/v1.0.0/mod.jar' }],
+      };
+      if (url.hostname === 'api.github.com') return jsonResponse(url.pathname.endsWith('/releases') ? [release] : release);
+      return new Response(changedZip, { status: 200 });
+    });
+
+    await service.pollEnabledGithubSources();
+
+    expect(versions.create).not.toHaveBeenCalled();
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining("last_status = 'manual_confirmation'"), expect.any(Array));
+    expect(notifications.create).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: 5,
+      type: 'system',
+      emailEvent: 'system',
+      deduplicationKey: expect.stringContaining('resource-source-sync-manual:9:'),
+    }));
+  });
+
+  it('adopts the newest exact remote tag on first opt-in only when its asset hash matches', async () => {
+    const zip = minimalZip();
+    const tag = 'v2.0.0';
+    const release = {
+      tag_name: tag, name: 'Latest', body: null, prerelease: false, draft: false,
+      assets: [{ name: 'mod.jar', size: zip.length, state: 'uploaded', browser_download_url: `https://github.com/owner/mod/releases/download/${tag}/mod.jar` }],
+    };
+    sync.enabled = 1;
+    const scheduled = { ...sync, resource_public_id: RESOURCE_PUBLIC_ID, resource_owner_user_id: 5, resource_title: 'Mod', resource_kind: 'mod' };
+    const existingVersion = {
+      version: tag, content_hash: createHash('sha256').update(zip).digest('hex'), file_name: 'mod.jar',
+    };
+    dataSource.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM resource_source_syncs ss JOIN resources')) return [scheduled];
+      if (sql.includes('FOR UPDATE')) return [{ id: 9 }];
+      if (sql.includes('FROM resource_versions')) return [existingVersion];
+      if (sql.includes('FROM resources')) return [resource];
+      if (sql.includes('FROM resource_members')) return [];
+      if (sql.includes('FROM resource_source_syncs')) return [sync];
+      return [];
+    });
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.hostname === 'api.github.com') return jsonResponse([release]);
+      return new Response(zip, { status: 200 });
+    });
+
+    await service.pollEnabledGithubSources();
+
+    expect(versions.create).not.toHaveBeenCalled();
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining('last_status = ?'), ['up_to_date', null, tag, 9]);
+    expect(notifications.create).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not create a scheduled version when the owner disables the source during download', async () => {
+    const zip = minimalZip();
+    const release = {
+      tag_name: 'v3.0.0', name: 'Latest', body: null, prerelease: false, draft: false,
+      assets: [{ name: 'mod.jar', size: zip.length, state: 'uploaded', browser_download_url: 'https://github.com/owner/mod/releases/download/v3.0.0/mod.jar' }],
+    };
+    sync.enabled = 1;
+    const scheduled = { ...sync, resource_public_id: RESOURCE_PUBLIC_ID, resource_owner_user_id: 5, resource_title: 'Mod', resource_kind: 'mod' };
+    dataSource.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM resource_source_syncs ss JOIN resources')) return [scheduled];
+      if (sql.includes('FOR UPDATE')) return [{ id: 9 }];
+      if (sql.includes('SELECT enabled FROM resource_source_syncs WHERE id')) return [{ enabled: 0 }];
+      if (sql.includes('FROM resource_versions')) return [];
+      if (sql.includes('FROM resources')) return [resource];
+      if (sql.includes('FROM resource_members')) return [];
+      if (sql.includes('FROM resource_source_syncs')) return [sync];
+      return [];
+    });
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.hostname === 'api.github.com' && url.pathname.endsWith('/releases')) return jsonResponse([release]);
+      if (url.hostname === 'api.github.com') return jsonResponse(release);
+      return new Response(zip, { status: 200 });
+    });
+
+    await service.pollEnabledGithubSources();
+
+    expect(dataSource.query).toHaveBeenCalledWith(
+      expect.stringContaining('SELECT enabled FROM resource_source_syncs WHERE id'), [9],
+    );
+    expect(versions.create).not.toHaveBeenCalled();
+    expect(storage.removeManaged).toHaveBeenCalledTimes(1);
+    expect(dataSource.query.mock.calls.some(([sql, params]) => sql.includes('last_status = ?') && params?.[0] === 'import_failed')).toBe(false);
+    expect(notifications.create).not.toHaveBeenCalled();
+    expect(await fs.readdir(quarantineRoot)).toHaveLength(0);
   });
 });
 

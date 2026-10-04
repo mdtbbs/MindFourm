@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -6,6 +7,7 @@ import { User } from '@entities/user.entity';
 import { ResourceReviewEvent } from '@entities/resource-center-v2.entity';
 import { ResourceVersionService } from '../resource-versions.service';
 import { ResourcePreviewService } from '../resource-preview.service';
+import { ResourceStorageService } from '../resource-storage.service';
 import { ResourceFileMeta } from '../resources.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
@@ -22,6 +24,7 @@ export class ResourcesV2WriteService {
     @InjectRepository(User) private readonly users: Repository<User>,
     private readonly versions: ResourceVersionService,
     private readonly previews: ResourcePreviewService,
+    @Optional() private readonly storage?: ResourceStorageService,
   ) {}
 
   private assertUuid(value: string): void {
@@ -82,6 +85,42 @@ export class ResourcesV2WriteService {
         findings: structured.analysis.warnings_json.map(item => ({ ...item, severity: item.severity.toUpperCase() })),
       },
     };
+  }
+
+  /** Export a transformed copy of an owner's published schematic without touching its stored release. */
+  async exportSchematic(publicId: string, versionPublicId: string, input: {
+    rotation_quarters: number; mirror_x: boolean; delete_positions?: Array<{ x: number; y: number }>;
+  }, actorId: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
+    const resource = await this.getResource(publicId);
+    await this.assertRole(resource, actorId, ['owner', 'maintainer']);
+    if (resource.resource_kind !== 'schematic') throw new BadRequestException('只有蓝图资源支持在线编辑');
+    this.assertUuid(versionPublicId);
+    if (!this.storage) throw new BadRequestException('资源文件存储不可用');
+    if (!Number.isInteger(input.rotation_quarters) || input.rotation_quarters < 0 || input.rotation_quarters > 3
+      || typeof input.mirror_x !== 'boolean' || (input.delete_positions?.length || 0) > 10_000) {
+      throw new BadRequestException('蓝图编辑操作无效');
+    }
+    const rows = await this.dataSource.query(
+      `SELECT public_id,status,file_path,file_name,content_hash FROM resource_versions
+       WHERE resource_id = ? AND public_id = ? LIMIT 1`,
+      [resource.id, versionPublicId],
+    ) as Array<{ public_id: string; status: string; file_path: string | null; file_name: string | null; content_hash: string | null }>;
+    const version = rows[0];
+    if (!version || version.status !== 'published') throw new NotFoundException('已发布蓝图版本不存在');
+    if (!version.file_path || !version.file_name?.toLowerCase().endsWith('.msch')) throw new BadRequestException('蓝图版本文件不可用');
+
+    const source = await this.storage.readManagedFile(version.file_path, 20 * 1024 * 1024);
+    const sourceHash = createHash('sha256').update(source).digest('hex');
+    if (version.content_hash && sourceHash !== version.content_hash.toLowerCase()) {
+      throw new BadRequestException('蓝图源文件校验失败，未生成编辑结果');
+    }
+    const transformed = await this.previews.transformSchematic(version.file_name, source, {
+      rotation_quarters: input.rotation_quarters,
+      mirror_x: input.mirror_x,
+      delete_positions: input.delete_positions || [],
+    });
+    const stem = version.file_name.split(/[\\/]/).pop()!.replace(/\.msch$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'schematic';
+    return { data: transformed.data, file_name: `${stem}-edited.msch`, sha256: transformed.sha256 };
   }
 
   async createVersion(publicId: string, file: ResourceFileMeta, input: {
@@ -199,10 +238,17 @@ export class ResourcesV2WriteService {
     const target = await this.getResource(input.target_resource_public_id);
     if (source.id === target.id) throw new BadRequestException('资源不能关联自己');
     if (!/^[a-z][a-z0-9_]{1,39}$/.test(input.relation_type)) throw new BadRequestException('关联类型无效');
+    if (!['recommended_for', 'fork_of', 'successor_of', 'related', 'requires', 'compatible_with'].includes(input.relation_type)) {
+      throw new BadRequestException('关联类型无效');
+    }
     const relationContext = input.relation_context || 'general';
     if (!['opening', 'production', 'defense', 'logistics', 'general'].includes(relationContext)) throw new BadRequestException('关联场景无效');
     if (input.relation_type !== 'recommended_for' && relationContext !== 'general') throw new BadRequestException('只有 recommended_for 关系支持场景标签');
     if (!target.is_public || !['approved', 'published'].includes(target.status || '')) throw new NotFoundException('目标资源不存在');
+    if (input.relation_type === 'fork_of' || input.relation_type === 'successor_of') {
+      if (source.resource_kind !== target.resource_kind) throw new BadRequestException('Fork 和继任关系必须连接相同类型的资源');
+      if (!input.target_version_public_id) throw new BadRequestException('Fork 和继任关系必须指定目标版本');
+    }
 
     const sourceVersion = input.source_version_public_id
       ? await this.resolveVersionPublicId(source.id, input.source_version_public_id) : null;

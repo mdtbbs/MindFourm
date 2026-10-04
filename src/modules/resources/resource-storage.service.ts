@@ -131,6 +131,21 @@ export class ResourceStorageService {
     return fs.readFile(managed.path);
   }
 
+  /** Read a bounded file only from private quarantine, never from public resource storage. */
+  async readQuarantinedFile(filePath: string, maxBytes: number): Promise<Buffer> {
+    const root = await fs.realpath(await this.getQuarantineDirectory());
+    const candidate = path.resolve(filePath);
+    let resolved: string;
+    try { resolved = await fs.realpath(candidate); }
+    catch (error: any) { if (error?.code === 'ENOENT') throw new BadRequestException('私有附件不存在'); throw error; }
+    if (!this.isInside(resolved, root)) throw new BadRequestException('私有附件存储路径无效');
+    const stat = await fs.lstat(resolved);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 || stat.size > maxBytes) {
+      throw new BadRequestException('私有附件大小或类型无效');
+    }
+    return fs.readFile(resolved);
+  }
+
   async statManagedFile(filePath: string): Promise<{ path: string; size: number }> {
     const candidate = path.resolve(filePath);
     const roots = [await this.getQuarantineDirectory(), await this.getResourceDirectory()];
@@ -192,6 +207,20 @@ export class ResourceStorageService {
     const roots = [await this.getQuarantineDirectory(), await this.getResourceDirectory()];
     if (!roots.some((root) => this.isInside(candidate, root))) return false;
     try { await fs.unlink(candidate); return true; } catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
+  }
+
+  /** Delete only a regular private-quarantine file; never unlink a public resource file. */
+  async removeQuarantinedFile(filePath: string | null | undefined): Promise<boolean> {
+    if (!filePath) return false;
+    const root = await fs.realpath(await this.getQuarantineDirectory());
+    const candidate = path.resolve(filePath);
+    let resolved: string;
+    try { resolved = await fs.realpath(candidate); }
+    catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
+    if (!this.isInside(resolved, root)) return false;
+    const stat = await fs.lstat(resolved);
+    if (!stat.isFile() || stat.isSymbolicLink()) return false;
+    try { await fs.unlink(resolved); return true; } catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
   }
 
   /** Remove old unreferenced files left by interrupted uploads, never active references. */

@@ -137,6 +137,7 @@ import { ResourceViewEvent } from './resource-view-event.entity';
 import { ResourcePackItem } from './resource-pack-item.entity';
 import { GameContentUploadSession } from './game-content-upload-session.entity';
 import { ResourceSubmissionIdempotency } from './resource-submission-idempotency.entity';
+import { ModReportAttachment } from './mod-report-attachment.entity';
 import { SocialPrivacySetting } from './social-privacy-setting.entity';
 import { UserPresencePreference } from './user-presence-preference.entity';
 import { MultiplayerSession } from './multiplayer-session.entity';
@@ -170,6 +171,7 @@ export const coreEntities = [
   Resource,
   ResourceUploadDraft,
   ResourceSubmissionIdempotency,
+  ModReportAttachment,
   ResourceCategory,
   ResourceVersion,
   PostLike,
@@ -340,6 +342,7 @@ export {
   ResourceVersionDiff, ResourceSourceSync,
   ModProfile, ModIdAlias, ModVersionMetadata, ModContent, ModContentAlias, ModLocalization,
   ModCompatibilityReport, ModIssueReport, ModConflictReport, ModConflictMember,
+  ModReportAttachment,
   SchematicVersionMetadata, SchematicBlock, SchematicMaterial, SchematicLogicProcessor, SchematicAnalysis,
   MapVersionMetadata, MapResourceEntry, MapSpawn, MapCore, MapWaveSummary, MapAnalysis, MapFeedback,
   // Phase 4 (refactor): Media

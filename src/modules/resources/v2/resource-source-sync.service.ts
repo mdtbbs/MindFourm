@@ -1,9 +1,10 @@
 import {
   BadGatewayException, BadRequestException, ConflictException, ForbiddenException,
-  Injectable, NotFoundException,
+  Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { DataSource } from 'typeorm';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -11,6 +12,7 @@ import * as path from 'path';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceStorageService } from '../resource-storage.service';
 import { ResourceVersionService } from '../resource-versions.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import {
   ResourceSourceSyncConfigDto, ResourceSourceSyncImportDto,
 } from './resource-source-sync.dto';
@@ -55,6 +57,19 @@ type SyncRow = {
   upstream_tag: string | null;
 };
 
+type ScheduledSyncRow = SyncRow & {
+  resource_public_id: string;
+  resource_owner_user_id: number | string;
+  resource_title: string;
+  resource_kind: string;
+};
+
+type ExistingVersionRow = {
+  version: string;
+  content_hash: string | null;
+  file_name: string | null;
+};
+
 type GithubRepository = { owner: string; repo: string; canonicalUrl: string };
 type GithubAsset = { name: string; size: number; state: string; browser_download_url: string };
 type GithubRelease = {
@@ -68,18 +83,29 @@ type GithubRelease = {
 };
 
 class GithubUpstreamError extends Error {
-  constructor(readonly status: number | null, message = 'GitHub request failed') {
+  constructor(readonly status: number | null, message = 'GitHub request failed', readonly manualReview = false) {
     super(message);
     this.name = 'GithubUpstreamError';
   }
 }
 
+class ScheduledSourceDisabledError extends Error {
+  constructor() {
+    super('Automatic GitHub source sync was disabled before import');
+    this.name = 'ScheduledSourceDisabledError';
+  }
+}
+
 @Injectable()
 export class ResourceSourceSyncService {
+  private readonly logger = new Logger(ResourceSourceSyncService.name);
+  private scheduledPollRunning = false;
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly storage: ResourceStorageService,
     private readonly versions: ResourceVersionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async upsertGithubConfig(publicId: string, actorId: number, input: ResourceSourceSyncConfigDto) {
@@ -131,7 +157,7 @@ export class ResourceSourceSyncService {
       include_prerelease: includePrerelease,
       asset_include: include,
       asset_exclude: exclude,
-      polling: 'manual',
+      polling: input.enabled ? 'scheduled' : 'manual',
     };
   }
 
@@ -159,8 +185,7 @@ export class ResourceSourceSyncService {
         .filter((release) => this.releaseAllowed(release, sync))
         .slice(0, limit)
         .map((release) => this.projectRelease(release, sync, repository));
-      const newestTag = releases[0]?.tag_name || null;
-      await this.updateSyncStatus(Number(sync.id), 'polled', null, newestTag).catch(() => undefined);
+      await this.updateSyncStatus(Number(sync.id), 'polled', null).catch(() => undefined);
 
       return {
         resource_public_id: resource.public_id,
@@ -175,7 +200,12 @@ export class ResourceSourceSyncService {
     }
   }
 
-  async importGithubRelease(publicId: string, actorId: number, input: ResourceSourceSyncImportDto) {
+  async importGithubRelease(
+    publicId: string,
+    actorId: number,
+    input: ResourceSourceSyncImportDto,
+    requireEnabled = false,
+  ) {
     const { resource, sync, repository } = await this.getPrivateSync(publicId, actorId);
     const tagName = this.normalizeTag(input.tag_name);
     const assetName = this.normalizeAssetName(input.asset_name);
@@ -221,6 +251,11 @@ export class ResourceSourceSyncService {
       if (!storedFile) throw new BadRequestException('Downloaded GitHub asset could not be quarantined');
       tempPath = undefined; // storeIncoming owns/moves the temp file.
 
+      // Manual imports remain available when automatic polling is disabled.
+      // Scheduled imports re-read the persisted flag immediately before the
+      // immutable version create so an owner can cancel an in-flight poll.
+      if (requireEnabled) await this.assertScheduledSourceEnabled(Number(sync.id));
+
       const created = await this.versions.create({
         resource_id: Number(resource.id),
         version: tagName,
@@ -248,13 +283,254 @@ export class ResourceSourceSyncService {
       };
     } catch (error) {
       if (storedFile?.file_path) await this.storage.removeManaged(storedFile.file_path).catch(() => undefined);
-      await this.updateSyncStatus(Number(sync.id), 'import_failed', 'GitHub release import failed', tagName).catch(() => undefined);
+      if (!(error instanceof ScheduledSourceDisabledError)) {
+        await this.updateSyncStatus(Number(sync.id), 'import_failed', 'GitHub release import failed', null).catch(() => undefined);
+      }
+      if (error instanceof ScheduledSourceDisabledError) throw error;
       if (error instanceof BadRequestException || error instanceof ConflictException
         || error instanceof ForbiddenException || error instanceof NotFoundException) throw error;
       if (error instanceof GithubUpstreamError) throw new BadGatewayException('Unable to retrieve the selected GitHub release asset');
       throw error;
     } finally {
       if (tempPath) await fs.unlink(tempPath).catch(() => undefined);
+    }
+  }
+
+  @Cron('0 */15 * * * *')
+  async pollEnabledGithubSources(): Promise<void> {
+    if (this.scheduledPollRunning) return;
+    this.scheduledPollRunning = true;
+    try {
+      const due = await this.dataSource.query(
+        `SELECT ss.id, ss.resource_id, ss.provider, ss.repository_url, ss.enabled, ss.stable_only,
+                ss.include_prerelease, ss.asset_include_json, ss.asset_exclude_json, ss.last_polled_at,
+                ss.last_status, ss.last_error, ss.upstream_tag,
+                r.public_id AS resource_public_id, r.user_id AS resource_owner_user_id,
+                r.title AS resource_title, r.resource_kind AS resource_kind
+         FROM resource_source_syncs ss JOIN resources r ON r.id = ss.resource_id
+         WHERE ss.provider = 'github' AND ss.enabled = 1 AND r.resource_kind = 'mod' AND r.deleted_at IS NULL
+           AND (ss.last_polled_at IS NULL OR ss.last_polled_at <= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE))
+         ORDER BY ss.last_polled_at ASC, ss.id ASC LIMIT 25`,
+      ) as ScheduledSyncRow[];
+
+      for (const row of due) {
+        if (!await this.claimScheduledSync(Number(row.id))) continue;
+        try {
+          await this.processScheduledSource(row);
+        } catch (error) {
+          const status = error instanceof GithubUpstreamError && error.status ? ` (HTTP ${error.status})` : '';
+          this.logger.warn(`Scheduled GitHub sync failed for source ${row.id}${status}`);
+          await this.updateSyncStatus(Number(row.id), 'error', `GitHub automatic polling failed${status}`, null).catch(() => undefined);
+        }
+      }
+    } catch {
+      this.logger.warn('Scheduled GitHub sync scan failed; the next interval will retry.');
+    } finally {
+      this.scheduledPollRunning = false;
+    }
+  }
+
+  private async claimScheduledSync(syncId: number): Promise<boolean> {
+    return this.dataSource.transaction(async (manager) => {
+      const rows = await manager.query(
+        `SELECT id FROM resource_source_syncs
+         WHERE id = ? AND provider = 'github' AND enabled = 1
+           AND (last_polled_at IS NULL OR last_polled_at <= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 15 MINUTE))
+         FOR UPDATE`,
+        [syncId],
+      );
+      if (!rows.length) return false;
+      await manager.query(
+        `UPDATE resource_source_syncs SET last_polled_at = UTC_TIMESTAMP(), last_status = 'polling',
+         last_error = NULL, updated_at = UTC_TIMESTAMP() WHERE id = ?`,
+        [syncId],
+      );
+      return true;
+    });
+  }
+
+  private async processScheduledSource(row: ScheduledSyncRow): Promise<void> {
+    const repository = this.parseRepositoryUrl(row.repository_url);
+    const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
+    const repoPath = `/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}`;
+    const rawReleases = await this.githubJson(`${repoPath}/releases?per_page=${MAX_RELEASES}&page=1`, signal);
+    if (!Array.isArray(rawReleases)) throw new GithubUpstreamError(null, 'Invalid release response');
+    const releases = rawReleases
+      .map((value) => this.normalizeRelease(value))
+      .filter((release): release is GithubRelease => Boolean(release))
+      .filter((release) => this.releaseAllowed(release, row));
+    if (!releases.length) {
+      await this.updateSyncStatus(Number(row.id), 'up_to_date', null, null);
+      return;
+    }
+
+    let baselineTag = row.upstream_tag?.trim() || null;
+    let baselineVersion: ExistingVersionRow | null = null;
+    if (baselineTag) {
+      baselineVersion = await this.getVersionForTag(Number(row.resource_id), baselineTag);
+      if (!baselineVersion) {
+        await this.stopForManualConfirmation(row, baselineTag, 'The remembered upstream tag has no matching local version.');
+        return;
+      }
+    }
+
+    let baselineRelease: GithubRelease | null = null;
+    if (baselineTag && baselineVersion) {
+      baselineRelease = releases.find((release) => release.tag_name === baselineTag) || null;
+      if (!baselineRelease) {
+        const rawBaseline = await this.githubJson(`${repoPath}/releases/tags/${encodeURIComponent(baselineTag)}`, signal, true);
+        baselineRelease = this.normalizeRelease(rawBaseline);
+      }
+      if (!baselineRelease || !this.releaseAllowed(baselineRelease, row)) {
+        await this.stopForManualConfirmation(row, baselineTag, 'The imported release is missing or no longer matches the channel filters.');
+        return;
+      }
+      const baselineAssets = this.scheduledAssetCandidates(baselineRelease, row);
+      if (baselineAssets.length !== 1) {
+        await this.stopForManualConfirmation(row, baselineTag, 'The imported release no longer has exactly one asset selected by the configured filters.');
+        return;
+      }
+      let remoteHash: string;
+      try {
+        const bytes = await this.downloadScheduledAsset(baselineAssets[0], repository, signal);
+        remoteHash = createHash('sha256').update(bytes).digest('hex');
+      } catch (error) {
+        if (error instanceof GithubUpstreamError && !error.manualReview) throw error;
+        await this.stopForManualConfirmation(row, baselineTag, 'The imported release asset can no longer be verified safely.');
+        return;
+      }
+      if (!baselineVersion.content_hash || remoteHash !== baselineVersion.content_hash.toLowerCase()) {
+        await this.stopForManualConfirmation(row, baselineTag, 'The upstream asset changed after import. Manual review is required before importing it again.');
+        return;
+      }
+      if (!row.upstream_tag) row.upstream_tag = baselineTag;
+    }
+
+    let pendingReleases: GithubRelease[];
+    if (!baselineTag) {
+      // First opt-in imports only the newest matching release; it does not
+      // silently backfill a repository's entire historical release list.
+      pendingReleases = releases;
+    } else {
+      const baselineIndex = releases.findIndex((release) => release.tag_name === baselineTag);
+      if (baselineIndex >= 0) {
+        // GitHub returns releases newest-first. Import one release per interval,
+        // oldest-to-newest, so latest_published_version_id stays monotonic.
+        pendingReleases = releases.slice(0, baselineIndex).reverse();
+      } else {
+        const baselineTime = Date.parse(baselineRelease?.published_at || '');
+        if (!Number.isFinite(baselineTime)) {
+          await this.stopForManualConfirmation(row, baselineTag, 'The baseline release is outside the current page and has no usable timestamp.');
+          return;
+        }
+        pendingReleases = releases
+          .filter((release) => Date.parse(release.published_at || '') > baselineTime)
+          .sort((left, right) => Date.parse(left.published_at || '') - Date.parse(right.published_at || ''));
+      }
+    }
+
+    let nextRelease: GithubRelease | null = null;
+    let selectedAssets: GithubAsset[] = [];
+    for (const release of pendingReleases) {
+      const matching = this.scheduledAssetCandidates(release, row);
+      if (!matching.length) continue;
+      nextRelease = release;
+      selectedAssets = matching;
+      break;
+    }
+    if (!nextRelease) {
+      await this.updateSyncStatus(Number(row.id), 'up_to_date', null, baselineTag);
+      return;
+    }
+    if (selectedAssets.length !== 1) {
+      await this.stopForManualConfirmation(row, nextRelease.tag_name, 'More than one release asset matches the configured filters.');
+      return;
+    }
+
+    const existing = await this.getVersionForTag(Number(row.resource_id), nextRelease.tag_name);
+    if (existing) {
+      let remoteHash: string;
+      try {
+        const bytes = await this.downloadScheduledAsset(selectedAssets[0], repository, signal);
+        remoteHash = createHash('sha256').update(bytes).digest('hex');
+      } catch (error) {
+        if (error instanceof GithubUpstreamError && !error.manualReview) throw error;
+        await this.stopForManualConfirmation(row, nextRelease.tag_name, 'An existing release asset can no longer be verified safely.');
+        return;
+      }
+      if (!existing.content_hash || remoteHash !== existing.content_hash.toLowerCase()) {
+        await this.stopForManualConfirmation(row, nextRelease.tag_name, 'An existing version tag now points to changed asset content. Manual review is required.');
+        return;
+      }
+      await this.updateSyncStatus(Number(row.id), 'up_to_date', null, nextRelease.tag_name);
+      return;
+    }
+
+    const asset = selectedAssets[0];
+    try {
+      await this.importGithubRelease(row.resource_public_id, Number(row.resource_owner_user_id), {
+        tag_name: nextRelease.tag_name,
+        asset_name: asset.name,
+      }, true);
+    } catch (error) {
+      if (error instanceof ScheduledSourceDisabledError) return;
+      if (error instanceof ConflictException || error instanceof BadRequestException) {
+        await this.stopForManualConfirmation(row, nextRelease.tag_name, 'Automatic import was rejected by duplicate or archive safety checks.');
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private scheduledAssetCandidates(release: GithubRelease, sync: SyncRow): GithubAsset[] {
+    return release.assets.filter((asset) => this.patternsAllow(sync, asset.name) && /\.(?:jar|zip)$/i.test(asset.name));
+  }
+
+  private async downloadScheduledAsset(asset: GithubAsset, repository: GithubRepository, signal: AbortSignal): Promise<Buffer> {
+    if (asset.state !== 'uploaded') throw new GithubUpstreamError(null, 'Selected asset is not uploaded', true);
+    if (!Number.isSafeInteger(asset.size) || asset.size < 1 || asset.size > MAX_ASSET_BYTES) {
+      throw new GithubUpstreamError(null, 'Selected asset size is outside the import limit', true);
+    }
+    const url = this.validateInitialAssetUrl(asset.browser_download_url, repository);
+    return this.downloadAsset(url, asset.size, signal);
+  }
+
+  private async getVersionForTag(resourceId: number, tag: string): Promise<ExistingVersionRow | null> {
+    const rows = await this.dataSource.query(
+      `SELECT version, content_hash, file_name FROM resource_versions
+       WHERE resource_id = ? AND version = ? ORDER BY revision DESC, id DESC LIMIT 1`,
+      [resourceId, tag],
+    ) as ExistingVersionRow[];
+    return rows[0] || null;
+  }
+
+  private async assertScheduledSourceEnabled(syncId: number): Promise<void> {
+    const rows = await this.dataSource.query(
+      `SELECT enabled FROM resource_source_syncs WHERE id = ? AND provider = 'github' LIMIT 1`,
+      [syncId],
+    ) as Array<{ enabled: number | string | boolean }>;
+    if (!rows[0] || !this.asBoolean(rows[0].enabled)) throw new ScheduledSourceDisabledError();
+  }
+
+  private async stopForManualConfirmation(row: ScheduledSyncRow, tag: string, reason: string): Promise<void> {
+    await this.dataSource.query(
+      `UPDATE resource_source_syncs SET enabled = 0, last_polled_at = UTC_TIMESTAMP(),
+       last_status = 'manual_confirmation', last_error = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?`,
+      [reason.slice(0, 500), Number(row.id)],
+    );
+    const tagForMessage = tag.replace(/[<>`\r\n]/g, '').slice(0, 100);
+    const content = `自动 GitHub Release 同步已暂停，需要人工确认。仓库：${row.repository_url}；标签：${tagForMessage}。原因：${reason}`;
+    const dedupeSuffix = createHash('sha256').update(`${row.id}:${tag}:${reason}`).digest('hex').slice(0, 36);
+    try {
+      await this.notifications.create({
+        user_id: Number(row.resource_owner_user_id),
+        type: 'system',
+        content,
+        emailEvent: 'system',
+        deduplicationKey: `resource-source-sync-manual:${row.id}:${dedupeSuffix}`,
+      });
+    } catch {
+      this.logger.warn(`Could not notify owner for GitHub source ${row.id}; automation remains paused.`);
     }
   }
 
@@ -300,7 +576,6 @@ export class ResourceSourceSyncService {
     this.assertMod(resource);
     if (!this.isPublicResource(resource)) throw new NotFoundException('Public Resource does not exist');
     const sync = await this.getSync(Number(resource.id));
-    if (!this.asBoolean(sync.enabled)) throw new NotFoundException('GitHub source is disabled');
     return { resource, sync, repository: this.parseRepositoryUrl(sync.repository_url) };
   }
 
@@ -309,7 +584,6 @@ export class ResourceSourceSyncService {
     this.assertMod(resource);
     await this.assertOwnerOrMaintainer(resource, actorId);
     const sync = await this.getSync(Number(resource.id));
-    if (!this.asBoolean(sync.enabled)) throw new NotFoundException('GitHub source is disabled');
     return { resource, sync, repository: this.parseRepositoryUrl(sync.repository_url) };
   }
 
@@ -463,25 +737,25 @@ export class ResourceSourceSyncService {
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.get('location');
         await response.body?.cancel().catch(() => undefined);
-        if (!location || redirects >= MAX_REDIRECTS) throw new GithubUpstreamError(response.status, 'Too many or invalid asset redirects');
+        if (!location || redirects >= MAX_REDIRECTS) throw new GithubUpstreamError(response.status, 'Too many or invalid asset redirects', true);
         let next: URL;
         try { next = new URL(location, current); }
-        catch { throw new GithubUpstreamError(response.status, 'Invalid asset redirect'); }
+        catch { throw new GithubUpstreamError(response.status, 'Invalid asset redirect', true); }
         this.validateRedirectUrl(next);
         current = next;
         continue;
       }
       if (response.status !== 200) {
         await response.body?.cancel().catch(() => undefined);
-        throw new GithubUpstreamError(response.status, 'GitHub asset download failed');
+        throw new GithubUpstreamError(response.status, 'GitHub asset download failed', [403, 404, 410].includes(response.status));
       }
       let bytes: Buffer;
       try { bytes = await this.readBoundedBody(response, MAX_ASSET_BYTES); }
-      catch { throw new GithubUpstreamError(response.status, 'GitHub asset exceeded the download limit'); }
-      if (bytes.length !== expectedSize) throw new GithubUpstreamError(response.status, 'GitHub asset size did not match release metadata');
+      catch { throw new GithubUpstreamError(response.status, 'GitHub asset exceeded the download limit', true); }
+      if (bytes.length !== expectedSize) throw new GithubUpstreamError(response.status, 'GitHub asset size did not match release metadata', true);
       return bytes;
     }
-    throw new GithubUpstreamError(null, 'Too many asset redirects');
+    throw new GithubUpstreamError(null, 'Too many asset redirects', true);
   }
 
   private async readBoundedBody(response: Response, maximumBytes: number): Promise<Buffer> {
@@ -527,7 +801,7 @@ export class ResourceSourceSyncService {
   private validateRedirectUrl(url: URL): void {
     if (url.protocol !== 'https:' || !GITHUB_ASSET_REDIRECT_HOSTS.has(url.hostname.toLowerCase())
       || url.port || url.username || url.password || url.hash || /%(?:0d|0a)/i.test(url.href)) {
-      throw new GithubUpstreamError(null, 'GitHub asset redirected to an unsafe URL');
+      throw new GithubUpstreamError(null, 'GitHub asset redirected to an unsafe URL', true);
     }
   }
 
@@ -648,10 +922,10 @@ export class ResourceSourceSyncService {
     }
   }
 
-  private async updateSyncStatus(syncId: number, status: string, error: string | null, tag: string | null): Promise<void> {
+  private async updateSyncStatus(syncId: number, status: string, error: string | null, tag: string | null = null): Promise<void> {
     await this.dataSource.query(
       `UPDATE resource_source_syncs SET last_polled_at = UTC_TIMESTAMP(), last_status = ?, last_error = ?,
-       upstream_tag = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?`,
+       upstream_tag = COALESCE(?, upstream_tag), updated_at = UTC_TIMESTAMP() WHERE id = ?`,
       [status, error, tag, syncId],
     );
   }

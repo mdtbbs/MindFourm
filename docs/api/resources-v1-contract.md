@@ -24,6 +24,14 @@ GET /api/v1/resources/{resource_public_id}/stats
 GET /api/v1/resources/{resource_public_id}/workbench
 GET /api/v1/resources/mods/{resource_public_id}/dependency-resolution
 GET /api/v1/resources/mods/{resource_public_id}/issue-reports
+POST /api/v1/resources/mods/issue-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/issue-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/issue-reports/{report_public_id}/attachments/{attachment_public_id}
+DELETE /api/v1/resources/mods/issue-reports/{report_public_id}/attachments/{attachment_public_id}
+POST /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments/{attachment_public_id}
+DELETE /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments/{attachment_public_id}
 PUT /api/v1/resources/{resource_public_id}/source-sync/github
 GET /api/v1/resources/{resource_public_id}/source-sync/github/releases
 POST /api/v1/resources/{resource_public_id}/source-sync/github/import
@@ -224,12 +232,12 @@ Mod 依赖解析 `GET /api/v1/resources/mods/{id}/dependency-resolution` 可选 
 
 审核 API 包括 `GET /api/v1/resources/{id}/review-events`、分析覆盖忽略的 POST/DELETE `/api/v1/resources/{id}/versions/{versionId}/analysis/overrides`，以及 `POST /api/v1/resources/{id}/review-annotations`。时间线需要 `resource.read`，只对 Resource Owner、active Maintainer/Publisher、管理员或版主开放；支持 UUID `version_public_id` 过滤、`limit=1..100`（默认 50）和 `offset=0..100000`（默认 0），限流 `60 / 60s`。忽略/清除接口需要 `resource.upload`，Owner/Maintainer 可操作且仅能处理现有 ERROR/WARNING finding，限流 `20 / 60s`。字段批注需要 `resource.upload`，仅管理员/版主可写，可带可选版本 UUID，限流 `30 / 60s`。时间线和写响应只返回公开 UUID，不包含内部数值 ID；字段和 DTO 示例见[Resource Center V2 契约](../resource-center-v2.md)。
 
-GitHub Release 来源 API 使用 Resource public UUID。`PUT /api/v1/resources/{id}/source-sync/github` 由 Owner/Maintainer 配置 HTTPS GitHub 仓库 URL、稳定/预发行选择和资产名 include/exclude 过滤（`resource.upload`，10/60s）；`GET /api/v1/resources/{id}/source-sync/github/releases` 手动读取公开 Mod 的 Release 列表及 README/License 预览，可选 `limit=1..30`（默认 20），匿名可读、Bearer 可选 `resource.read`，限流 12/60s；`POST /api/v1/resources/{id}/source-sync/github/import` 由 Owner/Maintainer 显式选取 tag 与资产名，经过隔离区和既有版本分析流程导入（`resource.upload`，5/60s）。此功能没有定时轮询或自动改写 Resource 元数据。请求验证错误为 400，未登录/无权限为 401/403，资源/来源/资产不可用为 404，GitHub 或下载失败为 502。字段和过滤边界见[Resource Center V2 契约](../resource-center-v2.md)。
+GitHub Release 来源 API 使用 Resource public UUID。`PUT /api/v1/resources/{id}/source-sync/github` 由 Owner/Maintainer 配置 HTTPS GitHub 仓库 URL、稳定/预发行选择和资产名 include/exclude 过滤（`resource.upload`，10/60s）；`enabled=true` 同时选择加入每 15 分钟一次的有界后台轮询和自动导入，`false` 保留手动读取/导入但关闭调度。`GET /api/v1/resources/{id}/source-sync/github/releases` 供作者手动读取公开 Mod 的 Release 列表及 README/License 预览，可选 `limit=1..30`（默认 20），匿名可读、Bearer 可选 `resource.read`，限流 12/60s；`POST /api/v1/resources/{id}/source-sync/github/import` 由 Owner/Maintainer 显式选取 tag 与资产名，经过隔离区和既有版本分析流程导入（`resource.upload`，5/60s）。自动导入不覆盖既有版本；上游 tag/资产变化、资产匹配歧义或无法验证时会暂停并通知 Owner，等待人工确认。请求验证错误为 400，未登录/无权限为 401/403，资源/来源/资产不可用为 404，GitHub 或下载失败为 502。字段和过滤边界见[Resource Center V2 契约](../resource-center-v2.md)。
 
 版本预览 `GET /api/v1/resources/{id}/versions/{versionId}/preview` 返回原始 PNG 字节，不使用 JSON 响应封装。它优先使用该已发布版本对应的安全预览，并在版本级预览缺失时尝试资源级预览；版本 DTO 只公开预览 URL，不公开存储键。
 
-关系列表与创建响应包含 `relation_type` 和非空 `relation_context`。对于 `recommended_for`，上下文值区分 `opening`、`production`、`defense`、`logistics` 和 `general`。
+关系列表包含 `relation_type`、`relation_direction`、非空 `relation_context`，以及目标资源已发布版本的 `version_public_id` 和 `version` 显示值（如有）。`recommended_for` 使用 `opening`、`production`、`defense`、`logistics` 和 `general` 表示推荐用途。创建支持 `recommended_for`、`fork_of`、`successor_of`、`related`、`requires` 和 `compatible_with`；Fork/继任必须关联相同资源类型的目标资源和一个已发布目标版本。工作台会显示关联方向、上游资源及其版本。
 
 管理操作使用 `resource.upload` scope，并按角色控制：Owner/Maintainer 可编辑资料和关系，Owner/Maintainer/Publisher 可分析或发布版本，协作者邀请由 Owner/Maintainer 发起，Owner/Admin 可发起所有权转让，接收方需接受。分析与发布的 multipart 上传限流为 `5 / 60s`。来源 URL 或许可证声明变更会将已审核资源重新置为待审核。
 
-社区写操作也使用 `resource.upload` scope：地图版本反馈、Mod 兼容性/问题报告和冲突报告需要登录及手机号验证；每个地图版本每个账号只保留一份反馈，公开 GET 只返回计数与评分平均值。报告作者可以更新自己的报告，Owner/Maintainer 可回复涉及的 Mod 报告。附件仅接受元数据，不能通过这些接口上传文件。所有公开资源、版本和报告标识均为 UUID；具体字段、限流和状态枚举见上述 V2 契约。
+社区写操作也使用 `resource.upload` scope：地图版本反馈、Mod 兼容性/问题报告和冲突报告需要登录及手机号验证；每个地图版本每个账号只保留一份反馈，公开 GET 只返回计数与评分平均值。报告作者可以更新自己的报告，Owner/Maintainer 可回复涉及的 Mod 报告。报告 JSON 的兼容 `attachments` 字段仍只接受元数据；问题报告二进制证据通过 `POST /api/v1/resources/mods/issue-reports/{reportId}/attachments` 上传，兼容性报告使用 `POST /api/v1/resources/mods/compatibility-reports/{reportId}/attachments`。两种路径均支持同路径 GET 清单、追加 `/{attachmentId}` 的 GET 原始字节下载或 DELETE 管理。上传限 PNG/JPEG/GIF/WebP 与 UTF-8 TXT/LOG/JSON/CRASH，单文件最多 5 MiB、每报告最多 10 个文件且总计最多 20 MiB；超单文件限制返回 413，其他格式/单报告限制返回 400。仅报告作者可上传/删除，上传还需手机号验证。私有附件留在隔离目录，`resource.read` 读取仅向报告作者、关联 Resource Owner/active Owner/Maintainer/Publisher、管理员/版主开放；附件清单的 `can_delete` 仅对报告作者为 `true`。公开报告投影不含附件字段。下载使用 `Cache-Control: private, no-store` 与 `nosniff`。上传前请清除 IP、令牌、用户名、本机路径等敏感内容。所有公开资源、版本、报告与附件标识均为 UUID；具体字段、限流和状态枚举见上述 V2 契约。

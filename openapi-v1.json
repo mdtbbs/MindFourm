@@ -12045,6 +12045,96 @@
         ]
       }
     },
+    "/v1/resources/{id}/versions/{versionId}/schematic-editor/export": {
+      "post": {
+        "operationId": "exportResourceSchematicEdit",
+        "x-rate-limit": {
+          "limit": 5,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "summary": "安全导出编辑后的蓝图副本",
+        "description": "Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像和删除选中方块。只读取托管版本并返回新文件，不修改原版本。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "description": "已发布 Version public UUID。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceV2ExportSchematicDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An official Mindustry .msch serialization as a downloadable file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "操作无效、文件无法解析或含有编辑器不支持安全保留的内容。"
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "资源或已发布版本不存在。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2-management"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/resources/{id}/members": {
       "post": {
         "operationId": "inviteResourceV2Member",
@@ -13951,7 +14041,7 @@
           "resource.upload"
         ],
         "summary": "配置 Mod 的 GitHub Release 来源",
-        "description": "仅 Owner/Maintainer 可操作。允许 HTTPS github.com 仓库 URL 与资产名过滤；由作者显式手动触发，配置不会自动轮询或改写 Resource 元数据。",
+        "description": "仅 Owner/Maintainer 可操作。允许 HTTPS github.com 仓库 URL 与资产名过滤。enabled=true 表示选择加入每 15 分钟运行的自动轮询和导入；关闭时仍可由作者手动读取和导入。上游资产变更或无法安全验证时会暂停自动同步并通知 Owner，不覆盖已有版本。",
         "parameters": [
           {
             "name": "id",
@@ -14023,7 +14113,7 @@
           "resource.read"
         ],
         "summary": "手动读取 GitHub Release、README 與 License 预览",
-        "description": "只读取公开 Mod 的 GitHub 信息；每次最多四个固定 GitHub API 请求、一页 Release。列表不会因开启配置而自动执行，也不会修改 Resource 元数据。",
+        "description": "作者手动读取公开 Mod 的 GitHub 信息；每次最多四个固定 GitHub API 请求、一页 Release。开启自动同步后，独立后台任务最多每 15 分钟检查一次，并安全导入符合过滤条件的新版本。",
         "parameters": [
           {
             "name": "id",
@@ -14099,7 +14189,7 @@
           "resource.upload"
         ],
         "summary": "显式导入一个 GitHub Release 资产",
-        "description": "仅 Owner/Maintainer 可操作。作者通过显式手动调用选择资产；资产通过本地格式校验、进入 quarantine，再由现有 ResourceVersionService 分析并创建不可覆盖的版本/revision。",
+        "description": "仅 Owner/Maintainer 可手动操作；启用的后台同步也复用相同导入校验。资产通过本地格式校验、进入 quarantine，再由现有 ResourceVersionService 分析并创建不可覆盖的版本/revision。若已有 tag 对应的上游资产发生变化，后台会暂停并等待人工确认。",
         "parameters": [
           {
             "name": "id",
@@ -14154,6 +14244,620 @@
         },
         "tags": [
           "v1-resources-source-sync"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/mods/issue-reports/{reportId}/attachments": {
+      "post": {
+        "operationId": "uploadModIssueReportAttachmentV2",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "summary": "为本人 Mod 问题报告上传私有日志或图片证据",
+        "description": "手机号验证后的报告提交者可上传；附件保持在私有隔离存储，只能由报告提交者、相关 Owner/Maintainer/Publisher 或审核人员读取。请先清除 IP、令牌、用户名、本机路径和其他隐私信息。",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "One PNG/JPEG/GIF/WebP image or UTF-8 TXT/LOG/JSON/CRASH log; max 5 MiB."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Private attachment metadata and an authenticated download route; no storage path is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ReportAttachmentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported file type/signature, invalid UTF-8 log, or attachment count/size limit reached."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report does not exist or the current user cannot modify it."
+          },
+          "413": {
+            "description": "Multipart file exceeds the 5 MiB per-file limit."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "listModIssueReportAttachmentsV2",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.read"
+        ],
+        "summary": "读取有权限访问的问题报告附件清单",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private metadata only; rows contain public UUIDs and no numeric IDs or storage keys.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ReportAttachmentListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The report identifier is not a UUID."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report does not exist or the current user cannot view its attachments."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/mods/issue-reports/{reportId}/attachments/{attachmentId}": {
+      "get": {
+        "operationId": "getModIssueReportAttachmentV2",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.read"
+        ],
+        "summary": "下载有权限访问的问题报告附件",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private binary download with Content-Disposition: attachment and no-store caching.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A report or attachment identifier is not a UUID."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report or attachment does not exist or is not visible to the current user."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteModIssueReportAttachmentV2",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "summary": "删除本人问题报告的附件",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report author deleted the private attachment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ReportAttachmentDeleteDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A report or attachment identifier is not a UUID."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report or attachment does not exist or is not owned by the current user."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/mods/compatibility-reports/{reportId}/attachments": {
+      "post": {
+        "operationId": "uploadModCompatibilityReportAttachmentV2",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "summary": "为本人 Mod 兼容报告上传私有日志或图片证据",
+        "description": "手机号验证后的报告提交者可上传；附件保持在私有隔离存储，只能由报告提交者、相关 Owner/Maintainer/Publisher 或审核人员读取。请先清除 IP、令牌、用户名、本机路径和其他隐私信息。",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "One PNG/JPEG/GIF/WebP image or UTF-8 TXT/LOG/JSON/CRASH log; max 5 MiB."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Private attachment metadata and an authenticated download route; no storage path is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ReportAttachmentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported file type/signature, invalid UTF-8 log, or attachment count/size limit reached."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report does not exist or the current user cannot modify it."
+          },
+          "413": {
+            "description": "Multipart file exceeds the 5 MiB per-file limit."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "listModCompatibilityReportAttachmentsV2",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.read"
+        ],
+        "summary": "读取有权限访问的兼容报告附件清单",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private metadata only; rows contain public UUIDs and no numeric IDs or storage keys.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ReportAttachmentListDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The report identifier is not a UUID."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report does not exist or the current user cannot view its attachments."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/mods/compatibility-reports/{reportId}/attachments/{attachmentId}": {
+      "get": {
+        "operationId": "getModCompatibilityReportAttachmentV2",
+        "x-rate-limit": {
+          "limit": 30,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.read"
+        ],
+        "summary": "下载有权限访问的兼容报告附件",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private binary download with Content-Disposition: attachment and no-store caching.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A report or attachment identifier is not a UUID."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report or attachment does not exist or is not visible to the current user."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteModCompatibilityReportAttachmentV2",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "summary": "删除本人兼容报告的附件",
+        "parameters": [
+          {
+            "name": "reportId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report author deleted the private attachment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceV2ReportAttachmentDeleteDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A report or attachment identifier is not a UUID."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "The report or attachment does not exist or is not owned by the current user."
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-report-attachments"
         ],
         "security": [
           {
@@ -24332,6 +25036,14 @@
             "type": "string",
             "example": "requires"
           },
+          "relation_direction": {
+            "type": "string",
+            "enum": [
+              "outgoing",
+              "incoming"
+            ],
+            "description": "Whether the current resource is the source or target of this relation."
+          },
           "relation_context": {
             "type": "string",
             "enum": [
@@ -24350,13 +25062,21 @@
             "type": "string",
             "nullable": true,
             "format": "uuid"
+          },
+          "version": {
+            "type": "string",
+            "nullable": true,
+            "example": "1.4.2",
+            "description": "Published version label for the related resource, when a relation targets a specific version."
           }
         },
         "required": [
           "relation_type",
+          "relation_direction",
           "relation_context",
           "resource",
-          "version_public_id"
+          "version_public_id",
+          "version"
         ]
       },
       "ResourceV2RelationPageDto": {
@@ -25792,6 +26512,51 @@
           "pagination"
         ]
       },
+      "ResourceV2SchematicPositionDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "ResourceV2ExportSchematicDto": {
+        "type": "object",
+        "properties": {
+          "rotation_quarters": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3,
+            "description": "Number of 90 degree counter-clockwise rotations."
+          },
+          "mirror_x": {
+            "type": "boolean",
+            "description": "Reflect the edited schematic horizontally."
+          },
+          "delete_positions": {
+            "maxItems": 10000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicPositionDto"
+            }
+          }
+        },
+        "required": [
+          "rotation_quarters",
+          "mirror_x"
+        ]
+      },
       "ResourceV2PatchProfileDto": {
         "type": "object",
         "properties": {
@@ -25827,7 +26592,15 @@
           },
           "relation_type": {
             "type": "string",
-            "example": "recommended_for"
+            "example": "recommended_for",
+            "enum": [
+              "recommended_for",
+              "fork_of",
+              "successor_of",
+              "related",
+              "requires",
+              "compatible_with"
+            ]
           },
           "relation_context": {
             "type": "string",
@@ -26384,7 +27157,7 @@
           },
           "enabled": {
             "type": "boolean",
-            "description": "Enable the manual release-list and import endpoints for this source. No scheduled polling is configured."
+            "description": "Opt in to scheduled GitHub release polling and automatic import (up to once every 15 minutes). Disabled sources still support author-triggered release listing and import."
           },
           "stable_only": {
             "type": "boolean",
@@ -26433,6 +27206,123 @@
         "required": [
           "tag_name",
           "asset_name"
+        ]
+      },
+      "ResourceV2ReportAttachmentDto": {
+        "type": "object",
+        "properties": {
+          "public_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "b4b728b7-73a5-4bd6-b2a6-9009d60d6b8f"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "log",
+              "image"
+            ],
+            "example": "image"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "crash-report.png"
+          },
+          "size_bytes": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 5242880,
+            "example": 24576
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "text/plain",
+              "image/png",
+              "image/jpeg",
+              "image/gif",
+              "image/webp"
+            ],
+            "example": "image/png"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "example": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-10-05T10:00:00.000Z"
+          },
+          "download_url": {
+            "type": "string",
+            "format": "uri-reference",
+            "example": "/api/v1/resources/mods/issue-reports/30000000-0000-4000-8000-000000000001/attachments/b4b728b7-73a5-4bd6-b2a6-9009d60d6b8f",
+            "description": "Private authenticated download route; never a public storage URL."
+          },
+          "can_delete": {
+            "type": "boolean",
+            "description": "True only for the report author, who may delete this attachment."
+          }
+        },
+        "required": [
+          "public_id",
+          "kind",
+          "name",
+          "size_bytes",
+          "mime_type",
+          "sha256",
+          "created_at",
+          "download_url",
+          "can_delete"
+        ]
+      },
+      "ResourceV2ReportAttachmentListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2ReportAttachmentDto"
+            }
+          },
+          "max_attachments": {
+            "type": "number",
+            "example": 10
+          },
+          "max_file_size_bytes": {
+            "type": "number",
+            "example": 5242880
+          },
+          "max_total_size_bytes": {
+            "type": "number",
+            "example": 20971520
+          }
+        },
+        "required": [
+          "items",
+          "max_attachments",
+          "max_file_size_bytes",
+          "max_total_size_bytes"
+        ]
+      },
+      "ResourceV2ReportAttachmentDeleteDto": {
+        "type": "object",
+        "properties": {
+          "public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deleted": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "public_id",
+          "deleted"
         ]
       },
       "UpdateProfileDto": {
