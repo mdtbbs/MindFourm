@@ -157,3 +157,33 @@ describe('developer docs code samples', () => {
     expect(html).not.toContain('Public V1 error envelope');
   });
 });
+
+describe('developer docs routes', () => {
+  it.each(['/api/docs/v1', '/api/docs/v1/'])(
+    'redirects the former Swagger UI entry point %s to the Chinese API reference',
+    (route) => {
+      let handler: ((request: any, response: any) => void) | undefined;
+      registerDeveloperDocs({
+        getHttpAdapter: () => ({
+          get: (registeredRoute: string, callback: (request: any, response: any) => void) => {
+            if (registeredRoute === route) handler = callback;
+          },
+        }),
+      } as any, {} as any, '2.6.2');
+
+      if (!handler) throw new Error(`Route ${route} was not registered`);
+      const response: any = {
+        redirect(status: number, location: string) {
+          this.statusCode = status;
+          this.location = location;
+          return this;
+        },
+      };
+
+      handler({}, response);
+
+      expect(response.statusCode).toBe(302);
+      expect(response.location).toBe('/api/v1/reference');
+    },
+  );
+});

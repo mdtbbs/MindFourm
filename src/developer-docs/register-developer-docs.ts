@@ -2229,6 +2229,13 @@ export function registerDeveloperDocs(
 ): void {
   const adapter = app.getHttpAdapter();
 
+  // Swagger UI ships English-only labels. Keep its former public entry point
+  // useful by redirecting browser users to the fully localized API reference.
+  const redirectToChineseReference = (_req: any, res: any) =>
+    res.redirect(302, '/api/v1/reference');
+  adapter.get('/api/docs/v1', redirectToChineseReference);
+  adapter.get('/api/docs/v1/', redirectToChineseReference);
+
   adapter.get('/developers', (_req: any, res: any) => {
     const html = renderHome(forumVersion);
     setHtmlHeaders(res, html);
