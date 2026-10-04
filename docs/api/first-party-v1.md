@@ -183,7 +183,34 @@ GET /api/v1/threads/123/replies?page=1&limit=20
 | GET | `/api/v1/resources/{id}` | 公开 | 资源详情 |
 | GET | `/api/v1/resources/{id}/manifest` | 公开 | 安装和同步清单 |
 | GET | `/api/v1/resources/{id}/preview` | 需要登录 | 资源预览 |
+| GET | `/api/v1/resources/{id}/versions/{versionId}/preview` | 公开；Bearer 可选 `resource.read` | 已发布版本 PNG 预览 |
 | GET | `/api/v1/resources/{resourceId}/versions/{versionId}/files/{fileId}/download` | 需要登录 | 版本文件下载 |
+| POST | `/api/v1/resources/{id}/versions/analyze` | `resource.upload` | 安全解析待发布版本，不执行模组代码；5/60s |
+| POST | `/api/v1/resources/{id}/versions` | `resource.upload` | 发布版本或新 revision；5/60s |
+| PATCH | `/api/v1/resources/{id}` | `resource.upload` | Owner/Maintainer 更新资料；来源或许可证变更会重新审核 |
+| POST | `/api/v1/resources/{id}/relations` | `resource.upload` | Owner/Maintainer 创建资源关系 |
+| POST | `/api/v1/resources/{id}/members` | `resource.upload` | Owner/Maintainer 邀请协作者 |
+| POST | `/api/v1/resources/{id}/members/respond` | `resource.upload` | 邀请接收方接受或拒绝 |
+| POST | `/api/v1/resources/{id}/owner-transfer` | `resource.upload` | Owner/Admin 发起所有权转让 |
+| GET | `/api/v1/resources/maps/{id}/versions/{versionId}/feedback` | 公开；Bearer 可选 `resource.read` | 读取地图版本反馈数量和评分平均值；60/60s |
+| POST | `/api/v1/resources/maps/{id}/versions/{versionId}/feedback` | `resource.upload` | 手机号验证账号提交/更新本人反馈；10/60s |
+| GET | `/api/v1/resources/mods/{id}/dependency-resolution` | 公开；Bearer 可选 `resource.read` | 读取 Mod 依赖树；`max_depth` 1–12、`max_nodes` 1–200；30/60s |
+| GET | `/api/v1/resources/mods/{id}/issue-reports` | 公开；Bearer 可选 `resource.read` | 游标分页读取问题报告和作者回复；可选 `version_public_id`、`cursor`、`limit`；不返回附件；60/60s |
+| PUT | `/api/v1/resources/{id}/source-sync/github` | `resource.upload` | Owner/Maintainer 配置 GitHub Release 来源和资产筛选；不启用定时同步；10/60s |
+| GET | `/api/v1/resources/{id}/source-sync/github/releases` | 公开；Bearer 可选 `resource.read` | 手动读取公开 Mod 的 Release、README、License 预览；`limit=1..30`；12/60s |
+| POST | `/api/v1/resources/{id}/source-sync/github/import` | `resource.upload` | Owner/Maintainer 显式导入单个 Release 资产，经隔离区和现有版本分析流程；5/60s |
+| GET | `/api/v1/resources/{id}/review-events` | 需要登录；`resource.read` | Resource Owner、Maintainer/Publisher、管理员或版主按偏移读取审核时间线；60/60s |
+| POST | `/api/v1/resources/{id}/versions/{versionId}/analysis/overrides` | `resource.upload` | Owner/Maintainer 忽略已存在的 ERROR/WARNING 分析项；20/60s |
+| DELETE | `/api/v1/resources/{id}/versions/{versionId}/analysis/overrides` | `resource.upload` | Owner/Maintainer 清除分析忽略并记录时间线事件；20/60s |
+| POST | `/api/v1/resources/{id}/review-annotations` | `resource.upload` | 管理员/版主添加字段批注；30/60s |
+| POST | `/api/v1/resources/mods/{id}/versions/{versionId}/compatibility-reports` | `resource.upload` | 手机号验证账号提交/更新 Mod 版本兼容报告；10/60s |
+| PUT | `/api/v1/resources/mods/compatibility-reports/{reportId}` | `resource.upload` | 手机号验证账号更新本人报告；20/60s |
+| POST | `/api/v1/resources/mods/{id}/versions/{versionId}/issue-reports` | `resource.upload` | 手机号验证账号提交问题报告；同一账号/Release 重复提交会更新原报告并保留 UUID/状态；10/60s |
+| PUT | `/api/v1/resources/mods/issue-reports/{reportId}` | `resource.upload` | 手机号验证账号更新本人报告；20/60s |
+| POST | `/api/v1/resources/mods/compatibility-reports/{reportId}/author-response` | `resource.upload` | Mod Owner/Maintainer 回复兼容报告；20/60s |
+| POST | `/api/v1/resources/mods/issue-reports/{reportId}/author-response` | `resource.upload` | Mod Owner/Maintainer 回复问题报告；20/60s |
+| POST | `/api/v1/resources/mods/conflicts` | `resource.upload` | 手机号验证账号提交涉及 2–10 个已发布 Mod 版本的冲突报告；10/60s |
+| POST | `/api/v1/resources/mods/conflicts/{reportId}/author-response` | `resource.upload` | 涉及 Mod 的 Owner/Maintainer 回复冲突报告；20/60s |
 | POST | `/api/v1/resources/drafts` | `resource.upload` | 上传隔离区草稿 |
 | POST | `/api/v1/resources/drafts/preview` | `resource.upload` | 地图/蓝图解析并生成私有预览草稿 |
 | GET | `/api/v1/resources/drafts/{draftId}` | `resource.upload` | 读取本人草稿 |
@@ -192,6 +219,8 @@ GET /api/v1/threads/123/replies?page=1&limit=20
 | DELETE | `/api/v1/resources/drafts/{draftId}` | `resource.upload` | 删除本人草稿 |
 
 资源 API 仍受 `resource_read` 服务能力和站点功能开关控制。文件可以匿名下载；携带 OAuth Bearer 时，令牌必须具备 `resource.download`。上传草稿仅创建者可读，30 分钟后过期，提交后进入现有审核流程。资源标识、清单和文件安全规则见[资源中心 API V1 契约](./resources-v1-contract.md)和[客户端接入指南](./public-client-v1.md)。
+
+`GET /api/v1/capabilities` 另外公开 Resource Center V2 的 Mod、蓝图、地图工作台、版本、关联、Mod Content 索引、兼容报告和分析能力。Mod 依赖解析按已发布版本构建有界依赖树，并报告未收录项、循环和截断状态。地图反馈公开接口只提供聚合值；没有单独的 map-feedback capability。审核时间线、分析忽略及字段批注按 Resource 成员或 staff 权限控制。GitHub Release 来源仅支持手动读取和显式导入，不提供定时同步。`schematic_full_editor`、`map_editor`、`wave_editor` 明确为 `false`。新增路径与 UUID / cursor 语义见[Resource Center V2 契约](../resource-center-v2.md)；原 `GET /api/v1/resources/{id}`、`/manifest` 及 `/api/v1/game-content/*` 响应保持兼容。
 
 ## 游戏内容
 

@@ -1,5 +1,8 @@
 import { randomUUID } from 'crypto';
 import { DataSource } from 'typeorm';
+import {
+  backfillResourceVersionStructure, emptyResourceV2StructureResult, ResourceV2StructureResult,
+} from './resource-v2-structure.backfill';
 
 /**
  * Legacy Resource → structured aggregate backfill.
@@ -22,6 +25,10 @@ export type BackfillResult = {
   versions_skipped: number;
   files_created: number;
   files_skipped: number;
+  owner_members_created: number;
+  owner_members_skipped: number;
+  owner_warnings: Array<{ resource_id: number; warning: string }>;
+  structure: ResourceV2StructureResult;
   errors: Array<{ resource_id: number; message: string }>;
 };
 
@@ -37,6 +44,10 @@ export async function runResourceV2Backfill(
     versions_skipped: 0,
     files_created: 0,
     files_skipped: 0,
+    owner_members_created: 0,
+    owner_members_skipped: 0,
+    owner_warnings: [],
+    structure: emptyResourceV2StructureResult(),
     errors: [],
   };
 
@@ -68,6 +79,32 @@ async function backfillOneResource(
   result: BackfillResult,
 ): Promise<void> {
   const resourceId = resource.id;
+
+  // The legacy resource owner becomes an active member on the aggregate. The
+  // unique resource/user key and INSERT IGNORE make reruns safe.
+  const ownerUserId = Number(resource.user_id);
+  if (!Number.isInteger(ownerUserId) || ownerUserId <= 0) {
+    result.owner_warnings.push({ resource_id: resourceId, warning: 'missing_or_invalid_user_id' });
+  } else {
+    const existingOwner = await dataSource.query(
+      `SELECT id FROM \`resource_members\` WHERE \`resource_id\` = ? AND \`user_id\` = ? AND \`role\` = 'owner' LIMIT 1`,
+      [resourceId, ownerUserId],
+    );
+    if (existingOwner.length > 0) {
+      result.owner_members_skipped++;
+    } else if (mode === 'write') {
+      const inserted = await dataSource.query(
+        `INSERT IGNORE INTO \`resource_members\` (\`resource_id\`,\`user_id\`,\`role\`,\`status\`,\`accepted_at\`)
+         VALUES (?, ?, 'owner', 'active', NOW(6))`,
+        [resourceId, ownerUserId],
+      );
+      const packet = Array.isArray(inserted) && inserted.length === 1 ? inserted[0] : inserted;
+      if (Number(packet?.affectedRows ?? packet?.affected ?? 1) > 0) result.owner_members_created++;
+      else result.owner_members_skipped++;
+    } else {
+      result.owner_members_created++;
+    }
+  }
 
   // --- Step 1: Create or find the legacy root release version ---
   const existingVersion = await dataSource.query(
@@ -153,6 +190,13 @@ async function backfillOneResource(
       );
     }
     result.files_created++;
+  }
+
+  // Map and schematic renderer data belongs to the release file/version. Move
+  // the legacy JSON into version-level rows without creating another Resource.
+  const structure = await backfillResourceVersionStructure(dataSource, resource, versionId, mode);
+  for (const key of Object.keys(result.structure) as Array<keyof ResourceV2StructureResult>) {
+    result.structure[key] += structure[key];
   }
 
   // --- Step 4: Update resource summary from description if empty ---

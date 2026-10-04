@@ -165,11 +165,12 @@ export async function requestV1<T>(path: string, init: RequestInit): Promise<T> 
     await fetch(buildPublicApiUrl('/api/auth/check'), { credentials: 'include' }).catch(() => undefined);
     csrf = document.cookie.split('; ').find((item) => item.startsWith('csrf_token='))?.slice('csrf_token='.length);
   }
+  const isMultipart = typeof FormData !== 'undefined' && init.body instanceof FormData;
   return fetchV1<T>(path, {
     init: {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isMultipart ? {} : { 'Content-Type': 'application/json' }),
         ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
         ...(init.headers as Record<string, string> | undefined),
       },

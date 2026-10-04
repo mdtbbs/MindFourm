@@ -9,7 +9,7 @@ describe('ResourceVersionService', () => {
     file_name: 'release.zip', file_path: '/quarantine/release.zip', file_size: 123,
     mime_type: 'application/zip', content_hash: 'a'.repeat(64),
   };
-  const resource = { id: 7, user_id: 9, status: 'approved', resource_kind: 'mod', source_url: null, title: 'Mod' };
+  const resource = { id: 7, user_id: 9, status: 'approved', resource_kind: 'other', source_url: null, title: 'Resource' };
 
   function setup(options: { exact?: boolean; claimError?: Error } = {}) {
     const manager = {
@@ -50,7 +50,7 @@ describe('ResourceVersionService', () => {
       content_hash: file.content_hash,
       availability_status: 'available',
     }));
-    expect(manager.update).toHaveBeenCalledWith(Resource, 7, { status: 'pending' });
+    expect(manager.update).toHaveBeenCalledWith(Resource, 7, { latest_published_version_id: 31 });
   });
 
   it('returns a hard duplicate conflict before creating a version', async () => {
@@ -69,5 +69,16 @@ describe('ResourceVersionService', () => {
     });
 
     expect(manager.save).not.toHaveBeenCalled();
+  });
+
+  it('creates a new immutable revision when the same version string is uploaded again', async () => {
+    const { service, versionRepository, manager } = setup();
+    versionRepository.findOne.mockResolvedValueOnce({ id: 19, version: '1.2.0', revision: 1, file_path: '/old/release.zip' });
+
+    await service.create({ resource_id: 7, version: '1.2.0' }, file, 9);
+
+    expect(versionRepository.create).toHaveBeenCalledWith(expect.objectContaining({ version: '1.2.0', revision: 2, status: 'published' }));
+    expect(manager.save).toHaveBeenCalledWith(ResourceVersion, expect.objectContaining({ revision: 2 }));
+    expect(manager.save).not.toHaveBeenCalledWith(ResourceVersion, expect.objectContaining({ id: 19 }));
   });
 });

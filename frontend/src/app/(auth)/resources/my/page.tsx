@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { resourceApi } from '@/lib/api/client';
 import { Resource } from '@/types';
-import { Download, Edit, ExternalLink, FileText, Loader2, Trash2 } from 'lucide-react';
+import { Download, Edit, ExternalLink, FileText, LayoutDashboard, Loader2, Trash2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
 import { confirmDialog } from '@/store/interaction-dialog-store';
 import { useI18n } from '@/i18n/provider';
@@ -169,6 +169,12 @@ export default function MyResourcesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
+                      {r.public_id && <Link
+                        href={`/resources/${encodeURIComponent(r.public_id)}/workbench`}
+                        className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--primary)] hover:bg-[var(--bg-elevated)]"
+                      >
+                        <LayoutDashboard className="h-3 w-3" /> {t('resourceWorkbenchV2.openWorkbench')}
+                      </Link>}
                       <Link
                         href={`/resources/${r.id}/edit`}
                         className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--primary)] hover:bg-[var(--bg-elevated)]"

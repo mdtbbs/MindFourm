@@ -58,6 +58,7 @@ import { SiteConfigService } from '@config/site-profile';
 import { buildResourceExportManifest, parseResourceImportManifest } from './resource-transfer.util';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { ResourceViewsService } from './resource-views.service';
+import { DownloadPolicyService } from '../downloads/download-policy.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -153,6 +154,7 @@ export class ResourcesController {
     private readonly duplicateService: ResourceDuplicateService,
     private readonly siteConfig: SiteConfigService,
     private readonly resourceViews: ResourceViewsService,
+    private readonly downloadPolicy: DownloadPolicyService,
   ) {}
 
   @Get()
@@ -526,6 +528,7 @@ export class ResourcesController {
   ) {
     // Resolve storage fields internally, with the same visibility rules as the public DTO.
     const resource = await this.resourcesService.getForFileAccess(id, req?.user);
+    await this.downloadPolicy.assertDownloadAuthentication(resource.resource_kind, req?.user);
 
     // MFL redirect: if resource uses MFL, redirect to MFL download URL
     if (!versionId && resource.use_mfl && resource.mfl_download_url) {
@@ -732,6 +735,7 @@ export class ResourcesController {
   ) {
     const resource = await this.resourcesService.updateStatus(id, status, {
       actorUsername: req.user?.username,
+      actorUserId: Number(req.user?.id) || null,
       rejectReason,
     });
     await this.logOperation(req, 'resource.moderate', id, { status, reject_reason: rejectReason || null });

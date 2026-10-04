@@ -39,6 +39,21 @@ describe('CapabilitiesService', () => {
       blueprint_production_analysis: false,
       minimum_supported_client_version: null,
       recommended_client_version: null,
+      resource_mod_workbench: true,
+      resource_schematic_workbench: true,
+      resource_map_workbench: true,
+      resource_versions_v2: true,
+      resource_relations_v1: true,
+      mod_content_index: true,
+      mod_dependency_resolver: true,
+      mod_compatibility_reports: true,
+      schematic_deep_analysis: true,
+      schematic_light_editor: false,
+      map_deep_analysis: true,
+      map_wave_viewer: true,
+      schematic_full_editor: false,
+      map_editor: false,
+      wave_editor: false,
     });
     expect(settings.getBoolean).toHaveBeenCalledWith('feature_resources_v1_read_enabled', true);
   });

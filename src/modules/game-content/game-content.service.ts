@@ -207,10 +207,11 @@ export class GameContentService {
     return { id: value, code: file.toString('base64') };
   }
 
-  async downloadInfo(value: string) {
+  async downloadInfo(value: string, userId: number | null = null) {
     const id = this.internalId(value);
     const resource = await this.resources.findOne({ where: { public_id: id }, relations: ['category'] });
     if (!resource || resource.resource_kind !== 'map') throw new NotFoundException('资源不存在');
+    await this.downloadPolicy.assertDownloadAuthentication('map', userId ? { id: userId } : null);
     await this.domain.getById(resource.id);
     const version = resource.latest_published_version_id ? await this.versions.findOne({ where: { id: resource.latest_published_version_id, resource_id: resource.id } }) : null;
     const file = version ? await this.files.findOne({ where: { resource_version_id: version.id, role: 'primary', availability_status: 'available' } }) : null;
@@ -221,6 +222,7 @@ export class GameContentService {
     const id = this.internalId(value);
     const resource = await this.resources.findOne({ where: { public_id: id, resource_kind: 'map' }, relations: ['category'] });
     if (!resource) throw new NotFoundException('资源不存在');
+    await this.downloadPolicy.assertDownloadAuthentication('map', userId ? { id: userId } : null);
     await this.domain.getById(resource.id);
     const version = resource.latest_published_version_id ? await this.versions.findOne({ where: { id: resource.latest_published_version_id, resource_id: resource.id } }) : null;
     const file = version ? await this.files.findOne({ where: { resource_version_id: version.id, role: 'primary', availability_status: 'available' } }) : null;

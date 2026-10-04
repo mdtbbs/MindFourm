@@ -6,6 +6,7 @@ describe('runResourceV2Backfill', () => {
     existingVersions?: any[];
     existingAttributions?: any[];
     existingFiles?: any[];
+    existingRows?: Record<string, any[]>;
   }) {
     const queries: string[] = [];
     let insertIdCounter = 100;
@@ -33,6 +34,8 @@ describe('runResourceV2Backfill', () => {
         if (sql.includes('FROM `resource_files`') && sql.includes("`role` = 'primary'")) {
           return options.existingFiles || [];
         }
+        const idLookup = sql.match(/SELECT id FROM `([a-z_]+)`/i);
+        if (idLookup) return options.existingRows?.[idLookup[1]] || [];
 
         // INSERT into versions
         if (sql.includes('INSERT INTO `resource_versions`')) {
@@ -194,5 +197,89 @@ describe('runResourceV2Backfill', () => {
 
     expect(result.files_created).toBe(1);
     expect(result.errors).toHaveLength(0);
+  });
+
+  it('seeds the legacy author as owner and reports a missing author identity', async () => {
+    const { mockDataSource } = createMockDataSource({
+      resources: [
+        { id: 20, user_id: 42, resource_type: 'external', external_url: 'https://example.test/a', version: '1.0' },
+        { id: 21, user_id: null, resource_type: 'external', external_url: 'https://example.test/b', version: '1.0' },
+      ],
+    });
+
+    const result = await runResourceV2Backfill(mockDataSource as any, 'write');
+
+    expect(result.owner_members_created).toBe(1);
+    expect(result.owner_warnings).toEqual([{ resource_id: 21, warning: 'missing_or_invalid_user_id' }]);
+    expect(mockDataSource.query.mock.calls.some(([sql]) => String(sql).includes("VALUES (?, ?, 'owner', 'active', NOW(6))"))).toBe(true);
+  });
+
+  it('copies legacy map renderer and publisher metadata to its version without creating a Resource', async () => {
+    const { mockDataSource } = createMockDataSource({
+      resources: [{
+        id: 30, user_id: 42, resource_type: 'upload', resource_kind: 'map', file_path: '/map.msav',
+        version: '8.0', renderer_metadata_json: {
+          width: 256, height: 128, planet: 'serpulo', game_modes: ['survival'], rules: { waveSpacing: 2 },
+          resources: [{ name: 'copper', amount: 10 }], spawn_points: [{ x: 4, y: 6, team: 'sharded' }],
+          cores: [{ x: 5, y: 7, team: 'sharded', type: 'core-shard' }],
+          wave_groups: [{ wave_start: 1, wave_end: 5, enemy_count: 8, boss_count: 1 }],
+          analysis: { estimated_difficulty: 2.5 },
+        },
+        metadata_json: { planets: ['serpulo'], game_modes: ['survival'] },
+      }],
+    });
+
+    const result = await runResourceV2Backfill(mockDataSource as any, 'write');
+    const calls = mockDataSource.query.mock.calls.map(([sql, params]) => [String(sql), params] as const);
+    const metadataInsert = calls.find(([sql]) => sql.includes('INSERT IGNORE INTO map_version_metadata'));
+
+    expect(result.structure).toMatchObject({
+      map_metadata_created: 1, map_resources_created: 1, map_spawns_created: 1,
+      map_cores_created: 1, map_waves_created: 1, map_analyses_created: 1,
+    });
+    expect(metadataInsert?.[1]).toContain(100);
+    expect(metadataInsert?.[1]).toContain(JSON.stringify({ waveSpacing: 2 }));
+    expect(calls.some(([sql]) => sql.includes('INSERT INTO `resources`'))).toBe(false);
+  });
+
+  it('copies schematic blocks, materials, compatibility and analysis to the existing release', async () => {
+    const { mockDataSource } = createMockDataSource({
+      resources: [{
+        id: 31, user_id: 42, resource_type: 'upload', resource_kind: 'schematic', file_path: '/base64.msch',
+        version: 'legacy-31', renderer_metadata_json: {
+          width: 8, height: 6, blocks: 12, structure_hash: 'a'.repeat(64), schematic_format_version: 1,
+          compatibility: { minimum_supported_build: 145 },
+          block_types: [{ name: 'copper-wall', count: 12 }],
+          block_positions: [{ name: 'copper-wall', x: 1, y: 2 }],
+          requirements: [{ item: 'copper', amount: 120 }],
+          logic_processors: [{ x: 3, y: 4, type: 'logic' }],
+          production: { complete: false, available: true, estimated: true, outputs: [] },
+        },
+        metadata_json: { required_mods: ['example-mod'] },
+      }],
+    });
+
+    const result = await runResourceV2Backfill(mockDataSource as any, 'write');
+
+    expect(result.structure).toMatchObject({
+      schematic_metadata_created: 1, schematic_blocks_created: 1, schematic_materials_created: 1,
+      schematic_logic_processors_created: 1, schematic_analyses_created: 1,
+    });
+    const blockInsert = mockDataSource.query.mock.calls.find(([sql]) => String(sql).includes('INSERT IGNORE INTO schematic_blocks'));
+    expect(blockInsert?.[1]).toEqual([100, 'copper-wall', null, 12, JSON.stringify([{ name: 'copper-wall', x: 1, y: 2 }]), null]);
+  });
+
+  it('dry-run reports existing owner and map metadata as skipped and does not write', async () => {
+    const { mockDataSource } = createMockDataSource({
+      resources: [{ id: 40, user_id: 42, resource_kind: 'map', resource_type: 'upload', version: '1.0', renderer_metadata_json: { width: 16 } }],
+      existingVersions: [{ id: 10 }],
+      existingRows: { resource_members: [{ id: 1 }], map_version_metadata: [{ id: 2 }] },
+    });
+
+    const result = await runResourceV2Backfill(mockDataSource as any, 'dry-run');
+
+    expect(result.owner_members_skipped).toBe(1);
+    expect(result.structure.map_metadata_skipped).toBe(1);
+    expect(mockDataSource.query.mock.calls.some(([sql]) => String(sql).trim().startsWith('INSERT'))).toBe(false);
   });
 });

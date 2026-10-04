@@ -70,7 +70,32 @@ export class CreateResourceDto {
 
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   version: string;
+
+  @ApiPropertyOptional({ enum: ['semver', 'compatibility'], default: 'semver', description: 'How this release version is interpreted.' })
+  @IsOptional() @IsIn(['semver', 'compatibility'])
+  version_mode?: 'semver' | 'compatibility';
+
+  @ApiPropertyOptional({ enum: ['release', 'beta', 'alpha', 'snapshot'], default: 'release' })
+  @IsOptional() @IsIn(['release', 'beta', 'alpha', 'snapshot'])
+  release_channel?: 'release' | 'beta' | 'alpha' | 'snapshot';
+
+  @ApiPropertyOptional({ maxLength: 80 })
+  @IsOptional() @IsString() @MaxLength(80)
+  game_version_min?: string;
+
+  @ApiPropertyOptional({ maxLength: 80 })
+  @IsOptional() @IsString() @MaxLength(80)
+  game_version_max?: string;
+
+  @ApiPropertyOptional({ maxLength: 128, description: 'Stable Mindustry Mod ID; independent from the resource UUID.' })
+  @IsOptional() @IsString() @MaxLength(128)
+  mod_id?: string;
+
+  @ApiPropertyOptional({ type: 'object', description: 'Publisher-supplied values are stored separately from parsed manifest values.' })
+  @IsOptional() @IsObject()
+  mod_author_overrides?: Record<string, unknown>;
 
   @IsOptional()
   @IsString()

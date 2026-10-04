@@ -17,6 +17,27 @@ GET /api/v1/resources
 GET /api/v1/resources/{resource_public_id}
 GET /api/v1/resources/{resource_public_id}/preview
 GET /api/v1/resources/{resource_public_id}/manifest
+GET /api/v1/resources/{resource_public_id}/versions
+GET /api/v1/resources/{resource_public_id}/versions/{version_public_id}/preview
+GET /api/v1/resources/{resource_public_id}/relations
+GET /api/v1/resources/{resource_public_id}/stats
+GET /api/v1/resources/{resource_public_id}/workbench
+GET /api/v1/resources/mods/{resource_public_id}/dependency-resolution
+GET /api/v1/resources/mods/{resource_public_id}/issue-reports
+PUT /api/v1/resources/{resource_public_id}/source-sync/github
+GET /api/v1/resources/{resource_public_id}/source-sync/github/releases
+POST /api/v1/resources/{resource_public_id}/source-sync/github/import
+GET /api/v1/resources/{resource_public_id}/review-events
+POST /api/v1/resources/{resource_public_id}/versions/{version_public_id}/analysis/overrides
+DELETE /api/v1/resources/{resource_public_id}/versions/{version_public_id}/analysis/overrides
+POST /api/v1/resources/{resource_public_id}/review-annotations
+POST /api/v1/resources/{resource_public_id}/versions/analyze
+POST /api/v1/resources/{resource_public_id}/versions
+PATCH /api/v1/resources/{resource_public_id}
+POST /api/v1/resources/{resource_public_id}/relations
+POST /api/v1/resources/{resource_public_id}/members
+POST /api/v1/resources/{resource_public_id}/members/respond
+POST /api/v1/resources/{resource_public_id}/owner-transfer
 GET /api/v1/resources/{resource_public_id}/versions/{version_public_id}/files/{file_public_id}/download
 GET /api/v1/packs/{pack_public_id}/versions/{version_public_id}/manifest
 POST /api/v1/packs/{pack_public_id}/versions/{version_public_id}/download-grants
@@ -186,3 +207,29 @@ POST /api/v1/resources/drafts
 最终创建资源或提交草稿时，客户端可以发送 `Idempotency-Key` 请求头。键按已认证账号隔离，并保留 24 小时。请求超时后，使用相同的键和完全相同的请求重试，即可重放首次结果。相同键搭配不同请求体会返回 HTTP 409 `IDEMPOTENCY_KEY_REUSED`；并发中的同键请求可能返回 `IDEMPOTENCY_IN_PROGRESS`。修改请求内容时必须生成新键。
 
 若公开资源已合并，客户端应遵循 V1 响应中的规范资源重定向信息；资源合并审核属于后台流程，不属于公开客户端操作。
+
+## Resource Center V2 API
+
+V2 在相同的 `resources` 聚合上增加 Mod、蓝图、地图结构化读取视图、owner/collaborator 管理操作、审核时间线/批注和社区工作流。已有 `GET /api/v1/resources/{id}`、`GET /api/v1/resources/{id}/manifest` 和 `/api/v1/game-content/*` 保持原响应语义。V2 类型专属字段、分页、OAuth scope、错误响应、角色、社区反馈/报告和 capabilities 见[Resource Center V2 契约](../resource-center-v2.md)。
+
+V2 路径中的 `{id}` 是 Resource public UUID；版本、文件、Content、报告对象也通过 UUID 暴露。响应仍使用 `{ data, meta }` 外层封装。列表在 `data` 中带 `{ items, pagination: { next_cursor, has_more } }`，cursor 为不透明值；默认 `limit=20`，最大 100。匿名读取可用；携带 MindAuth Bearer 时需要 `resource.read` scope。
+
+Content 索引复用兼容的 Game Content 前缀：`GET /api/v1/game-content/content/search`、`GET /api/v1/game-content/content/{id}` 和 `GET /api/v1/game-content/content/by-name/{type}/{internalName}`。它只搜索已发布 Mod Content，并返回所属 Resource public UUID。旧版 Game Content 蓝图、地图、上传和下载路径均未改动。
+
+Mod 依赖解析 `GET /api/v1/resources/mods/{id}/dependency-resolution` 可选 `version_public_id`（已发布版本 UUID）、`max_depth`（1–12，默认 12）和 `max_nodes`（1–200，默认 200）。响应包括 `unresolved` 未收录依赖、`cycles` 循环路径和 `truncated` 遍历是否受限制；`warnings` 说明限制或其他解析问题。该只读端点匿名可用，携带 Bearer 时需 `resource.read`，限流为 `30 / 60s`。
+
+公开 Mod 问题报告列表 `GET /api/v1/resources/mods/{id}/issue-reports` 支持可选 `version_public_id`、不透明 `cursor` 和 `limit`（默认 20、最大 100）；响应包含报告与作者回复的公开字段，不包含附件元数据或数据库数字 ID。该端点匿名可用，携带 Bearer 时需 `resource.read`，限流为 `60 / 60s`。
+
+提交 Mod 问题报告 `POST /api/v1/resources/mods/{id}/versions/{versionId}/issue-reports` 对同一账号和同一 Release 使用唯一键做幂等 upsert：重复提交更新现有报告内容，不重复创建记录，并保留原 public UUID 与状态。首次提交创建 `open` 报告。
+
+审核 API 包括 `GET /api/v1/resources/{id}/review-events`、分析覆盖忽略的 POST/DELETE `/api/v1/resources/{id}/versions/{versionId}/analysis/overrides`，以及 `POST /api/v1/resources/{id}/review-annotations`。时间线需要 `resource.read`，只对 Resource Owner、active Maintainer/Publisher、管理员或版主开放；支持 UUID `version_public_id` 过滤、`limit=1..100`（默认 50）和 `offset=0..100000`（默认 0），限流 `60 / 60s`。忽略/清除接口需要 `resource.upload`，Owner/Maintainer 可操作且仅能处理现有 ERROR/WARNING finding，限流 `20 / 60s`。字段批注需要 `resource.upload`，仅管理员/版主可写，可带可选版本 UUID，限流 `30 / 60s`。时间线和写响应只返回公开 UUID，不包含内部数值 ID；字段和 DTO 示例见[Resource Center V2 契约](../resource-center-v2.md)。
+
+GitHub Release 来源 API 使用 Resource public UUID。`PUT /api/v1/resources/{id}/source-sync/github` 由 Owner/Maintainer 配置 HTTPS GitHub 仓库 URL、稳定/预发行选择和资产名 include/exclude 过滤（`resource.upload`，10/60s）；`GET /api/v1/resources/{id}/source-sync/github/releases` 手动读取公开 Mod 的 Release 列表及 README/License 预览，可选 `limit=1..30`（默认 20），匿名可读、Bearer 可选 `resource.read`，限流 12/60s；`POST /api/v1/resources/{id}/source-sync/github/import` 由 Owner/Maintainer 显式选取 tag 与资产名，经过隔离区和既有版本分析流程导入（`resource.upload`，5/60s）。此功能没有定时轮询或自动改写 Resource 元数据。请求验证错误为 400，未登录/无权限为 401/403，资源/来源/资产不可用为 404，GitHub 或下载失败为 502。字段和过滤边界见[Resource Center V2 契约](../resource-center-v2.md)。
+
+版本预览 `GET /api/v1/resources/{id}/versions/{versionId}/preview` 返回原始 PNG 字节，不使用 JSON 响应封装。它优先使用该已发布版本对应的安全预览，并在版本级预览缺失时尝试资源级预览；版本 DTO 只公开预览 URL，不公开存储键。
+
+关系列表与创建响应包含 `relation_type` 和非空 `relation_context`。对于 `recommended_for`，上下文值区分 `opening`、`production`、`defense`、`logistics` 和 `general`。
+
+管理操作使用 `resource.upload` scope，并按角色控制：Owner/Maintainer 可编辑资料和关系，Owner/Maintainer/Publisher 可分析或发布版本，协作者邀请由 Owner/Maintainer 发起，Owner/Admin 可发起所有权转让，接收方需接受。分析与发布的 multipart 上传限流为 `5 / 60s`。来源 URL 或许可证声明变更会将已审核资源重新置为待审核。
+
+社区写操作也使用 `resource.upload` scope：地图版本反馈、Mod 兼容性/问题报告和冲突报告需要登录及手机号验证；每个地图版本每个账号只保留一份反馈，公开 GET 只返回计数与评分平均值。报告作者可以更新自己的报告，Owner/Maintainer 可回复涉及的 Mod 报告。附件仅接受元数据，不能通过这些接口上传文件。所有公开资源、版本和报告标识均为 UUID；具体字段、限流和状态枚举见上述 V2 契约。

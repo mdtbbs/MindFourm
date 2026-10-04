@@ -629,6 +629,25 @@ describe('ResourcesService', () => {
     expect(preview.enqueue).toHaveBeenCalledWith(expect.objectContaining({ id: 31, file_name: 'map.msav' }));
   });
 
+  it('publishes the submitted V2 release and records a review timeline event on approval', async () => {
+    const { service, manager } = createService({
+      resourceRepository: {
+        findOne: jest.fn()
+          .mockResolvedValueOnce({ id: 34, title: 'Map', status: 'pending', resource_kind: 'map', user_id: 5, file_path: '/safe/map.msav', is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null })
+          .mockResolvedValueOnce({ id: 34, title: 'Map', status: 'approved', resource_kind: 'map', user_id: 5, file_path: '/safe/map.msav', is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null }),
+      },
+      manager: { query: jest.fn().mockResolvedValue([{ id: 304, release_channel: 'release' }]) },
+    });
+
+    await service.updateStatus(34, 'approved', { actorUserId: 91 });
+
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 304, expect.objectContaining({ status: 'published', recommended: 1, published_at: expect.any(Date) }));
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 34, { latest_published_version_id: 304 });
+    expect(manager.save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      resource_id: 34, resource_version_id: 304, actor_user_id: 91, event_type: 'resource_approved', result: 'approved',
+    }));
+  });
+
   it('promotes release files and keeps the structured delivery pointer in sync', async () => {
     const storage = {
       promote: jest.fn()

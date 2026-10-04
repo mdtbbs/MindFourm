@@ -39,6 +39,21 @@ export type ClientCapabilities = {
   blueprint_production_analysis: boolean;
   minimum_supported_client_version: string | null;
   recommended_client_version: string | null;
+  resource_mod_workbench: boolean;
+  resource_schematic_workbench: boolean;
+  resource_map_workbench: boolean;
+  resource_versions_v2: boolean;
+  resource_relations_v1: boolean;
+  mod_content_index: boolean;
+  mod_dependency_resolver: boolean;
+  mod_compatibility_reports: boolean;
+  schematic_deep_analysis: boolean;
+  schematic_light_editor: boolean;
+  map_deep_analysis: boolean;
+  map_wave_viewer: boolean;
+  schematic_full_editor: boolean;
+  map_editor: boolean;
+  wave_editor: boolean;
 };
 
 @Injectable()
@@ -111,6 +126,21 @@ export class CapabilitiesService {
       blueprint_production_analysis: Boolean(process.env.RESOURCE_RENDERER_URL),
       minimum_supported_client_version: null,
       recommended_client_version: null,
+      resource_mod_workbench: resourceRead,
+      resource_schematic_workbench: resourceRead,
+      resource_map_workbench: resourceRead,
+      resource_versions_v2: resourceRead,
+      resource_relations_v1: resourceRead,
+      mod_content_index: resourceRead,
+      mod_dependency_resolver: resourceRead,
+      mod_compatibility_reports: resourceRead,
+      schematic_deep_analysis: resourceRead,
+      schematic_light_editor: false,
+      map_deep_analysis: resourceRead,
+      map_wave_viewer: resourceRead,
+      schematic_full_editor: false,
+      map_editor: false,
+      wave_editor: false,
     };
   }
 

@@ -101,10 +101,12 @@ describe('ResourcesController internal file access', () => {
     const controller = Object.create(ResourcesController.prototype) as ResourcesController;
     const domain = { getForFileAccess: jest.fn().mockResolvedValue(resource), incrementDownload: jest.fn().mockResolvedValue(undefined) };
     const previews = { readPreview: jest.fn().mockResolvedValue(Buffer.from('png')), supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
+    const downloadPolicy = { assertDownloadAuthentication: jest.fn().mockResolvedValue(undefined) };
     Object.defineProperty(controller, 'resourcesService', { value: domain });
     Object.defineProperty(controller, 'resourcePreviewService', { value: previews });
+    Object.defineProperty(controller, 'downloadPolicy', { value: downloadPolicy });
     Object.defineProperty(controller, 'logOperation', { value: jest.fn() });
-    return { controller, domain, previews };
+    return { controller, domain, previews, downloadPolicy };
   }
 
   it('passes the authorized storage key to the preview reader and returns only image bytes', async () => {
