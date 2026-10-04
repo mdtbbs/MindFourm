@@ -11,6 +11,7 @@ import {
   getResourceWorkbenchV2Analysis,
   getResourceWorkbenchV2ModContents,
   getResourceWorkbenchV2ModIndex,
+  getResourceWorkbenchV2KindTabData,
   getResourceWorkbenchV2,
   submitResourceV2MapFeedback,
   submitResourceV2ModCompatibilityReport,
@@ -44,6 +45,7 @@ jest.mock('@/lib/api/v1/resources', () => ({
   getResourceWorkbenchV2Analysis: jest.fn(),
   getResourceWorkbenchV2ModContents: jest.fn(),
   getResourceWorkbenchV2ModIndex: jest.fn(),
+  getResourceWorkbenchV2KindTabData: jest.fn(),
   getResourceV2MapFeedback: jest.fn(),
   getResourceV2ModCompatibility: jest.fn(),
   getResourceV2ModConflicts: jest.fn(),
@@ -83,6 +85,24 @@ jest.mock('@/i18n/provider', () => {
     'resourceWorkbenchV2.loadingMore': 'Loading more…',
     'resourceWorkbenchV2.localizationCoverage': 'Localization coverage',
     'resourceWorkbenchV2.noLocalizationCoverage': 'No localization coverage data is available.',
+    'resourceWorkbenchV2.mapWorkspace': 'Map version data',
+    'resourceWorkbenchV2.schematicWorkspace': 'Blueprint version data',
+    'resourceWorkbenchV2.versionScopedData': 'Structured data for the selected release',
+    'resourceWorkbenchV2.mapRulesTab': 'World rules',
+    'resourceWorkbenchV2.mapResourcesTab': 'Resources',
+    'resourceWorkbenchV2.mapSpawnsTab': 'Spawns',
+    'resourceWorkbenchV2.mapCoresTab': 'Cores',
+    'resourceWorkbenchV2.mapWavesTab': 'Wave groups',
+    'resourceWorkbenchV2.schematicBlocksTab': 'Block composition',
+    'resourceWorkbenchV2.schematicMaterialsTab': 'Materials',
+    'resourceWorkbenchV2.schematicProductionTab': 'Production',
+    'resourceWorkbenchV2.schematicLogicTab': 'Logic processors',
+    'resourceWorkbenchV2.kindDataLoading': 'Loading version data…',
+    'resourceWorkbenchV2.kindDataLoadFailed': 'Could not load version data',
+    'resourceWorkbenchV2.kindDataEmpty': 'No structured data is available for this section.',
+    'resourceWorkbenchV2.kindDataNoVersion': 'Select a published version to view this data.',
+    'resourceWorkbenchV2.kindDataLoadMore': 'Load more',
+    'resourceWorkbenchV2.kindDataLoadingMore': 'Loading more…',
     'resourceWorkbenchV2.translatedKeys': 'translated keys',
     'resourceWorkbenchV2.missingKeys': 'Missing keys',
     'resourceWorkbenchV2.schematicAnalysis': 'Blueprint production analysis',
@@ -261,6 +281,7 @@ const mockGetWorkbench = getResourceWorkbenchV2 as jest.MockedFunction<typeof ge
 const mockGetAnalysis = getResourceWorkbenchV2Analysis as jest.MockedFunction<typeof getResourceWorkbenchV2Analysis>;
 const mockGetModContents = getResourceWorkbenchV2ModContents as jest.MockedFunction<typeof getResourceWorkbenchV2ModContents>;
 const mockGetModIndex = getResourceWorkbenchV2ModIndex as jest.MockedFunction<typeof getResourceWorkbenchV2ModIndex>;
+const mockGetKindTabData = getResourceWorkbenchV2KindTabData as jest.MockedFunction<typeof getResourceWorkbenchV2KindTabData>;
 const mockGetMapFeedback = getResourceV2MapFeedback as jest.MockedFunction<typeof getResourceV2MapFeedback>;
 const mockGetModCompatibility = getResourceV2ModCompatibility as jest.MockedFunction<typeof getResourceV2ModCompatibility>;
 const mockGetModConflicts = getResourceV2ModConflicts as jest.MockedFunction<typeof getResourceV2ModConflicts>;
@@ -427,6 +448,7 @@ describe('ResourceWorkbenchV2', () => {
       contents: { items: [], pagination: { next_cursor: null, has_more: false } },
       localizations: { items: [], pagination: { next_cursor: null, has_more: false } },
     });
+    mockGetKindTabData.mockReset().mockResolvedValue({ summary: null, items: [], pagination: { next_cursor: null, has_more: false } });
     mockGetMapFeedback.mockReset().mockResolvedValue({ resource_public_id: 'resource-id', version_public_id: 'version-id', aggregate: { feedback_count: 0, difficulty_average: null, resource_sufficiency_average: null, balance_average: null, multiplayer_experience_average: null } });
     mockGetModCompatibility.mockReset().mockResolvedValue({ items: [], reports: [] });
     mockGetModConflicts.mockReset().mockResolvedValue({ items: [], pagination: { next_cursor: null, has_more: false } });
@@ -676,6 +698,46 @@ describe('ResourceWorkbenchV2', () => {
     expect(mockGetAnalysis).toHaveBeenCalledWith(fixture.resource.public_id, 'mod', 'version-1', expect.any(Object));
     expect(container.textContent).toContain('Version one manifest');
     expect(container.textContent).not.toContain('Recommended manifest');
+  });
+
+  it('loads map sections for the selected version and refetches after switching versions', async () => {
+    mockGetKindTabData.mockImplementation(async (_publicId, _kind, tab) => ({
+      summary: tab === 'rules' ? { wave_team: 'attack' } : null,
+      items: tab === 'waves' ? [{ wave_start: 1, wave_end: 3, enemy_count: 8 }] : [],
+      pagination: { next_cursor: null, has_more: false },
+    }));
+    const fixture = workbench('map', {
+      versions: [version('map-version-1', '1.0.0', 1), version('map-version-2', '2.0.0', 2, true)],
+    });
+    await mount(fixture);
+    expect(mockGetKindTabData).toHaveBeenCalledWith(fixture.resource.public_id, 'map', 'rules', 'map-version-2', undefined, expect.any(Object));
+    expect(container.textContent).toContain('attack');
+
+    await click(Array.from(container.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent === 'Wave groups') || null);
+    await act(async () => { await Promise.resolve(); });
+    expect(mockGetKindTabData).toHaveBeenCalledWith(fixture.resource.public_id, 'map', 'waves', 'map-version-2', undefined, expect.any(Object));
+    expect(container.textContent).toContain('Waves 1–3');
+
+    await setValue(container.querySelector('#workbench-version'), 'map-version-1');
+    await act(async () => { await Promise.resolve(); });
+    expect(mockGetKindTabData).toHaveBeenCalledWith(fixture.resource.public_id, 'map', 'waves', 'map-version-1', undefined, expect.any(Object));
+  });
+
+  it('loads schematic content sections on demand for the selected version', async () => {
+    mockGetKindTabData.mockImplementation(async (_publicId, _kind, tab) => ({
+      summary: null,
+      items: tab === 'materials' ? [{ internal_name: 'copper', amount: 20 }] : [],
+      pagination: { next_cursor: null, has_more: false },
+    }));
+    const fixture = workbench('schematic', { versions: [version('schematic-version', '1.0.0', 1, true)] });
+    await mount(fixture);
+    expect(mockGetKindTabData).toHaveBeenCalledWith(fixture.resource.public_id, 'schematic', 'blocks', 'schematic-version', undefined, expect.any(Object));
+
+    await click(Array.from(container.querySelectorAll('[role="tab"]')).find((tab) => tab.textContent === 'Materials') || null);
+    await act(async () => { await Promise.resolve(); });
+    expect(mockGetKindTabData).toHaveBeenCalledWith(fixture.resource.public_id, 'schematic', 'materials', 'schematic-version', undefined, expect.any(Object));
+    expect(container.textContent).toContain('copper');
+    expect(container.textContent).toContain('20');
   });
 
   it.each([

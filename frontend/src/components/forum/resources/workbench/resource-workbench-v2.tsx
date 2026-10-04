@@ -29,6 +29,7 @@ import ResourceProfileEditor from './resource-profile-editor';
 import ResourceReleaseForm from './resource-release-form';
 import ResourceCommunityInteractions from './resource-community-interactions';
 import SchematicLightEditor from './schematic-light-editor';
+import ResourceKindDataWorkspace from './resource-kind-data-workspace';
 
 type SectionKey = 'overview' | 'publish' | 'compatibility' | 'analysis' | 'community' | 'settings';
 type VersionTab = 'summary' | 'files' | 'compatibility' | 'diff';
@@ -658,6 +659,18 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
               modContentIndex: t('resourceWorkbenchV2.modContentIndex'), indexLoading: t('resourceWorkbenchV2.indexLoading'), indexLoadFailed: t('resourceWorkbenchV2.indexLoadFailed'), noIndexedContent: t('resourceWorkbenchV2.noIndexedContent'), loadMoreContent: t('resourceWorkbenchV2.loadMoreContent'), loadingMore: t('resourceWorkbenchV2.loadingMore'), localizationCoverage: t('resourceWorkbenchV2.localizationCoverage'), noLocalizationCoverage: t('resourceWorkbenchV2.noLocalizationCoverage'), translatedKeys: t('resourceWorkbenchV2.translatedKeys'), missingKeys: t('resourceWorkbenchV2.missingKeys'),
               parserDetails: t('resourceWorkbenchV2.parserDetails'), detailsEmpty: t('resourceWorkbenchV2.detailsEmpty'),
             }} analysis={selectedAnalysis} />
+            {['map', 'schematic'].includes(resource.resource_kind) && <ResourceKindDataWorkspace
+              key={`${resource.public_id}:${resource.resource_kind}`}
+              publicId={resource.public_id}
+              kind={resource.resource_kind as 'map' | 'schematic'}
+              versionPublicId={selectedVersion?.public_id || null}
+              labels={{
+                mapWorkspace: t('resourceWorkbenchV2.mapWorkspace'), schematicWorkspace: t('resourceWorkbenchV2.schematicWorkspace'), versionScopedData: t('resourceWorkbenchV2.versionScopedData'),
+                rules: t('resourceWorkbenchV2.mapRulesTab'), resources: t('resourceWorkbenchV2.mapResourcesTab'), spawns: t('resourceWorkbenchV2.mapSpawnsTab'), cores: t('resourceWorkbenchV2.mapCoresTab'), waves: t('resourceWorkbenchV2.mapWavesTab'),
+                blocks: t('resourceWorkbenchV2.schematicBlocksTab'), materials: t('resourceWorkbenchV2.schematicMaterialsTab'), production: t('resourceWorkbenchV2.schematicProductionTab'), logic: t('resourceWorkbenchV2.schematicLogicTab'),
+                loading: t('resourceWorkbenchV2.kindDataLoading'), loadFailed: t('resourceWorkbenchV2.kindDataLoadFailed'), retry: t('resourceWorkbenchV2.retry'), empty: t('resourceWorkbenchV2.kindDataEmpty'), noVersion: t('resourceWorkbenchV2.kindDataNoVersion'), loadMore: t('resourceWorkbenchV2.kindDataLoadMore'), loadingMore: t('resourceWorkbenchV2.kindDataLoadingMore'),
+              }}
+            />}
             <FoldCard title={t('resourceWorkbenchV2.about')} open><div className="space-y-3 text-sm leading-6 text-[var(--text-secondary)]">{resource.description ? <p className="whitespace-pre-wrap">{resource.description}</p> : resource.content_text ? <p className="whitespace-pre-wrap">{resource.content_text}</p> : <EmptyState>{t('resourceWorkbenchV2.noDescription')}</EmptyState>}<div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.visibility')}: {resource.visibility}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.renderer')}: {rendererStatus}</span></div></div></FoldCard>
             <FoldCard title={t('resourceWorkbenchV2.versionWorkspace')} open>
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><label htmlFor="workbench-version" className="text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbenchV2.selectVersion')}</label><select id="workbench-version" value={selectedVersion?.public_id || ''} onChange={(event) => setSelectedVersionId(event.target.value)} disabled={workbench.versions.length === 0} className="min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text)] sm:max-w-sm">{workbench.versions.length === 0 && <option value="">{t('resourceWorkbenchV2.noVersions')}</option>}{workbench.versions.map((version) => <option key={version.public_id} value={version.public_id}>{version.display_version || version.version}{version.recommended ? ` · ${t('resourceWorkbenchV2.recommended')}` : ''}</option>)}</select></div>

@@ -164,6 +164,14 @@ export type ResourceWorkbenchV2Page<T> = {
   pagination: { next_cursor: string | null; has_more: boolean };
 };
 
+export type ResourceWorkbenchV2Kind = 'map' | 'schematic';
+export type ResourceWorkbenchV2KindTab = 'rules' | 'resources' | 'spawns' | 'cores' | 'waves' | 'blocks' | 'materials' | 'production' | 'logic';
+export type ResourceWorkbenchV2KindTabData = {
+  summary: Record<string, unknown> | null;
+  items: Array<Record<string, unknown>>;
+  pagination: { next_cursor: string | null; has_more: boolean };
+};
+
 /** Owner-aware, read-only data contract for the Resource Center workbench. */
 export type ResourceWorkbenchV2Response = {
   resource: {
@@ -601,6 +609,60 @@ export async function getResourceWorkbenchV2ModIndex(
     getResourceWorkbenchV2Localizations(publicId, versionPublicId, undefined, options),
   ]);
   return { contents, localizations };
+}
+
+/** Fetch one on-demand, version-scoped map or schematic workbench section. */
+export async function getResourceWorkbenchV2KindTabData(
+  publicId: string,
+  kind: ResourceWorkbenchV2Kind,
+  tab: ResourceWorkbenchV2KindTab,
+  versionPublicId: string,
+  cursor?: string,
+  options?: FetchV1Options,
+): Promise<ResourceWorkbenchV2KindTabData> {
+  const paths: Record<ResourceWorkbenchV2Kind, Partial<Record<ResourceWorkbenchV2KindTab, string>>> = {
+    map: { rules: 'rules', resources: 'resources', spawns: 'spawns', cores: 'detail', waves: 'waves' },
+    schematic: { blocks: 'blocks', materials: 'materials', production: 'production', logic: 'logic' },
+  };
+  const path = paths[kind][tab];
+  if (!path) throw new Error(`Unsupported ${kind} workbench section: ${tab}`);
+  const query = new URLSearchParams({ version_public_id: versionPublicId, limit: '100' });
+  if (cursor) query.set('cursor', cursor);
+  const kindPath = kind === 'map' ? 'maps' : 'schematics';
+  const route = `/resources/${kindPath}/${encodeURIComponent(publicId)}${path === 'detail' ? '' : `/${path}`}`;
+  const response = await fetchV1<Record<string, unknown>>(
+    `${route}?${query.toString()}`,
+    options,
+  );
+  const asRecord = (value: unknown): Record<string, unknown> | null => value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+  const pagination = asRecord(response.pagination);
+  const rawItems = Array.isArray(response.items) ? response.items : [];
+  let summary: Record<string, unknown> | null = null;
+  if (tab === 'rules') summary = asRecord(response.rules);
+  if (tab === 'production') summary = { ...asRecord(response.production), available: response.available };
+  if (tab === 'cores') {
+    const map = asRecord(response.map);
+    const cores = Array.isArray(map?.cores) ? map.cores.map(asRecord).filter((item): item is Record<string, unknown> => item !== null) : [];
+    const mapSummary = Object.fromEntries(Object.entries(map || {}).filter(([key, value]) => key !== 'cores' && value !== null && value !== undefined && value !== ''));
+    return { summary: Object.keys(mapSummary).length ? mapSummary : null, items: cores, pagination: { next_cursor: null, has_more: false } };
+  }
+  if (tab === 'rules' && summary) {
+    return {
+      summary,
+      items: [],
+      pagination: { next_cursor: null, has_more: false },
+    };
+  }
+  return {
+    summary,
+    items: rawItems.map(asRecord).filter((item): item is Record<string, unknown> => item !== null),
+    pagination: {
+      next_cursor: typeof pagination?.next_cursor === 'string' ? pagination.next_cursor : null,
+      has_more: pagination?.has_more === true,
+    },
+  };
 }
 
 /** Analyze a prospective release without creating a resource version. */
