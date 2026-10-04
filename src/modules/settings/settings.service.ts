@@ -577,6 +577,7 @@ export class SettingsService implements OnModuleInit {
       { key: 'admin_notifications_webhook_secret', value: '', category: 'notifications', description: 'Optional webhook signature secret for admin notifications' },
       { key: 'admin_notifications_webhook_timeout_ms', value: '5000', category: 'notifications', description: 'Webhook request timeout in milliseconds' },
       { key: 'cleanup_log_retention_days', value: '365', category: 'cleanup', description: 'Days to retain operation logs' },
+      { key: 'security_access_log_retention_days', value: '90', category: 'cleanup', description: 'Days to retain security access logs' },
       { key: 'resource_file_retention_days', value: '30', category: 'cleanup', description: 'Days to retain rejected or deleted resource files' },
       { key: 'attachment_file_retention_days', value: '30', category: 'cleanup', description: 'Days to retain deleted attachment files' },
       { key: 'cleanup_session_retention_days', value: '30', category: 'cleanup', description: 'Days to retain expired sessions' },

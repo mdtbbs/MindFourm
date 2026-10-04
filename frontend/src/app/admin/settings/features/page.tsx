@@ -145,7 +145,7 @@ export default function FeaturesSettingsPage() {
   };
 
   if (loading) {
-    return <div className="py-8 text-center text-surface-500">Loading...</div>;
+    return <div className="py-8 text-center text-surface-500">加载中…</div>;
   }
 
   const enabledCount = features.filter((f) => (values[f.key] ?? (f.defaultEnabled === false ? 'false' : 'true')) === 'true').length;

@@ -8,8 +8,8 @@ import {
 } from './migration-utils';
 import { resolvePublicSiteUrl, validateConfiguredPublicSiteUrl } from '../../common/utils/public-site-url.util';
 
-export class EmailDeliveryHardening1720000240000 implements MigrationInterface {
-  name = 'EmailDeliveryHardening1720000240000';
+export class EmailDeliveryHardening1720000260000 implements MigrationInterface {
+  name = 'EmailDeliveryHardening1720000260000';
   transaction = false;
 
   async up(queryRunner: QueryRunner): Promise<void> {

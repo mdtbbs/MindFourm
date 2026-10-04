@@ -51,6 +51,7 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { SocialModule } from '../social/social.module';
 import { MultiplayerModule } from '../multiplayer/multiplayer.module';
 import { RealtimeGatewayModule } from '../realtime/realtime-gateway.module';
+import { SecurityAccessLogsModule } from '../security-access-logs/security-access-logs.module';
 
 @Module({
   imports: [
@@ -60,7 +61,7 @@ import { RealtimeGatewayModule } from '../realtime/realtime-gateway.module';
     StatsModule, SettingsModule, LogsModule, PointsModule, LevelsModule, BadgesModule, FollowsModule,
     GroupsModule, ShopModule, RssModule, PluginsModule, SearchModule, ServiceApiModule, ReportsModule,
     UserBlocksModule, ReactionsModule, UploadsModule, FriendsModule, PresenceModule, CapabilitiesModule,
-    MediaModule, DownloadsModule, EventsModule, ThreadsModule, CreatorModule, KnowledgeModule,
+    MediaModule, DownloadsModule, EventsModule, ThreadsModule, CreatorModule, KnowledgeModule, SecurityAccessLogsModule,
     FeedbackModule, NoticesModule, NavigationModule, PortalModule, RealtimeModule, SocialModule, MultiplayerModule, RealtimeGatewayModule,
   ],
 })

@@ -1,8 +1,8 @@
 # 论坛 API V1 参考
 
-本页按功能介绍论坛公开 API，并说明认证要求、请求参数、分页方式和常见写入操作。第三方客户端的授权流程与 scope 配置见[客户端接入指南](./public-client-v1.md)。
+本页按功能介绍论坛公开 API，并说明认证要求、请求参数、分页方式和常见写入操作。第三方客户端的授权流程与权限范围配置见[客户端接入指南](./public-client-v1.md)。
 
-Base URL:
+基础路径：
 
 ```text
 /api/v1
@@ -10,7 +10,7 @@ Base URL:
 
 建议按以下顺序接入：
 
-1. 用 MindAuth Public Client + Authorization Code + PKCE S256 登录，获取 Bearer token。
+1. 用 MindAuth 公开客户端 + 授权码模式 + PKCE S256 登录，获取 Bearer 令牌。
 2. `GET /api/v1/capabilities`
 3. 根据客户端类型读取 `GET /api/v1/client/config`
 4. 调用业务 API；具体操作仍受本地权限、手机验证、封禁和站点设置限制。
@@ -24,7 +24,7 @@ Base URL:
 | GET | `/api/v1/capabilities` | 公开 | 能力发现；包含 `multiplayer` 功能开关和 `cloud_saves_v1` |
 | GET | `/api/v1/client/config` | 公开 | Android 等客户端版本和功能配置 |
 
-第三方客户端统一使用 MindAuth Authorization Code + PKCE；第一方移动应用可能保留兼容能力，但不属于第三方 Public API。
+第三方客户端统一使用 MindAuth 授权码模式 + PKCE；第一方移动应用可能保留兼容能力，但不属于第三方公开 API。
 
 ## 用户资料
 
@@ -45,7 +45,7 @@ Base URL:
 | GET | `/api/v1/threads` | 公开 | 讨论列表 |
 | GET | `/api/v1/threads?q=关键词` | 公开 | 使用论坛现有搜索服务 |
 | POST | `/api/v1/threads` | 需要登录 | 创建讨论 |
-| GET | `/api/v1/threads/{id}` | 可匿名访问 | 讨论详情；匿名可读，登录后附加 viewer / ownership 状态 |
+| GET | `/api/v1/threads/{id}` | 可匿名访问 | 讨论详情；匿名可读，登录后附加浏览者和所有权状态 |
 | PUT | `/api/v1/threads/{id}` | 需要登录 | 修改讨论 |
 | DELETE | `/api/v1/threads/{id}` | 需要登录 | 软删除讨论 |
 | PUT | `/api/v1/threads/{id}/like` | 需要登录 | 点赞，幂等 |
@@ -67,12 +67,12 @@ GET /api/v1/threads?limit=20&offset=0&category_id=2
 
 | 参数 | 类型 | 含义 |
 | --- | --- | --- |
-| `limit` | integer | 每页条数，默认 20，最大 50。 |
-| `offset` | integer | 从列表开头跳过的条数，默认 0。 |
-| `page` | integer | 页码，从 1 开始；未传 `offset` 时用 `(page - 1) × limit` 计算起点。 |
-| `category_id` | integer | 只返回指定论坛分类的讨论。 |
-| `q` | string | 搜索标题与正文；搜索使用 `page` 和 `limit` 分页。 |
-| `sort` | string | `q` 搜索支持 `relevance`、`newest`、`oldest`。 |
+| `limit` | 整数 | 每页条数，默认 20，最大 50。 |
+| `offset` | 整数 | 从列表开头跳过的条数，默认 0。 |
+| `page` | 整数 | 页码，从 1 开始；未传 `offset` 时用 `(page - 1) × limit` 计算起点。 |
+| `category_id` | 整数 | 只返回指定论坛分类的讨论。 |
+| `q` | 字符串 | 搜索标题与正文；搜索使用 `page` 和 `limit` 分页。 |
+| `sort` | 字符串 | `q` 搜索支持 `relevance`、`newest`、`oldest`。 |
 
 搜索例子：
 
@@ -111,18 +111,18 @@ GET /api/v1/threads?q=建筑&page=1&limit=20
 
 `public_id` 当前为 `null`；客户端暂时用 `id` 访问讨论。摘要字段说明：`status` 是发布状态；`is_pinned` / `is_locked` 分别表示置顶和锁定；`view_count` / `reply_count` 是浏览与回复数；`author`、`category` 是可为空的嵌套摘要；`excerpt` 是纯文本预览。时间使用 ISO 8601。
 
-cursor 模式与 offset/search 模式分开使用。首次读取可发送空 `cursor` 来选择 cursor 模式，之后把 `data.next_cursor` 原样用于下一页：
+游标模式与偏移量 / 搜索模式分开使用。首次读取可发送空 `cursor` 来选择游标模式，之后把 `data.next_cursor` 原样用于下一页：
 
 ```http
 GET /api/v1/threads?limit=20&cursor=
 GET /api/v1/threads?limit=20&cursor=CURSOR_FROM_PREVIOUS_RESPONSE
 ```
 
-cursor 列表可选参数为 `source`、`exclude_category_ids`（逗号分隔）、`user_id`、`content_language`、`server_id`、`sort` 和 `order`。`sort` 支持 `created_at`、`updated_at`、`view_count`、`like_count`；`order` 是 `ASC` 或 `DESC`。cursor 响应的 `data` 是 `{ items, next_cursor, has_more }`，游标不透明，客户端不要解码或自行拼接。
+游标列表可选参数为 `source`、`exclude_category_ids`（逗号分隔）、`user_id`、`content_language`、`server_id`、`sort` 和 `order`。`sort` 支持 `created_at`、`updated_at`、`view_count`、`like_count`；`order` 是 `ASC` 或 `DESC`。游标响应的 `data` 是 `{ items, next_cursor, has_more }`，游标不透明，客户端不要解码或自行拼接。
 
 ### 创建讨论与回复
 
-写接口使用已授权的 MindAuth Bearer token 和 `forum.write` scope。以下示例以 富文本格式 V2 提交正文：
+写接口使用已授权的 MindAuth Bearer 令牌和 `forum.write` 权限范围。以下示例以富文本格式 V2 提交正文：
 
 ```http
 POST /api/v1/threads
@@ -143,7 +143,7 @@ Content-Type: application/json
 }
 ```
 
-`title` 必填。`category_id`、`server_id`、`required_group_id`、`post_type`、`content_language`、`tags` 和 `status` 可选；`post_type` 省略时为 `normal`，其他值应来自站点当前配置的帖子前缀。`content_language` 省略时服务端保存为 `unknown`。`status` 只能请求 `draft` 或 `published`；请求 `published` 不代表绕过审核，服务端可能保存为 `pending`。新客户端发送 `content_json` 时同时发送 `content_schema_version: 2`；`content` 是兼容用 Markdown 正文。字段限制和完整 Tiptap node / mark 选项见 [富文本格式](./rich-content-schema-v2.md)。
+`title` 必填。`category_id`、`server_id`、`required_group_id`、`post_type`、`content_language`、`tags` 和 `status` 可选；`post_type` 省略时为 `normal`，其他值应来自站点当前配置的帖子前缀。`content_language` 省略时服务端保存为 `unknown`。`status` 只能请求 `draft` 或 `published`；请求 `published` 不代表绕过审核，服务端可能保存为 `pending`。新客户端发送 `content_json` 时同时发送 `content_schema_version: 2`；`content` 是兼容用 Markdown 正文。字段限制以及完整 Tiptap 节点和格式标记选项见[富文本格式](./rich-content-schema-v2.md)。
 
 ```http
 POST /api/v1/threads/123/replies
@@ -173,7 +173,7 @@ GET /api/v1/threads/123/replies?page=1&limit=20
 
 回复列表的 `data` 是回复数组，每项包含 `id`、`post_id`、`user_id`、`parent_reply_id`、正文的四种表示、`status`、`like_count`、创建/更新时间、作者字段、`location_label` 和 `is_owner`。翻页信息在 `meta.pagination`，其中 `page`、`limit`、`total`、`total_pages`、`has_more` 表示当前页、页大小、总条数、总页数和是否还有下一页。独立回复接口每页最多 50 条；详情内只附带首批回复。
 
-thread/reply 读写支持 Tiptap JSON、服务端安全 HTML 与纯文本投影；`content` Markdown 字段继续用于兼容。
+讨论和回复的读写支持 Tiptap JSON、服务端生成的安全 HTML 与纯文本投影；`content` Markdown 字段继续用于兼容。
 
 ## 资源中心
 
@@ -191,7 +191,7 @@ thread/reply 读写支持 Tiptap JSON、服务端安全 HTML 与纯文本投影�
 | POST | `/api/v1/resources/drafts/{draftId}/submit` | `resource.upload` | 送入既有资源审核流程 |
 | DELETE | `/api/v1/resources/drafts/{draftId}` | `resource.upload` | 删除本人草稿 |
 
-资源 API 仍受 `resource_read` 服务能力和站点功能开关控制。文件可以匿名下载；携带 OAuth Bearer 时，令牌必须具备 `resource.download`。上传草稿仅创建者可读，30 分钟后过期，提交后进入现有审核流程。资源标识、Manifest 和文件安全规则见[资源中心 API V1 契约](./resources-v1-contract.md)和[客户端接入指南](./public-client-v1.md)。
+资源 API 仍受 `resource_read` 服务能力和站点功能开关控制。文件可以匿名下载；携带 OAuth Bearer 时，令牌必须具备 `resource.download`。上传草稿仅创建者可读，30 分钟后过期，提交后进入现有审核流程。资源标识、清单和文件安全规则见[资源中心 API V1 契约](./resources-v1-contract.md)和[客户端接入指南](./public-client-v1.md)。
 
 ## 游戏内容
 
@@ -214,68 +214,68 @@ thread/reply 读写支持 Tiptap JSON、服务端安全 HTML 与纯文本投影�
 - 地图 multipart 上传、预览、完成提交
 - 我的资源和收藏
 
-完整 endpoint 表、请求参数、限流和上传流程见 [game-content-v1.md](./game-content-v1.md)。
+完整接口表、请求参数、限流和上传流程见 [game-content-v1.md](./game-content-v1.md)。
 
 ## 好友、在线状态与多人联机
 
-好友、在线状态和联机使用 MindAuth Public Client Bearer。Scope 按操作类别申请：好友接口用 `friends.read`，Presence 用 `presence.read` / `presence.write`，联机控制面用 `multiplayer.read` / `multiplayer.write`。第三方联机还受站点开关及应用的 Presence / Multiplayer / Join Intent 能力审核约束。
+好友、在线状态和联机使用 MindAuth 公开客户端 Bearer。权限范围按操作类别申请：好友接口用 `friends.read`，在线状态用 `presence.read` / `presence.write`，联机控制面用 `multiplayer.read` / `multiplayer.write`。第三方联机还受站点开关及应用的在线状态 / 多人联机 / 加入意图能力审核约束。
 
-| 方法 | 路径 | OAuth scope | 说明 |
+| 方法 | 路径 | OAuth 权限范围 | 说明 |
 | --- | --- | --- | --- |
-| GET / PATCH | `/api/v1/social/privacy` | `presence.read` / `presence.write` | 读取或更新好友、Presence 与联机隐私策略 |
-| GET | `/api/v1/social/friends/presence?page=1&limit=50` | `friends.read presence.read` | 分页好友、在线状态与 Activity 聚合 |
+| GET / PATCH | `/api/v1/social/privacy` | `presence.read` / `presence.write` | 读取或更新好友、在线状态与联机隐私策略 |
+| GET | `/api/v1/social/friends/presence?page=1&limit=50` | `friends.read presence.read` | 分页好友、在线状态与活动状态聚合 |
 | GET | `/api/v1/friends`、`/api/v1/friends/requests` | `friends.read` | 好友列表与待处理请求 |
 | POST | `/api/v1/friends/requests` | `friends.read` | 发送好友请求 |
 | POST | `/api/v1/friends/requests/{id}/accept`、`.../reject` | `friends.read` | 接受或拒绝好友请求 |
 | DELETE | `/api/v1/friends/{userId}` | `friends.read` | 删除好友 |
 | GET | `/api/v1/blocks` | `friends.read` | 查看屏蔽列表 |
 | POST / DELETE | `/api/v1/users/{id}/block` | `friends.read` | 屏蔽或解除屏蔽用户 |
-| POST | `/api/v1/presence/connections` | `presence.write` | 创建 Presence Connection |
-| PATCH / DELETE | `/api/v1/presence/connections/{id}` | `presence.write` | 更新或删除 Presence Connection |
-| POST | `/api/v1/presence/connections/{id}/heartbeat` | `presence.write` | Presence 心跳 |
-| PUT / DELETE | `/api/v1/presence/connections/{id}/activity` | `presence.write` | 发布或清除 Rich Activity |
-| GET / PATCH | `/api/v1/multiplayer/preferences` | `multiplayer.read` / `multiplayer.write` | 查看或更新默认 Join Intent 客户端 |
+| POST | `/api/v1/presence/connections` | `presence.write` | 创建在线连接 |
+| PATCH / DELETE | `/api/v1/presence/connections/{id}` | `presence.write` | 更新或删除在线连接 |
+| POST | `/api/v1/presence/connections/{id}/heartbeat` | `presence.write` | 在线状态心跳 |
+| PUT / DELETE | `/api/v1/presence/connections/{id}/activity` | `presence.write` | 发布或清除富活动状态 |
+| GET / PATCH | `/api/v1/multiplayer/preferences` | `multiplayer.read` / `multiplayer.write` | 查看或更新默认加入意图客户端 |
 | GET | `/api/v1/multiplayer/capabilities` | `multiplayer.read` | 读取联机能力和限制 |
-| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建 Session |
-| GET | `/api/v1/multiplayer/sessions/{id}`、`.../{id}/peers` | `multiplayer.read` | 读取可见 Session 与 Peer |
-| POST | `/api/v1/multiplayer/sessions/resolve-code` | `multiplayer.read` | 解析 Unlisted Session 加入码 |
-| POST | `/api/v1/multiplayer/sessions/{id}/join`、`.../leave` | `multiplayer.write` | 加入、退出或恢复 Peer |
-| POST | `/api/v1/multiplayer/sessions/{id}/peers/{peerId}/heartbeat` | `multiplayer.write` | Peer 心跳 |
+| POST | `/api/v1/multiplayer/sessions` | `multiplayer.write` | 创建会话 |
+| GET | `/api/v1/multiplayer/sessions/{id}`、`.../{id}/peers` | `multiplayer.read` | 读取可见会话与对端 |
+| POST | `/api/v1/multiplayer/sessions/resolve-code` | `multiplayer.read` | 解析不公开会话加入码 |
+| POST | `/api/v1/multiplayer/sessions/{id}/join`、`.../leave` | `multiplayer.write` | 加入、退出或恢复对端 |
+| POST | `/api/v1/multiplayer/sessions/{id}/peers/{peerId}/heartbeat` | `multiplayer.write` | 对端心跳 |
 | POST | `/api/v1/multiplayer/sessions/{id}/candidates` | `multiplayer.write` | 发布连接候选 |
-| GET | `/api/v1/multiplayer/sessions/{id}/peers/{peerId}/candidates` | `multiplayer.read` | 读取 Peer 的连接候选 |
+| GET | `/api/v1/multiplayer/sessions/{id}/peers/{peerId}/candidates` | `multiplayer.read` | 读取对端的连接候选 |
 | DELETE | `/api/v1/multiplayer/sessions/{id}/candidates/{candidateId}` | `multiplayer.write` | 删除连接候选 |
 | POST | `/api/v1/multiplayer/invites` | `multiplayer.write` | 创建联机邀请 |
 | GET | `/api/v1/multiplayer/invites` | `multiplayer.read` | 查看自己的联机邀请 |
 | POST | `/api/v1/multiplayer/invites/{id}/accept`、`.../decline`、`.../revoke` | `multiplayer.write` | 接受、拒绝或撤销邀请 |
-| POST | `/api/v1/multiplayer/sessions/{id}/join-requests` | `multiplayer.write` | 请求加入需要审批的 Session |
+| POST | `/api/v1/multiplayer/sessions/{id}/join-requests` | `multiplayer.write` | 请求加入需要审批的会话 |
 | POST | `/api/v1/multiplayer/join-requests/{id}/approve`、`.../reject` | `multiplayer.write` | 批准或拒绝加入请求 |
-| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户且不预绑定 OAuth client 的 Join Intent |
-| POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | Launcher 消费 Join Intent 并加入 Session；首次消费的同一用户/client 可在 10 分钟内恢复结果 |
-| POST | `/api/v1/multiplayer/sessions/{id}/relay` | `multiplayer.write` | 为当前 Peer 申请短期官方 Relay Credential |
-| POST | `/api/v1/realtime/tickets` | `friends.read` | 创建一次性 WebSocket ticket |
+| POST | `/api/v1/multiplayer/sessions/{id}/join-intents` | `multiplayer.write` | 创建 60 秒、绑定用户且不预绑定 OAuth 客户端的加入意图 |
+| POST | `/api/v1/multiplayer/join-intents/{id}/consume` | `multiplayer.write` | 启动器使用加入意图并加入会话；首次使用的同一用户和客户端可在 10 分钟内恢复结果 |
+| POST | `/api/v1/multiplayer/sessions/{id}/relay` | `multiplayer.write` | 为当前对端申请短期官方中继凭证 |
+| POST | `/api/v1/realtime/tickets` | `friends.read` | 创建一次性 WebSocket 票据 |
 
-Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都有额外约束。逐接口请求体、字段、错误码及联机流程见 [多人联机 API](./multiplayer-v1.md)。
+会话的可见性、加入策略、恢复凭证和中继 / WebSocket 协议都有额外约束。逐接口请求体、字段、错误码及联机流程见[多人联机 API](./multiplayer-v1.md)。
 
 ## 云存档
 
-云存档是用户私有数据，不进入公共资源中心。API 入口是 `/api/v1/game-saves`；只申请客户端实际需要的 `game_content.saves.read`、`game_content.saves.write` 和 `game_content.saves.delete`。服务端按当前用户校验 Slot 所有权，不能通过传入其他用户 ID 读取他人存档。
+云存档是用户私有数据，不进入公共资源中心。API 入口是 `/api/v1/game-saves`；只申请客户端实际需要的 `game_content.saves.read`、`game_content.saves.write` 和 `game_content.saves.delete`。服务端按当前用户校验存档槽所有权，不能通过传入其他用户 ID 读取他人存档。
 
-| 方法 | 路径 | OAuth scope | 说明 |
+| 方法 | 路径 | OAuth 权限范围 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/capabilities` | 公开 | 检查 `cloud_saves_v1` 能力是否启用 |
-| GET | `/api/v1/game-saves?limit=20&cursor=...` | `game_content.saves.read` | 游标分页列出自己的存档 Slot |
+| GET | `/api/v1/game-saves?limit=20&cursor=...` | `game_content.saves.read` | 通过游标分页列出自己的存档槽 |
 | GET | `/api/v1/game-saves/quota` | `game_content.saves.read` | 查看存储额度与限制 |
-| POST | `/api/v1/game-saves` | `game_content.saves.write` | 创建 Slot |
-| GET | `/api/v1/game-saves/{slotId}` | `game_content.saves.read` | 查看 Slot 与当前 Snapshot |
-| PATCH | `/api/v1/game-saves/{slotId}` | `game_content.saves.write` | 更新 Slot 元数据 |
-| DELETE | `/api/v1/game-saves/{slotId}` | `game_content.saves.delete` | 删除自己的 Slot |
-| GET | `/api/v1/game-saves/{slotId}/snapshots` | `game_content.saves.read` | 查看历史 Snapshot |
-| PATCH | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}` | `game_content.saves.write` | Pin / Unpin 历史版本 |
+| POST | `/api/v1/game-saves` | `game_content.saves.write` | 创建存档槽 |
+| GET | `/api/v1/game-saves/{slotId}` | `game_content.saves.read` | 查看存档槽与当前快照 |
+| PATCH | `/api/v1/game-saves/{slotId}` | `game_content.saves.write` | 更新存档槽元数据 |
+| DELETE | `/api/v1/game-saves/{slotId}` | `game_content.saves.delete` | 删除自己的存档槽 |
+| GET | `/api/v1/game-saves/{slotId}/snapshots` | `game_content.saves.read` | 查看历史快照 |
+| PATCH | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}` | `game_content.saves.write` | 固定或取消固定历史版本 |
 | DELETE | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}` | `game_content.saves.delete` | 删除允许删除的历史版本 |
-| POST | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/restore` | `game_content.saves.write` | 将历史内容恢复为新 Snapshot |
+| POST | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/restore` | `game_content.saves.write` | 将历史内容恢复为新快照 |
 | POST | `/api/v1/game-saves/{slotId}/uploads` | `game_content.saves.write` | 创建上传会话并取得论坛文件上传地址 |
 | PUT | `/api/v1/game-saves/uploads/{uploadId}/file` | `game_content.saves.write` | 将存档文件流上传到论坛本地存储 |
-| POST | `/api/v1/game-saves/uploads/{uploadId}/commit` | `game_content.saves.write` | 校验上传对象并提交 Snapshot |
+| POST | `/api/v1/game-saves/uploads/{uploadId}/commit` | `game_content.saves.write` | 校验上传对象并提交快照 |
 | DELETE | `/api/v1/game-saves/uploads/{uploadId}` | `game_content.saves.write` | 取消未提交的上传会话 |
 | POST | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/download` | `game_content.saves.read` | 获取需继续认证的私有下载地址 |
 | GET | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/file` | `game_content.saves.read` | 从论坛本地存储下载存档文件 |
@@ -286,14 +286,14 @@ Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都�
 
 | 方法 | 路径 | 认证 | 说明 |
 | --- | --- | --- | --- |
-| GET | `/api/v1/notifications` | 需要登录 | `notification.read` scope；分页通知 |
-| GET | `/api/v1/notifications/unread-count` | 需要登录 | `notification.read` scope |
-| PUT | `/api/v1/notifications/{id}/read` | 需要登录 | `notification.read` scope |
-| PUT | `/api/v1/notifications/read-all` | 需要登录 | `notification.read` scope |
-| GET | `/api/v1/messages` | 需要登录 | `message.read` scope；会话 cursor 分页 |
-| GET | `/api/v1/messages/unread-count` | 需要登录 | `message.read` scope |
-| GET | `/api/v1/messages/{userId}` | 需要登录 | `message.read` scope；对话 cursor 分页 |
-| POST | `/api/v1/messages` | 需要登录 | `message.write` scope；复用既有 block/通知策略 |
+| GET | `/api/v1/notifications` | 需要登录 | `notification.read` 权限范围；分页通知 |
+| GET | `/api/v1/notifications/unread-count` | 需要登录 | `notification.read` 权限范围 |
+| PUT | `/api/v1/notifications/{id}/read` | 需要登录 | `notification.read` 权限范围 |
+| PUT | `/api/v1/notifications/read-all` | 需要登录 | `notification.read` 权限范围 |
+| GET | `/api/v1/messages` | 需要登录 | `message.read` 权限范围；会话游标分页 |
+| GET | `/api/v1/messages/unread-count` | 需要登录 | `message.read` 权限范围 |
+| GET | `/api/v1/messages/{userId}` | 需要登录 | `message.read` 权限范围；对话游标分页 |
+| POST | `/api/v1/messages` | 需要登录 | `message.write` 权限范围；沿用既有屏蔽和通知策略 |
 
 通知受 `feature_notifications_v1_enabled` 控制。私信受 `feature_messages_enabled` 控制，第三方 OAuth 私信还需管理员开启 `feature_messages_third_party_access_enabled`；缺少设置时返回稳定 403 code。
 
@@ -303,7 +303,7 @@ Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都�
 | --- | --- | --- | --- |
 | GET | `/api/v1/discover` | 公开 | 发现页聚合 |
 | GET | `/api/v1/home` | 公开 | 第一方首页数据 |
-| GET | `/api/v1/portal` | 公开 | Portal 聚合数据 |
+| GET | `/api/v1/portal` | 公开 | 门户聚合数据 |
 
 ## 公告
 
@@ -321,8 +321,8 @@ Session 的可见性、加入策略、恢复凭证和 Relay/WebSocket 协议都�
 | GET | `/api/v1/reports/mine` | 需要登录 | 查看自己的举报 |
 | POST | `/api/v1/uploads/images` | 需要登录 | 上传正文图片 |
 
-Public Client OAuth、scope 名称、富文本字段以及 cURL、JavaScript、Java、Kotlin 调用示例见[客户端接入指南](./public-client-v1.md)。
+公开客户端 OAuth、权限范围名称、富文本字段以及 cURL、JavaScript、Java、Kotlin 调用示例见[客户端接入指南](./public-client-v1.md)。
 
 ## 公开契约范围
 
-本指南只列出第三方 Public Client V1 操作。第一方兼容能力、论坛管理功能以及服务端集成使用的其他接口不属于本指南；请以 Public OpenAPI 的实际操作列表为准。
+本指南只列出第三方公开客户端 V1 操作。第一方兼容能力、论坛管理功能以及服务端集成使用的其他接口不属于本指南；请以公开 OpenAPI 的实际操作列表为准。

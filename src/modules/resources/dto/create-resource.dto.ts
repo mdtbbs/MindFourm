@@ -87,7 +87,7 @@ export class CreateResourceDto {
   content_json?: Record<string, unknown>;
 
   @ApiPropertyOptional({ enum: [2] })
-  @IsOptional() @IsInt() @Min(1) @Max(2)
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(2)
   content_schema_version?: number;
 
   @IsOptional()

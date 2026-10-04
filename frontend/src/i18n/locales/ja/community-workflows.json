@@ -100,6 +100,7 @@
       "server_plugin": "サーバープラグイン",
       "development_tool": "ツール",
       "texture_ui": "テクスチャ・UI",
+      "pack": "リソースパック",
       "other": "その他"
     }
   },
@@ -308,5 +309,52 @@
     "discardChanges": "変更を破棄",
     "saving": "保存中…",
     "saveChanges": "変更を保存"
+  },
+  "messagePrivacy": {
+    "title": "プライベートメッセージのプライバシー",
+    "description": "メッセージを送信できる相手を選択します。ブロックとアカウント停止は常に優先されます。",
+    "allowMessages": "メッセージを送信できる相手",
+    "everyone": "すべてのユーザー",
+    "friends": "フレンドのみ",
+    "nobody": "誰も許可しない",
+    "save": "プライバシー設定を保存",
+    "saving": "保存中…",
+    "saved": "保存しました",
+    "loadFailed": "プライベートメッセージの設定を読み込めませんでした。",
+    "saveFailed": "プライベートメッセージの設定を更新できませんでした。"
+  },
+  "adminSecurityAccessLogs": {
+    "title": "セキュリティアクセスログ",
+    "retention": "保存期間は管理者のクリーンアップ設定に従います（初期値：90日）。IPアドレスは管理者のみ閲覧できます。",
+    "loadFailed": "アクセスログを読み込めませんでした。",
+    "search": "検索",
+    "clear": "条件をクリア",
+    "total": "{count} 件",
+    "loading": "アクセスログを読み込み中…",
+    "empty": "該当する記録はありません。",
+    "previous": "前へ",
+    "next": "次へ",
+    "page": "{total} ページ中 {page} ページ",
+    "filter": {
+      "request_id": "リクエスト ID",
+      "user_id": "ユーザー ID",
+      "ip_address": "IP アドレス",
+      "route": "ルート",
+      "resource_id": "リソース ID",
+      "status_code": "ステータス",
+      "from": "開始日",
+      "to": "終了日"
+    },
+    "column": {
+      "time": "時刻",
+      "status": "ステータス",
+      "method": "メソッド",
+      "route": "ルート",
+      "resource": "リソース",
+      "user": "ユーザー ID",
+      "ip": "IP アドレス",
+      "request": "リクエスト ID",
+      "agent": "User-Agent"
+    }
   }
 }

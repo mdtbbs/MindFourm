@@ -19,6 +19,7 @@ import { ReplyLike } from './reply-like.entity';
 import { Ban } from './ban.entity';
 import { Setting } from './setting.entity';
 import { OperationLog } from './operation-log.entity';
+import { SecurityAccessLog } from './security-access-log.entity';
 import { SessionAudit } from './session-audit.entity';
 
 // Phase 1: Points
@@ -159,6 +160,7 @@ export const coreEntities = [
   Ban,
   Setting,
   OperationLog,
+  SecurityAccessLog,
   SessionAudit,
   // Phase 1: Points
   PointLog,
@@ -274,7 +276,7 @@ export {
   MultiplayerRelayAllocation, MultiplayerAuditLog,
   AdminNotification,
   Message, Attachment, CustomEmoji, Resource, ResourceCategory, ResourceVersion,
-  PostLike, ReplyLike, Ban, Setting, OperationLog, SessionAudit,
+  PostLike, ReplyLike, Ban, Setting, OperationLog, SecurityAccessLog, SessionAudit,
   // Phase 1: Points
   PointLog, PointRule,
   // Phase 2: Levels

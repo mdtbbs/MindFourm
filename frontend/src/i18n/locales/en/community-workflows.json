@@ -32,7 +32,7 @@
   },
   "postEdit": { "editorLoading": "Loading editor…", "titleRequired": "Enter a title.", "contentRequired": "Enter some content.", "saveFailed": "Could not save changes. Please try again.", "backToPost": "Back to discussion", "title": "Edit discussion", "titleLabel": "Title", "category": "Category", "noCategory": "No category", "content": "Content", "contentPlaceholder": "Edit the discussion with the rich-text editor…", "tags": "Tags", "tagsPlaceholder": "Separate tags with commas", "saving": "Saving…", "save": "Save changes", "cancel": "Cancel", "unchanged": "No changes" },
   "resourceEdit": { "editorLoading": "Loading editor…", "titleRequired": "Enter a title.", "externalUrlRequired": "Enter the external URL.", "updated": "Resource updated.", "updateFailed": "Could not update the resource.", "pageBack": "Back to resource", "pageTitle": "Edit resource", "pageDescription": "Update the resource title, description, topic and other details.", "titleLabel": "Title *", "titlePlaceholder": "Resource title", "version": "Version", "versionPlaceholder": "For example, 1.0 or v2.0", "shortDescription": "Short description", "shortDescriptionPlaceholder": "Shown below the resource title in listings. Rich text and images are supported.", "topic": "Topic / use", "noTopic": "None", "description": "Description", "descriptionPlaceholder": "Describe the resource, how to use it and important notes. Paste or drop images to upload them.", "externalUrlLabel": "External URL *", "externalUrlPlaceholder": "https://github.com/... or another resource link", "fileImmutable": "Uploaded files cannot be changed here. Delete the resource and upload it again to replace the file.", "currentFile": "Current file", "visibility": "Visibility", "public": "Public", "private": "Private", "cancel": "Cancel", "saving": "Saving…", "save": "Save changes" },
-  "resourceComments": { "loading": "Loading comments…", "deleteConfirm": "Delete this comment?", "reply": "Reply", "replyTo": "Reply to {name}", "new": "Write a comment", "placeholder": "Write your comment…", "cancel": "Cancel", "submitting": "Submitting…", "submit": "Comment", "empty": "No comments yet. Start the conversation.", "loadMore": "Load more comments ({shown}/{total})", "anonymous": "Anonymous", "delete": "Delete" },
+  "resourceComments": { "loading": "Loading comments…", "deleteConfirm": "Delete this comment?", "reply": "Reply", "replyTo": "Reply to {name}", "new": "Write a comment", "placeholder": "Write your comment…", "cancel": "Cancel", "submitting": "Submitting…", "submit": "Comment", "empty": "No comments yet. Start the conversation.", "loadMore": "Load more comments ({shown}/{total})", "anonymous": "Anonymous", "delete": "Delete", "fullDiscussion": "View full discussion" },
   "myResources": { "approved": "Approved", "pending": "In review", "rejected": "Rejected", "loadFailed": "Could not load resources.", "deleteConfirm": "Delete this resource? This cannot be undone.", "deleted": "Resource deleted.", "deleteFailed": "Could not delete the resource.", "retry": "Retry", "title": "My resources", "description": "Manage the resources you have submitted.", "submit": "Submit a resource", "empty": "You have not submitted any resources yet.", "submitFirst": "Submit your first resource", "headingTitle": "Title", "type": "Type", "status": "Status", "downloads": "Downloads", "size": "Size", "actions": "Actions", "external": "External link", "file": "File", "edit": "Edit", "delete": "Delete" },
   "emailSettings": { "home": "Home", "settings": "Settings", "title": "Settings", "notifications": "Notification settings", "blockedUsers": "Blocked users", "description": "Choose which email notifications to receive. All notifications remain available in your inbox; email is an additional reminder.", "replyLabel": "New reply notifications", "replyDescription": "Email me when someone replies to my discussion.", "mentionLabel": "Mention notifications", "mentionDescription": "Email me when someone mentions me.", "messageLabel": "Private messages", "messageDescription": "Email me when I receive a new message.", "systemLabel": "System notifications", "systemDescription": "Important account notices, such as report outcomes.", "digestLabel": "Weekly highlights", "digestDescription": "Receive a weekly summary of popular content.", "saving": "Saving…", "save": "Save settings", "saved": "Saved" },
   "cloudSaves": { "title": "Cloud saves", "settings": "Settings", "privateNotice": "Cloud saves are private to you and can sync across launchers you authorize.", "disabled": "Cloud saves are not enabled on this site.", "backToSettings": "Back to settings", "loading": "Loading…", "loadFailed": "Could not load cloud saves.", "historyFailed": "Could not load save history.", "downloadFailed": "Could not download this save.", "renameFailed": "Could not rename this save.", "deleteFailed": "Could not delete this item.", "restoreFailed": "Could not restore this version.", "updateFailed": "Could not update this version.", "refresh": "Refresh", "quota": "Storage", "slotUsage": "Saves {used} / {limit}", "retention": "Keep up to {count} unpinned versions per save for {days} days.", "quotaHint": "Storage use is high. Delete history you no longer need to free space.", "quotaFull": "Storage is full. Delete a save or older version before uploading again.", "slots": "Cloud saves", "empty": "No cloud saves yet. Sync a save from an MDTBBS launcher you have authorized.", "chooseSlot": "Choose a save to view its history.", "noSnapshot": "No backup yet", "current": "Current", "history": "History", "emptyHistory": "This save has no history yet.", "loadingHistory": "Loading history…", "revision": "Revision {revision}", "gameVersion": "Game", "unknownGameVersion": "Game version unknown", "wave": "Wave {wave}", "playtime": "Played {time}", "mods": "{count} mods", "unknownClient": "Unknown / Removed OAuth client", "pinned": "Pinned", "pin": "Pin", "unpin": "Unpin", "download": "Download", "restore": "Restore", "rename": "Rename", "delete": "Delete", "deleteSnapshot": "Delete version", "renamePrompt": "Enter a new save name", "deleteSlotConfirm": "This deletes the cloud save and all its history. Your local Mindustry save will not be affected. Continue?", "restoreConfirm": "Restore revision {revision}? This creates a new history entry and keeps the older versions.", "deleteSnapshotConfirm": "Delete history revision {revision}? This cannot be undone.", "manualReason": "Manual backup", "beforeLaunchReason": "Before launch", "afterExitReason": "After exit", "periodicReason": "Scheduled backup", "restoreReason": "Restored version", "conflictReason": "Conflict copy", "importReason": "Imported backup" },
@@ -100,6 +100,7 @@
       "server_plugin": "Server plugins",
       "development_tool": "Tools",
       "texture_ui": "Textures and UI",
+      "pack": "Resource packs",
       "other": "Other"
     }
   },
@@ -389,6 +390,53 @@
       "warning": "Warning",
       "error": "Error",
       "info": "Info"
+    }
+  },
+  "messagePrivacy": {
+    "title": "Private message privacy",
+    "description": "Choose who can message you. Existing blocks and bans always take precedence.",
+    "allowMessages": "Who can message you",
+    "everyone": "Everyone",
+    "friends": "Friends only",
+    "nobody": "Nobody",
+    "save": "Save privacy setting",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "loadFailed": "Could not load message privacy settings.",
+    "saveFailed": "Could not update message privacy settings."
+  },
+  "adminSecurityAccessLogs": {
+    "title": "Security access logs",
+    "retention": "Retention follows the admin cleanup setting (default: 90 days). IP addresses are visible to administrators only.",
+    "loadFailed": "Could not load security access logs.",
+    "search": "Search",
+    "clear": "Clear filters",
+    "total": "{count} records",
+    "loading": "Loading security access logs…",
+    "empty": "No matching records.",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {page} of {total}",
+    "filter": {
+      "request_id": "Request ID",
+      "user_id": "User ID",
+      "ip_address": "IP address",
+      "route": "Route",
+      "resource_id": "Resource ID",
+      "status_code": "Status",
+      "from": "From date",
+      "to": "To date"
+    },
+    "column": {
+      "time": "Time",
+      "status": "Status",
+      "method": "Method",
+      "route": "Route",
+      "resource": "Resource",
+      "user": "User ID",
+      "ip": "IP address",
+      "request": "Request ID",
+      "agent": "User agent"
     }
   }
 }

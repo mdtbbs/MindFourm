@@ -33,7 +33,7 @@ export default function ResourceModerationReview({ resource }: { resource: Resou
     <section className="space-y-4" aria-label="资源元数据审核对照">
       <div>
         <h4 className="text-base font-semibold text-surface-900 dark:text-gray-100">元数据审核对照</h4>
-        <p className="mt-1 text-xs text-surface-500">作者填写内容与解析器结果并列展示；有效结果中同名字段优先采用解析结果。</p>
+        <p className="mt-1 text-xs text-surface-500">作者填写内容与解析器结果并列展示；有效结果优先采用作者填写内容，作者未填写的字段使用解析结果补充。</p>
       </div>
 
       {differences.length > 0 ? (
@@ -70,7 +70,7 @@ export default function ResourceModerationReview({ resource }: { resource: Resou
           <h5 className="mb-2 font-semibold text-surface-800 dark:text-gray-200">文件完整性</h5>
           <dl className="grid gap-2 sm:grid-cols-2">
             {resource.file_name ? <div><dt className="text-surface-400">文件</dt><dd className="break-all">{resource.file_name}</dd></div> : null}
-            {resource.file_size ? <div><dt className="text-surface-400">大小</dt><dd>{resource.file_size.toLocaleString()} bytes</dd></div> : null}
+            {resource.file_size ? <div><dt className="text-surface-400">大小</dt><dd>{resource.file_size.toLocaleString()} 字节</dd></div> : null}
             {integrityStatus ? <div><dt className="text-surface-400">校验状态</dt><dd>{integrityStatus}</dd></div> : null}
             {resource.content_hash ? <div className="sm:col-span-2"><dt className="text-surface-400">{resource.hash_algorithm || 'SHA-256'}</dt><dd className="break-all font-mono">{resource.content_hash}</dd></div> : null}
           </dl>

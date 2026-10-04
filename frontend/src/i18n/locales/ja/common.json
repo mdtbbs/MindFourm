@@ -33,6 +33,7 @@
     "gameServers": "ゲームサーバー"
   },
   "navigation": {
+    "siteNavigation": "サイトナビゲーション",
     "discover": "見つける",
     "developers": "開発者向け",
     "home": "ホーム",
@@ -50,6 +51,11 @@
     "notifications": "通知",
     "friends": "フレンド",
     "settings": "設定",
+    "profile": "プロフィール",
+    "admin": "管理画面",
+    "logout": "ログアウト",
+    "register": "新規登録",
+    "login": "ログイン",
     "publishDiscussion": "ディスカッションを開始",
     "publishResource": "リソースを投稿"
   },
@@ -85,6 +91,7 @@
       "server_plugin": "サーバープラグイン",
       "development_tool": "開発ツール",
       "texture_ui": "テクスチャとUI",
+      "pack": "リソースパック",
       "other": "その他"
     }
   },
@@ -202,7 +209,8 @@
   },
   "adminNavigation": {
     "item": {
-      "resource-analytics": "リソース統計"
+      "resource-analytics": "リソース統計",
+      "security-access-logs": "セキュリティアクセスログ"
     }
   },
   "legal": {

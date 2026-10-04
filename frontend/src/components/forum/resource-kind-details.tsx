@@ -61,6 +61,10 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
   ];
   const requirements = Array.isArray(metadata.requirements) ? metadata.requirements.filter((item): item is { item?: string; amount?: number } => Boolean(item && typeof item === 'object')) : [];
   const blockTypes = Array.isArray(metadata.block_types) ? metadata.block_types.filter((item): item is { name?: string; count?: number } => Boolean(item && typeof item === 'object')) : [];
+  const estimatedBuildTimeSeconds = typeof metadata.estimated_build_time_seconds === 'number'
+    && Number.isFinite(metadata.estimated_build_time_seconds) && metadata.estimated_build_time_seconds > 0
+    ? Math.ceil(metadata.estimated_build_time_seconds)
+    : null;
   const production = metadata.production && typeof metadata.production === 'object' ? metadata.production as Record<string, any> : null;
   const productionItems = (production?.items || {}) as ProductionFlow;
   const productionLiquids = (production?.liquids || {}) as ProductionFlow;
@@ -123,7 +127,7 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
     {(kind === 'map' || kind === 'schematic') && (hasBuildEvidence || compatibilityEvidence.length > 0) && <section className="mt-5 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
       <h3 className="text-sm font-semibold text-[var(--text)]">{t('resourceKindDetails.buildCompatibility')}</h3>
       <dl className="mt-3 space-y-2 text-sm">
-        {kind === 'map' && typeof mapBuild?.stored_game_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.fileRecord')}</dt><dd className="text-[var(--text)]">Build {mapBuild.stored_game_build}</dd></div>}
+        {kind === 'map' && typeof mapBuild?.stored_game_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.fileRecord')}</dt><dd className="text-[var(--text)]">构建号 {mapBuild.stored_game_build}</dd></div>}
         {kind === 'schematic' && typeof rendererCompatibility?.minimum_supported_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.contentInference', { confidence: confidenceLabel(rendererCompatibility.confidence) })}</dt><dd className="text-[var(--text)]">{t('resourceKindDetails.minimumBuild', { build: rendererCompatibility.minimum_supported_build })}</dd></div>}
         {compatibilityEvidence.filter((item) => item.provenance !== 'inferred' || !hasBuildEvidence).map((item, index) => <div key={`${item.version}-${item.provenance}-${index}`} className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{evidenceLabel(item.provenance)} · {t('resourceTabs.versionLabel', { version: item.version || '' })}</dt><dd className="text-[var(--text)]">{evidenceValue(item)}{item.confidence ? ` · ${confidenceLabel(item.confidence)} ${t('resourceKindDetails.confidenceSuffix')}` : ''}</dd></div>)}
       </dl>
@@ -138,6 +142,18 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
       {(extendedMapData.length > 0 || dependencies.length > 0 || Boolean(metadata.rules && typeof metadata.rules === 'object')) && <details className="mt-5 border-t border-[var(--border)] pt-4"><summary className="cursor-pointer text-sm font-medium text-[var(--text-secondary)]">{t('resourceKindDetails.moreMapRules')}</summary><div className="mt-4 space-y-3 text-sm">{extendedMapData.map(([label, value]) => <p key={label}><span className="text-[var(--text-muted)]">{label}: </span>{value}</p>)}{dependencies.length > 0 && <p><span className="text-[var(--text-muted)]">{t('resourceKindDetails.requiredMod')}: </span>{[...new Set(dependencies)].join('、')}</p>}{Boolean(metadata.rules && typeof metadata.rules === 'object') && <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded bg-[var(--bg-elevated)] p-3 text-xs">{JSON.stringify(metadata.rules, null, 2)}</pre>}</div></details>}
     </>}
     {kind === 'schematic' && <>
+    <section className="mt-5 border-t border-[var(--border)] pt-5" aria-label={t('resourceKindDetails.estimatedBuildTime')}>
+      <h3 className="text-base font-semibold text-[var(--text)]">{t('resourceKindDetails.estimatedBuildTime')}</h3>
+      <p className="mt-2 text-lg font-semibold tabular-nums text-[var(--text)]" data-testid="schematic-estimated-build-time">
+        {estimatedBuildTimeSeconds === null
+          ? t('resourceKindDetails.estimateUnavailable')
+          : t('resourceKindDetails.estimateAbout', {
+            minutes: new Intl.NumberFormat(locale).format(Math.floor(estimatedBuildTimeSeconds / 60)),
+            seconds: new Intl.NumberFormat(locale).format(estimatedBuildTimeSeconds % 60),
+          })}
+      </p>
+      <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{t('resourceKindDetails.estimateNote')}</p>
+    </section>
     {production && <section className="mt-6 border-t border-[var(--border)] pt-5">
       <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1"><h3 className="text-base font-semibold text-[var(--text)]">{t('resourceKindDetails.production')}</h3><span className="text-xs text-[var(--text-muted)]">{t('resourceKindDetails.theoreticalRate')}</span></div>
       {production.available === false ? <p className="text-sm text-[var(--text-muted)]">{t('resourceKindDetails.noProductionFacilities')}</p> : <>

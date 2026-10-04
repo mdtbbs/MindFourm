@@ -13,11 +13,11 @@ test('file extension and file summary use actual human-readable file facts', () 
   expect(resourceFileSummary(resource)).toEqual(['Mindustry 地图', '.msav', '2.4 MB']);
 });
 
-test('resource version is distinct from Mindustry Build', () => {
+test('resource version is distinct from Mindustry build number', () => {
   expect(resourceVersionLabel(resource)).toBe('v3');
   expect(resourceVersionLabel({ version: '160', versions: [] })).toBe('v160');
   const modFacts = resourceCardFacts({ ...resource, resource_kind: 'mod', renderer_metadata: { version: '1.4', build: 160 } });
-  expect(modFacts.some((fact) => fact.value.startsWith('Build 1.4'))).toBe(false);
+  expect(modFacts.some((fact) => fact.value.startsWith('构建号 1.4'))).toBe(false);
 });
 
 test('unknown resource enums fall back to a user-facing label', () => {

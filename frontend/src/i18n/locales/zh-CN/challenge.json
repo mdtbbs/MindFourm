@@ -17,6 +17,7 @@
     "locked": "该讨论已锁定，不再接受新回复。"
   },
   "replyEditor": {
+    "loading": "正在加载回复编辑器…",
     "title": "发表回复",
     "replyTitle": "回复",
     "quoteTitle": "引用回复",

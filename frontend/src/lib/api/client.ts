@@ -623,6 +623,22 @@ export const adminApi = {
     request<{ data: AdminLog[]; pagination: PostListResponse['pagination'] }>(
       `/api/admin/logs${buildQueryString({ page: params?.page, limit: params?.limit, request_id: params?.request_id })}`
     ),
+  getSecurityAccessLogs: (params?: {
+    page?: number; limit?: number; request_id?: string; user_id?: number; ip_address?: string;
+    route?: string; resource_id?: string; status_code?: number; from?: string; to?: string;
+  }) => request<{
+    data: Array<{
+      id: number; request_id: string; user_id: number | null; method: string; route: string;
+      resource_type: string | null; resource_id: string | null; ip_address: string | null;
+      user_agent: string | null; status_code: number; created_at: string;
+    }>;
+    total: number; page: number; limit: number; totalPages: number;
+  }>(`/api/admin/security-access-logs${buildQueryString({
+    page: params?.page, limit: params?.limit, request_id: params?.request_id,
+    user_id: params?.user_id, ip_address: params?.ip_address, route: params?.route,
+    resource_id: params?.resource_id, status_code: params?.status_code,
+    from: params?.from, to: params?.to,
+  })}`),
   rollbackSettings: (category: string, auditId: number) => {
     clearCache();
     return request<{ message: string; rolled_back_audit_id: number }>(
@@ -1633,11 +1649,13 @@ export const resourceCommentApi = {
     ),
 
   /** 创建评论 */
-  create: (resourceId: number, input: { content: string; parent_comment_id?: number }) => {
+  create: (resourceId: number, input: { content: string; content_json?: Record<string, unknown>; content_schema_version?: number; parent_comment_id?: number }, challenge?: CommunityChallengeProof) => {
     clearCache();
+    const payload = input.content_json ? { ...input, content_schema_version: input.content_schema_version ?? 2 } : input;
     return request<ResourceComment>(`/api/resources/${resourceId}/comments`, {
       method: 'POST',
-      body: JSON.stringify(input),
+      body: JSON.stringify(payload),
+      ...(challenge ? { headers: { 'X-Forum-Challenge-Token': challenge.token, 'X-Forum-Challenge-Response': challenge.response } } : {}),
     });
   },
 

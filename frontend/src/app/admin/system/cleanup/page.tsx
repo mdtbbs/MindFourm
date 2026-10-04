@@ -45,7 +45,7 @@ export default function CleanupPage() {
     } catch (err) { setError(err instanceof Error ? err.message : 'Failed'); }
   };
 
-  if (loading) return <div className="py-8 text-center text-surface-500">Loading...</div>;
+  if (loading) return <div className="py-8 text-center text-surface-500">加载中…</div>;
 
   return (
     <div className="space-y-6">
@@ -73,6 +73,15 @@ export default function CleanupPage() {
           </div>
 
           <div className="bg-surface-50 border border-surface-200 p-5">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">安全访问日志</h3>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-surface-600">保留天数</span>
+              <input min="1" max="365" type="number" className="w-20 px-2 py-1 border border-surface-200 rounded text-sm text-center font-mono" value={values.security_access_log_retention_days ?? '90'} onChange={(e) => update('security_access_log_retention_days', e.target.value)} />
+            </div>
+            <p className="text-xs text-surface-400">超出保留期后删除；系统限制为 1–365 天，默认 90 天</p>
+          </div>
+
+          <div className="bg-surface-50 border border-surface-200 p-5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-surface-500 mb-4">未引用编辑器图片</h3>
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-surface-600">保留天数</span>
@@ -91,7 +100,7 @@ export default function CleanupPage() {
           </div>
         </div>
         <div className="px-6 py-4 border-t border-surface-200 flex justify-end gap-2">
-          <Button variant="ghost" onClick={fetchSettings}>Reset</Button>
+          <Button variant="ghost" onClick={fetchSettings}>重置</Button>
           <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
         </div>
       </div>

@@ -59,7 +59,6 @@ export default function FeedbackPage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--primary)]">Feedback</p>
       <h1 className="mt-2 text-3xl font-bold text-[var(--text)]">{t('feedback.title')}</h1>
       <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">{t('feedback.description')}</p>
       <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-6 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5 sm:p-7">

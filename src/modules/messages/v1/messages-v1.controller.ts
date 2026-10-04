@@ -1,8 +1,9 @@
 import { Body, Controller, Get, HttpStatus, Param, ParseIntPipe, Post, Query, Req } from '@nestjs/common';
-import { ApiCreatedResponse, ApiOkResponse, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ApiV1 } from '../../../common/decorators/api-v1.decorator';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
+import { RateLimit } from '../../../common/decorators/rate-limit.decorator';
 import { SettingsService } from '../../settings/settings.service';
 import { MessagesService } from '../messages.service';
 import { CreateMessageV1Dto, MessagePageV1Dto } from './messages-v1.dto';
@@ -54,6 +55,8 @@ export class MessagesV1Controller {
 
   @Get()
   @OAuthProtected('message.read')
+  @RateLimit({ max: 60, window: 60 })
+  @ApiOperation({ summary: '列出私信会话', description: '需要有效且未封禁的账号；OAuth Bearer 需要 message.read。若对方已屏蔽当前账号，不会泄露其会话摘要。每个账号每分钟最多 60 次。' })
   @ApiQuery({ name: 'cursor', required: false, type: String, example: 'CURSOR_FROM_PREVIOUS_PAGE', description: '上一页 data.next_cursor 返回的不透明游标。' })
   @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 100 }, example: 50, description: '每页会话数量，默认 50。' })
   @ApiOkResponse({ description: '会话摘要游标分页；next_cursor 位于 data 中。', schema: MESSAGE_CONVERSATION_PAGE_SCHEMA })
@@ -65,6 +68,9 @@ export class MessagesV1Controller {
 
   @Get('unread-count')
   @OAuthProtected('message.read')
+  @RateLimit({ max: 60, window: 60 })
+  @ApiOperation({ summary: '读取未读私信数', description: '需要有效且未封禁的账号；OAuth Bearer 需要 message.read。每个账号每分钟最多 60 次。' })
+  @ApiOkResponse({ description: '当前账号的未读消息数量。', schema: { type: 'object', required: ['count'], properties: { count: { type: 'integer', example: 3 } } } })
   async unreadCount(@Req() req: any) {
     await this.assertAccess(req);
     return { count: await this.messages.getUnreadCount(req.user.id) };
@@ -72,6 +78,8 @@ export class MessagesV1Controller {
 
   @Get(':userId')
   @OAuthProtected('message.read')
+  @RateLimit({ max: 60, window: 60 })
+  @ApiOperation({ summary: '读取私信会话', description: '需要有效且未封禁的账号；OAuth Bearer 需要 message.read。若对方已屏蔽当前账号，则拒绝读取。每个账号每分钟最多 60 次。' })
   @ApiQuery({ name: 'cursor', required: false, type: String, example: 'CURSOR_FROM_PREVIOUS_PAGE', description: '上一页 data.next_cursor 返回的不透明游标。' })
   @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 100 }, example: 50, description: '每页消息数量，默认 50。' })
   @ApiOkResponse({ description: '消息游标分页，按时间正序返回；读取时会将收到的消息标为已读，next_cursor 位于 data 中。', schema: MESSAGE_LIST_SCHEMA })
@@ -87,7 +95,9 @@ export class MessagesV1Controller {
 
   @Post()
   @OAuthProtected('message.write')
-  @ApiCreatedResponse({ description: '消息已发送，并应用现有屏蔽与通知策略。', schema: MESSAGE_ITEM_SCHEMA })
+  @RateLimit({ max: 10, window: 60 })
+  @ApiOperation({ summary: '发送私信', description: '需要有效且未封禁的账号；OAuth Bearer 需要 message.write。尊重收件人私信隐私设置及双方屏蔽关系，每个账号每分钟最多 10 次。' })
+  @ApiCreatedResponse({ description: '消息已发送，并应用收件人隐私、屏蔽与通知策略。', schema: MESSAGE_ITEM_SCHEMA })
   async send(@Req() req: any, @Body() dto: CreateMessageV1Dto) {
     await this.assertAccess(req);
     return this.toMessage(await this.messages.create(dto as any, req.user.id));

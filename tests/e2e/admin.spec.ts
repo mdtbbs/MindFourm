@@ -10,38 +10,53 @@
  */
 
 import { test, expect } from '../fixtures/page-objects/base.po';
-import { test as authTest, expect as authExpect } from '../fixtures/auth.fixture';
+import { test as authTest, adminTest, expect as authExpect } from '../fixtures/auth.fixture';
 
 test.describe('Admin Panel Access Control', () => {
   test('should deny access to unauthenticated users', async ({ page }) => {
+    const authOrigin = new URL(process.env.PLAYWRIGHT_AUTH_URL || 'http://127.0.0.1:4001').origin;
+    await page.route(`${authOrigin}/**`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<!doctype html><html><body>MindAuth E2E stub</body></html>',
+    }));
     await page.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    // Should redirect to login
-    await page.waitForTimeout(1000);
-    const url = page.url();
-    expect(url.includes('login') || url.includes('unauthorized')).toBeTruthy();
+    await expect(page).toHaveURL((url) => url.origin === authOrigin && url.pathname === '/authorize');
+    expect(new URL(page.url()).searchParams.get('state')).toBe('/admin');
   });
 
-  test('should deny access to regular users', async ({ page }) => {
+  authTest('should deny access to regular users', async ({ authenticatedPage }) => {
     // Even if authenticated, regular users shouldn't access admin
-    await page.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(1000);
-
-    // Should be redirected or shown unauthorized
-    const url = page.url();
-    expect(url.includes('login') || url.includes('unauthorized') || true).toBeTruthy();
+    await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await authExpect(authenticatedPage).toHaveURL(/\/$/);
+    await authExpect(authenticatedPage.locator('.admin-v2-sidebar-stack')).toHaveCount(0);
   });
 });
 
-authTest.describe('Admin Dashboard', () => {
-  authTest('should load admin dashboard', async ({ authenticatedPage }) => {
+authTest('regular users cannot read security access logs containing IP addresses', async ({ authenticatedPage }) => {
+  const status = await authenticatedPage.evaluate(async () => {
+    const response = await fetch('/api/admin/security-access-logs', { credentials: 'include' });
+    return response.status;
+  });
+  authExpect(status).toBe(403);
+});
+
+adminTest('administrators can open the restricted security access log viewer', async ({ authenticatedPage }) => {
+  await authenticatedPage.goto('/admin/security-access-logs', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await authExpect(authenticatedPage.getByRole('heading', { name: /安全访问日志|Security access logs/ })).toBeVisible();
+  await authExpect(authenticatedPage.getByRole('columnheader', { name: /IP 地址|IP address/ })).toBeVisible();
+});
+
+adminTest.describe('Admin Dashboard', () => {
+  adminTest('should load admin dashboard', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Should either show admin panel or redirect (if not admin user)
     await authenticatedPage.waitForTimeout(1000);
   });
 
-  authTest('should display statistics cards', async ({ authenticatedPage }) => {
+  adminTest('should display statistics cards', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Look for stat cards (total posts, users, etc)
@@ -52,16 +67,16 @@ authTest.describe('Admin Dashboard', () => {
     }
   });
 
-  authTest('should display admin sidebar', async ({ authenticatedPage }) => {
+  adminTest('should display admin sidebar', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    const sidebar = authenticatedPage.locator('[data-testid="admin-sidebar"]');
+    const sidebar = authenticatedPage.locator('.admin-v2-sidebar-stack');
     if (await sidebar.isVisible()) {
       authExpect(await sidebar.isVisible()).toBeTruthy();
     }
   });
 
-  authTest('should show recent activity', async ({ authenticatedPage }) => {
+  adminTest('should show recent activity', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Look for activity chart or list
@@ -76,23 +91,23 @@ authTest.describe('Admin Dashboard', () => {
   });
 });
 
-authTest.describe('Admin Sidebar Responsive Behavior', () => {
-  authTest('desktop (>1024px): sidebar 200px, labels visible, toggle hidden', async ({ authenticatedPage }) => {
+adminTest.describe('Admin Sidebar Responsive Behavior', () => {
+adminTest('desktop (>1180px): full navigation visible and mobile toggle hidden', async ({ authenticatedPage }) => {
     await authenticatedPage.setViewportSize({ width: 1280, height: 800 });
     await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await authenticatedPage.waitForTimeout(500);
 
-    const sidebar = authenticatedPage.locator('[data-testid="admin-sidebar"]');
+    const sidebar = authenticatedPage.locator('.admin-v2-sidebar-stack');
     await authExpect(sidebar).toBeVisible();
 
     const box = await sidebar.boundingBox();
     authExpect(box).not.toBeNull();
-    // Sidebar width should match --sidebar-width (200px) within 5px tolerance
-    authExpect(box!.width).toBeGreaterThan(190);
-    authExpect(box!.width).toBeLessThan(210);
+    // Admin 2.0 uses a 72px rail and a 232px section menu at desktop widths.
+    authExpect(box!.width).toBeGreaterThan(300);
+    authExpect(box!.width).toBeLessThan(308);
 
     // Nav labels should be visible at desktop
-    const labels = authenticatedPage.locator('[data-testid="admin-sidebar"] .nav-label');
+    const labels = authenticatedPage.locator('.admin-v2-secondary-nav a');
     const count = await labels.count();
     authExpect(count).toBeGreaterThan(0);
     // First label should be visible
@@ -101,62 +116,59 @@ authTest.describe('Admin Sidebar Responsive Behavior', () => {
     }
 
     // Toggle button should be hidden at desktop
-    const toggle = authenticatedPage.locator('.admin-sidebar-toggle');
+    const toggle = authenticatedPage.locator('.admin-v2-mobile-menu');
     authExpect(await toggle.isVisible()).toBeFalsy();
 
     // Content margin should match sidebar width
-    const content = authenticatedPage.locator('.admin-content');
+    const content = authenticatedPage.locator('.admin-v2-workspace');
     const contentBox = await content.boundingBox();
     authExpect(contentBox).not.toBeNull();
-    authExpect(contentBox!.x).toBeGreaterThan(190);
-    authExpect(contentBox!.x).toBeLessThan(215);
+    authExpect(contentBox!.x).toBeGreaterThan(300);
+    authExpect(contentBox!.x).toBeLessThan(308);
   });
 
-  authTest('tablet (769-1024px): sidebar collapsed to 60px, labels hidden', async ({ authenticatedPage }) => {
+  adminTest('tablet (769-1180px): both navigation columns remain available', async ({ authenticatedPage }) => {
     await authenticatedPage.setViewportSize({ width: 900, height: 800 });
     await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await authenticatedPage.waitForTimeout(500);
 
-    const sidebar = authenticatedPage.locator('[data-testid="admin-sidebar"]');
+    const sidebar = authenticatedPage.locator('.admin-v2-sidebar-stack');
     await authExpect(sidebar).toBeVisible();
 
     const box = await sidebar.boundingBox();
     authExpect(box).not.toBeNull();
-    // Sidebar width should match --sidebar-width-collapsed (60px) within 5px tolerance
-    authExpect(box!.width).toBeGreaterThan(55);
-    authExpect(box!.width).toBeLessThan(70);
+    // The responsive tablet layout narrows the rail and section menu together.
+    authExpect(box!.width).toBeGreaterThan(270);
+    authExpect(box!.width).toBeLessThan(278);
 
-    // Nav labels should be hidden via CSS (display: none)
-    const labels = authenticatedPage.locator('[data-testid="admin-sidebar"] .nav-label');
+    const labels = authenticatedPage.locator('.admin-v2-secondary-nav a');
     const count = await labels.count();
-    if (count > 0) {
-      authExpect(await labels.first().isVisible()).toBeFalsy();
-    }
+    authExpect(count).toBeGreaterThan(0);
+    authExpect(await labels.first().isVisible()).toBeTruthy();
 
-    // Content margin should match collapsed sidebar width
-    const content = authenticatedPage.locator('.admin-content');
+    // Workspace offset matches the narrowed tablet navigation stack.
+    const content = authenticatedPage.locator('.admin-v2-workspace');
     const contentBox = await content.boundingBox();
     authExpect(contentBox).not.toBeNull();
-    authExpect(contentBox!.x).toBeGreaterThan(55);
-    authExpect(contentBox!.x).toBeLessThan(75);
+    authExpect(contentBox!.x).toBeGreaterThan(270);
+    authExpect(contentBox!.x).toBeLessThan(278);
   });
 
-  authTest('mobile (≤768px): sidebar hidden off-screen, toggle visible, drawer opens on click', async ({ authenticatedPage }) => {
+  adminTest('mobile (≤768px): sidebar hidden off-screen, toggle visible, drawer opens on click', async ({ authenticatedPage }) => {
     await authenticatedPage.setViewportSize({ width: 375, height: 800 });
     await authenticatedPage.goto('/admin', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await authenticatedPage.waitForTimeout(500);
 
-    const sidebar = authenticatedPage.locator('[data-testid="admin-sidebar"]');
-    const toggle = authenticatedPage.locator('.admin-sidebar-toggle');
+    const sidebar = authenticatedPage.locator('.admin-v2-sidebar-stack');
+    const toggle = authenticatedPage.locator('.admin-v2-mobile-menu');
 
     // Toggle button should be visible on mobile
     authExpect(await toggle.isVisible()).toBeTruthy();
 
-    // Sidebar should be off-screen (transform: translateX(-100%))
+    // The navigation drawer starts just beyond the left viewport edge.
     const boxBefore = await sidebar.boundingBox();
     if (boxBefore) {
-      // Sidebar right edge should be at or before x=0 (off-screen)
-      authExpect(boxBefore.x + boxBefore.width).toBeLessThanOrEqual(5);
+      authExpect(boxBefore.x).toBeLessThan(-300);
     }
 
     // Click hamburger to open drawer
@@ -169,37 +181,31 @@ authTest.describe('Admin Sidebar Responsive Behavior', () => {
     authExpect(boxAfter!.x).toBeGreaterThanOrEqual(0);
     authExpect(boxAfter!.width).toBeGreaterThan(50);
 
-    // Sidebar should have the 'open' class
+    // Sidebar should have the open-state class.
     const className = await sidebar.getAttribute('class');
-    authExpect(className).toContain('open');
+    authExpect(className).toContain('is-open');
 
     // Content should start from left edge (no margin offset)
-    const content = authenticatedPage.locator('.admin-content');
+    const content = authenticatedPage.locator('.admin-v2-workspace');
     const contentBox = await content.boundingBox();
     authExpect(contentBox).not.toBeNull();
     authExpect(contentBox!.x).toBeLessThan(10);
 
     // Click overlay to close drawer
-    const overlay = authenticatedPage.locator('.admin-sidebar-overlay');
-    if (await overlay.isVisible()) {
-      await overlay.click();
-      await authenticatedPage.waitForTimeout(400);
-
-      // Sidebar should be off-screen again
-      const boxClosed = await sidebar.boundingBox();
-      if (boxClosed) {
-        authExpect(boxClosed.x + boxClosed.width).toBeLessThanOrEqual(5);
-      }
-
-      // 'open' class should be removed
-      const classNameAfterClose = await sidebar.getAttribute('class');
-      authExpect(classNameAfterClose).not.toContain('open');
-    }
+    const overlay = authenticatedPage.locator('.admin-v2-mobile-backdrop');
+    await authExpect(overlay).toBeVisible();
+    // The drawer sits above the backdrop on the left. Click the uncovered edge.
+    await overlay.click({ position: { x: 350, y: 400 } });
+    await authenticatedPage.waitForTimeout(400);
+    authExpect(await sidebar.getAttribute('class')).not.toContain('is-open');
+    const boxClosed = await sidebar.boundingBox();
+    authExpect(boxClosed).not.toBeNull();
+    authExpect(boxClosed!.x).toBeLessThan(-300);
   });
 });
 
-authTest.describe('Admin User Management', () => {
-  authTest('should display users table', async ({ authenticatedPage }) => {
+adminTest.describe('Admin User Management', () => {
+  adminTest('should display users table', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/users', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const usersTable = authenticatedPage.locator('[data-testid="users-table"]');
@@ -208,7 +214,7 @@ authTest.describe('Admin User Management', () => {
     }
   });
 
-  authTest('should show user search', async ({ authenticatedPage }) => {
+  adminTest('should show user search', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/users', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const searchInput = authenticatedPage.locator('[data-testid="user-search"]');
@@ -218,7 +224,7 @@ authTest.describe('Admin User Management', () => {
     }
   });
 
-  authTest('should show user role options', async ({ authenticatedPage }) => {
+  adminTest('should show user role options', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/users', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Look for role dropdown or role change buttons
@@ -229,8 +235,8 @@ authTest.describe('Admin User Management', () => {
   });
 });
 
-authTest.describe('Admin Post Management', () => {
-  authTest('should display posts table', async ({ authenticatedPage }) => {
+adminTest.describe('Admin Post Management', () => {
+  adminTest('should display posts table', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/posts', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
     const postsTable = authenticatedPage.locator('[data-testid="posts-table"]');
@@ -239,7 +245,7 @@ authTest.describe('Admin Post Management', () => {
     }
   });
 
-  authTest('should have post status filters', async ({ authenticatedPage }) => {
+  adminTest('should have post status filters', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/posts', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
     const statusFilter = authenticatedPage.locator('[data-testid="status-filter"]');
@@ -248,7 +254,7 @@ authTest.describe('Admin Post Management', () => {
     }
   });
 
-  authTest('should show bulk action buttons', async ({ authenticatedPage }) => {
+  adminTest('should show bulk action buttons', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/posts', { waitUntil: 'domcontentloaded', timeout: 90000 });
 
     // Look for bulk delete, pin, move buttons
@@ -259,8 +265,8 @@ authTest.describe('Admin Post Management', () => {
   });
 });
 
-authTest.describe('Admin Category Management', () => {
-  authTest('should display category list', async ({ authenticatedPage }) => {
+adminTest.describe('Admin Category Management', () => {
+  adminTest('should display category list', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/categories', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const categoryList = authenticatedPage.locator('[data-testid="category-list"]');
@@ -269,7 +275,7 @@ authTest.describe('Admin Category Management', () => {
     }
   });
 
-  authTest('should have add category button', async ({ authenticatedPage }) => {
+  adminTest('should have add category button', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/categories', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const addButton = authenticatedPage.locator('[data-testid="add-category"]');
@@ -278,7 +284,7 @@ authTest.describe('Admin Category Management', () => {
     }
   });
 
-  authTest('should show category form when adding', async ({ authenticatedPage }) => {
+  adminTest('should show category form when adding', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/categories', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const addButton = authenticatedPage.locator('[data-testid="add-category"]');
@@ -294,8 +300,8 @@ authTest.describe('Admin Category Management', () => {
   });
 });
 
-authTest.describe('Admin Moderation Queue', () => {
-  authTest('should display moderation queue', async ({ authenticatedPage }) => {
+adminTest.describe('Admin Moderation Queue', () => {
+  adminTest('should display moderation queue', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/content/moderation', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const moderationList = authenticatedPage.locator('[data-testid="moderation-list"]');
@@ -304,7 +310,7 @@ authTest.describe('Admin Moderation Queue', () => {
     }
   });
 
-  authTest('should show approve/reject buttons', async ({ authenticatedPage }) => {
+  adminTest('should show approve/reject buttons', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/content/moderation', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Look for moderation action buttons
@@ -319,8 +325,8 @@ authTest.describe('Admin Moderation Queue', () => {
   });
 });
 
-authTest.describe('Admin Tag Management', () => {
-  authTest('should display tag list', async ({ authenticatedPage }) => {
+adminTest.describe('Admin Tag Management', () => {
+  adminTest('should display tag list', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/content/tags', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const tagList = authenticatedPage.locator('[data-testid="tag-list"]');
@@ -329,7 +335,7 @@ authTest.describe('Admin Tag Management', () => {
     }
   });
 
-  authTest('should show merge tags option', async ({ authenticatedPage }) => {
+  adminTest('should show merge tags option', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/content/tags', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const mergeButton = authenticatedPage.locator('[data-testid="merge-tags"]');
@@ -339,8 +345,8 @@ authTest.describe('Admin Tag Management', () => {
   });
 });
 
-authTest.describe('Admin System Settings', () => {
-  authTest('should display basic settings', async ({ authenticatedPage }) => {
+adminTest.describe('Admin System Settings', () => {
+  adminTest('should display basic settings', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/settings/basic', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const settingsForm = authenticatedPage.locator('[data-testid="settings-form"]');
@@ -349,7 +355,7 @@ authTest.describe('Admin System Settings', () => {
     }
   });
 
-  authTest('should show ban management', async ({ authenticatedPage }) => {
+  adminTest('should show ban management', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/system/bans', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const banList = authenticatedPage.locator('[data-testid="ban-list"]');
@@ -358,7 +364,7 @@ authTest.describe('Admin System Settings', () => {
     }
   });
 
-  authTest('should display operation logs', async ({ authenticatedPage }) => {
+  adminTest('should display operation logs', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/admin/logs', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     const logsTable = authenticatedPage.locator('[data-testid="logs-table"]');

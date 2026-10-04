@@ -125,12 +125,12 @@ export class SocialPolicyService {
     }));
   }
 
-  async canPerform(viewerId: number, targetId: number, key: 'allow_join' | 'allow_join_request' | 'allow_invites'): Promise<boolean> {
+  async canPerform(viewerId: number, targetId: number, key: 'allow_join' | 'allow_join_request' | 'allow_invites' | 'allow_messages'): Promise<boolean> {
     const [settings, blocked] = await Promise.all([this.settingsFor(targetId), this.isBlockedEither(viewerId, targetId)]);
     return !blocked && this.isVisible(viewerId, targetId, settings[key]);
   }
 
-  async canPerformMany(viewerId: number, targetIds: number[], key: 'allow_join' | 'allow_join_request' | 'allow_invites'): Promise<Map<number, boolean>> {
+  async canPerformMany(viewerId: number, targetIds: number[], key: 'allow_join' | 'allow_join_request' | 'allow_invites' | 'allow_messages'): Promise<Map<number, boolean>> {
     const ids = [...new Set(targetIds)].filter((id) => id !== viewerId);
     if (!ids.length) return new Map(targetIds.map((id) => [id, true]));
     const [settings, friendships, blocks] = await Promise.all([

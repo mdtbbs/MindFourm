@@ -9,18 +9,10 @@
  */
 
 import { test as base, Page, BrowserContext } from '@playwright/test';
+import { recordTestUser, TEST_USERS, type TestUserType } from './test-users';
 
 const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3000';
-
-// Test user configuration - maps to existing database users
-const TEST_USERS = {
-  admin: { id: 1, username: 'testuser', role: 'admin' },
-  moderator: { id: 3, username: 'admin_mp2rq4te', role: 'admin' }, // Use admin as moderator for tests
-  user: { id: 2, username: 'e2e_mp2rq4te', role: 'user' },
-};
-
-type TestUserType = keyof typeof TEST_USERS;
 
 type AuthFixtures = {
   authenticatedPage: Page;
@@ -65,6 +57,9 @@ async function createTestSession(
     throw new Error(`Failed to create test session: ${response.status()} - ${body}`);
   }
 
+  const loginResult = await response.json();
+  recordTestUser(userType, loginResult?.userId);
+
   // Extract the session cookie from the response
   const cookies = await context.cookies(API_URL);
   const sessionCookie = cookies.find(c => c.name === 'forum_session');
@@ -97,6 +92,13 @@ export const test = base.extend<AuthFixtures>({
     const page = await context.newPage();
 
     try {
+      await context.addInitScript(() => {
+        const key = '__mindfourm_e2e_drafts_cleared__';
+        if (sessionStorage.getItem(key)) return;
+        localStorage.removeItem('draft:post:new');
+        localStorage.removeItem('draft:resource:new');
+        sessionStorage.setItem(key, '1');
+      });
       await routeBrowserApiToTestServer(context);
       // Create authenticated session
       await createTestSession(context, testUserType);
@@ -124,6 +126,13 @@ export const adminTest = base.extend<{ authenticatedPage: Page }>({
     const context = await browser.newContext();
     const page = await context.newPage();
     try {
+      await context.addInitScript(() => {
+        const key = '__mindfourm_e2e_drafts_cleared__';
+        if (sessionStorage.getItem(key)) return;
+        localStorage.removeItem('draft:post:new');
+        localStorage.removeItem('draft:resource:new');
+        sessionStorage.setItem(key, '1');
+      });
       await routeBrowserApiToTestServer(context);
       await createTestSession(context, 'admin');
       await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });

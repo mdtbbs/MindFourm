@@ -11,6 +11,7 @@ export type ApiV1Error = {
     message: string;
     retryable: boolean;
     details: unknown[];
+    documentation_url: string;
   };
   meta: ApiV1Meta;
 };
@@ -51,5 +52,16 @@ export function apiV1Error(
   details: unknown[],
   requestId: string,
 ): ApiV1Error {
-  return { error: { code, message, retryable, details }, meta: { request_id: requestId } };
+  return {
+    error: { code, message, retryable, details, documentation_url: v1ErrorDocumentationUrl(code) },
+    meta: { request_id: requestId },
+  };
+}
+
+export function v1ErrorCodeAnchor(code: string): string {
+  return String(code).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+export function v1ErrorDocumentationUrl(code: string): string {
+  return `https://mdtbbs.cn/api/v1/docs/errors#${v1ErrorCodeAnchor(code)}`;
 }

@@ -309,7 +309,7 @@ export default function AdminUsersPage() {
                 <div className="truncate text-sm font-semibold text-surface-900">
                   {profile ? userDisplayName(profile) : selectedRow ? userDisplayName(selectedRow) : `用户 #${selectedId}`}
                 </div>
-                <div className="font-mono text-[10px] text-surface-400">USER #{selectedId}</div>
+                <div className="font-mono text-[10px] text-surface-400">用户编号 #{selectedId}</div>
               </div>
               <button type="button" className="p-2 text-surface-500 hover:bg-surface-50" onClick={() => setSelectedId(null)}>
                 <X className="h-4 w-4" />
@@ -367,7 +367,7 @@ export default function AdminUsersPage() {
                         <div className="border-b border-surface-200 px-4 py-3 text-xs font-semibold text-surface-700">账号资料</div>
                         <dl className="divide-y divide-surface-100 text-sm">
                           <div className="flex justify-between gap-4 px-4 py-3"><dt className="text-surface-500">用户 ID</dt><dd className="font-mono text-xs">#{profile.id}</dd></div>
-                          <div className="flex justify-between gap-4 px-4 py-3"><dt className="text-surface-500">MindAuth ID</dt><dd className="font-mono text-xs">{profile.mindauth_id}</dd></div>
+                          <div className="flex justify-between gap-4 px-4 py-3"><dt className="text-surface-500">MindAuth 用户编号</dt><dd className="font-mono text-xs">{profile.mindauth_id}</dd></div>
                           <div className="flex justify-between gap-4 px-4 py-3"><dt className="text-surface-500">注册时间</dt><dd className="font-mono text-xs">{new Date(profile.created_at).toLocaleString('zh-CN')}</dd></div>
                           <div className="flex justify-between gap-4 px-4 py-3"><dt className="text-surface-500">最近公开地区</dt><dd>{profile.last_location_label || '—'}</dd></div>
                         </dl>

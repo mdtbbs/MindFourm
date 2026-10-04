@@ -1,15 +1,19 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { resourceCommentApi } from '@/lib/api/client';
 import type { ResourceComment } from '@/types';
 import { useAuth } from '@/store/user-store';
-import { Heart, Reply as ReplyIcon, Trash2, Send } from 'lucide-react';
+import { Heart, Reply as ReplyIcon, Trash2, Quote } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
 import { confirmDialog } from '@/store/interaction-dialog-store';
 import Link from 'next/link';
 import RichContentRenderer from '@/components/ui/rich-content-renderer';
 import { likeApi } from '@/lib/api/client';
+import type { CommunityChallengeProof } from '@/lib/api/client';
+
+const ReplyEditor = dynamic(() => import('@/components/forum/reply-editor'), { ssr: false });
 
 interface ResourceCommentThreadProps {
   resourceId: number;
@@ -50,12 +54,11 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
   const viewerIsStaff = user?.role === 'admin' || user?.role === 'moderator';
   const [comments, setComments] = useState<ResourceComment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newComment, setNewComment] = useState('');
-  const [replyTo, setReplyTo] = useState<{ id: number; username: string } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [replyTarget, setReplyTarget] = useState<{ comment: ResourceComment; mode: 'reply' | 'quote' } | null>(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [discussionUrl, setDiscussionUrl] = useState<string | null>(null);
+  const [discussionThreadId, setDiscussionThreadId] = useState<number | null>(null);
 
   const loadComments = useCallback(async () => {
     try {
@@ -67,6 +70,7 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
       }
       setComments(rows.map((comment) => ({ ...comment, is_liked: likedById[comment.id]?.liked || false, upvote_count: likedById[comment.id]?.count ?? comment.upvote_count })));
       setDiscussionUrl(res.discussion_thread_url || null);
+      setDiscussionThreadId(res.discussion_thread_id || null);
       setPage(1);
       const count = res.pagination?.total ?? 0;
       setTotal(count);
@@ -94,22 +98,20 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
     loadComments();
   }, [loadComments]);
 
-  const handleSubmit = async () => {
-    if (!newComment.trim() || submitting) return;
-    setSubmitting(true);
-    try {
-      await resourceCommentApi.create(resourceId, {
-        content: newComment.trim(),
-        parent_comment_id: replyTo?.id,
-      });
-      setNewComment('');
-      setReplyTo(null);
-      await loadComments();
-    } catch {
-      // silent
-    } finally {
-      setSubmitting(false);
-    }
+  const handleSubmit = async (
+    content: string,
+    parentReplyId?: number,
+    contentJson?: Record<string, unknown>,
+    proof?: CommunityChallengeProof,
+  ) => {
+    await resourceCommentApi.create(resourceId, {
+      content,
+      content_json: contentJson,
+      content_schema_version: contentJson ? 2 : undefined,
+      parent_comment_id: parentReplyId,
+    }, proof);
+    setReplyTarget(null);
+    await loadComments();
   };
 
   const handleDelete = async (id: number) => {
@@ -147,38 +149,16 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
   return (
     <div className="space-y-6">
       {discussionUrl && <div className="flex justify-end"><Link href={discussionUrl} className="text-sm font-medium text-primary hover:underline">{t('resourceComments.fullDiscussion')}</Link></div>}
-      {/* 评论表单 */}
-      <div className="card p-4">
-        <h3 className="text-lg font-bold mb-3">
-          {replyTo ? t('resourceComments.replyTo', { name: replyTo.username }) : t('resourceComments.new')}
-        </h3>
-        <div className="flex gap-2">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder={t('resourceComments.placeholder')}
-            className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm min-h-[80px] resize-y"
-            rows={3}
-          />
-        </div>
-        <div className="flex justify-end gap-2 mt-2">
-          {replyTo && (
-            <button
-              onClick={() => setReplyTo(null)}
-              className="rounded-lg px-4 py-2 text-sm text-muted-foreground hover:bg-muted"
-            >
-              {t('resourceComments.cancel')}
-            </button>
-          )}
-          <button
-            onClick={handleSubmit}
-            disabled={submitting || !newComment.trim()}
-            className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50 flex items-center gap-2"
-          >
-            <Send className="w-4 h-4" />
-            {submitting ? t('resourceComments.submitting') : t('resourceComments.submit')}
-          </button>
-        </div>
+      <div className="card p-3 sm:p-4">
+        {discussionThreadId && <ReplyEditor
+          key={`${discussionThreadId}:${replyTarget?.mode || 'new'}:${replyTarget?.comment.id || ''}`}
+          postId={discussionThreadId}
+          onSubmit={handleSubmit}
+          quoteReply={replyTarget?.mode === 'quote' ? { id: replyTarget.comment.id } : null}
+          replyToReply={replyTarget?.mode === 'reply' ? { id: replyTarget.comment.id } : null}
+          replyToLabel={replyTarget?.mode === 'reply' ? t('resourceComments.replyTo', { name: replyTarget.comment.username || t('resourceComments.anonymous') }) : undefined}
+          onCancelTarget={() => setReplyTarget(null)}
+        />}
       </div>
 
       {/* 评论列表 */}
@@ -195,7 +175,8 @@ export default function ResourceCommentThread({ resourceId, currentUserId, onCou
               depth={0}
               currentUserId={viewerId}
               viewerIsStaff={viewerIsStaff}
-              onReply={(id, username) => setReplyTo({ id, username })}
+              onReply={(comment, mode) => setReplyTarget({ comment, mode })}
+              onQuote={(comment) => setReplyTarget({ comment, mode: 'quote' })}
               onDelete={handleDelete}
               onLike={handleLike}
             />
@@ -213,6 +194,7 @@ function CommentNode({
   currentUserId,
   viewerIsStaff,
   onReply,
+  onQuote,
   onDelete,
   onLike,
 }: {
@@ -220,7 +202,8 @@ function CommentNode({
   depth: number;
   currentUserId?: number;
   viewerIsStaff: boolean;
-  onReply: (id: number, username: string) => void;
+  onReply: (comment: ResourceComment, mode: 'reply' | 'quote') => void;
+  onQuote: (comment: ResourceComment) => void;
   onDelete: (id: number) => void;
   onLike: (comment: ResourceComment) => void;
 }) {
@@ -248,11 +231,15 @@ function CommentNode({
                 {node.upvote_count > 0 && <span>{node.upvote_count}</span>}
               </button>
               <button
-                onClick={() => onReply(node.id, node.username || t('resourceComments.anonymous'))}
+                onClick={() => onReply(node, 'reply')}
                 className="flex items-center gap-1 hover:text-primary"
               >
                 <ReplyIcon className="w-3 h-3" />
                 {t('resourceComments.reply')}
+              </button>
+              <button type="button" onClick={() => onQuote(node)} className="flex items-center gap-1 hover:text-primary">
+                <Quote className="w-3 h-3" />
+                {t('replyEditor.quoteTitle')}
               </button>
               {canDelete && (
                 <button
@@ -279,6 +266,7 @@ function CommentNode({
               currentUserId={currentUserId}
               viewerIsStaff={viewerIsStaff}
               onReply={onReply}
+              onQuote={onQuote}
               onDelete={onDelete}
               onLike={onLike}
             />

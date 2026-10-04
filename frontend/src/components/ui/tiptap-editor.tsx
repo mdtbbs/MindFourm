@@ -637,9 +637,9 @@ function EmojiPicker({ editor }: { editor: Editor }) {
     .map(([category, values]) => [category, values.filter((emoji) => !query || emoji.includes(query))] as const)
     .filter(([, values]) => values.length);
   return <details className="tiptap-more tiptap-emoji-picker">
-    <summary className="tiptap-btn tiptap-more-trigger" aria-label="Emoji 面板" title="Emoji"><Smile className="w-4 h-4" /><span>Emoji</span></summary>
-    <div className="tiptap-more-menu tiptap-emoji-menu" role="group" aria-label="Emoji 面板">
-      <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="搜索 Emoji" placeholder="搜索 Emoji" className="tiptap-emoji-search" />
+    <summary className="tiptap-btn tiptap-more-trigger" aria-label="表情面板" title="表情"><Smile className="w-4 h-4" /><span>表情</span></summary>
+    <div className="tiptap-more-menu tiptap-emoji-menu" role="group" aria-label="表情面板">
+      <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="搜索表情" placeholder="搜索表情" className="tiptap-emoji-search" />
       {!query && recent.length > 0 && <section><strong>最近使用</strong><div className="tiptap-emoji-grid">{recent.map((emoji) => <button type="button" key={emoji} onClick={() => add(emoji)} aria-label={`插入 ${emoji}`}>{emoji}</button>)}</div></section>}
       {matches.map(([category, values]) => <section key={category}><strong>{category}</strong><div className="tiptap-emoji-grid">{values.map((emoji) => <button type="button" key={emoji} onClick={() => add(emoji)} aria-label={`插入 ${emoji}`}>{emoji}</button>)}</div></section>)}
       {query && !matches.length && <span className="tiptap-emoji-empty">没有匹配的 Emoji</span>}

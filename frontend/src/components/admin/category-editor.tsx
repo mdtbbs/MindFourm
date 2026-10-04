@@ -53,7 +53,7 @@ export function CategoryEditor({ category, onSave, onCancel }: CategoryEditorPro
       </div>
 
       <div>
-        <Label htmlFor="slug">Slug</Label>
+        <Label htmlFor="slug">短链接标识</Label>
         <Input
           id="slug"
           value={formData.slug}

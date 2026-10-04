@@ -71,7 +71,7 @@ export default function ModerationSettingsPage() {
   };
 
   if (loading) {
-    return <div className="py-8 text-center text-surface-500">Loading...</div>;
+    return <div className="py-8 text-center text-surface-500">加载中…</div>;
   }
 
   return (

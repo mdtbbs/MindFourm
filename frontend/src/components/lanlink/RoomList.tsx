@@ -192,10 +192,10 @@ export default function RoomList() {
 
                 <div className="rounded-lg bg-muted/60 p-3">
                   <p className="mb-1 text-xs font-medium text-muted-foreground">
-                    MOTD
+                    房间公告
                   </p>
                   <p className="max-h-24 overflow-auto whitespace-pre-wrap break-words text-sm">
-                    {room.motd || room.display_name || "房主未填写 MOTD"}
+                    {room.motd || room.display_name || "房主未填写房间公告"}
                   </p>
                 </div>
 

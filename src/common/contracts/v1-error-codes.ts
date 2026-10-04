@@ -17,6 +17,81 @@ export type V1ErrorCodeDefinition = {
 };
 
 export const V1_ERROR_CODES: Record<string, V1ErrorCodeDefinition> = {
+  DOC_NOT_FOUND: {
+    code: 'DOC_NOT_FOUND', httpStatus: 404, retryable: false,
+    defaultMessage: '文档页面不存在',
+    description: 'The requested developer documentation page or API reference is not available.',
+  },
+  CONTENT_REQUIRED: {
+    code: 'CONTENT_REQUIRED', httpStatus: 400, retryable: false,
+    defaultMessage: '正文不能为空',
+    description: 'The submitted rich-text or Markdown body is empty.',
+  },
+  CONTENT_TOO_LARGE: {
+    code: 'CONTENT_TOO_LARGE', httpStatus: 400, retryable: false,
+    defaultMessage: '正文过长',
+    description: 'The submitted text body exceeds the configured size limit.',
+  },
+  INVALID_BLUEPRINT: {
+    code: 'INVALID_BLUEPRINT', httpStatus: 422, retryable: false,
+    defaultMessage: '蓝图代码无效或超出大小限制',
+    description: 'The submitted Mindustry blueprint cannot be parsed or exceeds server limits.',
+  },
+  INVALID_MAP: {
+    code: 'INVALID_MAP', httpStatus: 422, retryable: false,
+    defaultMessage: '地图文件无法解析或超出服务端限制',
+    description: 'The submitted Mindustry map cannot be parsed or exceeds server limits.',
+  },
+  LANLINK_UNAVAILABLE: {
+    code: 'LANLINK_UNAVAILABLE', httpStatus: 503, retryable: true,
+    defaultMessage: '联机大厅暂时无法连接，请稍后重试',
+    description: 'The LanLink room service is disabled or unavailable; upstream failures may return 502.',
+  },
+  LANLINK_UPSTREAM_INVALID: {
+    code: 'LANLINK_UPSTREAM_INVALID', httpStatus: 502, retryable: true,
+    defaultMessage: '联机大厅返回了无效数据',
+    description: 'The LanLink room service returned a response that could not be parsed or projected.',
+  },
+  MESSAGING_DISABLED: {
+    code: 'MESSAGING_DISABLED', httpStatus: 403, retryable: false,
+    defaultMessage: '站点已关闭私信功能',
+    description: 'Private messaging is disabled by site configuration.',
+  },
+  NOTICE_NOT_FOUND: {
+    code: 'NOTICE_NOT_FOUND', httpStatus: 404, retryable: false,
+    defaultMessage: '公告不存在或不可见',
+    description: 'The requested notice does not exist or is not visible to the caller.',
+  },
+  REPLIES_UNAVAILABLE: {
+    code: 'REPLIES_UNAVAILABLE', httpStatus: 503, retryable: true,
+    defaultMessage: '回复暂不可用',
+    description: 'The reply service is not available for this request.',
+  },
+  RESOURCE_UPLOAD_DISABLED: {
+    code: 'RESOURCE_UPLOAD_DISABLED', httpStatus: 403, retryable: false,
+    defaultMessage: '站点已关闭资源上传',
+    description: 'Resource uploads are disabled by site configuration.',
+  },
+  SEARCH_UNAVAILABLE: {
+    code: 'SEARCH_UNAVAILABLE', httpStatus: 503, retryable: true,
+    defaultMessage: '搜索服务暂不可用',
+    description: 'The search service is not available for this request.',
+  },
+  TERMS_ACCEPTANCE_REQUIRED: {
+    code: 'TERMS_ACCEPTANCE_REQUIRED', httpStatus: 403, retryable: false,
+    defaultMessage: '请先接受社区条款',
+    description: 'The account must accept the current community terms before continuing.',
+  },
+  THIRD_PARTY_ACCESS_DISABLED: {
+    code: 'THIRD_PARTY_ACCESS_DISABLED', httpStatus: 403, retryable: false,
+    defaultMessage: '站点未开放第三方客户端私信访问',
+    description: 'Third-party clients cannot access private messaging on this deployment.',
+  },
+  USER_BANNED: {
+    code: 'USER_BANNED', httpStatus: 403, retryable: false,
+    defaultMessage: '账号当前不可使用此服务',
+    description: 'The account is banned from using this service.',
+  },
   CHALLENGE_REQUIRED: {
     code: 'CHALLENGE_REQUIRED', httpStatus: 428, retryable: true,
     defaultMessage: '此操作需要完成一次安全验证。',

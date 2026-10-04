@@ -179,7 +179,7 @@ export default function ExternalApiSettingsPage() {
   };
 
   if (loading) {
-    return <div className="py-8 text-center text-surface-500">Loading...</div>;
+    return <div className="py-8 text-center text-surface-500">加载中…</div>;
   }
 
   return (
@@ -257,7 +257,7 @@ export default function ExternalApiSettingsPage() {
           </div>
 
           <div>
-            <div className="mb-2 text-sm font-medium text-surface-700">Scopes</div>
+            <div className="mb-2 text-sm font-medium text-surface-700">权限范围</div>
             <div className="grid gap-2 md:grid-cols-3">
               {AVAILABLE_SCOPES.map((scope) => (
                 <label key={scope} className="flex items-center gap-2 rounded border border-surface-200 px-3 py-2 text-xs text-surface-700">
@@ -289,7 +289,7 @@ export default function ExternalApiSettingsPage() {
               <tr>
                 <th className="px-4 py-3">名称</th>
                 <th className="px-4 py-3">前缀</th>
-                <th className="px-4 py-3">Scopes</th>
+                <th className="px-4 py-3">权限范围</th>
                 <th className="px-4 py-3">状态</th>
                 <th className="px-4 py-3">最近使用</th>
                 <th className="px-4 py-3">操作</th>
@@ -331,7 +331,7 @@ export default function ExternalApiSettingsPage() {
               <div>
                 <div className="font-medium text-surface-800">{log.action}</div>
                 <div className="text-xs text-surface-500">
-                  {log.api_key_name || '未知 Key'} · actor #{log.actor_user_id ?? '-'} · {log.target_type || '-'} #{log.target_id ?? '-'}
+                  {log.api_key_name || '未知 Key'} · 操作人编号 #{log.actor_user_id ?? '-'} · {log.target_type || '-'} #{log.target_id ?? '-'}
                 </div>
                 {log.error_message ? <div className="mt-1 text-xs text-red-600">{log.error_message}</div> : null}
               </div>

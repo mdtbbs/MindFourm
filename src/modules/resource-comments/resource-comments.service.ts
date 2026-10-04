@@ -83,6 +83,8 @@ export class ResourceCommentsService {
     const postId = await this.ensureDiscussionThread(resourceId);
     const reply = await this.replies.createReplyForPost(postId, {
       content: dto.content,
+      content_json: dto.content_json,
+      content_schema_version: dto.content_schema_version,
       parent_reply_id: dto.parent_comment_id || undefined,
     }, userId, provenance);
     return this.toResourceComment(resourceId, reply);

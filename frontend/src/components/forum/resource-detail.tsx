@@ -251,6 +251,10 @@ export default function ResourceDetail({ resource, selectedVersionPublicId }: Re
       <ResourceTabs resource={resource} selectedVersionPublicId={primaryVersion?.public_id || undefined} activeTab={activeTab} onChange={setActiveTab} downloadUrl={downloadUrl} commentCount={commentCount} onCommentCountChange={updateCommentCount} />
       <ResourceAside
         resource={resource}
+        isMap={isMap}
+        downloadUrl={downloadUrl}
+        downloadLabel={downloadLabel}
+        primaryVersionId={primaryVersion?.id}
         supportedVersions={displayedSupportedVersions}
         compatibility={displayedCompatibility}
         hideVersionSupport={isMap || isSchematic}
