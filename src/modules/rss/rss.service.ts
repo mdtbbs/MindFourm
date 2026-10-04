@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Post } from '@entities/post.entity';
 import { Category } from '@entities/category.entity';
-import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '../settings/settings.service';
 import { applyPublicPostVisibility } from '@common/utils/post-visibility.util';
 
@@ -14,7 +13,6 @@ export class RssService {
     private postRepo: Repository<Post>,
     @InjectRepository(Category)
     private categoryRepo: Repository<Category>,
-    private configService: ConfigService,
     private settingsService: SettingsService,
   ) {}
 
@@ -35,9 +33,7 @@ export class RssService {
   }
 
   async generatePostsRss(): Promise<string> {
-    const frontendUrl = await this.settingsService.get('site_url')
-      || this.configService.get<string>('app.frontendUrl')
-      || 'http://localhost:3000';
+    const frontendUrl = await this.settingsService.getPublicSiteUrl();
     const postsQuery = this.postRepo.createQueryBuilder('post')
       .leftJoinAndSelect('post.user', 'user')
       .leftJoinAndSelect('post.category', 'category');
@@ -68,9 +64,7 @@ export class RssService {
   }
 
   async generateCategoryRss(categorySlug: string): Promise<string> {
-    const frontendUrl = await this.settingsService.get('site_url')
-      || this.configService.get<string>('app.frontendUrl')
-      || 'http://localhost:3000';
+    const frontendUrl = await this.settingsService.getPublicSiteUrl();
 
     const category = await this.categoryRepo.findOne({ where: { slug: categorySlug } });
     if (!category) throw new Error('Category not found');

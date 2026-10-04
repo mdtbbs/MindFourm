@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as Handlebars from 'handlebars';
+import { validateHandlebarsTemplate } from '@common/utils/email-template.util';
 
 /**
  * Template service for rendering email templates
@@ -53,18 +54,17 @@ export class TemplateService implements OnModuleInit {
    */
   render(template: string, variables: Record<string, any>): string {
     try {
-      // Compile template with Handlebars
+      validateHandlebarsTemplate(template);
       const compiledTemplate = Handlebars.compile(template);
-
-      // Render with variables
       return compiledTemplate(variables);
     } catch (error) {
       this.logger.error(`Failed to render template: ${(error as Error).message}`, (error as Error).stack);
-
-      // Fallback: if Handlebars compilation fails, return template as-is
-      // This handles cases where template might be plain HTML
-      return template;
+      throw error;
     }
+  }
+
+  validate(template: string): void {
+    validateHandlebarsTemplate(template);
   }
 
   /**

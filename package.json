@@ -60,6 +60,7 @@
     "class-validator": "^0.14.1",
     "compression": "^1.7.5",
     "dotenv": "^16.6.1",
+    "handlebars": "^4.7.9",
     "helmet": "^8.0.0",
     "ioredis": "^5.4.1",
     "marked": "^12.0.2",

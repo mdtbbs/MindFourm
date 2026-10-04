@@ -686,4 +686,56 @@ describe('SettingsService', () => {
       expect(value).toBe('["updated"]');
     });
   });
+  describe('public URL and email safety validation', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalFrontendUrl = process.env.FRONTEND_URL;
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalFrontendUrl === undefined) delete process.env.FRONTEND_URL;
+      else process.env.FRONTEND_URL = originalFrontendUrl;
+    });
+
+    it('falls back from a stale production loopback URL to the site profile domain', async () => {
+      process.env.NODE_ENV = 'production';
+      delete process.env.FRONTEND_URL;
+      const service = new SettingsService(
+        { query: jest.fn() } as any,
+        undefined,
+        { current: { domain: 'mdtbbs.cn' } } as any,
+      );
+      jest.spyOn(service, 'get').mockResolvedValue('http://127.0.0.1:3000');
+
+      await expect(service.getPublicSiteUrl()).resolves.toBe('https://mdtbbs.cn');
+    });
+
+    it('rejects saving a loopback site URL in production', async () => {
+      process.env.NODE_ENV = 'production';
+      const { service } = createService([]);
+
+      await expect(service.setBatch('basic', {
+        site_url: 'http://127.0.0.1:3000',
+      })).rejects.toThrow('站点 URL 无效');
+    });
+
+    it('rejects the legacy port 587 plus implicit TLS combination', async () => {
+      const { service } = createService([]);
+      jest.spyOn(service, 'get').mockResolvedValue(null);
+
+      await expect(service.setBatch('email', {
+        smtp_port: '587',
+        smtp_secure: 'true',
+      })).rejects.toThrow('STARTTLS');
+    });
+
+    it('rejects malformed Handlebars email templates before persisting them', async () => {
+      const { service } = createService([]);
+      jest.spyOn(service, 'get').mockResolvedValue(null);
+
+      await expect(service.setBatch('email', {
+        email_template_reply_body: '{{#if broken}}raw',
+      })).rejects.toThrow('模板语法错误');
+    });
+  });
+
 });

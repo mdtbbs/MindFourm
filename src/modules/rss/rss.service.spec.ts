@@ -11,7 +11,7 @@ describe('RSS privacy', () => {
     };
     const posts = { createQueryBuilder: jest.fn(() => query) };
     const categories = { findOne: jest.fn().mockResolvedValue({ id: 4, name: 'General' }) };
-    const service = new RssService(posts as any, categories as any, { get: () => 'https://example.test' } as any, { get: async () => 'https://example.test' } as any);
+    const service = new RssService(posts as any, categories as any, { getPublicSiteUrl: async () => 'https://example.test' } as any);
     await service.generatePostsRss(); await service.generateCategoryRss('general');
     expect(posts.createQueryBuilder).toHaveBeenCalledTimes(2);
     expect(query.andWhere).toHaveBeenCalledWith('post.status = :postVisibilityStatus', { postVisibilityStatus: 'published' });
