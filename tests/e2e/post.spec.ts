@@ -37,7 +37,7 @@ async function ensureFixturePost(request: APIRequestContext): Promise<void> {
         content: '# Fixture post\n\nThis post exists for E2E coverage.',
       });
       fixturePostId = post.id;
-      fixturePostTitle = 'E2E Fixture Post';
+      fixturePostTitle = post.title;
     })();
   }
 
@@ -86,10 +86,11 @@ test.describe('Public Post Viewing', () => {
 
   test('should display post content with markdown rendering', async ({ page }) => {
     expect(fixturePostId).not.toBeNull();
+    expect(fixturePostTitle).not.toBeNull();
     await page.goto(`/posts/${fixturePostId}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     // Check for post title
-    await expect(page.locator('main h1').first()).toHaveText('Fixture post', { timeout: 30000 });
+    await expect(page.locator('main h1').first()).toHaveText(fixturePostTitle!, { timeout: 30000 });
 
     // Check for post content
     const content = page.locator('[data-testid="post-content"]');
