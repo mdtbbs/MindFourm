@@ -96,6 +96,7 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
         { id: 'messages', label: translate('navigation.messages'), href: '/messages', icon: 'Mail' },
         { id: 'notifications', label: translate('navigation.notifications'), href: '/notifications', icon: 'Bell' },
         { id: 'friends', label: translate('navigation.friends'), href: '/friends', icon: 'Users' },
+        { id: 'cloud-saves', label: translate('cloudSaves.title'), href: '/settings/cloud-saves', icon: 'HardDrive' },
         { id: 'settings', label: translate('navigation.settings'), href: '/settings', icon: 'Settings' },
       ] });
     }
@@ -152,6 +153,7 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
       { id: 'messages', label: '私信', href: '/messages', icon: 'Mail' },
       { id: 'notifications', label: '通知', href: '/notifications', icon: 'Bell' },
       { id: 'friends', label: '好友', href: '/friends', icon: 'Users' },
+      { id: 'cloud-saves', label: translate('cloudSaves.title'), href: '/settings/cloud-saves', icon: 'HardDrive' },
       { id: 'settings', label: '设置', href: '/settings', icon: 'Settings' },
     ] });
   }

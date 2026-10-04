@@ -1,6 +1,6 @@
 import {
   Archive, Award, Bell, Book, BookOpen, Bookmark, Box, Calendar, Code, Cpu, Database, ExternalLink,
-  FileText, Folder, Gamepad, Gift, Heart, HelpCircle, Home, Image, Info,
+  FileText, Folder, Gamepad, Gift, HardDrive, Heart, HelpCircle, Home, Image, Info,
   Globe, GraduationCap, Link, LogIn, LogOut, Mail, Map, MessageSquare, Monitor, Music, Music2, Package,
   Palette, Puzzle, Radio, Search, Server, Settings, Shield, ShoppingCart,
   Smartphone, Star, Tag, TrendingUp, User, Users, Video, Wrench, Zap,
@@ -13,7 +13,7 @@ export const NAVIGATION_ICON_REGISTRY = {
   Book, FileText, Image, Video, Music, Calendar, Map, Star, Heart,
   TrendingUp, ExternalLink, Link, HelpCircle, Info, Mail, ShoppingCart,
   Gift, Award, User, LogIn, LogOut, Package, Puzzle, Server, Radio,
-  Code, Gamepad, Monitor, Smartphone, Palette, BookOpen, Wrench, Box, Archive,
+  Code, Gamepad, HardDrive, Monitor, Smartphone, Palette, BookOpen, Wrench, Box, Archive,
   Zap, Globe, Database, Cpu, Music2, GraduationCap,
 } satisfies Record<string, LucideIcon>;
 

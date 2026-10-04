@@ -55,6 +55,29 @@ test('global navigation honors admin configuration', () => {
   expect(configured[0].items[0]?.label).toBe('社区首页');
 });
 
+test('cloud saves appears in the authenticated account navigation shared by the desktop sidebar and mobile drawer', () => {
+  const translate = (key: string) => key === 'cloudSaves.title' ? '云存档' : key;
+  for (const mode of ['forum', 'resources'] as const) {
+    const navigation = buildContentNavigation({
+      ...base,
+      mode,
+      isAuthenticated: true,
+      userId: 7,
+      translate,
+    });
+    const account = navigation.find((section) => section.id === 'account');
+    expect(account?.items).toContainEqual({
+      id: 'cloud-saves',
+      label: '云存档',
+      href: '/settings/cloud-saves',
+      icon: 'HardDrive',
+    });
+  }
+
+  const anonymous = buildContentNavigation({ ...base, mode: 'forum', translate });
+  expect(anonymous.flatMap((section) => section.items).some((item) => item.href === '/settings/cloud-saves')).toBe(false);
+});
+
 test('Mindustry Club navigation follows its profile and omits unavailable legacy links', () => {
   const club = buildContentNavigation({
     ...base,
