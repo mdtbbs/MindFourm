@@ -1,6 +1,10 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { createHash } from 'crypto';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import { ResourceV2ReviewService } from './resource-v2-review.service';
+import { ResourceStorageService } from '../resource-storage.service';
 
 const ids = {
   resource: '10000000-0000-4000-8000-000000000001',
@@ -15,22 +19,38 @@ type HarnessOptions = {
   kind?: string;
   findingSeverity?: string;
   versionChannel?: string;
+  versionFilePath?: string | null;
 };
 
 function createHarness(options: HarnessOptions = {}) {
   const ownerId = options.ownerId ?? 10;
-  const versionStatus = options.versionStatus ?? 'published';
+  const state = { versionStatus: options.versionStatus ?? 'published', reviewEvents: 0, operationLogs: 0 };
   const payload = Buffer.from('release payload');
+  let transactionTail: Promise<void> = Promise.resolve();
   const managerQuery = jest.fn(async (sql: string, parameters: any[] = []) => execute(sql, parameters));
   const outerQuery = jest.fn(async (sql: string, parameters: any[] = []) => execute(sql, parameters));
   const manager = { query: managerQuery };
   const dataSource: any = {
     query: outerQuery,
-    transaction: jest.fn(async (callback: (manager: any) => Promise<unknown>) => callback(manager)),
+    transaction: jest.fn(async (callback: (manager: any) => Promise<unknown>) => {
+      let unlock!: () => void;
+      const previous = transactionTail;
+      transactionTail = new Promise<void>((resolve) => { unlock = resolve; });
+      await previous;
+      const snapshot = { ...state };
+      try { return await callback(manager); }
+      catch (error) { Object.assign(state, snapshot); throw error; }
+      finally { unlock(); }
+    }),
   };
   const storage = {
-    readManagedFile: jest.fn().mockResolvedValue(payload),
-    promote: jest.fn().mockResolvedValue('/uploads/resources/release.jar'),
+    readQuarantinedFile: jest.fn().mockResolvedValue(payload),
+    preparePromotion: jest.fn(async (sourcePath: string) => ({
+      sourcePath: path.resolve(sourcePath),
+      targetPath: '/uploads/resources/release.jar',
+      createdTarget: true,
+    })),
+    removeQuarantinedFile: jest.fn().mockResolvedValue(true),
   };
   const notifications = { create: jest.fn().mockResolvedValue({ id: 1 }) };
   const service = new ResourceV2ReviewService(dataSource, storage as any, notifications as any);
@@ -44,11 +64,12 @@ function createHarness(options: HarnessOptions = {}) {
     }
     if (sql.includes('FROM users WHERE id=?')) return [{ username: 'reviewer', role: options.staffRole || 'member' }];
     if (sql.includes('FROM resource_versions') && sql.includes('WHERE resource_id=? AND public_id=?')) {
-      return parameters[1] === ids.version && versionStatus !== 'missing'
-        && (!sql.includes("status='published'") || versionStatus === 'published')
-        ? [{ id: 17, resource_id: 7, public_id: ids.version, status: versionStatus, version: '1.0.0', release_channel: options.versionChannel || 'release', file_path: '/uploads/.quarantine/resources/release.jar', file_size: payload.length, content_hash: createHash('sha256').update(payload).digest('hex') }]
+      return parameters[1] === ids.version && state.versionStatus !== 'missing'
+        && (!sql.includes("status='published'") || state.versionStatus === 'published')
+        ? [{ id: 17, resource_id: 7, public_id: ids.version, status: state.versionStatus, version: '1.0.0', release_channel: options.versionChannel || 'release', file_path: options.versionFilePath === undefined ? '/uploads/.quarantine/resources/release.jar' : options.versionFilePath, file_name: 'release.jar', file_size: payload.length, mime_type: 'application/java-archive', content_hash: createHash('sha256').update(payload).digest('hex') }]
         : [];
     }
+    if (sql.startsWith('UPDATE resource_versions SET status=')) state.versionStatus = String(parameters[0]);
     if (sql.includes('FROM resource_analysis_runs') && sql.includes('findings_json')) {
       return [{ id: 21, parser_version: 'analyzer-3.2', findings_json: [
         { code: 'missing-dependency', severity: options.findingSeverity || 'WARNING', message: 'Dependency cannot be resolved.' },
@@ -67,25 +88,32 @@ function createHarness(options: HarnessOptions = {}) {
       field_path: null, annotation_severity: null, annotation_body: null,
     }];
     if (sql.startsWith('DELETE FROM resource_analysis_overrides')) return [{ affectedRows: 1 }];
-    if (sql.startsWith('INSERT INTO resource_review_events')) return { insertId: 45 };
+    if (sql.startsWith('INSERT INTO resource_review_events')) {
+      if (String(parameters[3] || '').startsWith('version_review_')) state.reviewEvents += 1;
+      return { insertId: 45 };
+    }
     if (sql.startsWith('INSERT INTO resource_review_annotations')) return { affectedRows: 1 };
     if (sql.startsWith('INSERT INTO resource_analysis_overrides')) return { affectedRows: 1 };
-    if (sql.startsWith('INSERT INTO operation_logs')) return { affectedRows: 1 };
+    if (sql.startsWith('INSERT INTO operation_logs')) { state.operationLogs += 1; return { affectedRows: 1 }; }
     return [];
   }
 
-  return { service, dataSource, managerQuery, outerQuery, storage, notifications };
+  return { service, dataSource, managerQuery, outerQuery, storage, notifications, state };
 }
 
 describe('ResourceV2ReviewService', () => {
-  it('publishes only pending versions, promotes and verifies the binary, advances latest, and keeps one stable recommendation', async () => {
+  it('publishes only pending versions, prepares and verifies the binary, advances latest, and keeps one stable recommendation', async () => {
     const { service, managerQuery, storage, notifications } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
 
     const result = await service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
 
     expect(result).toMatchObject({ status: 'published', recommended: true, version_public_id: ids.version });
-    expect(storage.readManagedFile).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar', 50 * 1024 * 1024);
-    expect(storage.promote).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar');
+    expect(storage.readQuarantinedFile).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar', 50 * 1024 * 1024);
+    expect(storage.preparePromotion).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar');
+    expect(storage.removeQuarantinedFile).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar');
+    expect(storage.removeQuarantinedFile.mock.invocationCallOrder[0]).toBeGreaterThan(
+      managerQuery.mock.invocationCallOrder[managerQuery.mock.invocationCallOrder.length - 1],
+    );
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_versions SET recommended=0'), [7, 17]);
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining("status='pending_review'"), expect.arrayContaining(['published', 1, 30, null, '/uploads/resources/release.jar', 7, 17]));
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE resources SET latest_published_version_id=?'), expect.arrayContaining([17, 7]));
@@ -110,6 +138,16 @@ describe('ResourceV2ReviewService', () => {
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_versions SET recommended=0'), [7, 17]);
   });
 
+  it('approves a fileless version even when local file storage is unavailable', async () => {
+    const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator', versionFilePath: null });
+    const service = new ResourceV2ReviewService(harness.dataSource, undefined, harness.notifications as any);
+
+    await expect(service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+      .resolves.toMatchObject({ status: 'published', recommended: true });
+    expect(harness.storage.readQuarantinedFile).not.toHaveBeenCalled();
+    expect(harness.state.reviewEvents).toBe(1);
+  });
+
   it.each([
     ['reject', 'rejected'],
     ['request_changes', 'changes_requested'],
@@ -117,7 +155,9 @@ describe('ResourceV2ReviewService', () => {
     const { service, managerQuery, storage } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
     const result = await service.reviewVersion(ids.resource, ids.version, 30, { action, reason: 'Please correct the release notes.' });
     expect(result).toMatchObject({ status, recommended: false, published_at: null });
-    expect(storage.promote).not.toHaveBeenCalled();
+    expect(storage.readQuarantinedFile).not.toHaveBeenCalled();
+    expect(storage.preparePromotion).not.toHaveBeenCalled();
+    expect(storage.removeQuarantinedFile).not.toHaveBeenCalled();
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('reviewed_by_user_id'), expect.arrayContaining([status, 0, 30, 'Please correct the release notes.']));
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO resource_review_events'), expect.any(Array));
   });
@@ -127,6 +167,157 @@ describe('ResourceV2ReviewService', () => {
     await expect(member.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).rejects.toBeInstanceOf(ForbiddenException);
     const alreadyPublished = createHarness({ versionStatus: 'published', staffRole: 'moderator' });
     await expect(alreadyPublished.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it.each([
+    ['wrong size', Buffer.from('wrong size')],
+    ['wrong SHA256', Buffer.from('x'.repeat(Buffer.byteLength('release payload')))],
+  ])('rejects a quarantined file with %s before copying it', async (_description, bytes) => {
+    const { service, storage } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+    storage.readQuarantinedFile.mockResolvedValue(bytes as Buffer);
+
+    await expect(service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+
+    expect(storage.preparePromotion).not.toHaveBeenCalled();
+    expect(storage.removeQuarantinedFile).not.toHaveBeenCalled();
+  });
+
+  it('keeps quarantine intact across a database rollback and retries publication from the same source', async () => {
+    const previousRoot = process.env.RESOURCE_UPLOAD_ROOT;
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-review-rollback-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const sourcePath = path.join(root, '.quarantine', 'resources', 'release.jar');
+    const targetPath = path.join(root, 'resources', 'release.jar');
+    const payload = Buffer.from('release payload');
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+    await fs.writeFile(sourcePath, payload);
+
+    const state = {
+      versionStatus: 'pending_review',
+      versionFilePath: sourcePath,
+      resourceFilePath: sourcePath,
+      latestVersionId: null as number | null,
+      reviewEvents: 0,
+      operationLogs: 0,
+    };
+    let failNextOperationLog = true;
+    const execute = async (sql: string, parameters: any[] = []): Promise<any> => {
+      if (sql.includes('FROM resources') && sql.includes('WHERE public_id=?')) {
+        return [{ id: 7, public_id: ids.resource, user_id: 10, resource_kind: 'mod', status: 'approved' }];
+      }
+      if (sql.includes('FROM users WHERE id=?')) return [{ username: 'reviewer', role: 'moderator' }];
+      if (sql.includes('FROM resource_versions') && sql.includes('WHERE resource_id=? AND public_id=?')) {
+        return [{ id: 17, resource_id: 7, public_id: ids.version, status: state.versionStatus,
+          version: '1.0.0', release_channel: 'release', file_path: state.versionFilePath,
+          file_name: 'release.jar', file_size: payload.length, mime_type: 'application/java-archive',
+          content_hash: createHash('sha256').update(payload).digest('hex') }];
+      }
+      if (sql.startsWith('UPDATE resource_versions SET recommended=0')) return { affectedRows: 1 };
+      if (sql.startsWith('UPDATE resource_versions SET status=')) {
+        state.versionStatus = String(parameters[0]);
+        if (sql.includes(',file_path=?')) state.versionFilePath = String(parameters[4]);
+        return { affectedRows: 1 };
+      }
+      if (sql.startsWith('UPDATE resource_files SET storage_key=?')) {
+        state.resourceFilePath = String(parameters[0]);
+        return { affectedRows: 1 };
+      }
+      if (sql.startsWith('UPDATE resources SET latest_published_version_id=?')) {
+        state.latestVersionId = Number(parameters[0]);
+        if (sql.includes('file_path=?')) state.resourceFilePath = String(parameters[1]);
+        return { affectedRows: 1 };
+      }
+      if (sql.startsWith('INSERT INTO resource_review_events')) { state.reviewEvents += 1; return { insertId: 45 }; }
+      if (sql.startsWith('INSERT INTO operation_logs')) {
+        if (failNextOperationLog) { failNextOperationLog = false; throw new Error('operation log insert failed'); }
+        state.operationLogs += 1;
+        return { affectedRows: 1 };
+      }
+      if (sql.includes('FROM resource_members')) return [];
+      return [];
+    };
+    const manager = { query: jest.fn(execute) };
+    const dataSource: any = {
+      query: jest.fn(execute),
+      transaction: jest.fn(async (callback: (manager: any) => Promise<unknown>) => {
+        const snapshot = { ...state };
+        try { return await callback(manager); }
+        catch (error) { Object.assign(state, snapshot); throw error; }
+      }),
+    };
+    const storage = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const prepareSpy = jest.spyOn(storage, 'preparePromotion');
+    const service = new ResourceV2ReviewService(dataSource, storage, { create: jest.fn().mockResolvedValue({ id: 1 }) } as any);
+
+    try {
+      await expect(service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+        .rejects.toThrow('operation log insert failed');
+      expect(state).toMatchObject({
+        versionStatus: 'pending_review', versionFilePath: sourcePath,
+        resourceFilePath: sourcePath, latestVersionId: null, reviewEvents: 0, operationLogs: 0,
+      });
+      await expect(fs.readFile(sourcePath)).resolves.toEqual(payload);
+      await expect(fs.readFile(targetPath)).resolves.toEqual(payload);
+
+      await expect(service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+        .resolves.toMatchObject({ status: 'published', recommended: true });
+
+      expect(prepareSpy).toHaveBeenCalledTimes(2);
+      await expect(prepareSpy.mock.results[0].value).resolves.toMatchObject({ createdTarget: true });
+      await expect(prepareSpy.mock.results[1].value).resolves.toMatchObject({ createdTarget: false });
+      expect(state).toMatchObject({
+        versionStatus: 'published', versionFilePath: targetPath,
+        resourceFilePath: targetPath, latestVersionId: 17, reviewEvents: 1, operationLogs: 1,
+      });
+      await expect(fs.readFile(sourcePath)).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(fs.readFile(targetPath)).resolves.toEqual(payload);
+    } finally {
+      if (previousRoot === undefined) delete process.env.RESOURCE_UPLOAD_ROOT;
+      else process.env.RESOURCE_UPLOAD_ROOT = previousRoot;
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('does not fail an approved publish when quarantine cleanup fails', async () => {
+    const { service, state, storage } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+    const warning = jest.spyOn((service as any).logger, 'warn').mockImplementation(() => undefined);
+    storage.removeQuarantinedFile.mockRejectedValue(new Error('disk cleanup unavailable'));
+
+    await expect(service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+      .resolves.toMatchObject({ status: 'published' });
+
+    expect(state.versionStatus).toBe('published');
+    expect(state.reviewEvents).toBe(1);
+    expect(state.operationLogs).toBe(1);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('disk cleanup unavailable'));
+    expect(storage.removeQuarantinedFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('serializes concurrent approvals so only one publishes, audits, records, and notifies', async () => {
+    const { service, state, storage, notifications } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+    let releasePreparations!: () => void;
+    const bothPrepared = new Promise<void>((resolve) => { releasePreparations = resolve; });
+    storage.preparePromotion.mockImplementation(async (sourcePath: string) => {
+      if (storage.preparePromotion.mock.calls.length === 2) releasePreparations();
+      await bothPrepared;
+      return { sourcePath: path.resolve(sourcePath), targetPath: '/uploads/resources/release.jar', createdTarget: true };
+    });
+
+    const [first, second] = await Promise.allSettled([
+      service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }),
+      service.reviewVersion(ids.resource, ids.version, 31, { action: 'approve' }),
+    ]);
+
+    expect([first, second].filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    const rejected = [first, second].find((result) => result.status === 'rejected') as PromiseRejectedResult;
+    expect(rejected.reason).toBeInstanceOf(BadRequestException);
+    expect(state.versionStatus).toBe('published');
+    expect(state.reviewEvents).toBe(1);
+    expect(state.operationLogs).toBe(1);
+    expect(storage.preparePromotion).toHaveBeenCalledTimes(2);
+    expect(storage.removeQuarantinedFile).toHaveBeenCalledTimes(1);
+    expect(notifications.create).toHaveBeenCalledTimes(1);
   });
 
   it('sets an ignore only for a matching warning on a published version and preserves actor/parser context', async () => {

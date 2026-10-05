@@ -1,7 +1,8 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { createHash } from 'crypto';
-import { ResourceStorageService } from '../resource-storage.service';
+import * as path from 'path';
+import { ResourceStorageService, type PreparedResourcePromotion } from '../resource-storage.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
@@ -40,6 +41,34 @@ export class ResourceV2ReviewService {
     if (reason && reason.length > 5_000) throw new BadRequestException('审核说明不能超过 5000 个字符');
     if (action !== 'approve' && !reason) throw new BadRequestException('拒绝或要求修改时必须填写原因');
 
+    let preparedPromotion: PreparedResourcePromotion | null = null;
+    let preparedSource: { filePath: string; fileSize: number; contentHash: string } | null = null;
+    if (action === 'approve') {
+      // Validate and copy outside the transaction. The source remains in
+      // quarantine until the database transaction commits successfully.
+      const preflightResource = await this.getResource(this.dataSource, resourcePublicId, false);
+      await this.assertStaff(this.dataSource, actorId);
+      const preflightVersion = await this.getVersion(this.dataSource, preflightResource.id, versionPublicId, false);
+      if (preflightVersion.status !== 'pending_review') {
+        throw new BadRequestException('只有 pending_review 状态的版本可以审核');
+      }
+      if (preflightVersion.file_path) {
+        if (!this.storage) throw new BadRequestException('资源文件存储服务不可用，无法发布此版本');
+        const bytes = await this.storage.readQuarantinedFile(preflightVersion.file_path, 50 * 1024 * 1024);
+        const fileSize = Number(preflightVersion.file_size);
+        const contentHash = String(preflightVersion.content_hash || '').toLowerCase();
+        if (!Number.isSafeInteger(fileSize) || fileSize < 1 || bytes.length !== fileSize) {
+          throw new BadRequestException('资源文件大小校验失败，无法发布此版本');
+        }
+        if (!/^[a-f0-9]{64}$/.test(contentHash)
+          || createHash('sha256').update(bytes).digest('hex') !== contentHash) {
+          throw new BadRequestException('资源文件 SHA256 校验失败，无法发布此版本');
+        }
+        preparedPromotion = await this.storage.preparePromotion(preflightVersion.file_path);
+        preparedSource = { filePath: preflightVersion.file_path, fileSize, contentHash };
+      }
+    }
+
     const outcome = await this.dataSource.transaction(async (manager) => {
       const resource = await this.getResource(manager, resourcePublicId, true);
       const reviewer = await this.assertStaff(manager, actorId);
@@ -47,20 +76,22 @@ export class ResourceV2ReviewService {
       if (version.status !== 'pending_review') {
         throw new BadRequestException('只有 pending_review 状态的版本可以审核');
       }
+      if (action === 'approve' && Boolean(version.file_path) !== Boolean(preparedSource)) {
+        throw new BadRequestException('待发布版本的文件信息已变化，请重新审核');
+      }
+      if (action === 'approve' && version.file_path) {
+        if (!preparedPromotion || !preparedSource
+          || path.resolve(version.file_path) !== path.resolve(preparedSource.filePath)
+          || Number(version.file_size) !== preparedSource.fileSize
+          || String(version.content_hash || '').toLowerCase() !== preparedSource.contentHash) {
+          throw new BadRequestException('待发布版本的文件信息已变化，请重新审核');
+        }
+      }
 
       const nextStatus = action === 'approve' ? 'published'
         : action === 'reject' ? 'rejected' : 'changes_requested';
       const isRecommended = action === 'approve' && ['release', 'stable'].includes(version.release_channel || 'release');
-      let promotedPath: string | null | undefined;
-      if (action === 'approve' && version.file_path) {
-        if (!this.storage) throw new BadRequestException('资源文件存储服务不可用，无法发布此版本');
-        const bytes = await this.storage.readManagedFile(version.file_path, 50 * 1024 * 1024);
-        const actualHash = createHash('sha256').update(bytes).digest('hex');
-        if (version.content_hash && actualHash !== version.content_hash.toLowerCase()) {
-          throw new BadRequestException('资源文件校验失败，无法发布此版本');
-        }
-        promotedPath = await this.storage.promote(version.file_path);
-      }
+      const promotedPath = action === 'approve' ? preparedPromotion?.targetPath : null;
       if (isRecommended) {
         await manager.query(
           `UPDATE resource_versions SET recommended=0
@@ -130,6 +161,15 @@ export class ResourceV2ReviewService {
         notify_user_ids: [...new Set([Number(resource.user_id), ...maintainers.map((member) => Number(member.user_id))])],
       };
     });
+
+    if (preparedPromotion && this.storage) {
+      try {
+        await this.storage.removeQuarantinedFile(preparedPromotion.sourcePath);
+      } catch (error) {
+        this.logger.warn(`Resource version was published, but quarantine cleanup failed: ${(error as Error).message}`);
+      }
+    }
+
     if (this.notifications) {
       const decision = action === 'approve' ? '已审核通过并发布'
         : action === 'reject' ? '未通过审核' : '需要修改后重新提交';

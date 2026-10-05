@@ -64,6 +64,69 @@ describe('ResourceStorageService', () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 
+  it('prepares publication by copying and leaves the quarantine source for post-commit cleanup', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const quarantine = path.join(root, '.quarantine', 'resources');
+    const sourcePath = path.join(quarantine, 'prepared.zip');
+    await fs.mkdir(quarantine, { recursive: true });
+    await fs.writeFile(sourcePath, 'content');
+
+    const prepared = await service.preparePromotion(sourcePath);
+
+    expect(prepared).toEqual({
+      sourcePath,
+      targetPath: path.join(root, 'resources', 'prepared.zip'),
+      createdTarget: true,
+    });
+    await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('content');
+    await expect(fs.readFile(prepared.targetPath, 'utf8')).resolves.toBe('content');
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('reuses an identical existing target without replacing it', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const quarantine = path.join(root, '.quarantine', 'resources');
+    const resources = path.join(root, 'resources');
+    const sourcePath = path.join(quarantine, 'retry.zip');
+    const targetPath = path.join(resources, 'retry.zip');
+    await fs.mkdir(quarantine, { recursive: true });
+    await fs.mkdir(resources, { recursive: true });
+    await fs.writeFile(sourcePath, 'same payload');
+    await fs.writeFile(targetPath, 'same payload');
+
+    await expect(service.preparePromotion(sourcePath)).resolves.toEqual({
+      sourcePath,
+      targetPath,
+      createdTarget: false,
+    });
+    await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('same payload');
+    await expect(fs.readFile(targetPath, 'utf8')).resolves.toBe('same payload');
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('rejects a same-name target with different content without overwriting it', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
+    process.env.RESOURCE_UPLOAD_ROOT = root;
+    const service = new ResourceStorageService({ get: jest.fn().mockResolvedValue('resources') } as any);
+    const quarantine = path.join(root, '.quarantine', 'resources');
+    const resources = path.join(root, 'resources');
+    const sourcePath = path.join(quarantine, 'collision.zip');
+    const targetPath = path.join(resources, 'collision.zip');
+    await fs.mkdir(quarantine, { recursive: true });
+    await fs.mkdir(resources, { recursive: true });
+    await fs.writeFile(sourcePath, 'new payload');
+    await fs.writeFile(targetPath, 'existing payload');
+
+    await expect(service.preparePromotion(sourcePath)).rejects.toThrow('已存在不同内容的同名文件');
+    await expect(fs.readFile(sourcePath, 'utf8')).resolves.toBe('new payload');
+    await expect(fs.readFile(targetPath, 'utf8')).resolves.toBe('existing payload');
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
   it('turns a pasted Mindustry schematic into a quarantined managed file', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-storage-'));
     process.env.RESOURCE_UPLOAD_ROOT = root;
