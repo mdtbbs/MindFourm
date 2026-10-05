@@ -22,15 +22,17 @@ describe('resource storage migration', () => {
     original_filename: 'map.msav', display_name: 'map.msav', mime_type: 'application/octet-stream',
     size_bytes: bytes.length, content_hash: null, hash_algorithm: null,
     availability_status: 'available', resource_status: 'approved', version_status: 'published', resource_public: 1,
+    resource_visibility: 'public',
   }) as any;
   const storage = () => ({ statManagedFile: jest.fn().mockImplementation(async () => ({ path: source, size: bytes.length })) }) as any;
   const client = () => ({
     uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-public', state: 'verified', sha256, size_bytes: bytes.length, mime_type: 'application/octet-stream' }),
     getObject: jest.fn().mockResolvedValue({ public_id: 'res-public', state: 'verified', sha256, size_bytes: bytes.length, mime_type: 'application/octet-stream' }),
     createBinding: jest.fn().mockResolvedValue({ id: 'binding-7' }),
+    deleteBinding: jest.fn().mockResolvedValue(undefined),
   }) as any;
-  const db = (record: any) => ({ transaction: jest.fn().mockImplementation(async (work) => work({
-    query: jest.fn().mockResolvedValue([{resource_status: 'approved', resource_public: 1, version_status: 'published'}]),
+  const db = (record: any, visibility = 'public') => ({ transaction: jest.fn().mockImplementation(async (work) => work({
+    query: jest.fn().mockResolvedValue([{ resource_status: 'approved', resource_public: 1, resource_visibility: visibility, version_status: 'published' }]),
     findOne: jest.fn().mockResolvedValue(record), save: jest.fn().mockResolvedValue(record),
   })) }) as any;
 
@@ -59,6 +61,14 @@ describe('resource storage migration', () => {
     expect(old.provider_file_id).toBeNull();
   });
 
+  it('keeps an explicitly private resource private during historical migration', async () => {
+    const old = file();
+    const remote = client();
+    const database = db(old, 'private');
+    expect(await migrateOneResourceFile(database, old, remote, storage(), {} as any, false)).toBe('migrated');
+    expect(remote.createBinding).toHaveBeenCalledWith('res-public', expect.objectContaining({ visibility: 'private', owner_id: 'file-7' }));
+  });
+
   it('leaves the historical row unchanged when RES upload fails', async () => {
     const old = file();
     const remote = client();
@@ -76,7 +86,7 @@ describe('resource storage migration', () => {
     const query = {
       innerJoin: jest.fn().mockReturnThis(), addSelect: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(),
-      getRawAndEntities: jest.fn().mockResolvedValue({ entities: [one, two, third], raw: [{ resource_status: 'approved', version_status: 'published' }, {}, {}] }),
+      getRawAndEntities: jest.fn().mockResolvedValue({ entities: [one, two, third], raw: [{ resource_status: 'approved', version_status: 'published', resource_visibility: 'public' }, {}, {}] }),
     };
     const database = { getRepository: () => ({ createQueryBuilder: () => query }) } as any;
     const result = await runResourceStorageMigration(database, client(), storage(), {} as any, { dryRun: true, backend: 'managed', limit: 3 });
