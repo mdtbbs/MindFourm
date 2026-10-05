@@ -104,6 +104,8 @@ public final class MapRenderer {
 
     static void initializeForFixture(Path root) {
         storageRoot = root.toAbsolutePath().normalize();
+        Vars.platform = new Platform() {};
+        Vars.net = new Net(Vars.platform.getNet());
         Vars.headless = true;
         Core.settings.setDataDirectory(new Fi(storageRoot.resolve("worker-config").toFile()));
         Vars.init();
