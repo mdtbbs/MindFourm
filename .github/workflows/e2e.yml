@@ -69,6 +69,9 @@ jobs:
       MOBILE_AUTH_JWT_SECRET: e2e-mobile-jwt-secret
       MOBILE_AUTH_REFRESH_HMAC_SECRET: e2e-mobile-refresh-secret
       CLOUD_SAVES_STORAGE_PATH: /tmp/mindfourm-cloud-saves
+      RES_ENABLED: 'true'
+      RES_BASE_URL: http://127.0.0.1:4100
+      RES_API_KEY: e2e-res-key
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -108,10 +111,12 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Start API and web app
+      - name: Start ResourceStorage, API and web app
         shell: bash
         run: |
           mkdir -p "$CLOUD_SAVES_STORAGE_PATH"
+          nohup node scripts/e2e-resource-storage.cjs > "$RUNNER_TEMP/mindfourm-res.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/mindfourm-res.pid"
           nohup npm run start:prod > "$RUNNER_TEMP/mindfourm-api.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/mindfourm-api.pid"
           (
@@ -120,12 +125,14 @@ jobs:
             echo $! > "$RUNNER_TEMP/mindfourm-web.pid"
           )
           for attempt in $(seq 1 90); do
-            if curl --silent --fail http://127.0.0.1:4000/api/health >/dev/null \
+            if curl --silent --fail http://127.0.0.1:4100/health >/dev/null \
+              && curl --silent --fail http://127.0.0.1:4000/api/health >/dev/null \
               && curl --silent --fail http://127.0.0.1:3000/ >/dev/null; then
               exit 0
             fi
             sleep 2
           done
+          cat "$RUNNER_TEMP/mindfourm-res.log"
           cat "$RUNNER_TEMP/mindfourm-api.log"
           cat "$RUNNER_TEMP/mindfourm-web.log"
           exit 1
@@ -154,6 +161,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            ${{ runner.temp }}/mindfourm-res.log
             ${{ runner.temp }}/mindfourm-api.log
             ${{ runner.temp }}/mindfourm-web.log
           if-no-files-found: ignore
