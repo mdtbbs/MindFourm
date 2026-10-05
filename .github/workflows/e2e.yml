@@ -151,7 +151,10 @@ jobs:
 
       - name: Run phone viewport browser smoke
         if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'smoke')
-        run: npm run test:e2e -- --project=mobile-chrome tests/e2e/mobile-shell.spec.ts
+        run: >-
+          npm run test:e2e -- --project=mobile-chrome
+          tests/e2e/mobile-shell.spec.ts
+          tests/e2e/mobile-search.spec.ts
 
       - name: Run full nightly browser suite
         if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'full')
