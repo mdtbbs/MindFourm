@@ -17,7 +17,12 @@ import { ResourceStorageClientService } from '../modules/resources/resource-stor
 import { ResourceStorageService } from '../modules/resources/resource-storage.service';
 
 export type MigrationOptions = { dryRun: boolean; backend: 'managed' | 'mfl'; limit: number; resourceId?: number };
-type Candidate = ResourceFile & { resource_status: string | null; version_status: string | null; resource_public?: number };
+type Candidate = ResourceFile & {
+  resource_status: string | null;
+  version_status: string | null;
+  resource_public?: number;
+  resource_visibility?: string | null;
+};
 
 export function parseMigrationOptions(argv: string[]): MigrationOptions {
   const values = new Map<string, string>();
@@ -102,12 +107,15 @@ export async function migrateOneResourceFile(
     updated = await db.transaction(async (manager) => {
       const current = await manager.findOne(ResourceFile, { where: { id: file.id }, lock: { mode: 'pessimistic_write' } });
       if (!current || current.storage_backend !== file.storage_backend) return false;
-      const state = await manager.query(`SELECT r.status AS resource_status,r.is_public AS resource_public,v.status AS version_status
+      const state = await manager.query(`SELECT r.status AS resource_status,r.is_public AS resource_public,r.visibility AS resource_visibility,v.status AS version_status
         FROM resource_versions v JOIN resources r ON r.id=v.resource_id
         WHERE v.id=? AND r.deleted_at IS NULL FOR UPDATE`, [current.resource_version_id]);
       if (!state[0]) return false;
-      const visibility = ['approved', 'published'].includes(state[0].resource_status) && Number(state[0].resource_public) === 1
-        && state[0].version_status === 'published' && current.availability_status === 'available' ? 'public' : 'private';
+      const visibility = ['approved', 'published'].includes(state[0].resource_status)
+        && Number(state[0].resource_public) === 1
+        && state[0].resource_visibility !== 'private'
+        && state[0].version_status === 'published'
+        && current.availability_status === 'available' ? 'public' : 'private';
       const binding = await client.createBinding(confirmed.public_id, {
         namespace: 'mindforum', owner_type: 'resource_file', owner_id: file.public_id, visibility,
       });
@@ -145,6 +153,7 @@ export async function runResourceStorageMigration(
     .addSelect('resource.status', 'resource_status')
     .addSelect('version.status', 'version_status')
     .addSelect('resource.is_public', 'resource_public')
+    .addSelect('resource.visibility', 'resource_visibility')
     .where('file.storage_backend IN (:...backends)', { backends: options.backend === 'managed' ? ['managed', 'local'] : ['mfl'] })
     .orderBy('file.id', 'ASC').take(options.limit);
   if (options.resourceId) query.andWhere('version.resource_id = :resourceId', { resourceId: options.resourceId });
@@ -155,6 +164,7 @@ export async function runResourceStorageMigration(
       resource_status: rows.raw[i]?.resource_status ?? null,
       version_status: rows.raw[i]?.version_status ?? null,
       resource_public: Number(rows.raw[i]?.resource_public || 0),
+      resource_visibility: rows.raw[i]?.resource_visibility ?? null,
     }) as Candidate;
     try { results[await migrateOneResourceFile(db, file, client, storage, mfl, options.dryRun)]++; }
     catch (error) {
