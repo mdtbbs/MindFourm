@@ -12,6 +12,7 @@ import arc.util.serialization.Json;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import mindustry.Vars;
+import mindustry.core.Logic;
 import mindustry.core.Platform;
 import mindustry.core.Version;
 import mindustry.ctype.ContentType;
@@ -96,6 +97,7 @@ public final class MapRenderer {
         Vars.init();
         Vars.content.createBaseContent();
         Vars.content.init();
+        Vars.logic = new Logic();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
         chineseBundle = loadChineseBundle();
     }
@@ -107,6 +109,7 @@ public final class MapRenderer {
         Vars.init();
         Vars.content.createBaseContent();
         Vars.content.init();
+        Vars.logic = new Logic();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
         chineseBundle = new Properties();
     }
