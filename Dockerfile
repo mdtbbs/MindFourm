@@ -2,6 +2,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
+# npm's prepare hook runs during install, before the rest of the source is copied.
+COPY scripts/install-git-hooks.cjs ./scripts/install-git-hooks.cjs
 RUN --mount=type=cache,target=/root/.npm npm ci --production=false
 COPY . .
 RUN npm run build:backend
