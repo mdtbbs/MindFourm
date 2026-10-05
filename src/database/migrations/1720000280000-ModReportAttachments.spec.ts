@@ -12,6 +12,9 @@ describe('ModReportAttachments migration', () => {
     expect(statement).toContain('CREATE TABLE IF NOT EXISTS mod_report_attachments');
     expect(statement).toContain('public_id CHAR(36) NOT NULL');
     expect(statement).toContain('file_path TEXT NOT NULL');
+    expect(statement).toContain('CHECK (');
+    expect(statement).toContain('issue_report_id IS NOT NULL AND compatibility_report_id IS NULL');
+    expect(statement).toContain('issue_report_id IS NULL AND compatibility_report_id IS NOT NULL');
     expect(statement).toContain('FOREIGN KEY (issue_report_id) REFERENCES mod_issue_reports(id) ON DELETE CASCADE');
     expect(statement).toContain('FOREIGN KEY (compatibility_report_id) REFERENCES mod_compatibility_reports(id) ON DELETE CASCADE');
     expect(statement).toContain('FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE SET NULL');

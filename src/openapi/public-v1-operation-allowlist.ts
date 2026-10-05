@@ -40,6 +40,7 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'GET /v1/resources/{id}/workbench',
   'POST /v1/resources/{id}/versions/analyze',
   'POST /v1/resources/{id}/versions',
+  'POST /v1/resources/{id}/versions/{versionId}/review',
   'POST /v1/resources/{id}/versions/{versionId}/schematic-editor/export',
   'PATCH /v1/resources/{id}',
   'POST /v1/resources/{id}/relations',

@@ -28,18 +28,18 @@ describe('GameContentService', () => {
     const resourcesDomain = { getList: jest.fn().mockResolvedValue({ data: [resource], next_cursor: 'cursor-2', has_more: true }), getById: jest.fn().mockResolvedValue(resource), isResourcePubliclyAccessible: jest.fn().mockResolvedValue(true), create: jest.fn() };
     const likeService = { add: jest.fn().mockResolvedValue({ is_liked: true }) };
     const favoriteService = { add: jest.fn().mockResolvedValue({ is_favorited: true }) };
-    const previewService = { resolveContentMetadata: jest.fn().mockResolvedValue({ items: { copper: { name: '铜', icon: 'data:image/png;base64,AA==' } }, blocks: { 'copper-wall': { name: '铜墙', icon: null } }, liquids: {} }), ensureProduction: jest.fn() };
-    const storage = { removeManaged: jest.fn().mockResolvedValue(true) };
-    const versions = {};
+    const previewService = { resolveContentMetadata: jest.fn().mockResolvedValue({ items: { copper: { name: '铜', icon: 'data:image/png;base64,AA==' } }, blocks: { 'copper-wall': { name: '铜墙', icon: null } }, liquids: {} }), ensureProduction: jest.fn(), readPreview: jest.fn().mockResolvedValue(Buffer.from('preview')) };
+    const storage = { removeManaged: jest.fn().mockResolvedValue(true), readManagedFile: jest.fn().mockResolvedValue(Buffer.from('mschpayload')), statManagedFile: jest.fn().mockResolvedValue({ path: '/uploads/resources/map.msav', size: 12 }) };
+    const versions = { findOne: jest.fn().mockResolvedValue(null) };
     const files = {};
-    const policy = {};
-    const grant = {};
+    const policy = { assertDownloadAuthentication: jest.fn().mockResolvedValue(undefined), checkEligibility: jest.fn().mockResolvedValue({ eligible: true }) };
+    const grant = { recordGrant: jest.fn().mockResolvedValue(true) };
     const events = {};
     const redis = { setIfNotExists: jest.fn().mockResolvedValue(false) };
     const config = { get: jest.fn().mockReturnValue('test-secret') };
     const uploadSessions = { create: jest.fn(), getOwned: jest.fn(), claim: jest.fn(), setCompleted: jest.fn(), setUploaded: jest.fn(), getPreview: jest.fn() };
     const service = new GameContentService(resourceRepo as any, likeRepo as any, favoriteRepo as any, versions as any, files as any, resourcesDomain as any, likeService as any, favoriteService as any, previewService as any, storage as any, policy as any, grant as any, events as any, redis as any, config as any, uploadSessions as any);
-    return { service, resourceRepo, likeRepo, favoriteRepo, resourcesDomain, likeService, favoriteService, previewService, redis, uploadSessions, storage };
+    return { service, resourceRepo, likeRepo, favoriteRepo, resourcesDomain, likeService, favoriteService, previewService, redis, uploadSessions, storage, versions, files, policy, grant };
   };
 
   it('uses the shared resource query and returns a safe public DTO with batch statistics', async () => {
@@ -65,6 +65,63 @@ describe('GameContentService', () => {
     const { service, resourcesDomain } = dependencies();
     await service.list('map', { featuredOnly: true, sort: 'trending', limit: '12' });
     expect(resourcesDomain.getList).toHaveBeenCalledWith(expect.objectContaining({ resource_kind: 'map', limit: 12 }), { scope: 'public', featuredOnly: true, trendingOnly: true });
+  });
+
+  it('hides renderer metadata and previews for approved Resources whose initial binary is still quarantined', async () => {
+    const { service, resourcesDomain, resourceRepo, previewService } = dependencies();
+    const pendingMap = {
+      ...resource,
+      resource_kind: 'map',
+      file_path: '/uploads/.quarantine/resources/pending.msav',
+      renderer_metadata_json: { width: 64, height: 32, build: 160 },
+    };
+    resourcesDomain.getList.mockResolvedValue({ data: [pendingMap] as any, next_cursor: null, has_more: false });
+    const listed = await service.list('map', { limit: '20' });
+    expect(listed.data[0].preview).toEqual({ thumbnail: null, width: null, height: null });
+    expect(listed.data[0].game.minBuild).toBeNull();
+
+    resourceRepo.findOne.mockResolvedValueOnce(pendingMap).mockResolvedValueOnce({ id: resource.id, view_count: '19' });
+    (service as any).likes = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn().mockResolvedValue(null) };
+    (service as any).favorites = { count: jest.fn().mockResolvedValue(0), findOne: jest.fn().mockResolvedValue(null) };
+    const detail = await service.detail('map', `map_${resource.public_id}`, null) as any;
+    expect(detail.preview).toEqual({ image: null, width: null, height: null });
+    expect(detail.map).toEqual({ mode: null, players: null, planet: null, resources: null, cores: null, waves: null });
+    expect(previewService.ensureProduction).not.toHaveBeenCalled();
+  });
+
+  it('keeps quarantined blueprint bytes and map previews/downloads out of Game Content', async () => {
+    const { service, resourceRepo, resourcesDomain, storage, previewService, versions, policy } = dependencies();
+    const pendingSchematic = { ...resource, file_path: '/uploads/.quarantine/resources/pending.msch' };
+    resourceRepo.findOne.mockResolvedValue(pendingSchematic);
+
+    await expect(service.blueprintCode(`bp_${resource.public_id}`, null)).rejects.toThrow('蓝图文件不存在');
+    expect(storage.readManagedFile).not.toHaveBeenCalled();
+
+    const pendingMap = { ...pendingSchematic, resource_kind: 'map', file_path: '/uploads/.quarantine/resources/pending.msav' };
+    resourceRepo.findOne.mockResolvedValue(pendingMap);
+    await expect(service.downloadInfo(`map_${resource.public_id}`)).rejects.toThrow('地图文件暂不可用');
+    await expect(service.prepareMapDownload(`map_${resource.public_id}`, null, 'game-content')).rejects.toThrow('地图文件暂不可用');
+    expect(policy.assertDownloadAuthentication).toHaveBeenCalledTimes(2);
+    expect(storage.statManagedFile).not.toHaveBeenCalled();
+
+    await expect(service.preview('map', `map_${resource.public_id}`)).resolves.toBeNull();
+    expect(previewService.readPreview).not.toHaveBeenCalled();
+    expect(versions.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: 'published' }) }));
+  });
+
+  it('preserves Game Content downloads for legacy approved files outside quarantine', async () => {
+    const { service, resourceRepo, resourcesDomain, storage, grant, policy } = dependencies();
+    const legacyMap = { ...resource, resource_kind: 'map', file_path: '/uploads/resources/legacy.msav' };
+    resourceRepo.findOne.mockResolvedValue(legacyMap);
+
+    const info = await service.downloadInfo(`map_${resource.public_id}`);
+    expect(info).toMatchObject({ filename: null, size: null, sha256: null });
+    const target = await service.prepareMapDownload(`map_${resource.public_id}`, null, 'game-content');
+    expect(target.path).toBe('/uploads/resources/map.msav');
+    expect(target.version).toBeNull();
+    expect(storage.statManagedFile).toHaveBeenCalledWith(legacyMap.file_path);
+    expect(grant.recordGrant).toHaveBeenCalled();
+    expect(policy.assertDownloadAuthentication).toHaveBeenCalledTimes(2);
   });
 
   it('maps renderer materials and blocks through the shared localized metadata service and counts one successful detail view', async () => {

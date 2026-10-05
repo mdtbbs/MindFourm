@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { ResourceV2ReviewService } from './resource-v2-review.service';
 
 const ids = {
@@ -13,11 +14,13 @@ type HarnessOptions = {
   versionStatus?: string;
   kind?: string;
   findingSeverity?: string;
+  versionChannel?: string;
 };
 
 function createHarness(options: HarnessOptions = {}) {
   const ownerId = options.ownerId ?? 10;
   const versionStatus = options.versionStatus ?? 'published';
+  const payload = Buffer.from('release payload');
   const managerQuery = jest.fn(async (sql: string, parameters: any[] = []) => execute(sql, parameters));
   const outerQuery = jest.fn(async (sql: string, parameters: any[] = []) => execute(sql, parameters));
   const manager = { query: managerQuery };
@@ -25,11 +28,16 @@ function createHarness(options: HarnessOptions = {}) {
     query: outerQuery,
     transaction: jest.fn(async (callback: (manager: any) => Promise<unknown>) => callback(manager)),
   };
-  const service = new ResourceV2ReviewService(dataSource);
+  const storage = {
+    readManagedFile: jest.fn().mockResolvedValue(payload),
+    promote: jest.fn().mockResolvedValue('/uploads/resources/release.jar'),
+  };
+  const notifications = { create: jest.fn().mockResolvedValue({ id: 1 }) };
+  const service = new ResourceV2ReviewService(dataSource, storage as any, notifications as any);
 
   function execute(sql: string, parameters: any[] = []): any {
     if (sql.includes('FROM resources') && sql.includes('WHERE public_id=?')) {
-      return parameters[0] === ids.resource ? [{ id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod' }] : [];
+      return parameters[0] === ids.resource ? [{ id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod', status: 'approved' }] : [];
     }
     if (sql.includes('FROM resource_members')) {
       return options.memberRole ? [{ role: options.memberRole }] : [];
@@ -38,7 +46,7 @@ function createHarness(options: HarnessOptions = {}) {
     if (sql.includes('FROM resource_versions') && sql.includes('WHERE resource_id=? AND public_id=?')) {
       return parameters[1] === ids.version && versionStatus !== 'missing'
         && (!sql.includes("status='published'") || versionStatus === 'published')
-        ? [{ id: 17, resource_id: 7, public_id: ids.version, status: versionStatus, version: '1.0.0' }]
+        ? [{ id: 17, resource_id: 7, public_id: ids.version, status: versionStatus, version: '1.0.0', release_channel: options.versionChannel || 'release', file_path: '/uploads/.quarantine/resources/release.jar', file_size: payload.length, content_hash: createHash('sha256').update(payload).digest('hex') }]
         : [];
     }
     if (sql.includes('FROM resource_analysis_runs') && sql.includes('findings_json')) {
@@ -66,10 +74,61 @@ function createHarness(options: HarnessOptions = {}) {
     return [];
   }
 
-  return { service, dataSource, managerQuery, outerQuery };
+  return { service, dataSource, managerQuery, outerQuery, storage, notifications };
 }
 
 describe('ResourceV2ReviewService', () => {
+  it('publishes only pending versions, promotes and verifies the binary, advances latest, and keeps one stable recommendation', async () => {
+    const { service, managerQuery, storage, notifications } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+
+    const result = await service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+
+    expect(result).toMatchObject({ status: 'published', recommended: true, version_public_id: ids.version });
+    expect(storage.readManagedFile).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar', 50 * 1024 * 1024);
+    expect(storage.promote).toHaveBeenCalledWith('/uploads/.quarantine/resources/release.jar');
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_versions SET recommended=0'), [7, 17]);
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining("status='pending_review'"), expect.arrayContaining(['published', 1, 30, null, '/uploads/resources/release.jar', 7, 17]));
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE resources SET latest_published_version_id=?'), expect.arrayContaining([17, 7]));
+    expect(managerQuery).not.toHaveBeenCalledWith(expect.stringContaining("status=CASE WHEN status='pending'"), expect.any(Array));
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO resource_review_events'), expect.any(Array));
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO operation_logs'), expect.any(Array));
+    expect(notifications.create).toHaveBeenCalledWith(expect.objectContaining({ user_id: 10, type: 'system' }));
+  });
+
+  it('publishes beta versions without changing the stable recommendation', async () => {
+    const { service, managerQuery } = createHarness({ versionStatus: 'pending_review', staffRole: 'admin', versionChannel: 'beta' });
+    const result = await service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    expect(result).toMatchObject({ status: 'published', recommended: false });
+    expect(managerQuery).not.toHaveBeenCalledWith(expect.stringContaining('SET recommended=0'), expect.any(Array));
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('recommended=?'), expect.arrayContaining(['published', 0]));
+  });
+
+  it('treats the stable compatibility channel as the single recommended release', async () => {
+    const { service, managerQuery } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator', versionChannel: 'stable' });
+    const result = await service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    expect(result).toMatchObject({ status: 'published', recommended: true });
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE resource_versions SET recommended=0'), [7, 17]);
+  });
+
+  it.each([
+    ['reject', 'rejected'],
+    ['request_changes', 'changes_requested'],
+  ] as const)('%s leaves the binary private and records the reason', async (action, status) => {
+    const { service, managerQuery, storage } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+    const result = await service.reviewVersion(ids.resource, ids.version, 30, { action, reason: 'Please correct the release notes.' });
+    expect(result).toMatchObject({ status, recommended: false, published_at: null });
+    expect(storage.promote).not.toHaveBeenCalled();
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('reviewed_by_user_id'), expect.arrayContaining([status, 0, 30, 'Please correct the release notes.']));
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO resource_review_events'), expect.any(Array));
+  });
+
+  it('restricts version review to staff and refuses a version that is no longer pending', async () => {
+    const member = createHarness({ versionStatus: 'pending_review', staffRole: 'member' });
+    await expect(member.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).rejects.toBeInstanceOf(ForbiddenException);
+    const alreadyPublished = createHarness({ versionStatus: 'published', staffRole: 'moderator' });
+    await expect(alreadyPublished.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('sets an ignore only for a matching warning on a published version and preserves actor/parser context', async () => {
     const { service, managerQuery } = createHarness();
 

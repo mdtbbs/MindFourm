@@ -14,27 +14,17 @@ export type MapFeedbackInput = {
   body?: string | null;
 };
 
-export type CommunityAttachmentMetadata = {
-  kind: 'log' | 'image';
-  name: string;
-  size_bytes: number;
-  mime_type?: string;
-  sha256?: string;
-};
-
 export type ModCompatibilityReportInput = {
   status: CommunityReportStatus;
   game_version?: string | null;
   platform_key?: string | null;
   runtime?: 'java' | 'js' | 'hybrid' | 'content' | null;
   body?: string | null;
-  attachments?: CommunityAttachmentMetadata[] | null;
 };
 
 export type ModIssueReportInput = {
   title: string;
   body: string;
-  attachments?: CommunityAttachmentMetadata[] | null;
 };
 
 export type AuthorResponseInput = {
@@ -124,9 +114,9 @@ export class ResourceV2CommunityWriteService {
           (public_id,resource_id,resource_version_id,user_id,status,game_version,platform_key,runtime,body,attachment_json,created_at,updated_at)
          VALUES (?,?,?,?,?,?,?,?,?,?,NOW(6),NOW(6))
          ON DUPLICATE KEY UPDATE status=VALUES(status),game_version=VALUES(game_version),platform_key=VALUES(platform_key),
-          runtime=VALUES(runtime),body=VALUES(body),attachment_json=VALUES(attachment_json),updated_at=NOW(6)`,
+          runtime=VALUES(runtime),body=VALUES(body),updated_at=NOW(6)`,
         [newPublicId, resource.id, version.id, actorId, normalized.status, normalized.game_version,
-          normalized.platform_key, normalized.runtime, normalized.body, this.json(normalized.attachments)],
+          normalized.platform_key, normalized.runtime, normalized.body, null],
       );
       const rows = await this.rows<ReportRow>(manager, 'SELECT public_id FROM mod_compatibility_reports WHERE resource_version_id = ? AND user_id = ? LIMIT 1', [version.id, actorId]);
       if (!rows[0] || !this.isUuid(rows[0].public_id)) throw new Error('Compatibility report was not persisted');
@@ -155,8 +145,8 @@ export class ResourceV2CommunityWriteService {
       const report = rows[0];
       if (!report) throw new NotFoundException('兼容性报告不存在');
       await manager.query(
-        `UPDATE mod_compatibility_reports SET status=?,game_version=?,platform_key=?,runtime=?,body=?,attachment_json=?,updated_at=NOW(6) WHERE public_id=? AND user_id=?`,
-        [normalized.status, normalized.game_version, normalized.platform_key, normalized.runtime, normalized.body, this.json(normalized.attachments), reportPublicId, actorId],
+        `UPDATE mod_compatibility_reports SET status=?,game_version=?,platform_key=?,runtime=?,body=?,updated_at=NOW(6) WHERE public_id=? AND user_id=?`,
+        [normalized.status, normalized.game_version, normalized.platform_key, normalized.runtime, normalized.body, reportPublicId, actorId],
       );
       await this.audit(manager, {
         actorId, action: 'resource.mod_compatibility.update', resourceId: Number(report.resource_id), versionId: Number(report.resource_version_id),
@@ -180,8 +170,8 @@ export class ResourceV2CommunityWriteService {
       await manager.query(
         `INSERT INTO mod_issue_reports (public_id,resource_id,resource_version_id,user_id,status,title,body,attachment_json,created_at,updated_at)
          VALUES (?,?,?,?,'open',?,?,?,NOW(6),NOW(6))
-         ON DUPLICATE KEY UPDATE title=VALUES(title),body=VALUES(body),attachment_json=VALUES(attachment_json),updated_at=NOW(6)`,
-        [publicId, resource.id, version.id, actorId, normalized.title, normalized.body, this.json(normalized.attachments)],
+         ON DUPLICATE KEY UPDATE title=VALUES(title),body=VALUES(body),updated_at=NOW(6)`,
+        [publicId, resource.id, version.id, actorId, normalized.title, normalized.body, null],
       );
       const rows = await this.rows<ReportRow>(manager,
         'SELECT public_id,status FROM mod_issue_reports WHERE resource_version_id=? AND user_id=? LIMIT 1', [version.id, actorId]);
@@ -213,8 +203,8 @@ export class ResourceV2CommunityWriteService {
       const report = rows[0];
       if (!report) throw new NotFoundException('问题报告不存在');
       await manager.query(
-        `UPDATE mod_issue_reports SET title=?,body=?,attachment_json=?,updated_at=NOW(6) WHERE public_id=? AND user_id=?`,
-        [normalized.title, normalized.body, this.json(normalized.attachments), reportPublicId, actorId],
+        `UPDATE mod_issue_reports SET title=?,body=?,updated_at=NOW(6) WHERE public_id=? AND user_id=?`,
+        [normalized.title, normalized.body, reportPublicId, actorId],
       );
       await this.audit(manager, {
         actorId, action: 'resource.mod_issue.update', resourceId: Number(report.resource_id), versionId: Number(report.resource_version_id),
@@ -479,7 +469,6 @@ export class ResourceV2CommunityWriteService {
       platform_key: this.normalizeKey(input.platform_key, 50, '平台'),
       runtime,
       body: this.optionalText(input.body, 20_000, '兼容性报告'),
-      attachments: this.normalizeAttachments(input.attachments),
     };
   }
 
@@ -487,7 +476,7 @@ export class ResourceV2CommunityWriteService {
     if (!input || typeof input !== 'object') throw new BadRequestException('问题报告格式无效');
     const title = this.requiredText(input.title, 255, '标题');
     const body = this.requiredText(input.body, 20_000, '问题描述');
-    return { title, body, attachments: this.normalizeAttachments(input.attachments) };
+    return { title, body };
   }
 
   private normalizeConflict(input: ModConflictReportInput) {
@@ -529,26 +518,6 @@ export class ResourceV2CommunityWriteService {
       response: this.optionalText(input.author_response, 10_000, '作者回复'),
       fixed_version_public_id: versionPublicId,
     };
-  }
-
-  private normalizeAttachments(value: CommunityAttachmentMetadata[] | null | undefined): CommunityAttachmentMetadata[] | null {
-    if (value === undefined || value === null) return null;
-    if (!Array.isArray(value) || value.length > 10) throw new BadRequestException('附件元数据最多 10 项');
-    let totalBytes = 0;
-    const result = value.map((item) => {
-      if (!item || typeof item !== 'object' || !['log', 'image'].includes(item.kind)) throw new BadRequestException('附件类型无效');
-      const name = this.requiredText(item.name, 255, '附件名称');
-      if (/[\\/\0]/.test(name) || name === '.' || name === '..') throw new BadRequestException('附件名称不能包含路径');
-      if (!Number.isSafeInteger(item.size_bytes) || item.size_bytes < 0 || item.size_bytes > 20 * 1024 * 1024) throw new BadRequestException('附件大小无效');
-      totalBytes += item.size_bytes;
-      if (totalBytes > 50 * 1024 * 1024) throw new BadRequestException('附件总大小超出限制');
-      const mime = item.mime_type ? this.requiredText(item.mime_type, 100, '附件类型') : undefined;
-      if (mime && item.kind === 'image' && !/^image\/(?:png|jpeg|gif|webp)$/i.test(mime)) throw new BadRequestException('图片附件 MIME 类型无效');
-      const hash = item.sha256?.trim().toLowerCase();
-      if (hash && !/^[0-9a-f]{64}$/.test(hash)) throw new BadRequestException('附件哈希无效');
-      return { kind: item.kind, name, size_bytes: item.size_bytes, ...(mime ? { mime_type: mime } : {}), ...(hash ? { sha256: hash } : {}) };
-    });
-    return result;
   }
 
   private optionalText(value: unknown, max: number, label: string): string | null {

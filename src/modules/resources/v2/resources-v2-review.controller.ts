@@ -10,7 +10,7 @@ import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import {
   ResourceV2ClearFindingOverrideDto, ResourceV2FindingOverrideDto, ResourceV2FindingOverrideResponseDto,
   ResourceV2ReviewAnnotationDto, ResourceV2ReviewAnnotationResponseDto,
-  ResourceV2ReviewTimelineQueryDto, ResourceV2ReviewTimelineResponseDto,
+  ResourceV2ReviewTimelineQueryDto, ResourceV2ReviewTimelineResponseDto, ResourceV2VersionReviewDto,
 } from './resources-v2-review.dto';
 import { ResourceV2ApiErrorEnvelopeDto, ResourceV2ApiMetaDto } from './resources-v2.dto';
 import { ResourceV2ReviewService } from './resource-v2-review.service';
@@ -67,6 +67,28 @@ export class ResourcesV2ReviewController {
   async timeline(@Param('id') id: string, @Query() rawQuery: Record<string, unknown>, @Req() req: any) {
     const query = await this.validate(rawQuery, ResourceV2ReviewTimelineQueryDto);
     return this.review.getReviewTimeline(id, Number(req.user.id), query);
+  }
+
+  @Post(':id/versions/:versionId/review')
+  @RateLimit({ max: 20, window: 60 })
+  @ApiOperation({ operationId: 'reviewResourceVersionV2', summary: '审核一个 ResourceVersion', description: '仅管理员或版主可以 approve、reject 或 request_changes。只审核待审版本，不会隐藏该 Resource 的其他已发布版本。' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
+  @ApiParam({ name: 'versionId', format: 'uuid', description: 'ResourceVersion public UUID。' })
+  @ApiBody({ type: ResourceV2VersionReviewDto })
+  @ApiOkResponse({ description: 'Version review action was recorded.' })
+  @ApiBadRequestResponse({ description: 'Review action, reason, or version state is invalid.' })
+  @ApiUnauthorizedResponse({ description: '需要有效的 MindAuth access token 或 MDTBBS 登录会话。' })
+  @ApiForbiddenResponse({ description: 'Only an administrator or moderator can review versions.' })
+  @ApiNotFoundResponse({ description: 'Resource or version does not exist.' })
+  @OAuthProtected('resource.upload')
+  async reviewVersion(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+    @Body() raw: Record<string, unknown>,
+    @Req() req: any,
+  ) {
+    const body = await this.validate(raw, ResourceV2VersionReviewDto);
+    return this.review.reviewVersion(id, versionId, Number(req.user.id), body);
   }
 
   @Post(':id/versions/:versionId/analysis/overrides')

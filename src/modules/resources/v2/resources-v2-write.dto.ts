@@ -119,3 +119,9 @@ export class ResourceV2TransferOwnerDto {
   @IsString() @MinLength(1) @MaxLength(100)
   username!: string;
 }
+
+export class ResourceV2RespondInvitationDto {
+  @ApiProperty({ type: 'boolean' })
+  @IsBoolean()
+  accept!: boolean;
+}

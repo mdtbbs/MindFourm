@@ -89,6 +89,34 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  renderer:
+    name: Mindustry renderer compile and fixture tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download pinned Mindustry v160.2 artifacts
+        shell: bash
+        run: |
+          mkdir -p tools/mindustry-renderer/build/deps
+          curl --fail --location --retry 3 \
+            https://github.com/Anuken/Mindustry/releases/download/v160.2/server-release.jar \
+            --output tools/mindustry-renderer/build/deps/server-release-v160.2.jar
+          curl --fail --location --retry 3 \
+            https://github.com/Anuken/Mindustry/releases/download/v160.2/Mindustry.jar \
+            --output tools/mindustry-renderer/build/deps/Mindustry-v160.2.jar
+
+      - name: Compile renderer and run safe fixture tests
+        run: bash tools/mindustry-renderer/test-renderer.sh
+
   android:
     name: Android auth tests and debug build
     # Pin the current hosted image generation because it provides the Android

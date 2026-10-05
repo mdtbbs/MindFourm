@@ -68,8 +68,8 @@ describe('ResourceSourceSyncService', () => {
         version_mode: dto.version_mode,
         revision: 1,
         release_channel: dto.release_channel,
-        status: 'published',
-        published_at: '2026-10-05T00:00:00.000Z',
+        status: 'pending_review',
+        published_at: null,
       })),
     };
     notifications = { create: jest.fn().mockResolvedValue({ id: 1 }) };
@@ -212,6 +212,11 @@ describe('ResourceSourceSyncService', () => {
       asset_name: 'mod.jar',
       version: expect.objectContaining({ public_id: VERSION_PUBLIC_ID, revision: 1 }),
     }));
+    expect(result.version).toEqual(expect.objectContaining({ status: 'pending_review', published_at: null }));
+    expect(notifications.create).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: 5,
+      deduplicationKey: expect.stringContaining('resource-source-sync-imported:'),
+    }));
     expect(JSON.stringify(result)).not.toMatch(/\b(?:resource_id|version_id|file_id)\s*:/);
     expect(storage.removeManaged).not.toHaveBeenCalled();
   });
@@ -299,7 +304,10 @@ describe('ResourceSourceSyncService', () => {
     expect(versions.create).toHaveBeenCalledWith(expect.objectContaining({
       version: 'v2.0.0', release_channel: 'release', version_mode: 'compatibility',
     }), expect.any(Object), 5);
-    expect(notifications.create).not.toHaveBeenCalled();
+    expect(notifications.create).toHaveBeenCalledWith(expect.objectContaining({
+      user_id: 5,
+      deduplicationKey: expect.stringContaining('resource-source-sync-imported:'),
+    }));
     expect(fetchSpy).toHaveBeenCalledTimes(3);
     expect(dataSource.query).not.toHaveBeenCalledWith(expect.stringContaining('ORDER BY COALESCE(published_at'), expect.any(Array));
     expect(fetchSpy.mock.calls.some(([input]) => new URL(String(input)).pathname.endsWith('/releases/tags/legacy-local-version'))).toBe(false);

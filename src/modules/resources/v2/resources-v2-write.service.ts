@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { DataSource, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -294,25 +294,66 @@ export class ResourcesV2WriteService {
   }
 
   async respondToInvitation(publicId: string, accept: boolean, actorId: number) {
-    const resource = await this.getResource(publicId);
-    return this.dataSource.transaction(async (manager) => {
+    if (typeof accept !== 'boolean') throw new BadRequestException('accept 必须是 JSON boolean');
+    const result = await this.dataSource.transaction(async (manager) => {
+      const resources = await manager.query(
+        `SELECT id,public_id,user_id FROM resources WHERE public_id=? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+        [publicId],
+      ) as Array<{ id: number; public_id: string; user_id: number }>;
+      const resource = resources[0];
+      if (!resource) throw new NotFoundException('资源不存在');
       const rows = await manager.query(
-        `SELECT role,status FROM resource_members WHERE resource_id = ? AND user_id = ? LIMIT 1 FOR UPDATE`,
+        `SELECT role,status,invited_by_user_id FROM resource_members WHERE resource_id = ? AND user_id = ? LIMIT 1 FOR UPDATE`,
         [resource.id, actorId],
-      ) as Array<{ role: ManagedRole; status: string }>;
+      ) as Array<{ role: ManagedRole; status: string; invited_by_user_id: number | null }>;
       if (!rows.length || rows[0].status !== 'invited') throw new NotFoundException('资源邀请不存在');
       if (rows[0].role === 'owner') {
-        if (!accept) throw new BadRequestException('所有权转让需要接收方确认后完成');
-        const current = await manager.query(
-          `SELECT user_id FROM resource_members WHERE resource_id = ? AND role = 'owner' AND status = 'active' LIMIT 1 FOR UPDATE`,
-          [resource.id],
-        ) as Array<{ user_id: number }>;
-        if (current[0]) await manager.query(
-          `UPDATE resource_members SET role = 'maintainer' WHERE resource_id = ? AND user_id = ? AND status = 'active'`,
-          [resource.id, current[0].user_id],
+        if (!accept) {
+          await manager.query(
+            `UPDATE resource_members SET status='revoked' WHERE resource_id=? AND user_id=? AND role='owner' AND status='invited'`,
+            [resource.id, actorId],
+          );
+          await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
+            resource_id: resource.id, resource_version_id: null, actor_user_id: actorId,
+            event_type: 'ownership_transfer_rejected', result: 'revoked', reason: '接收方拒绝所有权转让。',
+          }));
+          await manager.query(
+            `INSERT INTO operation_logs (user_id,action,target_type,target_id,details,created_at)
+             VALUES (?, 'resource.owner.transfer.reject', 'resource', ?, ?, NOW())`,
+            [actorId, resource.id, JSON.stringify({ from_user_id: rows[0].invited_by_user_id, target_user_id: actorId })],
+          );
+          return { resource_public_id: publicId, accepted: false, role: 'owner' };
+        }
+        if (Number(rows[0].invited_by_user_id) !== Number(resource.user_id)) {
+          await manager.query(
+            `UPDATE resource_members SET status='revoked' WHERE resource_id=? AND user_id=? AND role='owner' AND status='invited'`,
+            [resource.id, actorId],
+          );
+          await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
+            resource_id: resource.id, resource_version_id: null, actor_user_id: actorId,
+            event_type: 'ownership_transfer_stale', result: 'revoked', reason: '发起转让时的 Owner 已变化，旧邀请已失效。',
+          }));
+          await manager.query(
+            `INSERT INTO operation_logs (user_id,action,target_type,target_id,details,created_at)
+             VALUES (?, 'resource.owner.transfer.stale', 'resource', ?, ?, NOW())`,
+            [actorId, resource.id, JSON.stringify({ invited_by_user_id: rows[0].invited_by_user_id, current_owner_user_id: resource.user_id })],
+          );
+          return { resource_public_id: publicId, accepted: false, role: 'owner', stale: true };
+        }
+        await manager.query(
+          `INSERT INTO resource_members (resource_id,user_id,role,status,invited_by_user_id,accepted_at)
+           VALUES (?,?,'maintainer','active',NULL,NOW())
+           ON DUPLICATE KEY UPDATE role='maintainer',status='active',accepted_at=COALESCE(accepted_at,NOW())`,
+          [resource.id, resource.user_id],
         );
         await manager.query(
-          `UPDATE resource_members SET status = 'active', accepted_at = NOW() WHERE resource_id = ? AND user_id = ?`,
+          `UPDATE resource_members SET role='owner',status='active',accepted_at=NOW()
+           WHERE resource_id=? AND user_id=? AND role='owner' AND status='invited'`,
+          [resource.id, actorId],
+        );
+        await manager.query(
+          `UPDATE resource_members SET status='revoked'
+           WHERE resource_id=? AND role='owner' AND status='invited' AND user_id<>?`,
           [resource.id, actorId],
         );
         await manager.update(Resource, resource.id, { user_id: actorId });
@@ -333,20 +374,34 @@ export class ResourcesV2WriteService {
       );
       return { resource_public_id: publicId, accepted: accept, role: rows[0].role };
     });
+    if (result.stale) throw new ConflictException('所有权转让邀请已失效，请联系当前 Owner 重新发起');
+    return result;
   }
 
   async beginOwnershipTransfer(publicId: string, username: string, actorId: number, isAdmin = false) {
-    const resource = await this.getResource(publicId);
-    if (!isAdmin) await this.assertRole(resource, actorId, ['owner']);
+    this.assertUuid(publicId);
     const target = await this.users.findOne({ where: { username: username.trim() } });
     if (!target) throw new NotFoundException('接收方用户不存在');
     if (target.id === actorId) throw new BadRequestException('资源当前所有者不能转让给自己');
     return this.dataSource.transaction(async (manager) => {
+      const resources = await manager.query(
+        `SELECT id,public_id,user_id FROM resources WHERE public_id=? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+        [publicId],
+      ) as Array<{ id: number; public_id: string; user_id: number }>;
+      const resource = resources[0];
+      if (!resource) throw new NotFoundException('资源不存在');
+      if (!isAdmin && Number(resource.user_id) !== actorId) throw new ForbiddenException('只有当前 Owner 可以发起所有权转让');
+      if (Number(target.id) === Number(resource.user_id)) throw new BadRequestException('资源当前所有者不能转让给自己');
+      await manager.query(
+        `UPDATE resource_members SET status='revoked'
+         WHERE resource_id=? AND role='owner' AND status='invited'`,
+        [resource.id],
+      );
       await manager.query(
         `INSERT INTO resource_members (resource_id,user_id,role,status,invited_by_user_id,accepted_at)
          VALUES (?,?,'owner','invited',?,NULL)
          ON DUPLICATE KEY UPDATE role = 'owner', status = 'invited', invited_by_user_id = VALUES(invited_by_user_id), accepted_at = NULL`,
-        [resource.id, target.id, actorId],
+        [resource.id, target.id, resource.user_id],
       );
       await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
         resource_id: resource.id, resource_version_id: null, actor_user_id: actorId,

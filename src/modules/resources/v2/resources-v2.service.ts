@@ -367,7 +367,10 @@ export class ResourcesV2Service {
   }
 
   private resourcePreviewUrl(resource: Resource): string | null {
-    if (!this.isResourcePublic(resource) || !this.isUuid(resource.public_id)) return null;
+    if (!this.isResourcePublic(resource) || !this.isUuid(resource.public_id)
+      || (!this.numberValue(resource.latest_published_version_id)
+        && typeof (resource as any).file_path === 'string'
+        && /[\\/]\.quarantine[\\/]/.test((resource as any).file_path))) return null;
     const resourceUrl = `/api/v1/resources/${resource.public_id}/preview`;
     const hasStoredPreview = String((resource as any).renderer_status || '') === 'ready'
       && this.hasValidVersionPreviewKey(String(resource.resource_kind || ''), (resource as any).renderer_preview_key);
@@ -585,6 +588,9 @@ export class ResourcesV2Service {
     if (this.hasValidVersionPreviewKey(String(entity.resource_kind || ''), key)) {
       return this.resourcePreview.readPreviewKey(key as string);
     }
+    if (!this.numberValue(entity.latest_published_version_id)
+      && typeof (entity as any).file_path === 'string'
+      && /[\\/]\.quarantine[\\/]/.test((entity as any).file_path)) return this.notFound();
     const resourcePreview = await this.resourcePreview.readPreview(entity);
     if (!resourcePreview) return this.notFound();
     return resourcePreview;
@@ -631,7 +637,10 @@ export class ResourcesV2Service {
     if (!this.isUuid(publicId)) return this.notFound();
     const resource = await this.findResourceByPublicId(publicId);
     if (!resource) return this.notFound();
-    const role = await this.memberRole(resource, viewer);
+    const memberRole = await this.memberRole(resource, viewer);
+    const viewerRole = String(viewer?.role || '').toLowerCase();
+    const staffRole = ['admin', 'moderator'].includes(viewerRole) ? viewerRole : null;
+    const role = memberRole || staffRole;
     if (!this.isResourcePublic(resource) && !role) return this.notFound();
     const resourceDto = await this.toPublicResourceDto(resource);
     const versionPage = await this.listVersionRows(resource, { limit: 100 }, Boolean(role));
@@ -643,7 +652,10 @@ export class ResourcesV2Service {
     const relations = this.isResourcePublic(resource) ? await this.relationPage(resource, { limit: 100 }) : this.emptyPage<ResourceV2RelationDto>();
     return {
       resource: resourceDto,
-      permissions: { role: role || (this.isResourcePublic(resource) ? 'viewer' : null), can_manage: Boolean(role) },
+      permissions: {
+        role: role || (this.isResourcePublic(resource) ? 'viewer' : null),
+        can_manage: Boolean(memberRole),
+      },
       versions,
       analysis,
       relations: relations.items,

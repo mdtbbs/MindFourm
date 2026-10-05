@@ -1,9 +1,16 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { createHash } from 'crypto';
+import { ResourceStorageService } from '../resource-storage.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
-type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string };
-type VersionRow = { id: number; public_id: string; status: string; version?: string };
+type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; status?: string };
+type VersionRow = {
+  id: number; public_id: string; status: string; version?: string; release_channel?: string;
+  file_path?: string | null; file_name?: string | null; file_size?: number | null;
+  mime_type?: string | null; content_hash?: string | null;
+};
 type AnalysisRunRow = { id: number; parser_version: string; findings_json: unknown };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -15,7 +22,129 @@ const ANALYZERS: Record<string, string> = {
 
 @Injectable()
 export class ResourceV2ReviewService {
-  constructor(private readonly dataSource: DataSource) {}
+  private readonly logger = new Logger(ResourceV2ReviewService.name);
+
+  constructor(
+    private readonly dataSource: DataSource,
+    @Optional() private readonly storage?: ResourceStorageService,
+    @Optional() private readonly notifications?: NotificationsService,
+  ) {}
+
+  async reviewVersion(resourcePublicId: string, versionPublicId: string, actorId: number, input: {
+    action: 'approve' | 'reject' | 'request_changes'; reason?: string;
+  }): Promise<Record<string, unknown>> {
+    this.assertActor(actorId);
+    const action = input?.action;
+    if (!['approve', 'reject', 'request_changes'].includes(action)) throw new BadRequestException('版本审核动作无效');
+    const reason = input.reason?.trim() || null;
+    if (reason && reason.length > 5_000) throw new BadRequestException('审核说明不能超过 5000 个字符');
+    if (action !== 'approve' && !reason) throw new BadRequestException('拒绝或要求修改时必须填写原因');
+
+    const outcome = await this.dataSource.transaction(async (manager) => {
+      const resource = await this.getResource(manager, resourcePublicId, true);
+      const reviewer = await this.assertStaff(manager, actorId);
+      const version = await this.getVersion(manager, resource.id, versionPublicId, false);
+      if (version.status !== 'pending_review') {
+        throw new BadRequestException('只有 pending_review 状态的版本可以审核');
+      }
+
+      const nextStatus = action === 'approve' ? 'published'
+        : action === 'reject' ? 'rejected' : 'changes_requested';
+      const isRecommended = action === 'approve' && ['release', 'stable'].includes(version.release_channel || 'release');
+      let promotedPath: string | null | undefined;
+      if (action === 'approve' && version.file_path) {
+        if (!this.storage) throw new BadRequestException('资源文件存储服务不可用，无法发布此版本');
+        const bytes = await this.storage.readManagedFile(version.file_path, 50 * 1024 * 1024);
+        const actualHash = createHash('sha256').update(bytes).digest('hex');
+        if (version.content_hash && actualHash !== version.content_hash.toLowerCase()) {
+          throw new BadRequestException('资源文件校验失败，无法发布此版本');
+        }
+        promotedPath = await this.storage.promote(version.file_path);
+      }
+      if (isRecommended) {
+        await manager.query(
+          `UPDATE resource_versions SET recommended=0
+           WHERE resource_id=? AND id<>? AND recommended=1`,
+          [resource.id, version.id],
+        );
+      }
+      await manager.query(
+        `UPDATE resource_versions SET status=?,published_at=${action === 'approve' ? 'NOW(6)' : 'NULL'},recommended=?,
+           reviewed_by_user_id=?,reviewed_at=NOW(6),reject_reason=?${promotedPath ? ',file_path=?' : ''}
+         WHERE resource_id=? AND id=? AND status='pending_review'`,
+        [
+          nextStatus, isRecommended ? 1 : 0, actorId,
+          action === 'reject' || action === 'request_changes' ? reason : null,
+          ...(promotedPath ? [promotedPath] : []), resource.id, version.id,
+        ],
+      );
+      if (promotedPath && promotedPath !== version.file_path) {
+        await manager.query(
+          `UPDATE resource_files SET storage_key=?
+           WHERE resource_version_id=? AND storage_key=? AND delivery_mode='managed'`,
+          [promotedPath, version.id, version.file_path],
+        );
+      }
+      if (action === 'approve') {
+        if (promotedPath) {
+          await manager.query(
+            `UPDATE resources SET latest_published_version_id=?,file_path=?,file_name=?,file_size=?,mime_type=?,content_hash=?
+             WHERE id=? AND deleted_at IS NULL`,
+            [version.id, promotedPath, version.file_name, version.file_size, version.mime_type, version.content_hash, resource.id],
+          );
+        } else {
+          await manager.query(
+            'UPDATE resources SET latest_published_version_id=? WHERE id=? AND deleted_at IS NULL',
+            [version.id, resource.id],
+          );
+        }
+      }
+
+      await this.writeEvent(manager, {
+        resourceId: resource.id,
+        versionId: version.id,
+        actorId,
+        eventType: action === 'approve' ? 'version_review_approved'
+          : action === 'reject' ? 'version_review_rejected' : 'version_changes_requested',
+        result: nextStatus,
+        payload: { reason, action, reviewer_role: reviewer.role },
+      });
+      await this.writeAudit(manager, actorId, resource.id, `resource.version.review.${action}`, {
+        version_public_id: version.public_id,
+        action,
+        status: nextStatus,
+        reason,
+      });
+      const maintainers = await manager.query(
+        `SELECT user_id FROM resource_members
+         WHERE resource_id=? AND role IN ('owner','maintainer') AND status='active' AND user_id IS NOT NULL`,
+        [resource.id],
+      ) as Array<{ user_id: number }>;
+      return {
+        resource_public_id: resource.public_id,
+        version_public_id: version.public_id,
+        action,
+        status: nextStatus,
+        published_at: action === 'approve' ? new Date().toISOString() : null,
+        recommended: Boolean(isRecommended),
+        notify_user_ids: [...new Set([Number(resource.user_id), ...maintainers.map((member) => Number(member.user_id))])],
+      };
+    });
+    if (this.notifications) {
+      const decision = action === 'approve' ? '已审核通过并发布'
+        : action === 'reject' ? '未通过审核' : '需要修改后重新提交';
+      const content = `Resource ${outcome.resource_public_id} 的版本 ${outcome.version_public_id}${decision}${reason ? `：${reason}` : '。'}`;
+      await Promise.all(outcome.notify_user_ids.map((userId) => this.notifications!.create({
+        user_id: userId,
+        type: 'system',
+        content,
+        emailEvent: false,
+        deduplicationKey: `resource-version-review:${action}:${outcome.version_public_id}:${userId}`,
+      }).catch((error) => this.logger.warn(`Failed to notify Resource members after version review: ${(error as Error).message}`))));
+    }
+    const { notify_user_ids: _notifyUserIds, ...response } = outcome;
+    return response;
+  }
 
   async setFindingIgnore(resourcePublicId: string, versionPublicId: string, actorId: number, input: { finding_key: string; reason: string }) {
     this.assertActor(actorId);
@@ -194,7 +323,7 @@ export class ResourceV2ReviewService {
   private async getResource(executor: SqlExecutor, publicId: string, lock: boolean): Promise<ResourceRow> {
     this.assertUuid(publicId, 'Resource');
     const rows = await executor.query(
-      `SELECT id,public_id,user_id,resource_kind FROM resources
+      `SELECT id,public_id,user_id,resource_kind,status FROM resources
        WHERE public_id=? AND deleted_at IS NULL LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
       [publicId],
     ) as ResourceRow[];
@@ -205,7 +334,7 @@ export class ResourceV2ReviewService {
   private async getVersion(executor: SqlExecutor, resourceId: number, publicId: string, publishedOnly: boolean): Promise<VersionRow> {
     this.assertUuid(publicId, 'Version');
     const rows = await executor.query(
-      `SELECT id,public_id,status,version FROM resource_versions
+      `SELECT id,public_id,status,version,release_channel,file_path,file_name,file_size,mime_type,content_hash FROM resource_versions
        WHERE resource_id=? AND public_id=?${publishedOnly ? " AND status='published'" : ''} LIMIT 1${executor !== this.dataSource ? ' FOR UPDATE' : ''}`,
       [resourceId, publicId],
     ) as VersionRow[];

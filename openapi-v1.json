@@ -12230,15 +12230,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "type": "object",
-                "required": [
-                  "accept"
-                ],
-                "properties": {
-                  "accept": {
-                    "type": "boolean"
-                  }
-                }
+                "$ref": "#/components/schemas/ResourceV2RespondInvitationDto"
               }
             }
           }
@@ -13286,6 +13278,88 @@
                 }
               }
             }
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-resources-v2-review"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/{id}/versions/{versionId}/review": {
+      "post": {
+        "operationId": "reviewResourceVersionV2",
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "summary": "审核一个 ResourceVersion",
+        "description": "仅管理员或版主可以 approve、reject 或 request_changes。只审核待审版本，不会隐藏该 Resource 的其他已发布版本。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "description": "ResourceVersion public UUID。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceV2VersionReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Version review action was recorded."
+          },
+          "400": {
+            "description": "Review action, reason, or version state is invalid."
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "Only an administrator or moderator can review versions."
+          },
+          "404": {
+            "description": "Resource or version does not exist."
           },
           "default": {
             "description": "Public V1 error envelope",
@@ -25248,6 +25322,7 @@
               "maintainer",
               "publisher",
               "admin",
+              "moderator",
               "viewer"
             ],
             "nullable": true
@@ -25799,14 +25874,6 @@
       "ResourceV2ModCompatibilityReportDto": {
         "type": "object",
         "properties": {
-          "attachments": {
-            "maxItems": 10,
-            "description": "附件元数据。请先移除 IP、令牌、用户名、本机路径和其他隐私信息。",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ResourceV2CommunityAttachmentDto"
-            }
-          },
           "status": {
             "type": "string",
             "enum": [
@@ -26647,6 +26714,17 @@
           "role"
         ]
       },
+      "ResourceV2RespondInvitationDto": {
+        "type": "object",
+        "properties": {
+          "accept": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accept"
+        ]
+      },
       "ResourceV2TransferOwnerDto": {
         "type": "object",
         "properties": {
@@ -26688,52 +26766,9 @@
           }
         }
       },
-      "ResourceV2CommunityAttachmentDto": {
-        "type": "object",
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "log",
-              "image"
-            ]
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 255
-          },
-          "size_bytes": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 20971520
-          },
-          "mime_type": {
-            "type": "string",
-            "maxLength": 100
-          },
-          "sha256": {
-            "type": "string",
-            "minLength": 64,
-            "maxLength": 64
-          }
-        },
-        "required": [
-          "kind",
-          "name",
-          "size_bytes"
-        ]
-      },
       "ResourceV2ModIssueReportDto": {
         "type": "object",
         "properties": {
-          "attachments": {
-            "maxItems": 10,
-            "description": "附件元数据。请先移除 IP、令牌、用户名、本机路径和其他隐私信息。",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ResourceV2CommunityAttachmentDto"
-            }
-          },
           "title": {
             "type": "string",
             "maxLength": 255
@@ -26972,6 +27007,27 @@
         "required": [
           "items",
           "pagination"
+        ]
+      },
+      "ResourceV2VersionReviewDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject",
+              "request_changes"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 5000,
+            "description": "审核说明；reject 和 request_changes 必填。"
+          }
+        },
+        "required": [
+          "action"
         ]
       },
       "ResourceV2FindingOverrideResponseDto": {

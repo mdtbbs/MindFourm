@@ -29,4 +29,12 @@ describe('public resource boundary', () => {
   it('retains rejection feedback for an authorized nonpublic read', () => {
     expect(toPublicResource({ ...resource, status: 'rejected' })).toHaveProperty('reject_reason', 'moderation note');
   });
+
+  it('does not expose renderer metadata or previews derived from an initial quarantined binary', () => {
+    const pending = { ...resource, file_path: '/uploads/.quarantine/resources/pending.msav', renderer_status: 'ready' };
+    const detail = toPublicResource(pending as any);
+    const card = toPublicResource(pending as any, true);
+    expect(detail).toMatchObject({ renderer_status: 'unavailable', renderer_metadata: null, preview_url: null });
+    expect(card).toMatchObject({ renderer_status: 'unavailable', renderer_summary: { width: null, height: null, build: null }, preview_url: null });
+  });
 });

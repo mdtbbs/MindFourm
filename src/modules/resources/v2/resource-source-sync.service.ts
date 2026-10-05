@@ -264,6 +264,13 @@ export class ResourceSourceSyncService {
         content: this.boundedReleaseNotes(release.body),
       }, storedFile, actorId);
       await this.updateSyncStatus(Number(sync.id), 'imported', null, tagName).catch(() => undefined);
+      await this.notifications.create({
+        user_id: Number(resource.user_id),
+        type: 'system',
+        content: `GitHub Release ${tagName} 已导入资源审核队列，审核通过前不会公开下载。`,
+        emailEvent: false,
+        deduplicationKey: `resource-source-sync-imported:${sync.id}:${tagName}:${created.public_id}`,
+      }).catch((error) => this.logger.warn(`Failed to notify Resource owner about imported GitHub release: ${(error as Error).message}`));
 
       return {
         resource_public_id: resource.public_id,

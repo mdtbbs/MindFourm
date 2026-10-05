@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, UnprocessableEntityException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, Like, LessThan, In } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -422,8 +422,8 @@ export class ResourcesService {
         fileName: file?.file_name,
       }), { actorId: userId, surface: 'resource' })
       : this.emptyContentRisk();
-    // V2 resource types always enter the first-resource review workflow. Subsequent
-    // releases use the separate fast-publish path in ResourceVersionService.
+    // Resource moderation and binary-version review are separate workflows. Even
+    // when metadata can publish immediately, each new binary stays in review.
     const requiresModeration = risk.mustReview
       || ['mod', 'schematic', 'map'].includes(resourceKind)
       || Boolean(preparedMod?.idConflict)
@@ -607,12 +607,14 @@ export class ResourcesService {
         version: dto.version.trim(),
         version_mode: versionMode,
         revision: 1,
-        recommended: resource.status === RESOURCE_STATUS_APPROVED ? 1 : 0,
+        recommended: 0,
         game_version_min: gameVersionMin,
         game_version_max: gameVersionMax,
         release_channel: dto.release_channel || 'release',
-        status: resource.status === RESOURCE_STATUS_APPROVED ? 'published' : 'pending_review',
-        ...(resource.status === RESOURCE_STATUS_APPROVED ? { published_at: new Date() } : {}),
+        // A Resource approval does not review its binary. Initial and later
+        // uploads enter the same version-scoped review queue.
+        status: 'pending_review',
+        published_at: null,
         release_notes_markdown: contentSource?.content.trim() || null,
         release_notes_html: contentSource?.content_html || null,
         created_by_user_id: submitterUserId,
@@ -622,10 +624,6 @@ export class ResourcesService {
         mime_type: file?.mime_type || null,
         content_hash: file?.content_hash || null,
       } as Partial<ResourceVersion>));
-      if (resource.status === RESOURCE_STATUS_APPROVED) {
-        await manager.update(Resource, resource.id, { latest_published_version_id: release.id });
-      }
-
       const credits = [
         { role: 'submitter', subject_type: 'local_user', user_id: submitterUserId, display_name: null },
         ...this.normalizeCredits([...(dto.original_authors || []), ...(manifest?.author ? [manifest.author] : [])]).map((display_name) => ({ role: 'original_author', subject_type: 'external_person', user_id: null, display_name })),
@@ -697,7 +695,7 @@ export class ResourcesService {
         resource_version_id: release.id,
         actor_user_id: submitterUserId,
         event_type: 'submitted',
-        result: resource.status === RESOURCE_STATUS_PENDING ? 'pending_review' : 'published',
+        result: 'pending_review',
         reason: null,
       }));
 
@@ -1101,6 +1099,7 @@ export class ResourcesService {
         .addSelect('resource.filter_width', 'resource_card_width')
         .addSelect('resource.filter_height', 'resource_card_height')
         .addSelect("LEFT(JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.build')), 32)", 'resource_card_build')
+        .addSelect('resource.file_path', 'resource_card_file_path')
         .maxExecutionTime(2500)
         .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
         .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
@@ -1138,24 +1137,28 @@ export class ResourcesService {
       }
 
       if (planet?.trim()) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `resource.filter_planet = :resourcePlanet`,
           { resourcePlanet: planet.trim() },
         );
       }
       if (block?.trim()) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `JSON_SEARCH(resource.renderer_metadata_json, 'one', :resourceBlock, NULL, '$.block_types[*].name') IS NOT NULL`,
           { resourceBlock: block.trim() },
         );
       }
       if (width !== undefined) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `resource.filter_width = :resourceWidth`,
           { resourceWidth: width },
         );
       }
       if (height !== undefined) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `resource.filter_height = :resourceHeight`,
           { resourceHeight: height },
@@ -1188,7 +1191,7 @@ export class ResourcesService {
         // JSON metadata remains a legacy fallback until reconciliation proves
         // every historical resource has been migrated.
         qb.andWhere(
-          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
+          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
           { supportedVersion: supported_version.trim() },
         );
       }
@@ -1225,6 +1228,8 @@ export class ResourcesService {
         return Object.assign(entity, {
           description: row?.resource_card_description || null,
           renderer_summary: { width: row?.resource_card_width, height: row?.resource_card_height, build: row?.resource_card_build },
+          unreviewed_quarantined_binary: typeof row?.resource_card_file_path === 'string'
+            && /[\\/]\.quarantine[\\/]/.test(row.resource_card_file_path),
           ...(options.trendingOnly ? { trending_score: Number(row?.trending_score) || 0 } : {}),
         });
       });
@@ -1410,10 +1415,35 @@ export class ResourcesService {
       where: { id },
       select: ['id', 'user_id', 'category_id', 'status', 'is_public', 'resource_kind', 'resource_type',
         'file_path', 'file_name', 'file_size', 'mime_type', 'content_hash', 'use_mfl', 'mfl_download_url',
-        'external_url', 'renderer_status', 'renderer_preview_key'],
+        'external_url', 'renderer_status', 'renderer_preview_key', 'latest_published_version_id'],
     });
     if (!resource) throw new NotFoundException('资源不存在');
     await this.assertResourceVisible(resource, viewer);
+    const publishedVersion = resource.latest_published_version_id
+      ? await this.versionRepository.findOne({
+        where: { id: resource.latest_published_version_id, resource_id: id, status: 'published' },
+      })
+      : null;
+    if (publishedVersion) {
+      resource.file_path = publishedVersion.file_path;
+      resource.file_name = publishedVersion.file_name;
+      resource.file_size = publishedVersion.file_size;
+      resource.mime_type = publishedVersion.mime_type;
+      resource.content_hash = publishedVersion.content_hash;
+    } else {
+      const initialBinaryIsQuarantined = Boolean(resource.file_path && /[\\/]\.quarantine[\\/]/.test(resource.file_path));
+      if (initialBinaryIsQuarantined) {
+        // Resource-level moderation does not publish a binary. Never let the
+        // legacy default download path expose an initial version awaiting review.
+        (resource as any).file_path = null;
+      }
+      if (initialBinaryIsQuarantined && !await this.canViewUnpublishedVersions(resource, viewer)) {
+        // Initial map/schematic previews are derived from the submitted bytes;
+        // root Resource approval must not expose them before version approval.
+        resource.renderer_status = 'unavailable';
+        resource.renderer_preview_key = null;
+      }
+    }
     return resource;
   }
 
@@ -1444,14 +1474,18 @@ export class ResourcesService {
 
     await this.assertResourceVisible(resource, viewer);
 
+    const canViewUnpublished = await this.canViewUnpublishedVersions(resource, viewer);
     const versions = await this.versionRepository.find({
       where: { resource_id: id },
       order: { created_at: 'DESC' },
     });
-    const compatibilities = versions.length ? await this.dataSource.query(
+    const visibleVersions = canViewUnpublished
+      ? versions
+      : versions.filter((version) => version.status === 'published');
+    const compatibilities = visibleVersions.length ? await this.dataSource.query(
       `SELECT resource_version_id, runtime, min_version_value, max_version_value, channel, notes, provenance, confidence
-       FROM resource_version_compatibilities WHERE resource_version_id IN (${versions.map(() => '?').join(',')})
-       ORDER BY id ASC`, versions.map(({ id: versionId }) => versionId),
+       FROM resource_version_compatibilities WHERE resource_version_id IN (${visibleVersions.map(() => '?').join(',')})
+       ORDER BY id ASC`, visibleVersions.map(({ id: versionId }) => versionId),
     ) : [];
     const byVersion = new Map<number, any[]>();
     for (const item of compatibilities || []) {
@@ -1461,9 +1495,19 @@ export class ResourcesService {
         channel: item.channel, notes: item.notes, provenance: item.provenance, confidence: item.confidence });
       byVersion.set(versionId, rows);
     }
-    return this.normalizeOneResource(resource, versions.map((version) => ({ ...version,
+    return this.normalizeOneResource(resource, visibleVersions.map((version) => ({ ...version,
       compatibility: byVersion.get(version.id) || [],
     } as ResourceVersion)));
+  }
+
+  private async canViewUnpublishedVersions(resource: Resource, viewer?: { id: number; role: string }): Promise<boolean> {
+    if (!viewer) return false;
+    if (['admin', 'moderator'].includes(viewer.role) || Number(resource.user_id) === Number(viewer.id)) return true;
+    const rows = await this.dataSource.query(
+      `SELECT role FROM resource_members WHERE resource_id=? AND user_id=? AND status='active' LIMIT 1`,
+      [resource.id, viewer.id],
+    ) as Array<{ role: string }>;
+    return ['owner', 'maintainer', 'publisher'].includes(String(rows[0]?.role || ''));
   }
 
   async getTransferExportData(id: number, viewer: { id: number; role: string }): Promise<any> {
@@ -2197,18 +2241,6 @@ export class ResourcesService {
     }
   }
 
-  private async promoteResourceFile(filePath: string | null | undefined): Promise<string | null | undefined> {
-    if (!this.resourceStorageService || !filePath) return filePath;
-    try {
-      return await this.resourceStorageService.promote(filePath);
-    } catch (error: any) {
-      if (error?.code === 'ENOENT') {
-        throw new UnprocessableEntityException('资源文件不存在或已失效，请重新上传后再审核');
-      }
-      throw error;
-    }
-  }
-
   async updateStatus(
     id: number,
     status: string,
@@ -2233,24 +2265,6 @@ export class ResourcesService {
     }
 
     if (existingResource.status !== status) {
-      if (status === RESOURCE_STATUS_APPROVED && this.resourceStorageService) {
-        const promotedResourcePath = await this.promoteResourceFile(existingResource.file_path);
-        if (typeof promotedResourcePath === 'string' && promotedResourcePath !== existingResource.file_path) {
-          await this.resourceRepository.update(id, { file_path: promotedResourcePath });
-          existingResource.file_path = promotedResourcePath;
-        }
-        const versions = await this.versionRepository.find({ where: { resource_id: id } });
-        for (const version of versions) {
-          const promotedVersionPath = await this.promoteResourceFile(version.file_path);
-          if (typeof promotedVersionPath === 'string' && promotedVersionPath !== version.file_path) {
-            await this.versionRepository.update(version.id, { file_path: promotedVersionPath });
-            await this.resourceFileRepository.update(
-              { resource_version_id: version.id, role: 'primary' },
-              { storage_key: promotedVersionPath },
-            );
-          }
-        }
-      }
       const updateData: Partial<Resource> = { status };
       if (status === RESOURCE_STATUS_REJECTED) {
         updateData.reject_reason = options.rejectReason || null;
@@ -2338,10 +2352,24 @@ export class ResourcesService {
       );
 
       if (status === RESOURCE_STATUS_APPROVED) {
-        if (resource.renderer_status !== 'ready' && this.resourcePreviewService?.supports(resource)) {
-          void this.resourcePreviewService.enqueue(resource).catch((err) =>
-            console.error(`Resource preview enqueue error for ${resource.id}:`, err),
-          );
+        const latestPublishedVersion = await this.versionRepository.findOne({
+          where: { resource_id: id, status: 'published' },
+          order: { published_at: 'DESC', created_at: 'DESC', revision: 'DESC', id: 'DESC' },
+        });
+        if (latestPublishedVersion?.file_path) {
+          const publishedResource = {
+            ...resource,
+            file_path: latestPublishedVersion.file_path,
+            file_name: latestPublishedVersion.file_name,
+            file_size: latestPublishedVersion.file_size,
+            mime_type: latestPublishedVersion.mime_type,
+            content_hash: latestPublishedVersion.content_hash,
+          };
+          if (publishedResource.renderer_status !== 'ready' && this.resourcePreviewService?.supports(publishedResource)) {
+            void this.resourcePreviewService.enqueue(publishedResource).catch((err) =>
+              console.error(`Resource preview enqueue error for ${publishedResource.id}:`, err),
+            );
+          }
         }
         this.resourceSubscriptionsService?.notifyResourceUpdate(resource)
           .catch((err) => console.error('Resource subscriber notification error:', err));
@@ -2359,7 +2387,7 @@ export class ResourcesService {
     return updated ? this.normalizeOneResource(updated) : null;
   }
 
-  /** Keep the resource-level moderation workflow projected onto its latest release. */
+  /** Resource approval is separate from reviewing any uploaded binary version. */
   private async syncLatestV2ReleaseStatus(manager: EntityManager, resourceId: number, resourceStatus: string, actorUserId: number | null, reason: string | null): Promise<void> {
     const rows = await manager.query(
       `SELECT id,release_channel FROM resource_versions WHERE resource_id = ? AND public_id IS NOT NULL
@@ -2367,19 +2395,6 @@ export class ResourcesService {
       [resourceId],
     ) as Array<{ id: number; release_channel: string }>;
     const release = rows[0];
-    if (release && resourceStatus === RESOURCE_STATUS_APPROVED) {
-      await manager.update(ResourceVersion, { resource_id: resourceId, recommended: 1 }, { recommended: 0 });
-      await manager.update(ResourceVersion, Number(release.id), {
-        status: 'published',
-        published_at: new Date(),
-        recommended: release.release_channel === 'release' ? 1 : 0,
-      } as Partial<ResourceVersion>);
-      await manager.update(Resource, resourceId, { latest_published_version_id: Number(release.id) });
-    } else if (release && resourceStatus === RESOURCE_STATUS_REJECTED) {
-      await manager.update(ResourceVersion, Number(release.id), {
-        status: 'rejected', published_at: null, recommended: 0,
-      } as Partial<ResourceVersion>);
-    }
     if (resourceStatus === RESOURCE_STATUS_APPROVED || resourceStatus === RESOURCE_STATUS_REJECTED) {
       await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
         resource_id: resourceId,

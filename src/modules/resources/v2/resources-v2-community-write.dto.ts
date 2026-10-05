@@ -5,32 +5,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-export class ResourceV2CommunityAttachmentDto {
-  @ApiProperty({ enum: ['log', 'image'] })
-  @IsIn(['log', 'image'])
-  kind!: 'log' | 'image';
-
-  @ApiProperty({ maxLength: 255 })
-  @IsString() @MinLength(1) @MaxLength(255)
-  name!: string;
-
-  @ApiProperty({ minimum: 0, maximum: 20 * 1024 * 1024 })
-  @IsInt() @Min(0) @Max(20 * 1024 * 1024)
-  size_bytes!: number;
-
-  @ApiPropertyOptional({ maxLength: 100 })
-  @IsOptional() @IsString() @MaxLength(100)
-  mime_type?: string;
-
-  @ApiPropertyOptional({ minLength: 64, maxLength: 64 })
-  @IsOptional() @IsString() @MinLength(64) @MaxLength(64)
-  sha256?: string;
-}
-
 export class ResourceV2CommunityReportBaseDto {
-  @ApiPropertyOptional({ type: [ResourceV2CommunityAttachmentDto], maxItems: 10, description: '附件元数据。请先移除 IP、令牌、用户名、本机路径和其他隐私信息。' })
-  @IsOptional() @IsArray() @ArrayMaxSize(10) @ValidateNested({ each: true }) @Type(() => ResourceV2CommunityAttachmentDto)
-  attachments?: ResourceV2CommunityAttachmentDto[] | null;
+  // Actual report attachments are accepted only by the private binary routes.
 }
 
 export class ResourceV2MapFeedbackDto {

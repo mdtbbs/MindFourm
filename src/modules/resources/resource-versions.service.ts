@@ -55,7 +55,7 @@ export class ResourceVersionService {
     }
   }
 
-  async list(resourceId: number): Promise<any[]> {
+  async list(resourceId: number, viewer?: { id: number; role: string }): Promise<any[]> {
     const resource = await this.resourceRepository.findOne({
       where: { id: resourceId },
     });
@@ -64,8 +64,19 @@ export class ResourceVersionService {
       throw new NotFoundException('资源不存在');
     }
 
+    let canViewUnpublished = !!viewer && (
+      ['admin', 'moderator'].includes(viewer.role) || Number(resource.user_id) === Number(viewer.id)
+    );
+    if (viewer && !canViewUnpublished) {
+      const memberships = await this.versionRepository.manager.query(
+        "SELECT role FROM resource_members WHERE resource_id=? AND user_id=? AND status='active' LIMIT 1",
+        [resourceId, viewer.id],
+      ) as Array<{ role: string }>;
+      canViewUnpublished = ['owner', 'maintainer', 'publisher'].includes(String(memberships[0]?.role || ''));
+    }
+
     const versions = await this.versionRepository.find({
-      where: { resource_id: resourceId },
+      where: { resource_id: resourceId, ...(canViewUnpublished ? {} : { status: 'published' }) },
       order: { created_at: 'DESC' },
     });
 
@@ -167,13 +178,6 @@ export class ResourceVersionService {
       if (!/^[a-z0-9][a-z0-9_.-]{0,127}$/.test(nextModId)) throw new BadRequestException('必须提供有效的 Mod ID');
     }
 
-    const previousVersion = await this.versionRepository.findOne({
-      where: { resource_id: dto.resource_id, version: dto.version.trim() },
-      order: { revision: 'DESC' },
-    });
-    const revision = (previousVersion?.revision || 0) + 1;
-    const canFastPublish = ['approved', 'published'].includes(resource.status || '');
-
     const duplicate = await this.duplicateService.inspect({
       contentHash: file.content_hash,
       resourceKind: resource.resource_kind,
@@ -192,13 +196,16 @@ export class ResourceVersionService {
       public_id: randomUUID(),
       version: dto.version.trim(),
       version_mode: versionMode,
-      revision,
+      // Assigned after locking the parent Resource in the insert transaction.
+      revision: 0,
       recommended: 0,
       game_version_min: dto.game_version_min?.trim() || effectiveManifest?.minGameVersion || null,
       game_version_max: dto.game_version_max?.trim() || null,
-      status: canFastPublish ? 'published' : 'pending_review',
+      // Every uploaded binary is new content and must receive its own review.
+      // An already-approved Resource and its existing releases remain public.
+      status: 'pending_review',
       release_channel: dto.release_channel || 'release',
-      published_at: canFastPublish ? new Date() : null,
+      published_at: null,
       created_by_user_id: userId,
       release_notes_markdown: content || null,
       release_notes_html: content ? parseMarkdown(content) : null,
@@ -212,6 +219,38 @@ export class ResourceVersionService {
     });
 
     const saved = await this.versionRepository.manager.transaction(async (manager) => {
+      const lockedResources = await manager.query(
+        `SELECT id,user_id FROM resources WHERE id=? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+        [resource.id],
+      ) as Array<{ id: number; user_id: number }>;
+      const lockedResource = lockedResources[0];
+      if (!lockedResource) throw new NotFoundException('资源不存在');
+
+      // Ownership may have changed after the upload was authorized. Recheck
+      // access while holding the same Resource lock used for revision allocation.
+      if (Number(lockedResource.user_id) !== userId) {
+        const currentMemberships = await manager.query(
+          `SELECT u.role AS account_role,rm.role AS member_role
+           FROM users u LEFT JOIN resource_members rm
+             ON rm.resource_id=? AND rm.user_id=u.id AND rm.status='active'
+           WHERE u.id=? LIMIT 1`,
+          [resource.id, userId],
+        ) as Array<{ account_role: string; member_role: string | null }>;
+        if (currentMemberships[0]?.account_role !== 'admin'
+          && !['owner', 'maintainer', 'publisher'].includes(currentMemberships[0]?.member_role || '')) {
+          throw new ForbiddenException('没有权限为此资源添加版本');
+        }
+      }
+
+      const revisionRows = await manager.query(
+        `SELECT COALESCE(MAX(revision),0) AS max_revision
+         FROM resource_versions WHERE resource_id=? AND version=?`,
+        [resource.id, dto.version.trim()],
+      ) as Array<{ max_revision: number | string | null }>;
+      const nextRevision = Number(revisionRows[0]?.max_revision || 0) + 1;
+      if (!Number.isSafeInteger(nextRevision) || nextRevision < 1) throw new ConflictException('无法分配安全的 ResourceVersion revision');
+      version.revision = nextRevision;
+
       await this.resourcesService.claimResourceVersionHash(manager, file.content_hash, resource.id);
       const created = await manager.save(ResourceVersion, version);
       await manager.save(ResourceFile, {
@@ -259,11 +298,7 @@ export class ResourceVersionService {
         const changedId = Boolean(modProfile && modProfile.mod_id.toLowerCase() !== nextModId);
         const needsReview = idConflict || changedId || resource.status === 'pending';
         if (idConflict || changedId) {
-          await manager.update(Resource, resource.id, { status: 'pending' });
           await manager.update(ResourceVersion, created.id, { status: 'pending_review', published_at: null, recommended: 0 });
-        } else if (created.status === 'published') {
-          await manager.update(ResourceVersion, created.id, { recommended: dto.release_channel === 'beta' || dto.release_channel === 'alpha' || dto.release_channel === 'snapshot' ? 0 : 1 });
-          await manager.update(Resource, resource.id, { latest_published_version_id: created.id });
         }
 
         if (!idConflict) {
@@ -315,7 +350,6 @@ export class ResourceVersionService {
 
         if (idConflict || changedId) {
           await manager.update(ResourceVersion, created.id, { status: 'pending_review', published_at: null, recommended: 0 });
-          await manager.update(Resource, resource.id, { status: 'pending' });
         }
         await manager.save(ModVersionMetadata, manager.create(ModVersionMetadata, {
           resource_version_id: created.id,
@@ -408,15 +442,13 @@ export class ResourceVersionService {
           summary_json: { runtime_type: modAnalysis.runtime_type, content_count: modAnalysis.content.length, localization_count: modAnalysis.localizations.length, java: modAnalysis.java },
           findings_json: findings, started_at: new Date(), completed_at: new Date(),
         }));
-        if (needsReview || idConflict) await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
+        await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
           resource_id: resource.id, resource_version_id: created.id, actor_user_id: userId,
           event_type: 'release_submitted', result: 'pending_review', reason: changedId
             ? 'Mod ID changed; moderator review required.'
-            : idConflict ? 'Mod ID conflict requires moderator review.' : 'Resource is not currently approved or published.',
+            : idConflict ? 'Mod ID conflict requires moderator review.'
+              : needsReview ? 'Resource is not currently approved or published.' : 'New binary version requires moderator review.',
         }));
-      } else if (created.status === 'published') {
-        await manager.update(ResourceVersion, created.id, { recommended: dto.release_channel === 'beta' || dto.release_channel === 'alpha' || dto.release_channel === 'snapshot' ? 0 : 1 });
-        await manager.update(Resource, resource.id, { latest_published_version_id: created.id });
       } else {
         await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
           resource_id: resource.id, resource_version_id: created.id, actor_user_id: userId,
@@ -550,13 +582,28 @@ export class ResourceVersionService {
     }));
   }
 
-  async getDownloadTarget(resourceId: number, versionId: number): Promise<ResourceVersion> {
+  async getDownloadTarget(resourceId: number, versionId: number, viewer?: { id: number; role: string }): Promise<ResourceVersion> {
     const version = await this.versionRepository.findOne({
       where: { id: versionId, resource_id: resourceId },
     });
 
     if (!version) {
       throw new NotFoundException('版本不存在');
+    }
+    if (version.status !== 'published') {
+      let allowed = !!viewer && ['admin', 'moderator'].includes(viewer.role);
+      if (viewer && !allowed) {
+        const resource = await this.resourceRepository.findOne({ where: { id: resourceId } });
+        allowed = Number(resource?.user_id) === Number(viewer.id);
+        if (!allowed) {
+          const memberships = await this.versionRepository.manager.query(
+            "SELECT role FROM resource_members WHERE resource_id=? AND user_id=? AND status='active' LIMIT 1",
+            [resourceId, viewer.id],
+          ) as Array<{ role: string }>;
+          allowed = ['owner', 'maintainer', 'publisher'].includes(String(memberships[0]?.role || ''));
+        }
+      }
+      if (!allowed) throw new NotFoundException('版本不存在');
     }
 
     return version;

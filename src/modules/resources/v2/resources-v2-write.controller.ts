@@ -16,7 +16,7 @@ import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourceUploadInterceptor } fro
 import { ResourcesV2WriteService } from './resources-v2-write.service';
 import {
   ResourceV2CreateRelationDto, ResourceV2CreateVersionDto, ResourceV2InviteMemberDto,
-  ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2TransferOwnerDto,
+  ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2RespondInvitationDto, ResourceV2TransferOwnerDto,
 } from './resources-v2-write.dto';
 
 @ApiV1()
@@ -180,11 +180,18 @@ export class ResourcesV2WriteController {
   @RateLimit({ max: 20, window: 60 })
   @ApiOperation({ operationId: 'respondToResourceV2Invitation', summary: '接受或拒绝协作者邀请；所有权转让必须接受后完成' })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiBody({ schema: { type: 'object', required: ['accept'], properties: { accept: { type: 'boolean' } } } })
+  @ApiBody({ type: ResourceV2RespondInvitationDto })
   @ApiOkResponse({ description: 'Invitation response recorded.' })
   @ApiNotFoundResponse({ description: 'Invitation does not exist.' })
-  respondToInvitation(@Param('id') id: string, @Body('accept') accept: boolean, @Req() req: any) {
-    return this.resources.respondToInvitation(id, Boolean(accept), Number(req.user.id));
+  async respondToInvitation(@Param('id') id: string, @Body() rawBody: Record<string, unknown>, @Req() req: any) {
+    // The global ValidationPipe enables implicit conversion, where Boolean("false")
+    // becomes true. Reject non-JSON booleans before transforming the DTO.
+    if (!rawBody || typeof rawBody.accept !== 'boolean') {
+      throw new BadRequestException('accept 必须是 JSON boolean');
+    }
+    const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
+      .transform(rawBody, { type: 'body', metatype: ResourceV2RespondInvitationDto }) as ResourceV2RespondInvitationDto;
+    return this.resources.respondToInvitation(id, body.accept, Number(req.user.id));
   }
 
   @Post(':id/owner-transfer')

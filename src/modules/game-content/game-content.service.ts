@@ -104,7 +104,10 @@ export class GameContentService {
     const likeCounts = new Map(likeRows.map((r) => [Number(r.id), Number(r.count)]));
     const favoriteCounts = new Map(favoriteRows.map((r) => [Number(r.id), Number(r.count)]));
     return rows.map((r) => {
-      const parsed = this.parseObject((r as any).renderer_summary || r.renderer_metadata_json);
+      const unreviewedQuarantinedBinary = this.isQuarantinedPath(r.file_path);
+      const parsed = unreviewedQuarantinedBinary
+        ? {}
+        : this.parseObject((r as any).renderer_summary || r.renderer_metadata_json);
       const metadata = this.parseObject((r as any).metadata || r.metadata_json);
       const resourceType = type || (r.resource_kind === 'map' ? 'map' : 'blueprint');
       return {
@@ -125,8 +128,9 @@ export class GameContentService {
     if (!resource || resource.resource_kind !== this.kind(type)) throw new NotFoundException('资源不存在');
     if (!(await this.domain.isResourcePubliclyAccessible(resource))) throw new NotFoundException('资源不存在');
     await this.domain.getById(resource.id, viewer || undefined);
-    const renderer = this.parseObject(resource.renderer_metadata_json);
-    if (type === 'blueprint' && (!renderer.production || typeof renderer.production !== 'object')) this.previews.ensureProduction(resource);
+    const unreviewedQuarantinedBinary = this.isQuarantinedPath(resource.file_path);
+    const renderer = unreviewedQuarantinedBinary ? {} : this.parseObject(resource.renderer_metadata_json);
+    if (!unreviewedQuarantinedBinary && type === 'blueprint' && (!renderer.production || typeof renderer.production !== 'object')) this.previews.ensureProduction(resource);
     const metadata = this.parseObject(resource.metadata_json);
     const [likeCount, favoriteCount, viewerLike, viewerFavorite] = await Promise.all([
       this.likes.count({ where: { resource_id: resource.id } }), this.favorites.count({ where: { resource_id: resource.id } }),
@@ -197,10 +201,8 @@ export class GameContentService {
     if (!resource || resource.resource_kind !== 'schematic') throw new NotFoundException('资源不存在');
     if (!(await this.domain.isResourcePubliclyAccessible(resource))) throw new NotFoundException('资源不存在');
     await this.domain.getById(resource.id, viewer || undefined);
-    const version = resource.latest_published_version_id
-      ? await this.versions.findOne({ where: { id: resource.latest_published_version_id, resource_id: resource.id } })
-      : null;
-    const filePath = version?.file_path || resource.file_path;
+    const version = await this.latestPublishedVersion(resource);
+    const filePath = version?.file_path || (this.isQuarantinedPath(resource.file_path) ? null : resource.file_path);
     if (!filePath) throw new NotFoundException('蓝图文件不存在');
     const file = await this.storage.readManagedFile(filePath, 20 * 1024 * 1024).catch(() => null);
     if (!file || file.subarray(0, 4).toString('ascii') !== 'msch') throw new NotFoundException('蓝图文件暂不可用');
@@ -213,7 +215,8 @@ export class GameContentService {
     if (!resource || resource.resource_kind !== 'map') throw new NotFoundException('资源不存在');
     await this.downloadPolicy.assertDownloadAuthentication('map', userId ? { id: userId } : null);
     await this.domain.getById(resource.id);
-    const version = resource.latest_published_version_id ? await this.versions.findOne({ where: { id: resource.latest_published_version_id, resource_id: resource.id } }) : null;
+    const version = await this.latestPublishedVersion(resource);
+    if (!version && this.isQuarantinedPath(resource.file_path)) throw new NotFoundException('地图文件暂不可用');
     const file = version ? await this.files.findOne({ where: { resource_version_id: version.id, role: 'primary', availability_status: 'available' } }) : null;
     return { url: `/api/v1/game-content/maps/${value}/download/file`, filename: file?.original_filename || version?.file_name || resource.file_name || null, size: file?.size_bytes || version?.file_size || resource.file_size || null, sha256: file?.content_hash || version?.content_hash || resource.content_hash || null, expiresAt: null };
   }
@@ -224,7 +227,8 @@ export class GameContentService {
     if (!resource) throw new NotFoundException('资源不存在');
     await this.downloadPolicy.assertDownloadAuthentication('map', userId ? { id: userId } : null);
     await this.domain.getById(resource.id);
-    const version = resource.latest_published_version_id ? await this.versions.findOne({ where: { id: resource.latest_published_version_id, resource_id: resource.id } }) : null;
+    const version = await this.latestPublishedVersion(resource);
+    if (!version && this.isQuarantinedPath(resource.file_path)) throw new NotFoundException('地图文件暂不可用');
     const file = version ? await this.files.findOne({ where: { resource_version_id: version.id, role: 'primary', availability_status: 'available' } }) : null;
     if (file && version) {
       const eligibility = await this.downloadPolicy.checkEligibility(file.id);
@@ -236,7 +240,13 @@ export class GameContentService {
       const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: version.id, fileId: file.id, grantedAt: now, userId, clientType, clientVersion, platform, backend: file.storage_backend }, this.downloadActorKey(userId, clientIp));
       return { resource, version, file, path: location?.path || null, size: location?.size || file.size_bytes || null, externalUrl, counted: granted };
     }
+    if (version?.file_path) {
+      const location = await this.storage.statManagedFile(version.file_path);
+      const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: version.id, fileId: null, grantedAt: new Date(), userId, clientType, clientVersion, platform, backend: 'local' }, this.downloadActorKey(userId, clientIp));
+      return { resource, version, file: null, path: location.path, size: location.size, counted: granted };
+    }
     if (resource.file_path) {
+      if (this.isQuarantinedPath(resource.file_path)) throw new NotFoundException('地图文件暂不可用');
       const location = await this.storage.statManagedFile(resource.file_path);
       const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: null, fileId: null, grantedAt: new Date(), userId, clientType, clientVersion, platform, backend: 'local' }, this.downloadActorKey(userId, clientIp));
       return { resource, version: null, file: null, path: location.path, size: location.size, counted: granted };
@@ -275,7 +285,25 @@ export class GameContentService {
     if (!resource || resource.resource_kind !== this.kind(type)) throw new NotFoundException('资源不存在');
     if (!(await this.domain.isResourcePubliclyAccessible(resource))) throw new NotFoundException('资源不存在');
     await this.domain.getById(resource.id);
+    if (this.isQuarantinedPath(resource.file_path)) return null;
     return this.previews.readPreview(resource);
+  }
+
+  private isQuarantinedPath(filePath: unknown): boolean {
+    return typeof filePath === 'string' && /[\\/]\.quarantine[\\/]/.test(filePath);
+  }
+
+  private async latestPublishedVersion(resource: Resource): Promise<ResourceVersion | null> {
+    if (resource.latest_published_version_id) {
+      const pointed = await this.versions.findOne({
+        where: { id: resource.latest_published_version_id, resource_id: resource.id, status: 'published' },
+      });
+      if (pointed) return pointed;
+    }
+    return this.versions.findOne({
+      where: { resource_id: resource.id, status: 'published' },
+      order: { published_at: 'DESC', created_at: 'DESC', revision: 'DESC', id: 'DESC' },
+    });
   }
 
   async beginBlueprintUpload(userId: number, code: string) {

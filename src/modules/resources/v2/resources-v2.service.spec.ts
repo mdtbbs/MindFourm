@@ -3,6 +3,18 @@ import { Resource } from '@entities/resource.entity';
 import { ResourcesV2Service } from './resources-v2.service';
 
 describe('ResourcesV2Service relation projection', () => {
+  it('does not advertise a Resource preview before any binary version is published', () => {
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const resource = {
+      id: 7, public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', resource_kind: 'map',
+      status: 'approved', is_public: 1, latest_published_version_id: null,
+      file_path: '/uploads/.quarantine/resources/initial.msav',
+      renderer_status: 'ready', renderer_preview_key: `resources/map/aa/${'a'.repeat(64)}/preview.png`,
+    } as Resource;
+
+    expect((service as any).resourcePreviewUrl(resource)).toBeNull();
+  });
+
   it('preserves the recommended_for context and defaults unknown contexts to general', async () => {
     const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
     const resource = { id: 7 } as Resource;
@@ -45,6 +57,29 @@ describe('ResourcesV2Service relation projection', () => {
 
     expect(result.items[0].version_public_id).toBe('84b37577-d086-4897-a866-658e29e0bd09');
     expect(result.items[0].version).toBe('2.1.0');
+  });
+});
+
+describe('ResourcesV2Service reviewer workbench access', () => {
+  it('lets moderators inspect pending releases on private Resources without granting edit permissions', async () => {
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const resource = {
+      id: 7, public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', is_public: 0,
+      status: 'pending', renderer: null,
+    } as unknown as Resource;
+    jest.spyOn(service as any, 'findResourceByPublicId').mockResolvedValue(resource);
+    jest.spyOn(service as any, 'memberRole').mockResolvedValue(null);
+    jest.spyOn(service as any, 'toPublicResourceDto').mockResolvedValue({});
+    const listVersions = jest.spyOn(service as any, 'listVersionRows').mockResolvedValue({ items: [{ id: 22, status: 'pending_review' }] });
+    jest.spyOn(service as any, 'hydrateVersions').mockResolvedValue([{ public_id: '84b37577-d086-4897-a866-658e29e0bd09', status: 'pending_review' }]);
+    jest.spyOn(service as any, 'selectedVersion').mockResolvedValue(null);
+    jest.spyOn(service as any, 'statsFor').mockResolvedValue({});
+
+    const result = await service.getWorkbench(resource.public_id, { id: 30, role: 'moderator' });
+
+    expect(listVersions).toHaveBeenCalledWith(resource, { limit: 100 }, true);
+    expect(result.versions).toMatchObject([{ status: 'pending_review' }]);
+    expect(result.permissions).toEqual({ role: 'moderator', can_manage: false });
   });
 });
 

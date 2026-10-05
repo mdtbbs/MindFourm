@@ -7,6 +7,7 @@ import { ResourceAttribution } from '@entities/resource-attribution.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceVersionDependency } from '@entities/resource-version-dependency.entity';
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
+import { ResourceMember } from '@entities/resource-center-v2.entity';
 import { ResourceLegacyProjectionService } from './resource-legacy-projection.service';
 import { escapeLike } from '@common/utils/search.util';
 import {
@@ -95,6 +96,9 @@ export class ResourceReadAdapterService {
     @Optional()
     @InjectRepository(ResourceVersionCompatibility)
     private readonly compatibilityRepo?: Repository<ResourceVersionCompatibility>,
+    @Optional()
+    @InjectRepository(ResourceMember)
+    private readonly memberRepo?: Repository<ResourceMember>,
   ) {}
 
   /**
@@ -106,8 +110,8 @@ export class ResourceReadAdapterService {
       where: { id: resourceId },
     });
 
-    if (!resource || (resource as any).deleted_at) return null;
-    if (!resource.is_public) return null;
+    if (!resource || (resource as any).deleted_at || !resource.is_public
+      || !['approved', 'published'].includes(String(resource.status || ''))) return null;
 
     const [versions, attributions] = await Promise.all([
       this.versionRepo.find({
@@ -129,8 +133,12 @@ export class ResourceReadAdapterService {
         })
       : [];
 
-    // Build latest version DTO
-    const latestVersion = versions.find(v => v.id === resource.latest_published_version_id) || null;
+    // Public projections must never trust a stale pointer to a pending binary.
+    const publishedVersions = versions.filter((version) => version.status === 'published');
+    const pointedPublishedVersion = publishedVersions.find(v => v.id === resource.latest_published_version_id) || null;
+    const latestVersion = pointedPublishedVersion
+      || publishedVersions[0]
+      || null;
 
     return {
       public_id: resource.public_id || null,
@@ -144,7 +152,7 @@ export class ResourceReadAdapterService {
       content_text: resource.content_text || null,
       resource_kind: resource.resource_kind || null,
       visibility: resource.visibility || (resource.is_public ? 'public' : 'private'),
-      metadata: this.buildMetadata(resource),
+      metadata: this.buildMetadata(resource, Boolean(pointedPublishedVersion)),
       latest_version: latestVersion ? this.buildVersionDto(latestVersion, files) : null,
       attributions: attributions.map(a => ({
         id: a.id,
@@ -184,13 +192,25 @@ export class ResourceReadAdapterService {
 
   async getPublicResourceEntityByPublicId(publicId: string): Promise<Resource | null> {
     const resource = await this.resourceRepo.findOne({ where: { public_id: publicId } });
-    if (!resource || (resource as any).deleted_at || !resource.is_public) return null;
+    if (!resource || (resource as any).deleted_at || !resource.is_public
+      || !['approved', 'published'].includes(String(resource.status || ''))) return null;
+    if (typeof resource.file_path === 'string' && /[\\/]\.quarantine[\\/]/.test(resource.file_path)) {
+      const publishedVersion = await this.versionRepo.findOne({
+        where: { resource_id: resource.id, status: 'published' },
+        order: { published_at: 'DESC', created_at: 'DESC', revision: 'DESC', id: 'DESC' },
+      });
+      if (!publishedVersion) {
+        resource.renderer_status = 'unavailable';
+        resource.renderer_preview_key = null;
+      }
+    }
     return resource;
   }
 
   async getManifestByPublicId(publicId: string): Promise<V1ResourceManifest | null> {
     const resource = await this.resourceRepo.findOne({ where: { public_id: publicId } });
-    if (!resource || (resource as any).deleted_at || !resource.is_public || !resource.public_id) return null;
+    if (!resource || (resource as any).deleted_at || !resource.is_public || !resource.public_id
+      || !['approved', 'published'].includes(String(resource.status || ''))) return null;
 
     const versions = await this.versionRepo.find({
       where: { resource_id: resource.id, status: 'published' },
@@ -277,13 +297,32 @@ export class ResourceReadAdapterService {
     };
   }
 
-  async getPublicFileByPublicIds(resourcePublicId: string, versionPublicId: string, filePublicId: string) {
+  async getPublicFileByPublicIds(resourcePublicId: string, versionPublicId: string, filePublicId: string, viewer?: { id: number; role?: string }) {
     const resource = await this.resourceRepo.findOne({ where: { public_id: resourcePublicId } });
-    if (!resource || (resource as any).deleted_at || !resource.is_public) return null;
-    const version = await this.versionRepo.findOne({ where: { public_id: versionPublicId, resource_id: resource.id, status: 'published' } });
-    if (!version) return null;
+    if (!resource || (resource as any).deleted_at || resource.merged_into_resource_id) return null;
+    const publicResource = Boolean(resource.is_public) && ['approved', 'published'].includes(String(resource.status || ''));
+    const canManage = await this.canManageResource(resource, viewer);
+    if (!publicResource && !canManage) return null;
+    const version = await this.versionRepo.findOne({
+      where: {
+        public_id: versionPublicId,
+        resource_id: resource.id,
+        ...(publicResource && !canManage ? { status: 'published' } : {}),
+      },
+    });
+    if (!version || (version.status !== 'published' && !canManage)) return null;
     const file = await this.fileRepo.findOne({ where: { public_id: filePublicId, resource_version_id: version.id } });
     return file ? { resource, version, file } : null;
+  }
+
+  private async canManageResource(resource: Resource, viewer?: { id: number; role?: string }): Promise<boolean> {
+    if (!viewer || !Number.isSafeInteger(Number(viewer.id)) || Number(viewer.id) < 1) return false;
+    if (['admin', 'moderator'].includes(String(viewer.role || '').toLowerCase())) return true;
+    if (Number(resource.user_id) === Number(viewer.id)) return true;
+    const member = await this.memberRepo?.findOne({
+      where: { resource_id: resource.id, user_id: Number(viewer.id), status: 'active' },
+    });
+    return ['owner', 'maintainer', 'publisher'].includes(String(member?.role || ''));
   }
 
   async incrementDownload(resourceId: number): Promise<void> {
@@ -296,6 +335,8 @@ export class ResourceReadAdapterService {
     const query = this.resourceRepo.createQueryBuilder('resource')
       .where('resource.deleted_at IS NULL')
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere("resource.status IN ('approved','published')")
+      .andWhere('resource.merged_into_resource_id IS NULL')
       .orderBy('resource.created_at', 'DESC')
       .addOrderBy('resource.id', 'DESC')
       .skip(offset)
@@ -322,10 +363,13 @@ export class ResourceReadAdapterService {
     return { items, pagination: { limit, offset, next_offset: hasMore ? offset + limit : null, has_more: hasMore } };
   }
 
-  private buildMetadata(resource: Resource): V1ResourceMetadata {
+  private buildMetadata(resource: Resource, hasPublishedVersion = false): V1ResourceMetadata {
     const publisher = this.parseObject(resource.metadata_json);
-    const renderer = this.parseObject(resource.renderer_metadata_json);
-    const rendererStatus = resource.renderer_status || 'none';
+    const unreviewedQuarantinedBinary = !hasPublishedVersion
+      && typeof resource.file_path === 'string'
+      && /[\\/]\.quarantine[\\/]/.test(resource.file_path);
+    const renderer = unreviewedQuarantinedBinary ? {} : this.parseObject(resource.renderer_metadata_json);
+    const rendererStatus = unreviewedQuarantinedBinary ? 'unavailable' : resource.renderer_status || 'none';
     const metadata: V1ResourceMetadata = {
       schema_version: 1,
       tags: this.stringList(publisher.tags),

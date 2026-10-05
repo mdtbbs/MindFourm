@@ -550,7 +550,7 @@ export class ResourcesController {
     }
 
     const target = versionId
-      ? await this.versionService.getDownloadTarget(id, Number(versionId))
+      ? await this.versionService.getDownloadTarget(id, Number(versionId), req?.user)
       : resource;
 
     if (!target.file_path) {
@@ -580,7 +580,7 @@ export class ResourcesController {
   async getVersions(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     // Resolve the resource first so version listings inherit its visibility rules.
     await this.resourcesService.getById(id, req?.user);
-    return this.versionService.list(id);
+    return this.versionService.list(id, req?.user);
   }
 
   @Post()

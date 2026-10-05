@@ -2,6 +2,16 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 
+export class ResourceV2VersionReviewDto {
+  @ApiProperty({ enum: ['approve', 'reject', 'request_changes'] })
+  @IsIn(['approve', 'reject', 'request_changes'])
+  action!: 'approve' | 'reject' | 'request_changes';
+
+  @ApiPropertyOptional({ maxLength: 5_000, description: '审核说明；reject 和 request_changes 必填。' })
+  @IsOptional() @IsString() @MaxLength(5_000)
+  reason?: string;
+}
+
 export class ResourceV2ReviewAnnotationValueDto {
   @ApiProperty({ example: 'manifest.source_url' }) field_path!: string;
   @ApiProperty({ enum: ['ERROR', 'WARNING', 'INFO'] }) severity!: string;

@@ -6,6 +6,7 @@ import { ResourceVersionService } from './resource-versions.service';
 import { MflClientService } from './mfl-client.service';
 import { ResourcesController } from './resources.controller';
 import { Resource } from '@entities/resource.entity';
+import { ResourceMember } from '@entities/resource-center-v2.entity';
 import { ResourceUploadDraft } from '@entities/resource-upload-draft.entity';
 import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
@@ -65,7 +66,7 @@ import { ResourceCommentsModule } from '../resource-comments/resource-comments.m
     CustomEmojisModule,
     DownloadsModule,
     ResourceCommentsModule,
-    TypeOrmModule.forFeature([Resource, ResourceUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ModReportAttachment]),
+    TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ModReportAttachment]),
   ],
   providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService],
   controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController],

@@ -112,7 +112,6 @@ describe('ResourceV2CommunityWriteService', () => {
     const { service, managerQuery } = createHarness();
     const created = await service.submitModCompatibilityReport(ids.modA, ids.modAVersion, 10, {
       status: 'performance', game_version: 'v160.2', platform_key: 'linux-x64', runtime: 'java', body: 'Low FPS in campaign',
-      attachments: [{ kind: 'log', name: 'client.log', size_bytes: 200, mime_type: 'text/plain' }],
     });
     expect(created).toEqual({ public_id: ids.compatibilityReport, resource_public_id: ids.modA, version_public_id: ids.modAVersion, status: 'performance' });
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('ON DUPLICATE KEY UPDATE'), expect.arrayContaining([2, 12, 10]));
@@ -121,24 +120,20 @@ describe('ResourceV2CommunityWriteService', () => {
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE mod_compatibility_reports SET'), expect.any(Array));
   });
 
-  it('submits and updates Mod issue reports while persisting only whitelisted attachment metadata', async () => {
+  it('submits and updates Mod issue reports without accepting client-declared attachment metadata', async () => {
     const { service, managerQuery } = createHarness();
     const report = await service.submitModIssueReport(ids.modA, ids.modAVersion, 10, {
       title: 'Client crash', body: 'Crashes on load',
-      attachments: [{ kind: 'image', name: 'crash.png', size_bytes: 1024, mime_type: 'image/png', sha256: 'a'.repeat(64) }],
     });
     expect(report).toMatchObject({ resource_public_id: ids.modA, version_public_id: ids.modAVersion, status: 'open' });
     const insertCall = managerQuery.mock.calls.find(([sql]) => String(sql).includes('INSERT INTO mod_issue_reports'));
     expect(insertCall?.[0]).toContain('ON DUPLICATE KEY UPDATE');
     expect(report.public_id).toBe(ids.issueReport);
-    expect(JSON.parse(String(insertCall?.[1]?.[6]))).toEqual([{ kind: 'image', name: 'crash.png', size_bytes: 1024, mime_type: 'image/png', sha256: 'a'.repeat(64) }]);
+    expect(insertCall?.[1]?.[6]).toBeNull();
     const repeated = await service.submitModIssueReport(ids.modA, ids.modAVersion, 10, { title: 'Updated crash', body: 'More details' });
     expect(repeated.public_id).toBe(ids.issueReport);
     await service.updateModIssueReport(ids.issueReport, 10, { title: 'Updated title', body: 'More steps to reproduce' });
     expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('UPDATE mod_issue_reports SET'), expect.any(Array));
-    await expect(service.submitModIssueReport(ids.modA, ids.modAVersion, 10, {
-      title: 'Unsafe attachment', body: 'x', attachments: [{ kind: 'log', name: '../../secret', size_bytes: 1 }],
-    })).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('allows only an owner or active maintainer to respond and validates fixed releases', async () => {

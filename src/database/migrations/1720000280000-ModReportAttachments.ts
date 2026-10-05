@@ -22,6 +22,10 @@ export class ModReportAttachments1720000280000 implements MigrationInterface {
       UNIQUE KEY uq_mod_report_attachments_public_id (public_id),
       KEY idx_mod_report_attachments_issue (issue_report_id,created_at),
       KEY idx_mod_report_attachments_compatibility (compatibility_report_id,created_at),
+      CONSTRAINT chk_mod_report_attachments_exactly_one_parent CHECK (
+        (issue_report_id IS NOT NULL AND compatibility_report_id IS NULL)
+        OR (issue_report_id IS NULL AND compatibility_report_id IS NOT NULL)
+      ),
       CONSTRAINT fk_mod_report_attachments_issue FOREIGN KEY (issue_report_id) REFERENCES mod_issue_reports(id) ON DELETE CASCADE,
       CONSTRAINT fk_mod_report_attachments_compat FOREIGN KEY (compatibility_report_id) REFERENCES mod_compatibility_reports(id) ON DELETE CASCADE,
       CONSTRAINT fk_mod_report_attachments_uploader FOREIGN KEY (uploaded_by_user_id) REFERENCES users(id) ON DELETE SET NULL

@@ -130,6 +130,15 @@ describe('ResourceV2ReportAttachmentService', () => {
     expect(harness.storage.storeIncoming).toHaveBeenCalledTimes(1);
   });
 
+  it('writes compatibility evidence with exactly the compatibility parent column', async () => {
+    const harness = createHarness();
+    await harness.service.add('compatibility', ids.report, 10, await imageFile());
+
+    expect(harness.inserted).toHaveLength(1);
+    expect(harness.inserted[0].sql).toContain('(public_id,compatibility_report_id,kind');
+    expect(harness.inserted[0].sql).not.toContain('issue_report_id');
+  });
+
   it('rejects non-owners, unverified phone numbers, invalid signatures, and quota overflow before storing', async () => {
     const nonOwner = createHarness({ reporterId: 11 });
     await expect(nonOwner.service.add('issue', ids.report, 10, await imageFile()))

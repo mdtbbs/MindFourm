@@ -115,7 +115,7 @@ export class ResourcesV1Controller {
     await this.assertEnabled();
     const caps = await this.capabilitiesService.getCapabilities();
     if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
-    const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId);
+    const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId, req?.user);
     if (!target || target.file.availability_status !== 'available') {
       throw new NotFoundException('文件不存在或暂不可用');
     }

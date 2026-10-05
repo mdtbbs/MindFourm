@@ -557,7 +557,7 @@ export class ResourceV2DiffDto {
 }
 
 export class ResourceV2WorkbenchPermissionsDto {
-  @ApiProperty({ enum: ['owner', 'maintainer', 'publisher', 'admin', 'viewer'], nullable: true })
+  @ApiProperty({ enum: ['owner', 'maintainer', 'publisher', 'admin', 'moderator', 'viewer'], nullable: true })
   role!: string | null;
 
   @ApiProperty({ example: false }) can_manage!: boolean;
