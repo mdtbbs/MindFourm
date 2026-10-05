@@ -120,7 +120,12 @@ export class ResourcesV1Controller {
     const caps = await this.capabilitiesService.getCapabilities();
     if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
     const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId, req?.user);
-    if (!target || target.file.availability_status !== 'available') {
+    // The read adapter only returns an unpublished version to an authorized
+    // resource manager. RES keeps those bytes privately bound and marks the
+    // file `pending` until review. Allow that authorized private download while
+    // keeping public/published downloads restricted to `available` files.
+    const authorizedPending = target?.version.status !== 'published' && target?.file.availability_status === 'pending';
+    if (!target || (target.file.availability_status !== 'available' && !authorizedPending)) {
       throw new NotFoundException('文件不存在或暂不可用');
     }
     await this.downloadPolicyService?.assertDownloadAuthentication(target.resource.resource_kind, req?.user);
