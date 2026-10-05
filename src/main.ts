@@ -26,6 +26,7 @@ import { requestIdMiddleware } from './common/middleware/request-id.middleware';
 import { clientContextMiddleware } from './common/middleware/client-context.middleware';
 import { SwaggerModule } from '@nestjs/swagger';
 import { createV1OpenApiDocument } from './openapi/v1-openapi';
+import { registerOpenApiJsonRoutes } from './openapi/register-openapi-json-routes';
 import { appConfig } from './config/app.config';
 import { validateConfig, validateEnabledRelayConfig } from './config/validate';
 import { PerformanceTelemetryService } from './common/performance/performance-telemetry.service';
@@ -214,8 +215,7 @@ async function bootstrap() {
   // the supported Mod API undocumented; restricted installations may opt out.
   if (app.get(ConfigService).get<string>('OPENAPI_ENABLED') !== 'false') {
     const document = createV1OpenApiDocument(app);
-    app.getHttpAdapter().get('/api/openapi/v1.json', (_req: unknown, res: any) => res.json(document));
-    app.getHttpAdapter().get('/api/openapi/public-v1.json', (_req: unknown, res: any) => res.json(document));
+    registerOpenApiJsonRoutes(app, document);
     registerDeveloperDocs(app, document, packageJson.version);
   }
 
