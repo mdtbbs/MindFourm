@@ -151,7 +151,8 @@ test('Resource Center V2 keeps binaries private until version review and seriali
   const moderator = await testLogin(request, 'moderator');
   const admin = await testLogin(request, 'admin');
   const stamp = Date.now();
-  const resource = await createUploadedResource(request, owner, `E2E Resource V2 review ${stamp}`, Buffer.from('published version one'));
+  const initialPayload = `published version one ${stamp}`;
+  const resource = await createUploadedResource(request, owner, `E2E Resource V2 review ${stamp}`, Buffer.from(initialPayload));
 
   const reviewerWorkbench = unwrap(await (await request.get(
     `${API_URL}/api/v1/resources/${resource.publicId}/workbench`,
@@ -201,8 +202,8 @@ test('Resource Center V2 keeps binaries private until version review and seriali
   const downloadUrl = v1?.files?.find((file: any) => file.role === 'primary')?.download_url;
   expect(typeof downloadUrl).toBe('string');
   const v1Download = await request.get(new URL(downloadUrl, API_URL).toString());
-  expect(v1Download.ok()).toBeTruthy();
-  expect(await v1Download.text()).toBe('published version one');
+  if (!v1Download.ok()) throw new Error(`Published v1 download failed: ${v1Download.status()} ${await v1Download.text()}`);
+  expect(await v1Download.text()).toBe(initialPayload);
 
   const uploaded = await uploadVersion(request, resource.publicId, owner, '2.0.0', 'pending version two');
   expect(uploaded.response.status()).toBe(201);
@@ -211,7 +212,7 @@ test('Resource Center V2 keeps binaries private until version review and seriali
   try {
     const stillPublishedDownload = await anonymousAfterUpload.get(new URL(downloadUrl, API_URL).toString());
     expect(stillPublishedDownload.ok()).toBeTruthy();
-    expect(await stillPublishedDownload.text()).toBe('published version one');
+    expect(await stillPublishedDownload.text()).toBe(initialPayload);
     const stillPublicResource = unwrap(await (await anonymousAfterUpload.get(`${API_URL}/api/resources/${resource.id}`)).json());
     expect(stillPublicResource.status).toBe('approved');
   } finally {
