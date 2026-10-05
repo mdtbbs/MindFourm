@@ -155,6 +155,7 @@ function createService(overrides: {
   };
   const resourceFileRepository = {
     update: jest.fn().mockResolvedValue(undefined),
+    createQueryBuilder: jest.fn(() => defaultQb),
     ...overrides.resourceFileRepository,
   };
   const adminNotificationsService = {
@@ -207,6 +208,11 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('honors explicit private visibility before issuing a file URL', async () => {
+    const { service } = createService();
+    await expect(service.isResourcePubliclyAccessible({ status: 'approved', is_public: 1, visibility: 'private' })).resolves.toBe(false);
+  });
+
   it('retains storage keys for authorized file operations without exposing them in public details', async () => {
     const resource = { id: 27, user_id: 9, status: 'published', is_public: 1, category_id: null,
       renderer_preview_key: 'map/preview.png', file_path: '/private/map.msav', mfl_download_url: 'https://files.example.test/map' };
@@ -687,7 +693,7 @@ describe('ResourcesService', () => {
   });
 
   it('enqueues an approved map for forum-owned rendering', async () => {
-    const preview = { supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
+    const preview = { supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined), setResPreviewVisibility: jest.fn().mockResolvedValue(undefined) };
     const { service } = createService({
       resourcePreviewService: preview,
       versionRepository: {
@@ -801,4 +807,60 @@ describe('ResourcesService', () => {
     expect(normalized).not.toHaveProperty('reviewed_by_user_id');
   });
 
+});
+
+describe('RES Resource lifecycle visibility', () => {
+  it('keeps a published private file available while its binding remains private', async () => {
+    const service = Object.create(ResourcesService.prototype) as ResourcesService;
+    const file = { id: 31, public_id: 'file-id', resource_version_id: 11, provider_object_id: 'res-id', provider_binding_id: 'binding-id' };
+    const query = { innerJoin: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([file]) };
+    (service as any).resourceFileRepository = { createQueryBuilder: jest.fn().mockReturnValue(query), update: jest.fn().mockResolvedValue({}) };
+    (service as any).versionRepository = { find: jest.fn().mockResolvedValue([{ id: 11, status: 'published' }]) };
+    (service as any).resClient = { createBinding: jest.fn().mockResolvedValue({ id: 'binding-id' }) };
+    await (service as any).setResFileVisibility(7, 'private');
+    expect((service as any).resClient.createBinding).toHaveBeenCalledWith('res-id', expect.objectContaining({ visibility: 'private' }));
+    expect((service as any).resourceFileRepository.update).toHaveBeenCalledWith(31, { availability_status: 'available' });
+    (service as any).versionRepository.find.mockResolvedValue([{ id: 11, status: 'pending_review' }]);
+    await (service as any).setResFileVisibility(7, 'public');
+    expect((service as any).resClient.createBinding).toHaveBeenLastCalledWith('res-id', expect.objectContaining({ visibility: 'private' }));
+    expect((service as any).resourceFileRepository.update).toHaveBeenLastCalledWith(31, { availability_status: 'pending' });
+  });
+
+  it('privates leftover merged source bindings and restores both resources on database rollback', async () => {
+    const service = Object.create(ResourcesService.prototype) as ResourcesService;
+    const source = { id: 7, status: 'approved', is_public: 1, visibility: 'public' };
+    const target = { id: 8, status: 'approved', is_public: 1, visibility: 'public' };
+    const manager = {
+      query: jest.fn(async (sql: string) => {
+        if (sql.startsWith('SELECT * FROM resources WHERE id IN')) return [source, target];
+        if (sql.startsWith('INSERT INTO resource_merge_logs')) throw new Error('merge audit failed');
+        return [];
+      }),
+      createQueryBuilder: jest.fn().mockReturnValue({ update: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue({}) }),
+    };
+    (service as any).dataSource = { transaction: jest.fn(async (callback) => callback(manager)) };
+    jest.spyOn(service as any, 'resourceMergeCounts').mockResolvedValue({});
+    jest.spyOn(service as any, 'mergePublicResourceDiscussion').mockResolvedValue(0);
+    const visibility = jest.spyOn(service, 'setResourceStorageVisibility').mockResolvedValue(undefined);
+    await expect(service.mergeResource(7, 8, 42)).rejects.toThrow('merge audit failed');
+    expect(visibility).toHaveBeenNthCalledWith(1, expect.objectContaining({ id: 7, status: 'merged', is_public: 0 }), 'private', manager);
+    expect(visibility).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 8 }), 'public', manager);
+    expect(visibility).toHaveBeenNthCalledWith(3, source, 'public');
+    expect(visibility).toHaveBeenLastCalledWith(target, 'public');
+  });
+});
+
+describe('RES unpublished version download authorization', () => {
+  it('denies anonymous pending-version access on an approved resource and permits its owner', async () => {
+    const service = Object.create(ResourcesService.prototype) as ResourcesService;
+    const version = { id: 11, resource_id: 7, status: 'pending_review' };
+    const file = { id: 31, storage_backend: 'res', availability_status: 'pending' };
+    (service as any).versionRepository = { findOne: jest.fn().mockResolvedValue(version) };
+    (service as any).resourceRepository = { findOne: jest.fn().mockResolvedValue({ id: 7, user_id: 10, status: 'approved', is_public: 1 }) };
+    (service as any).resourceFileRepository = { findOne: jest.fn().mockResolvedValue(file) };
+    (service as any).dataSource = { query: jest.fn().mockResolvedValue([]) };
+    await expect(service.findStoredDownloadFile(7, 11)).rejects.toThrow('资源版本不存在');
+    expect((service as any).resourceFileRepository.findOne).not.toHaveBeenCalled();
+    await expect(service.findStoredDownloadFile(7, 11, { id: 10, role: 'member' })).resolves.toEqual({ version, file });
+  });
 });

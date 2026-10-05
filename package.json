@@ -34,6 +34,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
     "audit:resources": "npm run build:backend && node dist/scripts/resource-migration-audit.js",
+    "resource-storage:migrate": "npm run build:backend && node dist/scripts/resource-storage-migrate.js",
     "report:resource-duplicates": "npm run build:backend && node dist/scripts/resource-duplicate-report.js",
     "backfill:resources-v2": "npm run build:backend && node dist/scripts/resource-v2-backfill.js",
     "backfill:content-json": "npm run build:backend && node dist/scripts/content-json-backfill.js",

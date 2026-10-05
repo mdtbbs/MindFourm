@@ -53,7 +53,11 @@ export function toPublicResource(resource: Resource, card = false): Record<strin
     category_icon: resource.category?.icon || null,
     metadata: normalizeResourceMetadata(resource.metadata_json),
     ...(card ? { renderer_summary: { width: scalar(renderer.width), height: scalar(renderer.height), build: scalar(renderer.build) } } : { renderer_metadata: unreviewedQuarantinedBinary ? null : resource.renderer_metadata_json || null }),
-    preview_url: !unreviewedQuarantinedBinary && resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null,
+    preview_url: !unreviewedQuarantinedBinary && resource.renderer_status === 'ready'
+      ? (resource.renderer_preview_object_id && ['approved', 'published'].includes(resource.status) && Number(resource.is_public) === 1
+        ? `${(process.env.RES_BASE_URL || 'https://res.mdtbbs.cn').replace(/\/+$/, '')}/o/${encodeURIComponent(resource.renderer_preview_object_id)}/preview.png`
+        : `/api/resources/${resource.id}/preview`)
+      : null,
   };
 }
 
@@ -62,5 +66,6 @@ export const RESOURCE_CARD_COLUMNS = PUBLIC_FIELDS.filter((field) => ![
   'favorite_count', 'like_count', 'is_favorited', 'is_liked', 'is_subscribed', 'trending_score', 'summary', 'description',
 ].includes(field)).map((field) => `resource.${field}`).concat([
   'resource.is_public', 'resource.use_mfl', 'resource.metadata_json',
+  'resource.renderer_preview_object_id',
   'user.id', 'user.username', 'user.avatar_url', 'user.role', 'category.id', 'category.name', 'category.icon',
 ]);

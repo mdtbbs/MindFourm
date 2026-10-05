@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -17,6 +17,7 @@ describe('ResourceSourceSyncService', () => {
   let storage: any;
   let versions: any;
   let notifications: any;
+  let directUploads: any;
   let service: ResourceSourceSyncService;
   let fetchSpy: jest.SpyInstance;
 
@@ -73,7 +74,8 @@ describe('ResourceSourceSyncService', () => {
       })),
     };
     notifications = { create: jest.fn().mockResolvedValue({ id: 1 }) };
-    service = new ResourceSourceSyncService(dataSource, storage, versions, notifications);
+    directUploads = { uploadManagedFile: jest.fn(async (file) => ({ ...file, storage_backend: 'res', provider_object_id: 'res-public' })) };
+    service = new ResourceSourceSyncService(dataSource, storage, versions, notifications, directUploads);
     fetchSpy = jest.spyOn(globalThis, 'fetch');
   });
 
@@ -221,7 +223,7 @@ describe('ResourceSourceSyncService', () => {
       version_mode: 'compatibility',
       release_channel: 'release',
       content: 'Release notes',
-    }), expect.objectContaining({ file_path: expect.stringContaining('quarantine') }), 5);
+    }), expect.objectContaining({ file_path: expect.stringContaining('quarantine'), storage_backend: 'res', provider_object_id: 'res-public' }), 5);
     expect(result).toEqual(expect.objectContaining({
       resource_public_id: RESOURCE_PUBLIC_ID,
       tag_name: 'v1.2.0',
@@ -234,7 +236,25 @@ describe('ResourceSourceSyncService', () => {
       deduplicationKey: expect.stringContaining('resource-source-sync-imported:'),
     }));
     expect(JSON.stringify(result)).not.toMatch(/\b(?:resource_id|version_id|file_id)\s*:/);
-    expect(storage.removeManaged).not.toHaveBeenCalled();
+    expect(directUploads.uploadManagedFile).toHaveBeenCalledTimes(1);
+    expect(storage.removeManaged).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails RES upload without persisting a local version and removes temporary bytes', async () => {
+    const zip = minimalZip();
+    fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+      if (new URL(String(input)).hostname === 'api.github.com') return jsonResponse({
+        tag_name: 'v1', name: 'Release', body: '', prerelease: false, draft: false,
+        assets: [{ name: 'mod.jar', size: zip.length, state: 'uploaded', browser_download_url: 'https://github.com/owner/mod/releases/download/v1/mod.jar' }],
+      });
+      return new Response(zip, { status: 200 });
+    });
+    directUploads.uploadManagedFile.mockRejectedValue(new ServiceUnavailableException('资源存储服务暂不可用'));
+    await expect(service.importGithubRelease(RESOURCE_PUBLIC_ID, 5, { tag_name: 'v1', asset_name: 'mod.jar' }))
+      .rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(versions.create).not.toHaveBeenCalled();
+    expect(storage.removeManaged).toHaveBeenCalledTimes(1);
+    expect(await fs.readdir(quarantineRoot)).toEqual([]);
   });
 
   it('rejects unsafe asset redirects before any request to the redirected host', async () => {

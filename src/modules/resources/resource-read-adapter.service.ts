@@ -300,7 +300,7 @@ export class ResourceReadAdapterService {
   async getPublicFileByPublicIds(resourcePublicId: string, versionPublicId: string, filePublicId: string, viewer?: { id: number; role?: string }) {
     const resource = await this.resourceRepo.findOne({ where: { public_id: resourcePublicId } });
     if (!resource || (resource as any).deleted_at || resource.merged_into_resource_id) return null;
-    const publicResource = Boolean(resource.is_public) && ['approved', 'published'].includes(String(resource.status || ''));
+    const publicResource = Boolean(resource.is_public) && resource.visibility !== 'private' && ['approved', 'published'].includes(String(resource.status || ''));
     const canManage = await this.canManageResource(resource, viewer);
     if (!publicResource && !canManage) return null;
     const version = await this.versionRepo.findOne({

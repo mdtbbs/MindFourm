@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, HttpStatus, GoneException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, HttpStatus, GoneException, Optional, ServiceUnavailableException } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -12,6 +13,8 @@ import { ResourceLikesService } from '../resources/resource-likes.service';
 import { ResourceFavoritesService } from '../resources/resource-favorites.service';
 import { ResourcePreviewService } from '../resources/resource-preview.service';
 import { ResourceStorageService, StoredResourceFile } from '../resources/resource-storage.service';
+import { ResourceFileProviderService } from '../resources/resource-file-provider.service';
+import { ResourceStorageClientService } from '../resources/resource-storage-client.service';
 import { CreateResourceDto } from '../resources/dto/create-resource.dto';
 import { GameContentBlueprintDetailDto, GameContentListItemDto, GameContentMapDetailDto, GameContentUploadStatusDto } from './dto/game-content.dto';
 import { DownloadPolicyService } from '../downloads/download-policy.service';
@@ -48,7 +51,25 @@ export class GameContentService {
     private readonly redis: RedisService,
     private readonly config: ConfigService,
     private readonly uploadSessions: GameContentUploadSessionService,
+    @Optional() private readonly fileProvider?: ResourceFileProviderService,
+    @Optional() private readonly resClient?: ResourceStorageClientService,
   ) {}
+
+  /** Keep the legacy game-content request contract while making RES the durable byte store. */
+  private async uploadGameContentToRes(file: StoredResourceFile) {
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    const object = await this.resClient.uploadServerGeneratedObject({
+      body: createReadStream(file.file_path), sizeBytes: file.file_size, sha256: file.content_hash,
+      mimeType: file.mime_type || 'application/octet-stream', filename: file.file_name, purpose: 'resource_version',
+    });
+    if (object.state !== 'verified' || object.sha256 !== file.content_hash || object.size_bytes !== file.file_size) {
+      throw new ServiceUnavailableException('资源存储服务校验失败，请稍后重试');
+    }
+    return {
+      ...file, storage_backend: 'res' as const, provider_object_id: object.public_id,
+      mime_type: object.mime_type, file_size: object.size_bytes, content_hash: object.sha256,
+    };
+  }
 
   private kind(type: GameResourceType): string { return type === 'blueprint' ? 'schematic' : 'map'; }
   private publicId(resource: Resource): string { return `${resource.resource_kind === 'map' ? 'map' : 'bp'}_${resource.public_id}`; }
@@ -103,23 +124,24 @@ export class GameContentService {
     ]);
     const likeCounts = new Map(likeRows.map((r) => [Number(r.id), Number(r.count)]));
     const favoriteCounts = new Map(favoriteRows.map((r) => [Number(r.id), Number(r.count)]));
-    return rows.map((r) => {
+    return Promise.all(rows.map(async (r) => {
       const unreviewedQuarantinedBinary = this.isQuarantinedPath(r.file_path);
       const parsed = unreviewedQuarantinedBinary
         ? {}
         : this.parseObject((r as any).renderer_summary || r.renderer_metadata_json);
       const metadata = this.parseObject((r as any).metadata || r.metadata_json);
       const resourceType = type || (r.resource_kind === 'map' ? 'map' : 'blueprint');
+      const resPreviewUrl = unreviewedQuarantinedBinary ? null : await this.previews.getResPreviewUrl?.(r) || null;
       return {
         id: this.publicId(r), resourceId: r.id, type: resourceType, title: r.title, summary: r.summary || r.description || '',
         author: r.user ? { id: r.user.id, username: r.user.username, avatar: r.user.avatar_url || null } : null,
-        preview: { thumbnail: parsed.width || parsed.height ? `/api/v1/game-content/${resourceType === 'map' ? 'maps' : 'blueprints'}/${this.publicId(r)}/preview` : null, width: parsed.width ?? null, height: parsed.height ?? null },
+        preview: { thumbnail: resPreviewUrl || (parsed.width || parsed.height ? `/api/v1/game-content/${resourceType === 'map' ? 'maps' : 'blueprints'}/${this.publicId(r)}/preview` : null), width: parsed.width ?? null, height: parsed.height ?? null },
       game: { version: null, minBuild: parsed.build ?? null },
         tags: this.asList(metadata.tags), stats: { downloads: r.download_count || 0, likes: likeCounts.get(r.id) || 0, favorites: favoriteCounts.get(r.id) || 0, views: Number(r.view_count) || 0 },
         featured: Number(r.is_featured) === 1,
         createdAt: r.created_at, updatedAt: r.updated_at,
       };
-    });
+    }));
   }
 
   async detail(type: GameResourceType, value: string, viewer: Viewer, clientIp = ''): Promise<GameContentBlueprintDetailDto | GameContentMapDetailDto> {
@@ -131,6 +153,7 @@ export class GameContentService {
     const unreviewedQuarantinedBinary = this.isQuarantinedPath(resource.file_path);
     const renderer = unreviewedQuarantinedBinary ? {} : this.parseObject(resource.renderer_metadata_json);
     if (!unreviewedQuarantinedBinary && type === 'blueprint' && (!renderer.production || typeof renderer.production !== 'object')) this.previews.ensureProduction(resource);
+    const resPreviewUrl = unreviewedQuarantinedBinary ? null : await this.previews.getResPreviewUrl?.(resource) || null;
     const metadata = this.parseObject(resource.metadata_json);
     const [likeCount, favoriteCount, viewerLike, viewerFavorite] = await Promise.all([
       this.likes.count({ where: { resource_id: resource.id } }), this.favorites.count({ where: { resource_id: resource.id } }),
@@ -140,7 +163,7 @@ export class GameContentService {
     const base: any = {
       id: this.publicId(resource), resourceId: resource.id, type, title: resource.title, description: resource.description || '',
       author: resource.user ? { id: resource.user.id, username: resource.user.username, avatar: resource.user.avatar_url || null } : null,
-      preview: { image: renderer.width || renderer.height ? `/api/v1/game-content/${type === 'map' ? 'maps' : 'blueprints'}/${this.publicId(resource)}/preview` : null, width: renderer.width ?? null, height: renderer.height ?? null },
+      preview: { image: resPreviewUrl || (renderer.width || renderer.height ? `/api/v1/game-content/${type === 'map' ? 'maps' : 'blueprints'}/${this.publicId(resource)}/preview` : null), width: renderer.width ?? null, height: renderer.height ?? null },
       game: { version: null, minBuild: renderer.build ?? null }, tags: this.asList(metadata.tags),
       stats: { downloads: resource.download_count || 0, likes: likeCount, favorites: favoriteCount, views: Number(resource.view_count) || 0 },
       featured: Number(resource.is_featured) === 1,
@@ -202,11 +225,19 @@ export class GameContentService {
     if (!(await this.domain.isResourcePubliclyAccessible(resource))) throw new NotFoundException('资源不存在');
     await this.domain.getById(resource.id, viewer || undefined);
     const version = await this.latestPublishedVersion(resource);
-    const filePath = version?.file_path || (this.isQuarantinedPath(resource.file_path) ? null : resource.file_path);
-    if (!filePath) throw new NotFoundException('蓝图文件不存在');
-    const file = await this.storage.readManagedFile(filePath, 20 * 1024 * 1024).catch(() => null);
-    if (!file || file.subarray(0, 4).toString('ascii') !== 'msch') throw new NotFoundException('蓝图文件暂不可用');
-    return { id: value, code: file.toString('base64') };
+    const resourceFile = version ? await this.files.findOne({ where: { resource_version_id: version.id, role: 'primary', availability_status: 'available' } }) : null;
+    let content: Buffer;
+    if (resourceFile && this.fileProvider) {
+      content = await this.fileProvider.getReadableContent(resourceFile, 20 * 1024 * 1024);
+    } else {
+      const filePath = version?.file_path || (this.isQuarantinedPath(resource.file_path) ? null : resource.file_path);
+      if (!filePath) throw new NotFoundException('蓝图文件不存在');
+      const managed = await this.storage.readManagedFile(filePath, 20 * 1024 * 1024).catch(() => null);
+      if (!managed) throw new NotFoundException('蓝图文件暂不可用');
+      content = managed;
+    }
+    if (content.subarray(0, 4).toString('ascii') !== 'msch') throw new NotFoundException('蓝图文件暂不可用');
+    return { id: value, code: content.toString('base64') };
   }
 
   async downloadInfo(value: string, userId: number | null = null) {
@@ -233,8 +264,9 @@ export class GameContentService {
     if (file && version) {
       const eligibility = await this.downloadPolicy.checkEligibility(file.id);
       if (!eligibility.eligible) throw new NotFoundException('文件不存在或暂不可下载');
-      const externalUrl = file.external_url || (file.storage_key?.startsWith('http') ? file.storage_key : null);
-      const location = externalUrl ? null : await this.storage.statManagedFile(file.storage_key || version.file_path || '');
+      const providerTarget = this.fileProvider ? await this.fileProvider.getDownloadTarget(file) : null;
+      const externalUrl = providerTarget?.kind === 'redirect' ? providerTarget.url : file.external_url || (file.storage_key?.startsWith('http') ? file.storage_key : null);
+      const location = providerTarget?.kind === 'managed' ? { path: providerTarget.path, size: providerTarget.size } : externalUrl ? null : await this.storage.statManagedFile(file.storage_key || version.file_path || '');
       if (externalUrl) assertSafeRedirectUrl(externalUrl);
       const now = new Date();
       const granted = await this.downloadGrant.recordGrant({ resourceId: resource.id, versionId: version.id, fileId: file.id, grantedAt: now, userId, clientType, clientVersion, platform, backend: file.storage_backend }, this.downloadActorKey(userId, clientIp));
@@ -286,6 +318,8 @@ export class GameContentService {
     if (!(await this.domain.isResourcePubliclyAccessible(resource))) throw new NotFoundException('资源不存在');
     await this.domain.getById(resource.id);
     if (this.isQuarantinedPath(resource.file_path)) return null;
+    const resUrl = await this.previews.getResPreviewUrl?.(resource);
+    if (resUrl) return { redirectUrl: resUrl };
     return this.previews.readPreview(resource);
   }
 
@@ -365,7 +399,9 @@ export class GameContentService {
         title: input.title.trim(), description: input.description?.trim(), resource_type: 'upload',
         resource_kind: kind, version: '1.0.0', metadata: { tags: this.normalizeTags(input.tags) },
       };
-      const resource = await this.domain.create(dto, userId, draft.file, { ipAddress, rendererDraft: draft });
+      const resFile = await this.uploadGameContentToRes(draft.file);
+      const resource = await this.domain.create(dto, userId, resFile, { ipAddress, rendererDraft: draft });
+      await this.storage.removeManaged(draft.file.file_path).catch(() => undefined);
       return { id: `bp_${resource.public_id}`, resourceId: resource.id, type, status: resource.status, message: '已提交，等待审核' };
     } catch (error) {
       if (draft?.file.file_path) await this.storage.removeManaged(draft.file.file_path).catch(() => undefined);
@@ -412,8 +448,10 @@ export class GameContentService {
         title: input.title.trim(), description: input.description?.trim(), resource_type: 'upload',
         resource_kind: 'map', version: '1.0.0', metadata: { tags: this.normalizeTags(input.tags) },
       };
-      const resource = await this.domain.create(dto, userId, rendererDraft.file, { ipAddress, rendererDraft, uploadSessionId: uploadId });
+      const resFile = await this.uploadGameContentToRes(rendererDraft.file);
+      const resource = await this.domain.create(dto, userId, resFile, { ipAddress, rendererDraft, uploadSessionId: uploadId });
       await this.uploadSessions.setCompleted(uploadId, resource.id);
+      await this.storage.removeManaged(rendererDraft.file.file_path).catch(() => undefined);
       return { id: `map_${resource.public_id}`, resourceId: resource.id, type: 'map', status: resource.status, message: '已提交，等待审核' };
     } catch (error) {
       await this.uploadSessions.setUploaded(uploadId).catch(() => undefined);

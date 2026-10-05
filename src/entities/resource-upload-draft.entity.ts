@@ -32,6 +32,12 @@ export class ResourceUploadDraft {
   @Column({ type: 'varchar', length: 500, nullable: true })
   preview_key: string | null;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  preview_object_id: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  preview_binding_id: string | null;
+
   @Column({ type: 'json', nullable: true })
   metadata_json: any;
 

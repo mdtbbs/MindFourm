@@ -131,6 +131,19 @@ describe('ResourceReadAdapterService', () => {
     expect(memberRepo.findOne).toHaveBeenCalledWith({ where: { resource_id: 9, user_id: 22, status: 'active' } });
   });
 
+  it('does not grant anonymous access to an explicitly private RES resource even with a stale public flag', async () => {
+    const resource = { id: 9, user_id: 20, is_public: 1, visibility: 'private', status: 'approved' };
+    const version = { id: 90, resource_id: 9, status: 'published' };
+    const file = { id: 900, resource_version_id: 90, storage_backend: 'res' };
+    const service = new ResourceReadAdapterService(
+      { findOne: jest.fn().mockResolvedValue(resource) } as any,
+      { findOne: jest.fn().mockResolvedValue(version) } as any, {} as any,
+      { findOne: jest.fn().mockResolvedValue(file) } as any, new ResourceLegacyProjectionService(),
+    );
+    await expect(service.getPublicFileByPublicIds('resource', 'version', 'file')).resolves.toBeNull();
+    await expect(service.getPublicFileByPublicIds('resource', 'version', 'file', { id: 20, role: 'user' })).resolves.toMatchObject({ file });
+  });
+
   it('builds a V1 DTO with attributions and versions', async () => {
     const resourceRepo = {
       findOne: jest.fn().mockResolvedValue({

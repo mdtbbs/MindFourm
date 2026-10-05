@@ -3,11 +3,11 @@
 // The historical migration chain starts from a deployed legacy schema. Its
 // empty-database baseline synchronizes current entities, which already contain
 // columns and tables later historical migrations add. Prepare the isolated E2E
-// database at the current deployed schema, then leave only this release's two
-// migrations pending so the smoke suite exercises their real MySQL DDL.
+// database at the current deployed schema, then leave only this PR's migrations
+// pending so the smoke suite exercises their real MySQL DDL.
 
 const EXPECTED_DATABASE = 'mindfourm_ci';
-const FIRST_RELEASE_MIGRATION = 1720000240000;
+const FIRST_RELEASE_MIGRATION = 1720000290000;
 
 if (
   process.env.NODE_ENV !== 'test'
@@ -28,7 +28,7 @@ async function prepare() {
       throw new Error(`Refusing to prepare unexpected database: ${database}`);
     }
 
-    // Materialize the currently deployed entity schema in the disposable E2E DB.
+    // Materialize the current entity schema in the disposable E2E DB.
     await dataSource.synchronize(false);
 
     // These historical migrations own runtime tables that are not mapped as
@@ -57,10 +57,15 @@ async function prepare() {
       await queryRunner.release();
     }
 
-    // Revert only the schema changes introduced by this release so its actual
-    // migrations, rather than entity synchronization, create them below.
-    await dataSource.query('DROP TABLE IF EXISTS `security_access_logs`');
-    await dataSource.query('ALTER TABLE `social_privacy_settings` DROP COLUMN `allow_messages`');
+    // synchronize(false) includes the fields/tables introduced by this PR.
+    // Remove exactly those additions so 029/030/031 are exercised by
+    // `typeorm migration:run` below. Earlier migrations belong to master and
+    // must remain represented in the deployed baseline.
+    await dataSource.query('DROP TABLE IF EXISTS `resource_direct_upload_sessions`');
+    await dataSource.query('ALTER TABLE `resource_upload_drafts` DROP COLUMN `preview_binding_id`, DROP COLUMN `preview_object_id`');
+    await dataSource.query('ALTER TABLE `resource_versions` DROP COLUMN `renderer_preview_binding_id`, DROP COLUMN `renderer_preview_object_id`');
+    await dataSource.query('ALTER TABLE `resources` DROP COLUMN `renderer_preview_binding_id`, DROP COLUMN `renderer_preview_object_id`');
+    await dataSource.query('ALTER TABLE `resource_files` DROP COLUMN `provider_binding_id`, DROP COLUMN `provider_object_id`');
 
     await dataSource.query(
       'CREATE TABLE IF NOT EXISTS migrations (id int NOT NULL AUTO_INCREMENT, `timestamp` bigint NOT NULL, `name` varchar(255) NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB',
@@ -83,7 +88,7 @@ async function prepare() {
       );
     }
 
-    console.log(`Prepared ${deployedMigrations.length} deployed migrations; release migrations remain pending.`);
+    console.log(`Prepared ${deployedMigrations.length} deployed migrations; PR migrations remain pending.`);
   } finally {
     await dataSource.destroy();
   }

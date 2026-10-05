@@ -79,6 +79,7 @@ import { UserDataDeletionRequest } from './user-data-deletion-request.entity';
 // P0-B: Resource aggregate
 import { ResourceAttribution } from './resource-attribution.entity';
 import { ResourceFile } from './resource-file.entity';
+import { ResourceDirectUploadSession } from './resource-direct-upload-session.entity';
 import { ResourceVersionDependency } from './resource-version-dependency.entity';
 import { ResourceVersionCompatibility } from './resource-version-compatibility.entity';
 import {
@@ -231,6 +232,7 @@ export const coreEntities = [
   // P0-B: Resource aggregate
   ResourceAttribution,
   ResourceFile,
+  ResourceDirectUploadSession,
   ResourceVersionDependency,
   ResourceVersionCompatibility,
   // Resource Center V2: these classes must be present in the root DataSource,
@@ -370,7 +372,7 @@ export {
   LegalAcceptance,
   UserDataDeletionRequest,
   // P0-B: Resource aggregate
-  ResourceAttribution, ResourceFile, ResourceVersionDependency, ResourceVersionCompatibility,
+  ResourceAttribution, ResourceFile, ResourceDirectUploadSession, ResourceVersionDependency, ResourceVersionCompatibility,
   ResourceMember, ResourceRelation, ResourceReviewEvent, ResourceReviewAnnotation,
   ResourceAnalysisRun, ResourceAnalysisOverride, ResourceCompatibility, ResourceDependency,
   ResourceVersionDiff, ResourceSourceSync,

@@ -8,11 +8,11 @@
 
 ### Added
 
-- 暂无。
+- `POST /api/v1/resources/uploads/init` 和 `/uploads/complete` 增加资源上下文直传：`resource.upload`、登录与站点验证要求不变，限流 10/60s；init 必须携带 pending/draft 版本 UUID、文件名、大小、MIME 和 SHA-256，返回短期 RES 上传信息或去重对象，均需 complete 进行服务端验证与私有绑定。失败可返回 `RESOURCE_STORAGE_UNAVAILABLE` (503)、`RESOURCE_STORAGE_OBJECT_NOT_FOUND` (404)、`RESOURCE_STORAGE_REJECTED` (422)。
 
 ### Changed
 
-- 暂无。
+- 新 RES 文件下载与预览返回 302；下载仍由论坛授权并记录 DownloadGrant。旧 managed/MFL/external 文件保持兼容，客户端应跟随跳转。
 
 ### Deprecated
 

@@ -74,6 +74,9 @@ import { MultiplayerJoinIntentRecovery1720000180000 } from './1720000180000-Mult
 import { EmailDeliveryHardening1720000260000 } from './1720000260000-EmailDeliveryHardening';
 import { ResourceCenterV21720000270000 } from './1720000270000-ResourceCenterV2';
 import { ModReportAttachments1720000280000 } from './1720000280000-ModReportAttachments';
+import { AddResourceStorageReferences1720000290000 } from './1720000290000-AddResourceStorageReferences';
+import { ResourceDirectUploadSessions1720000300000 } from './1720000300000-ResourceDirectUploadSessions';
+import { ResourceVersionStoragePreviews1720000310000 } from './1720000310000-ResourceVersionStoragePreviews';
 
 /**
  * Migrations in run order.
@@ -159,4 +162,7 @@ export const migrations = [
   EmailDeliveryHardening1720000260000,
   ResourceCenterV21720000270000,
   ModReportAttachments1720000280000,
+  AddResourceStorageReferences1720000290000,
+  ResourceDirectUploadSessions1720000300000,
+  ResourceVersionStoragePreviews1720000310000,
 ];

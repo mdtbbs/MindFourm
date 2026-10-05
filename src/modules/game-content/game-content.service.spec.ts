@@ -1,5 +1,8 @@
 import { toPublicResource } from '../resources/resource-public.dto';
 import { GameContentService } from './game-content.service';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 describe('GameContentService', () => {
   const resource = {
@@ -38,8 +41,12 @@ describe('GameContentService', () => {
     const redis = { setIfNotExists: jest.fn().mockResolvedValue(false) };
     const config = { get: jest.fn().mockReturnValue('test-secret') };
     const uploadSessions = { create: jest.fn(), getOwned: jest.fn(), claim: jest.fn(), setCompleted: jest.fn(), setUploaded: jest.fn(), getPreview: jest.fn() };
-    const service = new GameContentService(resourceRepo as any, likeRepo as any, favoriteRepo as any, versions as any, files as any, resourcesDomain as any, likeService as any, favoriteService as any, previewService as any, storage as any, policy as any, grant as any, events as any, redis as any, config as any, uploadSessions as any);
-    return { service, resourceRepo, likeRepo, favoriteRepo, resourcesDomain, likeService, favoriteService, previewService, redis, uploadSessions, storage, versions, files, policy, grant };
+    const resClient = { isAvailable: true, uploadServerGeneratedObject: jest.fn().mockImplementation(async ({ body }) => {
+      body.destroy?.();
+      return { public_id: 'res-object', state: 'verified', sha256: 'b'.repeat(64), size_bytes: 123, mime_type: 'application/octet-stream' };
+    }) };
+    const service = new GameContentService(resourceRepo as any, likeRepo as any, favoriteRepo as any, versions as any, files as any, resourcesDomain as any, likeService as any, favoriteService as any, previewService as any, storage as any, policy as any, grant as any, events as any, redis as any, config as any, uploadSessions as any, undefined, resClient as any);
+    return { service, resourceRepo, likeRepo, favoriteRepo, resourcesDomain, likeService, favoriteService, previewService, redis, uploadSessions, storage, resClient, versions, files, policy, grant };
   };
 
   it('uses the shared resource query and returns a safe public DTO with batch statistics', async () => {
@@ -202,9 +209,13 @@ describe('GameContentService', () => {
   });
 
   it('creates a Resource once for a persistent map session and returns that Resource on repeated completion', async () => {
+    const folder = await mkdtemp(join(tmpdir(), 'game-content-res-'));
+    const source = join(folder, 'map.msav');
+    await writeFile(source, Buffer.alloc(123));
+    try {
     const { service, resourceRepo, resourcesDomain, uploadSessions } = dependencies();
     const uploadId = '51d4e1d8-d9cd-42f4-8326-55b2d35f1455';
-    const session = { id: uploadId, user_id: 8, status: 'uploaded', expires_at: new Date(Date.now() + 60_000), filename: 'map.msav', mime_type: 'application/octet-stream', actual_size: 123, actual_sha256: 'b'.repeat(64), expected_sha256: 'b'.repeat(64), storage_key: '/uploads/map.msav', preview_key: 'resources/map/bb/' + 'b'.repeat(64) + '/preview.png', parser_version: 'renderer-1', renderer_metadata: { width: 20, height: 18 }, resource_id: null };
+    const session = { id: uploadId, user_id: 8, status: 'uploaded', expires_at: new Date(Date.now() + 60_000), filename: 'map.msav', mime_type: 'application/octet-stream', actual_size: 123, actual_sha256: 'b'.repeat(64), expected_sha256: 'b'.repeat(64), storage_key: source, preview_key: 'resources/map/bb/' + 'b'.repeat(64) + '/preview.png', parser_version: 'renderer-1', renderer_metadata: { width: 20, height: 18 }, resource_id: null };
     const created = { id: 71, public_id: '672ca7f3-12bb-4d42-b624-5eeb59d4a4bd', status: 'pending' };
     uploadSessions.getOwned.mockResolvedValueOnce(session).mockResolvedValueOnce({ ...session, status: 'completed', resource_id: 71 });
     uploadSessions.claim.mockResolvedValue(true);
@@ -215,10 +226,11 @@ describe('GameContentService', () => {
     const first = await service.completeUpload(8, 'map', uploadId, { title: '测试地图', tags: ['电力'] });
     const second = await service.completeUpload(8, 'map', uploadId, { title: '测试地图', tags: ['电力'] });
     expect(resourcesDomain.create).toHaveBeenCalledTimes(1);
-    expect(resourcesDomain.create).toHaveBeenCalledWith(expect.objectContaining({ resource_kind: 'map' }), 8, expect.objectContaining({ content_hash: 'b'.repeat(64) }), expect.objectContaining({ uploadSessionId: uploadId, rendererDraft: expect.objectContaining({ previewKey: session.preview_key }) }));
+    expect(resourcesDomain.create).toHaveBeenCalledWith(expect.objectContaining({ resource_kind: 'map' }), 8, expect.objectContaining({ content_hash: 'b'.repeat(64), storage_backend: 'res', provider_object_id: 'res-object' }), expect.objectContaining({ uploadSessionId: uploadId, rendererDraft: expect.objectContaining({ previewKey: session.preview_key }) }));
     expect(uploadSessions.setCompleted).toHaveBeenCalledWith(uploadId, 71);
     expect(second).toMatchObject({ id: `map_${created.public_id}`, resourceId: 71 });
     expect(first).toEqual(second);
+    } finally { await rm(folder, { recursive: true, force: true }); }
   });
 
   it('rejects a map upload when the client hash does not match the server-computed hash', async () => {
@@ -226,5 +238,36 @@ describe('GameContentService', () => {
     await expect(service.beginMapUpload(8, { file_name: 'map.msav', file_path: '/uploads/map.msav', file_size: 10, mime_type: 'application/octet-stream', content_hash: 'a'.repeat(64) }, 'b'.repeat(64))).rejects.toMatchObject({ response: { code: 'HASH_MISMATCH' } });
     expect(storage.removeManaged).toHaveBeenCalledWith('/uploads/map.msav');
     expect(uploadSessions.create).not.toHaveBeenCalled();
+  });
+
+  it('grants a RES map download and returns a redirect target without reading local storage', async () => {
+    const { service, resourceRepo, resourcesDomain, storage } = dependencies();
+    (storage as any).statManagedFile = jest.fn();
+    const map = { ...resource, resource_kind: 'map', latest_published_version_id: 9 };
+    resourceRepo.findOne.mockResolvedValue(map);
+    resourcesDomain.getById.mockResolvedValue(map);
+    (service as any).versions = { findOne: jest.fn().mockResolvedValue({ id: 9, resource_id: map.id }) };
+    (service as any).files = { findOne: jest.fn().mockResolvedValue({ id: 11, storage_backend: 'res', provider_object_id: 'obj', availability_status: 'available' }) };
+    (service as any).downloadPolicy = { assertDownloadAuthentication: jest.fn().mockResolvedValue(undefined), checkEligibility: jest.fn().mockResolvedValue({ eligible: true }) };
+    const recordGrant = jest.fn().mockResolvedValue(true);
+    (service as any).downloadGrant = { recordGrant };
+    (service as any).fileProvider = { getDownloadTarget: jest.fn().mockResolvedValue({ kind: 'redirect', url: 'https://res.example/o/obj/map.msav' }) };
+
+    const target = await service.prepareMapDownload(`map_${map.public_id}`, 5, 'game-content');
+    expect(target).toMatchObject({ externalUrl: 'https://res.example/o/obj/map.msav', path: null });
+    expect(recordGrant).toHaveBeenCalledWith(expect.objectContaining({ fileId: 11, backend: 'res' }), 'user:5');
+    expect((storage as any).statManagedFile).not.toHaveBeenCalled();
+  });
+
+  it('reads published RES blueprint bytes through the provider', async () => {
+    const { service, resourceRepo } = dependencies();
+    resourceRepo.findOne.mockResolvedValue({ ...resource, latest_published_version_id: 9 });
+    (service as any).versions = { findOne: jest.fn().mockResolvedValue({ id: 9, resource_id: resource.id }) };
+    (service as any).files = { findOne: jest.fn().mockResolvedValue({ id: 12, storage_backend: 'res', provider_object_id: 'obj' }) };
+    const getReadableContent = jest.fn().mockResolvedValue(Buffer.from('msch-data'));
+    (service as any).fileProvider = { getReadableContent };
+
+    await expect(service.blueprintCode(`bp_${resource.public_id}`, null)).resolves.toEqual({ id: `bp_${resource.public_id}`, code: Buffer.from('msch-data').toString('base64') });
+    expect(getReadableContent).toHaveBeenCalledWith(expect.objectContaining({ provider_object_id: 'obj' }), 20 * 1024 * 1024);
   });
 });

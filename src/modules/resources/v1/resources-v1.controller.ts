@@ -20,6 +20,7 @@ import { ResourceCategoryService } from '../resource-categories.service';
 import { DownloadGrantService } from '../../downloads/download-grant.service';
 import { DownloadPolicyService } from '../../downloads/download-policy.service';
 import { getClientIp } from '@common/utils/client-context.util';
+import { ResourceFileProviderService } from '../resource-file-provider.service';
 
 /**
  * V1 Resource read endpoints.
@@ -42,6 +43,7 @@ export class ResourcesV1Controller {
     @Optional() private readonly categoryService?: ResourceCategoryService,
     @Optional() private readonly downloadGrantService?: DownloadGrantService,
     @Optional() private readonly downloadPolicyService?: DownloadPolicyService,
+    @Optional() private readonly fileProvider?: ResourceFileProviderService,
   ) {}
 
   @Get()
@@ -93,6 +95,8 @@ export class ResourcesV1Controller {
   async getPreview(@Param('id') id: string, @Res() res: Response) {
     await this.assertEnabled();
     const resource = await this.resourceReadAdapter.getPublicResourceEntityByPublicId(id);
+    const resUrl = resource && this.resourcePreviewService ? await this.resourcePreviewService.getResPreviewUrl(resource) : null;
+    if (resUrl) return res.redirect(302, resUrl);
     const preview = resource && this.resourcePreviewService ? await this.resourcePreviewService.readPreview(resource) : null;
     if (!preview) throw new NotFoundException('预览尚未生成');
     res.setHeader('Content-Type', 'image/png');
@@ -116,12 +120,18 @@ export class ResourcesV1Controller {
     const caps = await this.capabilitiesService.getCapabilities();
     if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
     const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId, req?.user);
-    if (!target || target.file.availability_status !== 'available') {
+    // The read adapter only returns an unpublished version to an authorized
+    // resource manager. RES keeps those bytes privately bound and marks the
+    // file `pending` until review. Allow that authorized private download while
+    // keeping public/published downloads restricted to `available` files.
+    const authorizedPending = target?.version.status !== 'published' && target?.file.availability_status === 'pending';
+    if (!target || (target.file.availability_status !== 'available' && !authorizedPending)) {
       throw new NotFoundException('文件不存在或暂不可用');
     }
     await this.downloadPolicyService?.assertDownloadAuthentication(target.resource.resource_kind, req?.user);
 
-    const redirectUrl = target.file.external_url || (
+    const providerTarget = this.fileProvider ? await this.fileProvider.getDownloadTarget(target.file, { private: !['approved', 'published'].includes(target.resource.status) || Number(target.resource.is_public) !== 1 || target.resource.visibility === 'private' || target.version.status !== 'published' }) : null;
+    const redirectUrl = providerTarget?.kind === 'redirect' ? providerTarget.url : target.file.external_url || (
       ['external', 'mfl'].includes(target.file.delivery_mode) && target.file.storage_key?.startsWith('http')
         ? target.file.storage_key
         : null
@@ -132,8 +142,8 @@ export class ResourcesV1Controller {
       return res.redirect(redirectUrl);
     }
 
-    if (!target.file.storage_key) throw new NotFoundException('文件存储地址不存在');
-    const filePath = path.resolve(target.file.storage_key);
+    if (!providerTarget && !target.file.storage_key) throw new NotFoundException('文件存储地址不存在');
+    const filePath = providerTarget?.kind === 'managed' ? providerTarget.path : path.resolve(target.file.storage_key!);
     try {
       await fs.access(filePath);
     } catch {
@@ -166,7 +176,7 @@ export class ResourcesV1Controller {
       clientType: 'public-v1',
       clientVersion: String(req?.headers?.['x-client-version'] || '').slice(0, 80) || null,
       platform: String(req?.headers?.['x-platform'] || '').slice(0, 40) || null,
-      backend: String(target.file.delivery_mode || 'managed').slice(0, 32),
+      backend: String(target.file.storage_backend || target.file.delivery_mode || 'managed').slice(0, 32),
     }, actorKey);
   }
 

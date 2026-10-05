@@ -211,3 +211,9 @@ curl -fsS https://forum.example.com/api/version
 5. 修复后重新执行测试、构建和冒烟检查。
 
 不要删除 Redis 或 MySQL 数据作为常规回滚手段。
+
+## ResourceStorage 配置
+
+新资源持久上传要求 `RES_ENABLED=true`、`RES_BASE_URL=https://res.mdtbbs.cn` 与服务端 `RES_API_KEY`，超时默认请求 10000ms、上传 120000ms，可用 `RES_REQUEST_TIMEOUT_MS` / `RES_UPLOAD_TIMEOUT_MS` 调整。API key 只在后端环境配置。禁用或缺失配置时历史 managed/MFL/external 读取保持兼容，新上传明确返回服务不可用。
+
+上线前单独验收新增迁移、RES API 可达性及 binding 权限；历史迁移为显式 CLI，默认保留旧文件。详见 [ResourceStorage](resource-storage.md)。本接入 PR 不执行生产迁移或部署。

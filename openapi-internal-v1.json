@@ -1958,6 +1958,106 @@
         ]
       }
     },
+    "/v1/resources/uploads/init": {
+      "post": {
+        "operationId": "ResourcesV1WriteController_initDirectUpload",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitResourceDirectUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Creates an owner-bound RES direct upload session. The upload token is short lived; complete is always required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDirectUploadInitResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/uploads/complete": {
+      "post": {
+        "operationId": "ResourcesV1WriteController_completeDirectUpload",
+        "x-rate-limit": {
+          "limit": 10,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteResourceDirectUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Checks the verified RES object server-side, creates a pending ResourceFile, and binds it privately.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDirectUploadCompleteResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/resources/drafts/preview": {
       "post": {
         "operationId": "ResourcesV1WriteController_previewDraft",
@@ -2442,7 +2542,10 @@
         ],
         "responses": {
           "200": {
-            "description": "Private preview image for the authenticated submitter."
+            "description": "Legacy private preview image for the authenticated submitter."
+          },
+          "302": {
+            "description": "Redirects RES draft previews to a short-lived private URL."
           },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
@@ -3244,6 +3347,9 @@
                 }
               }
             }
+          },
+          "302": {
+            "description": "Redirects new RES previews to their public URL; historical PNG bytes remain supported."
           },
           "401": {
             "description": "携带的登录凭据无效。"
@@ -23643,6 +23749,149 @@
             ]
           }
         }
+      },
+      "InitResourceDirectUploadDto": {
+        "type": "object",
+        "properties": {
+          "version_public_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Public ID of an existing draft or pending resource version."
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "map.msav"
+          },
+          "size_bytes": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 52428800,
+            "example": 123456
+          },
+          "mime_type": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "application/octet-stream"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "description": "Required SHA-256 binds the verified object to this upload context."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "supplementary",
+              "documentation"
+            ],
+            "default": "primary"
+          }
+        },
+        "required": [
+          "version_public_id",
+          "filename",
+          "size_bytes",
+          "mime_type",
+          "sha256"
+        ]
+      },
+      "ResourceDirectUploadTokenDto": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "token": {
+            "type": "string",
+            "description": "Short-lived upload token. Never the RES service API key."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "session_id",
+          "url",
+          "token",
+          "expires_at"
+        ]
+      },
+      "ResourceDirectUploadInitResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deduplicated": {
+            "type": "boolean"
+          },
+          "complete_required": {
+            "type": "number",
+            "enum": [
+              true
+            ]
+          },
+          "object_id": {
+            "type": "string"
+          },
+          "object_public_id": {
+            "type": "string"
+          },
+          "upload": {
+            "$ref": "#/components/schemas/ResourceDirectUploadTokenDto"
+          }
+        },
+        "required": [
+          "id",
+          "deduplicated",
+          "complete_required"
+        ]
+      },
+      "CompleteResourceDirectUploadDto": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Forum upload context ID returned by init."
+          },
+          "object_public_id": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "RES public object ID returned by deduplication or binary PUT."
+          }
+        },
+        "required": [
+          "session_id",
+          "object_public_id"
+        ]
+      },
+      "ResourceDirectUploadCompleteResponseDto": {
+        "type": "object",
+        "properties": {
+          "file_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "completed": {
+            "type": "number",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "file_public_id",
+          "completed"
+        ]
       },
       "ResourceV2CompatibilityDto": {
         "type": "object",

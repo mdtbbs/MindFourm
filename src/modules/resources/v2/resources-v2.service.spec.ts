@@ -170,3 +170,29 @@ describe('ResourcesV2Service map analysis projection', () => {
     expect(result.estimated_difficulty).toBeNull();
   });
 });
+
+
+describe('ResourcesV2Service RES version previews', () => {
+  it('advertises the selected version RES preview rather than the root renderer path', async () => {
+    const previews = { getVersionResPreviewUrl: jest.fn().mockResolvedValue('https://res.example/o/version-preview/preview.png') };
+    const service = new ResourcesV2Service({} as DataSource, {} as any, previews as any);
+    const resource = { id: 7, public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', resource_kind: 'map', status: 'approved', is_public: 1 } as Resource;
+    for (const collector of ['collectFiles', 'collectCompatibility', 'collectDependencies', 'collectVersionPreviewKeys']) {
+      jest.spyOn(service as any, collector).mockResolvedValue(new Map());
+    }
+    const version = { id: 11, public_id: '84b37577-d086-4897-a866-658e29e0bd09', version: '1.0', status: 'published', renderer_preview_object_id: 'version-preview' };
+    const versions = await (service as any).hydrateVersions(resource, [version]);
+    expect(versions[0].preview_url).toBe('https://res.example/o/version-preview/preview.png');
+    expect(previews.getVersionResPreviewUrl).toHaveBeenCalledWith(resource, version);
+    expect(versions[0]).not.toHaveProperty('renderer_preview_object_id');
+  });
+
+  it('rejects an unpublished selection before resolving a version RES URL', async () => {
+    const previews = { getVersionResPreviewUrl: jest.fn() };
+    const service = new ResourcesV2Service({} as DataSource, {} as any, previews as any);
+    jest.spyOn(service as any, 'getPublicResource').mockResolvedValue({ entity: { id: 7 } });
+    jest.spyOn(service as any, 'selectedVersion').mockResolvedValue(null);
+    await expect(service.getVersionPreviewUrl('resource-uuid', 'version-uuid')).rejects.toThrow();
+    expect(previews.getVersionResPreviewUrl).not.toHaveBeenCalled();
+  });
+});

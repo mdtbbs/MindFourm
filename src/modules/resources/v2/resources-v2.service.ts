@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
+import { ResourceVersion } from '@entities/resource-version.entity';
 import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import { escapeLike } from '@common/utils/search.util';
 import { ResourceReadAdapterService } from '../resource-read-adapter.service';
@@ -373,7 +374,7 @@ export class ResourcesV2Service {
         && /[\\/]\.quarantine[\\/]/.test((resource as any).file_path))) return null;
     const resourceUrl = `/api/v1/resources/${resource.public_id}/preview`;
     const hasStoredPreview = String((resource as any).renderer_status || '') === 'ready'
-      && this.hasValidVersionPreviewKey(String(resource.resource_kind || ''), (resource as any).renderer_preview_key);
+      && (Boolean(resource.renderer_preview_object_id) || this.hasValidVersionPreviewKey(String(resource.resource_kind || ''), (resource as any).renderer_preview_key));
     return hasStoredPreview ? resourceUrl : null;
   }
 
@@ -455,7 +456,7 @@ export class ResourcesV2Service {
       this.collectVersionPreviewKeys(resource, ids),
     ]);
     const publicIds = new Map(valid.map(row => [this.numberValue(row.id), String(row.public_id)]));
-    return valid.map(row => {
+    return Promise.all(valid.map(async row => {
       const id = this.numberValue(row.id);
       const versionPublicId = String(row.public_id);
       const versionFiles = files.get(id) || [];
@@ -463,9 +464,11 @@ export class ResourcesV2Service {
         file.download_url = `/api/v1/resources/${resource.public_id}/versions/${versionPublicId}/files/${file.public_id}/download`;
       }
       const hasOwnPreview = this.hasValidVersionPreviewKey(String(resource.resource_kind || ''), previewKeys.get(id));
-      const previewUrl = this.isResourcePublic(resource) && this.isUuid(versionPublicId) && hasOwnPreview
-        ? `/api/v1/resources/${resource.public_id}/versions/${versionPublicId}/preview`
-        : this.resourcePreviewUrl(resource);
+      const resPreviewUrl = row.renderer_preview_object_id
+        ? await this.resourcePreview.getVersionResPreviewUrl(resource, row as ResourceVersion) : null;
+      const previewUrl = resPreviewUrl || (this.isResourcePublic(resource) && row.status === 'published'
+        ? (hasOwnPreview ? `/api/v1/resources/${resource.public_id}/versions/${versionPublicId}/preview` : this.resourcePreviewUrl(resource))
+        : null);
       return {
         public_id: versionPublicId,
         version: String(row.version || ''),
@@ -483,7 +486,7 @@ export class ResourcesV2Service {
         dependencies: dependencies.get(id) || [],
         files: versionFiles,
       };
-    });
+    }));
   }
 
   private emptyPage<T>(query?: ResourceV2PageQueryDto): Page<T> {
@@ -577,6 +580,14 @@ export class ResourcesV2Service {
   async getStats(publicId: string) {
     const { entity } = await this.getPublicResource(publicId);
     return this.statsFor(entity);
+  }
+
+  async getVersionPreviewUrl(publicId: string, versionPublicId: string): Promise<string | null> {
+    const { entity } = await this.getPublicResource(publicId);
+    const version = await this.selectedVersion(entity, versionPublicId);
+    if (!version) return this.notFound();
+    if (version.renderer_preview_object_id) return this.resourcePreview.getVersionResPreviewUrl(entity, version as ResourceVersion);
+    return this.resourcePreview.getResPreviewUrl(entity);
   }
 
   async readVersionPreview(publicId: string, versionPublicId: string): Promise<Buffer> {

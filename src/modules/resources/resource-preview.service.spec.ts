@@ -5,6 +5,14 @@ import * as path from 'path';
 import { ResourcePreviewService } from './resource-preview.service';
 
 describe('ResourcePreviewService', () => {
+  const resClient = () => ({
+    isAvailable: true,
+    uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-preview' }),
+    createBinding: jest.fn().mockResolvedValue({ id: 'binding-preview' }),
+    deleteBinding: jest.fn().mockResolvedValue(undefined),
+    createPrivateDownloadUrl: jest.fn().mockResolvedValue({ url: 'https://res.example/private/token' }),
+    buildPublicDownloadUrl: jest.fn().mockReturnValue('https://res.example/o/res-preview/preview.png'),
+  });
   const originalUrl = process.env.RESOURCE_RENDERER_URL;
   const originalRoot = process.env.RESOURCE_PREVIEW_ROOT;
   const originalToken = process.env.RESOURCE_RENDERER_TOKEN;
@@ -15,6 +23,44 @@ describe('ResourcePreviewService', () => {
     if (originalRoot === undefined) delete process.env.RESOURCE_PREVIEW_ROOT; else process.env.RESOURCE_PREVIEW_ROOT = originalRoot;
     if (originalToken === undefined) delete process.env.RESOURCE_RENDERER_TOKEN; else process.env.RESOURCE_RENDERER_TOKEN = originalToken;
     global.fetch = originalFetch;
+  });
+
+
+  it('keeps version previews private until the resource and version are published and retains the PNG', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-version-preview-'));
+    try {
+      process.env.RESOURCE_PREVIEW_ROOT = root;
+      const hash = 'a'.repeat(64);
+      const key = `resources/map/aa/${hash}/preview.png`;
+      await fs.mkdir(path.dirname(path.join(root, key)), { recursive: true });
+      await fs.writeFile(path.join(root, key), Buffer.from('version preview'));
+      const client = resClient();
+      const references = jest.fn().mockResolvedValue([{ id: 11 }]);
+      const service = new ResourcePreviewService({ update: jest.fn(), manager: { query: references } } as any, undefined, undefined, undefined, client as any);
+      const resource = { id: 7, status: 'approved', is_public: 1, visibility: 'public', resource_kind: 'map' } as any;
+      const version = { id: 11, public_id: 'version-11', status: 'pending_review', content_hash: hash } as any;
+      const refs = await service.storeVersionPreviewInRes(resource, version, key);
+      expect(client.createBinding).toHaveBeenLastCalledWith('res-preview', expect.objectContaining({ owner_type: 'resource_version_preview', owner_id: 'version-11', visibility: 'private' }));
+      Object.assign(version, refs);
+      await expect(service.getVersionResPreviewUrl(resource, version)).resolves.toBe('https://res.example/private/token');
+      await service.setVersionResPreviewVisibility(resource, version, 'public');
+      expect(client.createBinding).toHaveBeenLastCalledWith('res-preview', expect.objectContaining({ visibility: 'private' }));
+      version.status = 'published';
+      await service.setVersionResPreviewVisibility(resource, version, 'public');
+      expect(client.createBinding).toHaveBeenLastCalledWith('res-preview', expect.objectContaining({ visibility: 'public' }));
+      await expect(service.getVersionResPreviewUrl(resource, version)).resolves.toBe('https://res.example/o/res-preview/preview.png');
+      await service.setVersionResPreviewVisibility({ ...resource, is_public: 0 }, version, 'public');
+      expect(client.createBinding).toHaveBeenLastCalledWith('res-preview', expect.objectContaining({ visibility: 'private' }));
+      await service.removePreviewKey(key);
+      expect(references).toHaveBeenCalledWith(expect.stringContaining('map_version_metadata'), [key, key, key]);
+      expect((await fs.stat(path.join(root, key))).isFile()).toBe(true);
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
+
+  it('rejects newly rendered drafts when RES is unavailable', async () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    const service = new ResourcePreviewService({} as any, undefined, undefined, undefined, { isAvailable: false } as any);
+    await expect(service.createDraft(17, 'map', { file_size: 10 } as any)).rejects.toThrow('资源存储服务暂不可用');
   });
 
   it('accepts only a content-addressed preview key and strips unexpected renderer metadata', async () => {
@@ -50,6 +96,38 @@ describe('ResourcePreviewService', () => {
     await fs.rm(root, { recursive: true, force: true });
   });
 
+  it('stores a new preview in RES with a private binding, then makes it public on approval', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-preview-res-'));
+    try {
+      const hash = 'a'.repeat(64);
+      const key = `resources/map/${hash.slice(0, 2)}/${hash}/preview.png`;
+      await fs.mkdir(path.dirname(path.join(root, key)), { recursive: true });
+      await fs.writeFile(path.join(root, key), Buffer.from('preview png'));
+      process.env.RESOURCE_PREVIEW_ROOT = root;
+      const update = jest.fn().mockResolvedValue(undefined);
+      const client = {
+        isAvailable: true,
+        uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-preview' }),
+        createBinding: jest.fn().mockResolvedValue({ id: 'binding-preview' }),
+        buildPublicDownloadUrl: jest.fn().mockReturnValue('https://res.example/o/res-preview/preview.png'),
+        createPrivateDownloadUrl: jest.fn().mockResolvedValue({ url: 'https://res.example/private/token' }),
+      };
+      const service = new ResourcePreviewService({ update } as any, undefined, undefined, undefined, client as any);
+      const resource = { id: 7, public_id: 'resource-7', is_public: 1, resource_kind: 'map', content_hash: hash, status: 'pending', renderer_status: 'ready' } as any;
+      await service.storePreviewInRes(resource, key);
+      expect(client.createBinding).toHaveBeenCalledWith('res-preview', expect.objectContaining({ owner_id: 'resource-7', visibility: 'private' }));
+      expect(update).toHaveBeenCalledWith(7, expect.objectContaining({ renderer_preview_object_id: 'res-preview', renderer_preview_binding_id: 'binding-preview', renderer_preview_key: null }));
+      expect((await fs.stat(path.join(root, key))).isFile()).toBe(true);
+      const withReference = { ...resource, renderer_preview_object_id: 'res-preview', renderer_preview_binding_id: 'binding-preview' };
+      expect(await service.getResPreviewUrl(withReference)).toBe('https://res.example/private/token');
+      await service.setResPreviewVisibility(withReference, 'public');
+      expect(client.createBinding).toHaveBeenLastCalledWith('res-preview', expect.objectContaining({ visibility: 'private' }));
+      await service.setResPreviewVisibility({ ...withReference, status: 'approved' }, 'public');
+      expect(client.createBinding).toHaveBeenLastCalledWith('res-preview', expect.objectContaining({ visibility: 'public' }));
+      expect(await service.getResPreviewUrl({ ...withReference, status: 'approved' })).toBe('https://res.example/o/res-preview/preview.png');
+    } finally { await fs.rm(root, { recursive: true, force: true }); }
+  });
+
   it('does not trust a renderer key that points outside its content-addressed location', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-preview-'));
     const source = path.join(root, 'blueprint.msch');
@@ -80,13 +158,17 @@ describe('ResourcePreviewService', () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
     process.env.RESOURCE_PREVIEW_ROOT = root;
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ previewKey: key, metadata: { name: 'Private' } }) }) as any;
-    const service = new ResourcePreviewService({ update: jest.fn() } as any, { removeManaged: jest.fn() } as any);
+    const client = resClient();
+    const service = new ResourcePreviewService({ update: jest.fn() } as any, { removeManaged: jest.fn() } as any, undefined, undefined, client as any);
 
     const draft = await service.createDraft(17, 'schematic', {
       file_name: 'blueprint.msch', file_path: source, file_size: input.length,
       mime_type: 'application/octet-stream', content_hash: hash,
     });
 
+    expect(client.createBinding).toHaveBeenCalledWith('res-preview', expect.objectContaining({ owner_type: 'resource_preview_draft', owner_id: draft.id, visibility: 'private' }));
+    await expect(service.getDraftResPreviewUrl(17, draft.id)).resolves.toBe('https://res.example/private/token');
+    await expect(service.getDraftResPreviewUrl(18, draft.id)).rejects.toThrow('预览草稿不存在或已过期');
     await expect(service.readDraftPreview(17, draft.id)).resolves.toEqual(Buffer.from('private preview'));
     await expect(service.readDraftPreview(18, draft.id)).rejects.toThrow('预览草稿不存在或已过期');
     await expect(service.takeDraft(18, draft.id, 'schematic')).rejects.toThrow('预览草稿不存在或已过期');
@@ -106,7 +188,7 @@ describe('ResourcePreviewService', () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
     process.env.RESOURCE_PREVIEW_ROOT = root;
     global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ previewKey: key, parserVersion: 'renderer-2', metadata: { width: 32, height: 16 } }) }) as any;
-    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+    const service = new ResourcePreviewService({ update: jest.fn() } as any, undefined, undefined, undefined, resClient() as any);
     const preview = await service.createDraft(17, 'map', { file_name: 'map.msav', file_path: source, file_size: input.length, mime_type: 'application/octet-stream', content_hash: hash });
     const consumed = await service.consumeDraft(17, preview.id, 'map');
     expect(consumed).toEqual({ file: expect.objectContaining({ file_path: source }), previewKey: key, parserVersion: 'renderer-2', metadata: { width: 32, height: 16 } });
