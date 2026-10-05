@@ -92,9 +92,13 @@ jobs:
       - name: Build backend
         run: npm run build:backend
 
-      - name: Prepare deployed schema and apply release migrations
+      - name: Verify release migrations up, down, and up on MySQL
         run: |
           node scripts/prepare-e2e-database.cjs
+          npx typeorm migration:run -d dist/database/data-source.js
+          npx typeorm migration:revert -d dist/database/data-source.js
+          npx typeorm migration:revert -d dist/database/data-source.js
+          npx typeorm migration:revert -d dist/database/data-source.js
           npx typeorm migration:run -d dist/database/data-source.js
 
       - name: Build frontend
