@@ -1,0 +1,213 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Download, FlipHorizontal, RotateCcw, RotateCw, Trash2, Undo2 } from 'lucide-react';
+import {
+  analyzeResourceWorkbenchVersionV2,
+  exportResourceWorkbenchSchematicV2,
+  getResourceV2SchematicBlocks,
+  type ResourceV2SchematicBlock,
+  type ResourceWorkbenchV2Response,
+  type ResourceWorkbenchV2Version,
+  type ResourceWorkbenchV2VersionAnalysis,
+} from '@/lib/api/v1/resources';
+import { V1ApiError } from '@/lib/api/v1/transport';
+import { useI18n } from '@/i18n/provider';
+
+type Placement = { key: string; x: number; y: number; rotation: number | null };
+type BlockGroup = { name: string; displayName: string | null; count: number; placements: Placement[] };
+
+function makeGroups(blocks: ResourceV2SchematicBlock[]): { groups: BlockGroup[]; complete: boolean; total: number } {
+  let complete = blocks.length > 0;
+  let total = 0;
+  const groups = blocks.map((block) => {
+    const positions = Array.isArray(block.positions) ? block.positions : [];
+    const placements = positions.flatMap((position): Placement[] => {
+      if (!Number.isInteger(position.x) || !Number.isInteger(position.y)) return [];
+      return [{ key: `${position.x}:${position.y}`, x: position.x!, y: position.y!, rotation: position.rotation }];
+    }).sort((left, right) => left.y - right.y || left.x - right.x);
+    if (placements.length !== block.count || placements.length !== positions.length) complete = false;
+    total += placements.length;
+    return { name: block.internal_name, displayName: block.display_name, count: block.count, placements };
+  }).sort((left, right) => left.name.localeCompare(right.name));
+  if (total > 10_000) complete = false;
+  return { groups, complete, total };
+}
+
+function suggestedFilename(version: ResourceWorkbenchV2Version): string {
+  const sourceName = version.files.find((file) => file.role === 'primary')?.original_filename
+    || version.files[0]?.original_filename || 'schematic.msch';
+  const stem = sourceName.split(/[\\/]/).pop()?.replace(/\.msch$/i, '') || 'schematic';
+  return `${stem}-edited.msch`;
+}
+
+export default function SchematicLightEditor({
+  workbench,
+  version,
+  canEdit,
+}: {
+  workbench: ResourceWorkbenchV2Response;
+  version: ResourceWorkbenchV2Version | null;
+  canEdit: boolean;
+}) {
+  const { t } = useI18n();
+  const [groups, setGroups] = useState<BlockGroup[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [complete, setComplete] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleted, setDeleted] = useState<Set<string>>(new Set());
+  const [rotation, setRotation] = useState(0);
+  const [mirrorX, setMirrorX] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [analysis, setAnalysis] = useState<ResourceWorkbenchV2VersionAnalysis | null>(null);
+  const [downloaded, setDownloaded] = useState(false);
+  const versionPublicId = version?.public_id;
+  const versionStatus = version?.status;
+
+  useEffect(() => {
+    setGroups([]); setSelected(new Set()); setDeleted(new Set()); setRotation(0); setMirrorX(false);
+    setAnalysis(null); setDownloaded(false); setActionError(''); setLoadError('');
+    if (!canEdit || !versionPublicId || versionStatus !== 'published') { setComplete(false); setTotal(0); return; }
+    let active = true;
+    setLoading(true);
+    void (async () => {
+      const blocks: ResourceV2SchematicBlock[] = [];
+      let cursor: string | undefined;
+      let pages = 0;
+      do {
+        const page = await getResourceV2SchematicBlocks(workbench.resource.public_id, versionPublicId, { limit: 100, cursor });
+        blocks.push(...page.items);
+        cursor = page.pagination.has_more ? page.pagination.next_cursor || undefined : undefined;
+        pages += 1;
+      } while (cursor && pages < 10);
+      const normalized = makeGroups(blocks);
+      if (!active) return;
+      setGroups(normalized.groups);
+      setComplete(normalized.complete && !cursor);
+      setTotal(normalized.total);
+    })().catch((caught) => {
+      if (active) setLoadError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.schematicEditor.loadFailed'));
+    }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [canEdit, t, versionPublicId, versionStatus, workbench.resource.public_id]);
+
+  const selectedCount = selected.size;
+  const deletedCount = deleted.size;
+  const canExport = Boolean(canEdit && version?.status === 'published' && complete && !loading && !busy
+    && (rotation !== 0 || mirrorX || deletedCount > 0));
+  const removedNames = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const group of groups) for (const placement of group.placements) labels.set(placement.key, group.displayName || group.name);
+    return [...deleted].map((key) => ({ key, name: labels.get(key) || key }));
+  }, [deleted, groups]);
+
+  const toggleSelected = (key: string) => setSelected((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  });
+
+  const deleteSelected = () => {
+    if (!selected.size) return;
+    setDeleted((current) => new Set([...current, ...selected]));
+    setSelected(new Set());
+    setAnalysis(null);
+    setDownloaded(false);
+  };
+
+  const exportAndReanalyze = async () => {
+    if (!version || !canExport) return;
+    setBusy(true); setActionError(''); setAnalysis(null); setDownloaded(false);
+    try {
+      const positions = [...deleted].map((key) => {
+        const [x, y] = key.split(':').map(Number);
+        return { x, y };
+      });
+      const blob = await exportResourceWorkbenchSchematicV2(workbench.resource.public_id, version.public_id, {
+        rotation_quarters: rotation,
+        mirror_x: mirrorX,
+        delete_positions: positions,
+      });
+      if (!blob.size) throw new Error(t('resourceWorkbenchV2.schematicEditor.exportFailed'));
+      const file = new File([blob], suggestedFilename(version), { type: 'application/octet-stream' });
+      const form = new FormData();
+      form.append('file', file);
+      const result = await analyzeResourceWorkbenchVersionV2(workbench.resource.public_id, form);
+      if (result.resource_kind !== 'schematic' || !('renderer_metadata' in result.analysis)) {
+        throw new Error(t('resourceWorkbenchV2.schematicEditor.reanalysisFailed'));
+      }
+      setAnalysis(result.analysis);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = file.name;
+      anchor.rel = 'noopener';
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setDownloaded(true);
+    } catch (caught) {
+      const message = caught instanceof V1ApiError && caught.message
+        ? caught.message
+        : t('resourceWorkbenchV2.schematicEditor.exportFailed');
+      setActionError(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!canEdit) return <p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.ownerOnly')}</p>;
+  if (!version) return <p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.noVersion')}</p>;
+  if (version.status !== 'published') return <p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.publishedOnly')}</p>;
+
+  return <div className="space-y-4">
+    <p className="text-sm leading-6 text-[var(--text-secondary)]">{t('resourceWorkbenchV2.schematicEditor.help')}</p>
+    {version.preview_url && <img src={version.preview_url} alt={t('resourceWorkbenchV2.schematicEditor.previewAlt')} className="max-h-72 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] object-contain" />}
+    <div className="flex flex-wrap gap-2">
+      <button type="button" disabled={busy} onClick={() => { setRotation((value) => (value + 3) % 4); setAnalysis(null); setDownloaded(false); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm disabled:opacity-50"><RotateCcw className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.rotateLeft')}</button>
+      <button type="button" disabled={busy} onClick={() => { setRotation((value) => (value + 1) % 4); setAnalysis(null); setDownloaded(false); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm disabled:opacity-50"><RotateCw className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.rotateRight')}</button>
+      <button type="button" aria-pressed={mirrorX} disabled={busy} onClick={() => { setMirrorX((value) => !value); setAnalysis(null); setDownloaded(false); }} className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm disabled:opacity-50 ${mirrorX ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : 'border-[var(--border)]'}`}><FlipHorizontal className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.mirror')}</button>
+      <button type="button" disabled={!selectedCount || busy} onClick={deleteSelected} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-500/40 px-3 text-sm text-red-700 disabled:opacity-40 dark:text-red-300"><Trash2 className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.deleteSelected')} · {selectedCount}</button>
+    </div>
+
+    {loading && <p role="status" className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.loading')}</p>}
+    {loadError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300"><AlertCircle className="mr-2 inline h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.loadFailed')}: {loadError}</div>}
+    {!loading && !loadError && groups.length === 0 && <p className="rounded-lg border border-dashed border-[var(--border)] p-4 text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.noBlocks')}</p>}
+    {!loading && !loadError && groups.length > 0 && !complete && <div role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-800 dark:text-amber-200">{t('resourceWorkbenchV2.schematicEditor.incompleteBlocks')}</div>}
+
+    {complete && <div className="space-y-2">
+      <p className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.blockPositions', { count: total })}</p>
+      {groups.map((group) => <details key={group.name} className="rounded-lg border border-[var(--border)]">
+        <summary className="min-h-11 cursor-pointer px-3 py-2 text-sm font-medium text-[var(--text)]">{group.displayName || group.name} · {group.count}</summary>
+        <div className="grid grid-cols-2 gap-1 border-t border-[var(--border)] p-2 sm:grid-cols-4">
+          {group.placements.map((placement) => {
+            const isDeleted = deleted.has(placement.key);
+            return <label key={placement.key} className={`flex min-h-11 items-center gap-2 rounded px-2 text-xs ${isDeleted ? 'text-[var(--text-muted)] line-through' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}>
+              <input type="checkbox" disabled={busy || isDeleted} checked={selected.has(placement.key)} onChange={() => toggleSelected(placement.key)} className="h-4 w-4 accent-[var(--primary)]" />
+              <span>{placement.x}, {placement.y}{placement.rotation !== null ? ` · ${placement.rotation}` : ''}</span>
+            </label>;
+          })}
+        </div>
+      </details>)}
+    </div>}
+
+    {removedNames.length > 0 && <section aria-label={t('resourceWorkbenchV2.schematicEditor.removed')} className="space-y-2 rounded-lg border border-[var(--border)] p-3">
+      <h4 className="text-sm font-semibold text-[var(--text)]">{t('resourceWorkbenchV2.schematicEditor.removed')}: {removedNames.length}</h4>
+      <div className="flex flex-wrap gap-2">{removedNames.slice(0, 100).map((item) => <button key={item.key} type="button" disabled={busy} onClick={() => { setDeleted((current) => { const next = new Set(current); next.delete(item.key); return next; }); setAnalysis(null); setDownloaded(false); }} className="inline-flex min-h-9 items-center gap-1 rounded-full bg-[var(--bg-elevated)] px-3 text-xs text-[var(--text-secondary)] disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" />{item.name} · {item.key} · {t('resourceWorkbenchV2.schematicEditor.undo')}</button>)}</div>
+    </section>}
+
+    <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-4">
+      <button type="button" disabled={!canExport} onClick={() => void exportAndReanalyze()} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4" />{busy ? t('resourceWorkbenchV2.schematicEditor.exporting') : t('resourceWorkbenchV2.schematicEditor.export')}</button>
+      <span className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.rotationStatus', { count: rotation, mirror: mirrorX ? t('resourceWorkbenchV2.schematicEditor.enabled') : t('resourceWorkbenchV2.schematicEditor.disabled') })}</span>
+    </div>
+    {actionError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">{actionError}</div>}
+    {busy && <p role="status" className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.reanalyzing')}</p>}
+    {downloaded && analysis && 'renderer_metadata' in analysis && <div role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-800 dark:text-emerald-200">
+      <p className="font-semibold">{t('resourceWorkbenchV2.schematicEditor.reanalysisComplete')}</p>
+      <p className="mt-1">{t('resourceWorkbenchV2.schematicEditor.exportedFile', { count: Number(analysis.renderer_metadata?.block_count ?? analysis.renderer_metadata?.blocks ?? 0) })}</p>
+      {analysis.findings.length > 0 && <ul className="mt-2 list-inside list-disc">{analysis.findings.map((finding, index) => <li key={`${finding.key || finding.code || 'finding'}:${index}`}>{finding.message}</li>)}</ul>}
+    </div>}
+  </div>;
+}

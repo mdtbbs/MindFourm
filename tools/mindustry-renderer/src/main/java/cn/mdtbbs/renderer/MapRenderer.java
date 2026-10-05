@@ -12,9 +12,11 @@ import arc.util.serialization.Json;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import mindustry.Vars;
+import mindustry.core.Logic;
 import mindustry.core.Platform;
 import mindustry.core.Version;
 import mindustry.ctype.ContentType;
+import mindustry.entities.units.BuildPlan;
 import mindustry.game.Schematic;
 import mindustry.game.Schematics;
 import mindustry.io.MapIO;
@@ -23,6 +25,9 @@ import mindustry.io.SaveMeta;
 import mindustry.maps.Map;
 import mindustry.net.Net;
 import mindustry.world.Block;
+import arc.math.geom.Point2;
+import arc.struct.Seq;
+import arc.struct.StringMap;
 
 import javax.imageio.ImageIO;
 import java.awt.Color;
@@ -56,8 +61,9 @@ import java.util.concurrent.Executors;
  * only uses official MapIO/Schematics readers and writes a derived PNG.
  */
 public final class MapRenderer {
+    private static final int MAX_MAP_LAYER_ITEMS = 5_000;
     private static final int MAX_BYTES = 20 * 1024 * 1024;
-    private static final String VERSION = "v160.2-preview-4-production";
+    private static final String VERSION = "v160.2-preview-5-resource-layers";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
     private static String token;
@@ -91,17 +97,21 @@ public final class MapRenderer {
         Vars.init();
         Vars.content.createBaseContent();
         Vars.content.init();
+        Vars.logic = new Logic();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
         chineseBundle = loadChineseBundle();
     }
 
     static void initializeForFixture(Path root) {
         storageRoot = root.toAbsolutePath().normalize();
+        Vars.platform = new Platform() {};
+        Vars.net = new Net(Vars.platform.getNet());
         Vars.headless = true;
         Core.settings.setDataDirectory(new Fi(storageRoot.resolve("worker-config").toFile()));
         Vars.init();
         Vars.content.createBaseContent();
         Vars.content.init();
+        Vars.logic = new Logic();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
         chineseBundle = new Properties();
     }
@@ -110,6 +120,7 @@ public final class MapRenderer {
         HttpServer server = HttpServer.create(new InetSocketAddress(env("WORKER_HOST", "127.0.0.1"), Integer.parseInt(env("WORKER_PORT", "6100"))), 8);
         server.createContext("/health", MapRenderer::health);
         server.createContext("/v1/analyze", MapRenderer::analyze);
+        server.createContext("/v1/transform-schematic", MapRenderer::transformSchematic);
         server.createContext("/v1/content-metadata", MapRenderer::contentMetadata);
         server.setExecutor(Executors.newSingleThreadExecutor());
         server.start();
@@ -218,6 +229,195 @@ public final class MapRenderer {
         }
     }
 
+    /** Applies only official in-memory schematic transforms; uploaded content is never loaded as code or executed. */
+    private static void transformSchematic(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        Path input = null;
+        try {
+            JsonValue request = JSON.parse(new String(readLimited(exchange, MAX_BYTES * 2), StandardCharsets.UTF_8));
+            String filename = request.getString("filename", "");
+            String sourceHash = request.getString("sha256", "").toLowerCase();
+            String encoded = request.getString("dataBase64", "");
+            int rotation = request.getInt("rotation_quarters", 0);
+            boolean mirrorX = request.getBoolean("mirror_x", false);
+            JsonValue rawDeletes = request.get("delete_positions");
+            if (filename.length() > 255 || !filename.toLowerCase().endsWith(".msch")
+                || !sourceHash.matches("[a-f0-9]{64}") || encoded.isEmpty()
+                || rotation < 0 || rotation > 3 || (rawDeletes != null && !rawDeletes.isArray())) {
+                send(exchange, 422, error("INVALID_SCHEMATIC_OPERATION")); return;
+            }
+            byte[] source = Base64.getDecoder().decode(encoded);
+            String actualHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source));
+            if (source.length == 0 || source.length > MAX_BYTES || !actualHash.equals(sourceHash)) {
+                send(exchange, 422, error("INVALID_FILE")); return;
+            }
+            List<Point2> deletePositions = readDeletePositions(rawDeletes);
+            Path inputs = storageRoot.resolve("worker-input").normalize();
+            Files.createDirectories(inputs);
+            input = Files.createTempFile(inputs, "schematic-edit-", ".msch");
+            Files.write(input, source);
+            byte[] output = transformSchematicBytes(input, rotation, mirrorX, deletePositions);
+            String outputHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(output));
+            String result = "{\"dataBase64\":" + quote(Base64.getEncoder().encodeToString(output))
+                + ",\"sha256\":" + quote(outputHash) + "}";
+            send(exchange, 200, result);
+        } catch (SchematicTransformException exception) {
+            send(exchange, 422, error(exception.errorCode));
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 422, error("INVALID_SCHEMATIC_OPERATION"));
+        } catch (Exception exception) {
+            exception.printStackTrace(System.err);
+            send(exchange, 422, error("INVALID_SCHEMATIC"));
+        } finally {
+            if (input != null) Files.deleteIfExists(input);
+        }
+    }
+
+    private static List<Point2> readDeletePositions(JsonValue raw) throws SchematicTransformException {
+        java.util.ArrayList<Point2> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        java.util.HashSet<Long> unique = new java.util.HashSet<>();
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= 10_000 || !item.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            int x = item.getInt("x", Integer.MIN_VALUE);
+            int y = item.getInt("y", Integer.MIN_VALUE);
+            if (x == Integer.MIN_VALUE || y == Integer.MIN_VALUE || Math.abs(x) > 128 || Math.abs(y) > 128
+                || !unique.add((((long)x) << 32) ^ (y & 0xffffffffL))) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+            result.add(new Point2(x, y));
+        }
+        return result;
+    }
+
+    /**
+     * Decodes with Mindustry's official reader and serializes with its official
+     * writer. Unknown block/content definitions are rejected because read()
+     * deliberately replaces unknown blocks with air and could otherwise lose data.
+     */
+    static byte[] transformSchematicBytes(Path input, int rotationQuarterTurns, boolean mirrorX, List<Point2> deletePositions) throws IOException, SchematicTransformException {
+        if (rotationQuarterTurns < 0 || rotationQuarterTurns > 3) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+        List<String> unknown = unknownSchematicEditContent(input);
+        if (!unknown.isEmpty()) throw new SchematicTransformException("UNSUPPORTED_SCHEMATIC_CONTENT");
+
+        Schematic source = Schematics.read(new Fi(input.toFile()));
+        java.util.HashSet<Long> requested = new java.util.HashSet<>();
+        for (Point2 position : deletePositions) {
+            if (position.x < 0 || position.y < 0 || position.x >= source.width || position.y >= source.height
+                || !requested.add((((long)position.x) << 32) ^ (position.y & 0xffffffffL))) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+        }
+        java.util.HashSet<Long> found = new java.util.HashSet<>();
+        for (int index = source.tiles.size - 1; index >= 0; index--) {
+            Schematic.Stile tile = source.tiles.get(index);
+            long position = (((long)tile.x) << 32) ^ (tile.y & 0xffffffffL);
+            if (requested.contains(position)) {
+                source.tiles.remove(index);
+                found.add(position);
+            }
+        }
+        if (found.size() != requested.size()) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+
+        StringMap tags = new StringMap();
+        tags.putAll(source.tags);
+        Seq<String> labels = new Seq<>();
+        if (source.labels != null) labels.addAll(source.labels);
+        Schematic rotated = Schematics.rotate(source, rotationQuarterTurns);
+        Schematic result = copySchematic(rotated);
+        result.tags.clear();
+        result.tags.putAll(tags);
+        result.labels.clear();
+        result.labels.addAll(labels);
+        if (mirrorX) mirrorSchematicX(result);
+        for (Schematic.Stile tile : result.tiles) {
+            if (tile.x < 0 || tile.y < 0 || tile.x >= result.width || tile.y >= result.height) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC");
+            }
+        }
+
+        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+        Schematics.write(result, output);
+        byte[] bytes = output.toByteArray();
+        if (bytes.length < 5 || bytes.length > MAX_BYTES) throw new SchematicTransformException("INVALID_SCHEMATIC");
+        Schematic verified = Schematics.read(new java.io.ByteArrayInputStream(bytes));
+        if (verified.width != result.width || verified.height != result.height || verified.tiles.size != result.tiles.size
+            || !SchematicFingerprint.exact(verified).equals(SchematicFingerprint.exact(result))) {
+            throw new SchematicTransformException("INVALID_SCHEMATIC");
+        }
+        return bytes;
+    }
+
+    private static Schematic copySchematic(Schematic source) {
+        Seq<Schematic.Stile> tiles = new Seq<>(source.tiles.size);
+        for (Schematic.Stile tile : source.tiles) tiles.add(tile.copy());
+        StringMap tags = new StringMap();
+        tags.putAll(source.tags);
+        Schematic copy = new Schematic(tiles, tags, source.width, source.height);
+        if (source.labels != null) copy.labels.addAll(source.labels);
+        return copy;
+    }
+
+    /** Horizontal reflection through the schematic's vertical centerline. */
+    private static void mirrorSchematicX(Schematic schematic) {
+        for (Schematic.Stile tile : schematic.tiles) {
+            tile.x = (short)(schematic.width - 1 - tile.x);
+            BuildPlan plan = new BuildPlan(tile.x, tile.y, tile.rotation, tile.block, tile.config);
+            plan.config = BuildPlan.pointConfig(tile.block, tile.config, point -> point.x = -point.x);
+            tile.block.flipRotation(plan, true);
+            tile.rotation = (byte)plan.rotation;
+            tile.config = plan.config;
+        }
+    }
+
+    private static List<String> unknownSchematicEditContent(Path input) throws IOException, SchematicTransformException {
+        try (DataInputStream file = new DataInputStream(Files.newInputStream(input))) {
+            if (file.readInt() != 0x6d736368) throw new SchematicTransformException("INVALID_SCHEMATIC");
+            int formatVersion = file.readUnsignedByte();
+            if (formatVersion != 1) throw new SchematicTransformException("UNSUPPORTED_SCHEMATIC_FORMAT");
+            try (DataInputStream data = new DataInputStream(new InflaterInputStream(file))) {
+                int width = data.readShort();
+                int height = data.readShort();
+                if (width <= 0 || height <= 0 || width > 128 || height > 128) throw new SchematicTransformException("INVALID_SCHEMATIC");
+                StringMap tags = new StringMap();
+                int tagCount = data.readUnsignedByte();
+                for (int index = 0; index < tagCount; index++) tags.put(data.readUTF(), data.readUTF());
+                String contentMap = tags.get("contentMap");
+                if (contentMap == null || contentMap.isBlank()) throw new SchematicTransformException("UNSUPPORTED_SCHEMATIC_CONTENT");
+                JsonValue mappedContent = JSON.parse(contentMap);
+                if (mappedContent == null || !mappedContent.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC");
+                java.util.ArrayList<String> unknown = new java.util.ArrayList<>();
+                for (JsonValue typeEntry = mappedContent.child; typeEntry != null; typeEntry = typeEntry.next) {
+                    int typeOrdinal;
+                    try { typeOrdinal = Integer.parseInt(typeEntry.name); }
+                    catch (NumberFormatException exception) { throw new SchematicTransformException("INVALID_SCHEMATIC"); }
+                    if (typeOrdinal < 0 || typeOrdinal >= ContentType.all.length || !typeEntry.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC");
+                    ContentType type = ContentType.all[typeOrdinal];
+                    for (JsonValue contentEntry = typeEntry.child; contentEntry != null; contentEntry = contentEntry.next) {
+                        if (Vars.content.getByName(type, contentEntry.name) == null) unknown.add(type.name() + ":" + contentEntry.name);
+                    }
+                }
+                int blockCount = data.readUnsignedByte();
+                for (int index = 0; index < blockCount; index++) {
+                    String name = data.readUTF();
+                    Block block = Vars.content.getByName(ContentType.block, mindustry.io.SaveFileReader.fallback.get(name, name));
+                    if (block == null || isA(block, "LegacyBlock")) unknown.add("block:" + name);
+                }
+                return List.copyOf(unknown);
+            }
+        } catch (SchematicTransformException | IOException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new SchematicTransformException("INVALID_SCHEMATIC");
+        }
+    }
+
+    static final class SchematicTransformException extends Exception {
+        final String errorCode;
+        SchematicTransformException(String errorCode) { super(errorCode); this.errorCode = errorCode; }
+    }
+
     private static void renderMap(HttpExchange exchange, Path input, String hash) throws IOException {
         Map map = MapIO.createMap(new Fi(input.toFile()), true);
         SaveMeta storedMeta = SaveIO.getMeta(new Fi(input.toFile()));
@@ -318,36 +518,59 @@ public final class MapRenderer {
             ",\"core_count\":" + jsonField(tileMetadata, "core_count", "0") +
             ",\"cores\":" + jsonField(tileMetadata, "cores", "[]") +
             ",\"core_teams\":" + jsonField(tileMetadata, "core_teams", "[]") +
+            ",\"tile_layers\":" + jsonField(tileMetadata, "tile_layers", "{}") +
+            ",\"tile_layers_truncated\":" + jsonField(tileMetadata, "tile_layers_truncated", "false") +
             "}";
     }
 
     private static String mapTileMetadata(Map map, boolean tilesLoaded) {
         if (!tilesLoaded || Vars.world == null || Vars.world.tiles == null || Vars.world.tiles.width != map.width || Vars.world.tiles.height != map.height) {
-            return "{\"core_count\":0,\"cores\":[],\"core_teams\":[]}";
+            return "{\"core_count\":0,\"cores\":[],\"core_teams\":[],\"tile_layers\":{},\"tile_layers_truncated\":false}";
         }
-        StringBuilder cores = new StringBuilder("[");
-        StringBuilder teams = new StringBuilder("[");
+        JsonArrayBuilder cores = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder terrain = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder resources = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder ores = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder enemySpawns = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder buildings = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder liquids = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
         java.util.HashSet<String> coreTeams = new java.util.HashSet<>();
-        int[] count = {0};
-        boolean[] firstCore = {true};
+        int count = 0;
         for (mindustry.world.Tile tile : Vars.world.tiles) {
-            if (!(tile.build instanceof mindustry.world.blocks.storage.CoreBlock.CoreBuild)) continue;
-            mindustry.game.Team team = tile.team();
-            String teamName = team == null ? "" : team.name;
-            if (!firstCore[0]) cores.append(',');
-            firstCore[0] = false;
-            cores.append("{\"x\":").append(tile.x).append(",\"y\":").append(tile.y)
-                .append(",\"team\":").append(quote(teamName)).append('}');
-            coreTeams.add(teamName);
-            count[0]++;
+            String position = "\"x\":" + tile.x + ",\"y\":" + tile.y;
+            terrain.add("{" + position + ",\"name\":" + quote(tile.floor().name) + "}");
+            mindustry.type.Item drop = tile.drop();
+            if (drop != null) resources.add("{" + position + ",\"name\":" + quote(drop.name) + "}");
+            if (tile.overlay().wallOre && tile.overlay().itemDrop != null) {
+                ores.add("{" + position + ",\"name\":" + quote(tile.overlay().itemDrop.name) + "}");
+            }
+            if (tile.floor().liquidDrop != null) {
+                liquids.add("{" + position + ",\"name\":" + quote(tile.floor().liquidDrop.name) + "}");
+            }
+            if (isA(tile.block(), "SpawnBlock")) {
+                enemySpawns.add("{" + position + ",\"name\":" + quote(tile.block().name) + "}");
+            }
+            if (tile.isCenter() && tile.build != null) {
+                mindustry.game.Team team = tile.team();
+                String teamName = team == null ? "" : team.name;
+                buildings.add("{" + position + ",\"name\":" + quote(tile.block().name) + ",\"team\":" + quote(teamName) + "}");
+                if (tile.build instanceof mindustry.world.blocks.storage.CoreBlock.CoreBuild) {
+                    cores.add("{" + position + ",\"team\":" + quote(teamName) + "}");
+                    coreTeams.add(teamName);
+                    count++;
+                }
+            }
         }
-        boolean firstTeam = true;
+        JsonArrayBuilder teams = new JsonArrayBuilder(100);
         for (String team : coreTeams) {
-            if (!firstTeam) teams.append(',');
-            firstTeam = false;
-            teams.append(quote(team));
+            teams.add(quote(team));
         }
-        return "{\"core_count\":" + count[0] + ",\"cores\":" + cores.append(']') + ",\"core_teams\":" + teams.append(']') + "}";
+        String tileLayers = "{\"terrain\":" + terrain + ",\"resources\":" + resources + ",\"ores\":" + ores
+            + ",\"enemy_spawns\":" + enemySpawns + ",\"buildings\":" + buildings + ",\"player_area\":[]"
+            + ",\"liquid\":" + liquids + "}";
+        boolean truncated = cores.truncated || terrain.truncated || resources.truncated || ores.truncated || enemySpawns.truncated || buildings.truncated || liquids.truncated;
+        return "{\"core_count\":" + count + ",\"cores\":" + cores + ",\"core_teams\":" + teams
+            + ",\"tile_layers\":" + tileLayers + ",\"tile_layers_truncated\":" + truncated + "}";
     }
 
     private static String jsonField(String json, String key, String fallback) {
@@ -355,9 +578,49 @@ public final class MapRenderer {
         int start = json.indexOf(marker);
         if (start < 0) return fallback;
         start += marker.length();
-        int end = json.indexOf(',', start);
-        if (end < 0) end = json.indexOf('}', start);
-        return end < 0 ? fallback : json.substring(start, end);
+        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
+        if (start >= json.length()) return fallback;
+        char first = json.charAt(start);
+        if (first == '{' || first == '[') {
+            int depth = 0;
+            boolean inString = false;
+            boolean escaped = false;
+            for (int index = start; index < json.length(); index++) {
+                char current = json.charAt(index);
+                if (inString) {
+                    if (escaped) escaped = false;
+                    else if (current == '\\') escaped = true;
+                    else if (current == '"') inString = false;
+                    continue;
+                }
+                if (current == '"') inString = true;
+                else if (current == '{' || current == '[') depth++;
+                else if (current == '}' || current == ']') {
+                    if (--depth == 0) return json.substring(start, index + 1);
+                }
+            }
+            return fallback;
+        }
+        int end = start;
+        while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}') end++;
+        return end == start ? fallback : json.substring(start, end);
+    }
+
+    private static final class JsonArrayBuilder {
+        private final int limit;
+        private final StringBuilder value = new StringBuilder("[");
+        private int count;
+        private boolean first = true;
+        private boolean truncated;
+        private JsonArrayBuilder(int limit) { this.limit = limit; }
+        private void add(String item) {
+            if (count >= limit) { truncated = true; return; }
+            if (!first) value.append(',');
+            first = false;
+            value.append(item);
+            count++;
+        }
+        @Override public String toString() { return value.append(']').toString(); }
     }
 
     private static String schematicMetadata(Schematic schematic) {
@@ -772,6 +1035,10 @@ public final class MapRenderer {
                 .append(",\"end\":").append(group.end)
                 .append(",\"spacing\":").append(group.spacing)
                 .append(",\"amount\":").append(group.unitAmount)
+                .append(",\"unit_health\":").append(number(group.type == null ? 0d : group.type.health))
+                .append(",\"shields\":").append(number(group.shields))
+                .append(",\"flying\":").append(group.type != null && group.type.flying)
+                .append(",\"boss\":").append(group.effect != null && "boss".equals(group.effect.name))
                 .append(",\"team\":").append(quote(group.team == null ? "" : group.team.name)).append('}');
         }
         return result.append(']').toString();

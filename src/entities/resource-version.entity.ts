@@ -3,11 +3,12 @@ import {
 } from 'typeorm';
 import { Resource } from './resource.entity';
 
-// One row per (resource, version): without the constraint, a retried upload
-// silently creates a second row for the same version string and the version list
-// shows duplicates.
-@Unique('uq_resource_versions_resource_version', ['resource_id', 'version'])
+// A release may be revised without replacing its previously published file.
+// Revision 1 is backfilled for all existing rows by the Resource Center V2 migration.
+@Unique('uq_resource_versions_resource_version_revision', ['resource_id', 'version', 'revision'])
 @Index('idx_resource_versions_hash_status', ['content_hash', 'status', 'resource_id'])
+@Index('idx_resource_versions_recommended', ['resource_id', 'recommended', 'status', 'published_at'])
+@Index('idx_resource_versions_channel', ['resource_id', 'release_channel', 'status'])
 @Entity('resource_versions')
 export class ResourceVersion {
   @PrimaryGeneratedColumn()
@@ -18,6 +19,21 @@ export class ResourceVersion {
 
   @Column({ length: 50 })
   version: string;
+
+  @Column({ type: 'varchar', length: 24, default: 'compatibility' })
+  version_mode: 'semver' | 'compatibility';
+
+  @Column({ type: 'int', unsigned: true, default: 1 })
+  revision: number;
+
+  @Column({ type: 'tinyint', unsigned: true, default: 0 })
+  recommended: number;
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  game_version_min: string | null;
+
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  game_version_max: string | null;
 
   @Column({ length: 500, nullable: true })
   file_path: string;

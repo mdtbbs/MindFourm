@@ -6,6 +6,7 @@ import { ResourceVersion } from '@entities/resource-version.entity';
 import { SettingsService } from '../settings/settings.service';
 import { LogsService } from '../logs/logs.service';
 import { ResourceStorageService } from './resource-storage.service';
+import { ModReportAttachment } from '@entities/mod-report-attachment.entity';
 
 export interface ResourceStorageCleanupResult {
   quarantined_orphans: number;
@@ -22,6 +23,7 @@ export class ResourceLifecycleService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
     @InjectRepository(ResourceVersion) private readonly versions: Repository<ResourceVersion>,
+    @InjectRepository(ModReportAttachment) private readonly reportAttachments: Repository<ModReportAttachment>,
     private readonly storage: ResourceStorageService,
     private readonly settings: SettingsService,
     private readonly logs: LogsService,
@@ -47,12 +49,16 @@ export class ResourceLifecycleService implements OnModuleInit, OnModuleDestroy {
     const resources = await this.resources.createQueryBuilder('resource')
       .withDeleted().select(['resource.id', 'resource.file_path', 'resource.status', 'resource.updated_at', 'resource.deleted_at']).getMany();
     const versions = await this.versions.find({ select: ['id', 'resource_id', 'file_path'] });
+    const reportAttachments = await this.reportAttachments.find({ select: ['file_path'] });
     const byResource = new Map<number, ResourceVersion[]>();
     for (const version of versions) byResource.set(version.resource_id, [...(byResource.get(version.resource_id) || []), version]);
     const referenced = new Set<string>();
     for (const resource of resources) {
       if (resource.file_path) referenced.add(require('path').resolve(resource.file_path));
       for (const version of byResource.get(resource.id) || []) if (version.file_path) referenced.add(require('path').resolve(version.file_path));
+    }
+    for (const attachment of reportAttachments) {
+      if (attachment.file_path) referenced.add(require('path').resolve(attachment.file_path));
     }
     let retiredResourceFiles = 0, retiredVersionFiles = 0;
     for (const resource of resources) {

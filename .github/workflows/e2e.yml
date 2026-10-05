@@ -134,6 +134,7 @@ jobs:
           tests/e2e/post.spec.ts
           tests/e2e/rich-content.spec.ts
           tests/e2e/resource.spec.ts
+          tests/e2e/resource-v2-review.spec.ts
           tests/e2e/admin.spec.ts
           tests/e2e/product-smoke.spec.ts
 

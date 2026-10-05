@@ -100,7 +100,7 @@ export class GameContentController {
 
   @Get('maps/:id/download') @OptionalAuth() @OAuthScopeIfBearer('resource.download')
   @RateLimit({ max: 60, window: 60 })
-  mapDownload(@Param('id') id: string) { return this.gameContent.downloadInfo(id); }
+  mapDownload(@Param('id') id: string, @Req() req: any) { return this.gameContent.downloadInfo(id, req.user?.id || null); }
 
   @Get('maps/:id/download/file') @OptionalAuth() @OAuthScopeIfBearer('resource.download') @RawHttpResponse() @RateLimit({ max: 30, window: 60 })
   async mapDownloadFile(@Param('id') id: string, @Req() req: any, @Res({ passthrough: true }) res: Response) {

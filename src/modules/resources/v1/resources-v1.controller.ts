@@ -18,6 +18,7 @@ import { V1ResourceDetail, V1ResourceManifest } from './resources-v1.dto';
 import { RESOURCE_KINDS } from '../resource-kind-registry';
 import { ResourceCategoryService } from '../resource-categories.service';
 import { DownloadGrantService } from '../../downloads/download-grant.service';
+import { DownloadPolicyService } from '../../downloads/download-policy.service';
 import { getClientIp } from '@common/utils/client-context.util';
 
 /**
@@ -40,6 +41,7 @@ export class ResourcesV1Controller {
     @Optional() private readonly resourcePreviewService?: ResourcePreviewService,
     @Optional() private readonly categoryService?: ResourceCategoryService,
     @Optional() private readonly downloadGrantService?: DownloadGrantService,
+    @Optional() private readonly downloadPolicyService?: DownloadPolicyService,
   ) {}
 
   @Get()
@@ -113,10 +115,11 @@ export class ResourcesV1Controller {
     await this.assertEnabled();
     const caps = await this.capabilitiesService.getCapabilities();
     if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
-    const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId);
+    const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId, req?.user);
     if (!target || target.file.availability_status !== 'available') {
       throw new NotFoundException('文件不存在或暂不可用');
     }
+    await this.downloadPolicyService?.assertDownloadAuthentication(target.resource.resource_kind, req?.user);
 
     const redirectUrl = target.file.external_url || (
       ['external', 'mfl'].includes(target.file.delivery_mode) && target.file.storage_key?.startsWith('http')

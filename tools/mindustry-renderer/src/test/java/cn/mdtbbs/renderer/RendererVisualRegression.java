@@ -28,6 +28,9 @@ import mindustry.game.Schematics;
 import arc.struct.Seq;
 import arc.struct.StringMap;
 import arc.struct.ObjectMap;
+import arc.math.geom.Point2;
+import arc.util.serialization.JsonReader;
+import arc.util.serialization.JsonValue;
 
 /** Tiny deterministic fixture for the transparent multi-region icon compositor. */
 public final class RendererVisualRegression {
@@ -85,6 +88,17 @@ public final class RendererVisualRegression {
                         require(oldSaveMetadata.contains("\"stored_game_build\":null") && oldSaveMetadata.contains("\"source\":\"unknown\""), "old maps without a stored build must report unknown");
                         require(oldSaveMetadata.contains("\"mindustry_build\":" + Version.build), "parser runtime must remain a separate field");
                         require(!oldSaveMetadata.contains("\"build\":" + Version.build), "parser runtime must never be emitted as the map's stored build");
+                        require(oldSaveMetadata.contains("\"tile_layers\":{}"), "header-only map metadata must not invent tile layer coordinates");
+                        MapIO.loadMap(map);
+                        JsonValue layeredMap = new JsonReader().parse(MapRenderer.mapMetadata(map, true, savedMeta));
+                        JsonValue tileLayers = layeredMap.get("tile_layers");
+                        require(tileLayers != null && tileLayers.get("terrain") != null && tileLayers.get("terrain").size > 0,
+                            "loaded maps must expose bounded terrain tile coordinates");
+                        require(tileLayers.get("enemy_spawns") != null && tileLayers.get("buildings") != null && tileLayers.get("liquid") != null,
+                            "map viewer layer groups must be present even when a layer has no markers");
+                        if ((long)map.width * map.height > 5_000) {
+                            require(layeredMap.getBoolean("tile_layers_truncated", false), "large map layers must declare coordinate truncation");
+                        }
                         Pixmap preview = MapIO.generatePreview(map);
                         try {
                             HashSet<Integer> colors = new HashSet<>();
@@ -135,7 +149,8 @@ public final class RendererVisualRegression {
             require(metadata.contains("\"schematic_format_version\":" + formatVersion), names[index] + " metadata must expose the schematic file format");
             require(metadata.contains("\"parser_runtime\""), names[index] + " metadata must identify its parser runtime");
             double expectedBuildSeconds = roundTrip.tiles.first().block.buildTime / 60d;
-            double reportedBuildSeconds = Double.parseDouble(jsonField(metadata, "estimated_build_time_seconds", "null"));
+            JsonValue metadataJson = new JsonReader().parse(metadata);
+            double reportedBuildSeconds = Double.parseDouble(metadataJson.getString("estimated_build_time_seconds", "null"));
             require(Math.abs(reportedBuildSeconds - expectedBuildSeconds) < 0.000001d,
                 names[index] + " metadata must estimate build time from resolved Mindustry block build times");
             String incompleteEstimate = MapRenderer.schematicMetadata(roundTrip, List.of("unknown-content"), formatVersion);
@@ -144,11 +159,71 @@ public final class RendererVisualRegression {
             BufferedImage image = MapRenderer.renderSchematicImage(roundTrip);
             require(image.getWidth() > 0 && image.getHeight() > 0, names[index] + " preview must be non-empty");
         }
+        verifySchematicEditorRoundTrip(root);
         String userFixture = System.getenv("MINDFOURM_MSCH_FIXTURE");
         if (userFixture != null && !userFixture.isBlank()) {
             Schematic original = Schematics.read(new Fi(Path.of(userFixture).toFile()));
             BufferedImage preview = MapRenderer.renderSchematicImage(original);
             require(original.tiles.size > 0 && preview.getWidth() > 0 && preview.getHeight() > 0, "reported schematic must decode and render");
+        }
+    }
+
+    private static void verifySchematicEditorRoundTrip(Path root) throws Exception {
+        var router = Vars.content.block("router");
+        var conveyor = Vars.content.block("conveyor");
+        require(router != null && conveyor != null, "schematic editor fixture blocks must be registered");
+        Schematic original = new Schematic(new Seq<>(), new StringMap(), 4, 3);
+        original.tags.put("name", "Editor fixture");
+        original.tags.put("description", "metadata survives transforms");
+        original.labels.add("editor-test");
+        original.tiles.add(new Schematic.Stile(conveyor, 0, 0, null, (byte)0));
+        original.tiles.add(new Schematic.Stile(router, 3, 2, null, (byte)1));
+        original.tiles.add(new Schematic.Stile(conveyor, 2, 1, null, (byte)2));
+        Path source = root.resolve("schematic-editor-source.msch");
+        Schematics.write(original, new Fi(source.toFile()));
+
+        byte[] editedBytes = MapRenderer.transformSchematicBytes(source, 1, true, List.of(new Point2(0, 0)));
+        require(editedBytes.length > 5 && editedBytes[0] == 'm' && editedBytes[1] == 's' && editedBytes[2] == 'c' && editedBytes[3] == 'h',
+            "the editor must emit an official .msch serialization");
+        Schematic edited = Schematics.read(new java.io.ByteArrayInputStream(editedBytes));
+        require(edited.width == 3 && edited.height == 4, "a quarter-turn must swap schematic dimensions");
+        require(edited.tiles.size == 2, "deleting a selected source coordinate must remove exactly one block");
+        require("Editor fixture".equals(edited.tags.get("name")) && "metadata survives transforms".equals(edited.tags.get("description")),
+            "schematic tags must survive rotation, reflection and serialization");
+        require(edited.labels.contains("editor-test"), "schematic labels must survive rotation, reflection and serialization");
+        require(edited.tiles.contains(tile -> tile.block == router && tile.x == 1 && tile.y == 2 && tile.rotation == 0),
+            "rotation and horizontal reflection must preserve the router and transform its orientation");
+        require(edited.tiles.contains(tile -> tile.block == conveyor && tile.x == 0 && tile.y == 1 && tile.rotation == 3),
+            "rotation and horizontal reflection must preserve the conveyor placement");
+
+        Schematic evenWidth = new Schematic(new Seq<>(), new StringMap(), 4, 2);
+        evenWidth.tiles.add(new Schematic.Stile(router, 0, 0, null, (byte)0));
+        evenWidth.tiles.add(new Schematic.Stile(router, 1, 1, null, (byte)0));
+        Path evenWidthSource = root.resolve("schematic-editor-even-width.msch");
+        Schematics.write(evenWidth, new Fi(evenWidthSource.toFile()));
+        Schematic mirrored = Schematics.read(new java.io.ByteArrayInputStream(
+            MapRenderer.transformSchematicBytes(evenWidthSource, 0, true, List.of())
+        ));
+        require(mirrored.tiles.contains(tile -> tile.block == router && tile.x == 3 && tile.y == 0),
+            "horizontal reflection must mirror placements across an even-width schematic's tile boundary");
+        require(mirrored.tiles.contains(tile -> tile.block == router && tile.x == 2 && tile.y == 1),
+            "horizontal reflection must preserve all even-width block placements");
+
+        Path unknown = root.resolve("schematic-editor-unknown.msch");
+        try (DataOutputStream file = new DataOutputStream(Files.newOutputStream(unknown))) {
+            file.writeInt(0x6d736368);
+            file.writeByte(1);
+            try (DataOutputStream data = new DataOutputStream(new DeflaterOutputStream(file))) {
+                data.writeShort(1); data.writeShort(1);
+                data.writeByte(1); data.writeUTF("contentMap"); data.writeUTF("{}");
+                data.writeByte(1); data.writeUTF("example-mod:unknown-machine");
+            }
+        }
+        try {
+            MapRenderer.transformSchematicBytes(unknown, 0, false, List.of());
+            throw new AssertionError("the editor must reject unknown blocks instead of serializing them as air");
+        } catch (MapRenderer.SchematicTransformException exception) {
+            require("UNSUPPORTED_SCHEMATIC_CONTENT".equals(exception.errorCode), "unknown block content must fail closed");
         }
     }
 

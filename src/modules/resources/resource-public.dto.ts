@@ -13,9 +13,15 @@ const PUBLIC_FIELDS = [
 ] as const;
 
 export function toPublicResource(resource: Resource, card = false): Record<string, any> {
+  const unreviewedQuarantinedBinary = (resource as any).unreviewed_quarantined_binary === true
+    || (typeof resource.file_path === 'string' && /[\\/]\.quarantine[\\/]/.test(resource.file_path));
   const result: Record<string, any> = {};
   for (const field of PUBLIC_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(resource, field)) result[field] = (resource as any)[field];
+    if (Object.prototype.hasOwnProperty.call(resource, field)) {
+      result[field] = field === 'renderer_status' && unreviewedQuarantinedBinary
+        ? 'unavailable'
+        : (resource as any)[field];
+    }
   }
   if (!card) {
     for (const field of ['content', 'content_json', 'content_html', 'content_text', 'content_schema_version'] as const) {
@@ -25,7 +31,9 @@ export function toPublicResource(resource: Resource, card = false): Record<strin
     result.description = String(resource.summary || resource.description || '').slice(0, 360);
     if (result.summary) result.summary = String(result.summary).slice(0, 360);
   }
-  const renderer = (resource as any).renderer_summary || resource.renderer_metadata_json || {};
+  const renderer = unreviewedQuarantinedBinary
+    ? {}
+    : (resource as any).renderer_summary || resource.renderer_metadata_json || {};
   const scalar = (value: unknown) => value != null && Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null;
   return {
     ...result,
@@ -44,8 +52,8 @@ export function toPublicResource(resource: Resource, card = false): Record<strin
     category_name: resource.category?.name || null,
     category_icon: resource.category?.icon || null,
     metadata: normalizeResourceMetadata(resource.metadata_json),
-    ...(card ? { renderer_summary: { width: scalar(renderer.width), height: scalar(renderer.height), build: scalar(renderer.build) } } : { renderer_metadata: resource.renderer_metadata_json || null }),
-    preview_url: resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null,
+    ...(card ? { renderer_summary: { width: scalar(renderer.width), height: scalar(renderer.height), build: scalar(renderer.build) } } : { renderer_metadata: unreviewedQuarantinedBinary ? null : resource.renderer_metadata_json || null }),
+    preview_url: !unreviewedQuarantinedBinary && resource.renderer_status === 'ready' ? `/api/resources/${resource.id}/preview` : null,
   };
 }
 

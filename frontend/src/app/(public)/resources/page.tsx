@@ -5,6 +5,7 @@ import { FileText, AlertCircle } from "lucide-react";
 import ErrorState from "@/components/ui/error-state";
 import ResourceFilters from "@/components/forum/resource-list-filters-client";
 import ResourceLoadMore from "@/components/forum/resource-load-more";
+import ResourceCategoryNavigation from "@/components/forum/resources/resource-category-navigation";
 import { fetchApiData } from "@/lib/api/server-fetch";
 import { fetchPublicSettings } from "@/lib/settings/server";
 import { resolveBrand } from "@/lib/theme/brand";
@@ -175,6 +176,17 @@ export default async function ResourcesPage({
           </p>
         </div>
       </div>
+
+      <ResourceCategoryNavigation
+        ariaLabel={t('resourceType')}
+        selectedKind={params.resource_kind}
+        labels={{
+          mod: t('resourceKind.mod'),
+          schematic: t('resourceKind.schematic'),
+          map: t('resourceKind.map'),
+          pack: t('resourceKind.pack'),
+        }}
+      />
 
       {/* Main content */}
       <main className="min-w-0 space-y-4">

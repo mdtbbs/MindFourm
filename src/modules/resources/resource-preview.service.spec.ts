@@ -32,7 +32,7 @@ describe('ResourcePreviewService', () => {
       json: async () => ({
         previewKey: `resources/map/${hash.slice(0, 2)}/${hash}/preview.png`,
         parserVersion: 'renderer-1',
-        metadata: { name: 'Alpha', width: 40, ignored: 'must not persist' },
+        metadata: { name: 'Alpha', width: 40, tile_layers: { terrain: [{ x: 1, y: 2, name: 'sand' }] }, tile_layers_truncated: true, ignored: 'must not persist' },
       }),
     }) as any;
     const service = new ResourcePreviewService({ update } as any);
@@ -45,7 +45,7 @@ describe('ResourcePreviewService', () => {
     expect(update).toHaveBeenLastCalledWith(7, expect.objectContaining({
       renderer_status: 'ready',
       renderer_preview_key: `resources/map/${hash.slice(0, 2)}/${hash}/preview.png`,
-      renderer_metadata_json: { name: 'Alpha', width: 40 },
+      renderer_metadata_json: { name: 'Alpha', width: 40, tile_layers: { terrain: [{ x: 1, y: 2, name: 'sand' }] }, tile_layers_truncated: true },
     }));
     await fs.rm(root, { recursive: true, force: true });
   });
@@ -157,6 +157,54 @@ describe('ResourcePreviewService', () => {
     const service = new ResourcePreviewService({ update: jest.fn() } as any);
     await expect(service.resolveContentMetadata(['copper'], ['battery']))
       .resolves.toEqual({ items: {}, blocks: {}, liquids: {} });
+  });
+
+  it('sends schematic edits to the official renderer and verifies its serialized bytes', async () => {
+    const source = Buffer.from([0x6d, 0x73, 0x63, 0x68, 1, 2, 3]);
+    const output = Buffer.from([0x6d, 0x73, 0x63, 0x68, 1, 4, 5]);
+    const outputHash = crypto.createHash('sha256').update(output).digest('hex');
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    process.env.RESOURCE_RENDERER_TOKEN = 'renderer-secret';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ dataBase64: output.toString('base64'), sha256: outputHash }),
+    }) as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+
+    await expect(service.transformSchematic('source.msch', source, {
+      rotation_quarters: 1, mirror_x: true, delete_positions: [{ x: 3, y: 7 }],
+    })).resolves.toEqual({ data: output, sha256: outputHash });
+
+    const [url, request] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe('http://127.0.0.1:6100/v1/transform-schematic');
+    expect(request.headers).toEqual({ 'content-type': 'application/json', authorization: 'Bearer renderer-secret' });
+    expect(JSON.parse(request.body)).toMatchObject({
+      filename: 'source.msch',
+      sha256: crypto.createHash('sha256').update(source).digest('hex'),
+      dataBase64: source.toString('base64'),
+      rotation_quarters: 1,
+      mirror_x: true,
+      delete_positions: [{ x: 3, y: 7 }],
+    });
+  });
+
+  it('rejects invalid editor coordinates and renderer output hashes', async () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    const source = Buffer.from([0x6d, 0x73, 0x63, 0x68, 1, 2, 3]);
+    global.fetch = jest.fn();
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+    await expect(service.transformSchematic('source.msch', source, {
+      rotation_quarters: 4, mirror_x: false, delete_positions: [],
+    })).rejects.toThrow('蓝图编辑操作无效');
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ dataBase64: Buffer.from('not a schematic').toString('base64'), sha256: '0'.repeat(64) }),
+    }) as any;
+    await expect(service.transformSchematic('source.msch', source, {
+      rotation_quarters: 0, mirror_x: false, delete_positions: [],
+    })).rejects.toThrow('Mindustry 蓝图编辑器返回了无效结果');
   });
 
   it('persists generic upload drafts across service instances and binds them to the owner', async () => {

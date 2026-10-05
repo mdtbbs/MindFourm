@@ -113,4 +113,10 @@ describe('migration registry', () => {
     expect(names).toContain('MessagePrivacySetting1720000250000');
     expect(names.indexOf('SecurityAccessLogs1720000240000')).toBeLessThan(names.indexOf('MessagePrivacySetting1720000250000'));
   });
+
+  it('registers private Mod report attachments after Resource Center V2', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('ModReportAttachments1720000280000');
+    expect(names.indexOf('ResourceCenterV21720000270000')).toBeLessThan(names.indexOf('ModReportAttachments1720000280000'));
+  });
 });

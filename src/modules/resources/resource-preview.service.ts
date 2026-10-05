@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, MoreThan, Repository } from 'typeorm';
 import { readFile, unlink } from 'fs/promises';
 import * as path from 'path';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { Resource } from '@entities/resource.entity';
 import { ResourceStorageService, StoredResourceFile } from './resource-storage.service';
 import { ResourceUploadDraft } from '@entities/resource-upload-draft.entity';
@@ -65,6 +65,76 @@ export class ResourcePreviewService {
 
   supports(resource: Pick<Resource, 'resource_kind'>): boolean {
     return PREVIEWABLE_KINDS.has(resource.resource_kind || '');
+  }
+
+  /** Transform a schematic through the bundled official Mindustry reader/writer. */
+  async transformSchematic(fileName: string, source: Buffer, operations: {
+    rotation_quarters: number; mirror_x: boolean; delete_positions: Array<{ x: number; y: number }>;
+  }): Promise<{ data: Buffer; sha256: string }> {
+    if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
+    const positions = operations?.delete_positions;
+    if (!Number.isInteger(operations?.rotation_quarters) || operations.rotation_quarters < 0 || operations.rotation_quarters > 3
+      || typeof operations.mirror_x !== 'boolean' || !Array.isArray(positions) || positions.length > 10_000
+    ) {
+      throw new BadRequestException('蓝图编辑操作无效');
+    }
+    const uniquePositions = new Set<string>();
+    for (const position of positions) {
+      const key = position && `${position.x}:${position.y}`;
+      if (!position || !Number.isInteger(position.x) || !Number.isInteger(position.y)
+        || position.x < 0 || position.x > 127 || position.y < 0 || position.y > 127
+        || !key || uniquePositions.has(key)) throw new BadRequestException('蓝图编辑操作无效');
+      uniquePositions.add(key);
+    }
+    if (!fileName.toLowerCase().endsWith('.msch') || source.length < 5 || source.length > MAX_RENDER_BYTES
+      || source.subarray(0, 4).toString('ascii') !== 'msch') {
+      throw new BadRequestException('蓝图文件无效或超过大小限制');
+    }
+    const sourceHash = createHash('sha256').update(source).digest('hex');
+    try {
+      const response = await fetch(`${this.rendererUrl}/v1/transform-schematic`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({
+          filename: fileName,
+          sha256: sourceHash,
+          dataBase64: source.toString('base64'),
+          rotation_quarters: operations.rotation_quarters,
+          mirror_x: operations.mirror_x,
+          delete_positions: operations.delete_positions,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({})) as { errorCode?: unknown };
+        const code = typeof error.errorCode === 'string' ? error.errorCode : '';
+        if (['INVALID_SCHEMATIC_OPERATION', 'UNSUPPORTED_SCHEMATIC_CONTENT', 'UNSUPPORTED_SCHEMATIC_FORMAT', 'INVALID_SCHEMATIC', 'INVALID_FILE'].includes(code)) {
+          throw new BadRequestException(code === 'UNSUPPORTED_SCHEMATIC_CONTENT'
+            ? '蓝图包含当前编辑器无法安全保留的 Mod 方块或配置，未生成文件'
+            : code === 'UNSUPPORTED_SCHEMATIC_FORMAT'
+              ? '此蓝图格式暂不支持安全编辑，未生成文件'
+              : '蓝图编辑操作无效或文件无法解析');
+        }
+        throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
+      }
+      const result = await response.json() as { dataBase64?: unknown; sha256?: unknown };
+      if (typeof result.dataBase64 !== 'string' || typeof result.sha256 !== 'string'
+        || !/^[a-f0-9]{64}$/.test(result.sha256)) throw new ServiceUnavailableException('Mindustry 蓝图编辑器返回了无效结果');
+      const data = Buffer.from(result.dataBase64, 'base64');
+      const digest = createHash('sha256').update(data).digest('hex');
+      if (!data.length || data.length > MAX_RENDER_BYTES || data.subarray(0, 4).toString('ascii') !== 'msch'
+        || data.toString('base64') !== result.dataBase64 || digest !== result.sha256) {
+        throw new ServiceUnavailableException('Mindustry 蓝图编辑器返回了无效结果');
+      }
+      return { data, sha256: digest };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
+      this.logger.warn(`Schematic transform failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
+    }
   }
 
   isConfigured(): boolean {
@@ -331,7 +401,7 @@ export class ResourcePreviewService {
     const allowed = new Set([
       'name', 'author', 'description', 'width', 'height', 'spawns', 'version', 'build',
       'planet', 'game_modes', 'teams', 'tags', 'mod_dependencies', 'waves', 'wave_groups',
-      'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'blocks', 'block_count', 'block_types',
+      'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'tile_layers', 'tile_layers_truncated', 'blocks', 'block_count', 'block_types',
       'block_positions', 'block_positions_truncated', 'requirements', 'power_production',
       'power_consumption', 'net_power', 'labels', 'production',
     ]);

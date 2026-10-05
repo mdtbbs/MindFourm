@@ -72,6 +72,8 @@ import { CloudSavesV11720000160000 } from './1720000160000-CloudSavesV1';
 import { MultiplayerJoinApprovalDurability1720000170000 } from './1720000170000-MultiplayerJoinApprovalDurability';
 import { MultiplayerJoinIntentRecovery1720000180000 } from './1720000180000-MultiplayerJoinIntentRecovery';
 import { EmailDeliveryHardening1720000260000 } from './1720000260000-EmailDeliveryHardening';
+import { ResourceCenterV21720000270000 } from './1720000270000-ResourceCenterV2';
+import { ModReportAttachments1720000280000 } from './1720000280000-ModReportAttachments';
 
 /**
  * Migrations in run order.
@@ -155,4 +157,6 @@ export const migrations = [
   SecurityAccessLogs1720000240000,
   MessagePrivacySetting1720000250000,
   EmailDeliveryHardening1720000260000,
+  ResourceCenterV21720000270000,
+  ModReportAttachments1720000280000,
 ];

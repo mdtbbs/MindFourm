@@ -81,6 +81,8 @@ jest.mock('./resource-subscriptions.service', () => ({
 
 import { ResourcesService } from './resources.service';
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
+import { ResourceVersion } from '@entities/resource-version.entity';
+import { ResourceReviewEvent } from '@entities/resource-center-v2.entity';
 
 function createService(overrides: {
   resourceRepository?: Record<string, jest.Mock>;
@@ -147,6 +149,7 @@ function createService(overrides: {
   };
   const versionRepository = {
     find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
     update: jest.fn().mockResolvedValue(undefined),
     ...overrides.versionRepository,
   };
@@ -207,7 +210,10 @@ describe('ResourcesService', () => {
   it('retains storage keys for authorized file operations without exposing them in public details', async () => {
     const resource = { id: 27, user_id: 9, status: 'published', is_public: 1, category_id: null,
       renderer_preview_key: 'map/preview.png', file_path: '/private/map.msav', mfl_download_url: 'https://files.example.test/map' };
-    const { service, resourceRepository } = createService({ resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) } });
+    const { service, resourceRepository } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { findOne: jest.fn().mockResolvedValue(null) },
+    });
     await expect(service.getForFileAccess(27)).resolves.toMatchObject({ renderer_preview_key: 'map/preview.png', file_path: '/private/map.msav' });
     const detail = await service.getById(27);
     expect(detail).not.toHaveProperty('renderer_preview_key');
@@ -215,11 +221,58 @@ describe('ResourcesService', () => {
     expect(resourceRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({ select: expect.arrayContaining(['file_path', 'renderer_preview_key', 'content_hash']) }));
   });
 
+  it('uses only the latest published version for the legacy default download target', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null,
+      latest_published_version_id: 10, file_path: '/uploads/.quarantine/resources/pending.jar' };
+    const published = { id: 10, resource_id: 27, status: 'published', file_path: '/uploads/resources/old.jar',
+      file_name: 'old.jar', file_size: 12, mime_type: 'application/java-archive', content_hash: 'a'.repeat(64) };
+    const { service, versionRepository } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { findOne: jest.fn().mockResolvedValue(published) },
+    });
+    await expect(service.getForFileAccess(27)).resolves.toMatchObject({
+      file_path: '/uploads/resources/old.jar', file_name: 'old.jar', content_hash: 'a'.repeat(64),
+    });
+    expect(versionRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 10, resource_id: 27, status: 'published' },
+    });
+  });
+
+  it('hides a quarantined initial binary after Resource approval until its version is reviewed', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null,
+      latest_published_version_id: null, file_path: '/uploads/.quarantine/resources/initial.jar',
+      renderer_status: 'ready', renderer_preview_key: 'resources/map/aa/' + 'a'.repeat(64) + '/preview.png' };
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { findOne: jest.fn().mockResolvedValue(null) },
+    });
+    await expect(service.getForFileAccess(27)).resolves.toMatchObject({
+      file_path: null, renderer_status: 'unavailable', renderer_preview_key: null,
+    });
+  });
+
   it('denies anonymous file access to pending resources while allowing their owner', async () => {
     const resource = { id: 27, user_id: 9, status: 'pending', is_public: 1, category_id: null, file_path: '/private/map.msav' };
     const { service } = createService({ resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) } });
     await expect(service.getForFileAccess(27)).rejects.toThrow('资源不存在');
     await expect(service.getForFileAccess(27, { id: 9, role: 'user' })).resolves.toBe(resource);
+  });
+
+  it('keeps pending versions out of legacy public Resource details while showing them to the owner', async () => {
+    const resource = { id: 27, user_id: 9, status: 'approved', is_public: 1, category_id: null, user: null, category: null };
+    const versions = [
+      { id: 22, resource_id: 27, public_id: 'pending-version', version: '2.0.0', status: 'pending_review' },
+      { id: 21, resource_id: 27, public_id: 'published-version', version: '1.0.0', status: 'published' },
+    ];
+    const { service } = createService({
+      resourceRepository: { findOne: jest.fn().mockResolvedValue(resource) },
+      versionRepository: { find: jest.fn().mockResolvedValue(versions) },
+    });
+
+    const publicRead = await service.getByIdWithVersions(27);
+    expect(publicRead.versions.map((version: any) => version.public_id)).toEqual(['published-version']);
+    const ownerRead = await service.getByIdWithVersions(27, { id: 9, role: 'user' });
+    expect(ownerRead.versions.map((version: any) => version.public_id)).toEqual(['pending-version', 'published-version']);
   });
 
   it('keeps an unknown schematic minimum build unknown instead of persisting Build 0', async () => {
@@ -235,6 +288,23 @@ describe('ResourcesService', () => {
     await (service as any).createInitialV2Aggregate(manager, resource, { version: '1.0.0' }, 9, undefined, undefined);
 
     expect(manager.save.mock.calls.some(([entity]) => entity === ResourceVersionCompatibility)).toBe(false);
+  });
+
+  it('keeps an initial binary pending even when Resource metadata is already approved', async () => {
+    const { service, manager } = createService();
+    const resource = { id: 81, resource_type: 'upload', resource_kind: 'other', status: 'approved' };
+
+    await (service as any).createInitialV2Aggregate(manager, resource, { version: '1.0.0' }, 9, {
+      file_path: '/uploads/.quarantine/resources/initial.zip', file_name: 'initial.zip', file_size: 4,
+      mime_type: 'application/zip', content_hash: 'a'.repeat(64),
+    }, undefined);
+
+    expect(manager.save).toHaveBeenCalledWith(ResourceVersion, expect.objectContaining({
+      status: 'pending_review', published_at: null, recommended: 0,
+    }));
+    expect(manager.save).toHaveBeenCalledWith(ResourceReviewEvent, expect.objectContaining({
+      event_type: 'submitted', result: 'pending_review',
+    }));
   });
 
   it('stores inferred and publisher-declared compatibility as separate evidence', async () => {
@@ -356,13 +426,23 @@ describe('ResourcesService', () => {
       { resourceTag: 'campaign' },
     );
     expect(defaultQb.andWhere).toHaveBeenCalledWith(
-      "(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))",
+      "(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))",
       { supportedVersion: 'v8' },
     );
     expect(defaultQb.andWhere).toHaveBeenCalledWith(
       "JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:resourceCompatibility), '$.compatibility')",
       { resourceCompatibility: 'desktop' },
     );
+  });
+
+  it('does not apply public map metadata filters to a quarantined initial binary', async () => {
+    const { service, defaultQb } = createService();
+    await service.getList({ resource_kind: 'map', planet: 'erekir', block: 'core-shard', width: 64, height: 32 } as any, { scope: 'public' });
+    expect(defaultQb.andWhere).toHaveBeenCalledWith(
+      '(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)',
+      { quarantineResourcePath: '%/.quarantine/%' },
+    );
+    expect(defaultQb.addSelect).toHaveBeenCalledWith('resource.file_path', 'resource_card_file_path');
   });
 
   it('does not force a default status filter for the admin list', async () => {
@@ -610,6 +690,13 @@ describe('ResourcesService', () => {
     const preview = { supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
     const { service } = createService({
       resourcePreviewService: preview,
+      versionRepository: {
+        findOne: jest.fn().mockResolvedValue({
+          id: 311, status: 'published', file_path: '/safe/published-map.msav',
+          file_name: 'published-map.msav', file_size: 12, mime_type: 'application/octet-stream',
+          content_hash: 'a'.repeat(64),
+        }),
+      },
       resourceRepository: {
         findOne: jest.fn()
           .mockResolvedValueOnce({
@@ -626,14 +713,33 @@ describe('ResourcesService', () => {
     await service.updateStatus(31, 'approved');
 
     expect(preview.supports).toHaveBeenCalledWith(expect.objectContaining({ id: 31, resource_kind: 'map' }));
-    expect(preview.enqueue).toHaveBeenCalledWith(expect.objectContaining({ id: 31, file_name: 'map.msav' }));
+    expect(preview.enqueue).toHaveBeenCalledWith(expect.objectContaining({ id: 31, file_name: 'published-map.msav' }));
+    expect(preview.enqueue).toHaveBeenCalledWith(expect.objectContaining({ file_path: '/safe/published-map.msav' }));
   });
 
-  it('promotes release files and keeps the structured delivery pointer in sync', async () => {
+  it('keeps Resource approval separate from V2 binary review and records the resource event', async () => {
+    const { service, manager } = createService({
+      resourceRepository: {
+        findOne: jest.fn()
+          .mockResolvedValueOnce({ id: 34, title: 'Map', status: 'pending', resource_kind: 'map', user_id: 5, file_path: '/safe/map.msav', is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null })
+          .mockResolvedValueOnce({ id: 34, title: 'Map', status: 'approved', resource_kind: 'map', user_id: 5, file_path: '/safe/map.msav', is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null }),
+      },
+      manager: { query: jest.fn().mockResolvedValue([{ id: 304, release_channel: 'release' }]) },
+    });
+
+    await service.updateStatus(34, 'approved', { actorUserId: 91 });
+
+    expect(manager.update).not.toHaveBeenCalledWith(expect.anything(), 304, expect.objectContaining({ status: 'published' }));
+    expect(manager.update).not.toHaveBeenCalledWith(expect.anything(), 34, { latest_published_version_id: 304 });
+    expect(manager.save).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      resource_id: 34, resource_version_id: 304, actor_user_id: 91, event_type: 'resource_approved', result: 'approved',
+    }));
+  });
+
+  it('does not promote pending release files when only the Resource is approved', async () => {
     const storage = {
       promote: jest.fn()
-        .mockResolvedValueOnce('/uploads/resources/pack.zip')
-        .mockResolvedValueOnce('/uploads/resources/pack.zip'),
+        .mockResolvedValue('/uploads/resources/pack.zip'),
     };
     const { service, resourceRepository, versionRepository, resourceFileRepository } = createService({
       resourceStorageService: storage,
@@ -653,32 +759,37 @@ describe('ResourcesService', () => {
       versionRepository: {
         find: jest.fn().mockResolvedValue([{ id: 302, resource_id: 32, file_path: '/uploads/.quarantine/resources/pack.zip' }]),
       },
+      manager: { query: jest.fn().mockResolvedValue([{ id: 302, release_channel: 'release' }]) },
     });
 
     await service.updateStatus(32, 'approved');
 
-    expect(versionRepository.update).toHaveBeenCalledWith(302, { file_path: '/uploads/resources/pack.zip' });
-    expect(resourceFileRepository.update).toHaveBeenCalledWith(
-      { resource_version_id: 302, role: 'primary' },
-      { storage_key: '/uploads/resources/pack.zip' },
-    );
-    expect(resourceRepository.update).toHaveBeenCalledWith(32, { file_path: '/uploads/resources/pack.zip' });
+    expect(storage.promote).not.toHaveBeenCalled();
+    expect(versionRepository.update).not.toHaveBeenCalled();
+    expect(resourceFileRepository.update).not.toHaveBeenCalled();
+    expect(resourceRepository.update).not.toHaveBeenCalled();
   });
 
-  it('returns an actionable error when an approved upload is no longer available', async () => {
+  it('allows Resource approval when a pending version file is still quarantined', async () => {
     const missingFile = Object.assign(new Error('no such file'), { code: 'ENOENT' });
     const { service, resourceRepository } = createService({
       resourceStorageService: { promote: jest.fn().mockRejectedValue(missingFile) },
       resourceRepository: {
-        findOne: jest.fn().mockResolvedValue({
-          id: 33, title: 'Missing pack', status: 'pending', resource_type: 'upload',
-          file_path: '/uploads/.quarantine/resources/missing.zip', user_id: 5,
-          is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
-        }),
+        findOne: jest.fn()
+          .mockResolvedValueOnce({
+            id: 33, title: 'Missing pack', status: 'pending', resource_type: 'upload',
+            file_path: '/uploads/.quarantine/resources/missing.zip', user_id: 5,
+            is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
+          })
+          .mockResolvedValueOnce({
+            id: 33, title: 'Missing pack', status: 'approved', resource_type: 'upload',
+            file_path: '/uploads/.quarantine/resources/missing.zip', user_id: 5,
+            is_public: 1, created_at: new Date(), updated_at: new Date(), user: { username: 'alice' }, category: null,
+          }),
       },
     });
 
-    await expect(service.updateStatus(33, 'approved')).rejects.toThrow('资源文件不存在或已失效，请重新上传后再审核');
+    await expect(service.updateStatus(33, 'approved')).resolves.toBeDefined();
     expect(resourceRepository.update).not.toHaveBeenCalled();
   });
   it('retains explicit version compatibility while dropping private storage fields', () => {

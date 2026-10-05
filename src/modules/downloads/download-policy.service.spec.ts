@@ -1,6 +1,25 @@
 import { DownloadPolicyService } from './download-policy.service';
 
 describe('DownloadPolicyService', () => {
+  it('requires login for map downloads by default and allows the admin setting to disable it', async () => {
+    const settings = { getBoolean: jest.fn().mockResolvedValue(true) };
+    const service = new DownloadPolicyService({} as any, {} as any, {} as any, settings as any);
+
+    await expect(service.assertDownloadAuthentication('map', null)).rejects.toMatchObject({ status: 401 });
+    expect(settings.getBoolean).toHaveBeenCalledWith('resource_download_map_auth_required', true);
+    settings.getBoolean.mockResolvedValue(false);
+    await expect(service.assertDownloadAuthentication('map', null)).resolves.toBeUndefined();
+  });
+
+  it('uses per-kind authentication settings and does not require login for unrelated kinds', async () => {
+    const settings = { getBoolean: jest.fn().mockResolvedValue(true) };
+    const service = new DownloadPolicyService({} as any, {} as any, {} as any, settings as any);
+
+    await expect(service.assertDownloadAuthentication('mod', { id: 15 })).resolves.toBeUndefined();
+    expect(settings.getBoolean).toHaveBeenCalledWith('resource_download_mod_auth_required', true);
+    await expect(service.assertDownloadAuthentication('other', null)).resolves.toBeUndefined();
+  });
+
   it('returns FILE_NOT_FOUND for missing file', async () => {
     const fileRepo = { findOne: jest.fn().mockResolvedValue(null) };
     const service = new DownloadPolicyService({} as any, {} as any, fileRepo as any);

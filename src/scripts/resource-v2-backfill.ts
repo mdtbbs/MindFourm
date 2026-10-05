@@ -16,7 +16,14 @@ async function main(): Promise<void> {
     const reconciliation = await runResourceV2Reconciliation(AppDataSource, new Date());
     process.stdout.write(`${JSON.stringify({ mode, backfill, reconciliation }, null, 2)}\n`);
     if (backfill.errors.length > 0) throw new Error(`Resource V2 backfill completed with ${backfill.errors.length} errors`);
-    if (mode === 'write' && (reconciliation.resources_missing_attribution > 0 || reconciliation.resources_missing_version > 0 || reconciliation.resources_missing_file > 0)) {
+    if (mode === 'write' && (
+      reconciliation.resources_missing_attribution > 0
+      || reconciliation.resources_missing_version > 0
+      || reconciliation.resources_missing_file > 0
+      || reconciliation.resources_missing_owner > 0
+      || reconciliation.map_resources_missing_version_metadata > 0
+      || reconciliation.schematic_resources_missing_version_metadata > 0
+    )) {
       throw new Error('Resource V2 reconciliation failed; do not enable V2 traffic');
     }
   } finally {
