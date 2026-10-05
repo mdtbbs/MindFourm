@@ -7,6 +7,7 @@
 - [`docs/README.md`](docs/README.md)：中文文档索引和阅读入口。
 - [`docs/api/README.md`](docs/api/README.md)：Public V1 边界、认证、响应、OpenAPI 和客户端文档入口。
 - `docs/api/*.md`：Public V1 OAuth/PKCE、资源、游戏内容、多人联机、云存档、错误码、富文本、Changelog 和生命周期契约。
+- [`docs/resource-storage.md`](docs/resource-storage.md)：RES 上传、binding 生命周期、历史兼容及手动迁移。
 - [`docs/resource-center-v2.md`](docs/resource-center-v2.md)：Resource Center V2 的资源、版本、成员、审核、分析、manifest 与接口。
 - [`docs/international-site-profiles.md`](docs/international-site-profiles.md)：`mdtbbs` 与 `mindustry-club` 部署配置及隔离要求。
 - [`docs/production-deployment.md`](docs/production-deployment.md)：生产配置、迁移和发布检查；执行前仍需核对当前代码和部署状态。
@@ -19,7 +20,7 @@
 - Backend modules live in `src/modules/`; entity registration is maintained in `src/entities/index.ts`; TypeORM migrations are registered from `src/database/migrations/`.
 - Next.js frontend lives in `frontend/`. Shared site profile data is in `src/config/site-profile-data.ts` and `frontend/src/config/site-profile.ts`.
 - Do not maintain hand-counted totals for modules or entities. Read `src/app.module.ts`, `src/entities/index.ts`, and `src/modules/` when the exact structure matters.
-- Forum business data and Resource aggregates are separate from file bytes. `ResourceStorageService` and the MindFileList integration handle file storage/delivery boundaries. Keep large binary transfers off the primary forum web path where the deployment uses a file service. Resource APIs are not generic object storage; content-addressed storage or blob deduplication is not implemented.
+- Forum business data and Resource aggregates are separate from file bytes. `ResourceStorageClientService` stores new durable resource bytes in RES; `ResourceStorageService` retains temporary staging and historical local compatibility, while `ResourceFileProviderService` selects RES, managed, MFL or external delivery. Keep large binary transfers off the primary forum web path where the deployment uses a file service. Resource APIs are not generic object storage; RES owns content-addressed objects and deduplication; forum deletion removes bindings, never shared CAS objects.
 
 ## Public API Contract
 

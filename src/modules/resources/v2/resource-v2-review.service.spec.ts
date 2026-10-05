@@ -20,6 +20,8 @@ type HarnessOptions = {
   findingSeverity?: string;
   versionChannel?: string;
   versionFilePath?: string | null;
+  resFile?: boolean;
+  publicResource?: boolean;
 };
 
 function createHarness(options: HarnessOptions = {}) {
@@ -53,11 +55,16 @@ function createHarness(options: HarnessOptions = {}) {
     removeQuarantinedFile: jest.fn().mockResolvedValue(true),
   };
   const notifications = { create: jest.fn().mockResolvedValue({ id: 1 }) };
-  const service = new ResourceV2ReviewService(dataSource, storage as any, notifications as any);
+  const res = {
+    getObject: jest.fn().mockResolvedValue({ public_id: 'res-object', state: 'verified', size_bytes: payload.length,
+      sha256: createHash('sha256').update(payload).digest('hex'), mime_type: 'application/java-archive' }),
+    createBinding: jest.fn().mockResolvedValue({ id: 'binding-1' }),
+  };
+  const service = new ResourceV2ReviewService(dataSource, storage as any, notifications as any, res as any);
 
   function execute(sql: string, parameters: any[] = []): any {
     if (sql.includes('FROM resources') && sql.includes('WHERE public_id=?')) {
-      return parameters[0] === ids.resource ? [{ id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod', status: 'approved' }] : [];
+      return parameters[0] === ids.resource ? [{ id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod', status: 'approved', is_public: options.publicResource === false ? 0 : 1, visibility: 'public' }] : [];
     }
     if (sql.includes('FROM resource_members')) {
       return options.memberRole ? [{ role: options.memberRole }] : [];
@@ -69,6 +76,11 @@ function createHarness(options: HarnessOptions = {}) {
         ? [{ id: 17, resource_id: 7, public_id: ids.version, status: state.versionStatus, version: '1.0.0', release_channel: options.versionChannel || 'release', file_path: options.versionFilePath === undefined ? '/uploads/.quarantine/resources/release.jar' : options.versionFilePath, file_name: 'release.jar', file_size: payload.length, mime_type: 'application/java-archive', content_hash: createHash('sha256').update(payload).digest('hex') }]
         : [];
     }
+    if (sql.includes("FROM resource_files WHERE resource_version_id=? AND storage_backend='res'")) return options.resFile ? [{
+      id: 22, public_id: 'file-owner', provider_object_id: 'res-object', provider_binding_id: 'binding-1',
+      size_bytes: payload.length, content_hash: createHash('sha256').update(payload).digest('hex'),
+      mime_type: 'application/java-archive', integrity_status: 'verified',
+    }] : [];
     if (sql.startsWith('UPDATE resource_versions SET status=')) state.versionStatus = String(parameters[0]);
     if (sql.includes('FROM resource_analysis_runs') && sql.includes('findings_json')) {
       return [{ id: 21, parser_version: 'analyzer-3.2', findings_json: [
@@ -98,7 +110,7 @@ function createHarness(options: HarnessOptions = {}) {
     return [];
   }
 
-  return { service, dataSource, managerQuery, outerQuery, storage, notifications, state };
+  return { service, dataSource, managerQuery, outerQuery, storage, notifications, state, res };
 }
 
 describe('ResourceV2ReviewService', () => {
@@ -214,6 +226,7 @@ describe('ResourceV2ReviewService', () => {
           content_hash: createHash('sha256').update(payload).digest('hex') }];
       }
       if (sql.startsWith('UPDATE resource_versions SET recommended=0')) return { affectedRows: 1 };
+      if (sql.includes("FROM resource_files WHERE resource_version_id=? AND storage_backend='res'")) return [];
       if (sql.startsWith('UPDATE resource_versions SET status=')) {
         state.versionStatus = String(parameters[0]);
         if (sql.includes(',file_path=?')) state.versionFilePath = String(parameters[4]);
@@ -425,5 +438,51 @@ describe('ResourceV2ReviewService', () => {
       timestamp: '2026-10-05T00:00:00.000Z', parser_version: 'analyzer-3.2',
     });
     expect(JSON.stringify(result)).not.toMatch(/"(?:id|resource_id|resource_version_id|analysis_run_id)"\s*:/);
+  });
+});
+
+
+describe('Resource V2 RES review publication', () => {
+  it('publishes verified RES binaries without local promotion and marks the file available', async () => {
+    const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true });
+    await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).resolves.toMatchObject({ status: 'published' });
+    expect(harness.res.getObject).toHaveBeenCalledWith('res-object');
+    expect(harness.res.createBinding).toHaveBeenCalledWith('res-object', expect.objectContaining({ owner_id: 'file-owner', visibility: 'public' }));
+    expect(harness.managerQuery).toHaveBeenCalledWith('UPDATE resource_files SET provider_binding_id=?,availability_status=? WHERE id=?', ['binding-1', 'available', 22]);
+    expect(harness.storage.preparePromotion).not.toHaveBeenCalled();
+  });
+
+  it('keeps approved files private for private resources', async () => {
+    const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true, publicResource: false });
+    await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    expect(harness.res.createBinding).toHaveBeenCalledWith('res-object', expect.objectContaining({ visibility: 'private' }));
+  });
+
+  it('fails without publishing when RES binding visibility fails', async () => {
+    const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true });
+    harness.res.createBinding.mockRejectedValueOnce(new Error('RES unavailable'));
+    await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).rejects.toThrow('RES unavailable');
+    expect(harness.state.versionStatus).toBe('pending_review');
+  });
+
+  it('restores private binding after a downstream database failure', async () => {
+    const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true });
+    harness.managerQuery.mockImplementationOnce(async () => [{ id: 7, public_id: ids.resource, user_id: 10, resource_kind: 'mod', status: 'approved', is_public: 1 }]);
+    const execute = harness.managerQuery.getMockImplementation()!;
+    harness.managerQuery.mockImplementation(async (sql, parameters) => {
+      if (sql.startsWith('INSERT INTO operation_logs')) throw new Error('audit failed');
+      return execute(sql, parameters);
+    });
+    await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).rejects.toThrow('audit failed');
+    expect(harness.state.versionStatus).toBe('pending_review');
+    expect(harness.res.createBinding).toHaveBeenLastCalledWith('res-object', expect.objectContaining({ visibility: 'private' }));
+  });
+
+  it('rejects metadata mismatch before creating a public binding', async () => {
+    const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true });
+    harness.res.getObject.mockResolvedValueOnce({ public_id: 'res-object', state: 'verified', size_bytes: 999,
+      sha256: 'forged', mime_type: 'application/java-archive' });
+    await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' })).rejects.toThrow('资源存储对象校验失败');
+    expect(harness.res.createBinding).not.toHaveBeenCalled();
   });
 });

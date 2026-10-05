@@ -234,10 +234,18 @@ Mod 依赖解析 `GET /api/v1/resources/mods/{id}/dependency-resolution` 可选 
 
 GitHub Release 来源 API 使用 Resource public UUID。`PUT /api/v1/resources/{id}/source-sync/github` 由 Owner/Maintainer 配置 HTTPS GitHub 仓库 URL、稳定/预发行选择和资产名 include/exclude 过滤（`resource.upload`，10/60s）；`enabled=true` 同时选择加入每 15 分钟一次的有界后台轮询和自动导入，`false` 保留手动读取/导入但关闭调度。`GET /api/v1/resources/{id}/source-sync/github/releases` 供作者手动读取公开 Mod 的 Release 列表及 README/License 预览，可选 `limit=1..30`（默认 20），匿名可读、Bearer 可选 `resource.read`，限流 12/60s；`POST /api/v1/resources/{id}/source-sync/github/import` 由 Owner/Maintainer 显式选取 tag 与资产名，经过隔离区和既有版本分析流程导入（`resource.upload`，5/60s）。自动导入不覆盖既有版本；上游 tag/资产变化、资产匹配歧义或无法验证时会暂停并通知 Owner，等待人工确认。请求验证错误为 400，未登录/无权限为 401/403，资源/来源/资产不可用为 404，GitHub 或下载失败为 502。字段和过滤边界见[Resource Center V2 契约](../resource-center-v2.md)。
 
-版本预览 `GET /api/v1/resources/{id}/versions/{versionId}/preview` 返回原始 PNG 字节，不使用 JSON 响应封装。它优先使用该已发布版本对应的安全预览，并在版本级预览缺失时尝试资源级预览；版本 DTO 只公开预览 URL，不公开存储键。
+版本预览 `GET /api/v1/resources/{id}/versions/{versionId}/preview` 对新 RES 预览返回 302，对历史预览返回原始 PNG 字节，不使用 JSON 响应封装。它优先使用该已发布版本对应的安全预览，并在版本级预览缺失时尝试资源级预览；版本 DTO 只公开预览 URL，不公开存储键。
 
 关系列表包含 `relation_type`、`relation_direction`、非空 `relation_context`，以及目标资源已发布版本的 `version_public_id` 和 `version` 显示值（如有）。`recommended_for` 使用 `opening`、`production`、`defense`、`logistics` 和 `general` 表示推荐用途。创建支持 `recommended_for`、`fork_of`、`successor_of`、`related`、`requires` 和 `compatible_with`；Fork/继任必须关联相同资源类型的目标资源和一个已发布目标版本。工作台会显示关联方向、上游资源及其版本。
 
 管理操作使用 `resource.upload` scope，并按角色控制：Owner/Maintainer 可编辑资料和关系，Owner/Maintainer/Publisher 可分析或发布版本，协作者邀请由 Owner/Maintainer 发起，Owner/Admin 可发起所有权转让，接收方需接受。分析与发布的 multipart 上传限流为 `5 / 60s`。来源 URL 或许可证声明变更会将已审核资源重新置为待审核。
 
 社区写操作也使用 `resource.upload` scope：地图版本反馈、Mod 兼容性/问题报告和冲突报告需要登录及手机号验证；每个地图版本每个账号只保留一份反馈，公开 GET 只返回计数与评分平均值。报告作者可以更新自己的报告，Owner/Maintainer 可回复涉及的 Mod 报告。报告 JSON 的兼容 `attachments` 字段仍只接受元数据；问题报告二进制证据通过 `POST /api/v1/resources/mods/issue-reports/{reportId}/attachments` 上传，兼容性报告使用 `POST /api/v1/resources/mods/compatibility-reports/{reportId}/attachments`。两种路径均支持同路径 GET 清单、追加 `/{attachmentId}` 的 GET 原始字节下载或 DELETE 管理。上传限 PNG/JPEG/GIF/WebP 与 UTF-8 TXT/LOG/JSON/CRASH，单文件最多 5 MiB、每报告最多 10 个文件且总计最多 20 MiB；超单文件限制返回 413，其他格式/单报告限制返回 400。仅报告作者可上传/删除，上传还需手机号验证。私有附件留在隔离目录，`resource.read` 读取仅向报告作者、关联 Resource Owner/active Owner/Maintainer/Publisher、管理员/版主开放；附件清单的 `can_delete` 仅对报告作者为 `true`。公开报告投影不含附件字段。下载使用 `Cache-Control: private, no-store` 与 `nosniff`。上传前请清除 IP、令牌、用户名、本机路径等敏感内容。所有公开资源、版本、报告与附件标识均为 UUID；具体字段、限流和状态枚举见上述 V2 契约。
+
+## ResourceStorage 直传
+
+`POST /api/v1/resources/uploads/init` 接受 `version_public_id`、`filename`、`size_bytes`、`mime_type`、必填 `sha256` 和可选 `role`（primary/supplementary/documentation）。需要 `resource.upload`、登录、站点验证和资源 Owner/active Maintainer/Publisher（Admin 可管理），限流 10/60s。已发布版本不可变。已有主文件不可替换。
+
+客户端使用返回的短期 token 向 RES PUT 原始字节（或接收去重对象），随后 `POST /api/v1/resources/uploads/complete` 携带论坛 `session_id` 和 `object_public_id`。论坛重新验证权限、版本状态和 RES verified 元数据，创建 pending ResourceFile 与私有 binding；重放 complete 返回同一 file_public_id。论坛不会向客户端暴露服务 API key。
+
+RES 文件下载与新预览使用 302；客户端应跟随跳转。下载授权和 DownloadGrant 保留在论坛，私有链接短期有效。存储不可用返回 503，不会持久回退本地。历史 managed/MFL/external 保持兼容。上传与手动迁移运维细节见 [ResourceStorage](../resource-storage.md)。

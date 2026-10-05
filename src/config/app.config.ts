@@ -60,6 +60,13 @@ export const appConfig = () => ({
     baseUrl: process.env.MFL_BASE_URL || '',
     apiKey: process.env.MFL_API_KEY || '',
   },
+  res: {
+    enabled: process.env.RES_ENABLED === 'true',
+    baseUrl: (process.env.RES_BASE_URL || 'https://res.mdtbbs.cn').replace(/\/+$/, ''),
+    apiKey: process.env.RES_API_KEY || '',
+    requestTimeoutMs: parsePositiveInt(process.env.RES_REQUEST_TIMEOUT_MS, 10_000),
+    uploadTimeoutMs: parsePositiveInt(process.env.RES_UPLOAD_TIMEOUT_MS, 120_000),
+  },
   automation: {
     apiKey: process.env.FORUM_API_KEY || '',
   },

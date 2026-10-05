@@ -193,6 +193,12 @@ export class Resource {
   @Column({ type: 'varchar', length: 500, nullable: true })
   renderer_preview_key: string | null;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  renderer_preview_object_id: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  renderer_preview_binding_id: string | null;
+
   @Column({ type: 'varchar', length: 100, nullable: true })
   renderer_parser_version: string | null;
 

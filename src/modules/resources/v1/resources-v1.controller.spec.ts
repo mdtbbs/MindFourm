@@ -120,4 +120,37 @@ describe('ResourcesV1Controller', () => {
     expect(adapter.incrementDownload).not.toHaveBeenCalled();
     expect(response.redirect).toHaveBeenCalledWith('https://cdn.example.org/mod.jar');
   });
+
+  it('records a RES download grant and redirects without reading file bytes', async () => {
+    const capabilities = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
+    const adapter = { getPublicFileByPublicIds: jest.fn().mockResolvedValue({
+      resource: { id: 7, status: 'approved', is_public: 1 }, version: { id: 12, status: 'published' },
+      file: { id: 30, storage_backend: 'res', availability_status: 'available' },
+    }) };
+    const grants = { recordGrant: jest.fn().mockResolvedValue(true) };
+    const provider = { getDownloadTarget: jest.fn().mockResolvedValue({ kind: 'redirect', url: 'https://res.example/o/object/file.msav' }) };
+    const controller = new ResourcesV1Controller(capabilities as any, adapter as any, undefined, undefined, grants as any, undefined, provider as any);
+    const response = { redirect: jest.fn() };
+
+    await controller.downloadFile('resource', 'version', 'file', response as any, { headers: {}, user: { id: 22 } });
+
+    expect(provider.getDownloadTarget).toHaveBeenCalledWith(expect.objectContaining({ storage_backend: 'res' }), { private: false });
+    expect(grants.recordGrant).toHaveBeenCalledWith(expect.objectContaining({ backend: 'res', fileId: 30 }), 'user:22');
+    expect(response.redirect).toHaveBeenCalledWith('https://res.example/o/object/file.msav');
+  });
+  it('requests a signed target for an authorized private published RES file', async () => {
+    const caps = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
+    const target = { resource: { id: 7, status: 'approved', is_public: 0 }, version: { id: 12, status: 'published' },
+      file: { id: 30, storage_backend: 'res', availability_status: 'available' } };
+    const adapter = { getPublicFileByPublicIds: jest.fn().mockResolvedValue(target) };
+    const provider = { getDownloadTarget: jest.fn().mockResolvedValue({ kind: 'redirect', url: 'https://res.example/private/short-token' }) };
+    const grants = { recordGrant: jest.fn().mockResolvedValue(true) };
+    const controller = new ResourcesV1Controller(caps as any, adapter as any, undefined, undefined, grants as any, undefined, provider as any);
+    const response = { redirect: jest.fn() };
+    await controller.downloadFile('resource', 'version', 'file', response as any, { headers: {}, user: { id: 22 } });
+    expect(provider.getDownloadTarget).toHaveBeenCalledWith(target.file, { private: true });
+    expect(response.redirect).toHaveBeenCalledWith('https://res.example/private/short-token');
+    expect(grants.recordGrant).toHaveBeenCalledTimes(1);
+  });
+
 });

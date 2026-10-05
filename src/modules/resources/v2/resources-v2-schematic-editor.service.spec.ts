@@ -10,8 +10,8 @@ describe('ResourcesV2WriteService schematic export', () => {
 
   function createService(status = 'published', contentHash = createHash('sha256').update(source).digest('hex')) {
     const dataSource = { query: jest.fn().mockResolvedValue([{
-      public_id: versionId, status, file_path: '/managed/resources/source.msch', file_name: '../source.msch', content_hash: contentHash,
-    }]) };
+      id: 8, public_id: versionId, status, file_path: '/managed/resources/source.msch', file_name: '../source.msch', content_hash: contentHash,
+    }]), getRepository: jest.fn().mockReturnValue({ findOne: jest.fn().mockResolvedValue(null) }) };
     const resources = { findOne: jest.fn().mockResolvedValue({ id: 7, user_id: 11, resource_kind: 'schematic' }) };
     const storage = { readManagedFile: jest.fn().mockResolvedValue(source) };
     const previews = { transformSchematic: jest.fn().mockResolvedValue({ data: edited, sha256: createHash('sha256').update(edited).digest('hex') }) };

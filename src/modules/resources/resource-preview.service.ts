@@ -1,14 +1,18 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, MoreThan, Repository } from 'typeorm';
-import { readFile, unlink } from 'fs/promises';
+import { EntityManager, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
+import { readFile, stat, unlink } from 'fs/promises';
 import * as path from 'path';
 import { createHash, randomUUID } from 'crypto';
 import { Resource } from '@entities/resource.entity';
+import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceStorageService, StoredResourceFile } from './resource-storage.service';
 import { ResourceUploadDraft } from '@entities/resource-upload-draft.entity';
 import { normalizeTiptapDocument } from '@common/utils/tiptap-content.util';
 import { ResourceDuplicateService, ResourceDuplicateResult } from './resource-duplicate.service';
+import { ResourceStorageClientService } from './resource-storage-client.service';
+import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceFileProviderService } from './resource-file-provider.service';
 
 type RendererResult = {
   metadata?: Record<string, unknown>;
@@ -22,7 +26,7 @@ const MAX_RENDER_BYTES = 20 * 1024 * 1024;
 const DRAFT_TTL_MS = 30 * 60 * 1000;
 const MAX_DRAFTS_PER_USER = 5;
 
-type RenderableFile = Pick<Resource, 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash'>;
+type RenderableFile = Pick<Resource, 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash'> & { id?: number };
 type RenderedPreview = Required<Pick<RendererResult, 'previewKey'>> & Pick<RendererResult, 'metadata' | 'parserVersion'>;
 type RenderAttempt = { preview: RenderedPreview | null; errorCode: string };
 type PreviewDraft = {
@@ -31,6 +35,8 @@ type PreviewDraft = {
   kind: string;
   file: StoredResourceFile;
   previewKey: string | null;
+  previewObjectId?: string | null;
+  previewBindingId?: string | null;
   metadata: Record<string, unknown> | null;
   parserVersion: string | null;
   expiresAt: number;
@@ -61,7 +67,111 @@ export class ResourcePreviewService {
     private readonly storage?: ResourceStorageService,
     @Optional() @InjectRepository(ResourceUploadDraft) private readonly uploadDrafts?: Repository<ResourceUploadDraft>,
     @Optional() private readonly duplicates?: ResourceDuplicateService,
+    @Optional() private readonly resClient?: ResourceStorageClientService,
+    @Optional() private readonly fileProvider?: ResourceFileProviderService,
+    @Optional() @InjectRepository(ResourceVersion) private readonly versions?: Repository<ResourceVersion>,
   ) {}
+
+  /** Move a newly rendered PNG into RES after the resource has a stable public identity. */
+  async storePreviewInRes(resource: Resource, previewKey: string): Promise<void> {
+    if (!this.isValidPreviewKey(previewKey, resource.resource_kind, resource.content_hash)) return;
+    if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    const preview = await readFile(path.resolve(this.previewRoot, previewKey));
+    if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
+    const object = await this.resClient.uploadServerGeneratedObject({
+      body: preview, sizeBytes: preview.length, mimeType: 'image/png', filename: 'preview.png', purpose: 'resource_preview',
+    });
+    const visibility = this.isResourcePreviewPublic(resource) ? 'public' : 'private';
+    const binding = await this.resClient.createBinding(object.public_id, {
+      namespace: 'mindforum', owner_type: 'resource_preview', owner_id: resource.public_id, visibility,
+    });
+    await this.resources.update(resource.id, {
+      renderer_preview_object_id: object.public_id,
+      renderer_preview_binding_id: binding.id,
+      renderer_preview_key: null,
+    });
+    // Keep PNGs referenced by historical version metadata.
+  }
+
+  async storeVersionPreviewInRes(resource: Resource, version: ResourceVersion, previewKey: string): Promise<{
+    renderer_preview_object_id: string; renderer_preview_binding_id: string;
+  }> {
+    if (!this.isValidPreviewKey(previewKey, resource.resource_kind, version.content_hash)) throw new BadRequestException('版本预览文件无效');
+    if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    const preview = await readFile(path.resolve(this.previewRoot, previewKey));
+    if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
+    const object = await this.resClient.uploadServerGeneratedObject({
+      body: preview, sizeBytes: preview.length, mimeType: 'image/png', filename: 'preview.png', purpose: 'resource_preview',
+    });
+    const visibility = this.isVersionPreviewPublic(resource, version) ? 'public' : 'private';
+    const binding = await this.resClient.createBinding(object.public_id, {
+      namespace: 'mindforum', owner_type: 'resource_version_preview', owner_id: version.public_id, visibility,
+    });
+    // A renderer key can be shared by historic versions of identical content.
+    // Keep local PNGs and metadata keys until a separate migration verifies all references.
+    return { renderer_preview_object_id: object.public_id, renderer_preview_binding_id: binding.id };
+  }
+
+  private isResourcePreviewPublic(resource: Partial<Resource>): boolean {
+    return ['approved', 'published'].includes(resource.status || '') && Number(resource.is_public) === 1
+      && resource.visibility !== 'private' && !resource.deleted_at;
+  }
+
+  private isVersionPreviewPublic(resource: Resource, version: Pick<ResourceVersion, 'status'>): boolean {
+    return this.isResourcePreviewPublic(resource) && version.status === 'published';
+  }
+
+  async setVersionResPreviewVisibility(resource: Resource, version: ResourceVersion, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
+    if (!version.renderer_preview_object_id) return;
+    if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    const binding = await this.resClient.createBinding(version.renderer_preview_object_id, {
+      namespace: 'mindforum', owner_type: 'resource_version_preview', owner_id: version.public_id,
+      visibility: visibility === 'public' && this.isVersionPreviewPublic(resource, version) ? 'public' : 'private',
+    });
+    if (version.renderer_preview_binding_id !== binding.id) {
+      if (manager) await manager.update(ResourceVersion, version.id, { renderer_preview_binding_id: binding.id });
+      else if (this.versions) await this.versions.update(version.id, { renderer_preview_binding_id: binding.id });
+    }
+    version.renderer_preview_binding_id = binding.id;
+  }
+
+  async getVersionResPreviewUrl(resource: Resource, version: ResourceVersion): Promise<string | null> {
+    if (!version.renderer_preview_object_id || !this.resClient) return null;
+    if (this.isVersionPreviewPublic(resource, version)) return this.resClient.buildPublicDownloadUrl(version.renderer_preview_object_id, 'preview.png');
+    return (await this.resClient.createPrivateDownloadUrl(version.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
+  }
+
+  async setResPreviewVisibility(resource: Resource, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
+    if (resource.renderer_preview_object_id) {
+      if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
+      if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+      const binding = await this.resClient.createBinding(resource.renderer_preview_object_id, {
+        namespace: 'mindforum', owner_type: 'resource_preview', owner_id: resource.public_id,
+        visibility: visibility === 'public' && this.isResourcePreviewPublic(resource) ? 'public' : 'private',
+      });
+      if (resource.renderer_preview_binding_id !== binding.id) {
+        if (manager) await manager.update(Resource, resource.id, { renderer_preview_binding_id: binding.id });
+        else await this.resources.update(resource.id, { renderer_preview_binding_id: binding.id });
+      }
+    }
+    if (this.versions || manager) {
+      const versions = manager
+        ? await manager.find(ResourceVersion, { where: { resource_id: resource.id } })
+        : await this.versions!.find({ where: { resource_id: resource.id } });
+      for (const version of versions) await this.setVersionResPreviewVisibility(resource, version, visibility, manager);
+    }
+  }
+
+  async getResPreviewUrl(resource: Pick<Resource, 'renderer_status' | 'renderer_preview_object_id' | 'status'> & { is_public?: number | boolean; visibility?: string | null; deleted_at?: Date | null }): Promise<string | null> {
+    if (resource.renderer_status !== 'ready' || !resource.renderer_preview_object_id || !this.resClient) return null;
+    if (this.isResourcePreviewPublic(resource as Partial<Resource>)) {
+      return this.resClient.buildPublicDownloadUrl(resource.renderer_preview_object_id, 'preview.png');
+    }
+    return (await this.resClient.createPrivateDownloadUrl(resource.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
+  }
 
   supports(resource: Pick<Resource, 'resource_kind'>): boolean {
     return PREVIEWABLE_KINDS.has(resource.resource_kind || '');
@@ -202,6 +312,7 @@ export class ResourcePreviewService {
     if (!this.isConfigured()) throw new BadRequestException('预览服务暂不可用，请稍后重试');
     if (file.file_size <= 0 || file.file_size > MAX_RENDER_BYTES) throw new BadRequestException('文件大小不支持生成预览');
     await this.makeRoomForDraft(userId);
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
 
     const rendered = await this.render({ resource_kind: kind, ...file });
     if (!rendered.preview) throw new BadRequestException('文件无法解析为有效的 Mindustry 地图或蓝图');
@@ -223,8 +334,19 @@ export class ResourcePreviewService {
       draftData: null,
     };
     try {
+      const preview = await this.readPreviewKey(rendered.preview.previewKey);
+      if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
+      const object = await this.resClient.uploadServerGeneratedObject({
+        body: preview, sizeBytes: preview.length, mimeType: 'image/png', filename: 'preview.png', purpose: 'resource_preview',
+      });
+      const binding = await this.resClient.createBinding(object.public_id, {
+        namespace: 'mindforum', owner_type: 'resource_preview_draft', owner_id: id, visibility: 'private',
+      });
+      draft.previewObjectId = object.public_id;
+      draft.previewBindingId = binding.id;
       await this.storeDraft(draft);
     } catch (error) {
+      await this.removeDraftPreviewBinding(draft);
       await this.removePreviewKey(draft.previewKey);
       throw error;
     }
@@ -274,6 +396,13 @@ export class ResourcePreviewService {
     await this.cleanupDraftFiles(draft);
   }
 
+  async getDraftResPreviewUrl(userId: number, id: string): Promise<string | null> {
+    const draft = await this.requireDraft(userId, id);
+    if (!draft.previewObjectId) return null;
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    return (await this.resClient.createPrivateDownloadUrl(draft.previewObjectId, { filename: 'preview.png', expires_in: 300 })).url;
+  }
+
   async readDraftPreview(userId: number, id: string): Promise<Buffer> {
     const draft = await this.requireDraft(userId, id);
     if (!draft.previewKey) throw new NotFoundException('预览尚未生成');
@@ -295,12 +424,13 @@ export class ResourcePreviewService {
       const deleted = await this.uploadDrafts.delete({ id, user_id: userId, expires_at: MoreThan(new Date()) });
       if (!deleted.affected) throw new NotFoundException('预览草稿不存在或已过期');
     } else this.drafts.delete(id);
+    await this.removeDraftPreviewBinding(draft);
     return { file: draft.file, previewKey: draft.previewKey, metadata: draft.metadata, parserVersion: draft.parserVersion };
   }
 
   async discardConsumedDraft(draft: ConsumedResourcePreviewDraft): Promise<void> {
     if (!draft.previewKey || !this.isValidPreviewKey(draft.previewKey)) return;
-    await unlink(path.resolve(this.previewRoot, draft.previewKey)).catch(() => undefined);
+    await this.removePreviewKey(draft.previewKey);
   }
 
   async enqueue(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash'>): Promise<void> {
@@ -309,7 +439,7 @@ export class ResourcePreviewService {
       await this.resources.update(resource.id, { renderer_status: 'unavailable', renderer_error_code: 'RENDERER_UNAVAILABLE' });
       return;
     }
-    if (!resource.file_path || !resource.file_name || !resource.content_hash) {
+    if (!resource.file_name || !resource.content_hash) {
       await this.fail(resource.id, 'RENDER_SOURCE_MISSING');
       return;
     }
@@ -334,6 +464,11 @@ export class ResourcePreviewService {
         renderer_parser_version: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
         renderer_metadata_json: this.safeMetadata(rendered.preview.metadata) as any,
       });
+      if (this.resClient) {
+        const owner = await this.resources.findOne({ where: { id: resource.id } });
+        if (!owner) throw new NotFoundException('资源不存在');
+        await this.storePreviewInRes(owner, rendered.preview.previewKey);
+      }
     } catch { await this.fail(resource.id, 'RENDER_FAILED'); }
   }
 
@@ -382,6 +517,19 @@ export class ResourcePreviewService {
 
   async removePreviewKey(previewKey: string | null | undefined): Promise<void> {
     if (!previewKey || !this.isValidPreviewKey(previewKey)) return;
+    // Identical content shares a renderer key. Draft cleanup must not erase an
+    // already published historic version's PNG. Retain it if reference checks fail.
+    if (this.resources.manager?.query) {
+      try {
+        const references = await this.resources.manager.query(
+          `SELECT id FROM resources WHERE renderer_preview_key = ?
+           UNION ALL SELECT resource_version_id AS id FROM map_version_metadata WHERE preview_key = ?
+           UNION ALL SELECT resource_version_id AS id FROM schematic_version_metadata WHERE preview_key = ? LIMIT 1`,
+          [previewKey, previewKey, previewKey],
+        );
+        if (references.length) return;
+      } catch { return; }
+    }
     await unlink(path.resolve(this.previewRoot, previewKey)).catch(() => undefined);
   }
 
@@ -446,8 +594,20 @@ export class ResourcePreviewService {
 
   private async render(resource: RenderableFile): Promise<RenderAttempt> {
     try {
-      if (!resource.file_path || !resource.file_name || !resource.content_hash) return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
-      const payload = await readFile(resource.file_path);
+      if (!resource.file_name || !resource.content_hash) return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
+      let payload: Buffer;
+      if (resource.file_path) {
+        const source = await stat(resource.file_path);
+        if (!source.isFile() || source.size > MAX_RENDER_BYTES) return { preview: null, errorCode: 'FILE_TOO_LARGE_FOR_PREVIEW' };
+        payload = await readFile(resource.file_path);
+      }
+      else if (resource.id && this.fileProvider) {
+        const file = await this.resources.manager.getRepository(ResourceFile).findOne({
+          where: { role: 'primary', resource_version: { resource_id: resource.id } }, order: { id: 'DESC' },
+        });
+        if (!file) return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
+        payload = await this.fileProvider.getReadableContent(file, MAX_RENDER_BYTES);
+      } else return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
       if (payload.length === 0 || payload.length > MAX_RENDER_BYTES) return { preview: null, errorCode: 'FILE_TOO_LARGE_FOR_PREVIEW' };
       const response = await fetch(`${this.rendererUrl}/v1/analyze`, {
         method: 'POST',
@@ -544,6 +704,8 @@ export class ResourcePreviewService {
       mime_type: draft.file.mime_type,
       content_hash: draft.file.content_hash,
       preview_key: draft.previewKey,
+      preview_object_id: draft.previewObjectId || null,
+      preview_binding_id: draft.previewBindingId || null,
       metadata_json: draft.metadata,
       parser_version: draft.parserVersion,
       draft_json: draft.draftData,
@@ -564,6 +726,8 @@ export class ResourcePreviewService {
         content_hash: row.content_hash,
       },
       previewKey: row.preview_key,
+      previewObjectId: row.preview_object_id || null,
+      previewBindingId: row.preview_binding_id || null,
       metadata: row.metadata_json || null,
       parserVersion: row.parser_version || null,
       expiresAt: new Date(row.expires_at).getTime(),
@@ -586,7 +750,16 @@ export class ResourcePreviewService {
     };
   }
 
+  private async removeDraftPreviewBinding(draft: PreviewDraft): Promise<void> {
+    if (draft.previewObjectId && draft.previewBindingId && this.resClient) {
+      await this.resClient.deleteBinding(draft.previewObjectId, draft.previewBindingId).catch(() => {
+        this.logger.warn('Draft preview binding cleanup failed; retained private binding');
+      });
+    }
+  }
+
   private async cleanupDraftFiles(draft: PreviewDraft): Promise<void> {
+    await this.removeDraftPreviewBinding(draft);
     if (this.storage) await this.storage.removeManaged(draft.file.file_path).catch(() => undefined);
     else await unlink(draft.file.file_path).catch(() => undefined);
     await this.removePreviewKey(draft.previewKey);

@@ -14,6 +14,7 @@ import { ResourceRating } from '@entities/resource-rating.entity';
 import { User } from '@entities/user.entity';
 import { ResourceAttribution } from '@entities/resource-attribution.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceDirectUploadSession } from '@entities/resource-direct-upload-session.entity';
 import { ResourceFavorite } from '@entities/resource-favorite.entity';
 import { ResourceLike } from '@entities/resource-like.entity';
 import { ResourceSubscription } from '@entities/resource-subscription.entity';
@@ -30,6 +31,9 @@ import { ResourcesV1Controller } from './v1/resources-v1.controller';
 import { CapabilitiesModule } from '../capabilities/capabilities.module';
 import { SettingsModule } from '../settings/settings.module';
 import { ResourceStorageService } from './resource-storage.service';
+import { ResourceStorageClientService } from './resource-storage-client.service';
+import { ResourceFileProviderService } from './resource-file-provider.service';
+import { ResourceDirectUploadService } from './resource-direct-upload.service';
 import { LogsModule } from '../logs/logs.module';
 import { ResourceLifecycleService } from './resource-lifecycle.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
@@ -66,10 +70,10 @@ import { ResourceCommentsModule } from '../resource-comments/resource-comments.m
     CustomEmojisModule,
     DownloadsModule,
     ResourceCommentsModule,
-    TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ModReportAttachment]),
+    TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceDirectUploadSession, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ModReportAttachment]),
   ],
-  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService],
+  providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourceDirectUploadService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService],
   controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController],
-  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
+  exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService],
 })
 export class ResourcesModule {}

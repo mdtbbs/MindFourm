@@ -3,12 +3,14 @@ import { createHash } from 'crypto';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource } from '@entities/resource.entity';
+import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceFileProviderService } from '../resource-file-provider.service';
 import { User } from '@entities/user.entity';
 import { ResourceReviewEvent } from '@entities/resource-center-v2.entity';
 import { ResourceVersionService } from '../resource-versions.service';
 import { ResourcePreviewService } from '../resource-preview.service';
 import { ResourceStorageService } from '../resource-storage.service';
-import { ResourceFileMeta } from '../resources.service';
+import { ResourceFileMeta, ResourcesService } from '../resources.service';
 import { parseMarkdown } from '@common/utils/markdown.util';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { analyzeMapMetadata } from '../analyzers/map-analyzer';
@@ -25,6 +27,8 @@ export class ResourcesV2WriteService {
     private readonly versions: ResourceVersionService,
     private readonly previews: ResourcePreviewService,
     @Optional() private readonly storage?: ResourceStorageService,
+    @Optional() private readonly fileProvider?: ResourceFileProviderService,
+    @Optional() private readonly resourceLifecycle?: ResourcesService,
   ) {}
 
   private assertUuid(value: string): void {
@@ -111,31 +115,42 @@ export class ResourcesV2WriteService {
     await this.assertRole(resource, actorId, ['owner', 'maintainer']);
     if (resource.resource_kind !== 'schematic') throw new BadRequestException('只有蓝图资源支持在线编辑');
     this.assertUuid(versionPublicId);
-    if (!this.storage) throw new BadRequestException('资源文件存储不可用');
     if (!Number.isInteger(input.rotation_quarters) || input.rotation_quarters < 0 || input.rotation_quarters > 3
       || typeof input.mirror_x !== 'boolean' || (input.delete_positions?.length || 0) > 10_000) {
       throw new BadRequestException('蓝图编辑操作无效');
     }
     const rows = await this.dataSource.query(
-      `SELECT public_id,status,file_path,file_name,content_hash FROM resource_versions
+      `SELECT id,public_id,status,file_path,file_name,content_hash FROM resource_versions
        WHERE resource_id = ? AND public_id = ? LIMIT 1`,
       [resource.id, versionPublicId],
-    ) as Array<{ public_id: string; status: string; file_path: string | null; file_name: string | null; content_hash: string | null }>;
+    ) as Array<{ id: number; public_id: string; status: string; file_path: string | null; file_name: string | null; content_hash: string | null }>;
     const version = rows[0];
     if (!version || version.status !== 'published') throw new NotFoundException('已发布蓝图版本不存在');
-    if (!version.file_path || !version.file_name?.toLowerCase().endsWith('.msch')) throw new BadRequestException('蓝图版本文件不可用');
-
-    const source = await this.storage.readManagedFile(version.file_path, 20 * 1024 * 1024);
+    const primary = await this.dataSource.getRepository(ResourceFile).findOne({
+      where: { resource_version_id: version.id, role: 'primary', availability_status: 'available' },
+    });
+    const filename = primary?.original_filename || version.file_name;
+    if (!filename?.toLowerCase().endsWith('.msch')) throw new BadRequestException('蓝图版本文件不可用');
+    let source: Buffer;
+    if (primary && this.fileProvider) {
+      source = await this.fileProvider.getReadableContent(primary, 20 * 1024 * 1024);
+    } else {
+      if (primary?.storage_backend === 'res' || !version.file_path || !this.storage) {
+        throw new BadRequestException('蓝图版本文件不可用');
+      }
+      source = await this.storage.readManagedFile(version.file_path, 20 * 1024 * 1024);
+    }
     const sourceHash = createHash('sha256').update(source).digest('hex');
-    if (version.content_hash && sourceHash !== version.content_hash.toLowerCase()) {
+    const expectedHash = primary?.content_hash || version.content_hash;
+    if (expectedHash && sourceHash !== expectedHash.toLowerCase()) {
       throw new BadRequestException('蓝图源文件校验失败，未生成编辑结果');
     }
-    const transformed = await this.previews.transformSchematic(version.file_name, source, {
+    const transformed = await this.previews.transformSchematic(filename, source, {
       rotation_quarters: input.rotation_quarters,
       mirror_x: input.mirror_x,
       delete_positions: input.delete_positions || [],
     });
-    const stem = version.file_name.split(/[\\/]/).pop()!.replace(/\.msch$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'schematic';
+    const stem = filename.split(/[\\/]/).pop()!.replace(/\.msch$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'schematic';
     return { data: transformed.data, file_name: `${stem}-edited.msch`, sha256: transformed.sha256 };
   }
 
@@ -211,12 +226,19 @@ export class ResourcesV2WriteService {
     if (input.source_url !== undefined) update.source_url = input.source_url?.trim() || null;
     if (input.license !== undefined) update.license = input.license?.trim() || null;
 
-    const resourceId = await this.dataSource.transaction(async (manager) => {
+    let previousResource: Resource | null = null;
+    let resourceId: number;
+    try {
+    resourceId = await this.dataSource.transaction(async (manager) => {
       const resource = await this.lockResource(manager, publicId);
       await this.assertRole(resource, actorId, ['owner', 'maintainer'], manager);
       const changedCritical = (input.source_url !== undefined && input.source_url !== (resource.source_url || null))
         || (input.license !== undefined && input.license !== (resource.license || null));
       if (changedCritical && ['approved', 'published'].includes(resource.status || '')) update.status = 'pending';
+      if (update.status === 'pending') {
+        previousResource = resource;
+        if (this.resourceLifecycle) await this.resourceLifecycle.setResourceStorageVisibility(resource, 'private', manager);
+      }
       await manager.update(Resource, resource.id, update);
       if (changedCritical) await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
         resource_id: resource.id,
@@ -233,6 +255,12 @@ export class ResourcesV2WriteService {
       );
       return resource.id;
     });
+    } catch (error) {
+      if (previousResource && this.resourceLifecycle) {
+        await this.resourceLifecycle.setResourceStorageVisibility(previousResource, 'public').catch(() => undefined);
+      }
+      throw error;
+    }
     const updated = await this.resources.findOne({ where: { id: resourceId } });
     if (!updated) throw new NotFoundException('资源不存在');
     return {

@@ -22,6 +22,8 @@ import { CreateResourceUploadDraftDto } from '../dto/create-resource-upload-draf
 import { UpdateResourceUploadDraftDto } from '../dto/update-resource-upload-draft.dto';
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourcePreviewDraftInterceptor, resourceUploadInterceptor } from '../resources.controller';
 import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
+import { ResourceDirectUploadService } from '../resource-direct-upload.service';
+import { CompleteResourceDirectUploadDto, InitResourceDirectUploadDto, ResourceDirectUploadInitResponseDto, ResourceDirectUploadCompleteResponseDto } from './resource-direct-upload.dto';
 
 const duplicateResponseSchema = {
   type: 'object', required: ['exact', 'structure', 'normalized', 'existing_resources'],
@@ -47,7 +49,30 @@ export class ResourcesV1WriteController {
     private readonly previews: ResourcePreviewService,
     private readonly settings: SettingsService,
     private readonly auth: AuthService,
+    private readonly directUploads: ResourceDirectUploadService,
   ) {}
+
+  @Post('uploads/init')
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 10, window: 60 })
+  @ApiBody({ type: InitResourceDirectUploadDto })
+  @ApiCreatedResponse({ type: ResourceDirectUploadInitResponseDto, description: 'Creates an owner-bound RES direct upload session. The upload token is short lived; complete is always required.' })
+  async initDirectUpload(@Body() rawBody: Record<string, any>, @Req() req: any) {
+    await this.assertEnabled(req.user);
+    const body = await this.validate(rawBody, InitResourceDirectUploadDto);
+    return this.directUploads.init(body, req.user);
+  }
+
+  @Post('uploads/complete')
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 10, window: 60 })
+  @ApiBody({ type: CompleteResourceDirectUploadDto })
+  @ApiCreatedResponse({ type: ResourceDirectUploadCompleteResponseDto, description: 'Checks the verified RES object server-side, creates a pending ResourceFile, and binds it privately.' })
+  async completeDirectUpload(@Body() rawBody: Record<string, any>, @Req() req: any) {
+    await this.assertEnabled(req.user);
+    const body = await this.validate(rawBody, CompleteResourceDirectUploadDto);
+    return this.directUploads.complete(body.session_id, body.object_public_id, req.user);
+  }
 
   @Post('drafts/preview')
   @OAuthProtected('resource.upload')
@@ -163,8 +188,14 @@ export class ResourcesV1WriteController {
   @OAuthProtected('resource.upload')
   @RawHttpResponse()
   @ApiParam({ name: 'draftId', type: 'string' })
-  @ApiOkResponse({ description: 'Private preview image for the authenticated submitter.' })
+  @ApiOkResponse({ description: 'Legacy private preview image for the authenticated submitter.' })
+  @ApiResponse({ status: 302, description: 'Redirects RES draft previews to a short-lived private URL.' })
   async draftPreview(@Param('draftId') draftId: string, @Req() req: any, @Res() res: Response) {
+    const redirect = await this.previews.getDraftResPreviewUrl(req.user.id, draftId);
+    if (redirect) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.redirect(302, redirect);
+    }
     const image = await this.previews.readDraftPreview(req.user.id, draftId);
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'private, no-store');
@@ -221,10 +252,12 @@ export class ResourcesV1WriteController {
       } else storedFile = schematicCode
           ? await this.storage.storePastedSchematic(schematicCode)
           : await this.storage.storeIncoming(file);
-      const resource = await this.resources.create(body, userId, storedFile, {
+      const resFile = storedFile ? await this.directUploads.uploadManagedFile(storedFile) : undefined;
+      const resource = await this.resources.create(body, userId, resFile, {
         ipAddress: getClientIp(req), rendererDraft, idempotencyKey,
         idempotencyPayload: idempotencyPayload || body,
       });
+      if (storedFile?.file_path) await this.storage.removeManaged(storedFile.file_path).catch(() => undefined);
       return this.submittedResource(resource);
     } catch (error) {
       await cleanupUploadedFile(file);

@@ -1,7 +1,7 @@
 import { applyDecorators, Controller, Get, Param, Query, Req, Res } from '@nestjs/common';
 import {
   ApiBadRequestResponse, ApiExtraModels, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiProduces,
-  ApiParam, ApiQuery, ApiTags, ApiUnauthorizedResponse, getSchemaPath,
+  ApiParam, ApiQuery, ApiResponse, ApiTags, ApiUnauthorizedResponse, getSchemaPath,
 } from '@nestjs/swagger';
 import { Type } from '@nestjs/common';
 import { createHash } from 'node:crypto';
@@ -126,7 +126,10 @@ export class ResourcesV2Controller {
   @ApiOkResponse({ description: 'PNG preview bytes for the selected version, falling back to the current resource preview when no version preview exists.', schema: { type: 'string', format: 'binary' } })
   @ApiUnauthorizedResponse({ description: '携带的登录凭据无效。' })
   @ApiNotFoundResponse({ description: '资源、已发布版本或预览不存在。' })
+  @ApiResponse({ status: 302, description: 'Redirects new RES previews to their public URL; historical PNG bytes remain supported.' })
   async versionPreview(@Param('id') id: string, @Param('versionId') versionId: string, @Res() response: Response) {
+    const redirect = await this.resources.getVersionPreviewUrl(id, versionId);
+    if (redirect) return response.redirect(302, redirect);
     const image = await this.resources.readVersionPreview(id, versionId);
     response.setHeader('Content-Type', 'image/png');
     response.setHeader('Cache-Control', 'public, max-age=300');

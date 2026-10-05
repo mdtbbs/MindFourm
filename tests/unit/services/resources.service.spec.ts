@@ -249,6 +249,7 @@ describe('ResourcesService - admin merge', () => {
       query: jest.fn(async (sql: string, params: any[] = []) => {
         if (sql.includes('SELECT * FROM resources WHERE id IN')) return [source, target];
         if (sql.includes('information_schema.tables')) return tables;
+        if (sql.includes("file.storage_backend='res'")) return [];
         if (sql.includes('SELECT id, post_type, source FROM posts WHERE id = ?')) return [{ id: params[0], post_type: 'resource_discussion', source: 'SYSTEM' }];
         if (sql.includes('SELECT id, version, status FROM resource_versions WHERE resource_id = ? ORDER BY id')) {
           versionSelects.push(Number(params[0]));

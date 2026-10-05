@@ -13,6 +13,15 @@ export interface MflUploadResponse {
   files: MflUploadResult[];
 }
 
+export interface MflFileMetadata {
+  id: number;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type?: string;
+  sha256?: string | null;
+}
+
 // Neither call previously had a timeout, so an unresponsive MindFileList could
 // hold a forum request handler (and, for uploads, a database transaction) open
 // indefinitely.
@@ -159,7 +168,29 @@ export class MflClientService {
   /**
    * Get the download URL for a MFL file
    */
-  getDownloadUrl(mflFileId: number): string {
-    return `${this.baseUrl}/download/${mflFileId}`;
+  getDownloadUrl(mflFileId: number, filePath?: string): string {
+    // download-site exposes /d/* and uses the stored relative file_path,
+    // with each path segment percent-encoded. Keep old ID links as a fallback
+    // for historical rows whose metadata cannot currently be resolved.
+    if (!filePath) return `${this.baseUrl}/download/${mflFileId}`;
+    const encoded = filePath.replace(/\\/g, '/').replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
+    return `${this.baseUrl}/d/${encoded}`;
+  }
+
+  async getFileMetadata(mflFileId: number): Promise<MflFileMetadata> {
+    if (!this.enabled) throw new Error('MFL is not configured');
+    const response = await fetch(`${this.baseUrl}/api/v1/files/${mflFileId}`, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.timeout(MFL_REQUEST_TIMEOUT_MS),
+    });
+    if (!response.ok) throw new Error(`MFL metadata request failed (${response.status})`);
+    const payload = await response.json() as { success?: boolean; data?: { file?: MflFileMetadata } };
+    if (!payload.success || !payload.data?.file?.file_path) throw new Error('MFL metadata response is invalid');
+    return payload.data.file;
+  }
+
+  async resolveDownloadUrl(mflFileId: number): Promise<string> {
+    const file = await this.getFileMetadata(mflFileId);
+    return this.getDownloadUrl(mflFileId, file.file_path);
   }
 }

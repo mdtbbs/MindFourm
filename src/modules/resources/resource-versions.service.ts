@@ -20,6 +20,8 @@ import { validateResourceVersion } from './analyzers/version-constraint.util';
 import { diffModVersion } from './analyzers/mod-content-diff';
 import { persistRendererAnalysis } from './v2/resource-version-analysis.persistence';
 import { diffStructuredVersion, type StructuredVersionSnapshot } from './analyzers/resource-version-diff';
+import { ResourcePreviewService } from './resource-preview.service';
+import { ResourceStorageClientService } from './resource-storage-client.service';
 
 @Injectable()
 export class ResourceVersionService {
@@ -31,6 +33,8 @@ export class ResourceVersionService {
     private readonly resourcesService: ResourcesService,
     private readonly duplicateService: ResourceDuplicateService,
     @Optional() private readonly storage?: ResourceStorageService,
+    @Optional() private readonly resClient?: ResourceStorageClientService,
+    @Optional() private readonly previews?: ResourcePreviewService,
   ) {}
 
   private async saveEntityBatches(manager: any, target: unknown, values: unknown[], batchSize = 500): Promise<void> {
@@ -83,13 +87,22 @@ export class ResourceVersionService {
     return versions.map((version) => this.normalizeVersion(version));
   }
 
-  async analyzeMod(file: ResourceFileMeta, authorOverrides?: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private async readUploadedFile(file: ResourceFileMeta, maxBytes: number): Promise<Buffer> {
+    if (file.storage_backend === 'res') {
+      if (!this.resClient || !file.provider_object_id) throw new BadRequestException('资源存储对象缺失');
+      return this.resClient.getObjectContent(file.provider_object_id, { maxBytes });
+    }
     if (!this.storage) throw new BadRequestException('资源文件存储不可用');
+    return this.storage.readManagedFile(file.file_path, maxBytes);
+  }
+
+  async analyzeMod(file: ResourceFileMeta, authorOverrides?: Record<string, unknown>): Promise<Record<string, unknown>> {
+    if (file.storage_backend !== 'res' && !this.storage) throw new BadRequestException('资源文件存储不可用');
     if (!/\.(?:jar|zip)$/i.test(file.file_name) || file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) {
       throw new BadRequestException('Mod 仅支持不超过 50 MiB 的 .jar 或 .zip 文件');
     }
     try {
-      const parsed = analyzeModArchive(await this.storage.readManagedFile(file.file_path, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
+      const parsed = analyzeModArchive(await this.readUploadedFile(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
       const manifest = applyModAuthorOverrides(parsed.manifest, authorOverrides);
       return {
         parser_version: parsed.parser_version,
@@ -165,9 +178,9 @@ export class ResourceVersionService {
     let nextModId: string | null = null;
     if (resource.resource_kind === 'mod') {
       if (!/\.(?:jar|zip)$/i.test(file.file_name)) throw new BadRequestException('Mod 仅支持 .jar 或 .zip 文件');
-      if (!this.storage || file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 50 MiB 安全限制');
+      if ((file.storage_backend !== 'res' && !this.storage) || file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 50 MiB 安全限制');
       try {
-        modAnalysis = analyzeModArchive(await this.storage.readManagedFile(file.file_path, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
+        modAnalysis = analyzeModArchive(await this.readUploadedFile(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
       } catch (error) {
         if (error instanceof ModUploadValidationError) throw new BadRequestException({ code: error.code, message: error.message });
         throw error;
@@ -209,7 +222,7 @@ export class ResourceVersionService {
       created_by_user_id: userId,
       release_notes_markdown: content || null,
       release_notes_html: content ? parseMarkdown(content) : null,
-      file_path: file.file_path,
+      file_path: file.storage_backend === 'res' ? undefined : file.file_path,
       file_name: file.file_name,
       file_size: file.file_size,
       mime_type: file.mime_type,
@@ -218,7 +231,10 @@ export class ResourceVersionService {
       content_html: content ? parseMarkdown(content) : undefined,
     });
 
-    const saved = await this.versionRepository.manager.transaction(async (manager) => {
+    const createdBindings: Array<{ objectId: string; id: string }> = [];
+    let saved: ResourceVersion;
+    try {
+    saved = await this.versionRepository.manager.transaction(async (manager) => {
       const lockedResources = await manager.query(
         `SELECT id,user_id FROM resources WHERE id=? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
         [resource.id],
@@ -253,8 +269,16 @@ export class ResourceVersionService {
 
       await this.resourcesService.claimResourceVersionHash(manager, file.content_hash, resource.id);
       const created = await manager.save(ResourceVersion, version);
+      const filePublicId = randomUUID();
+      if (file.storage_backend === 'res') {
+        if (!this.resClient || !file.provider_object_id) throw new ConflictException('资源存储对象缺失');
+        const binding = await this.resClient.createBinding(file.provider_object_id, {
+          namespace: 'mindforum', owner_type: 'resource_file', owner_id: filePublicId, visibility: 'private',
+        });
+        createdBindings.push({ objectId: file.provider_object_id, id: binding.id });
+      }
       await manager.save(ResourceFile, {
-        public_id: randomUUID(),
+        public_id: filePublicId,
         resource_version_id: created.id,
         role: 'primary',
         delivery_mode: 'managed',
@@ -264,12 +288,21 @@ export class ResourceVersionService {
         hash_algorithm: 'sha256',
         content_hash: file.content_hash,
         integrity_status: 'verified',
-        storage_backend: 'local',
-        storage_key: file.file_path,
+        storage_backend: file.storage_backend || 'local',
+        storage_key: file.storage_backend === 'res' ? `sha256:${file.content_hash}` : file.file_path,
+        provider_object_id: file.storage_backend === 'res' ? file.provider_object_id : null,
+        provider_binding_id: createdBindings[0]?.id || null,
         external_url: null,
-        availability_status: 'available',
+        availability_status: file.storage_backend === 'res' ? 'pending' : 'available',
         sort_order: 0,
       });
+
+      if (rendererDraft?.previewKey && this.previews) {
+        const preview = await this.previews.storeVersionPreviewInRes(resource, created, rendererDraft.previewKey);
+        createdBindings.push({ objectId: preview.renderer_preview_object_id, id: preview.renderer_preview_binding_id });
+        await manager.update(ResourceVersion, created.id, preview);
+        Object.assign(created, preview);
+      }
 
       if ((resource.resource_kind === 'schematic' || resource.resource_kind === 'map') && rendererDraft) {
         await persistRendererAnalysis(manager, {
@@ -457,6 +490,10 @@ export class ResourceVersionService {
       }
       return created;
     });
+    } catch (error) {
+      for (const binding of createdBindings) await this.resClient?.deleteBinding(binding.objectId, binding.id).catch(() => undefined);
+      throw error;
+    }
     return this.normalizeVersion(saved);
   }
 
@@ -630,8 +667,41 @@ export class ResourceVersionService {
       throw new NotFoundException('版本不存在');
     }
 
+    const resFiles = await this.versionRepository.manager.getRepository(ResourceFile).find({ where: { resource_version_id: id, storage_backend: 'res' } });
+    const removed: ResourceFile[] = [];
+    let removedPreview = false;
+    try {
+      for (const file of resFiles) {
+        if (!file.provider_object_id || !file.provider_binding_id || !this.resClient) throw new ConflictException('资源存储绑定缺失，无法删除版本');
+        await this.resClient.deleteBinding(file.provider_object_id, file.provider_binding_id);
+        removed.push(file);
+      }
+      if (version.renderer_preview_object_id) {
+        if (!version.public_id || !version.renderer_preview_binding_id || !this.resClient) throw new ConflictException('资源预览绑定缺失，无法删除版本');
+        await this.resClient.deleteBinding(version.renderer_preview_object_id, version.renderer_preview_binding_id);
+        removedPreview = true;
+      }
+      await this.versionRepository.delete(id);
+    } catch (error) {
+      for (const file of removed) {
+        if (!file.provider_object_id || !this.resClient) continue;
+        const binding = await this.resClient.createBinding(file.provider_object_id, {
+          namespace: 'mindforum', owner_type: 'resource_file', owner_id: file.public_id,
+          visibility: file.availability_status === 'available' ? 'public' : 'private',
+        }).catch(() => null);
+        if (binding) await this.versionRepository.manager.getRepository(ResourceFile).update(file.id, { provider_binding_id: binding.id });
+      }
+      if (removedPreview && version.public_id && version.renderer_preview_object_id && this.resClient) {
+        const binding = await this.resClient.createBinding(version.renderer_preview_object_id, {
+          namespace: 'mindforum', owner_type: 'resource_version_preview', owner_id: version.public_id,
+          visibility: version.status === 'published' && ['approved', 'published'].includes(resource.status)
+            && Number(resource.is_public) === 1 && resource.visibility !== 'private' ? 'public' : 'private',
+        }).catch(() => null);
+        if (binding) await this.versionRepository.update(version.id, { renderer_preview_binding_id: binding.id });
+      }
+      throw error;
+    }
     await this.deleteStoredFile(version.file_path);
-    await this.versionRepository.delete(id);
     if (version.content_hash) await this.resourcesService.releaseContentHashClaim(version.content_hash);
   }
 }

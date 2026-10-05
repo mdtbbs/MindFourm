@@ -3,14 +3,18 @@ import { DataSource } from 'typeorm';
 import { createHash } from 'crypto';
 import * as path from 'path';
 import { ResourceStorageService, type PreparedResourcePromotion } from '../resource-storage.service';
+import { Resource } from '@entities/resource.entity';
+import { ResourceVersion } from '@entities/resource-version.entity';
+import { ResourcePreviewService } from '../resource-preview.service';
+import { ResourceStorageClientService } from '../resource-storage-client.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
-type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; status?: string };
+type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; status?: string; is_public?: number; visibility?: string };
 type VersionRow = {
   id: number; public_id: string; status: string; version?: string; release_channel?: string;
   file_path?: string | null; file_name?: string | null; file_size?: number | null;
-  mime_type?: string | null; content_hash?: string | null;
+  mime_type?: string | null; content_hash?: string | null; renderer_preview_object_id?: string | null; renderer_preview_binding_id?: string | null;
 };
 type AnalysisRunRow = { id: number; parser_version: string; findings_json: unknown };
 
@@ -29,6 +33,8 @@ export class ResourceV2ReviewService {
     private readonly dataSource: DataSource,
     @Optional() private readonly storage?: ResourceStorageService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly resClient?: ResourceStorageClientService,
+    @Optional() private readonly previews?: ResourcePreviewService,
   ) {}
 
   async reviewVersion(resourcePublicId: string, versionPublicId: string, actorId: number, input: {
@@ -69,7 +75,11 @@ export class ResourceV2ReviewService {
       }
     }
 
-    const outcome = await this.dataSource.transaction(async (manager) => {
+    const changedBindings: Array<{ objectId: string; ownerId: string }> = [];
+    let changedPreview: { resource: Resource; version: ResourceVersion } | null = null;
+    let outcome: any;
+    try {
+    outcome = await this.dataSource.transaction(async (manager) => {
       const resource = await this.getResource(manager, resourcePublicId, true);
       const reviewer = await this.assertStaff(manager, actorId);
       const version = await this.getVersion(manager, resource.id, versionPublicId, false);
@@ -86,6 +96,39 @@ export class ResourceV2ReviewService {
           || String(version.content_hash || '').toLowerCase() !== preparedSource.contentHash) {
           throw new BadRequestException('待发布版本的文件信息已变化，请重新审核');
         }
+      }
+
+      const resFiles = await manager.query(
+        `SELECT id,public_id,provider_object_id,provider_binding_id,size_bytes,content_hash,mime_type,integrity_status
+         FROM resource_files WHERE resource_version_id=? AND storage_backend='res' FOR UPDATE`,
+        [version.id],
+      ) as Array<{ id: number; public_id: string; provider_object_id: string | null; provider_binding_id: string | null;
+        size_bytes: number; content_hash: string; mime_type: string; integrity_status: string }>;
+      for (const file of resFiles) {
+        if (!this.resClient || !file.provider_object_id) throw new BadRequestException('资源存储服务暂不可用，请稍后重试');
+        if (action === 'approve') {
+          const object = await this.resClient.getObject(file.provider_object_id);
+          if (object.state !== 'verified' || object.public_id !== file.provider_object_id
+            || Number(object.size_bytes) !== Number(file.size_bytes) || object.sha256 !== file.content_hash
+            || object.mime_type !== file.mime_type || file.integrity_status !== 'verified') {
+            throw new BadRequestException('资源存储对象校验失败，无法发布此版本');
+          }
+        }
+        const visibility = action === 'approve' && resource.status === 'approved'
+          && Number(resource.is_public) === 1 && resource.visibility !== 'private' ? 'public' : 'private';
+        const binding = await this.resClient.createBinding(file.provider_object_id, {
+          namespace: 'mindforum', owner_type: 'resource_file', owner_id: file.public_id, visibility,
+        });
+        changedBindings.push({ objectId: file.provider_object_id, ownerId: file.public_id });
+        await manager.query('UPDATE resource_files SET provider_binding_id=?,availability_status=? WHERE id=?',
+          [binding.id, action === 'approve' ? 'available' : 'pending', file.id]);
+      }
+
+      if (version.renderer_preview_object_id && this.previews) {
+        changedPreview = { resource: resource as Resource, version: version as ResourceVersion };
+        await this.previews.setVersionResPreviewVisibility(resource as Resource, {
+          ...version, status: action === 'approve' ? 'published' : version.status,
+        } as ResourceVersion, action === 'approve' ? 'public' : 'private', manager);
       }
 
       const nextStatus = action === 'approve' ? 'published'
@@ -162,6 +205,22 @@ export class ResourceV2ReviewService {
       };
     });
 
+    } catch (error) {
+      // Version review starts from pending_review, so every changed RES binding
+      // must return to private if any database or remote step fails.
+      for (const binding of changedBindings.reverse()) {
+        await this.resClient!.createBinding(binding.objectId, {
+          namespace: 'mindforum', owner_type: 'resource_file', owner_id: binding.ownerId, visibility: 'private',
+        }).catch(() => this.logger.error('RES binding compensation failed after version review'));
+      }
+      if (changedPreview && this.previews) {
+        const preview = changedPreview as { resource: Resource; version: ResourceVersion };
+        await this.previews.setVersionResPreviewVisibility(preview.resource, preview.version, 'private')
+          .catch(() => this.logger.error('RES preview compensation failed after version review'));
+      }
+      throw error;
+    }
+
     if (preparedPromotion && this.storage) {
       try {
         await this.storage.removeQuarantinedFile(preparedPromotion.sourcePath);
@@ -174,7 +233,7 @@ export class ResourceV2ReviewService {
       const decision = action === 'approve' ? '已审核通过并发布'
         : action === 'reject' ? '未通过审核' : '需要修改后重新提交';
       const content = `Resource ${outcome.resource_public_id} 的版本 ${outcome.version_public_id}${decision}${reason ? `：${reason}` : '。'}`;
-      await Promise.all(outcome.notify_user_ids.map((userId) => this.notifications!.create({
+      await Promise.all(outcome.notify_user_ids.map((userId: number) => this.notifications!.create({
         user_id: userId,
         type: 'system',
         content,
@@ -363,7 +422,7 @@ export class ResourceV2ReviewService {
   private async getResource(executor: SqlExecutor, publicId: string, lock: boolean): Promise<ResourceRow> {
     this.assertUuid(publicId, 'Resource');
     const rows = await executor.query(
-      `SELECT id,public_id,user_id,resource_kind,status FROM resources
+      `SELECT id,public_id,user_id,resource_kind,status,is_public,visibility FROM resources
        WHERE public_id=? AND deleted_at IS NULL LIMIT 1${lock ? ' FOR UPDATE' : ''}`,
       [publicId],
     ) as ResourceRow[];
@@ -374,7 +433,7 @@ export class ResourceV2ReviewService {
   private async getVersion(executor: SqlExecutor, resourceId: number, publicId: string, publishedOnly: boolean): Promise<VersionRow> {
     this.assertUuid(publicId, 'Version');
     const rows = await executor.query(
-      `SELECT id,public_id,status,version,release_channel,file_path,file_name,file_size,mime_type,content_hash FROM resource_versions
+      `SELECT id,public_id,status,version,release_channel,file_path,file_name,file_size,mime_type,content_hash,renderer_preview_object_id,renderer_preview_binding_id FROM resource_versions
        WHERE resource_id=? AND public_id=?${publishedOnly ? " AND status='published'" : ''} LIMIT 1${executor !== this.dataSource ? ' FOR UPDATE' : ''}`,
       [resourceId, publicId],
     ) as VersionRow[];

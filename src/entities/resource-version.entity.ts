@@ -50,6 +50,12 @@ export class ResourceVersion {
   @Column({ type: 'char', length: 64, nullable: true })
   content_hash: string | null;
 
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  renderer_preview_object_id: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  renderer_preview_binding_id: string | null;
+
   @Column({ type: 'text', nullable: true })
   content: string;
 

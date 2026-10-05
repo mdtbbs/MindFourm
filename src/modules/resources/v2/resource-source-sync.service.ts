@@ -1,6 +1,6 @@
 import {
   BadGatewayException, BadRequestException, ConflictException, ForbiddenException,
-  Injectable, Logger, NotFoundException,
+  Injectable, Logger, NotFoundException, Optional, ServiceUnavailableException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DataSource, EntityManager } from 'typeorm';
@@ -11,6 +11,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { ResourceStorageService } from '../resource-storage.service';
+import { ResourceDirectUploadService } from '../resource-direct-upload.service';
 import { ResourceVersionService } from '../resource-versions.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import {
@@ -106,6 +107,7 @@ export class ResourceSourceSyncService {
     private readonly storage: ResourceStorageService,
     private readonly versions: ResourceVersionService,
     private readonly notifications: NotificationsService,
+    @Optional() private readonly directUploads?: ResourceDirectUploadService,
   ) {}
 
   async upsertGithubConfig(publicId: string, actorId: number, input: ResourceSourceSyncConfigDto) {
@@ -263,13 +265,16 @@ export class ResourceSourceSyncService {
       // immutable version create so an owner can cancel an in-flight poll.
       if (requireEnabled) await this.assertScheduledSourceEnabled(Number(sync.id));
 
+      if (!this.directUploads) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+      const resFile = await this.directUploads.uploadManagedFile(storedFile);
+      if (requireEnabled) await this.assertScheduledSourceEnabled(Number(sync.id));
       const created = await this.versions.create({
         resource_id: Number(resource.id),
         version: tagName,
         version_mode: 'compatibility',
         release_channel: release.prerelease ? 'beta' : 'release',
         content: this.boundedReleaseNotes(release.body),
-      }, storedFile, actorId);
+      }, resFile, actorId);
       await this.updateSyncStatus(Number(sync.id), 'imported', null, tagName).catch(() => undefined);
       await this.notifications.create({
         user_id: Number(resource.user_id),
@@ -296,7 +301,6 @@ export class ResourceSourceSyncService {
         },
       };
     } catch (error) {
-      if (storedFile?.file_path) await this.storage.removeManaged(storedFile.file_path).catch(() => undefined);
       if (!(error instanceof ScheduledSourceDisabledError)) {
         await this.updateSyncStatus(Number(sync.id), 'import_failed', 'GitHub release import failed', null).catch(() => undefined);
       }
@@ -306,6 +310,7 @@ export class ResourceSourceSyncService {
       if (error instanceof GithubUpstreamError) throw new BadGatewayException('Unable to retrieve the selected GitHub release asset');
       throw error;
     } finally {
+      if (storedFile?.file_path) await this.storage.removeManaged(storedFile.file_path).catch(() => undefined);
       if (tempPath) await fs.unlink(tempPath).catch(() => undefined);
     }
   }

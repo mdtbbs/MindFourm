@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Param, Patch, Post, Req, Res, UploadedFile, UseInterceptors, ValidationPipe,
+  BadRequestException, Body, Controller, Optional, Param, Patch, Post, Req, Res, ServiceUnavailableException, UploadedFile, UseInterceptors, ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse, ApiBody, ApiConsumes, ApiCreatedResponse, ApiForbiddenResponse,
@@ -12,6 +12,7 @@ import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { assertSafeUploadedFile } from '@common/utils/upload-safety.util';
 import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
 import { ResourceStorageService } from '../resource-storage.service';
+import { ResourceDirectUploadService } from '../resource-direct-upload.service';
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourceUploadInterceptor } from '../resources.controller';
 import { ResourcesV2WriteService } from './resources-v2-write.service';
 import {
@@ -26,6 +27,7 @@ export class ResourcesV2WriteController {
   constructor(
     private readonly resources: ResourcesV2WriteService,
     private readonly storage: ResourceStorageService,
+    @Optional() private readonly directUploads?: ResourceDirectUploadService,
   ) {}
 
   @Post(':id/versions/analyze')
@@ -95,7 +97,11 @@ export class ResourcesV2WriteController {
       await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
       stored = await this.storage.storeIncoming(file);
       if (!stored) throw new BadRequestException('请选择版本文件');
-      return await this.resources.createVersion(id, stored, body, Number(req.user.id));
+      if (!this.directUploads) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+      const resFile = await this.directUploads.uploadManagedFile(stored);
+      const result = await this.resources.createVersion(id, resFile, body, Number(req.user.id));
+      await this.storage.removeManaged(stored.file_path).catch(() => undefined);
+      return result;
     } catch (error) {
       await cleanupUploadedFile(file);
       if (stored?.file_path) await this.storage.removeManaged(stored.file_path).catch(() => undefined);
