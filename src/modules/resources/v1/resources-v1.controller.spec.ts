@@ -138,6 +138,7 @@ describe('ResourcesV1Controller', () => {
     expect(grants.recordGrant).toHaveBeenCalledWith(expect.objectContaining({ backend: 'res', fileId: 30 }), 'user:22');
     expect(response.redirect).toHaveBeenCalledWith('https://res.example/o/object/file.msav');
   });
+
   it('requests a signed target for an authorized private published RES file', async () => {
     const caps = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
     const target = { resource: { id: 7, status: 'approved', is_public: 0 }, version: { id: 12, status: 'published' },
@@ -151,6 +152,42 @@ describe('ResourcesV1Controller', () => {
     expect(provider.getDownloadTarget).toHaveBeenCalledWith(target.file, { private: true });
     expect(response.redirect).toHaveBeenCalledWith('https://res.example/private/short-token');
     expect(grants.recordGrant).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows an adapter-authorized unpublished pending RES file through a signed private URL', async () => {
+    const caps = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
+    const target = {
+      resource: { id: 7, resource_kind: 'mod', status: 'approved', is_public: 1, visibility: 'public' },
+      version: { id: 12, status: 'pending_review' },
+      file: { id: 30, storage_backend: 'res', availability_status: 'pending' },
+    };
+    const adapter = { getPublicFileByPublicIds: jest.fn().mockResolvedValue(target) };
+    const provider = { getDownloadTarget: jest.fn().mockResolvedValue({ kind: 'redirect', url: 'https://res.example/private/pending-token' }) };
+    const grants = { recordGrant: jest.fn().mockResolvedValue(true) };
+    const controller = new ResourcesV1Controller(caps as any, adapter as any, undefined, undefined, grants as any, undefined, provider as any);
+    const response = { redirect: jest.fn() };
+
+    await controller.downloadFile('resource', 'pending-version', 'pending-file', response as any, { headers: {}, user: { id: 22 } });
+
+    expect(provider.getDownloadTarget).toHaveBeenCalledWith(target.file, { private: true });
+    expect(response.redirect).toHaveBeenCalledWith('https://res.example/private/pending-token');
+    expect(grants.recordGrant).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not treat a pending file on a published version as publicly downloadable', async () => {
+    const caps = { getCapabilities: jest.fn().mockResolvedValue({ resource_read: true, resources: { download: true } }) };
+    const target = {
+      resource: { id: 7, resource_kind: 'mod', status: 'approved', is_public: 1, visibility: 'public' },
+      version: { id: 12, status: 'published' },
+      file: { id: 30, storage_backend: 'res', availability_status: 'pending' },
+    };
+    const adapter = { getPublicFileByPublicIds: jest.fn().mockResolvedValue(target) };
+    const provider = { getDownloadTarget: jest.fn() };
+    const controller = new ResourcesV1Controller(caps as any, adapter as any, undefined, undefined, undefined, undefined, provider as any);
+
+    await expect(controller.downloadFile('resource', 'version', 'file', { redirect: jest.fn() } as any, { headers: {} }))
+      .rejects.toThrow('文件不存在或暂不可用');
+    expect(provider.getDownloadTarget).not.toHaveBeenCalled();
   });
 
 });
