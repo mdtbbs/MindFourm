@@ -29,6 +29,8 @@ import arc.struct.Seq;
 import arc.struct.StringMap;
 import arc.struct.ObjectMap;
 import arc.math.geom.Point2;
+import arc.util.serialization.JsonReader;
+import arc.util.serialization.JsonValue;
 
 /** Tiny deterministic fixture for the transparent multi-region icon compositor. */
 public final class RendererVisualRegression {
@@ -147,7 +149,8 @@ public final class RendererVisualRegression {
             require(metadata.contains("\"schematic_format_version\":" + formatVersion), names[index] + " metadata must expose the schematic file format");
             require(metadata.contains("\"parser_runtime\""), names[index] + " metadata must identify its parser runtime");
             double expectedBuildSeconds = roundTrip.tiles.first().block.buildTime / 60d;
-            double reportedBuildSeconds = Double.parseDouble(jsonField(metadata, "estimated_build_time_seconds", "null"));
+            JsonValue metadataJson = new JsonReader().parse(metadata);
+            double reportedBuildSeconds = Double.parseDouble(metadataJson.getString("estimated_build_time_seconds", "null"));
             require(Math.abs(reportedBuildSeconds - expectedBuildSeconds) < 0.000001d,
                 names[index] + " metadata must estimate build time from resolved Mindustry block build times");
             String incompleteEstimate = MapRenderer.schematicMetadata(roundTrip, List.of("unknown-content"), formatVersion);
