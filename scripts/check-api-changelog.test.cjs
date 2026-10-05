@@ -110,3 +110,28 @@ test('does not skip a master push when the missing changelog update can be detec
     assert.match(result.stderr, /Public V1 OpenAPI contract changed, but docs\/api\/changelog-v1\.md was not updated/);
   });
 });
+
+test('documents map submissions through upload sessions instead of a nonexistent collection POST', () => {
+  const changelogPath = path.join(__dirname, '..', 'docs', 'api', 'changelog-v1.md');
+  const openapiPath = path.join(__dirname, '..', 'openapi-v1.json');
+  const changelog = fs.readFileSync(changelogPath, 'utf8');
+  const publicOpenApi = JSON.parse(fs.readFileSync(openapiPath, 'utf8'));
+
+  assert.doesNotMatch(
+    changelog,
+    /POST\s+`?\/api\/v1\/game-content\/maps(?:\s|`|[,;])/i,
+    'the Public V1 contract has no POST /api/v1/game-content/maps operation',
+  );
+  assert.match(changelog, /GET\s+`?\/api\/v1\/game-content\/maps`?/);
+
+  const uploadOperations = [
+    ['post', '/v1/game-content/maps/uploads'],
+    ['get', '/v1/game-content/maps/uploads/{uploadId}'],
+    ['get', '/v1/game-content/maps/uploads/{uploadId}/preview'],
+    ['post', '/v1/game-content/maps/uploads/{uploadId}/complete'],
+  ];
+  for (const [method, route] of uploadOperations) {
+    assert.ok(publicOpenApi.paths[route]?.[method], `expected Public V1 ${method.toUpperCase()} ${route}`);
+    assert.ok(changelog.includes(`/api${route}`), `changelog should document ${method.toUpperCase()} /api${route}`);
+  }
+});

@@ -20,6 +20,8 @@ COPY --from=builder --chown=node:node /app/package.json ./package.json
 # Needed by the one-off maintenance scripts (content re-sanitisation, session-audit
 # token scrubbing) which are run inside this container after a deploy.
 COPY --from=builder --chown=node:node /app/scripts ./scripts
+# Developer-doc routes load their Markdown guides at runtime.
+COPY --from=builder --chown=node:node /app/docs/api ./docs/api
 
 # Writable upload target; must be a mounted volume in production so uploads survive
 # container replacement.

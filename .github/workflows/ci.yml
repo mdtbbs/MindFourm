@@ -64,6 +64,38 @@ jobs:
       - name: Test Public V1 changelog guard
         run: npm run test:api-changelog
 
+  production-image:
+    name: Production Docker API docs smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Build production Docker image
+        run: docker build --tag mindfourm-docs-smoke .
+
+      - name: Verify runtime Markdown guides in the image
+        run: |
+          docker run --rm --entrypoint /bin/sh mindfourm-docs-smoke -ec '
+            for guide in \
+              first-party-v1.md \
+              public-client-v1.md \
+              rich-content-schema-v2.md \
+              authentication.md \
+              game-content-v1.md \
+              resources-v1-contract.md \
+              multiplayer-v1.md \
+              cloud-saves-v1.md \
+              changelog-v1.md \
+              lifecycle-v1.md; do
+              test -s "/app/docs/api/$guide" || {
+                echo "Missing runtime API guide: /app/docs/api/$guide" >&2
+                exit 1
+              }
+            done
+          '
+
   frontend:
     name: Frontend lint, types, and build
     runs-on: ubuntu-latest
