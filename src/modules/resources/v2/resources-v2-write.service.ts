@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Resource } from '@entities/resource.entity';
 import { User } from '@entities/user.entity';
@@ -40,13 +40,29 @@ export class ResourcesV2WriteService {
     return resource;
   }
 
-  private async assertRole(resource: Resource, actorId: number, roles: ManagedRole[]): Promise<ManagedRole> {
-    if (resource.user_id === actorId) return 'owner';
-    const rows = await this.dataSource.query(
+  private async lockResource(manager: EntityManager, publicId: string): Promise<Resource> {
+    this.assertUuid(publicId);
+    const rows = await manager.query(
+      'SELECT * FROM resources WHERE public_id=? AND deleted_at IS NULL LIMIT 1 FOR UPDATE',
+      [publicId],
+    ) as Resource[];
+    if (!rows[0]) throw new NotFoundException('资源不存在');
+    return rows[0];
+  }
+
+  private async assertRole(
+    resource: Resource,
+    actorId: number,
+    roles: ManagedRole[],
+    executor: Pick<DataSource, 'query'> | Pick<EntityManager, 'query'> = this.dataSource,
+  ): Promise<ManagedRole> {
+    if (Number(resource.user_id) === Number(actorId)) return 'owner';
+    const lock = executor === this.dataSource ? '' : ' FOR UPDATE';
+    const rows = await executor.query(
       `SELECT u.role AS account_role, rm.role AS member_role
        FROM users u
        LEFT JOIN resource_members rm ON rm.resource_id = ? AND rm.user_id = u.id AND rm.status = 'active'
-       WHERE u.id = ? LIMIT 1`,
+       WHERE u.id = ? LIMIT 1${lock}`,
       [resource.id, actorId],
     ) as Array<{ account_role: string; member_role: ManagedRole | null }>;
     if (rows[0]?.account_role === 'admin') return 'owner';
@@ -174,8 +190,6 @@ export class ResourcesV2WriteService {
   async updateProfile(publicId: string, input: {
     title?: string; description?: string | null; content?: string | null; source_url?: string | null; license?: string | null;
   }, actorId: number): Promise<Record<string, unknown>> {
-    const resource = await this.getResource(publicId);
-    await this.assertRole(resource, actorId, ['owner', 'maintainer']);
     if (!Object.keys(input).length) throw new BadRequestException('至少需要提供一个要更新的字段');
     if (input.title !== undefined && !input.title.trim()) throw new BadRequestException('标题不能为空');
     if (input.title !== undefined && input.title.length > 255) throw new BadRequestException('标题不能超过 255 个字符');
@@ -183,8 +197,6 @@ export class ResourcesV2WriteService {
     if (input.license && input.license.length > 191) throw new BadRequestException('许可证字段过长');
     if (input.content && input.content.length > 100_000) throw new BadRequestException('介绍内容过长');
 
-    const changedCritical = (input.source_url !== undefined && input.source_url !== (resource.source_url || null))
-      || (input.license !== undefined && input.license !== (resource.license || null));
     const update: Partial<Resource> = {};
     if (input.title !== undefined) update.title = input.title.trim();
     if (input.description !== undefined) {
@@ -198,9 +210,13 @@ export class ResourcesV2WriteService {
     }
     if (input.source_url !== undefined) update.source_url = input.source_url?.trim() || null;
     if (input.license !== undefined) update.license = input.license?.trim() || null;
-    if (changedCritical && ['approved', 'published'].includes(resource.status || '')) update.status = 'pending';
 
-    await this.dataSource.transaction(async (manager) => {
+    const resourceId = await this.dataSource.transaction(async (manager) => {
+      const resource = await this.lockResource(manager, publicId);
+      await this.assertRole(resource, actorId, ['owner', 'maintainer'], manager);
+      const changedCritical = (input.source_url !== undefined && input.source_url !== (resource.source_url || null))
+        || (input.license !== undefined && input.license !== (resource.license || null));
+      if (changedCritical && ['approved', 'published'].includes(resource.status || '')) update.status = 'pending';
       await manager.update(Resource, resource.id, update);
       if (changedCritical) await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
         resource_id: resource.id,
@@ -215,8 +231,9 @@ export class ResourcesV2WriteService {
          VALUES (?, 'resource.profile.update', 'resource', ?, ?, NOW())`,
         [actorId, resource.id, JSON.stringify({ fields: Object.keys(update), requires_review: changedCritical })],
       );
+      return resource.id;
     });
-    const updated = await this.resources.findOne({ where: { id: resource.id } });
+    const updated = await this.resources.findOne({ where: { id: resourceId } });
     if (!updated) throw new NotFoundException('资源不存在');
     return {
       public_id: updated.public_id,
@@ -234,7 +251,6 @@ export class ResourcesV2WriteService {
     target_resource_public_id: string; relation_type: string; relation_context?: 'opening' | 'production' | 'defense' | 'logistics' | 'general'; source_version_public_id?: string; target_version_public_id?: string;
   }, actorId: number): Promise<Record<string, unknown>> {
     const source = await this.getResource(publicId);
-    await this.assertRole(source, actorId, ['owner', 'maintainer']);
     const target = await this.getResource(input.target_resource_public_id);
     if (source.id === target.id) throw new BadRequestException('资源不能关联自己');
     if (!/^[a-z][a-z0-9_]{1,39}$/.test(input.relation_type)) throw new BadRequestException('关联类型无效');
@@ -246,24 +262,29 @@ export class ResourcesV2WriteService {
     if (input.relation_type !== 'recommended_for' && relationContext !== 'general') throw new BadRequestException('只有 recommended_for 关系支持场景标签');
     if (!target.is_public || !['approved', 'published'].includes(target.status || '')) throw new NotFoundException('目标资源不存在');
     if (input.relation_type === 'fork_of' || input.relation_type === 'successor_of') {
-      if (source.resource_kind !== target.resource_kind) throw new BadRequestException('Fork 和继任关系必须连接相同类型的资源');
       if (!input.target_version_public_id) throw new BadRequestException('Fork 和继任关系必须指定目标版本');
     }
 
-    const sourceVersion = input.source_version_public_id
-      ? await this.resolveVersionPublicId(source.id, input.source_version_public_id) : null;
-    const targetVersion = input.target_version_public_id
-      ? await this.resolveVersionPublicId(target.id, input.target_version_public_id) : null;
     const created = await this.dataSource.transaction(async (manager) => {
+      const lockedSource = await this.lockResource(manager, publicId);
+      await this.assertRole(lockedSource, actorId, ['owner', 'maintainer'], manager);
+      if ((input.relation_type === 'fork_of' || input.relation_type === 'successor_of')
+        && lockedSource.resource_kind !== target.resource_kind) {
+        throw new BadRequestException('Fork 和继任关系必须连接相同类型的资源');
+      }
+      const sourceVersion = input.source_version_public_id
+        ? await this.resolveVersionPublicId(lockedSource.id, input.source_version_public_id, manager) : null;
+      const targetVersion = input.target_version_public_id
+        ? await this.resolveVersionPublicId(target.id, input.target_version_public_id, manager) : null;
       const inserted = await manager.query(
         `INSERT IGNORE INTO resource_relations (source_resource_id,target_resource_id,source_version_id,target_version_id,relation_type,relation_context,created_by_user_id)
          VALUES (?,?,?,?,?,?,?)`,
-        [source.id, target.id, sourceVersion?.id || null, targetVersion?.id || null, input.relation_type, relationContext, actorId],
+        [lockedSource.id, target.id, sourceVersion?.id || null, targetVersion?.id || null, input.relation_type, relationContext, actorId],
       );
       await manager.query(
         `INSERT INTO operation_logs (user_id,action,target_type,target_id,details,created_at)
          VALUES (?, 'resource.relation.create', 'resource', ?, ?, NOW())`,
-        [actorId, source.id, JSON.stringify({ target_public_id: target.public_id, relation_type: input.relation_type, relation_context: relationContext })],
+        [actorId, lockedSource.id, JSON.stringify({ target_public_id: target.public_id, relation_type: input.relation_type, relation_context: relationContext })],
       );
       return Array.isArray(inserted) ? Number(inserted[0]?.affectedRows || 0) > 0 : Number((inserted as any)?.affectedRows || 0) > 0;
     });
@@ -271,13 +292,15 @@ export class ResourcesV2WriteService {
   }
 
   async inviteMember(publicId: string, username: string, role: ManagedRole, actorId: number) {
-    const resource = await this.getResource(publicId);
-    const actorRole = await this.assertRole(resource, actorId, ['owner', 'maintainer']);
-    if (role === 'owner' || (actorRole === 'maintainer' && role !== 'publisher')) throw new ForbiddenException('只有 Owner 可以邀请或授予该角色');
     const target = await this.users.findOne({ where: { username: username.trim() } });
     if (!target) throw new NotFoundException('用户不存在');
     if (target.id === actorId) throw new BadRequestException('不能邀请自己');
     return this.dataSource.transaction(async (manager) => {
+      const resource = await this.lockResource(manager, publicId);
+      const actorRole = await this.assertRole(resource, actorId, ['owner', 'maintainer'], manager);
+      if (role === 'owner' || (actorRole === 'maintainer' && role !== 'publisher')) {
+        throw new ForbiddenException('只有 Owner 可以邀请或授予该角色');
+      }
       await manager.query(
         `INSERT INTO resource_members (resource_id,user_id,role,status,invited_by_user_id,accepted_at)
          VALUES (?,?,?,'invited',?,NULL)
@@ -416,10 +439,15 @@ export class ResourcesV2WriteService {
     });
   }
 
-  private async resolveVersionPublicId(resourceId: number, publicId: string) {
+  private async resolveVersionPublicId(
+    resourceId: number,
+    publicId: string,
+    executor: Pick<DataSource, 'query'> | Pick<EntityManager, 'query'> = this.dataSource,
+  ) {
     if (!/^[0-9a-f-]{36}$/i.test(publicId)) throw new BadRequestException('Version public ID must be a UUID');
-    const rows = await this.dataSource.query(
-      `SELECT id,public_id,status FROM resource_versions WHERE resource_id = ? AND public_id = ? LIMIT 1`,
+    const lock = executor === this.dataSource ? '' : ' FOR UPDATE';
+    const rows = await executor.query(
+      `SELECT id,public_id,status FROM resource_versions WHERE resource_id = ? AND public_id = ? LIMIT 1${lock}`,
       [resourceId, publicId],
     );
     if (!rows?.[0] || rows[0].status !== 'published') throw new NotFoundException('版本不存在');

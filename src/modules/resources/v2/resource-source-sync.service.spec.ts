@@ -130,6 +130,22 @@ describe('ResourceSourceSyncService', () => {
     })).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  it('rechecks source configuration permissions after locking the current resource owner', async () => {
+    const managerQuery = jest.fn(async (sql: string) => {
+      if (sql.includes('FROM resources')) return [{ ...resource, user_id: 99 }];
+      if (sql.includes('FROM resource_members')) return [];
+      return { affectedRows: 1 };
+    });
+    dataSource.transaction.mockImplementation(async (callback: (manager: { query: typeof managerQuery }) => unknown) => callback({ query: managerQuery }));
+
+    await expect(service.upsertGithubConfig(RESOURCE_PUBLIC_ID, 5, {
+      repository_url: 'https://github.com/owner/mod', enabled: true,
+    })).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(managerQuery).toHaveBeenCalledWith(expect.stringContaining('FOR UPDATE'), [RESOURCE_PUBLIC_ID]);
+    expect(managerQuery).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO resource_source_syncs'), expect.any(Array));
+  });
+
   it('manually polls bounded releases and includes bounded README/license previews', async () => {
     const encode = (text: string) => Buffer.from(text).toString('base64');
     fetchSpy.mockImplementation(async (input: string | URL | Request) => {

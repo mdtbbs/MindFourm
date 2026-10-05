@@ -21,6 +21,8 @@ describe('ResourcesV2WriteService resource relations', () => {
 
   it('rejects cross-kind fork links', async () => {
     const service = createService();
+    (service as any).dataSource.transaction = (callback: (manager: { query: jest.Mock }) => unknown) =>
+      callback({ query: jest.fn().mockResolvedValue([{ id: 10, resource_kind: 'schematic' }]) });
     jest.spyOn(service as any, 'getResource')
       .mockResolvedValueOnce({ id: 10, resource_kind: 'schematic' })
       .mockResolvedValueOnce({ id: 11, resource_kind: 'map', is_public: 1, status: 'approved' });

@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ResourcesV2WriteService } from './resources-v2-write.service';
 
 const resourcePublicId = '10000000-0000-4000-8000-000000000001';
@@ -20,6 +20,10 @@ function createHarness(ownerId = 10, invites: Array<{ userId: number; fromUserId
       if (sql.includes('FROM resource_members WHERE resource_id = ? AND user_id = ?')) {
         const member = members.get(Number(parameters[1]));
         return member ? [{ ...member }] : [];
+      }
+      if (sql.includes('FROM users u') && sql.includes('LEFT JOIN resource_members rm')) {
+        const member = members.get(Number(parameters[1]));
+        return [{ account_role: 'user', member_role: member?.status === 'active' ? member.role : null }];
       }
       if (sql.startsWith("UPDATE resource_members SET status='revoked'")) {
         const exceptUserId = sql.includes('user_id<>?') ? Number(parameters[1]) : null;
@@ -130,5 +134,27 @@ describe('ResourcesV2WriteService ownership transfer', () => {
 
     expect(harness.members.get(20)).toMatchObject({ role: 'owner', status: 'invited', invited_by_user_id: 10 });
     expect(harness.manager.query).toHaveBeenCalledWith(expect.stringContaining("'resource.owner.transfer.start'"), [99, 7, expect.any(String)]);
+  });
+
+  it('allows only the current locked owner to grant a maintainer invitation', async () => {
+    const harness = createHarness();
+
+    await expect(harness.service.inviteMember(resourcePublicId, 'B', 'maintainer', 10))
+      .resolves.toMatchObject({ role: 'maintainer', status: 'invited' });
+    expect(harness.manager.query).toHaveBeenCalledWith(expect.stringContaining('FOR UPDATE'), [resourcePublicId]);
+  });
+
+  it('does not use a former owner role snapshot to invite another maintainer after transfer', async () => {
+    const harness = createHarness();
+    await harness.service.beginOwnershipTransfer(resourcePublicId, 'B', 10);
+    await harness.service.respondToInvitation(resourcePublicId, true, 20);
+    const memberInvitesBefore = harness.queries.filter(({ sql }) => sql.startsWith('INSERT INTO resource_members')).length;
+
+    await expect(harness.service.inviteMember(resourcePublicId, 'C', 'maintainer', 10))
+      .rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(harness.ownerId).toBe(20);
+    expect(harness.manager.query).toHaveBeenCalledWith(expect.stringContaining('FOR UPDATE'), [resourcePublicId]);
+    expect(harness.queries.filter(({ sql }) => sql.startsWith('INSERT INTO resource_members'))).toHaveLength(memberInvitesBefore);
   });
 });

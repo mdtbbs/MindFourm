@@ -3,7 +3,7 @@ import {
   Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { createHash, randomUUID } from 'crypto';
 import { createReadStream } from 'fs';
 import * as fs from 'fs/promises';
@@ -109,9 +109,7 @@ export class ResourceSourceSyncService {
   ) {}
 
   async upsertGithubConfig(publicId: string, actorId: number, input: ResourceSourceSyncConfigDto) {
-    const resource = await this.getResource(publicId);
-    this.assertMod(resource);
-    await this.assertOwnerOrMaintainer(resource, actorId);
+    this.assertUuid(publicId, 'Resource');
     if (typeof input.enabled !== 'boolean') throw new BadRequestException('enabled must be a boolean');
 
     const repository = this.parseRepositoryUrl(input.repository_url);
@@ -124,6 +122,15 @@ export class ResourceSourceSyncService {
     const exclude = this.normalizePatterns(input.asset_exclude, 'asset_exclude');
 
     await this.dataSource.transaction(async (manager) => {
+      const lockedRows = await manager.query(
+        `SELECT id,user_id,public_id,resource_kind,status,is_public FROM resources
+         WHERE public_id=? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+        [publicId],
+      ) as ResourceRow[];
+      const resource = lockedRows[0];
+      if (!resource) throw new NotFoundException('Resource does not exist');
+      this.assertMod(resource);
+      await this.assertOwnerOrMaintainer(resource, actorId, manager);
       // One active GitHub source per Resource. Keep older configurations as
       // disabled rows so a repository change is reversible and auditable.
       await manager.query(
@@ -149,7 +156,7 @@ export class ResourceSourceSyncService {
     });
 
     return {
-      resource_public_id: resource.public_id,
+      resource_public_id: publicId,
       provider: 'github',
       repository_url: repository.canonicalUrl,
       enabled: input.enabled,
@@ -556,11 +563,16 @@ export class ResourceSourceSyncService {
     if (resource.resource_kind !== 'mod') throw new BadRequestException('GitHub Release Sync is only available for Mod resources');
   }
 
-  private async assertOwnerOrMaintainer(resource: ResourceRow, actorId: number): Promise<void> {
+  private async assertOwnerOrMaintainer(
+    resource: ResourceRow,
+    actorId: number,
+    executor: Pick<DataSource, 'query'> | Pick<EntityManager, 'query'> = this.dataSource,
+  ): Promise<void> {
     if (Number(resource.user_id) === actorId) return;
-    const rows = await this.dataSource.query(
+    const lock = executor === this.dataSource ? '' : ' FOR UPDATE';
+    const rows = await executor.query(
       `SELECT role FROM resource_members
-       WHERE resource_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner', 'maintainer') LIMIT 1`,
+       WHERE resource_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner', 'maintainer') LIMIT 1${lock}`,
       [Number(resource.id), actorId],
     ) as Array<{ role: string }>;
     if (!rows.length) throw new ForbiddenException('Only an active Resource owner or maintainer can manage GitHub sync');
