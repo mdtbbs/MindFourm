@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 
 export interface ResObject {
   id: string;
@@ -55,7 +56,7 @@ export class ResourceStorageClientService {
   private readonly requestTimeoutMs: number;
   private readonly uploadTimeoutMs: number;
 
-  constructor(configService: ConfigService) {
+  constructor(configService: ConfigService, @Optional() private readonly dataSource?: DataSource) {
     this.baseUrl = (configService.get<string>('res.baseUrl') || '').replace(/\/+$/, '');
     this.apiKey = configService.get<string>('res.apiKey') || '';
     this.enabled = configService.get<boolean>('res.enabled') !== false;
@@ -104,6 +105,25 @@ export class ResourceStorageClientService {
     return this.request(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   }
 
+  private async enforceResourceFileVisibility(input: ResBindingInput): Promise<ResBindingInput> {
+    if (input.visibility !== 'public' || input.owner_type !== 'resource_file' || !this.dataSource) return input;
+    const rows = await this.dataSource.query(
+      `SELECT r.status,r.is_public,r.visibility,r.deleted_at
+       FROM resource_files f
+       INNER JOIN resource_versions v ON v.id=f.resource_version_id
+       INNER JOIN resources r ON r.id=v.resource_id
+       WHERE f.public_id=? LIMIT 1`,
+      [input.owner_id],
+    ) as Array<{ status: string; is_public: number; visibility: string | null; deleted_at: Date | null }>;
+    const resource = rows[0];
+    const canBePublic = resource
+      && !resource.deleted_at
+      && ['approved', 'published'].includes(resource.status)
+      && Number(resource.is_public) === 1
+      && resource.visibility !== 'private';
+    return canBePublic ? input : { ...input, visibility: 'private' };
+  }
+
   async createUploadSession(input: { sha256?: string; size_bytes: number; mime_type: string; original_filename: string; purpose: string }): Promise<ResUploadSession> {
     const response = await this.post('/api/v1/uploads', input);
     const result = await this.readJson<ResUploadSession>(response);
@@ -148,9 +168,10 @@ export class ResourceStorageClientService {
   }
 
   async createBinding(id: string, input: ResBindingInput): Promise<ResBinding> {
-    const response = await this.post(`/api/v1/objects/${encodeURIComponent(id)}/bindings`, input);
+    const safeInput = await this.enforceResourceFileVisibility(input);
+    const response = await this.post(`/api/v1/objects/${encodeURIComponent(id)}/bindings`, safeInput);
     const result = await this.readJson<{ binding: ResBinding }>(response);
-    if (!result.binding?.id || result.binding.owner_id !== input.owner_id || result.binding.visibility !== input.visibility) throw new ResourceStorageClientError('rejected');
+    if (!result.binding?.id || result.binding.owner_id !== safeInput.owner_id || result.binding.visibility !== safeInput.visibility) throw new ResourceStorageClientError('rejected');
     return result.binding;
   }
 
