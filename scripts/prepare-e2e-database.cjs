@@ -31,17 +31,28 @@ async function prepare() {
     // Materialize the currently deployed entity schema in the disposable E2E DB.
     await dataSource.synchronize(false);
 
-    // This historical migration owns integrity claim tables that are not mapped
-    // as TypeORM entities. Synchronization cannot create them, but runtime
-    // resource uploads need them when claiming file hashes.
-    const integrityMigration = migrations
+    // These historical migrations own runtime tables that are not mapped as
+    // TypeORM entities. Synchronization cannot create them, but resource
+    // uploads and downloads use them in the deployed schema.
+    const runtimeSchemaMigrations = migrations
       .map((Migration) => new Migration())
-      .find((migration) => migration.name === 'ResourceIntegrityAndMerge1720000110000');
-    if (!integrityMigration) throw new Error('Resource integrity migration is missing from the migration registry.');
+      .filter((migration) => [
+        'GameContentDurability1720000060000',
+        'ResourceIntegrityAndMerge1720000110000',
+      ].includes(migration.name));
+    const expectedRuntimeMigrations = new Set([
+      'GameContentDurability1720000060000',
+      'ResourceIntegrityAndMerge1720000110000',
+    ]);
+    if (runtimeSchemaMigrations.length !== expectedRuntimeMigrations.size) {
+      throw new Error('A required runtime schema migration is missing from the migration registry.');
+    }
     const queryRunner = dataSource.createQueryRunner();
     await queryRunner.connect();
     try {
-      await integrityMigration.up(queryRunner);
+      for (const migration of runtimeSchemaMigrations) {
+        await migration.up(queryRunner);
+      }
     } finally {
       await queryRunner.release();
     }
