@@ -205,7 +205,8 @@ test('Resource Center V2 keeps binaries private until version review and seriali
   if (!v1Download.ok()) throw new Error(`Published v1 download failed: ${v1Download.status()} ${await v1Download.text()}`);
   expect(await v1Download.text()).toBe(initialPayload);
 
-  const uploaded = await uploadVersion(request, resource.publicId, owner, '2.0.0', 'pending version two');
+  const pendingVersionTwo = `pending version two ${stamp}`;
+  const uploaded = await uploadVersion(request, resource.publicId, owner, '2.0.0', pendingVersionTwo);
   expect(uploaded.response.status()).toBe(201);
   expect(uploaded.payload.version).toMatchObject({ status: 'pending_review', published_at: null, recommended: false });
   const anonymousAfterUpload = await playwrightRequest.newContext();
@@ -215,13 +216,14 @@ test('Resource Center V2 keeps binaries private until version review and seriali
     expect(await stillPublishedDownload.text()).toBe(initialPayload);
     const stillPublicResource = unwrap(await (await anonymousAfterUpload.get(`${API_URL}/api/resources/${resource.id}`)).json());
     expect(stillPublicResource.status).toBe('approved');
+    expect(stillPublicResource.versions.map((version: any) => version.public_id)).not.toContain(uploaded.payload.version.public_id);
   } finally {
     await anonymousAfterUpload.dispose();
   }
 
   const [revisionA, revisionB] = await Promise.all([
-    uploadVersion(request, resource.publicId, owner, '1.5.0', 'revision race A'),
-    uploadVersion(request, resource.publicId, owner, '1.5.0', 'revision race B'),
+    uploadVersion(request, resource.publicId, owner, '1.5.0', `revision race A ${stamp}`),
+    uploadVersion(request, resource.publicId, owner, '1.5.0', `revision race B ${stamp}`),
   ]);
   expect(revisionA.response.status()).toBe(201);
   expect(revisionB.response.status()).toBe(201);
@@ -254,7 +256,7 @@ test('Resource Center V2 keeps binaries private until version review and seriali
   expect(typeof hiddenV2File?.download_url).toBe('string');
   const ownerPendingDownload = await request.get(new URL(hiddenV2File.download_url, API_URL).toString(), { headers: headers(owner) });
   expect(ownerPendingDownload.ok()).toBeTruthy();
-  expect(await ownerPendingDownload.text()).toBe('pending version two');
+  expect(await ownerPendingDownload.text()).toBe(pendingVersionTwo);
   const anonymousAfterUploadV2 = await playwrightRequest.newContext();
   try {
     const denied = await anonymousAfterUploadV2.get(new URL(hiddenV2File.download_url, API_URL).toString());
@@ -282,10 +284,6 @@ test('Resource Center V2 keeps binaries private until version review and seriali
   )).json());
   const latestLegacyVersion = legacyDetail.versions.find((version: any) => version.public_id === uploaded.payload.version.public_id);
   expect(legacyDetail.latest_published_version_id).toBe(latestLegacyVersion.id);
-  const publicResource = unwrap(await (await request.get(`${API_URL}/api/resources/${resource.id}`)).json());
-  expect(publicResource.versions.map((version: any) => version.public_id)).not.toContain(uploaded.payload.version.public_id);
-  expect(publicResource.status).toBe('approved');
-
   const transferOne = await createExternalResource(request, owner, `E2E V2 transfer C wins ${stamp}`);
   await startTransfer(request, transferOne.publicId, 'e2e_moderator', owner);
   await startTransfer(request, transferOne.publicId, 'e2e_admin', owner);
