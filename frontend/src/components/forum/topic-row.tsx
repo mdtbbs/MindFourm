@@ -2,13 +2,16 @@ import Link from 'next/link';
 import { Circle, Clock, Eye, MessageSquare, Pin } from 'lucide-react';
 import type { PostSummary } from '@/types';
 import { formatTime } from '@/lib/utils';
+import SearchHighlight from './search-highlight';
 
 export default function TopicRow({
   post,
   showCategory = true,
+  highlightTerm,
 }: {
   post: PostSummary;
   showCategory?: boolean;
+  highlightTerm?: string;
 }) {
   const categoryColor = post.category_color || '#64748b';
   const activityAt = post.last_activity_at || post.created_at;
@@ -35,9 +38,9 @@ export default function TopicRow({
           <div className="flex min-w-0 items-start gap-2">
             {post.is_pinned && <Pin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" aria-label="置顶" />}
             {post.status === 'pending' && <span className="inline-flex shrink-0 items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700"><Clock className="h-3 w-3" />待审核</span>}
-            <span className="min-w-0 text-[15px] font-semibold leading-6 text-[var(--text)] transition-colors group-hover:text-[var(--primary)] sm:truncate">{post.title}</span>
+            <span className="min-w-0 text-[15px] font-semibold leading-6 text-[var(--text)] transition-colors group-hover:text-[var(--primary)] sm:truncate">{highlightTerm ? <SearchHighlight text={post.title} query={highlightTerm} /> : post.title}</span>
           </div>
-          {post.excerpt && <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">{post.excerpt}</p>}
+          {post.excerpt && <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">{highlightTerm ? <SearchHighlight text={post.excerpt} query={highlightTerm} /> : post.excerpt}</p>}
           {post.tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">
             {post.tags.slice(0, 3).map((tag, index) => <Link key={tag.id} href={`/tags/${tag.slug}`} className={`pointer-events-auto rounded bg-[var(--bg-elevated)] px-1.5 py-0.5 text-[11px] text-[var(--text-muted)] transition-colors hover:text-[var(--primary)] ${index > 1 ? 'hidden sm:inline-flex' : ''}`}>#{tag.name}</Link>)}
           </div>}

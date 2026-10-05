@@ -8,7 +8,7 @@ export class SearchQueryDto {
   q: string;
 
   @IsOptional()
-  @IsIn(['post', 'user', 'global'])
+  @IsIn(['post', 'posts', 'user', 'users', 'global', 'all', 'resources', 'resource', 'mod', 'map', 'schematic', 'servers', 'server', 'wiki', 'game_versions', 'game_version', 'developer_feed'])
   type?: string;
 
   @IsOptional()
@@ -16,7 +16,7 @@ export class SearchQueryDto {
   category?: string;
 
   @IsOptional()
-  @IsIn(['relevance', 'newest', 'oldest'])
+  @IsIn(['relevance', 'newest', 'oldest', 'downloads', 'rating'])
   sort?: string;
 
   @IsOptional()
@@ -35,4 +35,8 @@ export class SearchQueryDto {
   @IsOptional()
   @IsIn(['en', 'ru', 'ja', 'zh-CN'])
   content_language?: string;
+
+  @IsOptional()
+  @IsIn(['mod', 'map', 'schematic'])
+  resource_kind?: 'mod' | 'map' | 'schematic';
 }

@@ -119,4 +119,10 @@ describe('migration registry', () => {
     expect(names).toContain('ModReportAttachments1720000280000');
     expect(names.indexOf('ResourceCenterV21720000270000')).toBeLessThan(names.indexOf('ModReportAttachments1720000280000'));
   });
+
+  it('registers native search indexes and their maintenance status after the storage preview migration', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names).toContain('SearchIndexMaintenance1720000320000');
+    expect(names.indexOf('ResourceVersionStoragePreviews1720000310000')).toBeLessThan(names.indexOf('SearchIndexMaintenance1720000320000'));
+  });
 });

@@ -172,10 +172,10 @@ describe('SearchService', () => {
     expect(queryBuilder.select).toHaveBeenCalledWith(expect.not.arrayContaining(['p.content', 'p.content_html', 'p.content_json']));
     expect(queryBuilder.addSelect).toHaveBeenCalledWith(expect.stringContaining('LEFT('), 'post_card_excerpt');
     expect(queryBuilder.maxExecutionTime).toHaveBeenCalledWith(2500);
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      '(p.title LIKE :query OR p.content LIKE :query)',
-      { query: '%guide%' },
-    );
+    const searchClause = queryBuilder.andWhere.mock.calls.find(([clause]) => String(clause).includes('MATCH(p.title, p.content)'));
+    expect(searchClause?.[0]).toContain('p.title LIKE :query');
+    expect(searchClause?.[0]).toContain('MATCH(search_reply.content)');
+    expect(searchClause?.[1]).toEqual(expect.objectContaining({ query: '%guide%', fullTextQuery: 'guide' }));
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith(
       'search_title_match',
       'DESC',
@@ -270,7 +270,9 @@ describe('SearchService', () => {
     expect(result.pagination).toMatchObject({ page: 1, limit: 50 });
     expect(queryBuilder.skip).toHaveBeenCalledWith(0);
     expect(queryBuilder.take).toHaveBeenCalledWith(50);
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith('(p.title LIKE :query OR p.content LIKE :query)', { query: '%50\\%\\_\\\\%' });
+    const searchClause = queryBuilder.andWhere.mock.calls.find(([clause]) => String(clause).includes('MATCH(p.title, p.content)'));
+    expect(searchClause?.[0]).toContain('p.title LIKE :query');
+    expect(searchClause?.[1]).toEqual(expect.objectContaining({ query: '%50\\%\\_\\\\%', fullTextQuery: '50%_\\' }));
   });
 
   it('returns a stable empty page when a page is beyond the last result', async () => {
@@ -309,6 +311,28 @@ describe('SearchService', () => {
     const { service, providerRegistry } = createService();
     await service.searchResources('guide', 7);
     expect(providerRegistry.search).toHaveBeenCalledWith('resources', 'guide', { limit: 7 });
+  });
+
+  it('suggests aggregate public popular terms without reading personal search history', async () => {
+    const { service } = createService();
+    const popular = jest.spyOn(service, 'getPopularSearches').mockResolvedValue(['Mindustry', 'mindustry mods', 'other topic']);
+
+    await expect(service.getSearchSuggestions('MiNd', 4)).resolves.toEqual(['Mindustry', 'mindustry mods']);
+    await expect(service.getSearchSuggestions('mindusty', 4)).resolves.toEqual(['Mindustry']);
+    expect(popular).toHaveBeenCalledWith(10);
+  });
+
+  it('uses a single deterministic typo suggestion only when exact results are empty', async () => {
+    const { service } = createService();
+    const exact = { groups: { users: [], posts: [], resources: [], servers: [], game_versions: [], wiki: [], developer_feed: [] }, total_by_type: { users: 0, posts: 0, resources: 0, servers: 0, game_versions: 0, wiki: 0, developer_feed: 0 }, unavailable: [], pagination: { page: 1, limit: 10, has_more: false } };
+    const corrected = { ...exact, groups: { ...exact.groups, posts: [{ id: 1 }] }, total_by_type: { ...exact.total_by_type, posts: 1 } };
+    const search = jest.spyOn(service, 'searchUnified').mockResolvedValueOnce(exact as any).mockResolvedValueOnce(corrected as any);
+    jest.spyOn(service, 'getSearchSuggestions').mockResolvedValue(['mindustry']);
+
+    await expect(service.searchUnifiedWithSuggestion('mindustyr', undefined, { type: 'posts' })).resolves.toMatchObject({
+      suggested_query: 'mindustry', total_by_type: { posts: 1 },
+    });
+    expect(search).toHaveBeenNthCalledWith(2, 'mindustry', undefined, { type: 'posts' });
   });
 
   it('excludes group-only discussions when the searcher is anonymous', async () => {
@@ -354,7 +378,7 @@ describe('SearchService', () => {
     expect(userRepository.find).toHaveBeenLastCalledWith(expect.objectContaining({
       where: expect.arrayContaining([expect.objectContaining({ username: expect.anything() })]),
     }));
-    expect(providerRegistry.search).toHaveBeenCalledWith('game_versions', '160.4', { limit: 10, viewer: undefined });
+    expect(providerRegistry.search).toHaveBeenCalledWith('game_versions', '160.4', expect.objectContaining({ limit: 10, page: 1, viewer: undefined }));
   });
   it('keeps other search groups when one provider fails and marks missing groups', async () => {
     const providers = { search: jest.fn((key: string) => key === 'resources' ? Promise.reject(new Error('down')) : Promise.resolve([{ id: 1 }])) };

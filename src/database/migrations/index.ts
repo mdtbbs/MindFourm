@@ -77,6 +77,7 @@ import { ModReportAttachments1720000280000 } from './1720000280000-ModReportAtta
 import { AddResourceStorageReferences1720000290000 } from './1720000290000-AddResourceStorageReferences';
 import { ResourceDirectUploadSessions1720000300000 } from './1720000300000-ResourceDirectUploadSessions';
 import { ResourceVersionStoragePreviews1720000310000 } from './1720000310000-ResourceVersionStoragePreviews';
+import { SearchIndexMaintenance1720000320000 } from './1720000320000-SearchIndexMaintenance';
 
 /**
  * Migrations in run order.
@@ -165,4 +166,5 @@ export const migrations = [
   AddResourceStorageReferences1720000290000,
   ResourceDirectUploadSessions1720000300000,
   ResourceVersionStoragePreviews1720000310000,
+  SearchIndexMaintenance1720000320000,
 ];
