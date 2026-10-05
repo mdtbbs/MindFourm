@@ -43,6 +43,29 @@ describe('ResourceStorageClientService', () => {
     expect(fetchMock.mock.calls[2][1].method).toBe('DELETE');
   });
 
+  it('downgrades a requested public file binding when the owning resource is private', async () => {
+    const dataSource = { query: jest.fn().mockResolvedValue([{ status: 'approved', is_public: 1, visibility: 'private', deleted_at: null }]) };
+    const guarded = new ResourceStorageClientService(config as any, dataSource as any);
+    const binding = { id: 'binding-private', object_id: object.id, namespace: 'mindforum', owner_type: 'resource_file', owner_id: 'file-private', visibility: 'private', created_at: '' };
+    fetchMock.mockResolvedValueOnce(respond({ binding }));
+    await expect(guarded.createBinding(object.public_id, {
+      namespace: 'mindforum', owner_type: 'resource_file', owner_id: 'file-private', visibility: 'public',
+    })).resolves.toEqual(binding);
+    expect(dataSource.query).toHaveBeenCalledWith(expect.stringContaining('r.visibility'), ['file-private']);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ owner_id: 'file-private', visibility: 'private' });
+  });
+
+  it('keeps public binding requests public for a visible approved resource', async () => {
+    const dataSource = { query: jest.fn().mockResolvedValue([{ status: 'approved', is_public: 1, visibility: 'public', deleted_at: null }]) };
+    const guarded = new ResourceStorageClientService(config as any, dataSource as any);
+    const binding = { id: 'binding-public', object_id: object.id, namespace: 'mindforum', owner_type: 'resource_file', owner_id: 'file-public', visibility: 'public', created_at: '' };
+    fetchMock.mockResolvedValueOnce(respond({ binding }));
+    await expect(guarded.createBinding(object.public_id, {
+      namespace: 'mindforum', owner_type: 'resource_file', owner_id: 'file-public', visibility: 'public',
+    })).resolves.toEqual(binding);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ owner_id: 'file-public', visibility: 'public' });
+  });
+
   it('encodes public download path components', () => {
     expect(client.buildPublicDownloadUrl('public/id', '图 #1.png')).toBe('https://res.example.com/o/public%2Fid/%E5%9B%BE%20%231.png');
   });
