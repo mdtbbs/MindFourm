@@ -1,224 +1,103 @@
 # MindFourm
 
-Mindustry 社区论坛系统，集成 MindAuth OAuth SSO 认证和 MindFileList 资源文件托管。
+MindFourm 是 Mindustry 社区论坛和资源中心，使用 NestJS、Next.js、MySQL、Redis，并集成 MindAuth OAuth 与 MindFileList 文件服务。
 
-当前状态：核心论坛、资源中心、社交、积分和管理后台已经可用；EasyManager 服务器管理默认暂停。下载事件持久化、资源 V1 正式启用、投票和群聊 UI 仍属于后续工作。
+## 当前能力
 
-## 功能
+- 讨论、回复、通知、私信、好友、关注、屏蔽、群组和管理后台。
+- Resource Center V2：Mod、Map、Schematic、不可覆盖的版本 revision、成员/所有权、审核事件、兼容性、依赖、分析、manifests 和 GitHub Release 来源同步。
+- 游戏内容 API：地图和蓝图读取、投稿、预览、下载、收藏、点赞与上传会话。
+- Tiptap rich content：新正文以 `tiptap_json` / `content_json` 和 schema version 表示；旧 Markdown 请求仍可通过兼容路径转换，Markdown 是兼容输入和派生文本投影。
+- 下载生命周期写入数据库，包含 requested、granted、started、completed、failed；grant 使用数据库去重。管理统计读取持久化下载数据。
+- IPv4 与 IPv6 CIDR 封禁匹配。
+- EasyManager 集成默认关闭，可通过站点及功能设置管理。
 
-- 帖子发布与回复（支持 Markdown、嵌套回复）
-- 分类与标签系统
-- 用户资料与头像
-- 书签收藏
-- 点赞系统
-- 通知系统（回复、@提及、点赞、系统、举报）
-- 私信功能
-- 附件上传
-- 资源中心（用户上传资源，审核流程）
-- 搜索功能（MySQL LIKE，可升级至 Elasticsearch）
-- 积分与等级系统
-- 邮件通知（SMTP、队列处理）
-- 管理面板（仪表盘、内容审核、用户管理、操作日志）
-- 封禁管理（用户/IP/CIDR）
-- 限流保护（Redis 原子操作）
-- 好友、关注、用户屏蔽、群组
-- 反应表情、积分、等级、徽章、积分商店和排行榜
-- RSS 订阅、搜索历史、热门搜索
-- LanLink 房间发现与游戏/论坛身份信息展示
-- 外部服务 API（API Key、权限范围、模拟用户和审计日志）
-- 插件生命周期、配置、权限和事件 Hook
-- 隐私设置、法律条款确认、反馈和内容安全基础能力
+## 暂未实现或未提供完整体验
 
-### 当前未完成或暂未启用
+- 投票。
+- 完整群聊用户体验。
+- 插件前端主题/模板注入与无需重启的热加载。
+- 通用 CAS/blob 去重。
 
-- **投票**：尚未实现。
-- **群聊 UI**：已有群组相关能力，但没有群聊页面和完整聊天体验。
-- **下载统计持久化**：下载事件和去重记录目前在内存中，服务重启会丢失；数据库表、统计报表和后台展示待补齐。
-- **资源 V1 公开接口**：代码已存在，但受 `feature_resources_v1_read_enabled` 控制，默认关闭；目前主要使用整数资源 ID，`public_id` 公开解析仍待完成。
-- **插件主题/模板注入**：插件目前只能使用后端生命周期和事件 Hook，不能注入前端主题或页面模板。
-- **插件热加载**：插件变更后需要重启服务。
-- **IPv6 CIDR 封禁**：当前 IP 段匹配仅支持 IPv4。
-- **EasyManager**：相关服务列表、申请和自动公告能力保留但默认关闭，见下文。
+不要将以上列表扩展成未经代码核实的功能状态；模块、实体和开关以仓库源代码为准。
 
-### 推荐后续顺序
+## 站点配置
 
-1. 完成下载事件数据库化和后台统计。
-2. 补齐登录、发帖、回复、资源上传/下载、审核和权限的真实 E2E 测试。
-3. 做一次生产环境验收：数据库迁移、备份恢复、Redis、MindAuth、MFL、SSE、上传下载和健康检查。
-4. 正式启用资源 V1 并完成 `public_id` 回填与解析。
-5. 再考虑群聊 UI、投票、IPv6 封禁和插件前端扩展。
+同一代码库通过站点 profile 支持两个相互隔离的部署，不是运行时多租户。后端 `SITE_PROFILE` 与前端构建变量 `NEXT_PUBLIC_SITE_PROFILE` 必须匹配。
+
+| 站点 | Profile | 默认语言 | 社区写入验证 | Profile 功能差异 |
+| --- | --- | --- | --- | --- |
+| MDTBBS | `mdtbbs` | 简体中文 | 需要已验证手机号 | LanLink、开发动态、服务器申请和国内备案功能启用 |
+| Mindustry Club | `mindustry-club` | English，另支持 Русский / 日本語 | 需要邮箱，不要求手机号 | 不启用 LanLink、开发动态、服务器申请和国内备案功能；提供开发者入口 |
+
+两站应使用独立 MySQL 数据库、Redis、上传目录、OAuth Client、备份和运维凭据。站点示例与数据隔离见 [`docs/international-site-profiles.md`](docs/international-site-profiles.md)。后台运行时 feature flag 可进一步关闭 profile 功能。
 
 ## 快速开始
 
-### 环境要求
-
-- Node.js 18+
-- MySQL 8.0+
-- Redis 7.0+
-
-### 后端 (NestJS)
+需要 Node.js 20、MySQL 8 和 Redis 7。先复制 `.env.example`，配置数据库、Redis、MindAuth、站点 profile 和文件服务。
 
 ```bash
-npm install
-npm run dev        # 端口 4000
+npm ci
+npm run dev
 ```
 
-### 前端 (Next.js)
+前端：
 
 ```bash
 cd frontend
-npm install
-npm run dev        # 端口 3000
+npm ci
+npm run dev
 ```
 
-### 配置
+## 数据库
 
-复制 `.env.example` 到 `.env`：
+数据库结构由 TypeORM migrations 管理；DataSource 使用 `synchronize: false`。生产发布前先备份并检查待执行项，再通过显式迁移步骤执行和确认：
 
 ```bash
-cp .env.example .env
+npm run migration:show
+npm run migration:run
 ```
 
-关键配置：
-- `SITE_PROFILE` 与前端构建变量 `NEXT_PUBLIC_SITE_PROFILE` 必须一致。`mdtbbs` 保持中文站规则；`mindustry-club` 使用国际站语言、验证和功能策略。
-- `MINDAUTH_URL` - MindAuth 服务地址
-- `MINDAUTH_CLIENT_ID` / `MINDAUTH_CLIENT_SECRET` - OAuth 客户端信息
-- `EASYMANAGER_ENABLED` - EasyManager 集成开关，当前默认 `false`
-- `EASYMANAGER_URL` / `EASYMANAGER_API_KEY` - EasyManager 恢复时使用
-- `MFL_BASE_URL` / `MFL_API_KEY` - MindFileList 文件托管集成
-- `MYSQL_*` - MySQL 数据库配置
-- `REDIS_*` - Redis 配置
-
-### 独立社区站点
-
-MindFourm 通过单一站点配置支持两个独立部署，不做运行时多租户。每个部署应使用各自的 MySQL 数据库、Redis 实例/逻辑库、上传目录和 OAuth Client：
-
-| 站点 | Profile | URL | 语言 | 社区写入验证 |
-|---|---|---|---|---|
-| MDTBBS | `mdtbbs` | `https://mdtbbs.cn` | 简体中文 | 邮箱 + 手机 |
-| Mindustry Club | `mindustry-club` | `https://mindustry.club` | English / Русский / 日本語 | 邮箱，不要求手机号 |
-
-Club 示例配置、MindAuth Client 设置和数据隔离要求见 [`docs/international-site-profiles.md`](docs/international-site-profiles.md)。两个站点的本地用户、内容、审核和文件互不共享；MindAuth 负责统一身份。
-
-### 数据库
-
-MySQL 数据库 `mindfourm`，首次启动自动建表。生产环境应使用显式迁移并在迁移前完成备份。
-
-主要表：`users`, `posts`, `replies`, `categories`, `tags`, `notifications`, `messages`, `attachments`, `resources`, `settings`, `bans`
-
-## 服务集成
-
-### MindAuth OAuth SSO
-
-MindFourm 通过 MindAuth 完成登录授权，并在本地创建 Redis session。
-
-### MindFileList 资源文件托管
-
-资源中心可将上传文件转存到 MindFileList，由 MFL 管理文件存储、审核状态与下载限制。
-
-### EasyManager — ⏸ 暂停中
-
-EasyManager 服务器列表、服务器申请和自动公告回调代码保留，但当前默认关闭：
-
-- 后端：`EASYMANAGER_ENABLED=false` 时不连接 EasyManager，服务器 API 返回空数据或禁用提示
-- 前端：`feature_servers_enabled=false` 时隐藏服务器入口和首页服务器区块
-
-保留的恢复接口：
-
-| 论坛端点 | 当前禁用行为 |
-|------|------|
-| `GET /api/servers/public` | 返回空服务器列表 |
-| `GET /api/servers/versions` | 返回空版本列表 |
-| `GET /api/servers/templates` | 返回空模板列表 |
-| `GET /api/servers/my` | 需登录后返回空服务器列表 |
-| `POST /api/servers/apply` | 返回服务器功能已关闭 |
-
-恢复 EasyManager 时，需要设置 `EASYMANAGER_ENABLED=true` 并在后台功能管理中开启 `feature_servers_enabled`。
-
-## 管理面板
-
-访问 `/admin` 进入管理面板，需要管理员权限。
-
-### 功能模块
-
-| 分组 | 功能 |
-|------|------|
-| **总览** | 仪表盘（统计卡片、7日活跃图） |
-| **站点** | 基本信息、公告管理、显示设置、SEO 设置 |
-| **内容** | 帖子管理、标签管理、审核队列 |
-| **系统** | 发帖规则、限流设置、封禁管理、数据清理 |
-| **管理** | 分类管理、用户管理、系统日志 |
-| **资源** | 资源管理、资源审批、类别管理 |
-
-### 侧边栏分组
-
-管理后台侧边栏支持按功能分组显示，角色自动过滤（admin/moderator）。
+应用 DataSource 当前配置 `migrationsRun: true`，因此启动时也会执行未应用的 tracked migration；生产发布仍应将迁移审查、执行和验证作为独立发布门禁。Resource Center V2 的 migration/backfill 需要在目标环境单独验收。
 
 ## API 文档
 
-API 现在按用途分层：
+- Public V1 文档：`/api/v1`
+- API 参数参考：`/api/v1/reference`
+- 公开 API 更新记录：`/api/v1/docs/changelog`
+- API 生命周期：`/api/v1/docs/lifecycle`
+- 错误代码：`/api/v1/docs/errors`
+- 机器可读 OpenAPI：`/api/openapi/v1.json`
 
-- **First-party V1**：`/api/v1/*`，供 Web、Android、桌面端和 Mindustry Mod 使用。
-- **External API**：`/api/external/v1/*`，供机器人和服务端集成使用。
-- **Legacy / internal**：其他 `/api/*`，主要用于论坛现有前端、后台和历史兼容，不承诺第三方稳定性。
+第三方稳定契约是被明确纳入 Public V1 OpenAPI 的操作。其他 `/api/*` 路由属于旧版、论坛兼容、管理或内部能力，不能只凭路由存在就作为第三方契约。完整入口见 [`docs/api/README.md`](docs/api/README.md)。Public V1 OpenAPI 改动必须在同一 PR 更新 [`docs/api/changelog-v1.md`](docs/api/changelog-v1.md)，CI 会检查。
 
-文档入口：
+## 测试与验收
 
-- [`docs/api/README.md`](docs/api/README.md) - API 总览、响应格式、兼容策略
-- [`docs/api/first-party-v1.md`](docs/api/first-party-v1.md) - V1 endpoint 参考
-- [`docs/api/authentication.md`](docs/api/authentication.md) - Browser / Mobile / MindAuth / External API 认证
-- [`docs/api/game-content-v1.md`](docs/api/game-content-v1.md) - 蓝图和地图 API
-- [`docs/api/external.md`](docs/api/external.md) - 机器人 / 服务端 External API
+CI workflow 配置了后端构建和 Jest、Public V1 OpenAPI 检查、前端 lint/typecheck/build，以及 renderer 相关作业。CI 的通过状态以对应分支的实际 workflow 结果为准；本 README 不代表某次提交已经通过测试。
 
-运行时文档：
-
-```text
-/api/docs/v1
-/api/openapi/v1.json
-```
-
-第一方客户端应从能力发现开始：
-
-```http
-GET /api/v1/capabilities
-```
-
-## E2E 测试
+常用本地命令：
 
 ```bash
-npx playwright test
-npx playwright test --ui
+npm run build:backend
+npm test -- --runInBand
+npm run openapi:check
+npm run test:api-changelog
 ```
 
-当前单元测试覆盖较广，但 E2E 仍应以真实 MindAuth、数据库、Redis 和文件服务联调结果为准；不能把未运行或被环境阻塞的 E2E 视为通过。
+前端：
 
-## 生产部署检查
+```bash
+cd frontend
+npm run lint
+npm run typecheck
+npm run build
+```
 
-- 确认 `NODE_ENV=production`、`FRONTEND_URL`、MindAuth、MySQL、Redis 和 MFL 配置正确。
-- 先执行数据库备份，再执行迁移和构建。
-- 检查服务用户、文件权限、磁盘空间、systemd/Docker 健康状态。
-- 验证 `/health`、登录、SSE、资源上传、资源下载和后台审核链路。
-- 通过反向代理部署时确认 HTTPS、CORS、Cookie、`X-Forwarded-For` 和 SSE 长连接配置。
+涉及 Resource 或用户关键流程的变更还应运行相关 Playwright E2E。没有运行、被环境阻塞或无设备验证的检查不能报告为通过。
 
-## 技术栈
+## 更多文档
 
-### 后端
-- NestJS
-- TypeORM
-- MySQL 8
-- Redis 7
-- Markdown 解析
-- Cursor 分页
-- Bull 队列（邮件）
-
-### 前端
-- Next.js 14 App Router
-- TypeScript
-- Tailwind CSS
-- Zustand (状态管理)
-- TanStack React Query
-- SSE (实时通知)
-
-## 许可证
-
-MIT
+- [`docs/README.md`](docs/README.md)：仓库中文文档索引。
+- [`CLAUDE.md`](CLAUDE.md)：AI 开发上下文与当前实现边界。
+- [`docs/resource-center-v2.md`](docs/resource-center-v2.md)：Resource Center V2 契约与行为。
+- [`docs/production-deployment.md`](docs/production-deployment.md)：生产部署清单。

@@ -25,6 +25,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Require changelog update for Public V1 contract changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-api-changelog.cjs
+
       - name: Check forum version increment on master pushes
         if: github.event_name == 'push'
         env:
@@ -55,6 +60,9 @@ jobs:
 
       - name: Check committed Public V1 OpenAPI contract
         run: npm run openapi:check
+
+      - name: Test Public V1 changelog guard
+        run: npm run test:api-changelog
 
   frontend:
     name: Frontend lint, types, and build

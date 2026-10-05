@@ -2,6 +2,8 @@
 
 > 本文档记录了论坛系统的详细功能规格。
 > 创建时间: 2026-06-07
+>
+> **现状说明（2026-10）：** 这是早期设计快照，不代表当前功能状态。文中 Markdown textarea 编辑器等内容描述已被 Tiptap rich content 取代；当前正文契约见 [`docs/api/rich-content-schema-v2.md`](../api/rich-content-schema-v2.md)。
 
 ## 功能清单
 

@@ -410,25 +410,9 @@ ipInRange(ip: string, cidr: string): boolean {
 }
 ```
 
-### IPv6 支持规划
+### IPv6 CIDR
 
-**当前状态：仅支持 IPv4 CIDR**
-
-**后续改进建议：**
-- 添加 IPv6 CIDR 匹配支持
-- 使用 `ipaddr.js` 或类似库处理 IPv6 地址
-- 数据库字段扩展以存储 IPv6 地址
-
-```typescript
-// 建议的 IPv6 支持
-import * as ipaddr from 'ipaddr.js';
-
-ipInRangeV6(ip: string, cidr: string): boolean {
-  const addr = ipaddr.parse(ip);
-  const range = ipaddr.parseCIDR(cidr);
-  return addr.match(range);
-}
-```
+当前实现已在 `src/modules/bans/bans.service.ts` 中支持 IPv4 和 IPv6 地址规范化、CIDR 校验及同地址族匹配；回归用例位于 `src/modules/bans/bans.service.spec.ts`。本节上方的简单 IPv4 伪代码是早期设计示例，不等同于当前实现。
 
 ### 封禁缓存
 

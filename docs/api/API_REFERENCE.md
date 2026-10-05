@@ -1,5 +1,7 @@
 # MindFourm API 参考
 
+> **归档说明：** 本文件是早期生成的全后端/兼容接口参考快照，包含并非 Public V1 的路由，所列端点数量、认证与响应示例不代表当前实现。第三方客户端请使用 [`docs/api/README.md`](README.md)、[当前 Public V1 OpenAPI](/api/openapi/v1.json) 和在线参数参考。
+
 > 由源码自动生成，覆盖后端全部 HTTP 接口（340 个端点）。
 > 基础路径：`/api` · 响应统一包装为 `{ "success": true, "data": ... }`。
 
