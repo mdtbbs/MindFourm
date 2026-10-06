@@ -20,7 +20,7 @@ authTest.describe('Mobile search controls', () => {
     const controls = [
       query,
       authenticatedPage.locator('#search-sort'),
-      authenticatedPage.locator('a[aria-current="page"]').first(),
+      authenticatedPage.locator('nav[aria-label="搜索结果类型"] a[aria-current="page"]').first(),
       authenticatedPage.locator('form[action="/search"] button[type="submit"]'),
     ];
     for (const control of controls) {

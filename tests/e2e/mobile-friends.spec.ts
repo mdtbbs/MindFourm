@@ -5,11 +5,13 @@ authTest.describe('Mobile friends and multiplayer actions', () => {
     await authenticatedPage.setViewportSize({ width: 390, height: 844 });
     await authenticatedPage.route('**/api/v1/social/friends/presence?**', (route) => route.fulfill({
       status: 200, contentType: 'application/json',
-      body: JSON.stringify({ data: [{
+      body: JSON.stringify({ data: { data: [{
         user: { id: 42, username: 'friend', avatar_url: 'https://assets.example.test/friend.png', friendship_since: '2026-01-01' },
         presence: { status: 'online' }, activity: null,
         actions: { can_join: false, can_request_join: false, can_invite: false, session_visible: false },
-      }], pagination: { page: 1, limit: 50, total: 1, totalPages: 1 }, meta: { request_id: 'mobile-friends' } }),
+      }], pagination: { page: 1, limit: 50, total: 1, totalPages: 1 } }, meta: {
+        request_id: 'mobile-friends', pagination: { page: 1, limit: 50, total: 1, total_pages: 1, has_more: false },
+      } }),
     }));
     await authenticatedPage.route('**/api/v1/blocks?**', (route) => route.fulfill({
       status: 200, contentType: 'application/json', body: JSON.stringify({ data: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 }, meta: { request_id: 'mobile-blocks' } }),
