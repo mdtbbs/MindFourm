@@ -5,6 +5,7 @@
 ## Documentation Map
 
 - [`docs/README.md`](docs/README.md)：中文文档索引和阅读入口。
+- `docs/product/*.md`：面向论坛用户与开发者的功能概览、产品更新日志和公开计划；在线入口为 `/api/v1/docs/product-*`。
 - [`docs/api/README.md`](docs/api/README.md)：Public V1 边界、认证、响应、OpenAPI 和客户端文档入口。
 - `docs/api/*.md`：Public V1 OAuth/PKCE、资源、游戏内容、多人联机、云存档、错误码、富文本、Changelog 和生命周期契约。
 - [`docs/resource-storage.md`](docs/resource-storage.md)：RES 上传、binding 生命周期、历史兼容及手动迁移。

@@ -24,6 +24,7 @@ COPY --from=builder --chown=node:node /app/package.json ./package.json
 COPY --from=builder --chown=node:node /app/scripts ./scripts
 # Developer-doc routes load their Markdown guides at runtime.
 COPY --from=builder --chown=node:node /app/docs/api ./docs/api
+COPY --from=builder --chown=node:node /app/docs/product ./docs/product
 
 # Writable upload target; must be a mounted volume in production so uploads survive
 # container replacement.

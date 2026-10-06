@@ -1329,19 +1329,25 @@
             "name": "type",
             "required": false,
             "in": "query",
-            "description": "结果分组筛选。",
+            "description": "结果分组筛选；保留 post、user、global 历史值作为兼容别名。",
             "schema": {
               "enum": [
-                "all",
+                "post",
                 "posts",
+                "user",
+                "users",
+                "global",
+                "all",
                 "resources",
+                "resource",
                 "mod",
                 "map",
                 "schematic",
-                "users",
                 "servers",
+                "server",
                 "wiki",
                 "game_versions",
+                "game_version",
                 "developer_feed"
               ],
               "type": "string"
@@ -1435,10 +1441,12 @@
             "name": "type",
             "required": false,
             "in": "query",
-            "description": "搜索类型；此端点固定返回帖子结果。",
+            "description": "保留历史查询值以兼容旧客户端；此端点始终返回帖子结果。",
             "schema": {
               "enum": [
-                "post"
+                "post",
+                "user",
+                "global"
               ],
               "type": "string"
             }
@@ -23700,7 +23708,7 @@
   "info": {
     "title": "MDTBBS Internal V1 API",
     "description": "Internal development contract. This specification may contain privileged operations and must not be exposed from the public developer portal. Third-party clients use the separately filtered Public Client V1 contract. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "contact": {}
   },
   "tags": [],

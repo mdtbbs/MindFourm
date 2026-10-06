@@ -2,6 +2,12 @@
 
 按任务选择当前文档入口。实现状态以代码和 OpenAPI 为准；设计草案与历史计划仅用于了解背景。
 
+## 面向用户与第三方开发者
+
+- [`product/overview.md`](product/overview.md)：论坛功能概览与从 1.0 开始的主要演进里程碑。
+- [`product/changelog.md`](product/changelog.md)：面向用户的产品更新记录。
+- [`product/roadmap.md`](product/roadmap.md)：已公开的研发方向、计划边界和功能下线公告。
+
 ## API 与客户端
 
 - [`api/README.md`](api/README.md)：Public V1 边界、文档入口与维护规则。
