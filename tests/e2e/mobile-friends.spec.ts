@@ -49,8 +49,10 @@ authTest.describe('Mobile friends and multiplayer actions', () => {
     await expect(authenticatedPage.getByRole('heading', { name: /加入请求/ })).toBeVisible();
     for (const label of ['接受并加入', '拒绝', '批准']) {
       const control = authenticatedPage.getByRole('button', { name: label });
-      const box = await control.boundingBox();
-      expect(box?.height || 0, `${label} should be easy to tap on mobile`).toBeGreaterThanOrEqual(44);
+      for (let index = 0; index < await control.count(); index += 1) {
+        const box = await control.nth(index).boundingBox();
+        expect(box?.height || 0, `${label} should be easy to tap on mobile`).toBeGreaterThanOrEqual(44);
+      }
     }
   });
 });
