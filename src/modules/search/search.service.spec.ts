@@ -310,7 +310,7 @@ describe('SearchService', () => {
   it('delegates resource search to registered domain providers', async () => {
     const { service, providerRegistry } = createService();
     await service.searchResources('guide', 7);
-    expect(providerRegistry.search).toHaveBeenCalledWith('resources', 'guide', { limit: 7 });
+    expect(providerRegistry.search).toHaveBeenCalledWith('resources', 'guide', expect.objectContaining({ limit: 7, page: 1 }));
   });
 
   it('suggests aggregate public popular terms without reading personal search history', async () => {

@@ -36,6 +36,12 @@ It handles files one by one: verify source bytes and SHA-256, upload or deduplic
 
 RES failure blocks new uploads and moderation changes that require a binding visibility update. Existing managed and MFL files remain available. A previously approved RES file can still receive a stable public redirect even if the forum cannot query RES metadata. Repair a failed operation by retrying it; do not publish a forum approval while its RES binding is private. No production migration or cleanup is part of the integration PR.
 
+## Reconciliation
+
+Administrators can run a read-only Forum↔RES reconciliation scan at `POST /api/admin/resources/storage/reconciliation/scan`. It compares Forum `resource_files` with the paginated RES object and `mindforum/resource_file` binding inventories, reporting missing objects/bindings, owner or binding drift, hash/size/MIME mismatch, object state, publication visibility, dangling files, and orphan objects/bindings. The report contains only public IDs and metadata; service keys, storage paths and signed URLs are never returned.
+
+Repairs require both `repair=true` and `confirm=true`. Safe repairs mark a local file unavailable when the authoritative object is missing or inconsistent, or recreate the owner binding with the expected private/public visibility before updating the Forum row in a transaction. The operation never deletes an object or an unknown binding. Request and completion summaries are written to `operation_logs`; review the report before every repair. See [`resource-storage-reconciliation.md`](resource-storage-reconciliation.md) for the finding matrix and operator procedure.
+
 ## Schema migrations
 
 `1720000290000` adds ResourceFile object/binding references and Resource preview references. `1720000300000` creates owner-bound direct upload contexts. `1720000310000` adds separate ResourceVersion and ResourceUploadDraft preview object/binding references. All have explicit down migrations; historic MFL integer IDs and PNG keys retain their meaning.

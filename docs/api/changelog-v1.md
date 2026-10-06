@@ -6,6 +6,12 @@
 
 ## 尚未发布
 
+### 2.7.0 计划发布内容
+
+- Resource Center 增加 metadata-first direct upload 和基于官方 renderer 的蓝图/地图新版本编辑流程。上传对象在论坛 complete 阶段重新校验，编辑永远创建新 revision 并进入现有审核；公开客户端继续使用已有 V1 文件和版本接口。
+- 统一搜索资源筛选增加 `game_version`、`author`、`tag`、`dependency`、`release_channel`，旧兼容搜索也按登录 viewer 应用屏蔽和资源可见性；这些字段是可选增量参数。
+- 能力发现会在 renderer 协议/运行时哈希或 RES 不满足时关闭编辑能力。客户端必须把 `false` 当作当前不可用，不应自行重试绕过开关。
+
 ### Added
 
 - `POST /api/v1/resources/uploads/init` 和 `/uploads/complete` 增加资源上下文直传：`resource.upload`、登录与站点验证要求不变，限流 10/60s；init 必须携带 pending/draft 版本 UUID、文件名、大小、MIME 和 SHA-256，返回短期 RES 上传信息或去重对象，均需 complete 进行服务端验证与私有绑定。失败可返回 `RESOURCE_STORAGE_UNAVAILABLE` (503)、`RESOURCE_STORAGE_OBJECT_NOT_FOUND` (404)、`RESOURCE_STORAGE_REJECTED` (422)。

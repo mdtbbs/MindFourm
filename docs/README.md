@@ -14,6 +14,10 @@
 ## 当前系统与运维
 
 - [`resource-center-v2.md`](resource-center-v2.md)：Resource Center V2 业务与 API。
+- [`platform-2.7.0.md`](platform-2.7.0.md)：2.7.0 平台能力收口、证据层和已知限制。
+- [`schematic-editor.md`](schematic-editor.md)、[`map-editor.md`](map-editor.md)：蓝图/地图安全编辑器边界与版本流程。
+- [`resource-storage-reconciliation.md`](resource-storage-reconciliation.md)：ResourceStorage 对账、审计和显式修复。
+- [`resource-storage.md`](resource-storage.md)：RES 直传、下载、预览和历史迁移合同。
 - [`international-site-profiles.md`](international-site-profiles.md)：MDTBBS / Mindustry Club profile 差异及部署隔离。
 - [`production-deployment.md`](production-deployment.md)：生产配置、数据库迁移和发布检查。
 - [`production-readiness.md`](production-readiness.md)：生产就绪背景与验收记录；执行操作前重新核实当前状态。

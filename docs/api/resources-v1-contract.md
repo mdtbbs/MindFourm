@@ -248,4 +248,8 @@ GitHub Release 来源 API 使用 Resource public UUID。`PUT /api/v1/resources/{
 
 客户端使用返回的短期 token 向 RES PUT 原始字节（或接收去重对象），随后 `POST /api/v1/resources/uploads/complete` 携带论坛 `session_id` 和 `object_public_id`。论坛重新验证权限、版本状态和 RES verified 元数据，创建 pending ResourceFile 与私有 binding；重放 complete 返回同一 file_public_id。论坛不会向客户端暴露服务 API key。
 
+资源首次创建可使用 `POST /api/v1/resources/direct-drafts`，只提交元数据并返回 upload_pending 首版本；已有 Resource 可使用 `POST /api/v1/resources/{id}/versions/direct-drafts` 创建新的 upload_pending revision。两个接口都要求 `Idempotency-Key`，文件字节只经过 RES，不经过论坛的 multipart body。直传 complete 仍必须由论坛重新读取对象元数据并进入审核，不能通过客户端自报大小、MIME 或哈希提前发布。
+
+Owner/Maintainer 可以对已发布蓝图调用 `POST /api/v1/resources/{id}/versions/{versionId}/schematic-editor/export`，或对已发布地图调用 `POST /api/v1/resources/{id}/versions/{versionId}/map-editor/export`。两者返回官方 Mindustry 文件，不修改源版本；客户端应把导出文件作为新 direct-upload revision 提交。蓝图编辑支持有限的方块/静态逻辑操作，地图编辑支持完整小型地形网格、类型化规则和波次子集；未知或超界内容会拒绝导出，具体边界见[蓝图安全编辑器](../schematic-editor.md)和[地图安全编辑器](../map-editor.md)。
+
 RES 文件下载与新预览使用 302；客户端应跟随跳转。下载授权和 DownloadGrant 保留在论坛，私有链接短期有效。存储不可用返回 503，不会持久回退本地。历史 managed/MFL/external 保持兼容。上传与手动迁移运维细节见 [ResourceStorage](../resource-storage.md)。

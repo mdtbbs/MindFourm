@@ -6,6 +6,9 @@ MindFourm 是 Mindustry 社区论坛和资源中心，使用 NestJS、Next.js、
 
 - 讨论、回复、通知、私信、好友、关注、屏蔽、群组和管理后台。
 - Resource Center V2：Mod、Map、Schematic、不可覆盖的版本 revision、成员/所有权、审核事件、兼容性、依赖、分析、manifests 和 GitHub Release 来源同步。
+- ResourceStorage metadata-first direct upload、对象/绑定对账和安全修复审计；对账不会自动删除对象或历史文件。
+- 官方 renderer-backed 蓝图/地图轻编辑器：编辑结果总是新版本并重新进入审核；能力开关在 renderer/RES 不满足时关闭。
+- viewer-aware 统一搜索、资源过滤、建议/纠错，以及好友隐私、邀请、加入请求和可恢复 realtime。
 - 游戏内容 API：地图和蓝图读取、投稿、预览、下载、收藏、点赞与上传会话。
 - Tiptap rich content：新正文以 `tiptap_json` / `content_json` 和 schema version 表示；旧 Markdown 请求仍可通过兼容路径转换，Markdown 是兼容输入和派生文本投影。
 - 下载生命周期写入数据库，包含 requested、granted、started、completed、failed；grant 使用数据库去重。管理统计读取持久化下载数据。
@@ -17,7 +20,7 @@ MindFourm 是 Mindustry 社区论坛和资源中心，使用 NestJS、Next.js、
 - 投票。
 - 完整群聊用户体验。
 - 插件前端主题/模板注入与无需重启的热加载。
-- 通用 CAS/blob 去重。
+- 面向任意业务的通用 blob API；ResourceStorage 已提供资源文件的 CAS 去重、binding 和显式 GC/对账流程。
 
 不要将以上列表扩展成未经代码核实的功能状态；模块、实体和开关以仓库源代码为准。
 
@@ -100,4 +103,6 @@ npm run build
 - [`docs/README.md`](docs/README.md)：仓库中文文档索引。
 - [`CLAUDE.md`](CLAUDE.md)：AI 开发上下文与当前实现边界。
 - [`docs/resource-center-v2.md`](docs/resource-center-v2.md)：Resource Center V2 契约与行为。
+- [`docs/platform-2.7.0.md`](docs/platform-2.7.0.md)：2.7.0 收口范围和已知限制。
+- [`docs/resource-storage-reconciliation.md`](docs/resource-storage-reconciliation.md)：RES 对账与安全修复。
 - [`docs/production-deployment.md`](docs/production-deployment.md)：生产部署清单。

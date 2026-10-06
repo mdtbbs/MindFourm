@@ -43,6 +43,11 @@ export type UnifiedSearchOptions = {
   limit?: number;
   content_language?: string;
   resource_kind?: 'mod' | 'map' | 'schematic';
+  game_version?: string;
+  author?: string;
+  tag?: string;
+  dependency?: string;
+  release_channel?: SearchOptions['release_channel'];
 };
 
 export type UnifiedSearchResult = {
@@ -372,6 +377,11 @@ export class SearchService {
       const providerOptions = {
         page, limit: resultLimit, viewer, category: options.category,
         sort: options.sort as SearchOptions['sort'], resource_kind: resourceKind,
+        game_version: options.game_version,
+        author: options.author,
+        tag: options.tag,
+        dependency: options.dependency,
+        release_channel: options.release_channel,
         ...(key === 'resources' ? {
           content_language: options.content_language,
           preferred_content_language: preferredContentLanguage,
@@ -497,8 +507,22 @@ export class SearchService {
    * Only returns approved and public resources.
    * Uses Full-Text search when available (ngram index handles CJK + Latin).
    */
-  async searchResources(query: string, limit: number = 20): Promise<any[]> {
-    return this.providerRegistry?.search('resources', query, { limit }) || [];
+  async searchResources(query: string, limit: number = 20, viewer?: SearchViewer, options: UnifiedSearchOptions = {}): Promise<any[]> {
+    return this.providerRegistry?.search('resources', query, {
+      page: options.page || 1,
+      limit,
+      category: options.category,
+      sort: options.sort as SearchOptions['sort'],
+      resource_kind: options.resource_kind,
+      game_version: options.game_version,
+      author: options.author,
+      tag: options.tag,
+      dependency: options.dependency,
+      release_channel: options.release_channel,
+      content_language: options.content_language,
+      viewer,
+      preferred_content_language: viewer?.preferred_content_language,
+    }) || [];
   }
 
   async recordSearch(userId: number, query: string, resultsCount: number): Promise<void> {

@@ -739,6 +739,7 @@
       "enabled": "はい",
       "disabled": "いいえ",
       "previewAlt": "公開済みスケマティックのプレビュー",
+      "exportDiff": "解析差分 · 元 {source}、書き出し {output}、変化 {delta}",
       "saveVersion": "新しいバージョンとして保存",
       "savingVersion": "審査対象バージョンを保存中…",
       "versionSaved": "編集したスケマティックを新しいバージョンとして作成し、審査に送信しました。",

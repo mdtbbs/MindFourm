@@ -13,6 +13,7 @@ export class SearchQueryDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   category?: string;
 
   @IsOptional()

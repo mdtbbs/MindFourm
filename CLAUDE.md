@@ -8,7 +8,10 @@
 - [`docs/api/README.md`](docs/api/README.md)：Public V1 边界、认证、响应、OpenAPI 和客户端文档入口。
 - `docs/api/*.md`：Public V1 OAuth/PKCE、资源、游戏内容、多人联机、云存档、错误码、富文本、Changelog 和生命周期契约。
 - [`docs/resource-storage.md`](docs/resource-storage.md)：RES 上传、binding 生命周期、历史兼容及手动迁移。
+- [`docs/resource-storage-reconciliation.md`](docs/resource-storage-reconciliation.md)：Forum↔RES 对账、审计和显式修复边界。
 - [`docs/resource-center-v2.md`](docs/resource-center-v2.md)：Resource Center V2 的资源、版本、成员、审核、分析、manifest 与接口。
+- [`docs/schematic-editor.md`](docs/schematic-editor.md)、[`docs/map-editor.md`](docs/map-editor.md)：官方 renderer 编辑器的安全范围和已知限制。
+- [`docs/platform-2.7.0.md`](docs/platform-2.7.0.md)：2.7.0 平台能力收口与证据层。
 - [`docs/international-site-profiles.md`](docs/international-site-profiles.md)：`mdtbbs` 与 `mindustry-club` 部署配置及隔离要求。
 - [`docs/production-deployment.md`](docs/production-deployment.md)：生产配置、迁移和发布检查；执行前仍需核对当前代码和部署状态。
 - `docs/design/`：设计背景。逐项确认是否与当前实现一致后才可用于实施。
@@ -47,6 +50,8 @@
 - Current V2 contracts include public UUID identifiers (`public_id`), owner/member roles and invitations, review events and annotations, compatibility and dependencies, version analysis, type-specific manifests, GitHub Release source sync, and Mod/Map/Schematic read APIs.
 - Uploads enter quarantine/pending review and become published only after the review decision. Review, approval, and storage transitions are implemented in the Resource V2 services; preserve quarantine files when a review fails or is rejected.
 - Forum stores Resource business metadata, ownership, versions, and moderation state. File storage handles the binary lifecycle and delivery. Keep Resource API behavior explicit and resource-oriented; do not present it as a generic blob API.
+- Metadata-first direct upload keeps browser bytes on ResourceStorage; Forum completion must re-read authoritative object metadata and only then create a pending private binding. ResourceStorage reconciliation is administrator-triggered, records request/completion operation logs, and never deletes objects automatically.
+- Renderer-backed schematic/map editing always exports a new version. Capability flags are fail-closed on protocol, pinned runtime digest, operation allowlist, and RES health; do not describe unsupported map layers or unknown schematic configuration as editable.
 - Resource V2 migrations and any required backfill need separate production acceptance. Do not infer that a local migration or source build proves production schema/data readiness.
 
 ## Download Events and Analytics
@@ -81,7 +86,7 @@ Runtime settings and feature flags can further disable functionality. Check `src
 - Polls are not implemented.
 - Group chat has no complete user-facing chat experience.
 - Plugin frontend theme/template injection and hot reload are not implemented.
-- A general CAS/blob deduplication layer is not implemented.
+- A general-purpose blob API outside the ResourceStorage resource-file CAS is not implemented; resource uploads use the ResourceStorage CAS, binding, GC, and reconciliation contracts documented above.
 
 Do not report implemented dashboard download analytics, IPv6 CIDR, Resource public UUIDs, or Tiptap storage as outstanding work.
 

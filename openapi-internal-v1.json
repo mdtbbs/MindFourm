@@ -1197,6 +1197,47 @@
         }
       }
     },
+    "/v1/search/suggestions": {
+      "get": {
+        "operationId": "SearchV1Controller_suggestions",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "forum.read"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minLength": 2,
+              "maxLength": 64
+            },
+            "description": "从聚合热门词中返回有界、公开的搜索建议。"
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "v1-search"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/search": {
       "get": {
         "operationId": "SearchV1Controller_unified",
@@ -1209,6 +1250,35 @@
           "forum.read"
         ],
         "parameters": [
+          {
+            "name": "resource_kind",
+            "required": false,
+            "in": "query",
+            "description": "资源子类型筛选。",
+            "schema": {
+              "enum": [
+                "mod",
+                "map",
+                "schematic"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "content_language",
+            "required": false,
+            "in": "query",
+            "description": "资源和帖子内容语言筛选。",
+            "schema": {
+              "enum": [
+                "en",
+                "ru",
+                "ja",
+                "zh-CN"
+              ],
+              "type": "string"
+            }
+          },
           {
             "name": "limit",
             "required": false,
@@ -1238,7 +1308,9 @@
               "enum": [
                 "relevance",
                 "newest",
-                "oldest"
+                "oldest",
+                "downloads",
+                "rating"
               ],
               "type": "string"
             }
@@ -1257,12 +1329,20 @@
             "name": "type",
             "required": false,
             "in": "query",
-            "description": "搜索内容类型。",
+            "description": "结果分组筛选。",
             "schema": {
               "enum": [
-                "post",
-                "user",
-                "global"
+                "all",
+                "posts",
+                "resources",
+                "mod",
+                "map",
+                "schematic",
+                "users",
+                "servers",
+                "wiki",
+                "game_versions",
+                "developer_feed"
               ],
               "type": "string"
             }
@@ -1358,9 +1438,7 @@
             "description": "搜索类型；此端点固定返回帖子结果。",
             "schema": {
               "enum": [
-                "post",
-                "user",
-                "global"
+                "post"
               ],
               "type": "string"
             }
@@ -1987,6 +2065,67 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ResourceDirectUploadInitResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "v1-resource-uploads"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/direct-drafts": {
+      "post": {
+        "operationId": "ResourcesV1WriteController_createDirectUploadDraft",
+        "x-rate-limit": {
+          "limit": 5,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "ASCII key scoped to the authenticated account; reuse only for the same direct-upload draft.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Creates an unpublished Resource and upload_pending first version without receiving the file bytes.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateResourceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Metadata-only direct-upload draft; call uploads/init and uploads/complete before it enters moderation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDirectUploadDraftResponseDto"
                 }
               }
             }
@@ -11301,6 +11440,78 @@
         ]
       }
     },
+    "/v1/resources/{id}/versions/direct-drafts": {
+      "post": {
+        "operationId": "createResourceV2DirectVersionDraft",
+        "x-rate-limit": {
+          "limit": 5,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "summary": "创建 metadata-first 直接上传版本草稿",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "ASCII key scoped to the authenticated account and Resource.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "Creates an upload_pending version without receiving file bytes.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceV2CreateVersionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Upload draft identifiers and expiry; use the existing direct upload init/complete endpoints to attach the file.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDirectUploadDraftResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "v1-resources-v2-management"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/resources/{id}/versions/{versionId}/schematic-editor/export": {
       "post": {
         "operationId": "exportResourceSchematicEdit",
@@ -11313,7 +11524,7 @@
           "resource.upload"
         ],
         "summary": "安全导出编辑后的蓝图副本",
-        "description": "Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像和删除选中方块。只读取托管版本并返回新文件，不修改原版本。",
+        "description": "Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像、删除、移动和放置单格方块。只读取托管版本并返回新文件，不修改原版本；含有不支持内容时拒绝导出。",
         "parameters": [
           {
             "name": "id",
@@ -11349,6 +11560,86 @@
         "responses": {
           "200": {
             "description": "An official Mindustry .msch serialization as a downloadable file.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "操作无效、文件无法解析或含有编辑器不支持安全保留的内容。"
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "404": {
+            "description": "资源或已发布版本不存在。"
+          }
+        },
+        "tags": [
+          "v1-resources-v2-management"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/{id}/versions/{versionId}/map-editor/export": {
+      "post": {
+        "operationId": "exportResourceMapEdit",
+        "x-rate-limit": {
+          "limit": 5,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "resource.upload"
+        ],
+        "summary": "安全导出编辑后的地图副本",
+        "description": "Owner/Maintainer 可编辑已发布地图的地形、类型化规则字段和波次组。地图通过官方 MapIO 写入并重新导入校验；未知规则与波次字段保留，不支持内容会拒绝导出。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Resource public UUID。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "description": "已发布 Version public UUID。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceV2ExportMapDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An official Mindustry .msav serialization as a derived file.",
             "content": {
               "application/octet-stream": {
                 "schema": {
@@ -17063,6 +17354,37 @@
         ],
         "x-rate-limit": {
           "limit": 180,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      }
+    },
+    "/v1/multiplayer/join-requests": {
+      "get": {
+        "operationId": "MultiplayerV1Controller_listJoinRequests",
+        "x-required-scopes": [
+          "multiplayer.read"
+        ],
+        "parameters": [],
+        "responses": {
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          }
+        },
+        "tags": [
+          "联机会话",
+          "加入请求"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 1200,
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         }
@@ -23611,6 +23933,23 @@
         "type": "object",
         "properties": {}
       },
+      "SearchIndexMaintenanceDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "reindex",
+              "rebuild",
+              "repair"
+            ],
+            "description": "Rebuilds one allowlisted MySQL FULLTEXT index from its source table."
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
       "CreateResourceCategoryDto": {
         "type": "object",
         "properties": {}
@@ -23853,6 +24192,112 @@
           "id",
           "deduplicated",
           "complete_required"
+        ]
+      },
+      "CreateResourceDto": {
+        "type": "object",
+        "properties": {
+          "version_mode": {
+            "type": "string",
+            "enum": [
+              "semver",
+              "compatibility"
+            ],
+            "default": "semver",
+            "description": "How this release version is interpreted."
+          },
+          "release_channel": {
+            "type": "string",
+            "enum": [
+              "release",
+              "beta",
+              "alpha",
+              "snapshot"
+            ],
+            "default": "release"
+          },
+          "game_version_min": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "game_version_max": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "mod_id": {
+            "type": "string",
+            "maxLength": 128,
+            "description": "Stable Mindustry Mod ID; independent from the resource UUID."
+          },
+          "mod_author_overrides": {
+            "type": "object",
+            "description": "Publisher-supplied values are stored separately from parsed manifest values."
+          },
+          "content_json": {
+            "description": "Rich Content Schema v2 source; Markdown is a compatibility projection.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/TiptapDocumentDto"
+              }
+            ]
+          },
+          "content_schema_version": {
+            "type": "number",
+            "enum": [
+              2
+            ]
+          }
+        }
+      },
+      "ResourceDirectUploadDraftResponseDto": {
+        "type": "object",
+        "properties": {
+          "resource_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "resource_id": {
+            "type": "number",
+            "description": "Legacy numeric Resource ID for navigation after initial upload."
+          },
+          "version_public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "upload_draft_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "draft_status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "completed"
+            ]
+          },
+          "version_status": {
+            "type": "string",
+            "enum": [
+              "upload_pending",
+              "pending_review"
+            ]
+          },
+          "revision": {
+            "type": "number",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "resource_public_id",
+          "version_public_id",
+          "upload_draft_id",
+          "expires_at",
+          "draft_status",
+          "version_status"
         ]
       },
       "CompleteResourceDirectUploadDto": {
@@ -25633,14 +26078,33 @@
             "format": "uuid",
             "nullable": true
           },
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          },
           "rules": {
             "type": "object",
             "nullable": true
+          },
+          "tile_layers": {
+            "type": "object",
+            "description": "Version-scoped bounded terrain layer used by the map editor."
+          },
+          "tile_layers_truncated": {
+            "type": "boolean"
           }
         },
         "required": [
           "version_public_id",
-          "rules"
+          "width",
+          "height",
+          "rules",
+          "tile_layers",
+          "tile_layers_truncated"
         ]
       },
       "ResourceV2MapResourceDto": {
@@ -25803,6 +26267,56 @@
           "pagination"
         ]
       },
+      "ResourceV2CreateVersionDto": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string",
+            "maxLength": 50,
+            "example": "1.2.0"
+          },
+          "version_mode": {
+            "type": "string",
+            "enum": [
+              "semver",
+              "compatibility"
+            ]
+          },
+          "release_channel": {
+            "type": "string",
+            "enum": [
+              "release",
+              "beta",
+              "alpha",
+              "snapshot"
+            ]
+          },
+          "game_version_min": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "game_version_max": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 20000,
+            "description": "Markdown release notes."
+          },
+          "mod_id": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "mod_author_overrides": {
+            "type": "object",
+            "description": "Publisher overrides remain separate from parsed manifest values."
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "ResourceV2SchematicPositionDto": {
         "type": "object",
         "properties": {
@@ -25820,6 +26334,93 @@
         "required": [
           "x",
           "y"
+        ]
+      },
+      "ResourceV2SchematicMoveDto": {
+        "type": "object",
+        "properties": {
+          "from_x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "from_y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "to_x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "to_y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "required": [
+          "from_x",
+          "from_y",
+          "to_x",
+          "to_y"
+        ]
+      },
+      "ResourceV2SchematicAddedBlockDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "block": {
+            "type": "string",
+            "maxLength": 191,
+            "example": "router"
+          },
+          "rotation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3,
+            "default": 0
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "block"
+        ]
+      },
+      "ResourceV2SchematicLogicConfigDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 32768,
+            "description": "Inert processor source text; never evaluated by the renderer."
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "source"
         ]
       },
       "ResourceV2ExportSchematicDto": {
@@ -25841,12 +26442,120 @@
             "items": {
               "$ref": "#/components/schemas/ResourceV2SchematicPositionDto"
             }
+          },
+          "move_positions": {
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicMoveDto"
+            }
+          },
+          "add_blocks": {
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicAddedBlockDto"
+            }
+          },
+          "logic_configs": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicLogicConfigDto"
+            }
           }
         },
         "required": [
           "rotation_quarters",
           "mirror_x"
         ]
+      },
+      "ResourceV2MapTerrainChangeDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "floor": {
+            "type": "string",
+            "maxLength": 191,
+            "example": "sand"
+          },
+          "overlay": {
+            "type": "string",
+            "maxLength": 191,
+            "example": "air",
+            "description": "Overlay block name; use air to clear an existing overlay."
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "floor",
+          "overlay"
+        ]
+      },
+      "ResourceV2MapWaveOperationDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "add",
+              "update",
+              "delete",
+              "move"
+            ]
+          },
+          "index": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 5000
+          },
+          "to_index": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 5000
+          },
+          "fields": {
+            "type": "object",
+            "description": "Known SpawnGroup fields to add or update. Unknown source fields remain intact."
+          }
+        },
+        "required": [
+          "action",
+          "index"
+        ]
+      },
+      "ResourceV2ExportMapDto": {
+        "type": "object",
+        "properties": {
+          "terrain_changes": {
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2MapTerrainChangeDto"
+            }
+          },
+          "rule_changes": {
+            "type": "object",
+            "description": "Typed scalar/list Rules fields. Unspecified and unknown source fields are preserved."
+          },
+          "wave_operations": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2MapWaveOperationDto"
+            }
+          }
+        }
       },
       "ResourceV2PatchProfileDto": {
         "type": "object",
@@ -26605,6 +27314,10 @@
           "deleted"
         ]
       },
+      "ResourceStorageReconciliationDto": {
+        "type": "object",
+        "properties": {}
+      },
       "MobileExchangeDto": {
         "type": "object",
         "properties": {
@@ -26761,6 +27474,17 @@
       "PatchSocialPrivacyDto": {
         "type": "object",
         "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "idle",
+              "dnd",
+              "invisible"
+            ],
+            "example": "online",
+            "description": "好友看到的在线状态。"
+          },
           "presence_visibility": {
             "type": "string",
             "enum": [
