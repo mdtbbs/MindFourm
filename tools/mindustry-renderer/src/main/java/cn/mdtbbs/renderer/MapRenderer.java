@@ -146,7 +146,7 @@ public final class MapRenderer {
             + ",\"runtime\":{\"name\":\"Mindustry\",\"version\":\"v160.2\",\"build\":" + Version.build
             + ",\"artifactSha256\":" + quote(MINDUSTRY_SERVER_SHA256) + "}"
             + ",\"supportedOperations\":[\"schematic.read\",\"schematic.write\",\"schematic.logic.read\",\"schematic.logic.text.write\",\"map.read\",\"map.write\",\"map.rules.read\",\"map.rules.write\",\"map.waves.read\",\"map.waves.write\"]"
-            + ",\"textureAssets\":" + (spriteAtlas != null) + "}");
+            + ",\"textureAssets\":" + (spriteAtlas != null) + "}";
     }
 
     /** Hashes the compiled entry class so health reports the running worker build, not just its source label. */
