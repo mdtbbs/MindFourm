@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Download, FlipHorizontal, RotateCcw, RotateCw, Trash2, Undo2 } from 'lucide-react';
 import {
   analyzeResourceWorkbenchVersionV2,
@@ -13,7 +13,7 @@ import {
   type ResourceWorkbenchV2Version,
   type ResourceWorkbenchV2VersionAnalysis,
 } from '@/lib/api/v1/resources';
-import { V1ApiError } from '@/lib/api/v1/transport';
+import { fetchV1, V1ApiError } from '@/lib/api/v1/transport';
 import { useI18n } from '@/i18n/provider';
 
 type LogicLink = { name: string; x: number; y: number };
@@ -22,6 +22,7 @@ type BlockGroup = { name: string; displayName: string | null; count: number; pla
 type SchematicMove = { from_x: number; from_y: number; to_x: number; to_y: number };
 type SchematicAddition = { x: number; y: number; block: string; rotation: number };
 type EditSnapshot = { deleted: string[]; moves: SchematicMove[]; additions: SchematicAddition[]; logicEdits: Record<string, string>; rotation: number; mirrorX: boolean };
+type Dimensions = { width: number; height: number };
 
 function newIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -70,11 +71,14 @@ function suggestedFilename(version: ResourceWorkbenchV2Version): string {
   return `${stem}-edited.msch`;
 }
 
-function schematicDimensions(workbench: ResourceWorkbenchV2Response): { width: number; height: number } | null {
-  const width = workbench.resource.metadata.schematic?.width;
-  const height = workbench.resource.metadata.schematic?.height;
-  return Number.isInteger(width) && Number.isInteger(height) && width! > 0 && height! > 0 && width! <= 128 && height! <= 128
-    ? { width: width!, height: height! }
+function readDimensions(value: unknown): Dimensions | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const detail = value as Record<string, unknown>;
+  const width = detail.width;
+  const height = detail.height;
+  return Number.isInteger(width) && Number.isInteger(height) && (width as number) > 0 && (height as number) > 0
+    && (width as number) <= 128 && (height as number) <= 128
+    ? { width: width as number, height: height as number }
     : null;
 }
 
@@ -91,6 +95,7 @@ export default function SchematicLightEditor({
 }) {
   const { t } = useI18n();
   const [groups, setGroups] = useState<BlockGroup[]>([]);
+  const [dimensions, setDimensions] = useState<Dimensions | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [complete, setComplete] = useState(false);
@@ -112,17 +117,27 @@ export default function SchematicLightEditor({
   const [downloaded, setDownloaded] = useState(false);
   const [savingVersion, setSavingVersion] = useState(false);
   const [versionSaved, setVersionSaved] = useState(false);
+  const saveAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
   const versionPublicId = version?.public_id;
   const versionStatus = version?.status;
 
   useEffect(() => {
-    setGroups([]); setSelected(new Set()); setDeleted(new Set()); setMoves([]); setAdditions([]); setLogicEdits({}); setUndoStack([]);
+    setGroups([]); setDimensions(null); setSelected(new Set()); setDeleted(new Set()); setMoves([]); setAdditions([]); setLogicEdits({}); setUndoStack([]);
     setTool('select'); setMoveSource(null); setPaletteBlock(''); setRotation(0); setMirrorX(false);
-    setAnalysis(null); setDownloaded(false); setVersionSaved(false); setActionError(''); setLoadError('');
+    setAnalysis(null); setDownloaded(false); setVersionSaved(false); setActionError(''); setLoadError(''); saveAttempt.current = null;
     if (!canEdit || !versionPublicId || versionStatus !== 'published') { setComplete(false); setTotal(0); return; }
     let active = true;
     setLoading(true);
     void (async () => {
+      const query = new URLSearchParams({ version_public_id: versionPublicId });
+      const detail = await fetchV1<{ version_public_id: string | null; schematic?: Record<string, unknown> | null }>(
+        `/resources/schematics/${encodeURIComponent(workbench.resource.public_id)}?${query.toString()}`,
+      );
+      const selectedDimensions = readDimensions(detail.schematic);
+      if (!selectedDimensions || detail.version_public_id !== versionPublicId) {
+        throw new Error(t('resourceWorkbenchV2.schematicEditor.loadFailed'));
+      }
+
       const blocks: ResourceV2SchematicBlock[] = [];
       let cursor: string | undefined;
       let pages = 0;
@@ -133,9 +148,11 @@ export default function SchematicLightEditor({
         pages += 1;
       } while (cursor && pages < 10);
       const normalized = makeGroups(blocks);
+      const placeable = normalized.groups.filter((group) => group.placements.length > 0 && group.placements.every((placement) => placement.size === 1));
       if (!active) return;
+      setDimensions(selectedDimensions);
       setGroups(normalized.groups);
-      setPaletteBlock(normalized.groups[0]?.name || '');
+      setPaletteBlock(placeable[0]?.name || '');
       setComplete(normalized.complete && !cursor);
       setTotal(normalized.total);
     })().catch((caught) => {
@@ -146,7 +163,7 @@ export default function SchematicLightEditor({
 
   const selectedCount = selected.size;
   const deletedCount = deleted.size;
-  const dimensions = schematicDimensions(workbench);
+  const placeableGroups = useMemo(() => groups.filter((group) => group.placements.length > 0 && group.placements.every((placement) => placement.size === 1)), [groups]);
   const hasPlacementEdits = moves.length > 0 || additions.length > 0;
   const logicConfigEdits = useMemo(() => groups.flatMap((group) => group.placements.flatMap((placement) => {
     const source = logicEdits[placement.key];
@@ -221,7 +238,7 @@ export default function SchematicLightEditor({
       }
       return;
     }
-    if (tool === 'place' && !occupant && paletteBlock) {
+    if (tool === 'place' && !occupant && paletteBlock && placeableGroups.some((group) => group.name === paletteBlock)) {
       rememberEdit();
       setAdditions((current) => [...current, { x, y, block: paletteBlock, rotation: 0 }]);
       setAnalysis(null); setDownloaded(false);
@@ -284,14 +301,19 @@ export default function SchematicLightEditor({
     if (!version || !canExport || savingVersion) return;
     setSavingVersion(true); setActionError(''); setVersionSaved(false);
     try {
-      const blob = await exportResourceWorkbenchSchematicV2(workbench.resource.public_id, version.public_id, {
+      const transform = {
         rotation_quarters: rotation,
         mirror_x: mirrorX,
         delete_positions: [...deleted].map((key) => { const [x, y] = key.split(':').map(Number); return { x, y }; }),
         move_positions: moves,
         add_blocks: additions,
         logic_configs: logicConfigEdits,
-      });
+      };
+      const fingerprint = JSON.stringify({ source: version.public_id, transform });
+      if (!saveAttempt.current || saveAttempt.current.fingerprint !== fingerprint) {
+        saveAttempt.current = { fingerprint, key: newIdempotencyKey() };
+      }
+      const blob = await exportResourceWorkbenchSchematicV2(workbench.resource.public_id, version.public_id, transform);
       const file = new File([blob], suggestedFilename(version), { type: 'application/octet-stream' });
       const versionMode = version.version_mode === 'semver' ? 'semver' : 'compatibility';
       const releaseChannel = ['release', 'beta', 'alpha', 'snapshot'].includes(version.release_channel)
@@ -300,9 +322,12 @@ export default function SchematicLightEditor({
         version: version.version, version_mode: versionMode, release_channel: releaseChannel,
         ...(version.game_version_min ? { game_version_min: version.game_version_min } : {}),
         ...(version.game_version_max ? { game_version_max: version.game_version_max } : {}),
-      }, newIdempotencyKey());
-      await uploadResourceDirectDraft(draft.version_public_id, file);
+      }, saveAttempt.current.key);
+      if (draft.draft_status !== 'completed') {
+        await uploadResourceDirectDraft(draft.version_public_id, file);
+      }
       await onSaved?.(draft.version_public_id);
+      saveAttempt.current = null;
       setVersionSaved(true);
     } catch (caught) {
       setActionError(caught instanceof V1ApiError && caught.message ? caught.message : t('resourceWorkbenchV2.schematicEditor.saveVersionFailed'));
@@ -321,14 +346,14 @@ export default function SchematicLightEditor({
     {complete && dimensions && <section className="space-y-3 rounded-lg border border-[var(--border)] p-3" aria-label={t('resourceWorkbenchV2.schematicEditor.canvas')}>
       <div className="flex flex-wrap items-center gap-2">
         {(['select', 'move', 'place'] as const).map((mode) => <button key={mode} type="button" aria-pressed={tool === mode}
-          disabled={busy} onClick={() => { setTool(mode); setMoveSource(null); }}
+          disabled={busy || (mode === 'place' && placeableGroups.length === 0)} onClick={() => { setTool(mode); setMoveSource(null); }}
           className={`min-h-10 rounded-lg border px-3 text-sm ${tool === mode ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)]'}`}>
           {t(`resourceWorkbenchV2.schematicEditor.${mode}Tool`)}
         </button>)}
-        {tool === 'place' && <label className="flex min-h-10 items-center gap-2 text-sm text-[var(--text-secondary)]">
+        {tool === 'place' && placeableGroups.length > 0 && <label className="flex min-h-10 items-center gap-2 text-sm text-[var(--text-secondary)]">
           {t('resourceWorkbenchV2.schematicEditor.blockPalette')}
           <select aria-label={t('resourceWorkbenchV2.schematicEditor.blockPalette')} value={paletteBlock} onChange={(event) => setPaletteBlock(event.target.value)} className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-2 text-[var(--text)]">
-            {groups.map((group) => <option key={group.name} value={group.name}>{group.displayName || group.name}</option>)}
+            {placeableGroups.map((group) => <option key={group.name} value={group.name}>{group.displayName || group.name}</option>)}
           </select>
         </label>}
       </div>
