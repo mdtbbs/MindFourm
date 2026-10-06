@@ -152,7 +152,7 @@ export class ResourceDiscoveryRelatedPaginationDto {
 
 export class ResourceDiscoveryItemDto {
   @ApiProperty({ type: ResourceDiscoveryResourceCardDto }) resource!: ResourceDiscoveryResourceCardDto;
-  @ApiProperty({ description: 'Ranking score, useful for ordering only; not a quality guarantee.' }) score!: number;
+  @ApiProperty({ description: 'Ranking score rounded to three decimals. Compare only within the same algorithm identifier; this is not a quality guarantee.' }) score!: number;
   @ApiProperty({ type: [String], example: ['same_kind', 'same_category', 'shared_tags:logic,power', 'kind:schematic', 'tags:logic,power', 'recent_downloads', 'editor_pick', 'top_downloaded'], description: 'Stable reason codes: editor_pick, trending, recent_views, recent_downloads, quality_signals, top_rated, newest, top_downloaded, same_kind, same_category, shared_tags:<tags>, kind:<kind>, category, tags:<tags>, featured, popular_now.' }) reasons!: string[];
   @ApiPropertyOptional({ description: 'Views during the last seven days; present for rising results.' }) recent_views?: number;
   @ApiPropertyOptional({ description: 'Completed downloads during the last seven days; present for rising results.' }) recent_downloads?: number;
@@ -163,12 +163,32 @@ export class ResourceDiscoverySectionDto {
   @ApiProperty({ type: ResourceDiscoveryHomePaginationDto }) pagination!: ResourceDiscoveryHomePaginationDto;
 }
 
+export class ResourceDiscoveryFeaturedSectionDto extends ResourceDiscoverySectionDto {
+  @ApiProperty({ enum: ['resource-featured-v1'], example: 'resource-featured-v1', description: 'Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources.' }) algorithm!: string;
+}
+
+export class ResourceDiscoveryTrendingSectionDto extends ResourceDiscoverySectionDto {
+  @ApiProperty({ enum: ['resource-trending-v1'], example: 'resource-trending-v1', description: 'Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources.' }) algorithm!: string;
+}
+
+export class ResourceDiscoveryRisingSectionDto extends ResourceDiscoverySectionDto {
+  @ApiProperty({ enum: ['resource-rising-v1'], example: 'resource-rising-v1', description: 'Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources.' }) algorithm!: string;
+}
+
+export class ResourceDiscoveryTopRatedSectionDto extends ResourceDiscoverySectionDto {
+  @ApiProperty({ enum: ['resource-bayesian-rating-v1'], example: 'resource-bayesian-rating-v1', description: 'Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources.' }) algorithm!: string;
+}
+
+export class ResourceDiscoveryNewestSectionDto extends ResourceDiscoverySectionDto {
+  @ApiProperty({ enum: ['resource-newest-v1'], example: 'resource-newest-v1', description: 'Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources.' }) algorithm!: string;
+}
+
 export class ResourceDiscoveryHomeSectionsDto {
-  @ApiProperty({ type: ResourceDiscoverySectionDto, description: 'Operator-curated public resources.' }) featured!: ResourceDiscoverySectionDto;
-  @ApiProperty({ type: ResourceDiscoverySectionDto, description: 'Resources ranked by public engagement, rating, and recency.' }) trending!: ResourceDiscoverySectionDto;
-  @ApiProperty({ type: ResourceDiscoverySectionDto, description: 'Resources ranked using the last seven days of public view and completed-download counts.' }) rising!: ResourceDiscoverySectionDto;
-  @ApiProperty({ type: ResourceDiscoverySectionDto, description: 'Resources ranked by Bayesian-smoothed rating.' }) top_rated!: ResourceDiscoverySectionDto;
-  @ApiProperty({ type: ResourceDiscoverySectionDto, description: 'Newest currently visible resources.' }) newest!: ResourceDiscoverySectionDto;
+  @ApiProperty({ type: ResourceDiscoveryFeaturedSectionDto, description: 'Featured resources ranked by popularity.' }) featured!: ResourceDiscoveryFeaturedSectionDto;
+  @ApiProperty({ type: ResourceDiscoveryTrendingSectionDto, description: 'Resources ranked by quality signals plus an update-recency bonus.' }) trending!: ResourceDiscoveryTrendingSectionDto;
+  @ApiProperty({ type: ResourceDiscoveryRisingSectionDto, description: 'Resources ranked by quality plus seven-day view and completed-download signals.' }) rising!: ResourceDiscoveryRisingSectionDto;
+  @ApiProperty({ type: ResourceDiscoveryTopRatedSectionDto, description: 'Rated resources ranked by Bayesian-smoothed rating.' }) top_rated!: ResourceDiscoveryTopRatedSectionDto;
+  @ApiProperty({ type: ResourceDiscoveryNewestSectionDto, description: 'Newest currently visible resources.' }) newest!: ResourceDiscoveryNewestSectionDto;
 }
 
 export class ResourceDiscoveryHomeDto {
@@ -177,7 +197,7 @@ export class ResourceDiscoveryHomeDto {
 }
 
 export class ResourceDiscoveryRecommendationsDto {
-  @ApiProperty({ example: 'resource-taste-v1' }) algorithm!: string;
+  @ApiProperty({ enum: ['resource-taste-v1', 'resource-trending-v1'], example: 'resource-taste-v1', description: 'Personalized taste ranking or the non-personalized trending fallback.' }) algorithm!: string;
   @ApiProperty({ description: 'True only when currently visible in-site likes/favorites produced a profile.' }) personalized!: boolean;
   @ApiProperty({ description: 'Explains whether a personal profile was used and its data boundary.' }) privacy!: string;
   @ApiProperty({ type: [ResourceDiscoveryItemDto] }) items!: ResourceDiscoveryItemDto[];
@@ -185,13 +205,13 @@ export class ResourceDiscoveryRecommendationsDto {
 }
 
 export class ResourceDiscoveryRelatedDto {
-  @ApiProperty({ example: 'resource-related-v1' }) algorithm!: string;
+  @ApiProperty({ enum: ['resource-related-v1'], example: 'resource-related-v1' }) algorithm!: string;
   @ApiProperty({ type: [ResourceDiscoveryItemDto] }) items!: ResourceDiscoveryItemDto[];
   @ApiProperty({ type: ResourceDiscoveryRelatedPaginationDto }) pagination!: ResourceDiscoveryRelatedPaginationDto;
 }
 
 export class ResourceDiscoveryHotDto {
-  @ApiProperty({ example: 'resource-download-count-v1' }) algorithm!: string;
+  @ApiProperty({ enum: ['resource-download-count-v1'], example: 'resource-download-count-v1' }) algorithm!: string;
   @ApiProperty({ type: [ResourceDiscoveryItemDto] }) items!: ResourceDiscoveryItemDto[];
   @ApiProperty({ type: ResourceDiscoveryForYouPaginationDto, description: 'Pagination over the bounded 300-resource download ranking window.' }) pagination!: ResourceDiscoveryForYouPaginationDto;
 }

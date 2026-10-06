@@ -4,6 +4,14 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.2.0
+
+本次为发现榜单补充可机器读取的算法版本标识，并公布各算法的评分口径。既有路由、筛选、排序和隐私行为不变；新响应字段是兼容性新增，旧客户端可忽略未知字段。算法版本或分数权重改变时会更新算法 ID，并同步文档与 OpenAPI。
+
+### Added
+
+- `GET /api/v1/resources/discovery/home` 的每个 section 新增 `algorithm` 字段：`resource-featured-v1`、`resource-trending-v1`、`resource-rising-v1`、`resource-bayesian-rating-v1`、`resource-newest-v1`。`hot`、`for-you` 和 `related` 继续返回对应算法 ID；OpenAPI 为这些字段声明了枚举值。评分公式、信号窗口、候选上限、reason 和隐私边界见[资源中心 API V1 的资源发现与推荐算法说明](./resources-v1-contract.md)。
+
 ## Public API 1.1.0
 
 本次契约修订在初始 `1.0.0` 基础上增加了公开操作和可选查询参数。所有既有公开操作、必填参数和字段语义均保留。OpenAPI `info.version` 使用语义版本；兼容新增提升次版本号，破坏性契约变更需要新的路径主版本和迁移说明。API 基础路径仍是 `/api/v1`。
@@ -30,7 +38,7 @@
 
 ## Public V1 当前能力摘要
 
-以下内容概览当前 V1 契约，不是逐次 API 修订清单。初始 OpenAPI 契约版本为 `1.0.0`；当前契约版本为 `1.1.0`。论坛应用版本与 API 契约版本相互独立。
+以下内容概览当前 V1 契约，不是逐次 API 修订清单。初始 OpenAPI 契约版本为 `1.0.0`；当前契约版本为 `1.2.0`。论坛应用版本与 API 契约版本相互独立。
 
 #### Added
 

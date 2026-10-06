@@ -15123,7 +15123,7 @@
           "resource.read"
         ],
         "summary": "读取资源发现榜单",
-        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。返回精选、趋势、近 7 日上升、评分榜与最新榜，排除删除、未审核、私有和停用主题资源。每个榜单给出理由和限定候选窗口内的分页信息；候选窗口达到上限时可能仍有未扫描结果。",
+        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。返回精选、趋势、近 7 日上升、评分榜与最新榜；每个榜单返回稳定 algorithm 版本标识、score 与 reasons。排序公式与隐私边界见 /api/v1/docs/resources。排除删除、未审核、私有和停用主题资源；候选窗口达到上限时可能仍有未扫描结果。",
         "parameters": [
           {
             "name": "kind",
@@ -15228,7 +15228,7 @@
           "resource.read"
         ],
         "summary": "读取下载量最高的公开资源",
-        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。排除删除、未审核、私有和停用主题资源；返回理由、下载计分和最多 300 个候选的分页状态。",
+        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。使用 resource-download-count-v1 按累计下载量排名。排除删除、未审核、私有和停用主题资源；返回理由、下载计分和最多 300 个候选的分页状态。完整榜单定义见 /api/v1/docs/resources。",
         "parameters": [
           {
             "name": "limit",
@@ -15317,7 +15317,7 @@
           "resource.read"
         ],
         "summary": "读取猜你喜欢资源",
-        "description": "匿名访问可用。匿名或无可见偏好时返回非个性化趋势榜；登录且携带有效 Bearer 时需要 resource.read。排除删除、未审核、私有和停用主题资源。个性化仅使用当前公开资源中的站内点赞/收藏，并排除这些种子本身。响应包含 reasons、score 和候选窗口分页，不使用外部浏览行为。",
+        "description": "匿名访问可用。匿名或无可见偏好时返回 resource-trending-v1；存在可见偏好时返回 resource-taste-v1。登录且携带有效 Bearer 时需要 resource.read。排除删除、未审核、私有和停用主题资源。个性化只使用当前公开资源的站内点赞/收藏，并排除种子本身；响应包含算法版本、reasons、score 和候选窗口分页，不使用外部浏览行为。公式见 /api/v1/docs/resources。",
         "parameters": [
           {
             "name": "kind",
@@ -15421,7 +15421,7 @@
           "resource.read"
         ],
         "summary": "读取相关推荐资源",
-        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。源资源本身必须当前公开，否则返回 404，避免泄露私密资源状态。返回当前公开、审核通过且未关联停用主题的候选资源、解释理由与限定候选窗口分页。",
+        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。使用 resource-related-v1 按资源类别、主题、标签和公开质量信号排序。源资源本身必须当前公开，否则返回 404，避免泄露私密资源状态。返回当前公开、审核通过且未关联停用主题的候选资源、解释理由与限定候选窗口分页。公式见 /api/v1/docs/resources。",
         "parameters": [
           {
             "name": "id",
@@ -24906,7 +24906,7 @@
   "info": {
     "title": "MDTBBS Public Client API",
     "description": "Stable V1 contract for MindAuth public clients. Use /api/v1/capabilities for feature discovery. Server-side integrations use a separate authorization boundary and are not part of this specification. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "contact": {}
   },
   "tags": [],
@@ -29294,7 +29294,7 @@
           },
           "score": {
             "type": "number",
-            "description": "Ranking score, useful for ordering only; not a quality guarantee."
+            "description": "Ranking score rounded to three decimals. Compare only within the same algorithm identifier; this is not a quality guarantee."
           },
           "reasons": {
             "example": [
@@ -29366,7 +29366,7 @@
           "candidate_window_truncated"
         ]
       },
-      "ResourceDiscoverySectionDto": {
+      "ResourceDiscoveryFeaturedSectionDto": {
         "type": "object",
         "properties": {
           "items": {
@@ -29377,45 +29377,162 @@
           },
           "pagination": {
             "$ref": "#/components/schemas/ResourceDiscoveryHomePaginationDto"
+          },
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "resource-featured-v1"
+            ],
+            "example": "resource-featured-v1",
+            "description": "Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources."
           }
         },
         "required": [
           "items",
-          "pagination"
+          "pagination",
+          "algorithm"
+        ]
+      },
+      "ResourceDiscoveryTrendingSectionDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHomePaginationDto"
+          },
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "resource-trending-v1"
+            ],
+            "example": "resource-trending-v1",
+            "description": "Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources."
+          }
+        },
+        "required": [
+          "items",
+          "pagination",
+          "algorithm"
+        ]
+      },
+      "ResourceDiscoveryRisingSectionDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHomePaginationDto"
+          },
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "resource-rising-v1"
+            ],
+            "example": "resource-rising-v1",
+            "description": "Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources."
+          }
+        },
+        "required": [
+          "items",
+          "pagination",
+          "algorithm"
+        ]
+      },
+      "ResourceDiscoveryTopRatedSectionDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHomePaginationDto"
+          },
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "resource-bayesian-rating-v1"
+            ],
+            "example": "resource-bayesian-rating-v1",
+            "description": "Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources."
+          }
+        },
+        "required": [
+          "items",
+          "pagination",
+          "algorithm"
+        ]
+      },
+      "ResourceDiscoveryNewestSectionDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHomePaginationDto"
+          },
+          "algorithm": {
+            "type": "string",
+            "enum": [
+              "resource-newest-v1"
+            ],
+            "example": "resource-newest-v1",
+            "description": "Versioned ranking algorithm. Formula and input definitions are published in /api/v1/docs/resources."
+          }
+        },
+        "required": [
+          "items",
+          "pagination",
+          "algorithm"
         ]
       },
       "ResourceDiscoveryHomeSectionsDto": {
         "type": "object",
         "properties": {
           "featured": {
-            "description": "Operator-curated public resources.",
+            "description": "Featured resources ranked by popularity.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+                "$ref": "#/components/schemas/ResourceDiscoveryFeaturedSectionDto"
               }
             ]
           },
           "trending": {
-            "description": "Resources ranked by public engagement, rating, and recency.",
+            "description": "Resources ranked by quality signals plus an update-recency bonus.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+                "$ref": "#/components/schemas/ResourceDiscoveryTrendingSectionDto"
               }
             ]
           },
           "rising": {
-            "description": "Resources ranked using the last seven days of public view and completed-download counts.",
+            "description": "Resources ranked by quality plus seven-day view and completed-download signals.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+                "$ref": "#/components/schemas/ResourceDiscoveryRisingSectionDto"
               }
             ]
           },
           "top_rated": {
-            "description": "Resources ranked by Bayesian-smoothed rating.",
+            "description": "Rated resources ranked by Bayesian-smoothed rating.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+                "$ref": "#/components/schemas/ResourceDiscoveryTopRatedSectionDto"
               }
             ]
           },
@@ -29423,7 +29540,7 @@
             "description": "Newest currently visible resources.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+                "$ref": "#/components/schemas/ResourceDiscoveryNewestSectionDto"
               }
             ]
           }
@@ -29495,7 +29612,12 @@
         "properties": {
           "algorithm": {
             "type": "string",
-            "example": "resource-taste-v1"
+            "enum": [
+              "resource-taste-v1",
+              "resource-trending-v1"
+            ],
+            "example": "resource-taste-v1",
+            "description": "Personalized taste ranking or the non-personalized trending fallback."
           },
           "personalized": {
             "type": "boolean",
@@ -29566,6 +29688,9 @@
         "properties": {
           "algorithm": {
             "type": "string",
+            "enum": [
+              "resource-related-v1"
+            ],
             "example": "resource-related-v1"
           },
           "items": {
@@ -29662,6 +29787,9 @@
         "properties": {
           "algorithm": {
             "type": "string",
+            "enum": [
+              "resource-download-count-v1"
+            ],
             "example": "resource-download-count-v1"
           },
           "items": {

@@ -190,6 +190,17 @@ describe('developer docs routes', () => {
     expect(response.body).toContain(title);
   });
 
+  it('serves the public resource ranking algorithms in the online API guide', () => {
+    const response = requestDocumentationRoute('/api/v1/docs/resources');
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('资源发现与推荐');
+    expect(response.body).toContain('resource-bayesian-rating-v1');
+    expect(response.body).toContain('resource-taste-v1');
+    expect(response.body).toContain('completed_downloads_7d');
+    expect(response.body).toContain('匿名调用不建立个人画像');
+  });
+
   it.each(['/api/docs/v1', '/api/docs/v1/'])(
     'redirects the former Swagger UI entry point %s to the Chinese API reference',
     (route) => {

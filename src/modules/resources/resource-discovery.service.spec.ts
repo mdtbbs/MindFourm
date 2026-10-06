@@ -80,6 +80,11 @@ describe('ResourceDiscoveryService', () => {
     expect(candidates.andWhere).toHaveBeenCalledWith('(resourceCategory.id IS NULL OR resourceCategory.is_active = 1)');
     expect(candidates.andWhere).toHaveBeenCalledWith('resource.public_id IS NOT NULL');
     expect(candidates.take).toHaveBeenCalledWith(400);
+    expect(result.sections.featured.algorithm).toBe('resource-featured-v1');
+    expect(result.sections.trending.algorithm).toBe('resource-trending-v1');
+    expect(result.sections.rising.algorithm).toBe('resource-rising-v1');
+    expect(result.sections.top_rated.algorithm).toBe('resource-bayesian-rating-v1');
+    expect(result.sections.newest.algorithm).toBe('resource-newest-v1');
     expect(result.sections.featured.items[0].resource.public_id).toBe('featured');
     expect(result.sections.featured.items[0].reasons).toEqual(['editor_pick']);
     expect(result.sections.rising.pagination).toEqual(expect.objectContaining({ page: 1, limit: 1, items_in_window: 2, candidate_window_size: 400 }));

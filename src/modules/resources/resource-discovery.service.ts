@@ -56,24 +56,33 @@ export class ResourceDiscoveryService {
     const newest = [...candidates]
       .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime() || left.id - right.id);
 
-    const section = (items: Resource[], score: (resource: Resource) => number, reason: (resource: Resource) => string[], signal = false) => this.pageItems(
-      items.map((resource) => ({
-        resource: toPublicResource(resource, true),
-        score: Number(score(resource).toFixed(3)),
-        reasons: reason(resource),
-        ...(signal ? {
-          recent_views: recentSignals.get(resource.id)?.views || 0,
-          recent_downloads: recentSignals.get(resource.id)?.downloads || 0,
-        } : {}),
-      })), page, limit, HOME_WINDOW, candidates.length >= HOME_WINDOW,
-    );
+    const section = (
+      algorithm: string,
+      items: Resource[],
+      score: (resource: Resource) => number,
+      reason: (resource: Resource) => string[],
+      signal = false,
+    ) => ({
+      algorithm,
+      ...this.pageItems(
+        items.map((resource) => ({
+          resource: toPublicResource(resource, true),
+          score: Number(score(resource).toFixed(3)),
+          reasons: reason(resource),
+          ...(signal ? {
+            recent_views: recentSignals.get(resource.id)?.views || 0,
+            recent_downloads: recentSignals.get(resource.id)?.downloads || 0,
+          } : {}),
+        })), page, limit, HOME_WINDOW, candidates.length >= HOME_WINDOW,
+      ),
+    });
 
     return {
       generated_at: new Date().toISOString(),
       sections: {
-        featured: section(featured, (resource) => this.popularity(resource), () => ['editor_pick']),
-        trending: section(trending, (resource) => this.trendingScore(resource), () => ['trending']),
-        rising: section(rising, (resource) => this.risingScore(resource, recentSignals.get(resource.id)), (resource) => {
+        featured: section('resource-featured-v1', featured, (resource) => this.popularity(resource), () => ['editor_pick']),
+        trending: section('resource-trending-v1', trending, (resource) => this.trendingScore(resource), () => ['trending']),
+        rising: section('resource-rising-v1', rising, (resource) => this.risingScore(resource, recentSignals.get(resource.id)), (resource) => {
           const signals = recentSignals.get(resource.id);
           const reasons = [
             ...(signals?.views ? ['recent_views'] : []),
@@ -81,8 +90,8 @@ export class ResourceDiscoveryService {
           ];
           return reasons.length ? reasons : ['quality_signals'];
         }, true),
-        top_rated: section(topRated, (resource) => this.bayesianRating(resource), () => ['top_rated']),
-        newest: section(newest, (resource) => 1 / (1 + Math.max(0, (Date.now() - new Date(resource.created_at).getTime()) / 86_400_000)), () => ['newest']),
+        top_rated: section('resource-bayesian-rating-v1', topRated, (resource) => this.bayesianRating(resource), () => ['top_rated']),
+        newest: section('resource-newest-v1', newest, (resource) => 1 / (1 + Math.max(0, (Date.now() - new Date(resource.created_at).getTime()) / 86_400_000)), () => ['newest']),
       },
     };
   }

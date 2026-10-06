@@ -50,6 +50,12 @@ The established `GET /resources/{id}` detail and `GET /resources/{id}/manifest` 
 
 Each `versions[]` item uses public UUIDs and contains `version`, `display_version`, `version_mode`, `revision`, `release_channel`, `recommended`, game-version bounds, publication state, `preview_url`, `compatibility[]`, `dependencies[]`, and `files[]`. `preview_url` is either a version preview route or the resource preview fallback; storage keys are never returned. The version preview route returns raw `image/png` bytes, uses the version's validated preview key when present, and otherwise tries the current resource preview. Files include SHA-256 only when the stored hash algorithm is SHA-256. `download_url` is the stable V1 download route; `downloadable` and `installable` reflect current file availability and integrity checks.
 
+## Public resource discovery and recommendation algorithms
+
+The third-party Public V1 endpoints are `GET /api/v1/resources/discovery/home`, `/hot`, `/for-you`, and `/related/{id}`. They expose public recommendation results, stable algorithm IDs, `score`, reason codes, and bounded pagination. The resource guide at [`docs/api/resources-v1-contract.md`](api/resources-v1-contract.md) is also served online at `/api/v1/docs/resources`; it documents the formulas, inputs, windows, and privacy boundary. The matching machine-readable parameters and response schemas are in `/api/openapi/v1.json`.
+
+All endpoints filter to currently public, approved/published resources before ranking. The personalized endpoint uses only currently visible in-site likes and favorites as seeds; anonymous and empty-profile calls use the non-personalized trending fallback. Algorithm IDs version the score semantics so clients can compare `score` only within one algorithm. Do not treat scores as a cross-algorithm quality rating.
+
 ## Mod reads
 
 | Method | Path | Purpose |
@@ -111,7 +117,7 @@ Block positions may be empty if the parser did not preserve coordinates. The API
 | GET | `/resources/maps/{id}/relations` | Public related resources |
 | GET | `/resources/maps/{id}/diff` | Stored version diff or an unavailable result |
 
-Map difficulty and wave strength are estimates. Missing rules, resource entries, spawns, waves, or analysis are represented as `null` or empty lists rather than inferred. The map editor only writes the terrain/rules/waves subset that the official renderer can round-trip safely; it does not provide block, team, resource, liquid, or marker painting.
+Map difficulty and wave strength are estimates. Missing rules, resource entries, spawns, waves, or analysis are represented as `null` or empty lists rather than inferred. The map editor can safely add, delete, and move vanilla Core, Spawn point, and building/object entries; Core and building team changes are supported. It validates content, legal teams, map bounds, and each multiblock footprint. Unknown or unsafe objects/configuration fail closed. Terrain, overlay, Rules, waves, and supported map objects are written through the official renderer and parser round-trip; resource/liquid/marker painting is outside the current editing surface.
 
 ## Review timeline and annotations
 
@@ -203,7 +209,7 @@ Search requires a non-empty `q` of at most 255 characters. `type` is optional an
 
 ## Capabilities and editor boundaries
 
-`GET /api/v1/capabilities` includes `resource_mod_workbench`, `resource_schematic_workbench`, `resource_map_workbench`, `resource_versions_v2`, `resource_relations_v1`, `mod_content_index`, `mod_dependency_resolver`, `mod_compatibility_reports`, `schematic_deep_analysis`, `schematic_light_editor`, `map_deep_analysis`, and `map_wave_viewer`. `schematic_light_editor`, `schematic_full_editor`, `map_editor`, and `wave_editor` are runtime readiness flags: they are true only when the renderer health protocol, pinned Mindustry v160.2 artifact digest, operation allowlist, RES health, and resource upload setting all pass. Clients must hide the corresponding save controls when a flag is false.
+`GET /api/v1/capabilities` includes `resource_mod_workbench`, `resource_schematic_workbench`, `resource_map_workbench`, `resource_versions_v2`, `resource_relations_v1`, `mod_content_index`, `mod_dependency_resolver`, `mod_compatibility_reports`, `schematic_deep_analysis`, `schematic_light_editor`, `map_deep_analysis`, and `map_wave_viewer`. `schematic_light_editor`, `schematic_full_editor`, `map_editor`, and `wave_editor` are runtime readiness flags: they are true only when the renderer health protocol, pinned Mindustry v160.5 artifact digest, operation allowlist, RES health, and resource upload setting all pass. Clients must hide the corresponding save controls when a flag is false.
 
 The owner-aware map workbench includes a wave viewer sourced from the selected version's structured `analysis.data.waves` rows, with renderer wave groups as a fallback. It displays available enemy counts, estimated health, air ratio, boss counts, strength, and heuristic spike markers; null analysis values stay unavailable. The schematic preview supports click inspection and name-classified logistics, liquid, power, and input/output marker filters. The renderer emits bounded terrain, resource, ore, core, enemy-spawn, building, and liquid tile layers, and marks the layer payload when coordinate arrays are truncated. The `player_area` layer is currently empty because map files do not provide a defined player-area boundary. The editor writes only the safe subset documented in [`schematic-editor.md`](schematic-editor.md) and [`map-editor.md`](map-editor.md).
 
