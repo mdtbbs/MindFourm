@@ -1567,7 +1567,32 @@ export const multiplayerApi = {
   invite: (sessionId: string, targetUserId: number) => request<{ id: string; status: string }>(
     '/api/v1/multiplayer/invites', { method: 'POST', body: JSON.stringify({ session_id: sessionId, target_user_id: targetUserId }) },
   ),
+  listInvites: () => request<Array<{ invite_id: string; session_id: string; sender_user_id: number; status: string; expires_at: string; session: { game_id: string; game_version?: string | null; activity_name?: string | null } | null }>>('/api/v1/multiplayer/invites'),
+  acceptInvite: (inviteId: string) => request<{ invite_id: string; status: string; join_intent: { intent_id: string; expires_in: number } }>(
+    `/api/v1/multiplayer/invites/${encodeURIComponent(inviteId)}/accept`, { method: 'POST' },
+  ),
+  declineInvite: (inviteId: string) => request<{ status: string }>(
+    `/api/v1/multiplayer/invites/${encodeURIComponent(inviteId)}/decline`, { method: 'POST' },
+  ),
+  listJoinRequests: () => request<{ data: IncomingJoinRequest[]; total: number }>('/api/v1/multiplayer/join-requests'),
+  approveJoinRequest: (requestId: string) => request<{ status: string; join_intent: { intent_id: string; expires_in: number } }>(
+    `/api/v1/multiplayer/join-requests/${encodeURIComponent(requestId)}/approve`, { method: 'POST' },
+  ),
+  rejectJoinRequest: (requestId: string) => request<{ status: string }>(
+    `/api/v1/multiplayer/join-requests/${encodeURIComponent(requestId)}/reject`, { method: 'POST' },
+  ),
+  consumeJoinIntent: (intentId: string) => request<unknown>(
+    `/api/v1/multiplayer/join-intents/${encodeURIComponent(intentId)}/consume`, { method: 'POST', body: JSON.stringify({}) },
+  ),
 };
+
+export interface IncomingJoinRequest {
+  id: string;
+  session_id: string;
+  expires_at: string;
+  requester: FriendSearchResult | null;
+  session: { id: string; game_id: string; game_version: string | null; activity_name: string | null; status: string; expires_at: string } | null;
+}
 
 export interface FriendRequestItem {
   id: number;

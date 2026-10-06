@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { Resource } from '@entities/resource.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceDirectUploadDraft } from '@entities/resource-direct-upload-draft.entity';
+import { ResourceDirectUploadSession } from '@entities/resource-direct-upload-session.entity';
 import { ResourceFileMeta, ResourcesService } from './resources.service';
 import { ResourceDuplicateService } from './resource-duplicate.service';
 import { ResourceStorageService } from './resource-storage.service';
@@ -22,6 +24,14 @@ import { persistRendererAnalysis } from './v2/resource-version-analysis.persiste
 import { diffStructuredVersion, type StructuredVersionSnapshot } from './analyzers/resource-version-diff';
 import { ResourcePreviewService } from './resource-preview.service';
 import { ResourceStorageClientService } from './resource-storage-client.service';
+
+export interface DirectVersionCompletionContext {
+  versionId: number;
+  draftId: string;
+  sessionId: string;
+  objectPublicId: string;
+  verifiedBytes: Buffer;
+}
 
 @Injectable()
 export class ResourceVersionService {
@@ -139,6 +149,7 @@ export class ResourceVersionService {
     file: ResourceFileMeta | undefined,
     userId: number,
     rendererDraft?: { metadata: Record<string, unknown> | null; parserVersion: string | null; previewKey: string | null },
+    directCompletion?: DirectVersionCompletionContext,
   ): Promise<any> {
     if (!dto.version?.trim()) {
       throw new BadRequestException('版本号不能为空');
@@ -180,7 +191,8 @@ export class ResourceVersionService {
       if (!/\.(?:jar|zip)$/i.test(file.file_name)) throw new BadRequestException('Mod 仅支持 .jar 或 .zip 文件');
       if ((file.storage_backend !== 'res' && !this.storage) || file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 50 MiB 安全限制');
       try {
-        modAnalysis = analyzeModArchive(await this.readUploadedFile(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
+        modAnalysis = analyzeModArchive(directCompletion?.verifiedBytes
+          || await this.readUploadedFile(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
       } catch (error) {
         if (error instanceof ModUploadValidationError) throw new BadRequestException({ code: error.code, message: error.message });
         throw error;
@@ -258,17 +270,65 @@ export class ResourceVersionService {
         }
       }
 
-      const revisionRows = await manager.query(
-        `SELECT COALESCE(MAX(revision),0) AS max_revision
-         FROM resource_versions WHERE resource_id=? AND version=?`,
-        [resource.id, dto.version.trim()],
-      ) as Array<{ max_revision: number | string | null }>;
-      const nextRevision = Number(revisionRows[0]?.max_revision || 0) + 1;
-      if (!Number.isSafeInteger(nextRevision) || nextRevision < 1) throw new ConflictException('无法分配安全的 ResourceVersion revision');
-      version.revision = nextRevision;
-
       await this.resourcesService.claimResourceVersionHash(manager, file.content_hash, resource.id);
-      const created = await manager.save(ResourceVersion, version);
+      let created: ResourceVersion;
+      if (directCompletion) {
+        const session = await manager.getRepository(ResourceDirectUploadSession).findOne({
+          where: { id: directCompletion.sessionId, user_id: userId }, lock: { mode: 'pessimistic_write' },
+        });
+        const draft = await manager.getRepository(ResourceDirectUploadDraft).findOne({
+          where: { id: directCompletion.draftId, user_id: userId, resource_version_id: directCompletion.versionId, status: 'open' },
+          lock: { mode: 'pessimistic_write' },
+        });
+        const uploadVersion = await manager.getRepository(ResourceVersion).findOne({
+          where: { id: directCompletion.versionId, resource_id: resource.id }, lock: { mode: 'pessimistic_write' },
+        });
+        if (!session || !draft || !uploadVersion || uploadVersion.status !== 'upload_pending') {
+          throw new ConflictException('版本上传草稿已完成或不存在');
+        }
+        if (session.resource_file_public_id || session.expires_at.getTime() <= Date.now()
+          || draft.expires_at.getTime() <= Date.now() || draft.status !== 'open') {
+          throw new ConflictException('版本上传会话或草稿已过期或完成');
+        }
+        if (session.filename !== file.file_name || Number(session.size_bytes) !== file.file_size
+          || session.sha256 !== file.content_hash.toLowerCase()
+          || (session.object_public_id && session.object_public_id !== directCompletion.objectPublicId)) {
+          throw new ConflictException('上传会话与已验证的 RES 对象不匹配');
+        }
+        if (uploadVersion.version !== dto.version.trim() || uploadVersion.version_mode !== versionMode
+          || uploadVersion.release_channel !== (dto.release_channel || 'release')
+          || uploadVersion.created_by_user_id !== userId) {
+          throw new ConflictException('版本草稿元数据与完成请求不匹配');
+        }
+        const draftChanges = {
+          game_version_min: version.game_version_min,
+          game_version_max: version.game_version_max,
+          status: 'pending_review',
+          published_at: null,
+          recommended: 0,
+          release_notes_markdown: version.release_notes_markdown,
+          release_notes_html: version.release_notes_html,
+          file_path: null as unknown as string,
+          file_name: file.file_name,
+          file_size: file.file_size,
+          mime_type: file.mime_type,
+          content_hash: file.content_hash,
+          content: version.content,
+          content_html: version.content_html,
+        };
+        await manager.update(ResourceVersion, uploadVersion.id, draftChanges);
+        created = Object.assign(uploadVersion, draftChanges);
+      } else {
+        const revisionRows = await manager.query(
+          `SELECT COALESCE(MAX(revision),0) AS max_revision
+           FROM resource_versions WHERE resource_id=? AND version=?`,
+          [resource.id, dto.version.trim()],
+        ) as Array<{ max_revision: number | string | null }>;
+        const nextRevision = Number(revisionRows[0]?.max_revision || 0) + 1;
+        if (!Number.isSafeInteger(nextRevision) || nextRevision < 1) throw new ConflictException('无法分配安全的 ResourceVersion revision');
+        version.revision = nextRevision;
+        created = await manager.save(ResourceVersion, version);
+      }
       const filePublicId = randomUUID();
       if (file.storage_backend === 'res') {
         if (!this.resClient || !file.provider_object_id) throw new ConflictException('资源存储对象缺失');
@@ -487,6 +547,13 @@ export class ResourceVersionService {
           resource_id: resource.id, resource_version_id: created.id, actor_user_id: userId,
           event_type: 'release_submitted', result: 'pending_review', reason: 'Resource is not currently approved or published.',
         }));
+      }
+      if (directCompletion) {
+        await manager.update(ResourceDirectUploadDraft, directCompletion.draftId, { status: 'completed', completed_at: new Date() });
+        await manager.update(ResourceDirectUploadSession, directCompletion.sessionId, {
+          resource_file_public_id: filePublicId,
+          object_public_id: directCompletion.objectPublicId,
+        });
       }
       return created;
     });

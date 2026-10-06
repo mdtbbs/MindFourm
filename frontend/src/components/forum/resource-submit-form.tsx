@@ -13,6 +13,7 @@ import { DraftSnapshot, useDraft, useDraftAutoSave } from '@/hooks/use-draft';
 import DraftRecovery from '@/components/ui/draft-recovery';
 import { useI18n } from '@/i18n/provider';
 import ContentLanguageSelect from '@/components/forum/content-language-select';
+import { createResourceDirectUploadDraft, uploadResourceDirectDraft } from '@/lib/api/v1/resources';
 
 type ResourceType = 'upload' | 'external';
 type SchematicSource = 'file' | 'paste';
@@ -221,9 +222,34 @@ export default function ResourceSubmitForm() {
         setError(t('resourceSubmit.duplicateDetected'));
         return;
       }
-      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), contentLanguage, categoryId, isPublic });
+      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), content, contentJson, contentLanguage, categoryId, isPublic, schematicCode: isSchematic && schematicSource === 'paste' ? schematicCode.trim() : null });
       if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
         submissionKey.current = { fingerprint, key: crypto.randomUUID() };
+      }
+
+      if (resourceType === 'upload' && file) {
+        const directDraft = await createResourceDirectUploadDraft({
+          title: title.trim(),
+          resource_type: 'upload',
+          resource_kind: resourceKind,
+          content_language: contentLanguage || 'unknown',
+          version: version.trim(),
+          ...(description.trim() ? { description: description.trim() } : {}),
+          ...(categoryId ? { category_id: categoryId } : {}),
+          is_public: isPublic ? 1 : 0,
+          ...(content.trim() ? { content: content.trim() } : {}),
+          ...(contentJson ? { content_json: contentJson, content_schema_version: 2 } : {}),
+        }, submissionKey.current.key);
+        if (directDraft.draft_status === 'open') {
+          await uploadResourceDirectDraft(directDraft.version_public_id, file, contentHash);
+        } else if (directDraft.version_status !== 'pending_review') {
+          throw new Error('资源上传草稿状态已变化，请重新提交');
+        }
+        if (!Number.isSafeInteger(directDraft.resource_id)) throw new Error('资源已提交，但服务端没有返回资源导航 ID');
+        draft.clear();
+        showSuccess(t('resourceSubmit.success'));
+        router.push(`/resources/${directDraft.resource_id}`);
+        return;
       }
 
       const resource = await resourceApi.upload(formData, submissionKey.current.key);

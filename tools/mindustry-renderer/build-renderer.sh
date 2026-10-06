@@ -4,6 +4,7 @@ set -euo pipefail
 renderer_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_dir="$(cd "$renderer_dir/../.." && pwd)"
 server_jar="${MINDUSTRY_SERVER_JAR:-/opt/mindfourm-renderer/mindustry-server-v160.2.jar}"
+expected_server_sha256="fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57"
 classes_dir="$renderer_dir/build/classes/java/main"
 runtime_dir="$repo_dir/renderer-runtime"
 releases_dir="$runtime_dir/releases"
@@ -14,6 +15,13 @@ fi
 
 if [[ ! -r "$server_jar" ]]; then
   printf 'Mindustry server runtime not found: %s\n' "$server_jar" >&2
+  exit 1
+fi
+
+actual_server_sha256="$(sha256sum "$server_jar" | awk '{print tolower($1)}')"
+if [[ "$actual_server_sha256" != "$expected_server_sha256" ]]; then
+  printf 'Mindustry server runtime digest mismatch: expected %s, got %s (%s)\n' \
+    "$expected_server_sha256" "$actual_server_sha256" "$server_jar" >&2
   exit 1
 fi
 
@@ -37,7 +45,10 @@ jar --create --file "$stage_dir/mindfourm-mindustry-renderer.jar" \
   -C "$classes_dir" .
 chmod 644 "$stage_dir/mindfourm-mindustry-renderer.jar"
 chmod 755 "$stage_dir"
-ln -s "$server_jar" "$stage_dir/mindustry-server.jar"
+# Copy the verified runtime into the immutable release instead of linking an
+# external path that could change after the health metadata was established.
+cp "$server_jar" "$stage_dir/mindustry-server.jar"
+chmod 644 "$stage_dir/mindustry-server.jar"
 
 release_dir="$releases_dir/$revision"
 if [[ ! -e "$release_dir" ]]; then

@@ -4,7 +4,9 @@ export const RENDERER_ANALYZER_LIMITS = {
   maxObjectKeys: 100,
   maxDepth: 6,
   maxJsonNodes: 8_000,
-  maxStringChars: 4_000,
+  // Processor source is stored as inert text inside bounded schematic position
+  // metadata and may be up to 32 KiB per processor.
+  maxStringChars: 32_768,
   maxFindings: 50,
 } as const;
 

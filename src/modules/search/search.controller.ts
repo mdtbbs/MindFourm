@@ -21,7 +21,17 @@ export class SearchController {
           category: dto.category,
           sort: dto.sort,
         }, req.user),
-        this.searchService.searchResources(query, 20),
+        this.searchService.searchResources(query, 20, req.user, {
+          category: dto.category,
+          sort: dto.sort,
+          resource_kind: dto.resource_kind,
+          game_version: dto.game_version,
+          author: dto.author,
+          tag: dto.tag,
+          dependency: dto.dependency,
+          release_channel: dto.release_channel,
+          content_language: dto.content_language,
+        }),
       ]);
 
       return {

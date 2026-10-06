@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { friendsApi, type FriendRequestItem } from '@/lib/api/client';
 
-export default function FriendRequests() {
+export default function FriendRequests({ onChanged }: { onChanged?: () => void }) {
   const [requests, setRequests] = useState<FriendRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<Set<number>>(new Set());
@@ -28,6 +28,7 @@ export default function FriendRequests() {
     try {
       await friendsApi.acceptRequest(userId);
       setRequests((prev) => prev.filter((r) => r.requester.id !== userId));
+      onChanged?.();
     } catch {
       // silent
     } finally {
@@ -44,6 +45,7 @@ export default function FriendRequests() {
     try {
       await friendsApi.rejectRequest(userId);
       setRequests((prev) => prev.filter((r) => r.requester.id !== userId));
+      onChanged?.();
     } catch {
       // silent
     } finally {
@@ -73,9 +75,9 @@ export default function FriendRequests() {
             className="flex items-center justify-between rounded-lg px-3 py-2 hover:bg-muted/50"
           >
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center text-sm font-bold text-yellow-700 dark:text-yellow-400">
+              {req.requester.avatar_url ? <img src={req.requester.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-full bg-yellow-100 text-sm font-bold text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
                 {req.requester.username[0].toUpperCase()}
-              </div>
+              </div>}
               <div>
                 <div className="text-sm font-medium">{req.requester.username}</div>
                 <div className="text-xs text-muted-foreground">
@@ -87,14 +89,14 @@ export default function FriendRequests() {
               <button
                 onClick={() => handleAccept(req.requester.id)}
                 disabled={processing.has(req.requester.id)}
-                className="rounded bg-green-500/10 px-3 py-1 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50"
+                className="min-h-11 rounded bg-green-500/10 px-3 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50"
               >
                 接受
               </button>
               <button
                 onClick={() => handleReject(req.requester.id)}
                 disabled={processing.has(req.requester.id)}
-                className="rounded bg-red-500/10 px-3 py-1 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                className="min-h-11 rounded bg-red-500/10 px-3 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50"
               >
                 拒绝
               </button>

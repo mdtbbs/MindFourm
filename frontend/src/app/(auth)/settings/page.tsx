@@ -19,6 +19,23 @@ interface EmailPreferences {
 }
 
 type MessagePrivacy = 'everyone' | 'friends' | 'nobody';
+type PresenceStatus = 'online' | 'idle' | 'dnd' | 'invisible';
+type SocialPrivacy = {
+  status: PresenceStatus;
+  presence_visibility: MessagePrivacy;
+  activity_visibility: MessagePrivacy;
+  allow_join: MessagePrivacy;
+  allow_join_request: MessagePrivacy;
+  allow_invites: MessagePrivacy;
+  allow_messages: MessagePrivacy;
+  show_last_seen: boolean;
+};
+
+const DEFAULT_SOCIAL_PRIVACY: SocialPrivacy = {
+  status: 'online', presence_visibility: 'friends', activity_visibility: 'friends',
+  allow_join: 'friends', allow_join_request: 'friends', allow_invites: 'friends',
+  allow_messages: 'everyone', show_last_seen: true,
+};
 
 const EMAIL_OPTIONS: { key: keyof EmailPreferences; label: string; description: string }[] = [
   { key: 'reply_email', label: 'replyLabel', description: 'replyDescription' },
@@ -50,6 +67,11 @@ export default function SettingsPage() {
   const [messagePrivacySaving, setMessagePrivacySaving] = useState(false);
   const [messagePrivacySaved, setMessagePrivacySaved] = useState(false);
   const [messagePrivacyError, setMessagePrivacyError] = useState<string | null>(null);
+  const [socialPrivacy, setSocialPrivacy] = useState<SocialPrivacy>(DEFAULT_SOCIAL_PRIVACY);
+  const [socialPrivacyLoading, setSocialPrivacyLoading] = useState(true);
+  const [socialPrivacySaving, setSocialPrivacySaving] = useState(false);
+  const [socialPrivacySaved, setSocialPrivacySaved] = useState(false);
+  const [socialPrivacyError, setSocialPrivacyError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -58,10 +80,18 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetchV1<{ allow_messages?: MessagePrivacy }>('/social/privacy')
-      .then((settings) => setMessagePrivacy(settings.allow_messages || 'everyone'))
-      .catch((error) => setMessagePrivacyError(error instanceof Error ? error.message : t('messagePrivacy.loadFailed')))
-      .finally(() => setMessagePrivacyLoading(false));
+    fetchV1<Partial<SocialPrivacy>>('/social/privacy')
+      .then((settings) => {
+        const value = { ...DEFAULT_SOCIAL_PRIVACY, ...settings };
+        setSocialPrivacy(value);
+        setMessagePrivacy(value.allow_messages);
+      })
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : t('messagePrivacy.loadFailed');
+        setMessagePrivacyError(message);
+        setSocialPrivacyError(message);
+      })
+      .finally(() => { setMessagePrivacyLoading(false); setSocialPrivacyLoading(false); });
   }, [isAuthenticated, t]);
 
   useEffect(() => {
@@ -126,6 +156,7 @@ export default function SettingsPage() {
     setMessagePrivacyError(null);
     try {
       await requestV1('/social/privacy', { method: 'PATCH', body: JSON.stringify({ allow_messages: messagePrivacy }) });
+      setSocialPrivacy((current) => ({ ...current, allow_messages: messagePrivacy }));
       setMessagePrivacySaved(true);
       window.setTimeout(() => setMessagePrivacySaved(false), 3000);
     } catch (error) {
@@ -133,6 +164,30 @@ export default function SettingsPage() {
     } finally {
       setMessagePrivacySaving(false);
     }
+  };
+
+  const saveSocialPrivacy = async () => {
+    setSocialPrivacySaving(true);
+    setSocialPrivacyError(null);
+    try {
+      const savedSettings = await requestV1<SocialPrivacy>('/social/privacy', {
+        method: 'PATCH', body: JSON.stringify(socialPrivacy),
+      });
+      setSocialPrivacy(savedSettings);
+      setMessagePrivacy(savedSettings.allow_messages);
+      window.dispatchEvent(new CustomEvent('forum:presence-preference-change', { detail: { status: savedSettings.status } }));
+      setSocialPrivacySaved(true);
+      window.setTimeout(() => setSocialPrivacySaved(false), 3000);
+    } catch (error) {
+      setSocialPrivacyError(error instanceof Error ? error.message : t('socialPrivacy.saveFailed'));
+    } finally {
+      setSocialPrivacySaving(false);
+    }
+  };
+
+  const updateSocialPrivacy = <K extends keyof SocialPrivacy>(key: K, value: SocialPrivacy[K]) => {
+    setSocialPrivacy((current) => ({ ...current, [key]: value }));
+    setSocialPrivacySaved(false);
   };
 
   // The header and footer come from the (auth) route group's layout; this page used
@@ -232,15 +287,50 @@ export default function SettingsPage() {
               id="allow-messages"
               value={messagePrivacy}
               disabled={messagePrivacyLoading || messagePrivacySaving}
-              onChange={(event) => { setMessagePrivacy(event.target.value as MessagePrivacy); setMessagePrivacySaved(false); }}
-              className="min-w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]"
+              onChange={(event) => { const value = event.target.value as MessagePrivacy; setMessagePrivacy(value); updateSocialPrivacy('allow_messages', value); setMessagePrivacySaved(false); }}
+              className="min-h-11 min-w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]"
             >
               {(['everyone', 'friends', 'nobody'] as const).map((value) => <option key={value} value={value}>{t(`messagePrivacy.${value}`)}</option>)}
             </select>
-            <button type="button" onClick={saveMessagePrivacy} disabled={messagePrivacyLoading || messagePrivacySaving} className="btn btn-primary">
+            <button type="button" onClick={saveMessagePrivacy} disabled={messagePrivacyLoading || messagePrivacySaving} className="btn btn-primary min-h-11">
               {messagePrivacySaving ? t('messagePrivacy.saving') : t('messagePrivacy.save')}
             </button>
             {messagePrivacySaved && <span role="status" className="text-sm text-success">{t('messagePrivacy.saved')}</span>}
+          </div>
+        </section>
+
+        <section id="activity-privacy" className="card mb-6 p-6" aria-labelledby="social-privacy-title">
+          <h2 id="social-privacy-title" className="text-lg font-semibold">{t('socialPrivacy.title')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('socialPrivacy.description')}</p>
+          {socialPrivacyError && <p role="alert" className="mt-3 text-sm text-red-600">{socialPrivacyError}</p>}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <label className="text-sm font-medium">{t('socialPrivacy.status')}
+              <select value={socialPrivacy.status} disabled={socialPrivacyLoading || socialPrivacySaving}
+                onChange={(event) => updateSocialPrivacy('status', event.target.value as PresenceStatus)}
+                className="mt-1.5 min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm">
+                {(['online', 'idle', 'dnd', 'invisible'] as const).map((value) => <option key={value} value={value}>{t(`socialPrivacy.${value}`)}</option>)}
+              </select>
+            </label>
+            {(['presence_visibility', 'activity_visibility', 'allow_join', 'allow_join_request', 'allow_invites'] as const).map((key) => (
+              <label key={key} className="text-sm font-medium">{t(`socialPrivacy.${key}`)}
+                <select value={socialPrivacy[key]} disabled={socialPrivacyLoading || socialPrivacySaving}
+                  onChange={(event) => updateSocialPrivacy(key, event.target.value as MessagePrivacy)}
+                  className="mt-1.5 min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm">
+                  {(['everyone', 'friends', 'nobody'] as const).map((value) => <option key={value} value={value}>{t(`socialPrivacy.${value}`)}</option>)}
+                </select>
+              </label>
+            ))}
+          </div>
+          <label className="mt-4 flex min-h-11 items-center gap-3 text-sm">
+            <input type="checkbox" checked={socialPrivacy.show_last_seen} disabled={socialPrivacyLoading || socialPrivacySaving}
+              onChange={(event) => updateSocialPrivacy('show_last_seen', event.target.checked)} className="h-5 w-5" />
+            {t('socialPrivacy.showLastSeen')}
+          </label>
+          <div className="mt-4 flex min-h-11 items-center gap-3">
+            <button type="button" onClick={saveSocialPrivacy} disabled={socialPrivacyLoading || socialPrivacySaving} className="btn btn-primary min-h-11">
+              {socialPrivacySaving ? t('socialPrivacy.saving') : t('socialPrivacy.save')}
+            </button>
+            {socialPrivacySaved && <span role="status" className="text-sm text-success">{t('socialPrivacy.saved')}</span>}
           </div>
         </section>
 

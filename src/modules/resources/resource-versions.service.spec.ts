@@ -14,6 +14,7 @@ describe('ResourceVersionService', () => {
   it('limits legacy version listings and direct downloads to published versions for public viewers', async () => {
     const { service, versionRepository } = setup();
     const rows = [
+      { id: 23, resource_id: 7, version: '3.0.0', status: 'upload_pending' },
       { id: 22, resource_id: 7, version: '2.0.0', status: 'pending_review' },
       { id: 21, resource_id: 7, version: '1.0.0', status: 'published' },
     ];
@@ -23,7 +24,8 @@ describe('ResourceVersionService', () => {
 
     await expect(service.list(7)).resolves.toEqual([expect.objectContaining({ status: 'published' })]);
     await expect(service.getDownloadTarget(7, 22)).rejects.toThrow('版本不存在');
-    await expect(service.list(7, { id: 9, role: 'user' })).resolves.toHaveLength(2);
+    await expect(service.getDownloadTarget(7, 23)).rejects.toThrow('版本不存在');
+    await expect(service.list(7, { id: 9, role: 'user' })).resolves.toHaveLength(3);
     await expect(service.getDownloadTarget(7, 22, { id: 9, role: 'user' })).resolves.toEqual(rows[0]);
   });
 

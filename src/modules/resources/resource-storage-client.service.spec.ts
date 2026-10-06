@@ -105,6 +105,18 @@ describe('ResourceStorageClientService', () => {
     expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe('Bearer short-token');
   });
 
+  it('reads paginated admin inventories and rejects malformed private payloads', async () => {
+    const sha256 = 'b'.repeat(64);
+    fetchMock.mockResolvedValueOnce(respond({ items: [{ public_id: 'object-1', sha256, size_bytes: 4, mime_type: 'application/octet-stream', original_filename: 'x.bin', state: 'verified', created_at: '', verified_at: '', binding_count: 1 }], next_cursor: 'object-1' }))
+      .mockResolvedValueOnce(respond({ items: [{ binding_id: 'binding-1', object_public_id: 'object-1', sha256, size_bytes: 4, object_state: 'verified', namespace: 'mindforum', owner_type: 'resource_file', owner_id: 'file-1', visibility: 'private', created_at: '' }], next_cursor: null }));
+    await expect(client.listAdminObjectInventory({ limit: 500 })).resolves.toMatchObject({ items: [{ public_id: 'object-1', binding_count: 1 }], next_cursor: 'object-1' });
+    await expect(client.listAdminBindingInventory({ namespace: 'mindforum', ownerType: 'resource_file', limit: 20 })).resolves.toMatchObject({ items: [{ binding_id: 'binding-1', owner_id: 'file-1' }] });
+    expect(fetchMock.mock.calls[0][0]).toContain('/api/admin/inventory/objects?limit=100');
+    expect(fetchMock.mock.calls[1][0]).toContain('owner_type=resource_file');
+    fetchMock.mockResolvedValueOnce(respond({ items: [{ public_id: 'object-1' }], next_cursor: null }));
+    await expect(client.listAdminObjectInventory({ limit: 1 })).rejects.toMatchObject({ code: 'rejected' });
+  });
+
   it('reuses a verified deduplicated object without uploading bytes', async () => {
     const body = Buffer.from('abc');
     const sha256 = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';

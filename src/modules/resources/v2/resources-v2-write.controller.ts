@@ -1,8 +1,8 @@
 import {
-  BadRequestException, Body, Controller, Optional, Param, Patch, Post, Req, Res, ServiceUnavailableException, UploadedFile, UseInterceptors, ValidationPipe,
+  BadRequestException, Body, Controller, HttpStatus, Optional, Param, Patch, Post, Req, Res, ServiceUnavailableException, UploadedFile, UseInterceptors, ValidationPipe,
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse, ApiBody, ApiConsumes, ApiCreatedResponse, ApiForbiddenResponse,
+  ApiBadRequestResponse, ApiBody, ApiConsumes, ApiCreatedResponse, ApiForbiddenResponse, ApiHeader,
   ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiProduces, ApiTags,
 } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -15,9 +15,13 @@ import { ResourceStorageService } from '../resource-storage.service';
 import { ResourceDirectUploadService } from '../resource-direct-upload.service';
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourceUploadInterceptor } from '../resources.controller';
 import { ResourcesV2WriteService } from './resources-v2-write.service';
+import { ResourceDirectUploadDraftResponseDto } from '../v1/resource-direct-upload.dto';
+import { AuthService } from '../../auth/auth.service';
+import { SettingsService } from '../../settings/settings.service';
+import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import {
   ResourceV2CreateRelationDto, ResourceV2CreateVersionDto, ResourceV2InviteMemberDto,
-  ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2RespondInvitationDto, ResourceV2TransferOwnerDto,
+  ResourceV2ExportMapDto, ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2RespondInvitationDto, ResourceV2TransferOwnerDto,
 } from './resources-v2-write.dto';
 
 @ApiV1()
@@ -28,6 +32,8 @@ export class ResourcesV2WriteController {
     private readonly resources: ResourcesV2WriteService,
     private readonly storage: ResourceStorageService,
     @Optional() private readonly directUploads?: ResourceDirectUploadService,
+    @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly auth?: AuthService,
   ) {}
 
   @Post(':id/versions/analyze')
@@ -61,6 +67,34 @@ export class ResourcesV2WriteController {
     } finally {
       await cleanupUploadedFile(file);
       if (stored?.file_path) await this.storage.removeManaged(stored.file_path).catch(() => undefined);
+    }
+  }
+
+  @Post(':id/versions/direct-drafts')
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 5, window: 60 })
+  @ApiOperation({ operationId: 'createResourceV2DirectVersionDraft', summary: '创建 metadata-first 直接上传版本草稿' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
+  @ApiConsumes('application/json')
+  @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'ASCII key scoped to the authenticated account and Resource.' })
+  @ApiBody({ type: ResourceV2CreateVersionDto, description: 'Creates an upload_pending version without receiving file bytes.' })
+  @ApiCreatedResponse({ type: ResourceDirectUploadDraftResponseDto, description: 'Upload draft identifiers and expiry; use the existing direct upload init/complete endpoints to attach the file.' })
+  async createVersionDirectDraft(@Param('id') id: string, @Body() rawBody: Record<string, any>, @Req() req: any) {
+    if (!this.directUploads) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    await this.assertUploadEnabled(req.user);
+    const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
+      .transform(rawBody || {}, { type: 'body', metatype: ResourceV2CreateVersionDto }) as ResourceV2CreateVersionDto;
+    const rawKey = req.headers?.['idempotency-key'];
+    return this.directUploads.createVersionDraft(id, body, { id: Number(req.user.id), role: req.user.role }, typeof rawKey === 'string' ? rawKey : undefined);
+  }
+
+  private async assertUploadEnabled(user: any) {
+    if (!this.settings || !this.auth) throw new ServiceUnavailableException('资源上传验证暂不可用');
+    if (!await this.settings.getBoolean('feature_resources_v1_upload_enabled', true)) {
+      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源上传', false);
+    }
+    if (await this.auth.checkNeedsTermsAcceptance(user)) {
+      throw new ApiV1Exception('TERMS_ACCEPTANCE_REQUIRED', HttpStatus.FORBIDDEN, '请先接受社区条款', false);
     }
   }
 
@@ -113,7 +147,7 @@ export class ResourcesV2WriteController {
   @RawHttpResponse()
   @OAuthProtected('resource.upload')
   @RateLimit({ max: 5, window: 60 })
-  @ApiOperation({ operationId: 'exportResourceSchematicEdit', summary: '安全导出编辑后的蓝图副本', description: 'Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像和删除选中方块。只读取托管版本并返回新文件，不修改原版本。' })
+  @ApiOperation({ operationId: 'exportResourceSchematicEdit', summary: '安全导出编辑后的蓝图副本', description: 'Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像、删除、移动和放置单格方块。只读取托管版本并返回新文件，不修改原版本；含有不支持内容时拒绝导出。' })
   @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
   @ApiParam({ name: 'versionId', format: 'uuid', description: '已发布 Version public UUID。' })
   @ApiConsumes('application/json')
@@ -133,6 +167,37 @@ export class ResourcesV2WriteController {
     const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
       .transform(rawBody || {}, { type: 'body', metatype: ResourceV2ExportSchematicDto }) as ResourceV2ExportSchematicDto;
     const result = await this.resources.exportSchematic(id, versionId, body, Number(req.user.id));
+    response.setHeader('Content-Type', 'application/octet-stream');
+    response.setHeader('Content-Disposition', attachmentContentDisposition(result.file_name));
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    return response.send(result.data);
+  }
+
+  @Post(':id/versions/:versionId/map-editor/export')
+  @RawHttpResponse()
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 5, window: 60 })
+  @ApiOperation({ operationId: 'exportResourceMapEdit', summary: '安全导出编辑后的地图副本', description: 'Owner/Maintainer 可编辑已发布地图的地形、类型化规则字段和波次组。地图通过官方 MapIO 写入并重新导入校验；未知规则与波次字段保留，不支持内容会拒绝导出。' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
+  @ApiParam({ name: 'versionId', format: 'uuid', description: '已发布 Version public UUID。' })
+  @ApiConsumes('application/json')
+  @ApiBody({ type: ResourceV2ExportMapDto })
+  @ApiProduces('application/octet-stream')
+  @ApiOkResponse({ description: 'An official Mindustry .msav serialization as a derived file.', schema: { type: 'string', format: 'binary' } })
+  @ApiBadRequestResponse({ description: '操作无效、文件无法解析或含有编辑器不支持安全保留的内容。' })
+  @ApiForbiddenResponse({ description: '当前用户不是该资源的 Owner 或 Maintainer。' })
+  @ApiNotFoundResponse({ description: '资源或已发布版本不存在。' })
+  async exportMap(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+    @Body() rawBody: Record<string, any>,
+    @Req() req: any,
+    @Res() response: Response,
+  ) {
+    const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
+      .transform(rawBody || {}, { type: 'body', metatype: ResourceV2ExportMapDto }) as ResourceV2ExportMapDto;
+    const result = await this.resources.exportMap(id, versionId, body, Number(req.user.id));
     response.setHeader('Content-Type', 'application/octet-stream');
     response.setHeader('Content-Disposition', attachmentContentDisposition(result.file_name));
     response.setHeader('Cache-Control', 'private, no-store');

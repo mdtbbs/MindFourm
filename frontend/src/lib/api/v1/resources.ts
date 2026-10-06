@@ -7,6 +7,12 @@
  */
 
 import { fetchV1, requestV1, requestV1Blob, type FetchV1Options } from './transport';
+export {
+  createResourceDirectUploadDraft,
+  createResourceDirectVersionDraft,
+  uploadResourceDirectDraft,
+} from './resource-direct-upload';
+export type { ResourceDirectUploadDraftResponse, ResourceDirectVersionDraftInput } from './resource-direct-upload';
 
 export type V1VersionSummary = {
   public_id: string;
@@ -306,7 +312,10 @@ export type ResourceV2PagedResult<T> = {
   pagination: { next_cursor: string | null; has_more: boolean };
 };
 
-export type ResourceV2SchematicBlockPosition = { x: number | null; y: number | null; rotation: number | null };
+export type ResourceV2SchematicBlockPosition = {
+  x: number | null; y: number | null; rotation: number | null; size?: number;
+  config?: unknown; logic_source_available?: boolean;
+};
 export type ResourceV2SchematicBlock = {
   internal_name: string;
   display_name: string | null;
@@ -318,6 +327,14 @@ export type ResourceV2SchematicTransformInput = {
   rotation_quarters: number;
   mirror_x: boolean;
   delete_positions: Array<{ x: number; y: number }>;
+  move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
+  add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+  logic_configs?: Array<{ x: number; y: number; source: string }>;
+};
+export type ResourceV2MapTransformInput = {
+  terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
+  rule_changes?: Record<string, unknown>;
+  wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
 };
 
 export type ResourceV2MapFeedbackAggregate = {
@@ -650,7 +667,13 @@ export async function getResourceWorkbenchV2KindTabData(
   }
   if (tab === 'rules' && summary) {
     return {
-      summary,
+      summary: {
+        ...summary,
+        width: typeof response.width === 'number' ? response.width : null,
+        height: typeof response.height === 'number' ? response.height : null,
+        tile_layers: asRecord(response.tile_layers),
+        tile_layers_truncated: response.tile_layers_truncated === true,
+      },
       items: [],
       pagination: { next_cursor: null, has_more: false },
     };
@@ -699,6 +722,18 @@ export async function exportResourceWorkbenchSchematicV2(
 ): Promise<Blob> {
   return requestV1Blob(
     `/resources/${encodeURIComponent(publicId)}/versions/${encodeURIComponent(versionPublicId)}/schematic-editor/export`,
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+}
+
+/** Export a transformed copy of a published map through the official MapIO reader/writer. */
+export async function exportResourceWorkbenchMapV2(
+  publicId: string,
+  versionPublicId: string,
+  input: ResourceV2MapTransformInput,
+): Promise<Blob> {
+  return requestV1Blob(
+    `/resources/${encodeURIComponent(publicId)}/versions/${encodeURIComponent(versionPublicId)}/map-editor/export`,
     { method: 'POST', body: JSON.stringify(input) },
   );
 }

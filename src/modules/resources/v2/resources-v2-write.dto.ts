@@ -12,6 +12,56 @@ export class ResourceV2SchematicPositionDto {
   y!: number;
 }
 
+export class ResourceV2SchematicMoveDto {
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  from_x!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  from_y!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  to_x!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  to_y!: number;
+}
+
+export class ResourceV2SchematicAddedBlockDto {
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  x!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  y!: number;
+
+  @ApiProperty({ maxLength: 191, example: 'router' })
+  @IsString() @MinLength(1) @MaxLength(191)
+  block!: string;
+
+  @ApiPropertyOptional({ minimum: 0, maximum: 3, default: 0 })
+  @IsOptional() @IsInt() @Min(0) @Max(3)
+  rotation?: number;
+}
+
+export class ResourceV2SchematicLogicConfigDto {
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  x!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 127 })
+  @IsInt() @Min(0) @Max(127)
+  y!: number;
+
+  @ApiProperty({ maxLength: 32_768, description: 'Inert processor source text; never evaluated by the renderer.' })
+  @IsString() @MaxLength(32_768)
+  source!: string;
+}
+
 export class ResourceV2ExportSchematicDto {
   @ApiProperty({ minimum: 0, maximum: 3, description: 'Number of 90 degree counter-clockwise rotations.' })
   @IsInt() @Min(0) @Max(3)
@@ -24,6 +74,68 @@ export class ResourceV2ExportSchematicDto {
   @ApiPropertyOptional({ type: [ResourceV2SchematicPositionDto], maxItems: 10_000 })
   @IsOptional() @IsArray() @ArrayMaxSize(10_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicPositionDto)
   delete_positions?: ResourceV2SchematicPositionDto[];
+
+  @ApiPropertyOptional({ type: [ResourceV2SchematicMoveDto], maxItems: 5_000 })
+  @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicMoveDto)
+  move_positions?: ResourceV2SchematicMoveDto[];
+
+  @ApiPropertyOptional({ type: [ResourceV2SchematicAddedBlockDto], maxItems: 5_000 })
+  @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicAddedBlockDto)
+  add_blocks?: ResourceV2SchematicAddedBlockDto[];
+
+  @ApiPropertyOptional({ type: [ResourceV2SchematicLogicConfigDto], maxItems: 1_000 })
+  @IsOptional() @IsArray() @ArrayMaxSize(1_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicLogicConfigDto)
+  logic_configs?: ResourceV2SchematicLogicConfigDto[];
+}
+
+export class ResourceV2MapTerrainChangeDto {
+  @ApiProperty({ minimum: 0, maximum: 32_767 })
+  @IsInt() @Min(0) @Max(32_767)
+  x!: number;
+
+  @ApiProperty({ minimum: 0, maximum: 32_767 })
+  @IsInt() @Min(0) @Max(32_767)
+  y!: number;
+
+  @ApiProperty({ maxLength: 191, example: 'sand' })
+  @IsString() @MinLength(1) @MaxLength(191)
+  floor!: string;
+
+  @ApiProperty({ maxLength: 191, example: 'air', description: 'Overlay block name; use air to clear an existing overlay.' })
+  @IsString() @MaxLength(191)
+  overlay!: string;
+}
+
+export class ResourceV2MapWaveOperationDto {
+  @ApiProperty({ enum: ['add', 'update', 'delete', 'move'] })
+  @IsIn(['add', 'update', 'delete', 'move'])
+  action!: 'add' | 'update' | 'delete' | 'move';
+
+  @ApiProperty({ minimum: 0, maximum: 5_000 })
+  @IsInt() @Min(0) @Max(5_000)
+  index!: number;
+
+  @ApiPropertyOptional({ minimum: 0, maximum: 5_000 })
+  @IsOptional() @IsInt() @Min(0) @Max(5_000)
+  to_index?: number;
+
+  @ApiPropertyOptional({ type: 'object', description: 'Known SpawnGroup fields to add or update. Unknown source fields remain intact.' })
+  @IsOptional() @IsObject()
+  fields?: Record<string, unknown>;
+}
+
+export class ResourceV2ExportMapDto {
+  @ApiPropertyOptional({ type: [ResourceV2MapTerrainChangeDto], maxItems: 5_000 })
+  @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2MapTerrainChangeDto)
+  terrain_changes?: ResourceV2MapTerrainChangeDto[];
+
+  @ApiPropertyOptional({ type: 'object', description: 'Typed scalar/list Rules fields. Unspecified and unknown source fields are preserved.' })
+  @IsOptional() @IsObject()
+  rule_changes: Record<string, unknown> = {};
+
+  @ApiPropertyOptional({ type: [ResourceV2MapWaveOperationDto], maxItems: 1_000 })
+  @IsOptional() @IsArray() @ArrayMaxSize(1_000) @ValidateNested({ each: true }) @Type(() => ResourceV2MapWaveOperationDto)
+  wave_operations?: ResourceV2MapWaveOperationDto[];
 }
 
 export class ResourceV2CreateVersionDto {

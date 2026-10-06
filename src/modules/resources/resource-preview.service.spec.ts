@@ -258,7 +258,7 @@ describe('ResourcePreviewService', () => {
     })).resolves.toEqual({ data: output, sha256: outputHash });
 
     const [url, request] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(url).toBe('http://127.0.0.1:6100/v1/transform-schematic');
+    expect(url).toBe('http://127.0.0.1:6100/v2/transform-schematic');
     expect(request.headers).toEqual({ 'content-type': 'application/json', authorization: 'Bearer renderer-secret' });
     expect(JSON.parse(request.body)).toMatchObject({
       filename: 'source.msch',
@@ -267,6 +267,8 @@ describe('ResourcePreviewService', () => {
       rotation_quarters: 1,
       mirror_x: true,
       delete_positions: [{ x: 3, y: 7 }],
+      move_positions: [],
+      add_blocks: [],
     });
   });
 

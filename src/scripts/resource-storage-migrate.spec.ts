@@ -28,6 +28,7 @@ describe('resource storage migration', () => {
   const client = () => ({
     uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-public', state: 'verified', sha256, size_bytes: bytes.length, mime_type: 'application/octet-stream' }),
     getObject: jest.fn().mockResolvedValue({ public_id: 'res-public', state: 'verified', sha256, size_bytes: bytes.length, mime_type: 'application/octet-stream' }),
+    getObjectContent: jest.fn().mockResolvedValue(bytes),
     createBinding: jest.fn().mockResolvedValue({ id: 'binding-7' }),
     deleteBinding: jest.fn().mockResolvedValue(undefined),
   }) as any;
@@ -57,8 +58,24 @@ describe('resource storage migration', () => {
     const database = db(old);
     expect(await migrateOneResourceFile(database, old, remote, storage(), {} as any, false)).toBe('migrated');
     expect(remote.createBinding).toHaveBeenCalledWith('res-public', expect.objectContaining({ visibility: 'public', owner_id: 'file-7' }));
+    expect(remote.getObjectContent).toHaveBeenCalledWith('res-public', { maxBytes: bytes.length });
     expect(old).toMatchObject({ storage_backend: 'res', provider_object_id: 'res-public', provider_binding_id: 'binding-7', integrity_status: 'verified' });
     expect(old.provider_file_id).toBeNull();
+  });
+
+  it.each([
+    ['truncated bytes', Buffer.from('short')],
+    ['same-size changed bytes', Buffer.alloc(bytes.length, 0x41)],
+  ])('does not bind or change the historical row when re-download verification fails: %s', async (_label, downloaded) => {
+    const old = file();
+    const remote = client();
+    remote.getObjectContent.mockResolvedValue(downloaded);
+    const database = db(old);
+    await expect(migrateOneResourceFile(database, old, remote, storage(), {} as any, false))
+      .rejects.toThrow('RES re-download SHA-256 or size does not match source bytes');
+    expect(remote.createBinding).not.toHaveBeenCalled();
+    expect(database.transaction).not.toHaveBeenCalled();
+    expect(old.storage_backend).toBe('managed');
   });
 
   it('keeps an explicitly private resource private during historical migration', async () => {

@@ -93,7 +93,7 @@ For all version-scoped reads, `version_public_id` is optional. A Content entry h
 | GET | `/resources/schematics/{id}/relations` | Public related resources |
 | GET | `/resources/schematics/{id}/diff` | Stored version diff or an unavailable result |
 
-Block positions may be empty if the parser did not preserve coordinates. The API does not invent inspection detail. Production is theoretical/estimated data, never a measured gameplay result. The workbench includes an owner/maintainer light editor for rotate, mirror, selected-block deletion, official `.msch` export, and reanalysis. It fails closed on unknown content that could be lost by the bundled reader. The original published file is never modified; export creates a new file for the normal release flow.
+Block positions may be empty if the parser did not preserve coordinates. The API does not invent inspection detail. Production is theoretical/estimated data, never a measured gameplay result. The workbench includes owner/maintainer light editors for schematic rotate, horizontal mirror, selected-block deletion, placement, static logic text, and official `.msch` export, plus map terrain, typed boolean rules, wave editing, and official `.msav` export. Both editors fail closed on unknown content that could be lost by the bundled reader. The original published file is never modified; export creates a new direct-upload version for the normal review flow. Bounds and deliberately unsupported map fields are documented in [`schematic-editor.md`](schematic-editor.md) and [`map-editor.md`](map-editor.md).
 
 ## Map reads
 
@@ -111,7 +111,7 @@ Block positions may be empty if the parser did not preserve coordinates. The API
 | GET | `/resources/maps/{id}/relations` | Public related resources |
 | GET | `/resources/maps/{id}/diff` | Stored version diff or an unavailable result |
 
-Map difficulty and wave strength are estimates. Missing rules, resource entries, spawns, waves, or analysis are represented as `null` or empty lists rather than inferred. Map and wave editing are not exposed by these GET routes.
+Map difficulty and wave strength are estimates. Missing rules, resource entries, spawns, waves, or analysis are represented as `null` or empty lists rather than inferred. The map editor only writes the terrain/rules/waves subset that the official renderer can round-trip safely; it does not provide block, team, resource, liquid, or marker painting.
 
 ## Review timeline and annotations
 
@@ -201,11 +201,11 @@ The versioned Content index uses the existing Game Content API prefix:
 
 Search requires a non-empty `q` of at most 255 characters. `type` is optional and at most 50 characters. Search and by-name results use cursor pagination. By-name queries may return matching entries from several public resources or historical versions. Existing `/game-content/blueprints`, `/maps`, upload, preview, download, like, and favorite APIs retain their earlier semantics.
 
-## Capabilities and unsupported editors
+## Capabilities and editor boundaries
 
-`GET /api/v1/capabilities` includes `resource_mod_workbench`, `resource_schematic_workbench`, `resource_map_workbench`, `resource_versions_v2`, `resource_relations_v1`, `mod_content_index`, `mod_dependency_resolver`, `mod_compatibility_reports`, `schematic_deep_analysis`, `schematic_light_editor`, `map_deep_analysis`, and `map_wave_viewer`. The light editor implementation is present, but `schematic_light_editor` remains `false` until the bundled renderer runtime and export round trip can be verified in the target environment. Full schematic editing, map editing, and wave editing remain explicitly unsupported: `schematic_full_editor=false`, `map_editor=false`, `wave_editor=false`.
+`GET /api/v1/capabilities` includes `resource_mod_workbench`, `resource_schematic_workbench`, `resource_map_workbench`, `resource_versions_v2`, `resource_relations_v1`, `mod_content_index`, `mod_dependency_resolver`, `mod_compatibility_reports`, `schematic_deep_analysis`, `schematic_light_editor`, `map_deep_analysis`, and `map_wave_viewer`. `schematic_light_editor`, `schematic_full_editor`, `map_editor`, and `wave_editor` are runtime readiness flags: they are true only when the renderer health protocol, pinned Mindustry v160.2 artifact digest, operation allowlist, RES health, and resource upload setting all pass. Clients must hide the corresponding save controls when a flag is false.
 
-The owner-aware map workbench includes a wave viewer sourced from the selected version's structured `analysis.data.waves` rows, with renderer wave groups as a fallback. It displays available enemy counts, estimated health, air ratio, boss counts, strength, and heuristic spike markers; null analysis values stay unavailable. The schematic preview supports click inspection and name-classified logistics, liquid, power, and input/output marker filters. The renderer emits bounded terrain, resource, ore, core, enemy-spawn, building, and liquid tile layers, and marks the layer payload when coordinate arrays are truncated. The `player_area` layer is currently empty because map files do not provide a defined player-area boundary. Target runtime verification is still required for the new renderer metadata projection.
+The owner-aware map workbench includes a wave viewer sourced from the selected version's structured `analysis.data.waves` rows, with renderer wave groups as a fallback. It displays available enemy counts, estimated health, air ratio, boss counts, strength, and heuristic spike markers; null analysis values stay unavailable. The schematic preview supports click inspection and name-classified logistics, liquid, power, and input/output marker filters. The renderer emits bounded terrain, resource, ore, core, enemy-spawn, building, and liquid tile layers, and marks the layer payload when coordinate arrays are truncated. The `player_area` layer is currently empty because map files do not provide a defined player-area boundary. The editor writes only the safe subset documented in [`schematic-editor.md`](schematic-editor.md) and [`map-editor.md`](map-editor.md).
 
 ## Owner and collaborator writes
 
@@ -214,8 +214,12 @@ These owner/collaborator routes use the same Resource aggregate and public UUIDs
 | Method | Path | Permission and behavior |
 | --- | --- | --- |
 | POST | `/resources/{id}/versions/analyze` | Owner, maintainer, or publisher; multipart dry-run parse. Mod archives are inspected statically and never executed; map/blueprint previews use the existing renderer. Limit: 5 requests per 60 seconds. |
+| POST | `/resources/direct-drafts` | Authenticated uploader; creates a metadata-only initial Resource and `upload_pending` version. Requires an idempotency key; bytes go directly to RES. |
+| POST | `/resources/uploads/init` and `/resources/uploads/complete` | Authenticated uploader; creates/finishes an owner-bound RES upload after server-side metadata and content verification. The resulting file is private and pending review. |
+| POST | `/resources/{id}/versions/direct-drafts` | Owner, maintainer, or publisher; creates a metadata-only new revision for direct upload. Requires an idempotency key. |
 | POST | `/resources/{id}/versions` | Owner, maintainer, or publisher; multipart upload enters `pending_review`. Re-uploading a version string creates a new revision instead of overwriting an existing file. Limit: 5 requests per 60 seconds. |
 | POST | `/resources/{id}/versions/{versionId}/schematic-editor/export` | Owner or maintainer; transforms one published schematic, returns an official `.msch` copy, and leaves the source version immutable. Limit: 5 / 60s. |
+| POST | `/resources/{id}/versions/{versionId}/map-editor/export` | Owner or maintainer; transforms the safe map terrain/rules/waves subset, returns an official `.msav` copy, and leaves the source version immutable. Limit: 5 / 60s. |
 | PATCH | `/resources/{id}` | Owner or maintainer; update title, description, content, source URL, or license. Changing source URL or license on an approved resource marks it pending review. |
 | POST | `/resources/{id}/relations` | Owner or maintainer; create `recommended_for`, `fork_of`, `successor_of`, `related`, `requires`, or `compatible_with` relations using public UUIDs. Fork/successor relations require the same resource kind and a published target version UUID. |
 | POST | `/resources/{id}/members` | Owner or maintainer; invite a collaborator by username. Maintainers may grant publisher role only. |

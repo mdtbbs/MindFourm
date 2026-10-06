@@ -1,17 +1,36 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { extname } from 'path';
 import { createReadStream } from 'fs';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import os from 'os';
+import path from 'path';
 import { DataSource, Repository } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceMember } from '@entities/resource-center-v2.entity';
 import { ResourceDirectUploadSession } from '@entities/resource-direct-upload-session.entity';
+import { ResourceDirectUploadDraft } from '@entities/resource-direct-upload-draft.entity';
 import { ResourceStorageClientError, ResourceStorageClientService } from './resource-storage-client.service';
 import { MAX_RESOURCE_SIZE } from './resources.controller';
-import type { ResourceFileMeta } from './resources.service';
+import { ResourceFileMeta, ResourcesService } from './resources.service';
+import { validateResourceVersion } from './analyzers/version-constraint.util';
+import { parseMarkdown } from '@common/utils/markdown.util';
+import { RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS } from './resource-direct-upload.constants';
+import { ResourcesV2WriteService } from './v2/resources-v2-write.service';
+
+export interface DirectVersionDraftInput {
+  version: string;
+  version_mode?: 'semver' | 'compatibility';
+  release_channel?: 'release' | 'beta' | 'alpha' | 'snapshot';
+  game_version_min?: string;
+  game_version_max?: string;
+  content?: string;
+  mod_id?: string;
+  mod_author_overrides?: Record<string, unknown>;
+}
 
 const ALLOWED_EXTENSIONS = new Set(['.zip', '.rar', '.7z', '.tar', '.gz', '.jar', '.msav', '.msch', '.json', '.hjson', '.txt', '.md', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif']);
 const ALLOWED_ROLES = new Set(['primary', 'supplementary', 'documentation']);
@@ -34,7 +53,138 @@ export class ResourceDirectUploadService {
     @InjectRepository(ResourceFile) private readonly files: Repository<ResourceFile>,
     private readonly dataSource: DataSource,
     private readonly res: ResourceStorageClientService,
+    @InjectRepository(ResourceDirectUploadDraft) private readonly drafts: Repository<ResourceDirectUploadDraft>,
+    private readonly v2Writes: ResourcesV2WriteService,
+    private readonly resourceLifecycle: ResourcesService,
   ) {}
+
+  private normalizeIdempotencyKey(key: string | undefined): string {
+    const value = key?.trim();
+    if (!value || !/^[\x21-\x7e]{1,128}$/.test(value)) throw new BadRequestException('Idempotency-Key 格式无效');
+    return value;
+  }
+
+  private canonical(value: any): any {
+    if (Array.isArray(value)) return value.map((item) => this.canonical(item));
+    if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((key) => [key, this.canonical(value[key])]));
+    return value;
+  }
+
+  async createVersionDraft(publicId: string, input: DirectVersionDraftInput, actor: { id: number; role?: string }, key?: string) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(publicId)) {
+      throw new BadRequestException('Resource public ID must be a UUID');
+    }
+    const idempotencyKey = this.normalizeIdempotencyKey(key);
+    const keyHash = createHash('sha256').update(idempotencyKey).digest('hex');
+    const fingerprint = createHash('sha256').update(JSON.stringify(this.canonical({ resource_public_id: publicId, input }))).digest('hex');
+    const versionMode = input.version_mode || 'compatibility';
+    try { validateResourceVersion(input.version, versionMode); }
+    catch (error) { throw new BadRequestException(error instanceof Error ? error.message : '版本号格式无效'); }
+
+    try {
+    return await this.dataSource.transaction(async (manager) => {
+      const resourceRows = await manager.query(
+        'SELECT * FROM resources WHERE public_id=? AND deleted_at IS NULL LIMIT 1 FOR UPDATE', [publicId],
+      ) as Resource[];
+      const resource = resourceRows[0];
+      if (!resource) throw new NotFoundException('资源不存在');
+      if (!(await this.canWriteResource(resource, actor, manager))) throw new ForbiddenException('没有权限为此资源添加版本');
+
+      const draftRepo = manager.getRepository(ResourceDirectUploadDraft);
+      const existingDraft = await draftRepo.findOne({ where: { user_id: actor.id, idempotency_key_hash: keyHash }, lock: { mode: 'pessimistic_write' } });
+      if (existingDraft) {
+        if (existingDraft.request_fingerprint !== fingerprint) throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', message: 'Idempotency-Key 已用于另一份版本草稿。' });
+        if (existingDraft.expires_at.getTime() <= Date.now() || existingDraft.status === 'expired') throw new ConflictException({ code: 'UPLOAD_DRAFT_EXPIRED', message: '版本上传草稿已过期，请重新创建。' });
+        const previous = await manager.findOne(ResourceVersion, { where: { id: existingDraft.resource_version_id } });
+        if (!previous?.public_id) throw new ConflictException('版本上传草稿已失效');
+        return {
+          resource_public_id: resource.public_id,
+          resource_id: resource.id,
+          version_public_id: previous.public_id,
+          upload_draft_id: existingDraft.id,
+          revision: previous.revision,
+          expires_at: existingDraft.expires_at.toISOString(),
+          draft_status: existingDraft.status,
+          version_status: previous.status,
+        };
+      }
+
+      if (!input.version?.trim() || input.version.trim().length > 50) throw new BadRequestException('版本号无效');
+      const releaseNotes = input.content?.trim() || null;
+      const revisionRows = await manager.query(
+        'SELECT COALESCE(MAX(revision),0) AS max_revision FROM resource_versions WHERE resource_id=? AND version=?',
+        [resource.id, input.version.trim()],
+      ) as Array<{ max_revision: number | string | null }>;
+      const revision = Number(revisionRows[0]?.max_revision || 0) + 1;
+      if (!Number.isSafeInteger(revision) || revision < 1) throw new ConflictException('无法分配安全的 ResourceVersion revision');
+      const now = Date.now();
+      const expiresAt = new Date(now + RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS);
+      const version = await manager.save(ResourceVersion, manager.create(ResourceVersion, {
+        resource_id: resource.id,
+        public_id: randomUUID(),
+        version: input.version.trim(),
+        version_mode: versionMode,
+        revision,
+        recommended: 0,
+        game_version_min: input.game_version_min?.trim() || null,
+        game_version_max: input.game_version_max?.trim() || null,
+        release_channel: input.release_channel || 'release',
+        status: 'upload_pending',
+        published_at: null,
+        created_by_user_id: actor.id,
+        release_notes_markdown: releaseNotes,
+        release_notes_html: releaseNotes ? parseMarkdown(releaseNotes) : null,
+        content: releaseNotes,
+        content_html: releaseNotes ? parseMarkdown(releaseNotes) : null,
+      } as Partial<ResourceVersion>));
+      const draft = await manager.save(ResourceDirectUploadDraft, manager.create(ResourceDirectUploadDraft, {
+        id: randomUUID(), resource_version_id: version.id, user_id: actor.id,
+        idempotency_key_hash: keyHash, request_fingerprint: fingerprint,
+        request_metadata: input as unknown as Record<string, unknown>,
+        status: 'open', expires_at: expiresAt, completed_at: null,
+      }));
+      return {
+        resource_public_id: resource.public_id,
+        resource_id: resource.id,
+        version_public_id: version.public_id,
+        upload_draft_id: draft.id,
+        revision,
+        expires_at: expiresAt.toISOString(),
+        draft_status: draft.status,
+        version_status: version.status,
+      };
+    });
+    } catch (error: any) {
+      if (error?.code !== 'ER_DUP_ENTRY' && error?.errno !== 1062 && error?.driverError?.code !== 'ER_DUP_ENTRY'
+        && error?.driverError?.errno !== 1062) throw error;
+      // Concurrent retries using one account-scoped key can race across two
+      // Resource locks. Resolve the winner after rollback instead of exposing
+      // a database duplicate-key error or creating another version.
+      const existingDraft = await this.drafts.findOne({ where: { user_id: actor.id, idempotency_key_hash: keyHash } });
+      if (!existingDraft) throw error;
+      if (existingDraft.request_fingerprint !== fingerprint) {
+        throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED', message: 'Idempotency-Key 已用于另一份版本草稿。' });
+      }
+      if (existingDraft.expires_at.getTime() <= Date.now() || existingDraft.status === 'expired') {
+        throw new ConflictException({ code: 'UPLOAD_DRAFT_EXPIRED', message: '版本上传草稿已过期，请重新创建。' });
+      }
+      const requestedResource = await this.resources.findOne({ where: { public_id: publicId } });
+      if (!requestedResource || requestedResource.deleted_at) throw new NotFoundException('资源不存在');
+      if (!(await this.canWriteResource(requestedResource, actor))) throw new ForbiddenException('没有权限为此资源添加版本');
+      const previous = await this.versions.findOne({ where: { id: existingDraft.resource_version_id } });
+      if (!previous?.public_id || previous.resource_id !== requestedResource.id) throw new ConflictException('版本上传草稿已失效');
+      return {
+        resource_public_id: requestedResource.public_id,
+        resource_id: requestedResource.id,
+        version_public_id: previous.public_id,
+        upload_draft_id: existingDraft.id,
+        revision: previous.revision,
+        expires_at: existingDraft.expires_at.toISOString(),
+        draft_status: existingDraft.status,
+        version_status: previous.status,
+      };
+    }
+  }
 
   /** Move a temporary, locally validated upload to RES before durable forum creation. */
   async uploadManagedFile(file: ResourceFileMeta): Promise<ResourceFileMeta> {
@@ -76,8 +226,12 @@ export class ResourceDirectUploadService {
     const resource = await this.resources.findOne({ where: { id: version.resource_id } });
     if (!resource || resource.deleted_at) throw new NotFoundException('资源不存在');
     if (!(await this.canWriteResource(resource, actor))) throw new ForbiddenException('没有权限修改此资源版本');
-    if (!['draft', 'pending_review', 'pending'].includes(version.status || '')) {
-      throw new ConflictException('资源版本已进入不可修改状态');
+    if (version.status !== 'upload_pending') throw new ConflictException('资源版本没有等待直接上传');
+    const draft = await this.drafts.findOne({ where: { resource_version_id: version.id, user_id: actor.id, status: 'open' } });
+    if (!draft) throw new ConflictException('版本上传草稿不存在或已完成');
+    if (draft.expires_at.getTime() <= Date.now()) {
+      await this.drafts.update(draft.id, { status: 'expired' });
+      throw new ConflictException('版本上传草稿已过期，请重新创建');
     }
     return { version, resource };
   }
@@ -88,7 +242,8 @@ export class ResourceDirectUploadService {
     if (!ALLOWED_ROLES.has(role)) throw new BadRequestException('无效的文件角色');
     this.validateFile(input.filename, input.size_bytes, input.mime_type, resource.resource_kind || 'other');
     if (!input.sha256 || !/^[a-f0-9]{64}$/i.test(input.sha256)) throw new BadRequestException('必须提供有效的 SHA-256');
-    if (role === 'primary' && await this.files.exist({ where: { resource_version_id: version.id, role: 'primary' } })) {
+    if (role !== 'primary') throw new BadRequestException('此草稿仅支持上传主文件');
+    if (await this.files.exist({ where: { resource_version_id: version.id, role: 'primary' } })) {
       throw new ConflictException('此版本已有主文件');
     }
     const upload = await this.res.createUploadSession({
@@ -114,6 +269,12 @@ export class ResourceDirectUploadService {
     if (!session) throw new NotFoundException('上传会话不存在');
     if (session.resource_file_public_id) return { file_public_id: session.resource_file_public_id, completed: true };
     if (session.expires_at.getTime() <= Date.now()) throw new ConflictException('上传会话已过期');
+    const uploadDraft = await this.drafts.findOne({ where: { resource_version_id: session.resource_version_id, user_id: actor.id, status: 'open' } });
+    if (!uploadDraft) throw new ConflictException('版本上传草稿不存在或已完成');
+    if (uploadDraft.expires_at.getTime() <= Date.now()) {
+      await this.drafts.update(uploadDraft.id, { status: 'expired' });
+      throw new ConflictException('版本上传草稿已过期，请重新创建');
+    }
     if (session.object_public_id && session.object_public_id !== objectPublicId) throw new BadRequestException('上传对象不匹配');
     const version = await this.versions.findOne({ where: { id: session.resource_version_id } });
     if (!version?.public_id) throw new NotFoundException('资源版本不存在');
@@ -129,40 +290,69 @@ export class ResourceDirectUploadService {
     if (object.size_bytes !== Number(session.size_bytes) || object.sha256.toLowerCase() !== session.sha256) {
       throw new BadRequestException('资源存储对象与上传会话不匹配');
     }
-    const filePublicId = randomUUID();
-    let bindingId: string | undefined;
-    try {
-      return await this.dataSource.transaction(async (manager) => {
-        const locked = await manager.getRepository(ResourceDirectUploadSession).findOne({ where: { id: sessionId, user_id: actor.id }, lock: { mode: 'pessimistic_write' } });
-        if (!locked) throw new NotFoundException('上传会话不存在');
-        if (locked.resource_file_public_id) return { file_public_id: locked.resource_file_public_id, completed: true };
-        if (locked.expires_at.getTime() <= Date.now()) throw new ConflictException('上传会话已过期');
-        const latestVersion = await manager.findOne(ResourceVersion, { where: { id: locked.resource_version_id } });
-        const latestResource = latestVersion && await manager.findOne(Resource, { where: { id: latestVersion.resource_id }, lock: { mode: 'pessimistic_write' } });
-        if (!latestResource || latestResource.deleted_at || !latestVersion || !['draft', 'pending_review', 'pending'].includes(latestVersion.status || '')) throw new ConflictException('资源版本状态已变化');
-        if (!(await this.canWriteResource(latestResource, actor, manager))) throw new ForbiddenException('没有权限修改此资源版本');
-        if (locked.role === 'primary' && await manager.exists(ResourceFile, { where: { resource_version_id: latestVersion.id, role: 'primary' } })) {
-          throw new ConflictException('此版本已有主文件');
-        }
-        const binding = await this.res.createBinding(objectPublicId, {
-          namespace: 'mindforum', owner_type: 'resource_file', owner_id: filePublicId, visibility: 'private',
-        });
-        bindingId = binding.id;
-        await manager.save(ResourceFile, manager.create(ResourceFile, {
-          public_id: filePublicId, resource_version_id: latestVersion.id, role: locked.role,
-          delivery_mode: 'managed', display_name: locked.filename.slice(0, 255), original_filename: locked.filename,
-          mime_type: object.mime_type, size_bytes: object.size_bytes,
-          hash_algorithm: 'sha256', content_hash: object.sha256.toLowerCase(), integrity_status: 'verified',
-          storage_backend: 'res', storage_key: `sha256:${object.sha256.toLowerCase()}`,
-          provider_file_id: null, provider_object_id: object.public_id, provider_binding_id: binding.id,
-          external_url: null, availability_status: 'pending', sort_order: 0,
-        }));
-        await manager.update(ResourceDirectUploadSession, locked.id, { resource_file_public_id: filePublicId, object_public_id: object.public_id });
-        return { file_public_id: filePublicId, completed: true };
-      });
-    } catch (error) {
-      if (bindingId) await this.res.deleteBinding(objectPublicId, bindingId).catch(() => undefined);
-      throw error;
+    const bytes = await this.res.getObjectContent(object.public_id, { maxBytes: MAX_RESOURCE_SIZE });
+    const actualHash = createHash('sha256').update(bytes).digest('hex');
+    if (bytes.length !== object.size_bytes || actualHash !== object.sha256.toLowerCase()) {
+      throw new ConflictException('资源存储对象内容与已验证元数据不匹配');
     }
+    if (resource.status === 'draft') {
+      if (!resource.public_id) throw new ConflictException('资源公开标识缺失，无法完成上传');
+      if (!uploadDraft.request_metadata) throw new ConflictException('初始资源草稿元数据缺失');
+      const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'mindforum-direct-resource-'));
+      const tempFile = path.join(tempDirectory, session.filename.replace(/[^A-Za-z0-9._-]/g, '_').slice(-120) || 'upload.bin');
+      try {
+        await writeFile(tempFile, bytes, { mode: 0o600, flag: 'wx' });
+        const completed = await this.resourceLifecycle.completeInitialDirectUpload({
+          versionId: version.id,
+          draftId: uploadDraft.id,
+          sessionId: session.id,
+          objectPublicId: object.public_id,
+          actor,
+          file: {
+            file_name: session.filename,
+            file_path: tempFile,
+            file_size: object.size_bytes,
+            mime_type: object.mime_type,
+            content_hash: object.sha256.toLowerCase(),
+            storage_backend: 'res',
+            provider_object_id: object.public_id,
+          },
+        });
+        return { ...completed, completed: true };
+      } finally {
+        await rm(tempDirectory, { recursive: true, force: true });
+      }
+    }
+    if (resource.status !== 'draft') {
+      if (!resource.public_id) throw new ConflictException('资源公开标识缺失，无法完成版本上传');
+      const draftMetadata = uploadDraft.request_metadata as unknown as DirectVersionDraftInput | null;
+      if (!draftMetadata || draftMetadata.version !== version.version) throw new ConflictException('版本上传草稿元数据缺失或不匹配');
+      const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'mindforum-direct-version-'));
+      const tempFile = path.join(tempDirectory, session.filename.replace(/[^A-Za-z0-9._-]/g, '_').slice(-120) || 'upload.bin');
+      try {
+        await writeFile(tempFile, bytes, { mode: 0o600, flag: 'wx' });
+        await this.v2Writes.completeDirectVersion(resource.public_id, {
+          file_name: session.filename,
+          file_path: tempFile,
+          file_size: object.size_bytes,
+          mime_type: object.mime_type,
+          content_hash: object.sha256.toLowerCase(),
+          storage_backend: 'res',
+          provider_object_id: object.public_id,
+        }, draftMetadata, actor.id, {
+          versionId: version.id,
+          draftId: uploadDraft.id,
+          sessionId: session.id,
+          objectPublicId: object.public_id,
+          verifiedBytes: bytes,
+        });
+        const completedSession = await this.sessions.findOne({ where: { id: session.id, user_id: actor.id } });
+        if (!completedSession?.resource_file_public_id) throw new ConflictException('版本文件事务未完成');
+        return { file_public_id: completedSession.resource_file_public_id, completed: true, version_public_id: version.public_id };
+      } finally {
+        await rm(tempDirectory, { recursive: true, force: true });
+      }
+    }
+    throw new ConflictException('资源上传草稿状态无法完成');
   }
 }

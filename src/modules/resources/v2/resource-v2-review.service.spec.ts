@@ -114,6 +114,14 @@ function createHarness(options: HarnessOptions = {}) {
 }
 
 describe('ResourceV2ReviewService', () => {
+  it('does not allow an upload_pending metadata draft to enter moderation', async () => {
+    const { service, res, storage } = createHarness({ versionStatus: 'upload_pending', staffRole: 'moderator' });
+    await expect(service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(res.getObject).not.toHaveBeenCalled();
+    expect(storage.preparePromotion).not.toHaveBeenCalled();
+  });
+
   it('publishes only pending versions, prepares and verifies the binary, advances latest, and keeps one stable recommendation', async () => {
     const { service, managerQuery, storage, notifications } = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
 

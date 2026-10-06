@@ -213,6 +213,15 @@ describe('ResourcesService', () => {
     await expect(service.isResourcePubliclyAccessible({ status: 'approved', is_public: 1, visibility: 'private' })).resolves.toBe(false);
   });
 
+  it('keeps metadata-first draft Resources out of public detail and search results', async () => {
+    const { service, resourceRepository } = createService();
+    await expect(service.isResourcePubliclyAccessible({ status: 'draft', is_public: 1, visibility: 'public' })).resolves.toBe(false);
+    await service.getPublicResources();
+    expect(resourceRepository.createQueryBuilder().where).toHaveBeenCalledWith(
+      'resource.status IN (:...statuses)', expect.objectContaining({ statuses: expect.not.arrayContaining(['draft']) }),
+    );
+  });
+
   it('retains storage keys for authorized file operations without exposing them in public details', async () => {
     const resource = { id: 27, user_id: 9, status: 'published', is_public: 1, category_id: null,
       renderer_preview_key: 'map/preview.png', file_path: '/private/map.msav', mfl_download_url: 'https://files.example.test/map' };

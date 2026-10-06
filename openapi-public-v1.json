@@ -1410,6 +1410,35 @@
         ],
         "parameters": [
           {
+            "name": "resource_kind",
+            "required": false,
+            "in": "query",
+            "description": "资源子类型筛选。",
+            "schema": {
+              "enum": [
+                "mod",
+                "map",
+                "schematic"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "content_language",
+            "required": false,
+            "in": "query",
+            "description": "资源和帖子内容语言筛选。",
+            "schema": {
+              "enum": [
+                "en",
+                "ru",
+                "ja",
+                "zh-CN"
+              ],
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "required": false,
             "in": "query",
@@ -1438,7 +1467,9 @@
               "enum": [
                 "relevance",
                 "newest",
-                "oldest"
+                "oldest",
+                "downloads",
+                "rating"
               ],
               "type": "string"
             }
@@ -1457,12 +1488,20 @@
             "name": "type",
             "required": false,
             "in": "query",
-            "description": "搜索内容类型。",
+            "description": "结果分组筛选。",
             "schema": {
               "enum": [
-                "post",
-                "user",
-                "global"
+                "all",
+                "posts",
+                "resources",
+                "mod",
+                "map",
+                "schematic",
+                "users",
+                "servers",
+                "wiki",
+                "game_versions",
+                "developer_feed"
               ],
               "type": "string"
             }
@@ -1568,9 +1607,7 @@
             "description": "搜索类型；此端点固定返回帖子结果。",
             "schema": {
               "enum": [
-                "post",
-                "user",
-                "global"
+                "post"
               ],
               "type": "string"
             }
@@ -12183,7 +12220,7 @@
           "resource.upload"
         ],
         "summary": "安全导出编辑后的蓝图副本",
-        "description": "Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像和删除选中方块。只读取托管版本并返回新文件，不修改原版本。",
+        "description": "Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像、删除、移动和放置单格方块。只读取托管版本并返回新文件，不修改原版本；含有不支持内容时拒绝导出。",
         "parameters": [
           {
             "name": "id",
@@ -26678,14 +26715,33 @@
             "format": "uuid",
             "nullable": true
           },
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          },
           "rules": {
             "type": "object",
             "nullable": true
+          },
+          "tile_layers": {
+            "type": "object",
+            "description": "Version-scoped bounded terrain layer used by the map editor."
+          },
+          "tile_layers_truncated": {
+            "type": "boolean"
           }
         },
         "required": [
           "version_public_id",
-          "rules"
+          "width",
+          "height",
+          "rules",
+          "tile_layers",
+          "tile_layers_truncated"
         ]
       },
       "ResourceV2MapResourceDto": {
@@ -26867,6 +26923,93 @@
           "y"
         ]
       },
+      "ResourceV2SchematicMoveDto": {
+        "type": "object",
+        "properties": {
+          "from_x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "from_y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "to_x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "to_y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "required": [
+          "from_x",
+          "from_y",
+          "to_x",
+          "to_y"
+        ]
+      },
+      "ResourceV2SchematicAddedBlockDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "block": {
+            "type": "string",
+            "maxLength": 191,
+            "example": "router"
+          },
+          "rotation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3,
+            "default": 0
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "block"
+        ]
+      },
+      "ResourceV2SchematicLogicConfigDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 32768,
+            "description": "Inert processor source text; never evaluated by the renderer."
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "source"
+        ]
+      },
       "ResourceV2ExportSchematicDto": {
         "type": "object",
         "properties": {
@@ -26885,6 +27028,27 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ResourceV2SchematicPositionDto"
+            }
+          },
+          "move_positions": {
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicMoveDto"
+            }
+          },
+          "add_blocks": {
+            "maxItems": 5000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicAddedBlockDto"
+            }
+          },
+          "logic_configs": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicLogicConfigDto"
             }
           }
         },
@@ -27728,6 +27892,17 @@
       "PatchSocialPrivacyDto": {
         "type": "object",
         "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "online",
+              "idle",
+              "dnd",
+              "invisible"
+            ],
+            "example": "online",
+            "description": "好友看到的在线状态。"
+          },
           "presence_visibility": {
             "type": "string",
             "enum": [

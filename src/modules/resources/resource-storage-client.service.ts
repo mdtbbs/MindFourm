@@ -30,6 +30,23 @@ export interface ResBinding {
   created_at: string;
 }
 
+export interface ResObjectInventoryItem extends Omit<ResObject, 'id'> {
+  binding_count: number;
+}
+
+export interface ResBindingInventoryItem {
+  binding_id: string;
+  object_public_id: string;
+  sha256: string;
+  size_bytes: number;
+  object_state: ResObject['state'];
+  namespace: string;
+  owner_type: string;
+  owner_id: string;
+  visibility: 'public' | 'private';
+  created_at: string;
+}
+
 export interface ResBindingInput {
   namespace: string;
   owner_type: string;
@@ -148,6 +165,69 @@ export class ResourceStorageClientService {
       || !Number.isSafeInteger(result.object.size_bytes) || result.object.size_bytes < 0
       || typeof result.object.mime_type !== 'string' || typeof result.object.original_filename !== 'string') throw new ResourceStorageClientError('rejected');
     return result.object;
+  }
+
+  /**
+   * Read the administrative object inventory without ever returning the
+   * upstream response wholesale.  The inventory endpoint intentionally does
+   * not expose storage paths, credentials, or private download tokens.
+   */
+  async listAdminObjectInventory(options: { limit: number; after?: string; state?: ResObject['state'] }): Promise<{ items: ResObjectInventoryItem[]; next_cursor: string | null }> {
+    const params = new URLSearchParams({ limit: String(Math.min(100, Math.max(1, Math.trunc(options.limit) || 1))) });
+    if (options.after) params.set('after', options.after);
+    if (options.state) params.set('state', options.state);
+    const response = await this.request(`/api/admin/inventory/objects?${params.toString()}`);
+    const result = await this.readJson<{ items: unknown; next_cursor?: unknown }>(response);
+    if (!Array.isArray(result.items) || (result.next_cursor !== undefined && result.next_cursor !== null && typeof result.next_cursor !== 'string')) {
+      throw new ResourceStorageClientError('rejected');
+    }
+    const items = result.items.map((item) => this.parseObjectInventoryItem(item));
+    return { items, next_cursor: result.next_cursor == null ? null : result.next_cursor };
+  }
+
+  /** Read only the Forum-owned resource-file bindings from the admin inventory. */
+  async listAdminBindingInventory(options: { namespace: string; ownerType: string; limit: number; after?: string }): Promise<{ items: ResBindingInventoryItem[]; next_cursor: string | null }> {
+    const params = new URLSearchParams({
+      namespace: options.namespace,
+      owner_type: options.ownerType,
+      limit: String(Math.min(100, Math.max(1, Math.trunc(options.limit) || 1))),
+    });
+    if (options.after) params.set('after', options.after);
+    const response = await this.request(`/api/admin/inventory/bindings?${params.toString()}`);
+    const result = await this.readJson<{ items: unknown; next_cursor?: unknown }>(response);
+    if (!Array.isArray(result.items) || (result.next_cursor !== undefined && result.next_cursor !== null && typeof result.next_cursor !== 'string')) {
+      throw new ResourceStorageClientError('rejected');
+    }
+    const items = result.items.map((item) => this.parseBindingInventoryItem(item));
+    return { items, next_cursor: result.next_cursor == null ? null : result.next_cursor };
+  }
+
+  private parseObjectInventoryItem(value: unknown): ResObjectInventoryItem {
+    const item = value as Partial<ResObjectInventoryItem> | null;
+    if (!item || typeof item.public_id !== 'string' || !item.public_id
+      || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(item.sha256)
+      || typeof item.size_bytes !== 'number' || !Number.isSafeInteger(item.size_bytes) || item.size_bytes < 0
+      || typeof item.mime_type !== 'string' || typeof item.original_filename !== 'string'
+      || typeof item.state !== 'string' || typeof item.created_at !== 'string'
+      || (item.verified_at !== null && typeof item.verified_at !== 'string')
+      || typeof item.binding_count !== 'number' || !Number.isSafeInteger(item.binding_count) || item.binding_count < 0) {
+      throw new ResourceStorageClientError('rejected');
+    }
+    return item as ResObjectInventoryItem;
+  }
+
+  private parseBindingInventoryItem(value: unknown): ResBindingInventoryItem {
+    const item = value as Partial<ResBindingInventoryItem> | null;
+    if (!item || typeof item.binding_id !== 'string' || !item.binding_id
+      || typeof item.object_public_id !== 'string' || !item.object_public_id
+      || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(item.sha256)
+      || typeof item.size_bytes !== 'number' || !Number.isSafeInteger(item.size_bytes) || item.size_bytes < 0
+      || typeof item.object_state !== 'string'
+      || typeof item.namespace !== 'string' || typeof item.owner_type !== 'string' || typeof item.owner_id !== 'string'
+      || !['public', 'private'].includes(String(item.visibility)) || typeof item.created_at !== 'string') {
+      throw new ResourceStorageClientError('rejected');
+    }
+    return item as ResBindingInventoryItem;
   }
 
   async getObjectContent(id: string, options: { maxBytes?: number; signal?: AbortSignal } = {}): Promise<Buffer> {

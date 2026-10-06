@@ -1,0 +1,1 @@
+export const RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;

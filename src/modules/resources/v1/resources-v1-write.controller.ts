@@ -4,7 +4,9 @@ import {
 } from '@nestjs/common';
 import { ApiBody, ApiConsumes, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
+import { createHash } from 'crypto';
 import { unlink } from 'fs/promises';
+import { DataSource } from 'typeorm';
 import { ApiV1, RawHttpResponse } from '../../../common/decorators/api-v1.decorator';
 import { ApiV1Exception } from '../../../common/exceptions/api-v1.exception';
 import { OAuthProtected } from '../../../common/decorators/oauth-protected.decorator';
@@ -23,7 +25,7 @@ import { UpdateResourceUploadDraftDto } from '../dto/update-resource-upload-draf
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourcePreviewDraftInterceptor, resourceUploadInterceptor } from '../resources.controller';
 import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
 import { ResourceDirectUploadService } from '../resource-direct-upload.service';
-import { CompleteResourceDirectUploadDto, InitResourceDirectUploadDto, ResourceDirectUploadInitResponseDto, ResourceDirectUploadCompleteResponseDto } from './resource-direct-upload.dto';
+import { CompleteResourceDirectUploadDto, InitResourceDirectUploadDto, ResourceDirectUploadInitResponseDto, ResourceDirectUploadCompleteResponseDto, ResourceDirectUploadDraftResponseDto } from './resource-direct-upload.dto';
 
 const duplicateResponseSchema = {
   type: 'object', required: ['exact', 'structure', 'normalized', 'existing_resources'],
@@ -50,6 +52,7 @@ export class ResourcesV1WriteController {
     private readonly settings: SettingsService,
     private readonly auth: AuthService,
     private readonly directUploads: ResourceDirectUploadService,
+    private readonly dataSource: DataSource,
   ) {}
 
   @Post('uploads/init')
@@ -61,6 +64,53 @@ export class ResourcesV1WriteController {
     await this.assertEnabled(req.user);
     const body = await this.validate(rawBody, InitResourceDirectUploadDto);
     return this.directUploads.init(body, req.user);
+  }
+
+  @Post('direct-drafts')
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 5, window: 60 })
+  @ApiConsumes('application/json')
+  @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'ASCII key scoped to the authenticated account; reuse only for the same direct-upload draft.' })
+  @ApiBody({ type: CreateResourceDto, description: 'Creates an unpublished Resource and upload_pending first version without receiving the file bytes.' })
+  @ApiCreatedResponse({ type: ResourceDirectUploadDraftResponseDto, description: 'Metadata-only direct-upload draft; call uploads/init and uploads/complete before it enters moderation.' })
+  async createDirectUploadDraft(@Body() rawBody: Record<string, any>, @Req() req: any) {
+    await this.assertEnabled(req.user);
+    const body = await this.validate(rawBody, CreateResourceDto);
+    const rawKey = req.headers?.['idempotency-key'];
+    const key = typeof rawKey === 'string' ? rawKey : undefined;
+    const userId = Number(req.user.id);
+
+    // The generic submission idempotency row remains valid after a direct draft
+    // has completed. Recover that successful result before re-entering the
+    // initial-draft creator, whose open/upload_pending checks intentionally
+    // reject mutation of a completed draft.
+    const replay = await this.resources.findIdempotentReplay(userId, key, body as unknown as Record<string, unknown>);
+    if (replay && key) {
+      const keyHash = createHash('sha256').update(key.trim()).digest('hex');
+      const rows = await this.dataSource.query(
+        `SELECT draft.id, draft.expires_at, draft.status AS draft_status,
+                version.public_id AS version_public_id, version.status AS version_status, version.revision
+         FROM resource_direct_upload_drafts draft
+         JOIN resource_versions version ON version.id=draft.resource_version_id
+         WHERE draft.user_id=? AND draft.idempotency_key_hash=? AND version.resource_id=?
+         ORDER BY draft.created_at DESC LIMIT 1`,
+        [userId, keyHash, Number(replay.id)],
+      ) as Array<{ id: string; expires_at: Date | string; draft_status: 'open' | 'completed'; version_public_id: string; version_status: string; revision: number | string }>;
+      const draft = rows[0];
+      if (draft && (draft.draft_status === 'completed' || new Date(draft.expires_at).getTime() > Date.now())) {
+        return {
+          resource_public_id: replay.public_id,
+          resource_id: Number(replay.id),
+          version_public_id: draft.version_public_id,
+          upload_draft_id: draft.id,
+          expires_at: new Date(draft.expires_at).toISOString(),
+          draft_status: draft.draft_status,
+          version_status: draft.version_status,
+          revision: Number(draft.revision),
+        };
+      }
+    }
+    return this.resources.createDirectUploadDraft(body, userId, key, getClientIp(req));
   }
 
   @Post('uploads/complete')

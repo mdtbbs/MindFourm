@@ -80,7 +80,7 @@ describe('SearchController', () => {
       category: undefined,
       sort: 'relevance',
     }, actor);
-    expect(searchService.searchResources).toHaveBeenCalledWith('guide', 20);
+    expect(searchService.searchResources).toHaveBeenCalledWith('guide', 20, actor, expect.objectContaining({ sort: 'relevance' }));
     expect(result).toMatchObject({
       data: [
         { id: 7, title: 'Result', excerpt: 'summary' },

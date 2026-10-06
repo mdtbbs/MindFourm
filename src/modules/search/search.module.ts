@@ -19,6 +19,8 @@ import { SettingsService } from '../settings/settings.service';
 import { SearchProviderRegistry } from './search-provider.registry';
 import { ContentRelation } from '@entities/content-relation.entity';
 import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
+import { SearchIndexMaintenanceController } from './search-index-maintenance.controller';
+import { SearchIndexMaintenanceService } from './search-index-maintenance.service';
 
 @Module({
   imports: [
@@ -28,11 +30,12 @@ import { OAuthScopeGuard } from '../../common/guards/oauth-scope.guard';
     ]),
     SettingsModule,
   ],
-  controllers: [SearchController, SearchV1Controller, SearchAuditController],
+  controllers: [SearchController, SearchV1Controller, SearchAuditController, SearchIndexMaintenanceController],
   providers: [
     OAuthScopeGuard,
     SearchService,
     SearchProviderRegistry,
+    SearchIndexMaintenanceService,
     PostSummaryService,
     { provide: SEARCH_SETTINGS_READER, useExisting: SettingsService },
   ],

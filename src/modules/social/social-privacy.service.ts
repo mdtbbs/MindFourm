@@ -28,10 +28,14 @@ export class SocialPrivacyService {
   }
 
   async patch(userId: number, dto: PatchSocialPrivacyDto) {
-    const [settings] = await Promise.all([this.ensurePrivacy(userId), this.ensurePreference(userId)]);
+    const [settings, preference] = await Promise.all([this.ensurePrivacy(userId), this.ensurePreference(userId)]);
     const { status, ...privacyPatch } = dto as PatchSocialPrivacyDto & { status?: UserPresenceStatus };
     Object.assign(settings, privacyPatch);
     await this.privacy.save(settings);
+    if (status) {
+      preference.status = status;
+      await this.preferences.save(preference);
+    }
     return this.get(userId);
   }
 
