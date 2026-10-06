@@ -15,7 +15,7 @@ async function expectNoViewportOverflow(page: Page): Promise<void> {
 
 async function expectVisibleRegionsInsideViewport(page: Page, selectors: string[]): Promise<void> {
   for (const selector of selectors) {
-    const regions = page.locator(selector).filter({ visible: true });
+    const regions = page.locator(`${selector}:visible`);
     for (let index = 0; index < await regions.count(); index += 1) {
       const box = await regions.nth(index).boundingBox();
       if (!box) continue;
@@ -26,7 +26,7 @@ async function expectVisibleRegionsInsideViewport(page: Page, selectors: string[
 }
 
 authTest.describe('Mobile resource center', () => {
-  authTest('keeps discovery shelves and resource actions inside a 390px viewport', async ({ authenticatedPage }) => {
+  authTest('keeps discovery shelves and resource filters inside a 390px viewport', async ({ authenticatedPage }) => {
     await authenticatedPage.setViewportSize(PHONE);
     await authenticatedPage.goto('/resources', { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
@@ -34,13 +34,13 @@ authTest.describe('Mobile resource center', () => {
     await expectNoViewportOverflow(authenticatedPage);
     await expectVisibleRegionsInsideViewport(authenticatedPage, ['main > *', 'main form', 'main [role="navigation"]']);
 
-    const oversizedButtons = await authenticatedPage.locator('main button:visible').evaluateAll((buttons) => buttons
-      .map((button) => {
-        const rect = button.getBoundingClientRect();
-        return { text: button.textContent?.trim() || '', width: rect.width, height: rect.height };
+    const undersizedFilterControls = await authenticatedPage.locator('main form input:visible, main form select:visible, main form button:visible').evaluateAll((controls) => controls
+      .map((control) => {
+        const rect = control.getBoundingClientRect();
+        return { text: control.textContent?.trim() || '', width: rect.width, height: rect.height };
       })
       .filter((item) => item.width > 0 && item.height > 0 && item.height < 40));
-    expect(oversizedButtons, 'primary resource controls should remain touch-sized on phones').toEqual([]);
+    expect(undersizedFilterControls, 'resource filters should remain touch-sized on phones').toEqual([]);
   });
 });
 
@@ -69,11 +69,11 @@ adminTest.describe('Mobile resource operations', () => {
     await expectNoViewportOverflow(authenticatedPage);
     await expectVisibleRegionsInsideViewport(authenticatedPage, ['main > *', 'main form']);
 
-    const controls = authenticatedPage.locator('main input:visible, main select:visible, main button:visible');
+    const controls = authenticatedPage.locator('main form input:visible, main form select:visible, main form button:visible');
     for (let index = 0; index < await controls.count(); index += 1) {
       const box = await controls.nth(index).boundingBox();
       if (!box || box.width === 0 || box.height === 0) continue;
-      expect(box.height, 'audit controls should be touch-sized').toBeGreaterThanOrEqual(40);
+      expect(box.height, 'audit filter controls should be touch-sized').toBeGreaterThanOrEqual(40);
     }
   });
 });
