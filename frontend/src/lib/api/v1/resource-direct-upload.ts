@@ -32,6 +32,14 @@ type ResourceDirectUploadInitResponse = {
 
 type ResourceDirectUploadCompleteResponse = { file_public_id: string; completed: true; version_public_id?: string };
 
+function normalizedUploadMime(file: File): string {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith('.rar') || lowerName.endsWith('.7z') || lowerName.endsWith('.tar')) {
+    return 'application/octet-stream';
+  }
+  return file.type || 'application/octet-stream';
+}
+
 /** Create a first-resource metadata draft before sending the file to ResourceStorage. */
 export async function createResourceDirectUploadDraft(
   input: Record<string, unknown>,
@@ -73,7 +81,7 @@ export async function uploadResourceDirectDraft(
       version_public_id: versionPublicId,
       filename: file.name,
       size_bytes: file.size,
-      mime_type: file.type || 'application/octet-stream',
+      mime_type: normalizedUploadMime(file),
       sha256,
     }),
   });
