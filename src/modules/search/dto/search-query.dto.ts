@@ -16,7 +16,7 @@ export class SearchQueryDto {
   category?: string;
 
   @IsOptional()
-  @IsIn(['relevance', 'newest', 'oldest', 'downloads', 'rating'])
+  @IsIn(['relevance', 'newest', 'oldest', 'updated_at', 'downloads', 'rating'])
   sort?: string;
 
   @IsOptional()
@@ -39,4 +39,20 @@ export class SearchQueryDto {
   @IsOptional()
   @IsIn(['mod', 'map', 'schematic'])
   resource_kind?: 'mod' | 'map' | 'schematic';
+
+  @IsOptional() @IsString() @MaxLength(80)
+  game_version?: string;
+
+  @IsOptional() @IsString() @MaxLength(100)
+  author?: string;
+
+  @IsOptional() @IsString() @MaxLength(80)
+  tag?: string;
+
+  @IsOptional() @IsString() @MaxLength(128)
+  dependency?: string;
+
+  @IsOptional()
+  @IsIn(['release', 'stable', 'beta', 'alpha', 'snapshot'])
+  release_channel?: 'release' | 'stable' | 'beta' | 'alpha' | 'snapshot';
 }

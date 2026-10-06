@@ -2,6 +2,36 @@ import { createHmac } from 'crypto';
 import { MultiplayerService } from './multiplayer.service';
 
 describe('MultiplayerService control-plane guards', () => {
+  it('lists only unexpired join requests owned by the caller and bounds the projection', async () => {
+    const row = {
+      id: 'jrq_1', session_id: 'ses_1', expires_at: new Date(), created_at: new Date(),
+      requester: { id: 8, username: 'player', avatar_url: '/avatar.png', email: 'private@example.test' },
+      session: { id: 'ses_1', game_id: 'mindustry', game_version: 'v1', activity_name: 'Survival', status: 'active', expires_at: new Date(), code_hash: 'secret' },
+    };
+    const qb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(), take: jest.fn().mockReturnThis(),
+      getManyAndCount: jest.fn().mockResolvedValue([[row], 1]),
+    };
+    const service = Object.create(MultiplayerService.prototype) as any;
+    service.requireEnabled = jest.fn().mockResolvedValue(undefined);
+    service.joinRequests = { createQueryBuilder: jest.fn().mockReturnValue(qb) };
+
+    const result = await service.listJoinRequests(7);
+
+    expect(qb.where).toHaveBeenCalledWith('join_request.target_user_id = :ownerId', { ownerId: 7 });
+    expect(qb.andWhere).toHaveBeenNthCalledWith(1, "join_request.status = 'pending'");
+    expect(qb.andWhere).toHaveBeenNthCalledWith(2, 'join_request.expires_at > :now', expect.objectContaining({ now: expect.any(Date) }));
+    expect(qb.take).toHaveBeenCalledWith(50);
+    expect(result.data[0]).toEqual({
+      id: 'jrq_1', session_id: 'ses_1', expires_at: row.expires_at, created_at: row.created_at,
+      requester: { id: 8, username: 'player', avatar_url: '/avatar.png' },
+      session: { id: 'ses_1', game_id: 'mindustry', game_version: 'v1', activity_name: 'Survival', status: 'active', expires_at: row.session.expires_at },
+    });
+    expect(JSON.stringify(result)).not.toContain('secret');
+    expect(JSON.stringify(result)).not.toContain('private@example.test');
+  });
+
   it('binds one-time Join Intents to the owner and consumes them atomically', async () => {
     const service = Object.create(MultiplayerService.prototype) as any;
     const payload = JSON.stringify({ user_id: 7, session_id: 'ses_12345678901234567890', approved_join: true });

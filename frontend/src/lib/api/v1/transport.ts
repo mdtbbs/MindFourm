@@ -178,6 +178,13 @@ export async function requestV1<T>(path: string, init: RequestInit): Promise<T> 
   });
 }
 
+/** Build the API host's WebSocket endpoint using the same base as V1 fetches. */
+export function buildV1WebSocketUrl(path: string): string {
+  const url = new URL(buildPublicApiUrl(path), typeof window === 'undefined' ? 'http://127.0.0.1' : window.location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
 /** V1 mutation helper for endpoints that return a raw file instead of JSON. */
 export async function requestV1Blob(path: string, init: RequestInit): Promise<Blob> {
   let csrf = typeof document === 'undefined'

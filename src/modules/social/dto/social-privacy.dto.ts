@@ -2,8 +2,13 @@ import { IsBoolean, IsEnum, IsInt, IsOptional, Min } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 const VISIBILITY = ['everyone', 'friends', 'nobody'] as const;
+const PRESENCE_STATUS = ['online', 'idle', 'dnd', 'invisible'] as const;
 
 export class PatchSocialPrivacyDto {
+  @ApiPropertyOptional({ enum: [...PRESENCE_STATUS], example: 'online', description: '好友看到的在线状态。' })
+  @IsOptional() @IsEnum(PRESENCE_STATUS)
+  status?: typeof PRESENCE_STATUS[number];
+
   @ApiPropertyOptional({ enum: [...VISIBILITY], example: 'friends', description: '谁可以看到在线状态。' })
   @IsOptional() @IsEnum(VISIBILITY)
   presence_visibility?: typeof VISIBILITY[number];

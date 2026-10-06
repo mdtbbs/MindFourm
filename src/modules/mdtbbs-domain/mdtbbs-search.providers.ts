@@ -53,11 +53,62 @@ export class MdtbbsResourceSearchProvider implements SearchProvider, OnModuleIni
     if (options.category) qb.andWhere('category.slug = :category', { category: options.category });
     if (options.resource_kind) qb.andWhere('r.resource_kind = :resourceKind', { resourceKind: options.resource_kind });
     if (options.content_language) qb.andWhere('r.content_language = :contentLanguage', { contentLanguage: options.content_language });
+    if (options.author?.trim()) {
+      const author = options.author.trim();
+      const authorId = /^\d+$/.test(author) ? Number(author) : -1;
+      qb.andWhere('(LOWER(user.username) = LOWER(:author) OR r.user_id = :authorId)', { author, authorId });
+    }
+    if (options.tag?.trim()) {
+      qb.andWhere("JSON_CONTAINS(r.metadata_json, JSON_QUOTE(:resourceTag), '$.tags')", { resourceTag: options.tag.trim() });
+    }
+    if (options.game_version?.trim()) {
+      qb.andWhere(`(EXISTS (
+        SELECT 1 FROM resource_version_compatibilities search_compatibility
+        INNER JOIN resource_versions search_compatibility_version ON search_compatibility_version.id = search_compatibility.resource_version_id
+        WHERE search_compatibility_version.resource_id = r.id AND search_compatibility_version.status = 'published'
+          AND search_compatibility.runtime = 'mindustry'
+          AND (search_compatibility.game_series = :gameVersion OR
+            ((search_compatibility.min_version_value IS NULL OR search_compatibility.min_version_value <= :gameVersion)
+              AND (search_compatibility.max_version_value IS NULL OR search_compatibility.max_version_value >= :gameVersion)))
+      ) OR EXISTS (
+        SELECT 1 FROM resource_versions search_game_version
+        WHERE search_game_version.resource_id = r.id AND search_game_version.status = 'published'
+          AND (search_game_version.game_version_min = :gameVersion OR search_game_version.game_version_max = :gameVersion)
+      ) OR JSON_CONTAINS(r.metadata_json, JSON_QUOTE(:gameVersion), '$.supported_versions'))`, {
+        gameVersion: options.game_version.trim(),
+      });
+    }
+    if (options.release_channel) {
+      qb.andWhere(`EXISTS (
+        SELECT 1 FROM resource_versions search_release
+        WHERE search_release.resource_id = r.id AND search_release.status = 'published'
+          AND search_release.release_channel = :releaseChannel
+      )`, { releaseChannel: options.release_channel });
+    }
+    if (options.dependency?.trim()) {
+      const dependency = options.dependency.trim();
+      const dependencyId = /^\d+$/.test(dependency) ? Number(dependency) : -1;
+      const dependencyLike = `%${escapeLike(dependency)}%`;
+      qb.andWhere(`(EXISTS (
+        SELECT 1 FROM resource_version_dependencies search_dependency
+        INNER JOIN resource_versions search_dependency_version ON search_dependency_version.id = search_dependency.resource_version_id
+        WHERE search_dependency_version.resource_id = r.id AND search_dependency_version.status = 'published'
+          AND (search_dependency.external_identifier = :dependency OR search_dependency.external_identifier LIKE :dependencyLike
+            OR search_dependency.target_resource_id = :dependencyId)
+      ) OR EXISTS (
+        SELECT 1 FROM resource_dependencies search_dependency_v2
+        INNER JOIN resource_versions search_dependency_v2_version ON search_dependency_v2_version.id = search_dependency_v2.resource_version_id
+        WHERE search_dependency_v2_version.resource_id = r.id AND search_dependency_v2_version.status = 'published'
+          AND (search_dependency_v2.external_identifier = :dependency OR search_dependency_v2.external_identifier LIKE :dependencyLike
+            OR search_dependency_v2.target_resource_id = :dependencyId)
+      ))`, { dependency, dependencyLike, dependencyId });
+    }
     if (options.preferred_content_language) {
       qb.addSelect('CASE WHEN r.content_language = :preferredContentLanguage THEN 1 ELSE 0 END', 'search_language_match')
         .setParameter('preferredContentLanguage', options.preferred_content_language);
     }
     if (options.preferred_content_language) qb.orderBy('search_language_match', 'DESC');
+    if (options.sort === 'updated_at') qb.addOrderBy('r.updated_at', 'DESC');
     if (options.sort === 'oldest') qb.addOrderBy('r.created_at', 'ASC');
     else if (options.sort === 'newest') qb.addOrderBy('r.created_at', 'DESC');
     else if (options.sort === 'rating') qb.addOrderBy('r.rating_average', 'DESC').addOrderBy('r.rating_count', 'DESC').addOrderBy('r.created_at', 'DESC');

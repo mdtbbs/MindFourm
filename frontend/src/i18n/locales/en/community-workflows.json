@@ -405,6 +405,28 @@
     "loadFailed": "Could not load message privacy settings.",
     "saveFailed": "Could not update message privacy settings."
   },
+  "socialPrivacy": {
+    "title": "Presence, activity and multiplayer privacy",
+    "description": "Choose who can see your status and activity, who can join or invite you, and your manual status. Server policy controls the available multiplayer actions.",
+    "status": "My status",
+    "online": "Online",
+    "idle": "Idle",
+    "dnd": "Do not disturb",
+    "invisible": "Invisible",
+    "presence_visibility": "Who can see my online status",
+    "activity_visibility": "Who can see my current activity",
+    "allow_join": "Who can join my session directly",
+    "allow_join_request": "Who can request to join my session",
+    "allow_invites": "Who can invite me to a session",
+    "showLastSeen": "Show my last seen time to permitted viewers",
+    "everyone": "Everyone",
+    "friends": "Friends only",
+    "nobody": "Nobody",
+    "save": "Save social privacy",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveFailed": "Could not update social privacy settings."
+  },
   "adminSecurityAccessLogs": {
     "title": "Security access logs",
     "retention": "Retention follows the admin cleanup setting (default: 90 days). IP addresses are visible to administrators only.",

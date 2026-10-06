@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSse } from "@/hooks/use-sse";
+import { useForumRealtime } from '@/hooks/use-forum-realtime';
 import { useAuth } from "@/lib/auth/context";
 import { useSettings } from "@/lib/settings/context";
 import { resolveBrand } from "@/lib/theme/brand";
@@ -91,6 +92,7 @@ export default function ContentShell({
   }, []);
 
   useSse("notification", handleMessageEvent, { enabled: isAuthenticated });
+  useForumRealtime(user?.id, isAuthenticated);
 
   const buildAuthUrl = (endpoint: "login" | "register") => {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;

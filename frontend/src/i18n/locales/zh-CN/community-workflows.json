@@ -405,6 +405,28 @@
     "loadFailed": "无法加载私信隐私设置。",
     "saveFailed": "无法更新私信隐私设置。"
   },
+  "socialPrivacy": {
+    "title": "在线状态、活动与联机隐私",
+    "description": "设置好友可见范围、联机请求策略和手动在线状态。服务端策略会决定可执行的联机操作。",
+    "status": "我的状态",
+    "online": "在线",
+    "idle": "离开",
+    "dnd": "请勿打扰",
+    "invisible": "隐身",
+    "presence_visibility": "谁能看到在线状态",
+    "activity_visibility": "谁能看到正在进行的活动",
+    "allow_join": "谁可以直接加入我的房间",
+    "allow_join_request": "谁可以申请加入我的房间",
+    "allow_invites": "谁可以邀请我加入房间",
+    "showLastSeen": "向有权限的人显示上次在线时间",
+    "everyone": "所有人",
+    "friends": "仅好友",
+    "nobody": "任何人都不允许",
+    "save": "保存社交隐私设置",
+    "saving": "保存中…",
+    "saved": "已保存",
+    "saveFailed": "无法更新社交隐私设置。"
+  },
   "adminSecurityAccessLogs": {
     "title": "安全访问日志",
     "retention": "保留期限由后台清理设置控制（默认 90 天）。IP 地址仅管理员可见。",

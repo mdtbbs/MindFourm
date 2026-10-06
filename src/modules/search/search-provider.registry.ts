@@ -4,8 +4,13 @@ export interface SearchOptions {
   limit: number;
   page?: number;
   category?: string;
-  sort?: 'relevance' | 'newest' | 'oldest' | 'downloads' | 'rating';
+  sort?: 'relevance' | 'newest' | 'oldest' | 'updated_at' | 'downloads' | 'rating';
   resource_kind?: 'mod' | 'map' | 'schematic';
+  game_version?: string;
+  author?: string;
+  tag?: string;
+  dependency?: string;
+  release_channel?: 'release' | 'stable' | 'beta' | 'alpha' | 'snapshot';
   viewer?: { id: number; role: string; preferred_content_language?: string | null };
   content_language?: string;
   preferred_content_language?: string | null;
