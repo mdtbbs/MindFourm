@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, Put, Query, Req, UseGuards } from '@nestjs/common';
+import { ApiExcludeController } from '@nestjs/swagger';
 import { IsBoolean } from 'class-validator';
 import { JwtAuthGuard } from '@common/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
@@ -12,6 +13,7 @@ class SetResourceFeaturedDto {
   featured!: boolean;
 }
 
+@ApiExcludeController()
 @Controller('admin/resources/operations')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ResourceOperationsController {
