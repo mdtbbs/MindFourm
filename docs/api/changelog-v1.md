@@ -4,44 +4,33 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
-## 尚未发布
+## Public API 1.1.0
 
-### 2.7.0 计划发布内容
-
-- Resource Center 增加 metadata-first direct upload 和基于官方 renderer 的蓝图/地图新版本编辑流程。上传对象在论坛 complete 阶段重新校验，编辑永远创建新 revision 并进入现有审核；公开客户端继续使用已有 V1 文件和版本接口。
-- 统一搜索资源筛选增加 `game_version`、`author`、`tag`、`dependency`、`release_channel`，旧兼容搜索也按登录 viewer 应用屏蔽和资源可见性；这些字段是可选增量参数。
-- 能力发现会在 renderer 协议/运行时哈希或 RES 不满足时关闭编辑能力。客户端必须把 `false` 当作当前不可用，不应自行重试绕过开关。
+本次契约修订在初始 `1.0.0` 基础上增加了公开操作和可选查询参数。所有既有公开操作、必填参数和字段语义均保留。OpenAPI `info.version` 使用语义版本；兼容新增提升次版本号，破坏性契约变更需要新的路径主版本和迁移说明。API 基础路径仍是 `/api/v1`。
 
 ### Added
 
-- `POST /api/v1/resources/uploads/init` 和 `/uploads/complete` 增加资源上下文直传：`resource.upload`、登录与站点验证要求不变，限流 10/60s；init 必须携带 pending/draft 版本 UUID、文件名、大小、MIME 和 SHA-256，返回短期 RES 上传信息或去重对象，均需 complete 进行服务端验证与私有绑定。失败可返回 `RESOURCE_STORAGE_UNAVAILABLE` (503)、`RESOURCE_STORAGE_OBJECT_NOT_FOUND` (404)、`RESOURCE_STORAGE_REJECTED` (422)。
+- 资源中心新增 Mod、Map、Schematic 的类型化详情、清单、版本、依赖、关系和分析操作；增加协作者管理、审核记录、GitHub Release 来源同步和安全的编辑导出操作。完整接口见[资源中心 API V1](./resources-v1-contract.md)。
+- 增加 `POST /api/v1/resources/uploads/init` 与 `POST /api/v1/resources/uploads/complete`。二者要求 `resource.upload`；init 创建短期上传会话，complete 会重新校验对象并建立待审核资源绑定。相关错误包括 `RESOURCE_STORAGE_UNAVAILABLE` (503)、`RESOURCE_STORAGE_OBJECT_NOT_FOUND` (404) 和 `RESOURCE_STORAGE_REJECTED` (422)。
+- 游戏内容 API 增加按名称读取和搜索内容的操作，以及地图和资源的类型化读取能力。
 - 新增 `GET /api/v1/resources/discovery/home`、`/discovery/hot`、`/discovery/for-you` 和 `/discovery/related/{id}`，公开精选、趋势、近 7 天上升、评分榜、最新、下载榜、猜你喜欢和相关推荐，匿名可读；携带 MindAuth Bearer 时需要 `resource.read`。响应声明稳定 `reasons`、榜单候选窗口分页、公开资源卡片和 V1 request-id envelope。推荐排除删除、未审核、私有和停用主题资源；相关推荐对不可公开源资源统一返回 404。限流分别为 60、60、45、60 次/分钟。匿名推荐不读取个人行为；个性化只用当前公开资源上的站内点赞/收藏。
 
 ### Changed
 
-- 新 RES 文件下载与预览返回 302；下载仍由论坛授权并记录 DownloadGrant。旧 managed/MFL/external 文件保持兼容，客户端应跟随跳转。
+- `GET /api/v1/search` 增加可选 `resource_kind` 与 `content_language` 查询参数，并扩展排序和结果分组值。原有 `post`、`user`、`global` 搜索类型仍保留为兼容输入。`GET /api/v1/search/posts` 保留原有类型值，但该路径始终返回帖子。
+- 资源文件下载和预览在使用新文件交付方式时可能返回 HTTP `302`。客户端应跟随重定向；论坛仍负责访问授权，历史文件来源继续兼容。
 
 ### Deprecated
 
-- 暂无。
+- 当前没有已弃用的公开操作。
 
 ### Removed
 
-- 暂无。
+- 当前没有移除公开操作；既有 V1 路径、必填参数和已记录的字段语义均保留。
 
-### Fixed
+## Public V1 当前能力摘要
 
-- 暂无。
-
-### Security
-
-- 暂无。
-
-## 已发布版本
-
-### Public V1 — OpenAPI `info.version` `1.0.0`
-
-仓库将 Public V1 契约标记为 `1.0.0`。Git 历史可以确认以下功能已合入当前 `master`，但没有记录一个统一的 V1 对外发布日期；此处不推定发布日期，也不把论坛应用版本号当作 API 版本。
+以下内容概览当前 V1 契约，不是逐次 API 修订清单。初始 OpenAPI 契约版本为 `1.0.0`；当前契约版本为 `1.1.0`。论坛应用版本与 API 契约版本相互独立。
 
 #### Added
 

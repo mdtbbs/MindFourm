@@ -22,6 +22,14 @@ const PUBLIC_API_ORIGIN = `${PUBLIC_SITE}/api`;
 
 const NAV_GROUPS = [
   {
+    label: '论坛与版本',
+    items: [
+      { href: '/api/v1/docs/product-overview', label: '论坛功能概览' },
+      { href: '/api/v1/docs/product-changelog', label: '产品更新日志' },
+      { href: '/api/v1/docs/product-roadmap', label: '公开计划' },
+    ],
+  },
+  {
     label: '入门',
     items: [
       { href: '/api/v1/docs/quick-start', label: '快速开始' },
@@ -72,6 +80,11 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   changelog: 'changelog-v1.md',
   lifecycle: 'lifecycle-v1.md',
 };
+const PRODUCT_GUIDES: Record<string, string> = {
+  'product-overview': 'overview.md',
+  'product-changelog': 'changelog.md',
+  'product-roadmap': 'roadmap.md',
+};
 
 const MARKDOWN_GUIDE_SLUGS: Record<string, string> = Object.fromEntries(
   Object.entries(MARKDOWN_GUIDES).map(([slug, file]) => [file, slug]),
@@ -117,9 +130,10 @@ function escapeHtml(value: unknown): string {
 }
 
 function renderMarkdownGuide(slug: string): DocPage | undefined {
-  const fileName = MARKDOWN_GUIDES[slug];
+  const fileName = MARKDOWN_GUIDES[slug] || PRODUCT_GUIDES[slug];
   if (!fileName) return undefined;
-  const candidates = [join(process.cwd(), 'docs', 'api', fileName), join(__dirname, '..', '..', 'docs', 'api', fileName)];
+  const section = PRODUCT_GUIDES[slug] ? 'product' : 'api';
+  const candidates = [join(process.cwd(), 'docs', section, fileName), join(__dirname, '..', '..', 'docs', section, fileName)];
   let markdown: string | undefined;
   for (const candidate of candidates) {
     try {
@@ -168,7 +182,7 @@ function renderMarkdownGuide(slug: string): DocPage | undefined {
     .map((heading) => ({ href: `#${encodeURI(heading.id)}`, label: heading.label, level: heading.level }));
   return {
     title,
-    description: title + ' · MDTBBS API 文档',
+    description: title + (section === 'product' ? ' · MDTBBS 产品文档' : ' · MDTBBS API 文档'),
     body: '<div class="markdown-body">' + parsedBody + '</div>',
     toc,
   };
@@ -410,7 +424,7 @@ function commonShell(params: {
 </head>
 <body>
   <header class="topbar">
-    <a class="brand" href="/api/v1"><span class="brand-mark">MDT</span><span>MDTBBS 开发者文档</span></a>
+    <a class="brand" href="/api/v1"><span class="brand-mark">MDT</span><span>MDTBBS 文档中心</span></a>
     <nav class="top-links" aria-label="顶栏导航">
       <a class="hide-mobile" href="/">返回论坛</a>
       <a href="/api/openapi/v1.json">OpenAPI 规范</a>
@@ -418,14 +432,14 @@ function commonShell(params: {
     </nav>
   </header>
   <div class="layout${params.toc?.length ? ' has-toc' : ''}">
-    <nav class="sidebar" aria-label="开发者文档导航">
-      <div class="sidebar-title">开发者文档</div>
+    <nav class="sidebar" aria-label="文档中心导航">
+      <div class="sidebar-title">文档中心</div>
       <a href="/api/v1"${params.activePath === '/api/v1' ? ' aria-current="page"' : ''}>概览</a>
       ${nav}
     </nav>
     <main class="content">
       ${params.body}
-  <div class="footer">MDTBBS 论坛 ${escapeHtml(params.forumVersion)} · 公开 API v${escapeHtml(API_V1_VERSION)} · 文档以当前公开稳定接口为准。</div>
+  <div class="footer">MDTBBS 论坛 ${escapeHtml(params.forumVersion)} · Public API ${escapeHtml(API_V1_VERSION)} · 产品说明以公开更新记录为准。</div>
     </main>
     ${toc}
   </div>
@@ -475,12 +489,12 @@ function setHtmlHeaders(res: any, nonceAwareHtml: string, options: { noStore?: b
 
 function renderHome(forumVersion: string): string {
   const body = `
-    <div class="eyebrow">MDTBBS 开发者文档</div>
-    <h1>把 MDTBBS 接入你的工具</h1>
-    <p class="lead">这里整理论坛、资源中心、蓝图与地图的公开 API。先从能跑通的场景开始，再按需要接入认证、上传和同步。</p>
+    <div class="eyebrow">MDTBBS 文档中心</div>
+    <h1>了解论坛，开始接入</h1>
+    <p class="lead">这里面向论坛用户与第三方开发者，提供功能概览、版本更新、后续计划和公开 API 接入资料。</p>
     <div class="stat-grid">
       <div class="stat"><span>论坛版本</span><strong>${escapeHtml(forumVersion)}</strong></div>
-      <div class="stat"><span>API 版本</span><strong>v${escapeHtml(API_V1_VERSION)}</strong></div>
+      <div class="stat"><span>API 契约</span><strong>${escapeHtml(API_V1_VERSION)}</strong></div>
       <div class="stat"><span>API 地址</span><strong>mdtbbs.cn/api/v1</strong></div>
     </div>
     ${callout('info', '先检查服务能力', `客户端启动后先请求 ${inlineCode('GET /api/v1/capabilities')}。如果服务端关闭某项能力，客户端应隐藏对应入口，不要靠接口报错来猜。`)}
@@ -497,6 +511,7 @@ function renderHome(forumVersion: string): string {
       <p>公开读取接口通常可以匿名调用。需要用户身份或写权限的接口，会在指南和 API 参考中标明认证方式与 OAuth 权限范围。</p>
     `, 'first-request')}
     ${section('如何使用这些文档', '<p>指南介绍常见场景和完整流程；<a href="/api/v1/reference">API 参考</a>逐项列出参数、权限、请求体、响应和调用示例；机器可读接口定义见 <a href="/api/openapi/v1.json"><code>/api/openapi/v1.json</code></a>。</p>', 'how-to-use')}
+    ${section('论坛与版本', '<p><a href="/api/v1/docs/product-overview">查看论坛功能概览</a>，了解论坛从 1.0 到当前版本的主要能力；<a href="/api/v1/docs/product-changelog">查看产品更新日志</a>与<a href="/api/v1/docs/product-roadmap">公开计划</a>。</p>', 'product')}
     ${section('公开接口范围', '<p>第三方客户端的稳定接口使用 <code>/api/v1/*</code>。管理端、服务间和未列入本开发者文档的历史路由不属于公开稳定契约。</p>', 'boundary')}
   `;
   return commonShell({
@@ -509,6 +524,7 @@ function renderHome(forumVersion: string): string {
       { href: '#scenarios', label: '常见开发场景' },
       { href: '#first-request', label: '先运行一个请求' },
       { href: '#how-to-use', label: '如何使用这些文档' },
+      { href: '#product', label: '论坛与版本' },
     ],
   });
 }

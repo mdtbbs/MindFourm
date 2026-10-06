@@ -1,6 +1,12 @@
 import { IsString, IsOptional, IsInt, Min, Max, IsIn, IsNotEmpty, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
+export const SEARCH_TYPE_VALUES = [
+  'post', 'posts', 'user', 'users', 'global', 'all', 'resources', 'resource',
+  'mod', 'map', 'schematic', 'servers', 'server', 'wiki', 'game_versions',
+  'game_version', 'developer_feed',
+];
+
 export class SearchQueryDto {
   @IsString()
   @IsNotEmpty()
@@ -8,7 +14,7 @@ export class SearchQueryDto {
   q: string;
 
   @IsOptional()
-  @IsIn(['post', 'posts', 'user', 'users', 'global', 'all', 'resources', 'resource', 'mod', 'map', 'schematic', 'servers', 'server', 'wiki', 'game_versions', 'game_version', 'developer_feed'])
+  @IsIn(SEARCH_TYPE_VALUES)
   type?: string;
 
   @IsOptional()
