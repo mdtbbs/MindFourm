@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, SelectQueryBuilder } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceLike } from '@entities/resource-like.entity';
 import { ResourceFavorite } from '@entities/resource-favorite.entity';
@@ -125,10 +125,15 @@ export class ResourceDiscoveryService {
     const seedIds = [...new Set([...likes, ...favorites].map((entry) => entry.resource_id))];
     if (!seedIds.length) return this.fallbackForYou(kind, limit);
 
-    const seeds = await this.resources.find({ where: { id: In(seedIds) } });
+    const seeds = await this.visibleQuery('seed')
+      .andWhere('seed.id IN (:...seedIds)', { seedIds })
+      .take(240)
+      .getMany();
+    if (!seeds.length) return this.fallbackForYou(kind, limit);
+
     const profile = this.profile(seeds);
     const candidates = await this.visibleQuery('resource', kind).take(350).getMany();
-    const seedSet = new Set(seedIds);
+    const seedSet = new Set(seeds.map((seed) => seed.id));
 
     const ranked = candidates
       .filter((candidate) => !seedSet.has(candidate.id))
@@ -139,7 +144,7 @@ export class ResourceDiscoveryService {
     return {
       algorithm: 'resource-taste-v1',
       personalized: true,
-      privacy: 'Uses only your MDTBBS resource likes/favorites and public resource metadata.',
+      privacy: 'Uses only your MDTBBS likes/favorites on currently public resources and public resource metadata.',
       items: ranked.map((item) => ({
         resource: toPublicResource(item.resource, true),
         score: Number(item.score.toFixed(3)),
