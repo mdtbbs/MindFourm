@@ -180,11 +180,20 @@ export class ResourcePreviewService {
   /** Transform a schematic through the bundled official Mindustry reader/writer. */
   async transformSchematic(fileName: string, source: Buffer, operations: {
     rotation_quarters: number; mirror_x: boolean; delete_positions: Array<{ x: number; y: number }>;
+    move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
+    add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+    logic_configs?: Array<{ x: number; y: number; source: string }>;
   }): Promise<{ data: Buffer; sha256: string }> {
     if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
     const positions = operations?.delete_positions;
+    const moves = operations?.move_positions || [];
+    const additions = operations?.add_blocks || [];
+    const logicConfigs = operations?.logic_configs || [];
     if (!Number.isInteger(operations?.rotation_quarters) || operations.rotation_quarters < 0 || operations.rotation_quarters > 3
       || typeof operations.mirror_x !== 'boolean' || !Array.isArray(positions) || positions.length > 10_000
+      || !Array.isArray(moves) || moves.length > 5_000 || !Array.isArray(additions) || additions.length > 5_000
+      || !Array.isArray(logicConfigs) || logicConfigs.length > 1_000
+      || positions.length + moves.length + additions.length + logicConfigs.length > 10_000
     ) {
       throw new BadRequestException('蓝图编辑操作无效');
     }
@@ -196,13 +205,46 @@ export class ResourcePreviewService {
         || !key || uniquePositions.has(key)) throw new BadRequestException('蓝图编辑操作无效');
       uniquePositions.add(key);
     }
+    const moveSources = new Set<string>();
+    const moveTargets = new Set<string>();
+    for (const move of moves) {
+      const sourceKey = move && `${move.from_x}:${move.from_y}`;
+      const targetKey = move && `${move.to_x}:${move.to_y}`;
+      if (!move || ![move.from_x, move.from_y, move.to_x, move.to_y].every(Number.isInteger)
+        || [move.from_x, move.from_y, move.to_x, move.to_y].some((value) => value < 0 || value > 127)
+        || !sourceKey || !targetKey || uniquePositions.has(sourceKey) || moveSources.has(sourceKey) || moveTargets.has(targetKey)) {
+        throw new BadRequestException('蓝图编辑操作无效');
+      }
+      moveSources.add(sourceKey);
+      moveTargets.add(targetKey);
+    }
+    const addedPositions = new Set<string>();
+    for (const addition of additions) {
+      const key = addition && `${addition.x}:${addition.y}`;
+      if (!addition || !Number.isInteger(addition.x) || !Number.isInteger(addition.y)
+        || addition.x < 0 || addition.x > 127 || addition.y < 0 || addition.y > 127
+        || !/^[a-zA-Z0-9_.:-]{1,191}$/.test(addition.block)
+        || (addition.rotation !== undefined && (!Number.isInteger(addition.rotation) || addition.rotation < 0 || addition.rotation > 3))
+        || !key || addedPositions.has(key) || moveTargets.has(key)) {
+        throw new BadRequestException('蓝图编辑操作无效');
+      }
+      addedPositions.add(key);
+    }
+    const logicPositions = new Set<string>();
+    for (const edit of logicConfigs) {
+      const key = edit && `${edit.x}:${edit.y}`;
+      if (!edit || !Number.isInteger(edit.x) || !Number.isInteger(edit.y) || edit.x < 0 || edit.x > 127 || edit.y < 0 || edit.y > 127
+        || typeof edit.source !== 'string' || edit.source.length > 32_768 || edit.source.includes('\0')
+        || !key || logicPositions.has(key)) throw new BadRequestException('蓝图处理器文本无效');
+      logicPositions.add(key);
+    }
     if (!fileName.toLowerCase().endsWith('.msch') || source.length < 5 || source.length > MAX_RENDER_BYTES
       || source.subarray(0, 4).toString('ascii') !== 'msch') {
       throw new BadRequestException('蓝图文件无效或超过大小限制');
     }
     const sourceHash = createHash('sha256').update(source).digest('hex');
     try {
-      const response = await fetch(`${this.rendererUrl}/v1/transform-schematic`, {
+      const response = await fetch(`${this.rendererUrl}/v2/transform-schematic`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
@@ -215,6 +257,9 @@ export class ResourcePreviewService {
           rotation_quarters: operations.rotation_quarters,
           mirror_x: operations.mirror_x,
           delete_positions: operations.delete_positions,
+          move_positions: moves,
+          add_blocks: additions,
+          logic_configs: logicConfigs,
         }),
         signal: AbortSignal.timeout(60_000),
       });
@@ -244,6 +289,98 @@ export class ResourcePreviewService {
       if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
       this.logger.warn(`Schematic transform failed: ${(error as Error).message}`);
       throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
+    }
+  }
+
+  /** Transform a derived map through official MapIO and retain unknown Rules/wave JSON fields. */
+  async transformMap(fileName: string, source: Buffer, operations: {
+    terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
+    rule_changes?: Record<string, unknown>;
+    wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
+  }): Promise<{ data: Buffer; sha256: string }> {
+    if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
+    const terrain = operations?.terrain_changes || [];
+    const waves = operations?.wave_operations || [];
+    const rules = operations?.rule_changes || {};
+    if (!Array.isArray(terrain) || terrain.length > 5_000 || !Array.isArray(waves) || waves.length > 1_000
+      || !rules || typeof rules !== 'object' || Array.isArray(rules) || Object.keys(rules).length > 100) {
+      throw new BadRequestException('地图编辑操作无效');
+    }
+    const positions = new Set<string>();
+    for (const change of terrain) {
+      const key = change && `${change.x}:${change.y}`;
+      if (!change || !Number.isInteger(change.x) || !Number.isInteger(change.y)
+        || change.x < 0 || change.y < 0 || change.x > 32_767 || change.y > 32_767
+        || !/^[a-zA-Z0-9_.:-]{1,191}$/.test(change.floor)
+        || typeof change.overlay !== 'string' || change.overlay.length > 191
+        || (change.overlay !== '' && !/^[a-zA-Z0-9_.:-]{1,191}$/.test(change.overlay))
+        || !key || positions.has(key)) throw new BadRequestException('地图地形编辑操作无效');
+      positions.add(key);
+    }
+    for (const operation of waves) {
+      if (!operation || !['add', 'update', 'delete', 'move'].includes(operation.action)
+        || !Number.isInteger(operation.index) || operation.index < 0 || operation.index > 5_000
+        || (operation.action === 'move' && (!Number.isInteger(operation.to_index) || operation.to_index! < 0 || operation.to_index! > 5_000))
+        || (['add', 'update'].includes(operation.action) && (!operation.fields || typeof operation.fields !== 'object' || Array.isArray(operation.fields)))) {
+        throw new BadRequestException('地图波次编辑操作无效');
+      }
+    }
+    if (Buffer.byteLength(JSON.stringify({ rules, waves })) > 512 * 1024
+      || !fileName.toLowerCase().endsWith('.msav') || source.length < 8 || source.length > MAX_RENDER_BYTES
+      || source.subarray(0, 4).toString('ascii') !== 'MSAV') {
+      throw new BadRequestException('地图文件无效或编辑数据超过大小限制');
+    }
+    const sourceHash = createHash('sha256').update(source).digest('hex');
+    try {
+      const response = await fetch(`${this.rendererUrl}/v2/transform-map`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({
+          filename: fileName,
+          sha256: sourceHash,
+          dataBase64: source.toString('base64'),
+          terrain_changes: terrain,
+          rule_changes: rules,
+          wave_operations: waves,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({})) as { errorCode?: unknown };
+        const code = typeof error.errorCode === 'string' ? error.errorCode : '';
+        if ([
+          'INVALID_MAP_OPERATION', 'INVALID_WAVE_OPERATION', 'UNSUPPORTED_MAP_CONTENT', 'UNSUPPORTED_MAP_SIZE',
+          'UNSUPPORTED_MAP_RULES', 'INVALID_MAP_RULES', 'INVALID_MAP', 'INVALID_FILE',
+        ].includes(code)) {
+          const message = code === 'UNSUPPORTED_MAP_CONTENT'
+            ? '地图包含当前编辑器无法安全保留的 Mod 或未知内容，未生成文件'
+            : code === 'UNSUPPORTED_MAP_SIZE'
+              ? '地图尺寸超过当前安全编辑上限，未生成文件'
+              : code === 'UNSUPPORTED_MAP_RULES'
+                ? '地图规则格式无法安全保留，未生成文件'
+                : '地图编辑操作无效或文件无法解析';
+          throw new BadRequestException(message);
+        }
+        throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
+      }
+      const result = await response.json() as { dataBase64?: unknown; sha256?: unknown };
+      if (typeof result.dataBase64 !== 'string' || typeof result.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(result.sha256)) {
+        throw new ServiceUnavailableException('Mindustry 地图编辑器返回了无效结果');
+      }
+      const data = Buffer.from(result.dataBase64, 'base64');
+      const digest = createHash('sha256').update(data).digest('hex');
+      if (!data.length || data.length > MAX_RENDER_BYTES || data.subarray(0, 4).toString('ascii') !== 'MSAV'
+        || data.toString('base64') !== result.dataBase64 || digest !== result.sha256) {
+        throw new ServiceUnavailableException('Mindustry 地图编辑器返回了无效结果');
+      }
+      return { data, sha256: digest };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
+      this.logger.warn(`Map transform failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
     }
   }
 
@@ -567,7 +704,7 @@ export class ResourcePreviewService {
 
   private sanitizeMetadataValue(value: unknown, depth = 0): unknown {
     if (depth > 4) return undefined;
-    if (typeof value === 'string') return value.slice(0, 20_000);
+    if (typeof value === 'string') return value.slice(0, 32_768);
     if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
     if (typeof value === 'boolean' || value === null) return value;
     if (Array.isArray(value)) {

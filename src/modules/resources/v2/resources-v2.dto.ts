@@ -507,7 +507,11 @@ export class ResourceV2ProductionResponseDto {
 
 export class ResourceV2MapRulesDto {
   @ApiProperty({ format: 'uuid', nullable: true }) version_public_id!: string | null;
+  @ApiProperty({ nullable: true, type: Number }) width!: number | null;
+  @ApiProperty({ nullable: true, type: Number }) height!: number | null;
   @ApiProperty({ type: 'object', nullable: true }) rules!: Record<string, unknown> | null;
+  @ApiProperty({ type: 'object', description: 'Version-scoped bounded terrain layer used by the map editor.' }) tile_layers!: Record<string, unknown>;
+  @ApiProperty({ type: Boolean }) tile_layers_truncated!: boolean;
 }
 
 export class ResourceV2MapResourceDto {

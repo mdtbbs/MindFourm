@@ -21,7 +21,7 @@ import { SettingsService } from '../../settings/settings.service';
 import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import {
   ResourceV2CreateRelationDto, ResourceV2CreateVersionDto, ResourceV2InviteMemberDto,
-  ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2RespondInvitationDto, ResourceV2TransferOwnerDto,
+  ResourceV2ExportMapDto, ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2RespondInvitationDto, ResourceV2TransferOwnerDto,
 } from './resources-v2-write.dto';
 
 @ApiV1()
@@ -147,7 +147,7 @@ export class ResourcesV2WriteController {
   @RawHttpResponse()
   @OAuthProtected('resource.upload')
   @RateLimit({ max: 5, window: 60 })
-  @ApiOperation({ operationId: 'exportResourceSchematicEdit', summary: '安全导出编辑后的蓝图副本', description: 'Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像和删除选中方块。只读取托管版本并返回新文件，不修改原版本。' })
+  @ApiOperation({ operationId: 'exportResourceSchematicEdit', summary: '安全导出编辑后的蓝图副本', description: 'Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像、删除、移动和放置单格方块。只读取托管版本并返回新文件，不修改原版本；含有不支持内容时拒绝导出。' })
   @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
   @ApiParam({ name: 'versionId', format: 'uuid', description: '已发布 Version public UUID。' })
   @ApiConsumes('application/json')
@@ -167,6 +167,37 @@ export class ResourcesV2WriteController {
     const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
       .transform(rawBody || {}, { type: 'body', metatype: ResourceV2ExportSchematicDto }) as ResourceV2ExportSchematicDto;
     const result = await this.resources.exportSchematic(id, versionId, body, Number(req.user.id));
+    response.setHeader('Content-Type', 'application/octet-stream');
+    response.setHeader('Content-Disposition', attachmentContentDisposition(result.file_name));
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    return response.send(result.data);
+  }
+
+  @Post(':id/versions/:versionId/map-editor/export')
+  @RawHttpResponse()
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 5, window: 60 })
+  @ApiOperation({ operationId: 'exportResourceMapEdit', summary: '安全导出编辑后的地图副本', description: 'Owner/Maintainer 可编辑已发布地图的地形、类型化规则字段和波次组。地图通过官方 MapIO 写入并重新导入校验；未知规则与波次字段保留，不支持内容会拒绝导出。' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
+  @ApiParam({ name: 'versionId', format: 'uuid', description: '已发布 Version public UUID。' })
+  @ApiConsumes('application/json')
+  @ApiBody({ type: ResourceV2ExportMapDto })
+  @ApiProduces('application/octet-stream')
+  @ApiOkResponse({ description: 'An official Mindustry .msav serialization as a derived file.', schema: { type: 'string', format: 'binary' } })
+  @ApiBadRequestResponse({ description: '操作无效、文件无法解析或含有编辑器不支持安全保留的内容。' })
+  @ApiForbiddenResponse({ description: '当前用户不是该资源的 Owner 或 Maintainer。' })
+  @ApiNotFoundResponse({ description: '资源或已发布版本不存在。' })
+  async exportMap(
+    @Param('id') id: string,
+    @Param('versionId') versionId: string,
+    @Body() rawBody: Record<string, any>,
+    @Req() req: any,
+    @Res() response: Response,
+  ) {
+    const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
+      .transform(rawBody || {}, { type: 'body', metatype: ResourceV2ExportMapDto }) as ResourceV2ExportMapDto;
+    const result = await this.resources.exportMap(id, versionId, body, Number(req.user.id));
     response.setHeader('Content-Type', 'application/octet-stream');
     response.setHeader('Content-Disposition', attachmentContentDisposition(result.file_name));
     response.setHeader('Cache-Control', 'private, no-store');

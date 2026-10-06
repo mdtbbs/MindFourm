@@ -1407,11 +1407,35 @@ export class ResourcesV2Service {
     if (cursor) { clauses.push('(created_at < ? OR (created_at = ? AND id < ?))'); parameters.push(cursor.sort_at, cursor.sort_at, cursor.id); }
     parameters.push(limit + 1);
     const rows = await this.rowsFrom('schematic_logic_processors', `SELECT *, created_at AS v2_sort_at FROM schematic_logic_processors WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT ?`, parameters);
-    return this.pageFromRows(rows, query, row => ({
-      x: this.nullableNumber(row.position_x), y: this.nullableNumber(row.position_y), processor_type: row.processor_type || 'unknown',
-      links: this.safePublicJson(this.arrayValue(row.links_json), []),
-      variables: Object.entries(this.safePublicJson(this.objectValue(row.variables_json) || {}, {})).map(([name, value]) => ({ name, value })),
-    }));
+    const metadataRows = await this.rowsFrom('schematic_version_metadata', 'SELECT source_renderer_metadata_json FROM schematic_version_metadata WHERE resource_version_id = ? LIMIT 1', [version.id]);
+    const renderer = this.objectValue(metadataRows[0]?.source_renderer_metadata_json) || {};
+    const inertConfigByPosition = new Map<string, { source: string | null; source_available: boolean; links: unknown[] }>();
+    for (const raw of this.arrayValue(renderer.block_positions)) {
+      const position = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+      const x = this.nullableNumber(position.x);
+      const y = this.nullableNumber(position.y);
+      const config = this.objectValue(position.config);
+      if (x === null || y === null || !config) continue;
+      const source = config.format_version === 1 && typeof config.source === 'string' && config.source.length <= 32_768 && !config.source.includes('\0')
+        ? config.source : null;
+      inertConfigByPosition.set(`${x}:${y}`, {
+        source,
+        source_available: source !== null && position.logic_source_available === true,
+        links: this.safePublicJson(this.arrayValue(config.links), []),
+      });
+    }
+    return this.pageFromRows(rows, query, row => {
+      const x = this.nullableNumber(row.position_x);
+      const y = this.nullableNumber(row.position_y);
+      const config = x === null || y === null ? undefined : inertConfigByPosition.get(`${x}:${y}`);
+      return {
+        x, y, processor_type: row.processor_type || 'unknown',
+        links: config?.links ?? this.safePublicJson(this.arrayValue(row.links_json), []),
+        logic_source: config?.source ?? null,
+        logic_source_available: config?.source_available ?? false,
+        variables: Object.entries(this.safePublicJson(this.objectValue(row.variables_json) || {}, {})).map(([name, value]) => ({ name, value })),
+      };
+    });
   }
 
   async getSchematicProduction(publicId: string, query: ResourceV2VersionQueryDto) {
@@ -1433,8 +1457,21 @@ export class ResourcesV2Service {
   async getMapRules(publicId: string, query: ResourceV2VersionQueryDto) {
     const { entity } = await this.getPublicResource(publicId, 'map');
     const version = await this.selectedVersion(entity, query.version_public_id);
-    const rows = version ? await this.rowsFrom('map_version_metadata', 'SELECT rules_json FROM map_version_metadata WHERE resource_version_id = ? LIMIT 1', [version.id]) : [];
-    return { version_public_id: version?.public_id || null, rules: this.safePublicJson(this.objectValue(rows[0]?.rules_json), null) };
+    const rows = version ? await this.rowsFrom(
+      'map_version_metadata',
+      'SELECT width,height,rules_json,source_renderer_metadata_json FROM map_version_metadata WHERE resource_version_id = ? LIMIT 1',
+      [version.id],
+    ) : [];
+    const row = rows[0];
+    const renderer = this.objectValue(row?.source_renderer_metadata_json) || {};
+    return {
+      version_public_id: version?.public_id || null,
+      width: this.nullableNumber(row?.width),
+      height: this.nullableNumber(row?.height),
+      rules: this.safePublicJson(this.objectValue(row?.rules_json), null),
+      tile_layers: this.safePublicJson(this.objectValue(renderer.tile_layers), {}),
+      tile_layers_truncated: renderer.tile_layers_truncated === true,
+    };
   }
 
   async getMapResources(publicId: string, query: ResourceV2VersionQueryDto) {

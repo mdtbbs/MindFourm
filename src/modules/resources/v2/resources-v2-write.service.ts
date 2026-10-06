@@ -110,13 +110,19 @@ export class ResourcesV2WriteService {
   /** Export a transformed copy of an owner's published schematic without touching its stored release. */
   async exportSchematic(publicId: string, versionPublicId: string, input: {
     rotation_quarters: number; mirror_x: boolean; delete_positions?: Array<{ x: number; y: number }>;
+    move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
+    add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+    logic_configs?: Array<{ x: number; y: number; source: string }>;
   }, actorId: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
     const resource = await this.getResource(publicId);
     await this.assertRole(resource, actorId, ['owner', 'maintainer']);
     if (resource.resource_kind !== 'schematic') throw new BadRequestException('只有蓝图资源支持在线编辑');
     this.assertUuid(versionPublicId);
     if (!Number.isInteger(input.rotation_quarters) || input.rotation_quarters < 0 || input.rotation_quarters > 3
-      || typeof input.mirror_x !== 'boolean' || (input.delete_positions?.length || 0) > 10_000) {
+      || typeof input.mirror_x !== 'boolean' || (input.delete_positions?.length || 0) > 10_000
+      || (input.move_positions?.length || 0) > 5_000 || (input.add_blocks?.length || 0) > 5_000
+      || (input.logic_configs?.length || 0) > 1_000
+      || (input.delete_positions?.length || 0) + (input.move_positions?.length || 0) + (input.add_blocks?.length || 0) + (input.logic_configs?.length || 0) > 10_000) {
       throw new BadRequestException('蓝图编辑操作无效');
     }
     const rows = await this.dataSource.query(
@@ -149,9 +155,58 @@ export class ResourcesV2WriteService {
       rotation_quarters: input.rotation_quarters,
       mirror_x: input.mirror_x,
       delete_positions: input.delete_positions || [],
+      move_positions: input.move_positions || [],
+      add_blocks: input.add_blocks || [],
+      logic_configs: input.logic_configs || [],
     });
     const stem = filename.split(/[\\/]/).pop()!.replace(/\.msch$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'schematic';
     return { data: transformed.data, file_name: `${stem}-edited.msch`, sha256: transformed.sha256 };
+  }
+
+  /** Export a transformed map copy; the caller may save it as a new direct-upload version. */
+  async exportMap(publicId: string, versionPublicId: string, input: {
+    terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
+    rule_changes?: Record<string, unknown>;
+    wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
+  }, actorId: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
+    const resource = await this.getResource(publicId);
+    await this.assertRole(resource, actorId, ['owner', 'maintainer']);
+    if (resource.resource_kind !== 'map') throw new BadRequestException('只有地图资源支持在线编辑');
+    this.assertUuid(versionPublicId);
+    const terrain = input.terrain_changes || [];
+    const waveOperations = input.wave_operations || [];
+    if (terrain.length > 5_000 || waveOperations.length > 1_000
+      || !input.rule_changes || typeof input.rule_changes !== 'object' || Array.isArray(input.rule_changes)
+      || Object.keys(input.rule_changes).length > 100) throw new BadRequestException('地图编辑操作无效');
+    const rows = await this.dataSource.query(
+      `SELECT id,public_id,status,file_path,file_name,content_hash FROM resource_versions
+       WHERE resource_id = ? AND public_id = ? LIMIT 1`,
+      [resource.id, versionPublicId],
+    ) as Array<{ id: number; public_id: string; status: string; file_path: string | null; file_name: string | null; content_hash: string | null }>;
+    const version = rows[0];
+    if (!version || version.status !== 'published') throw new NotFoundException('已发布地图版本不存在');
+    const primary = await this.dataSource.getRepository(ResourceFile).findOne({
+      where: { resource_version_id: version.id, role: 'primary', availability_status: 'available' },
+    });
+    const filename = primary?.original_filename || version.file_name;
+    if (!filename?.toLowerCase().endsWith('.msav')) throw new BadRequestException('地图版本文件不可用');
+    let source: Buffer;
+    if (primary && this.fileProvider) {
+      source = await this.fileProvider.getReadableContent(primary, 20 * 1024 * 1024);
+    } else {
+      if (primary?.storage_backend === 'res' || !version.file_path || !this.storage) throw new BadRequestException('地图版本文件不可用');
+      source = await this.storage.readManagedFile(version.file_path, 20 * 1024 * 1024);
+    }
+    const sourceHash = createHash('sha256').update(source).digest('hex');
+    const expectedHash = primary?.content_hash || version.content_hash;
+    if (expectedHash && sourceHash !== expectedHash.toLowerCase()) throw new BadRequestException('地图源文件校验失败，未生成编辑结果');
+    const transformed = await this.previews.transformMap(filename, source, {
+      terrain_changes: terrain,
+      rule_changes: input.rule_changes,
+      wave_operations: waveOperations,
+    });
+    const stem = filename.split(/[\\/]/).pop()!.replace(/\.msav$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'map';
+    return { data: transformed.data, file_name: `${stem}-edited.msav`, sha256: transformed.sha256 };
   }
 
   async createVersion(publicId: string, file: ResourceFileMeta, input: {

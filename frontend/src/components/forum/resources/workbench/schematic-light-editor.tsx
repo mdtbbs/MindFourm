@@ -14,8 +14,12 @@ import {
 import { V1ApiError } from '@/lib/api/v1/transport';
 import { useI18n } from '@/i18n/provider';
 
-type Placement = { key: string; x: number; y: number; rotation: number | null };
+type LogicLink = { name: string; x: number; y: number };
+type Placement = { key: string; x: number; y: number; rotation: number | null; size: number; block: string; displayName: string; logicSource?: string; logicLinks?: LogicLink[] };
 type BlockGroup = { name: string; displayName: string | null; count: number; placements: Placement[] };
+type SchematicMove = { from_x: number; from_y: number; to_x: number; to_y: number };
+type SchematicAddition = { x: number; y: number; block: string; rotation: number };
+type EditSnapshot = { deleted: string[]; moves: SchematicMove[]; additions: SchematicAddition[]; logicEdits: Record<string, string>; rotation: number; mirrorX: boolean };
 
 function makeGroups(blocks: ResourceV2SchematicBlock[]): { groups: BlockGroup[]; complete: boolean; total: number } {
   let complete = blocks.length > 0;
@@ -24,7 +28,25 @@ function makeGroups(blocks: ResourceV2SchematicBlock[]): { groups: BlockGroup[];
     const positions = Array.isArray(block.positions) ? block.positions : [];
     const placements = positions.flatMap((position): Placement[] => {
       if (!Number.isInteger(position.x) || !Number.isInteger(position.y)) return [];
-      return [{ key: `${position.x}:${position.y}`, x: position.x!, y: position.y!, rotation: position.rotation }];
+      const config = position.config && typeof position.config === 'object' && !Array.isArray(position.config)
+        ? position.config as Record<string, unknown> : null;
+      const source = config?.format_version === 1 && typeof config.source === 'string'
+        && config.source.length <= 32_768 && !config.source.includes('\0') && position.logic_source_available === true
+        ? config.source : undefined;
+      const logicLinks = config?.format_version === 1 && Array.isArray(config.links) && config.links.length <= 1_000
+        ? config.links.flatMap((raw): LogicLink[] => {
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+          const link = raw as Record<string, unknown>;
+          return typeof link.name === 'string' && link.name.length > 0 && link.name.length <= 100
+            && Number.isInteger(link.x) && Number.isInteger(link.y)
+            ? [{ name: link.name, x: link.x as number, y: link.y as number }] : [];
+        }) : undefined;
+      return [{ key: `${position.x}:${position.y}`, x: position.x!, y: position.y!, rotation: position.rotation,
+        size: Number.isInteger(position.size) && position.size! >= 1 && position.size! <= 64 ? position.size! : 1,
+        block: block.internal_name, displayName: block.display_name || block.internal_name,
+        ...(/processor/i.test(block.internal_name) && source !== undefined ? { logicSource: source } : {}),
+        ...(/processor/i.test(block.internal_name) && logicLinks !== undefined ? { logicLinks } : {}),
+      }];
     }).sort((left, right) => left.y - right.y || left.x - right.x);
     if (placements.length !== block.count || placements.length !== positions.length) complete = false;
     total += placements.length;
@@ -39,6 +61,14 @@ function suggestedFilename(version: ResourceWorkbenchV2Version): string {
     || version.files[0]?.original_filename || 'schematic.msch';
   const stem = sourceName.split(/[\\/]/).pop()?.replace(/\.msch$/i, '') || 'schematic';
   return `${stem}-edited.msch`;
+}
+
+function schematicDimensions(workbench: ResourceWorkbenchV2Response): { width: number; height: number } | null {
+  const width = workbench.resource.metadata.schematic?.width;
+  const height = workbench.resource.metadata.schematic?.height;
+  return Number.isInteger(width) && Number.isInteger(height) && width! > 0 && height! > 0 && width! <= 128 && height! <= 128
+    ? { width: width!, height: height! }
+    : null;
 }
 
 export default function SchematicLightEditor({
@@ -58,6 +88,13 @@ export default function SchematicLightEditor({
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deleted, setDeleted] = useState<Set<string>>(new Set());
+  const [moves, setMoves] = useState<SchematicMove[]>([]);
+  const [additions, setAdditions] = useState<SchematicAddition[]>([]);
+  const [logicEdits, setLogicEdits] = useState<Record<string, string>>({});
+  const [tool, setTool] = useState<'select' | 'move' | 'place'>('select');
+  const [moveSource, setMoveSource] = useState<string | null>(null);
+  const [paletteBlock, setPaletteBlock] = useState('');
+  const [undoStack, setUndoStack] = useState<EditSnapshot[]>([]);
   const [rotation, setRotation] = useState(0);
   const [mirrorX, setMirrorX] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -68,7 +105,8 @@ export default function SchematicLightEditor({
   const versionStatus = version?.status;
 
   useEffect(() => {
-    setGroups([]); setSelected(new Set()); setDeleted(new Set()); setRotation(0); setMirrorX(false);
+    setGroups([]); setSelected(new Set()); setDeleted(new Set()); setMoves([]); setAdditions([]); setLogicEdits({}); setUndoStack([]);
+    setTool('select'); setMoveSource(null); setPaletteBlock(''); setRotation(0); setMirrorX(false);
     setAnalysis(null); setDownloaded(false); setActionError(''); setLoadError('');
     if (!canEdit || !versionPublicId || versionStatus !== 'published') { setComplete(false); setTotal(0); return; }
     let active = true;
@@ -86,6 +124,7 @@ export default function SchematicLightEditor({
       const normalized = makeGroups(blocks);
       if (!active) return;
       setGroups(normalized.groups);
+      setPaletteBlock(normalized.groups[0]?.name || '');
       setComplete(normalized.complete && !cursor);
       setTotal(normalized.total);
     })().catch((caught) => {
@@ -96,8 +135,16 @@ export default function SchematicLightEditor({
 
   const selectedCount = selected.size;
   const deletedCount = deleted.size;
+  const dimensions = schematicDimensions(workbench);
+  const hasPlacementEdits = moves.length > 0 || additions.length > 0;
+  const logicConfigEdits = useMemo(() => groups.flatMap((group) => group.placements.flatMap((placement) => {
+    const source = logicEdits[placement.key];
+    return source !== undefined && source !== placement.logicSource ? [{
+      x: placement.x, y: placement.y, source,
+    }] : [];
+  })), [groups, logicEdits]);
   const canExport = Boolean(canEdit && version?.status === 'published' && complete && !loading && !busy
-    && (rotation !== 0 || mirrorX || deletedCount > 0));
+    && (rotation !== 0 || mirrorX || deletedCount > 0 || hasPlacementEdits || logicConfigEdits.length > 0));
   const removedNames = useMemo(() => {
     const labels = new Map<string, string>();
     for (const group of groups) for (const placement of group.placements) labels.set(placement.key, group.displayName || group.name);
@@ -110,8 +157,69 @@ export default function SchematicLightEditor({
     return next;
   });
 
+  const rememberEdit = () => setUndoStack((current) => [...current.slice(-49), {
+    deleted: [...deleted], moves: [...moves], additions: [...additions], logicEdits: { ...logicEdits }, rotation, mirrorX,
+  }]);
+
+  const undoLast = () => {
+    const previous = undoStack[undoStack.length - 1];
+    if (!previous) return;
+    setUndoStack((current) => current.slice(0, -1));
+    setDeleted(new Set(previous.deleted)); setMoves(previous.moves); setAdditions(previous.additions);
+    setLogicEdits(previous.logicEdits); setRotation(previous.rotation); setMirrorX(previous.mirrorX);
+    setAnalysis(null); setDownloaded(false); setMoveSource(null);
+  };
+
+  const visiblePlacements = useMemo(() => {
+    const moveBySource = new Map(moves.map((move) => [`${move.from_x}:${move.from_y}`, move]));
+    const result: Placement[] = [];
+    for (const group of groups) for (const placement of group.placements) {
+      if (deleted.has(placement.key)) continue;
+      const move = moveBySource.get(placement.key);
+      result.push(move ? { ...placement, x: move.to_x, y: move.to_y } : placement);
+    }
+    for (const item of additions) result.push({
+      key: `added:${item.x}:${item.y}:${item.block}`, x: item.x, y: item.y, rotation: item.rotation,
+      size: 1, block: item.block, displayName: item.block,
+    });
+    return result;
+  }, [additions, deleted, groups, moves]);
+
+  const selectedLogicPlacement = visiblePlacements.find((placement) => selected.has(placement.key) && placement.logicSource !== undefined);
+  const editCell = (x: number, y: number) => {
+    const occupant = visiblePlacements.find((placement) => {
+      const offset = -Math.floor((placement.size - 1) / 2);
+      return x >= placement.x + offset && x < placement.x + offset + placement.size
+        && y >= placement.y + offset && y < placement.y + offset + placement.size;
+    });
+    if (tool === 'select') {
+      if (occupant && !occupant.key.startsWith('added:')) setSelected(new Set([occupant.key]));
+      else setSelected(new Set());
+      return;
+    }
+    if (tool === 'move') {
+      if (!moveSource) {
+        if (occupant && !occupant.key.startsWith('added:')) { setMoveSource(occupant.key); setSelected(new Set([occupant.key])); }
+        return;
+      }
+      if (!occupant) {
+        const [from_x, from_y] = moveSource.split(':').map(Number);
+        rememberEdit();
+        setMoves((current) => [...current.filter((move) => `${move.from_x}:${move.from_y}` !== moveSource), { from_x, from_y, to_x: x, to_y: y }]);
+        setMoveSource(null); setSelected(new Set()); setAnalysis(null); setDownloaded(false);
+      }
+      return;
+    }
+    if (tool === 'place' && !occupant && paletteBlock) {
+      rememberEdit();
+      setAdditions((current) => [...current, { x, y, block: paletteBlock, rotation: 0 }]);
+      setAnalysis(null); setDownloaded(false);
+    }
+  };
+
   const deleteSelected = () => {
     if (!selected.size) return;
+    rememberEdit();
     setDeleted((current) => new Set([...current, ...selected]));
     setSelected(new Set());
     setAnalysis(null);
@@ -130,6 +238,9 @@ export default function SchematicLightEditor({
         rotation_quarters: rotation,
         mirror_x: mirrorX,
         delete_positions: positions,
+        move_positions: moves,
+        add_blocks: additions,
+        logic_configs: logicConfigEdits,
       });
       if (!blob.size) throw new Error(t('resourceWorkbenchV2.schematicEditor.exportFailed'));
       const file = new File([blob], suggestedFilename(version), { type: 'application/octet-stream' });
@@ -165,10 +276,62 @@ export default function SchematicLightEditor({
   return <div className="space-y-4">
     <p className="text-sm leading-6 text-[var(--text-secondary)]">{t('resourceWorkbenchV2.schematicEditor.help')}</p>
     {version.preview_url && <img src={version.preview_url} alt={t('resourceWorkbenchV2.schematicEditor.previewAlt')} className="max-h-72 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] object-contain" />}
+    {complete && dimensions && <section className="space-y-3 rounded-lg border border-[var(--border)] p-3" aria-label={t('resourceWorkbenchV2.schematicEditor.canvas')}>
+      <div className="flex flex-wrap items-center gap-2">
+        {(['select', 'move', 'place'] as const).map((mode) => <button key={mode} type="button" aria-pressed={tool === mode}
+          disabled={busy} onClick={() => { setTool(mode); setMoveSource(null); }}
+          className={`min-h-10 rounded-lg border px-3 text-sm ${tool === mode ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)]'}`}>
+          {t(`resourceWorkbenchV2.schematicEditor.${mode}Tool`)}
+        </button>)}
+        {tool === 'place' && <label className="flex min-h-10 items-center gap-2 text-sm text-[var(--text-secondary)]">
+          {t('resourceWorkbenchV2.schematicEditor.blockPalette')}
+          <select aria-label={t('resourceWorkbenchV2.schematicEditor.blockPalette')} value={paletteBlock} onChange={(event) => setPaletteBlock(event.target.value)} className="min-h-10 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-2 text-[var(--text)]">
+            {groups.map((group) => <option key={group.name} value={group.name}>{group.displayName || group.name}</option>)}
+          </select>
+        </label>}
+      </div>
+      <p className="text-xs text-[var(--text-muted)]">{t(`resourceWorkbenchV2.schematicEditor.${tool}Help`)}{moveSource ? ` · ${t('resourceWorkbenchV2.schematicEditor.moveSource', { position: moveSource })}` : ''}</p>
+      <svg role="grid" aria-label={t('resourceWorkbenchV2.schematicEditor.canvas')} viewBox={`0 0 ${dimensions.width} ${dimensions.height}`} className="block w-full rounded-lg border border-[var(--border)] bg-[#111820]" style={{ maxHeight: '32rem' }}>
+        <g transform={`translate(0 ${dimensions.height}) scale(1 -1)`}>
+          {Array.from({ length: dimensions.width * dimensions.height }, (_unused, index) => {
+            const x = index % dimensions.width;
+            const y = Math.floor(index / dimensions.width);
+            return <rect key={`cell:${x}:${y}`} data-cell={`${x}:${y}`} role="gridcell" aria-label={`${x}, ${y}`} tabIndex={0}
+              x={x} y={y} width="1" height="1" fill="transparent" stroke="rgba(255,255,255,0.14)" strokeWidth="0.025"
+              onClick={() => editCell(x, y)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); editCell(x, y); } }} />;
+          })}
+          {visiblePlacements.map((placement) => {
+            const groupIndex = Math.max(0, groups.findIndex((group) => group.name === placement.block));
+            const colors = ['#71b7ff', '#84d39a', '#ffc875', '#df9df4', '#ff8e82', '#7bd7d2'];
+            const offset = -Math.floor((placement.size - 1) / 2);
+            return <g key={placement.key} pointerEvents="none">
+              <rect x={placement.x + offset + 0.08} y={placement.y + offset + 0.08} width={placement.size - 0.16} height={placement.size - 0.16} rx="0.12" fill={colors[groupIndex % colors.length]} fillOpacity="0.9"
+                stroke={selected.has(placement.key) || moveSource === placement.key ? '#ffffff' : '#17202a'} strokeWidth="0.08" />
+            </g>;
+          })}
+        </g>
+      </svg>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-muted)]">
+        <span>{t('resourceWorkbenchV2.schematicEditor.canvasDimensions', { width: dimensions.width, height: dimensions.height })}</span>
+        {undoStack.length > 0 && <button type="button" disabled={busy} onClick={undoLast} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-[var(--text-secondary)]"><Undo2 className="h-3.5 w-3.5" />{t('resourceWorkbenchV2.schematicEditor.undoLast')}</button>}
+      </div>
+    </section>}
+    {selectedLogicPlacement && <section className="space-y-2 rounded-lg border border-[var(--border)] p-3">
+      <label htmlFor="schematic-logic-source" className="block text-sm font-semibold text-[var(--text)]">{t('resourceWorkbenchV2.schematicEditor.logicSource')}</label>
+      <p className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.logicSourceHelp')}</p>
+      {selectedLogicPlacement.logicLinks?.length ? <ul aria-label={t('resourceWorkbenchV2.schematicEditor.logicLinks')} className="space-y-1 text-xs text-[var(--text-secondary)]">
+        {selectedLogicPlacement.logicLinks.map((link, index) => <li key={`${link.name}:${link.x}:${link.y}:${index}`}><code>{link.name}</code> · {link.x}, {link.y}</li>)}
+      </ul> : null}
+      <textarea id="schematic-logic-source" maxLength={32_768} spellCheck={false} dir="ltr" disabled={busy}
+        value={logicEdits[selectedLogicPlacement.key] ?? selectedLogicPlacement.logicSource ?? ''}
+        onFocus={rememberEdit}
+        onChange={(event) => { setLogicEdits((current) => ({ ...current, [selectedLogicPlacement.key]: event.target.value })); setAnalysis(null); setDownloaded(false); }}
+        className="min-h-36 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-3 font-mono text-sm text-[var(--text)]" />
+    </section>}
     <div className="flex flex-wrap gap-2">
-      <button type="button" disabled={busy} onClick={() => { setRotation((value) => (value + 3) % 4); setAnalysis(null); setDownloaded(false); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm disabled:opacity-50"><RotateCcw className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.rotateLeft')}</button>
-      <button type="button" disabled={busy} onClick={() => { setRotation((value) => (value + 1) % 4); setAnalysis(null); setDownloaded(false); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm disabled:opacity-50"><RotateCw className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.rotateRight')}</button>
-      <button type="button" aria-pressed={mirrorX} disabled={busy} onClick={() => { setMirrorX((value) => !value); setAnalysis(null); setDownloaded(false); }} className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm disabled:opacity-50 ${mirrorX ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : 'border-[var(--border)]'}`}><FlipHorizontal className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.mirror')}</button>
+      <button type="button" disabled={busy} onClick={() => { rememberEdit(); setRotation((value) => (value + 3) % 4); setAnalysis(null); setDownloaded(false); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm disabled:opacity-50"><RotateCcw className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.rotateLeft')}</button>
+      <button type="button" disabled={busy} onClick={() => { rememberEdit(); setRotation((value) => (value + 1) % 4); setAnalysis(null); setDownloaded(false); }} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] px-3 text-sm disabled:opacity-50"><RotateCw className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.rotateRight')}</button>
+      <button type="button" aria-pressed={mirrorX} disabled={busy} onClick={() => { rememberEdit(); setMirrorX((value) => !value); setAnalysis(null); setDownloaded(false); }} className={`inline-flex min-h-11 items-center gap-2 rounded-lg border px-3 text-sm disabled:opacity-50 ${mirrorX ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : 'border-[var(--border)]'}`}><FlipHorizontal className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.mirror')}</button>
       <button type="button" disabled={!selectedCount || busy} onClick={deleteSelected} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-500/40 px-3 text-sm text-red-700 disabled:opacity-40 dark:text-red-300"><Trash2 className="h-4 w-4" />{t('resourceWorkbenchV2.schematicEditor.deleteSelected')} · {selectedCount}</button>
     </div>
 
@@ -207,6 +370,11 @@ export default function SchematicLightEditor({
     {downloaded && analysis && 'renderer_metadata' in analysis && <div role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-800 dark:text-emerald-200">
       <p className="font-semibold">{t('resourceWorkbenchV2.schematicEditor.reanalysisComplete')}</p>
       <p className="mt-1">{t('resourceWorkbenchV2.schematicEditor.exportedFile', { count: Number(analysis.renderer_metadata?.block_count ?? analysis.renderer_metadata?.blocks ?? 0) })}</p>
+      <p className="mt-1">{t('resourceWorkbenchV2.schematicEditor.exportDiff', {
+        source: total,
+        output: Number(analysis.renderer_metadata?.block_count ?? analysis.renderer_metadata?.blocks ?? 0),
+        delta: Number(analysis.renderer_metadata?.block_count ?? analysis.renderer_metadata?.blocks ?? 0) - total,
+      })}</p>
       {analysis.findings.length > 0 && <ul className="mt-2 list-inside list-disc">{analysis.findings.map((finding, index) => <li key={`${finding.key || finding.code || 'finding'}:${index}`}>{finding.message}</li>)}</ul>}
     </div>}
   </div>;

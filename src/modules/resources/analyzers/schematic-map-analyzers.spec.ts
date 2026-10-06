@@ -11,7 +11,9 @@ describe('schematic and map metadata analyzers', () => {
       block_types: [{ name: 'graphite-press', count: 1 }, { name: 'power-node', count: 1 }],
       block_positions: [
         { block: 'graphite-press', x: 3, y: 4, rotation: 1, config: 'private logic payload' },
-        { block: 'logic-processor', x: 7, y: 2 },
+        { block: 'logic-processor', x: 7, y: 2, logic_source_available: true, config: {
+          format_version: 1, source: 'print("inert source")', links: [{ name: 'node1', x: 2, y: 3 }],
+        } },
       ],
       requirements: [{ item: 'copper', amount: 24 }, { item: 'copper', amount: 5 }, { item: 'lead', amount: 12 }],
       mod_dependencies: ['example-mod'],
@@ -35,9 +37,16 @@ describe('schematic and map metadata analyzers', () => {
     expect(result.metadata).toMatchObject({ width: 12, height: 8, block_count: 3, min_supported_build: 151 });
     expect(result.blocks).toContainEqual(expect.objectContaining({ internal_name: 'graphite-press', count: 1 }));
     expect(result.blocks.find((item) => item.internal_name === 'logic-processor')?.count).toBe(1);
-    expect(result.blocks.find((item) => item.internal_name === 'graphite-press')?.positions_json).toEqual([{ x: 3, y: 4, rotation: 1 }]);
+    expect(result.blocks.find((item) => item.internal_name === 'graphite-press')?.positions_json).toEqual([{ x: 3, y: 4, rotation: 1, size: 1 }]);
+    expect(result.blocks.find((item) => item.internal_name === 'logic-processor')?.positions_json).toEqual([{
+      x: 7, y: 2, rotation: null, size: 1,
+      config: { format_version: 1, source: 'print("inert source")', links: [{ name: 'node1', x: 2, y: 3 }] },
+      logic_source_available: true,
+    }]);
     expect(result.materials).toEqual([{ internal_name: 'copper', amount: 29 }, { internal_name: 'lead', amount: 12 }]);
-    expect(result.logic_processors).toEqual([expect.objectContaining({ position_x: 7, position_y: 2, processor_type: 'logic-processor' })]);
+    expect(result.logic_processors).toEqual([expect.objectContaining({
+      position_x: 7, position_y: 2, processor_type: 'logic-processor', links_json: [{ name: 'node1', x: 2, y: 3 }],
+    })]);
     expect(result.analysis).toMatchObject({ complete: true, available: true, estimated: true });
     expect(result.analysis.production_json).toMatchObject({
       mode: 'theoretical', estimated: true,
@@ -49,9 +58,10 @@ describe('schematic and map metadata analyzers', () => {
     ]));
     expect(result.analysis.warnings_json).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'terrain-dependent' }),
-      expect.objectContaining({ code: 'LOGIC_CONFIG_NOT_ANALYZED', severity: 'info' }),
+      expect.objectContaining({ code: 'LOGIC_NOT_EXECUTED', severity: 'info' }),
     ]));
     expect(JSON.stringify(result.logic_processors)).not.toContain('private logic payload');
+    expect(JSON.stringify(result.logic_processors)).not.toContain('inert source');
   });
 
   it('derives schematic block counts only when renderer block type counts are missing', () => {

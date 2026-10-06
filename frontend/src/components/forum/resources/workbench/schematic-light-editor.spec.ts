@@ -27,6 +27,19 @@ jest.mock('@/i18n/provider', () => {
     'resourceWorkbenchV2.schematicEditor.ownerOnly': 'Owner or maintainer only',
     'resourceWorkbenchV2.schematicEditor.noBlocks': 'No block positions',
     'resourceWorkbenchV2.schematicEditor.incompleteBlocks': 'Some positions are missing',
+    'resourceWorkbenchV2.schematicEditor.canvas': 'Schematic placement canvas',
+    'resourceWorkbenchV2.schematicEditor.selectTool': 'Select',
+    'resourceWorkbenchV2.schematicEditor.moveTool': 'Move',
+    'resourceWorkbenchV2.schematicEditor.placeTool': 'Place',
+    'resourceWorkbenchV2.schematicEditor.blockPalette': 'Block',
+    'resourceWorkbenchV2.schematicEditor.selectHelp': 'Select a block on the canvas or in the list.',
+    'resourceWorkbenchV2.schematicEditor.moveHelp': 'Move a block.',
+    'resourceWorkbenchV2.schematicEditor.placeHelp': 'Place a block.',
+    'resourceWorkbenchV2.schematicEditor.canvasDimensions': 'Grid: {width} × {height}',
+    'resourceWorkbenchV2.schematicEditor.undoLast': 'Undo last edit',
+    'resourceWorkbenchV2.schematicEditor.logicSource': 'Processor source (inert text)',
+    'resourceWorkbenchV2.schematicEditor.logicSourceHelp': 'Source is never executed.',
+    'resourceWorkbenchV2.schematicEditor.logicLinks': 'Processor links',
     'resourceWorkbenchV2.schematicEditor.rotateLeft': 'Rotate left',
     'resourceWorkbenchV2.schematicEditor.rotateRight': 'Rotate right',
     'resourceWorkbenchV2.schematicEditor.mirror': 'Mirror horizontally',
@@ -181,7 +194,7 @@ describe('SchematicLightEditor', () => {
 
   async function click(element: Element | null): Promise<void> {
     if (!element) throw new Error('Expected schematic editor control was not rendered');
-    await act(async () => { (element as HTMLElement).click(); });
+    await act(async () => { element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true })); });
   }
 
   it('transforms a published schematic, reanalyzes it, then downloads the official output', async () => {
@@ -206,6 +219,9 @@ describe('SchematicLightEditor', () => {
       rotation_quarters: 3,
       mirror_x: true,
       delete_positions: [{ x: 0, y: 0 }],
+      move_positions: [],
+      add_blocks: [],
+      logic_configs: [],
     });
     expect(mockAnalyze).toHaveBeenCalledTimes(1);
     const form = mockAnalyze.mock.calls[0][1];
@@ -240,6 +256,63 @@ describe('SchematicLightEditor', () => {
     const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') as HTMLButtonElement | undefined;
     expect(exportButton?.disabled).toBe(true);
     expect(mockExport).not.toHaveBeenCalled();
+  });
+
+  it('moves a multi-tile vanilla building from its anchor through the real canvas', async () => {
+    mockGetBlocks.mockResolvedValueOnce({
+      items: [{ internal_name: 'core-shard', display_name: 'Core shard', count: 1, positions: [{ x: 1, y: 1, rotation: 0, size: 3 }] }],
+      pagination: { next_cursor: null, has_more: false },
+    });
+    const largeWorkbench = workbench();
+    largeWorkbench.resource.metadata.schematic = { ...largeWorkbench.resource.metadata.schematic!, width: 6, height: 5 };
+    mockAnalyze.mockResolvedValue({
+      resource_public_id: RESOURCE_ID,
+      resource_kind: 'schematic',
+      analysis: { parser_version: 'renderer-1', renderer_metadata: { block_count: 1 }, duplicate: false, findings: [] },
+    });
+    await act(async () => {
+      root = createRoot(container);
+      root.render(createElement(SchematicLightEditor, { workbench: largeWorkbench, version: version(), canEdit: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Move') || null);
+    await click(container.querySelector('[data-cell="2:2"]'));
+    await click(container.querySelector('[data-cell="4:2"]'));
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') || null);
+
+    expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
+      rotation_quarters: 0, mirror_x: false, delete_positions: [],
+      move_positions: [{ from_x: 1, from_y: 1, to_x: 4, to_y: 2 }], add_blocks: [], logic_configs: [],
+    });
+  });
+
+  it('keeps processor links visible and exports edited source as inert text', async () => {
+    mockGetBlocks.mockResolvedValueOnce({
+      items: [{ internal_name: 'logic-processor', display_name: 'Logic processor', count: 1, positions: [{
+        x: 1, y: 1, rotation: 0, size: 1, logic_source_available: true,
+        config: { format_version: 1, source: 'print("before")', links: [{ name: 'core', x: 2, y: 3 }] },
+      }] }],
+      pagination: { next_cursor: null, has_more: false },
+    });
+    mockAnalyze.mockResolvedValue({
+      resource_public_id: RESOURCE_ID,
+      resource_kind: 'schematic',
+      analysis: { parser_version: 'renderer-1', renderer_metadata: { block_count: 1 }, duplicate: false, findings: [] },
+    });
+    await mount();
+
+    await click(container.querySelector('[data-cell="1:1"]'));
+    expect(container.textContent).toContain('core · 2, 3');
+    const source = container.querySelector('#schematic-logic-source') as HTMLTextAreaElement;
+    await act(async () => Simulate.change(source, { target: { value: 'print("after")' } as EventTarget & { value: string } }));
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') || null);
+
+    expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
+      rotation_quarters: 0, mirror_x: false, delete_positions: [], move_positions: [], add_blocks: [],
+      logic_configs: [{ x: 1, y: 1, source: 'print("after")' }],
+    });
   });
 
   it('shows position loading failures without enabling export', async () => {

@@ -2,7 +2,6 @@ import {
   AnalyzerWarning,
   boundedNumber,
   boundedString,
-  boundedJson,
   list,
   parseRendererMetadata,
   record,
@@ -140,10 +139,15 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
     const name = blockName(item.block ?? item.name ?? item.internal_name);
     if (!name) continue;
     if (!declaredTypes.has(name)) counts.set(name, (counts.get(name) ?? 0) + 1);
+    const logicConfig = normalizeLogicConfig(item.config);
     const position = {
       x: boundedNumber(item.x, { min: -1_000_000, max: 1_000_000, integer: true }),
       y: boundedNumber(item.y, { min: -1_000_000, max: 1_000_000, integer: true }),
       rotation: boundedNumber(item.rotation, { min: 0, max: 3, integer: true }),
+      size: boundedNumber(item.size, { min: 1, max: 64, integer: true }) ?? 1,
+      ...(name.includes('processor') && logicConfig
+        ? { config: logicConfig, logic_source_available: true }
+        : name.includes('processor') ? { logic_source_available: item.logic_source_available === true } : {}),
     };
     const entries = positions.get(name) ?? [];
     if (entries.length < 500) entries.push(position);
@@ -156,7 +160,7 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
           position_x: position.x,
           position_y: position.y,
           processor_type: name.slice(0, 64),
-          links_json: null,
+          links_json: logicConfig?.links ?? null,
           variables_json: null,
         });
       }
@@ -165,7 +169,7 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
   if (sourcePositions.values.length > 0 && sourceTypes.values.length === 0) {
     warnings.push(warning('BLOCK_COUNTS_DERIVED', 'Block counts were derived from the bounded renderer position list.'));
   }
-  if (processorMap.size > 0) warnings.push(warning('LOGIC_CONFIG_NOT_ANALYZED', 'Logic processor configuration is not interpreted; only renderer-provided block positions are recorded.', 'info'));
+  if (processorMap.size > 0) warnings.push(warning('LOGIC_NOT_EXECUTED', 'Processor source and links are exposed as inert metadata; the source is not evaluated or interpreted.', 'info'));
 
   const blocks = [...counts.entries()].slice(0, 500).map(([internal_name, count]) => ({
     internal_name,
@@ -176,6 +180,25 @@ function normalizeBlocks(renderer: Record<string, unknown>, warnings: AnalyzerWa
   })).sort((left, right) => left.internal_name.localeCompare(right.internal_name));
   if (counts.size > 500) warnings.push(warning('BLOCK_TYPES_TRUNCATED', 'The number of distinct block types exceeded the analysis limit.'));
   return { blocks, logicProcessors: [...processorMap.values()].slice(0, 500) };
+}
+
+function normalizeLogicConfig(value: unknown): { source: string; links: Array<{ name: string; x: number; y: number }>; format_version: 1 } | null {
+  const config = record(value);
+  if (config.format_version !== 1) return null;
+  const source = boundedString(config.source, 32_768);
+  if (source === null || source.includes('\0')) return null;
+  const rawLinks = list(config.links, 1_000);
+  if (rawLinks.truncated) return null;
+  const links: Array<{ name: string; x: number; y: number }> = [];
+  for (const raw of rawLinks.values) {
+    const link = record(raw);
+    const name = boundedString(link.name, 100);
+    const x = boundedNumber(link.x, { min: -32_768, max: 32_767, integer: true });
+    const y = boundedNumber(link.y, { min: -32_768, max: 32_767, integer: true });
+    if (!name || x === null || y === null) return null;
+    links.push({ name, x, y });
+  }
+  return { source, links, format_version: 1 };
 }
 
 function normalizeMaterials(value: unknown, warnings: AnalyzerWarning[]): SchematicMaterialRecord[] {
