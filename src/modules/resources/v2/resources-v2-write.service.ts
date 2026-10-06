@@ -7,7 +7,7 @@ import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceFileProviderService } from '../resource-file-provider.service';
 import { User } from '@entities/user.entity';
 import { ResourceReviewEvent } from '@entities/resource-center-v2.entity';
-import { ResourceVersionService } from '../resource-versions.service';
+import { DirectVersionCompletionContext, ResourceVersionService } from '../resource-versions.service';
 import { ResourcePreviewService } from '../resource-preview.service';
 import { ResourceStorageService } from '../resource-storage.service';
 import { ResourceFileMeta, ResourcesService } from '../resources.service';
@@ -200,6 +200,54 @@ export class ResourcesV2WriteService {
       revision: version.revision,
       findings: findings[0]?.findings_json || [],
     };
+  }
+
+  /** Finalize a metadata-first draft using the same server analyzers and persistence as multipart releases. */
+  async completeDirectVersion(publicId: string, file: ResourceFileMeta, input: {
+    version: string; version_mode?: 'semver' | 'compatibility'; release_channel?: 'release' | 'beta' | 'alpha' | 'snapshot';
+    game_version_min?: string; game_version_max?: string; content?: string; mod_id?: string;
+    mod_author_overrides?: Record<string, unknown>;
+  }, actorId: number, context: DirectVersionCompletionContext) {
+    const resource = await this.getResource(publicId);
+    await this.assertRole(resource, actorId, ['owner', 'maintainer', 'publisher']);
+    let rendererDraft: { metadata: Record<string, unknown> | null; parserVersion: string | null; previewKey: string | null } | undefined;
+    if (resource.resource_kind === 'map' || resource.resource_kind === 'schematic') {
+      const extension = resource.resource_kind === 'map' ? '.msav' : '.msch';
+      if (!file.file_name.toLowerCase().endsWith(extension)) throw new BadRequestException(`仅支持 ${extension} 文件`);
+      const preview = await this.previews.createDraft(actorId, resource.resource_kind, file as any);
+      const consumed = await this.previews.consumeDraft(actorId, preview.id, resource.resource_kind);
+      rendererDraft = { metadata: consumed.metadata, parserVersion: consumed.parserVersion, previewKey: consumed.previewKey };
+    }
+    try {
+      const version = await this.versions.create({ resource_id: resource.id, ...input }, file, actorId, rendererDraft, context);
+      const analyzer = resource.resource_kind === 'mod' ? 'mod-static-analysis'
+        : resource.resource_kind === 'schematic' ? 'schematic-static-analysis'
+          : resource.resource_kind === 'map' ? 'map-static-analysis' : null;
+      const findings = analyzer
+        ? await this.dataSource.query(
+          `SELECT ar.findings_json FROM resource_analysis_runs ar JOIN resource_versions rv ON rv.id = ar.resource_version_id
+           WHERE rv.public_id = ? AND ar.analyzer = ? ORDER BY ar.created_at DESC LIMIT 1`,
+          [version.public_id, analyzer],
+        )
+        : [];
+      return {
+        version: {
+          public_id: version.public_id,
+          version: version.version,
+          version_mode: version.version_mode,
+          revision: version.revision,
+          release_channel: version.release_channel,
+          recommended: Boolean(version.recommended),
+          status: version.status,
+          published_at: version.published_at || null,
+        },
+        revision: version.revision,
+        findings: findings[0]?.findings_json || [],
+      };
+    } catch (error) {
+      if (rendererDraft?.previewKey) await this.previews.removePreviewKey(rendererDraft.previewKey);
+      throw error;
+    }
   }
 
   async updateProfile(publicId: string, input: {

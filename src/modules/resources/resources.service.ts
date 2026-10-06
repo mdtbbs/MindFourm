@@ -6,6 +6,8 @@ import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceAttribution } from '@entities/resource-attribution.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceDirectUploadDraft } from '@entities/resource-direct-upload-draft.entity';
+import { ResourceDirectUploadSession } from '@entities/resource-direct-upload-session.entity';
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
 import {
   ResourceAnalysisRun, ResourceCompatibility, ResourceDependency, ResourceMember,
@@ -47,6 +49,7 @@ import {
 } from './analyzers/mod-package-parser';
 import { validateResourceVersion } from './analyzers/version-constraint.util';
 import { persistRendererAnalysis } from './v2/resource-version-analysis.persistence';
+import { RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS } from './resource-direct-upload.constants';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -186,6 +189,7 @@ export class ResourcesService {
     resourceType: string,
     dto: CreateResourceDto,
     file?: ResourceFileMeta,
+    directUploadDraft = false,
   ): Promise<PreparedModArchive | null> {
     const versionMode = dto.version_mode || (kind === 'mod' ? 'semver' : 'compatibility');
     try {
@@ -194,6 +198,8 @@ export class ResourcesService {
       throw new BadRequestException(error instanceof Error ? error.message : '版本号格式无效');
     }
     if (kind !== 'mod') return null;
+
+    if (directUploadDraft && !file) return null;
 
     let analysis: ModArchiveAnalysis | null = null;
     if (resourceType === 'upload') {
@@ -346,6 +352,170 @@ export class ResourcesService {
     return isAccessible ? this.normalizeOneResource(resource) : null;
   }
 
+  async createDirectUploadDraft(dto: CreateResourceDto, userId: number, idempotencyHeader: string | undefined, ipAddress?: string) {
+    if (this.normalizeResourceType(dto.resource_type) !== 'upload') throw new BadRequestException('直接上传草稿必须是本站托管资源');
+    if (dto.preview_draft_id || dto.schematic_code) throw new BadRequestException('直接上传草稿不能附带本地预览或蓝图代码');
+    const idempotencyKey = this.validateIdempotencyKey(idempotencyHeader);
+    if (!idempotencyKey) throw new BadRequestException('直接上传草稿必须提供 Idempotency-Key');
+    const idempotencyKeyHash = createHash('sha256').update(idempotencyKey).digest('hex');
+    const requestFingerprint = this.hashCanonical({ operation: 'initial-resource-direct-upload', dto });
+    const expiresAt = new Date(Date.now() + RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS);
+    const resource = await this.create(dto, userId, undefined, {
+      ipAddress,
+      idempotencyKey,
+      idempotencyPayload: dto,
+      directUploadDraft: { idempotencyKeyHash, requestFingerprint, expiresAt, requestMetadata: dto as unknown as Record<string, unknown> },
+    });
+    const version = await this.versionRepository.findOne({ where: { resource_id: resource.id }, order: { id: 'DESC' } });
+    if (!version?.public_id) throw new ConflictException('资源上传草稿版本不存在');
+    const rows = await this.dataSource.query(
+      `SELECT draft.id, draft.expires_at, draft.status AS draft_status, version.status AS version_status, version.revision
+       FROM resource_direct_upload_drafts draft JOIN resource_versions version ON version.id=draft.resource_version_id
+       WHERE draft.resource_version_id=? AND draft.user_id=? LIMIT 1`,
+      [version.id, userId],
+    ) as Array<{ id: string; expires_at: Date | string; draft_status: 'open' | 'completed'; version_status: 'upload_pending' | 'pending_review'; revision: number }>;
+    const draft = rows[0];
+    if (!draft) throw new ConflictException('资源上传草稿已失效');
+    if (draft.draft_status !== 'open' || draft.version_status !== 'upload_pending' || new Date(draft.expires_at).getTime() <= Date.now()) {
+      throw new ConflictException({ code: 'UPLOAD_DRAFT_EXPIRED', message: '资源上传草稿已完成或过期，请重新创建。' });
+    }
+    return {
+      resource_public_id: resource.public_id,
+      resource_id: resource.id,
+      version_public_id: version.public_id,
+      upload_draft_id: draft.id,
+      expires_at: new Date(draft.expires_at).toISOString(),
+      draft_status: draft.draft_status,
+      version_status: draft.version_status,
+      revision: Number(draft.revision),
+    };
+  }
+
+  /** Complete an initial metadata-only draft after re-reading the verified RES bytes. */
+  async completeInitialDirectUpload(
+    input: { versionId: number; draftId: string; sessionId: string; objectPublicId: string; actor: { id: number; role?: string }; file: ResourceFileMeta },
+  ): Promise<{ file_public_id: string; version_public_id: string }> {
+    const version = await this.versionRepository.findOne({ where: { id: input.versionId } });
+    if (!version?.public_id) throw new NotFoundException('资源版本不存在');
+    const resource = await this.resourceRepository.findOne({ where: { id: version.resource_id } });
+    if (!resource || resource.deleted_at || resource.status !== 'draft') throw new ConflictException('初始资源草稿状态已变化');
+    if (resource.user_id !== input.actor.id && input.actor.role !== 'admin') throw new ForbiddenException('没有权限完成此资源上传');
+    const draft = await this.dataSource.getRepository(ResourceDirectUploadDraft).findOne({ where: { id: input.draftId, user_id: input.actor.id, resource_version_id: version.id } });
+    const dto = draft?.request_metadata as unknown as CreateResourceDto | null;
+    if (!draft || draft.status !== 'open' || draft.expires_at.getTime() <= Date.now() || !dto) {
+      throw new ConflictException('资源上传草稿不存在、已完成或已过期');
+    }
+    if (version.status !== 'upload_pending' || dto.version?.trim() !== version.version) throw new ConflictException('初始资源版本草稿元数据不匹配');
+    const createdResBindings: Array<{ objectId: string; bindingId: string }> = [];
+    let rendererDraft: ConsumedResourcePreviewDraft | undefined;
+    let previewStored = false;
+    try {
+      const preparedMod = await this.prepareInitialModArchive(resource.resource_kind || 'other', resource.resource_type, dto, input.file, false);
+      const contentSource = resolveOptionalContentSource(dto.content, dto.content_json, dto.content_schema_version);
+      if (contentSource) dto.content = contentSource.content;
+      if (resource.resource_kind === 'map' || resource.resource_kind === 'schematic') {
+        if (!this.resourcePreviewService) throw new BadRequestException('地图或蓝图解析服务不可用');
+        const preview = await this.resourcePreviewService.createDraft(input.actor.id, resource.resource_kind, input.file as any);
+        rendererDraft = await this.resourcePreviewService.consumeDraft(input.actor.id, preview.id, resource.resource_kind);
+        if (preview.duplicate?.exact) throw this.duplicateConflict(preview.duplicate.existing_resources[0]);
+        if (preview.duplicate?.structure && !dto.duplicate_note?.trim()) {
+          throw new ConflictException({ code: 'RESOURCE_STRUCTURE_DUPLICATE', message: '发现一个结构相同的蓝图。请说明用途或内容上的区别后继续提交。', existing_resources: preview.duplicate.existing_resources });
+        }
+      }
+      const rendererMetadata = rendererDraft?.metadata || null;
+      const structureHash = typeof rendererMetadata?.structure_hash === 'string' ? rendererMetadata.structure_hash : null;
+      const normalizedStructureHash = typeof rendererMetadata?.normalized_structure_hash === 'string' ? rendererMetadata.normalized_structure_hash : null;
+      const duplicate = this.resourceDuplicateService ? await this.resourceDuplicateService.inspect({
+        contentHash: input.file.content_hash, structureHash, normalizedStructureHash,
+        resourceKind: resource.resource_kind, sourceUrl: resource.source_url, title: resource.title,
+      }) : null;
+      if (duplicate?.exact) throw this.duplicateConflict(duplicate.existing_resources[0]);
+      if (duplicate?.structure && !dto.duplicate_note?.trim()) throw new ConflictException({
+        code: 'RESOURCE_STRUCTURE_DUPLICATE', message: '发现一个结构相同的蓝图。请说明用途或内容上的区别后继续提交。', existing_resources: duplicate.existing_resources,
+      });
+
+      const result = await this.dataSource.transaction(async (manager) => {
+        const lockedResource = await manager.findOne(Resource, { where: { id: resource.id }, lock: { mode: 'pessimistic_write' } });
+        const lockedVersion = await manager.findOne(ResourceVersion, { where: { id: version.id, resource_id: resource.id }, lock: { mode: 'pessimistic_write' } });
+        const lockedDraft = await manager.findOne(ResourceDirectUploadDraft, { where: { id: input.draftId, user_id: input.actor.id, resource_version_id: version.id, status: 'open' }, lock: { mode: 'pessimistic_write' } });
+        const lockedSession = await manager.findOne(ResourceDirectUploadSession, { where: { id: input.sessionId, user_id: input.actor.id, resource_version_id: version.id }, lock: { mode: 'pessimistic_write' } });
+        if (!lockedResource || lockedResource.status !== 'draft' || lockedResource.deleted_at
+          || !lockedVersion || lockedVersion.status !== 'upload_pending' || !lockedDraft || !lockedSession) {
+          throw new ConflictException('初始资源上传草稿状态已变化');
+        }
+        if (lockedResource.user_id !== input.actor.id && input.actor.role !== 'admin') throw new ForbiddenException('没有权限完成此资源上传');
+        if (lockedDraft.expires_at.getTime() <= Date.now() || lockedSession.expires_at.getTime() <= Date.now()
+          || lockedSession.resource_file_public_id || lockedSession.role !== 'primary'
+          || lockedSession.filename !== input.file.file_name || Number(lockedSession.size_bytes) !== input.file.file_size
+          || lockedSession.sha256 !== input.file.content_hash.toLowerCase()
+          || (lockedSession.object_public_id && lockedSession.object_public_id !== input.objectPublicId)) {
+          throw new ConflictException('上传会话或草稿已过期或与资源文件不匹配');
+        }
+        if (await manager.exists(ResourceFile, { where: { resource_version_id: version.id, role: 'primary' } })) {
+          throw new ConflictException('此版本已有主文件');
+        }
+        await this.claimContentHash(manager, input.file.content_hash, resource.id);
+        if (structureHash) await this.claimStructureHash(manager, structureHash, resource.id, dto.duplicate_note?.trim() || '');
+        Object.assign(lockedResource, {
+          file_path: null,
+          file_name: input.file.file_name,
+          file_size: input.file.file_size,
+          mime_type: input.file.mime_type,
+          content_hash: input.file.content_hash,
+          structure_hash: structureHash,
+          normalized_structure_hash: normalizedStructureHash,
+          status: RESOURCE_STATUS_PENDING,
+          renderer_status: rendererDraft ? 'ready' : lockedResource.renderer_status,
+          renderer_error_code: rendererDraft ? null : lockedResource.renderer_error_code,
+          renderer_preview_key: rendererDraft?.previewKey || null,
+          renderer_parser_version: rendererDraft?.parserVersion || null,
+          renderer_metadata_json: rendererMetadata as any,
+        });
+        await manager.update(Resource, resource.id, {
+          file_path: null as unknown as string,
+          file_name: input.file.file_name,
+          file_size: input.file.file_size,
+          mime_type: input.file.mime_type,
+          content_hash: input.file.content_hash,
+          structure_hash: structureHash,
+          normalized_structure_hash: normalizedStructureHash,
+          status: RESOURCE_STATUS_PENDING,
+          renderer_status: rendererDraft ? 'ready' : lockedResource.renderer_status,
+          renderer_error_code: rendererDraft ? null : lockedResource.renderer_error_code,
+          renderer_preview_key: rendererDraft?.previewKey || null,
+          renderer_parser_version: rendererDraft?.parserVersion || null,
+          renderer_metadata_json: rendererMetadata as any,
+        });
+        await this.createInitialV2Aggregate(
+          manager, lockedResource, dto, input.actor.id, input.file, contentSource, preparedMod || undefined,
+          createdResBindings, undefined, lockedVersion, true,
+        );
+        const primary = await manager.findOne(ResourceFile, { where: { resource_version_id: version.id, role: 'primary' } });
+        if (!primary) throw new ConflictException('资源文件记录未创建');
+        await manager.update(ResourceDirectUploadDraft, lockedDraft.id, { status: 'completed', completed_at: new Date() });
+        await manager.update(ResourceDirectUploadSession, lockedSession.id, { resource_file_public_id: primary.public_id, object_public_id: input.objectPublicId });
+        return { filePublicId: primary.public_id, resource: lockedResource };
+      });
+
+      if (rendererDraft?.previewKey && this.resourcePreviewService) {
+        try {
+          await this.resourcePreviewService.storePreviewInRes(result.resource, rendererDraft.previewKey);
+          previewStored = true;
+        } catch {
+          await this.resourceRepository.update(resource.id, { renderer_status: 'failed', renderer_error_code: 'RES_PREVIEW_UNAVAILABLE', renderer_preview_key: null });
+        }
+      }
+      return { file_public_id: result.filePublicId, version_public_id: version.public_id };
+    } catch (error) {
+      for (const binding of createdResBindings) await this.resClient?.deleteBinding(binding.objectId, binding.bindingId).catch(() => undefined);
+      throw error;
+    } finally {
+      if (rendererDraft?.previewKey && this.resourcePreviewService && !previewStored) {
+        await this.resourcePreviewService.discardConsumedDraft(rendererDraft);
+      }
+    }
+  }
+
   async create(
     dto: CreateResourceDto,
     userId: number,
@@ -356,6 +526,7 @@ export class ResourcesService {
       uploadSessionId?: string;
       idempotencyKey?: string;
       idempotencyPayload?: unknown;
+      directUploadDraft?: { idempotencyKeyHash: string; requestFingerprint: string; expiresAt: Date; requestMetadata?: Record<string, unknown> };
       origin?: { site: string; resourceId: string; url: string };
     } = {},
   ): Promise<any> {
@@ -415,21 +586,21 @@ export class ResourcesService {
       throw new BadRequestException('无效的资源类型');
     }
 
-    if (resourceType === 'upload' && !file) {
+    if (resourceType === 'upload' && !file && !provenance.directUploadDraft) {
       throw new BadRequestException('文件类资源必须上传文件');
     }
 
     if (resourceType === 'external' && !dto.external_url) {
       throw new BadRequestException('外链类资源必须填写外链地址');
     }
-    this.assertKindFileContract(resourceKind, resourceType, file?.file_name);
+    if (!provenance.directUploadDraft) this.assertKindFileContract(resourceKind, resourceType, file?.file_name);
     if (resourceKind === 'mod' && resourceType === 'external' && file) {
       throw new BadRequestException('外链 Mod 不能同时上传文件');
     }
     if ((resourceKind === 'map' || resourceKind === 'schematic') && dto.external_url) {
       throw new BadRequestException('地图和蓝图只能使用本站托管文件，不能设置外链地址');
     }
-    const preparedMod = await this.prepareInitialModArchive(resourceKind, resourceType, dto, file);
+    const preparedMod = await this.prepareInitialModArchive(resourceKind, resourceType, dto, file, Boolean(provenance.directUploadDraft));
 
     const canonicalJson = dto.content_json && this.customEmojis
       ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, true)
@@ -447,7 +618,7 @@ export class ResourcesService {
       : this.emptyContentRisk();
     // Resource moderation and binary-version review are separate workflows. Even
     // when metadata can publish immediately, each new binary stays in review.
-    const requiresModeration = file?.storage_backend === 'res' || risk.mustReview
+    const requiresModeration = Boolean(provenance.directUploadDraft) || file?.storage_backend === 'res' || risk.mustReview
       || ['mod', 'schematic', 'map'].includes(resourceKind)
       || Boolean(preparedMod?.idConflict)
       || (this.siteConfig?.isEnabled('resourcePreModeration') ?? true);
@@ -484,7 +655,7 @@ export class ResourcesService {
       content_schema_version: contentSource?.content_schema_version || 2,
       category_id: categoryId,
       is_public: this.toTinyInt((dto as any).is_public, 1),
-      status: requiresModeration ? RESOURCE_STATUS_PENDING : RESOURCE_STATUS_APPROVED,
+      status: provenance.directUploadDraft ? 'draft' : requiresModeration ? RESOURCE_STATUS_PENDING : RESOURCE_STATUS_APPROVED,
       ...(provenance.uploadSessionId ? { game_content_upload_session_id: provenance.uploadSessionId } : {}),
       ...(provenance.rendererDraft ? {
         renderer_status: 'ready' as const,
@@ -535,7 +706,7 @@ export class ResourcesService {
       const resource = await manager.save(Resource, newResource);
       if (file?.content_hash) await this.claimContentHash(manager, file.content_hash, resource.id);
       if (structureHash) await this.claimStructureHash(manager, structureHash, resource.id, dto.duplicate_note?.trim() || '');
-      await this.createInitialV2Aggregate(manager, resource, dto, userId, file, contentSource, preparedMod || undefined, createdResBindings);
+      await this.createInitialV2Aggregate(manager, resource, dto, userId, file, contentSource, preparedMod || undefined, createdResBindings, provenance.directUploadDraft);
       if (idempotencyKey) {
         await manager.query('UPDATE resource_submission_idempotency SET resource_id = ? WHERE user_id = ? AND idempotency_key = ?', [resource.id, userId, idempotencyKey]);
       }
@@ -615,6 +786,9 @@ export class ResourcesService {
     contentSource: ReturnType<typeof resolveOptionalContentSource>,
     preparedMod?: PreparedModArchive,
     createdResBindings: Array<{ objectId: string; bindingId: string }> = [],
+    directUploadDraft?: { idempotencyKeyHash: string; requestFingerprint: string; expiresAt: Date; requestMetadata?: Record<string, unknown> },
+    existingRelease?: ResourceVersion,
+    finalizingDirectDraft = false,
   ): Promise<void> {
       const versionMode = dto.version_mode || (resource.resource_kind === 'mod' ? 'semver' : 'compatibility');
       const manifest = preparedMod?.effectiveManifest || null;
@@ -636,21 +810,21 @@ export class ResourcesService {
           await manager.update(Resource, resource.id, { status: RESOURCE_STATUS_PENDING });
         }
       }
-      const release = await manager.save(ResourceVersion, manager.create(ResourceVersion, {
+      const releaseValues = {
         resource_id: resource.id,
-        public_id: randomUUID(),
+        public_id: existingRelease?.public_id || randomUUID(),
         // This is strictly the resource's own release version. Mindustry build
         // compatibility is represented below in ResourceVersionCompatibility.
         version: dto.version.trim(),
         version_mode: versionMode,
-        revision: 1,
+        revision: existingRelease?.revision || 1,
         recommended: 0,
         game_version_min: gameVersionMin,
         game_version_max: gameVersionMax,
         release_channel: dto.release_channel || 'release',
         // A Resource approval does not review its binary. Initial and later
         // uploads enter the same version-scoped review queue.
-        status: 'pending_review',
+        status: directUploadDraft ? 'upload_pending' : 'pending_review',
         published_at: null,
         release_notes_markdown: contentSource?.content.trim() || null,
         release_notes_html: contentSource?.content_html || null,
@@ -660,13 +834,18 @@ export class ResourcesService {
         file_size: file?.file_size || null,
         mime_type: file?.mime_type || null,
         content_hash: file?.content_hash || null,
-      } as Partial<ResourceVersion>));
+      } as Partial<ResourceVersion>;
+      const release = existingRelease
+        ? Object.assign(existingRelease, releaseValues, { id: existingRelease.id })
+        : manager.create(ResourceVersion, releaseValues);
+      if (existingRelease) await manager.update(ResourceVersion, existingRelease.id, releaseValues);
+      else await manager.save(ResourceVersion, release);
       const credits = [
         { role: 'submitter', subject_type: 'local_user', user_id: submitterUserId, display_name: null },
         ...this.normalizeCredits([...(dto.original_authors || []), ...(manifest?.author ? [manifest.author] : [])]).map((display_name) => ({ role: 'original_author', subject_type: 'external_person', user_id: null, display_name })),
         ...this.normalizeCredits(dto.maintainers).map((display_name) => ({ role: 'maintainer', subject_type: 'external_person', user_id: null, display_name })),
       ];
-      await manager.save(ResourceAttribution, credits.map((credit, sort_order) => manager.create(ResourceAttribution, {
+      if (!finalizingDirectDraft) await manager.save(ResourceAttribution, credits.map((credit, sort_order) => manager.create(ResourceAttribution, {
         resource_id: resource.id,
         ...credit,
         sort_order,
@@ -684,7 +863,7 @@ export class ResourcesService {
         resBindingId = binding.id;
         createdResBindings.push({ objectId: file.provider_object_id, bindingId: binding.id });
       }
-      await manager.save(ResourceFile, manager.create(ResourceFile, {
+      if (!(hosted && directUploadDraft)) await manager.save(ResourceFile, manager.create(ResourceFile, {
         public_id: filePublicId,
         resource_version_id: release.id,
         role: 'primary',
@@ -704,6 +883,20 @@ export class ResourcesService {
         sort_order: 0,
       }));
 
+      if (directUploadDraft) {
+        await manager.save(ResourceDirectUploadDraft, manager.create(ResourceDirectUploadDraft, {
+          id: randomUUID(),
+          resource_version_id: release.id,
+          user_id: submitterUserId,
+          idempotency_key_hash: directUploadDraft.idempotencyKeyHash,
+          request_fingerprint: directUploadDraft.requestFingerprint,
+          request_metadata: directUploadDraft.requestMetadata || null,
+          status: 'open',
+          expires_at: directUploadDraft.expiresAt,
+          completed_at: null,
+        }));
+      }
+
       const compatibility: Array<{
         min_version_value?: string;
         max_version_value?: string;
@@ -719,8 +912,11 @@ export class ResourcesService {
         min_version_value: String(inferredBuild), max_version_value: undefined, channel: undefined,
         notes: '基于蓝图内容自动推测', provenance: 'inferred', confidence: renderer.compatibility.confidence || 'low',
       });
-      if (compatibility.length) {
-        await manager.save(ResourceVersionCompatibility, compatibility.map((item) => manager.create(ResourceVersionCompatibility, {
+      const compatibilityToSave = finalizingDirectDraft
+        ? compatibility.filter((item) => item.provenance === 'inferred')
+        : compatibility;
+      if (compatibilityToSave.length) {
+        await manager.save(ResourceVersionCompatibility, compatibilityToSave.map((item) => manager.create(ResourceVersionCompatibility, {
           resource_version_id: release.id,
           runtime: 'mindustry',
           min_version_value: item.min_version_value?.trim() || null,
@@ -732,7 +928,7 @@ export class ResourcesService {
         })));
       }
 
-      await manager.save(ResourceMember, manager.create(ResourceMember, {
+      if (!finalizingDirectDraft) await manager.save(ResourceMember, manager.create(ResourceMember, {
         resource_id: resource.id,
         user_id: submitterUserId,
         role: 'owner',
@@ -740,7 +936,7 @@ export class ResourcesService {
         invited_by_user_id: null,
         accepted_at: new Date(),
       }));
-      await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
+      if (!directUploadDraft) await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
         resource_id: resource.id,
         resource_version_id: release.id,
         actor_user_id: submitterUserId,
@@ -777,14 +973,14 @@ export class ResourcesService {
           created_by_user_id: submitterUserId,
         })),
       ];
-      if (v2Compatibility.length) {
+      if (v2Compatibility.length && !finalizingDirectDraft) {
         await manager.save(ResourceCompatibility, v2Compatibility.map((item) => manager.create(ResourceCompatibility, {
           resource_version_id: release.id,
           ...item,
         })));
       }
 
-      if (resource.resource_kind === 'schematic' || resource.resource_kind === 'map') {
+      if (!directUploadDraft && (resource.resource_kind === 'schematic' || resource.resource_kind === 'map')) {
         await persistRendererAnalysis(manager, {
           resourceId: resource.id,
           versionId: release.id,

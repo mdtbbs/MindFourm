@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { AlertTriangle, FileArchive, Loader2, ScanSearch, UploadCloud } from 'lucide-react';
 import {
   analyzeResourceWorkbenchVersionV2,
-  createResourceWorkbenchVersionV2,
+  createResourceDirectVersionDraft,
+  uploadResourceDirectDraft,
   type ResourceWorkbenchV2ModVersionAnalysis,
   type ResourceWorkbenchV2RendererVersionAnalysis,
   type ResourceWorkbenchV2Response,
@@ -48,6 +49,7 @@ export default function ResourceReleaseForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<ResourceWorkbenchV2VersionCreateResponse | null>(null);
+  const submissionKey = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const chooseFile = (candidate: File | undefined) => {
     if (!candidate) return;
@@ -97,15 +99,40 @@ export default function ResourceReleaseForm({
     setSubmitting(true);
     setError(null);
     try {
-      const data = new FormData();
-      data.append('file', file);
-      data.append('version', version.trim());
-      data.append('version_mode', versionMode);
-      data.append('release_channel', releaseChannel);
-      if (gameVersionMin.trim()) data.append('game_version_min', gameVersionMin.trim());
-      if (gameVersionMax.trim()) data.append('game_version_max', gameVersionMax.trim());
-      if (releaseNotes.trim()) data.append('content', releaseNotes.trim());
-      const result = await createResourceWorkbenchVersionV2(workbench.resource.public_id, data);
+      const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+      const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      const input = {
+        version: version.trim(),
+        version_mode: versionMode,
+        release_channel: releaseChannel,
+        ...(gameVersionMin.trim() ? { game_version_min: gameVersionMin.trim() } : {}),
+        ...(gameVersionMax.trim() ? { game_version_max: gameVersionMax.trim() } : {}),
+        ...(releaseNotes.trim() ? { content: releaseNotes.trim() } : {}),
+      } as const;
+      const fingerprint = JSON.stringify({ sha256, filename: file.name, input });
+      if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
+        submissionKey.current = { fingerprint, key: crypto.randomUUID() };
+      }
+      const draft = await createResourceDirectVersionDraft(workbench.resource.public_id, input, submissionKey.current.key);
+      if (draft.draft_status === 'open') {
+        await uploadResourceDirectDraft(draft.version_public_id, file, sha256);
+      } else if (draft.version_status !== 'pending_review') {
+        throw new Error(t('resourceWorkbenchV2.releaseSubmitFailed'));
+      }
+      const result: ResourceWorkbenchV2VersionCreateResponse = {
+        version: {
+          public_id: draft.version_public_id,
+          version: input.version,
+          version_mode: input.version_mode,
+          revision: draft.revision || 1,
+          release_channel: input.release_channel,
+          recommended: false,
+          status: 'pending_review',
+          published_at: null,
+        },
+        revision: draft.revision || 1,
+        findings: [],
+      };
       setCreated(result);
       onReleased(result);
     } catch (caught) {

@@ -64,3 +64,14 @@ export class ResourceDirectUploadCompleteResponseDto {
   @ApiProperty({ format: 'uuid' }) file_public_id: string;
   @ApiProperty({ enum: [true] }) completed: boolean;
 }
+
+export class ResourceDirectUploadDraftResponseDto {
+  @ApiProperty({ format: 'uuid' }) resource_public_id: string;
+  @ApiPropertyOptional({ description: 'Legacy numeric Resource ID for navigation after initial upload.' }) resource_id?: number;
+  @ApiProperty({ format: 'uuid' }) version_public_id: string;
+  @ApiProperty({ format: 'uuid' }) upload_draft_id: string;
+  @ApiProperty({ format: 'date-time' }) expires_at: string;
+  @ApiProperty({ enum: ['open', 'completed'] }) draft_status: 'open' | 'completed';
+  @ApiProperty({ enum: ['upload_pending', 'pending_review'] }) version_status: 'upload_pending' | 'pending_review';
+  @ApiPropertyOptional({ minimum: 1 }) revision?: number;
+}

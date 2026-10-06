@@ -7,6 +7,12 @@
  */
 
 import { fetchV1, requestV1, requestV1Blob, type FetchV1Options } from './transport';
+export {
+  createResourceDirectUploadDraft,
+  createResourceDirectVersionDraft,
+  uploadResourceDirectDraft,
+} from './resource-direct-upload';
+export type { ResourceDirectUploadDraftResponse, ResourceDirectVersionDraftInput } from './resource-direct-upload';
 
 export type V1VersionSummary = {
   public_id: string;

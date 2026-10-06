@@ -101,6 +101,11 @@ export async function migrateOneResourceFile(
     if (confirmed.state !== 'verified' || confirmed.sha256 !== sha256 || confirmed.size_bytes !== acquired.size) {
       throw new Error('RES object verification failed');
     }
+    const downloaded = await client.getObjectContent(confirmed.public_id, { maxBytes: acquired.size });
+    const downloadedSha256 = createHash('sha256').update(downloaded).digest('hex');
+    if (downloaded.length !== acquired.size || downloadedSha256 !== sha256) {
+      throw new Error('RES re-download SHA-256 or size does not match source bytes');
+    }
     let bindingId: string | undefined;
     let updated: boolean;
     try {

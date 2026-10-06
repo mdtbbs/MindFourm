@@ -23,7 +23,7 @@ import { UpdateResourceUploadDraftDto } from '../dto/update-resource-upload-draf
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourcePreviewDraftInterceptor, resourceUploadInterceptor } from '../resources.controller';
 import { RESOURCE_KIND_VALUES } from '../resource-kind-registry';
 import { ResourceDirectUploadService } from '../resource-direct-upload.service';
-import { CompleteResourceDirectUploadDto, InitResourceDirectUploadDto, ResourceDirectUploadInitResponseDto, ResourceDirectUploadCompleteResponseDto } from './resource-direct-upload.dto';
+import { CompleteResourceDirectUploadDto, InitResourceDirectUploadDto, ResourceDirectUploadInitResponseDto, ResourceDirectUploadCompleteResponseDto, ResourceDirectUploadDraftResponseDto } from './resource-direct-upload.dto';
 
 const duplicateResponseSchema = {
   type: 'object', required: ['exact', 'structure', 'normalized', 'existing_resources'],
@@ -61,6 +61,20 @@ export class ResourcesV1WriteController {
     await this.assertEnabled(req.user);
     const body = await this.validate(rawBody, InitResourceDirectUploadDto);
     return this.directUploads.init(body, req.user);
+  }
+
+  @Post('direct-drafts')
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 5, window: 60 })
+  @ApiConsumes('application/json')
+  @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'ASCII key scoped to the authenticated account; reuse only for the same direct-upload draft.' })
+  @ApiBody({ type: CreateResourceDto, description: 'Creates an unpublished Resource and upload_pending first version without receiving the file bytes.' })
+  @ApiCreatedResponse({ type: ResourceDirectUploadDraftResponseDto, description: 'Metadata-only direct-upload draft; call uploads/init and uploads/complete before it enters moderation.' })
+  async createDirectUploadDraft(@Body() rawBody: Record<string, any>, @Req() req: any) {
+    await this.assertEnabled(req.user);
+    const body = await this.validate(rawBody, CreateResourceDto);
+    const rawKey = req.headers?.['idempotency-key'];
+    return this.resources.createDirectUploadDraft(body, Number(req.user.id), typeof rawKey === 'string' ? rawKey : undefined, getClientIp(req));
   }
 
   @Post('uploads/complete')

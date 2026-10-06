@@ -1,8 +1,8 @@
 import {
-  BadRequestException, Body, Controller, Optional, Param, Patch, Post, Req, Res, ServiceUnavailableException, UploadedFile, UseInterceptors, ValidationPipe,
+  BadRequestException, Body, Controller, HttpStatus, Optional, Param, Patch, Post, Req, Res, ServiceUnavailableException, UploadedFile, UseInterceptors, ValidationPipe,
 } from '@nestjs/common';
 import {
-  ApiBadRequestResponse, ApiBody, ApiConsumes, ApiCreatedResponse, ApiForbiddenResponse,
+  ApiBadRequestResponse, ApiBody, ApiConsumes, ApiCreatedResponse, ApiForbiddenResponse, ApiHeader,
   ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiProduces, ApiTags,
 } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -15,6 +15,10 @@ import { ResourceStorageService } from '../resource-storage.service';
 import { ResourceDirectUploadService } from '../resource-direct-upload.service';
 import { cleanupUploadedFile, MAX_RESOURCE_SIZE, resourceUploadInterceptor } from '../resources.controller';
 import { ResourcesV2WriteService } from './resources-v2-write.service';
+import { ResourceDirectUploadDraftResponseDto } from '../v1/resource-direct-upload.dto';
+import { AuthService } from '../../auth/auth.service';
+import { SettingsService } from '../../settings/settings.service';
+import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import {
   ResourceV2CreateRelationDto, ResourceV2CreateVersionDto, ResourceV2InviteMemberDto,
   ResourceV2ExportSchematicDto, ResourceV2PatchProfileDto, ResourceV2RespondInvitationDto, ResourceV2TransferOwnerDto,
@@ -28,6 +32,8 @@ export class ResourcesV2WriteController {
     private readonly resources: ResourcesV2WriteService,
     private readonly storage: ResourceStorageService,
     @Optional() private readonly directUploads?: ResourceDirectUploadService,
+    @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly auth?: AuthService,
   ) {}
 
   @Post(':id/versions/analyze')
@@ -61,6 +67,34 @@ export class ResourcesV2WriteController {
     } finally {
       await cleanupUploadedFile(file);
       if (stored?.file_path) await this.storage.removeManaged(stored.file_path).catch(() => undefined);
+    }
+  }
+
+  @Post(':id/versions/direct-drafts')
+  @OAuthProtected('resource.upload')
+  @RateLimit({ max: 5, window: 60 })
+  @ApiOperation({ operationId: 'createResourceV2DirectVersionDraft', summary: '创建 metadata-first 直接上传版本草稿' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Resource public UUID。' })
+  @ApiConsumes('application/json')
+  @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'ASCII key scoped to the authenticated account and Resource.' })
+  @ApiBody({ type: ResourceV2CreateVersionDto, description: 'Creates an upload_pending version without receiving file bytes.' })
+  @ApiCreatedResponse({ type: ResourceDirectUploadDraftResponseDto, description: 'Upload draft identifiers and expiry; use the existing direct upload init/complete endpoints to attach the file.' })
+  async createVersionDirectDraft(@Param('id') id: string, @Body() rawBody: Record<string, any>, @Req() req: any) {
+    if (!this.directUploads) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    await this.assertUploadEnabled(req.user);
+    const body = await new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true })
+      .transform(rawBody || {}, { type: 'body', metatype: ResourceV2CreateVersionDto }) as ResourceV2CreateVersionDto;
+    const rawKey = req.headers?.['idempotency-key'];
+    return this.directUploads.createVersionDraft(id, body, { id: Number(req.user.id), role: req.user.role }, typeof rawKey === 'string' ? rawKey : undefined);
+  }
+
+  private async assertUploadEnabled(user: any) {
+    if (!this.settings || !this.auth) throw new ServiceUnavailableException('资源上传验证暂不可用');
+    if (!await this.settings.getBoolean('feature_resources_v1_upload_enabled', true)) {
+      throw new ApiV1Exception('RESOURCE_UPLOAD_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源上传', false);
+    }
+    if (await this.auth.checkNeedsTermsAcceptance(user)) {
+      throw new ApiV1Exception('TERMS_ACCEPTANCE_REQUIRED', HttpStatus.FORBIDDEN, '请先接受社区条款', false);
     }
   }
 

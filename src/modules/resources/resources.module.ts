@@ -15,6 +15,7 @@ import { User } from '@entities/user.entity';
 import { ResourceAttribution } from '@entities/resource-attribution.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceDirectUploadSession } from '@entities/resource-direct-upload-session.entity';
+import { ResourceDirectUploadDraft } from '@entities/resource-direct-upload-draft.entity';
 import { ResourceFavorite } from '@entities/resource-favorite.entity';
 import { ResourceLike } from '@entities/resource-like.entity';
 import { ResourceSubscription } from '@entities/resource-subscription.entity';
@@ -70,7 +71,7 @@ import { ResourceCommentsModule } from '../resource-comments/resource-comments.m
     CustomEmojisModule,
     DownloadsModule,
     ResourceCommentsModule,
-    TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceDirectUploadSession, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ModReportAttachment]),
+    TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceDirectUploadSession, ResourceDirectUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ModReportAttachment]),
   ],
   providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourceDirectUploadService, ResourcePreviewService, ResourceLifecycleService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService],
   controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController],
