@@ -97,15 +97,17 @@ describe('ResourceDiscoveryService', () => {
     expect(sourceQuery.andWhere).toHaveBeenCalledWith('resource.public_id = :publicId', { publicId: 'source' });
   });
 
-  it('builds a personalized profile from likes and favorites, excludes seeds, and prefers matching tags', async () => {
+  it('builds a personalized profile only from currently visible liked/favorited resources', async () => {
     const seed = resource({ id: 11, public_id: 'seed', metadata_json: { tags: ['logic', 'power'] } });
     const matching = resource({ id: 12, public_id: 'matching', metadata_json: { tags: ['logic'] }, view_count: '3' });
     const unrelated = resource({ id: 13, public_id: 'unrelated', resource_kind: 'map', category_id: 50, metadata_json: { tags: ['survival'] }, view_count: '4' });
 
+    const seedQuery = query([seed]);
     const candidates = query([seed, unrelated, matching]);
     const resourceRepository = {
-      find: jest.fn().mockResolvedValue([seed]),
-      createQueryBuilder: jest.fn().mockReturnValue(candidates),
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(seedQuery)
+        .mockReturnValueOnce(candidates),
     };
     const likes = { find: jest.fn().mockResolvedValue([{ resource_id: 11 }]) };
     const favorites = { find: jest.fn().mockResolvedValue([{ resource_id: 11 }]) };
@@ -114,6 +116,8 @@ describe('ResourceDiscoveryService', () => {
 
     expect(result.personalized).toBe(true);
     expect(result.algorithm).toBe('resource-taste-v1');
+    expect(result.privacy).toContain('currently public resources');
+    expect(seedQuery.andWhere).toHaveBeenCalledWith('seed.id IN (:...seedIds)', { seedIds: [11] });
     expect(result.items.map((item) => item.resource.public_id)).not.toContain('seed');
     expect(result.items[0].resource.public_id).toBe('matching');
     expect(result.items[0].reasons).toEqual(expect.arrayContaining([
@@ -123,5 +127,24 @@ describe('ResourceDiscoveryService', () => {
     ]));
     expect(likes.find).toHaveBeenCalledWith(expect.objectContaining({ where: { user_id: 42 } }));
     expect(favorites.find).toHaveBeenCalledWith(expect.objectContaining({ where: { user_id: 42 } }));
+  });
+
+  it('falls back to non-personalized ranking when all interaction seeds are no longer visible', async () => {
+    const hiddenSeedQuery = query([]);
+    const fallbackCandidates = query([resource({ id: 21, public_id: 'fallback' })]);
+    const resourceRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(hiddenSeedQuery)
+        .mockReturnValueOnce(fallbackCandidates),
+    };
+    const likes = { find: jest.fn().mockResolvedValue([{ resource_id: 999 }]) };
+    const favorites = { find: jest.fn().mockResolvedValue([]) };
+
+    const result = await service(resourceRepository, likes, favorites).forYou(42, undefined, 12);
+
+    expect(result.personalized).toBe(false);
+    expect(result.algorithm).toBe('resource-trending-v1');
+    expect(result.privacy).toBe('No personal profile was used.');
+    expect(result.items[0].resource.public_id).toBe('fallback');
   });
 });
