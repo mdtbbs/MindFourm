@@ -129,9 +129,9 @@ export class ResourceV2ExportMapDto {
   @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2MapTerrainChangeDto)
   terrain_changes?: ResourceV2MapTerrainChangeDto[];
 
-  @ApiPropertyOptional({ type: 'object', description: 'Typed scalar/list Rules fields. Unspecified and unknown source fields are preserved.' })
+  @ApiPropertyOptional({ type: 'object', description: 'Typed scalar/list Rules fields. Unspecified and unknown source fields are preserved.', default: {} })
   @IsOptional() @IsObject()
-  rule_changes?: Record<string, unknown>;
+  rule_changes: Record<string, unknown> = {};
 
   @ApiPropertyOptional({ type: [ResourceV2MapWaveOperationDto], maxItems: 1_000 })
   @IsOptional() @IsArray() @ArrayMaxSize(1_000) @ValidateNested({ each: true }) @Type(() => ResourceV2MapWaveOperationDto)
