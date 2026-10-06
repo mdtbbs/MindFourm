@@ -688,8 +688,14 @@ public final class MapRenderer {
                 try (DataOutputStream data = new DataOutputStream(bytes)) {
                     tile.build.writeAll(new arc.util.io.Writes(data));
                 }
+                String buildHash;
+                try {
+                    buildHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
+                } catch (java.security.NoSuchAlgorithmException exception) {
+                    throw new IOException("SHA-256 unavailable", exception);
+                }
                 buildings.add(tile.x + ":" + tile.y + ":" + tile.build.block.name + ":" + tile.build.rotation + ":"
-                    + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray())));
+                    + buildHash);
             }
         }
         return new MapStructure(Vars.world.width(), Vars.world.height(), List.copyOf(tiles), List.copyOf(buildings));
