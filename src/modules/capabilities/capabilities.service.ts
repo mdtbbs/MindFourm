@@ -117,7 +117,7 @@ export class CapabilitiesService {
     const schematicFullEditor = schematicLightEditor
       && this.hasRendererOperations(editorReadiness, ['schematic.logic.read', 'schematic.logic.text.write']);
     const mapEditor = resourceCenterAvailable && resourceUpload && editorReadiness.storageReady
-      && this.hasRendererOperations(editorReadiness, ['map.read', 'map.terrain.write', 'map.rules.read', 'map.rules.write']);
+      && this.hasRendererOperations(editorReadiness, ['map.read', 'map.write', 'map.rules.read', 'map.rules.write']);
     const waveEditor = mapEditor
       && this.hasRendererOperations(editorReadiness, ['map.waves.read', 'map.waves.write']);
     return {
@@ -151,7 +151,6 @@ export class CapabilitiesService {
       },
       cloud_saves_v1: cloudSavesAvailable,
       client: { minimum_supported_version: null, recommended_version: null },
-      // Legacy aliases remain until official clients migrate to nested capabilities.
       resource_read: resourceRead,
       resource_files: resourceRead,
       download_grants: resourceRead && resourceDownload,
