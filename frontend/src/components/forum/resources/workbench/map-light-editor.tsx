@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Save } from 'lucide-react';
 import {
   createResourceDirectVersionDraft,
@@ -87,11 +87,12 @@ export default function MapLightEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [saved, setSaved] = useState(false);
+  const saveAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
   const versionId = version?.public_id;
 
   useEffect(() => {
     setEditor(null); setTerrainEdits({}); setRuleEdits({}); setWaveOperations([]); setWaveGroups([]);
-    setLoadError(''); setError(''); setSaved(false);
+    setLoadError(''); setError(''); setSaved(false); saveAttempt.current = null;
     if (!versionId) return;
     const controller = new AbortController();
     setLoading(true);
@@ -168,6 +169,10 @@ export default function MapLightEditor({
         rule_changes: ruleEdits,
         wave_operations: waveOperations,
       };
+      const fingerprint = JSON.stringify({ source: version.public_id, operations });
+      if (!saveAttempt.current || saveAttempt.current.fingerprint !== fingerprint) {
+        saveAttempt.current = { fingerprint, key: newIdempotencyKey() };
+      }
       const blob = await exportResourceWorkbenchMapV2(workbench.resource.public_id, version.public_id, operations);
       if (!blob.size) throw new Error(t('resourceWorkbenchV2.mapEditor.saveFailed'));
       const file = new File([blob], fileName(version), { type: 'application/octet-stream' });
@@ -177,9 +182,10 @@ export default function MapLightEditor({
         release_channel: ['release', 'beta', 'alpha', 'snapshot'].includes(version.release_channel) ? version.release_channel as 'release' | 'beta' | 'alpha' | 'snapshot' : 'release',
         ...(version.game_version_min ? { game_version_min: version.game_version_min } : {}),
         ...(version.game_version_max ? { game_version_max: version.game_version_max } : {}),
-      }, newIdempotencyKey());
+      }, saveAttempt.current.key);
       await uploadResourceDirectDraft(draft.version_public_id, file);
       await onSaved?.(draft.version_public_id);
+      saveAttempt.current = null;
       setSaved(true);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.mapEditor.saveFailed'));
