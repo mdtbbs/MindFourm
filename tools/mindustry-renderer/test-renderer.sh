@@ -48,8 +48,12 @@ if [[ -d "$renderer_dir/src/test/resources" ]]; then
 fi
 unzip -q "$desktop_jar" 'sprites/*' -d "$assets_dir"
 
-ASSETS_ROOT="$assets_dir" java -Djava.awt.headless=true \
-  -cp "$classpath:$main_classes:$test_classes" \
-  cn.mdtbbs.renderer.RendererVisualRegression
+for fixture in \
+  cn.mdtbbs.renderer.RendererVisualRegression \
+  cn.mdtbbs.renderer.EditorSafetyRegression; do
+  ASSETS_ROOT="$assets_dir" java -Djava.awt.headless=true \
+    -cp "$classpath:$main_classes:$test_classes" \
+    "$fixture"
+done
 
 printf 'Mindustry renderer compile and fixture verification passed.\n'
