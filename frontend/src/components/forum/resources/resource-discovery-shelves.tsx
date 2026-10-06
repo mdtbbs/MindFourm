@@ -88,7 +88,7 @@ function ResourceDiscoveryCard({ resource }: { resource: Resource }) {
   const tags = Array.isArray(resource.metadata?.tags) ? resource.metadata.tags.slice(0, 2) : [];
   return <Link href={`/resources/${encodeURIComponent(id)}`} className="block min-w-[15rem] max-w-[18rem] snap-start border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)] sm:min-w-0 sm:max-w-none">
     <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{resource.title}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{resource.resource_kind || resource.resource_type}</div></div>{Number(resource.is_featured) === 1 ? <Star className="h-4 w-4 shrink-0 text-amber-500" fill="currentColor" /> : null}</div>
-    <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-[var(--text-secondary)]">{resource.summary || resource.description || '暂无简介'}</p>
+    <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-[var(--text-secondary)]">{resource.description || '暂无简介'}</p>
     {tags.length ? <div className="mt-3 flex min-h-5 gap-1 overflow-hidden">{tags.map((tag) => <span key={tag} className="truncate border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">{tag}</span>)}</div> : <div className="mt-3 min-h-5" />}
     <div className="mt-3 flex items-center gap-3 text-[11px] tabular-nums text-[var(--text-muted)]"><span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" />{Number(resource.view_count || 0)}</span><span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />{Number(resource.download_count || 0)}</span></div>
   </Link>;
