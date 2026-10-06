@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { friendsApi, multiplayerApi, socialPresenceApi, userBlocksApi, type IncomingJoinRequest, type SocialFriendPresenceItem } from '@/lib/api/client';
 import FriendRequests from '@/components/lanlink/FriendRequests';
 import { confirmDialog } from '@/store/interaction-dialog-store';
-import { ackForumRealtimeEvent, type ForumRealtimeMessage } from '@/hooks/use-forum-realtime';
+import { type ForumRealtimeMessage } from '@/hooks/use-forum-realtime';
 import { useAuth } from '@/lib/auth/context';
 
 type Tab = 'all' | 'online' | 'pending' | 'blocked';
@@ -42,7 +42,6 @@ export default function FriendsList() {
   const [joinRequests, setJoinRequests] = useState<IncomingJoinRequest[]>([]);
   const [approvals, setApprovals] = useState<Array<{ id: string; requestId: string; intentId: string; sessionId?: string }>>([]);
   const [busyActions, setBusyActions] = useState<Set<string>>(new Set());
-  const consumedApprovalIds = useRef(new Set<string>());
   const [launcher, setLauncher] = useState<{ default_client_id: string | null; clients: Array<{ client_id: string; name: string; launch_uri_template: string | null }> }>({ default_client_id: null, clients: [] });
 
   const load = useCallback(async () => {
@@ -65,11 +64,6 @@ export default function FriendsList() {
   useEffect(() => { void load(); }, [load]);
 
   useEffect(() => {
-    const key = `forum:consumed-join-approvals:${user?.id || 'current'}`;
-    try {
-      const saved = JSON.parse(window.sessionStorage.getItem(key) || '[]') as string[];
-      consumedApprovalIds.current = new Set(saved.filter((id) => typeof id === 'string'));
-    } catch { consumedApprovalIds.current = new Set(); }
     const handleRealtime = (event: Event) => {
       const message = (event as CustomEvent<ForumRealtimeMessage>).detail;
       if (!message) return;
@@ -79,10 +73,6 @@ export default function FriendsList() {
       const requestId = typeof message.data?.join_request_id === 'string' ? message.data.join_request_id : '';
       const intentId = typeof message.data?.intent_id === 'string' ? message.data.intent_id : '';
       if (!requestId || !intentId) return;
-      if (consumedApprovalIds.current.has(requestId)) {
-        ackForumRealtimeEvent(Number(user?.id), message.id);
-        return;
-      }
       setApprovals((current) => current.some((item) => item.id === message.id) ? current : [...current, {
         id: message.id!, requestId, intentId,
         sessionId: typeof message.data?.session_id === 'string' ? message.data.session_id : undefined,
@@ -90,7 +80,7 @@ export default function FriendsList() {
     };
     window.addEventListener('forum:realtime', handleRealtime);
     return () => window.removeEventListener('forum:realtime', handleRealtime);
-  }, [load, user?.id]);
+  }, [load]);
 
   const markBusy = (id: number, value: boolean) => setBusy((current) => {
     const next = new Set(current);
@@ -201,16 +191,22 @@ export default function FriendsList() {
     finally { markActionBusy(requestId, false); }
   };
 
-  const consumeApproval = async (approval: { id: string; requestId: string; intentId: string }) => {
+  const handoffApproval = async (approval: { id: string; requestId: string; intentId: string }) => {
     markActionBusy(approval.requestId, true);
     try {
-      await multiplayerApi.consumeJoinIntent(approval.intentId);
-      consumedApprovalIds.current.add(approval.requestId);
-      try { window.sessionStorage.setItem(`forum:consumed-join-approvals:${user?.id || 'current'}`, JSON.stringify([...consumedApprovalIds.current].slice(-100))); } catch { /* Current session can still acknowledge the event. */ }
-      ackForumRealtimeEvent(Number(user?.id), approval.id);
+      const selected = launcher.clients.find((client) => client.client_id === launcher.default_client_id);
+      try { await navigator.clipboard.writeText(approval.intentId); } catch { /* Clipboard may be unavailable. */ }
+      if (!selected?.launch_uri_template) {
+        setNotice(`已复制一次性加入凭证 ${approval.intentId}。请先设置默认联机客户端，或在客户端中使用该 Intent。`);
+        return;
+      }
+      window.location.assign(selected.launch_uri_template.replace('{intent_id}', encodeURIComponent(approval.intentId)));
+      // The web client must not consume or acknowledge this one-time intent.
+      // The selected launcher/client owns consumption; keeping the realtime
+      // event unacknowledged lets it be replayed if handoff fails.
       setApprovals((current) => current.filter((item) => item.requestId !== approval.requestId));
-      setNotice('已继续加入获批的联机房间。');
-    } catch { setError('使用加入凭证失败；只有成功使用后才会确认这条实时事件。'); }
+      setNotice(`已将一次性加入凭证交给 ${selected.name}，由客户端完成加入。`);
+    } catch { setError('无法打开联机客户端；加入凭证尚未被网页消费，可以重试。'); }
     finally { markActionBusy(approval.requestId, false); }
   };
 
@@ -287,7 +283,7 @@ export default function FriendsList() {
           <h3 id="approved-join-requests-title" className="mb-2 text-sm font-semibold">已批准的加入请求</h3>
           <ul className="space-y-2">{approvals.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <span className="min-w-0 flex-1 text-sm">你的加入请求已批准{item.sessionId ? `（${item.sessionId}）` : ''}。</span>
-            <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => void consumeApproval(item)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">继续加入</button>
+            <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => void handoffApproval(item)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">继续加入</button>
           </li>)}</ul>
         </section>}
       </div>}
