@@ -78,7 +78,7 @@ describe('CapabilitiesService', () => {
     process.env.RES_API_KEY = 'res-secret';
     const operations = [
       'schematic.read', 'schematic.write', 'schematic.logic.read', 'schematic.logic.text.write',
-      'map.read', 'map.terrain.write', 'map.rules.read', 'map.rules.write', 'map.waves.read', 'map.waves.write',
+      'map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.waves.read', 'map.waves.write',
     ];
     global.fetch = jest.fn(async (input) => {
       const url = String(input);
