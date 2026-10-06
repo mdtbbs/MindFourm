@@ -66,11 +66,11 @@ import java.util.concurrent.Executors;
  * only uses official MapIO/Schematics readers and writes a derived PNG.
  */
 public final class MapRenderer {
-    private static final int MAX_MAP_LAYER_ITEMS = 5_000;
+    private static final int MAX_MAP_LAYER_ITEMS = 40_000;
     private static final int MAX_MAP_TILE_AREA = 2_000_000;
     private static final int MAX_BYTES = 20 * 1024 * 1024;
     private static final int PROTOCOL_VERSION = 2;
-    private static final String VERSION = "v160.2-preview-6-editors";
+    private static final String VERSION = "v160.2-preview-7-full-editors";
     private static final String MINDUSTRY_SERVER_SHA256 = "fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
@@ -865,7 +865,7 @@ public final class MapRenderer {
             if (add.x() >= source.width || add.y() >= source.height) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
             Block block = Vars.content.getByName(ContentType.block, add.block());
             long position = positionKey(add.x(), add.y());
-            if (block == null || isA(block, "LegacyBlock") || block.size != 1
+            if (block == null || isA(block, "LegacyBlock")
                 || !reserveSchematicFootprint(finalPositions, block, add.x(), add.y(), source.width, source.height)) {
                 throw new SchematicTransformException(block == null || isA(block, "LegacyBlock")
                     ? "UNSUPPORTED_SCHEMATIC_CONTENT" : "INVALID_SCHEMATIC_OPERATION");
