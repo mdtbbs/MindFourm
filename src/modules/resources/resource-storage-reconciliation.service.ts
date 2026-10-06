@@ -92,24 +92,28 @@ export class ResourceStorageReconciliationService {
       this.inspectLocalFile(file, objectByPublicId, bindingById, bindingByOwner, findings);
     }
 
-    for (const binding of bindings) {
-      if (!localByPublicId.has(binding.owner_id)) {
-        findings.push(this.finding('orphan_binding', 'error', false, 'none', null, binding.object_public_id, binding.binding_id, {
-          owner_id: binding.owner_id,
-          namespace: binding.namespace,
-          owner_type: binding.owner_type,
-        }));
+    // Absence-based findings are only valid when the local inventory is complete.
+    // A bounded/truncated local scan cannot prove that a provider owner is orphaned.
+    if (!localResult.truncated) {
+      for (const binding of bindings) {
+        if (!localByPublicId.has(binding.owner_id)) {
+          findings.push(this.finding('orphan_binding', 'error', false, 'none', null, binding.object_public_id, binding.binding_id, {
+            owner_id: binding.owner_id,
+            namespace: binding.namespace,
+            owner_type: binding.owner_type,
+          }));
+        }
       }
-    }
-    const resourceFileObjectIds = new Set(localResult.items.map((file) => file.provider_object_id).filter(Boolean));
-    const resourceBindingsByObject = new Set(bindings.map((binding) => binding.object_public_id));
-    for (const object of objects) {
-      if (!resourceFileObjectIds.has(object.public_id) && !resourceBindingsByObject.has(object.public_id) && object.binding_count === 0) {
-        findings.push(this.finding('orphan_object', 'warning', false, 'none', null, object.public_id, null, {
-          object_state: object.state,
-          sha256: object.sha256,
-          size_bytes: object.size_bytes,
-        }));
+      const resourceFileObjectIds = new Set(localResult.items.map((file) => file.provider_object_id).filter(Boolean));
+      const resourceBindingsByObject = new Set(bindings.map((binding) => binding.object_public_id));
+      for (const object of objects) {
+        if (!resourceFileObjectIds.has(object.public_id) && !resourceBindingsByObject.has(object.public_id) && object.binding_count === 0) {
+          findings.push(this.finding('orphan_object', 'warning', false, 'none', null, object.public_id, null, {
+            object_state: object.state,
+            sha256: object.sha256,
+            size_bytes: object.size_bytes,
+          }));
+        }
       }
     }
 
@@ -329,9 +333,11 @@ export class ResourceStorageReconciliationService {
         visibility: this.expectedVisibility(file),
       });
       await this.dataSource.transaction(async (manager: EntityManager) => {
+        // Binding repair must never promote local availability. Integrity and
+        // object-health findings own that state, so leave it untouched here.
         await manager.query(
-          `UPDATE resource_files SET provider_binding_id=?, availability_status=? WHERE id=? AND storage_backend='res'`,
-          [binding.id, 'available', file.id],
+          `UPDATE resource_files SET provider_binding_id=? WHERE id=? AND storage_backend='res'`,
+          [binding.id, file.id],
         );
       });
       return { code: finding.code, resource_file_public_id: finding.resource_file_public_id, status: 'repaired', action: 'rebound' };
