@@ -79,6 +79,24 @@ authTest.describe('Mobile resource center', () => {
       .filter((item) => item.width > 0 && item.height > 0 && item.height < 40));
     expect(undersizedFilterControls, 'resource filters should remain touch-sized on phones').toEqual([]);
   });
+
+  authTest('map and schematic submission workbenches remain usable at phone width', async ({ authenticatedPage }) => {
+    await authenticatedPage.setViewportSize(PHONE);
+    for (const route of ['/resources/submit/map', '/resources/submit/schematic']) {
+      await authenticatedPage.goto(route, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+      await expect(authenticatedPage.locator('main form')).toBeVisible();
+      await expectNoViewportOverflow(authenticatedPage);
+      await expectVisibleRegionsInsideViewport(authenticatedPage, ['main form', 'main form > *', 'main form section']);
+
+      const narrowFields = await authenticatedPage.locator('main form input:visible, main form textarea:visible, main form select:visible').evaluateAll((fields) => fields
+        .map((field) => {
+          const rect = field.getBoundingClientRect();
+          return { width: rect.width, right: rect.right };
+        })
+        .filter((field) => field.width > 0 && field.right > window.innerWidth + 1));
+      expect(narrowFields, `${route} form fields must stay inside the phone viewport`).toEqual([]);
+    }
+  });
 });
 
 adminTest.describe('Mobile resource operations', () => {
