@@ -63,4 +63,23 @@ describe('SearchIndexMaintenance migration', () => {
       .rejects.toThrow('Search FULLTEXT catalog requires a character column: posts.content');
     expect(statements).toHaveLength(0);
   });
+
+  it('normalizes uppercase information_schema field names returned by mysql2', async () => {
+    const { runner, query, statements } = makeQueryRunner();
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('information_schema.columns')) {
+        return SEARCH_INDEX_CATALOG.flatMap((index) => index.columns.map((column) => ({
+          TABLE_NAME: index.table,
+          COLUMN_NAME: column,
+          DATA_TYPE: column.endsWith('_markdown') || column === 'content' || column === 'description' ? 'text' : 'varchar',
+        })));
+      }
+      statements.push(sql);
+      return [];
+    });
+
+    await expect(new SearchIndexMaintenance1720000320000().up(runner)).resolves.toBeUndefined();
+    expect(statements[0]).toContain('CREATE TABLE IF NOT EXISTS search_index_maintenance_runs');
+    expect(statements.filter((sql) => sql.includes('ADD FULLTEXT INDEX'))).toHaveLength(SEARCH_INDEX_CATALOG.length);
+  });
 });

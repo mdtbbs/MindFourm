@@ -57,7 +57,14 @@ export class SearchIndexMaintenance1720000320000 implements MigrationInterface {
       WHERE table_schema = DATABASE() AND table_name IN (${placeholders})`, tables);
     const found = new Map<string, string>();
     for (const column of columns) {
-      found.set(`${column.table_name}.${column.column_name}`, String(column.data_type).toLowerCase());
+      // mysql2 preserves the driver's column-label casing for information_schema
+      // rows. In CI/prod this can be uppercase (TABLE_NAME/COLUMN_NAME/DATA_TYPE),
+      // while mocks and some drivers return the requested lowercase labels.
+      // Normalize both forms before validating the allowlisted catalog.
+      const tableName = column.table_name ?? column.TABLE_NAME;
+      const columnName = column.column_name ?? column.COLUMN_NAME;
+      const dataType = column.data_type ?? column.DATA_TYPE;
+      found.set(`${tableName}.${columnName}`, String(dataType).toLowerCase());
     }
     const textTypes = new Set(['char', 'varchar', 'tinytext', 'text', 'mediumtext', 'longtext']);
     for (const index of SEARCH_INDEX_CATALOG) {
