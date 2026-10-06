@@ -29,6 +29,7 @@ import ResourceProfileEditor from './resource-profile-editor';
 import ResourceReleaseForm from './resource-release-form';
 import ResourceCommunityInteractions from './resource-community-interactions';
 import SchematicLightEditor from './schematic-light-editor';
+import MapLightEditor from './map-light-editor';
 import ResourceKindDataWorkspace from './resource-kind-data-workspace';
 
 type SectionKey = 'overview' | 'publish' | 'compatibility' | 'analysis' | 'community' | 'settings';
@@ -677,7 +678,20 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
               <VersionWorkspace version={selectedVersion} locale={locale} kind={resource.resource_kind} publicId={resource.public_id} versions={workbench.versions} labels={{ ...sharedLabels, noVersions: t('resourceWorkbenchV2.noVersions') }} />
             </FoldCard>
             {resource.resource_kind === 'schematic' && <FoldCard title={t('resourceWorkbenchV2.schematicEditor.title')}>
-              <SchematicLightEditor workbench={workbench} version={selectedVersion} canEdit={canEditProfile} />
+              <SchematicLightEditor
+                workbench={workbench}
+                version={selectedVersion}
+                canEdit={canEditProfile}
+                onSaved={async (versionPublicId) => { await refreshWorkbench(versionPublicId).catch((caught) => setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.loadFailed'))); }}
+              />
+            </FoldCard>}
+            {resource.resource_kind === 'map' && <FoldCard title={t('resourceWorkbenchV2.mapEditor.title')}>
+              <MapLightEditor
+                workbench={workbench}
+                version={selectedVersion}
+                canEdit={canEditProfile}
+                onSaved={async (versionPublicId) => { await refreshWorkbench(versionPublicId).catch((caught) => setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.loadFailed'))); }}
+              />
             </FoldCard>}
           </>}
 

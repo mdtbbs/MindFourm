@@ -6,6 +6,8 @@ import {
   analyzeResourceWorkbenchVersionV2,
   exportResourceWorkbenchSchematicV2,
   getResourceV2SchematicBlocks,
+  createResourceDirectVersionDraft,
+  uploadResourceDirectDraft,
   type ResourceV2SchematicBlock,
   type ResourceWorkbenchV2Response,
   type ResourceWorkbenchV2Version,
@@ -20,6 +22,11 @@ type BlockGroup = { name: string; displayName: string | null; count: number; pla
 type SchematicMove = { from_x: number; from_y: number; to_x: number; to_y: number };
 type SchematicAddition = { x: number; y: number; block: string; rotation: number };
 type EditSnapshot = { deleted: string[]; moves: SchematicMove[]; additions: SchematicAddition[]; logicEdits: Record<string, string>; rotation: number; mirrorX: boolean };
+
+function newIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return `schematic-editor-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 function makeGroups(blocks: ResourceV2SchematicBlock[]): { groups: BlockGroup[]; complete: boolean; total: number } {
   let complete = blocks.length > 0;
@@ -75,10 +82,12 @@ export default function SchematicLightEditor({
   workbench,
   version,
   canEdit,
+  onSaved,
 }: {
   workbench: ResourceWorkbenchV2Response;
   version: ResourceWorkbenchV2Version | null;
   canEdit: boolean;
+  onSaved?: (versionPublicId: string) => Promise<void> | void;
 }) {
   const { t } = useI18n();
   const [groups, setGroups] = useState<BlockGroup[]>([]);
@@ -101,13 +110,15 @@ export default function SchematicLightEditor({
   const [actionError, setActionError] = useState('');
   const [analysis, setAnalysis] = useState<ResourceWorkbenchV2VersionAnalysis | null>(null);
   const [downloaded, setDownloaded] = useState(false);
+  const [savingVersion, setSavingVersion] = useState(false);
+  const [versionSaved, setVersionSaved] = useState(false);
   const versionPublicId = version?.public_id;
   const versionStatus = version?.status;
 
   useEffect(() => {
     setGroups([]); setSelected(new Set()); setDeleted(new Set()); setMoves([]); setAdditions([]); setLogicEdits({}); setUndoStack([]);
     setTool('select'); setMoveSource(null); setPaletteBlock(''); setRotation(0); setMirrorX(false);
-    setAnalysis(null); setDownloaded(false); setActionError(''); setLoadError('');
+    setAnalysis(null); setDownloaded(false); setVersionSaved(false); setActionError(''); setLoadError('');
     if (!canEdit || !versionPublicId || versionStatus !== 'published') { setComplete(false); setTotal(0); return; }
     let active = true;
     setLoading(true);
@@ -269,6 +280,37 @@ export default function SchematicLightEditor({
     }
   };
 
+  const saveAsNewVersion = async () => {
+    if (!version || !canExport || savingVersion) return;
+    setSavingVersion(true); setActionError(''); setVersionSaved(false);
+    try {
+      const blob = await exportResourceWorkbenchSchematicV2(workbench.resource.public_id, version.public_id, {
+        rotation_quarters: rotation,
+        mirror_x: mirrorX,
+        delete_positions: [...deleted].map((key) => { const [x, y] = key.split(':').map(Number); return { x, y }; }),
+        move_positions: moves,
+        add_blocks: additions,
+        logic_configs: logicConfigEdits,
+      });
+      const file = new File([blob], suggestedFilename(version), { type: 'application/octet-stream' });
+      const versionMode = version.version_mode === 'semver' ? 'semver' : 'compatibility';
+      const releaseChannel = ['release', 'beta', 'alpha', 'snapshot'].includes(version.release_channel)
+        ? version.release_channel as 'release' | 'beta' | 'alpha' | 'snapshot' : 'release';
+      const draft = await createResourceDirectVersionDraft(workbench.resource.public_id, {
+        version: version.version, version_mode: versionMode, release_channel: releaseChannel,
+        ...(version.game_version_min ? { game_version_min: version.game_version_min } : {}),
+        ...(version.game_version_max ? { game_version_max: version.game_version_max } : {}),
+      }, newIdempotencyKey());
+      await uploadResourceDirectDraft(draft.version_public_id, file);
+      await onSaved?.(draft.version_public_id);
+      setVersionSaved(true);
+    } catch (caught) {
+      setActionError(caught instanceof V1ApiError && caught.message ? caught.message : t('resourceWorkbenchV2.schematicEditor.saveVersionFailed'));
+    } finally {
+      setSavingVersion(false);
+    }
+  };
+
   if (!canEdit) return <p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.ownerOnly')}</p>;
   if (!version) return <p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.noVersion')}</p>;
   if (version.status !== 'published') return <p className="text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.publishedOnly')}</p>;
@@ -363,6 +405,7 @@ export default function SchematicLightEditor({
 
     <div className="flex flex-wrap items-center gap-3 border-t border-[var(--border)] pt-4">
       <button type="button" disabled={!canExport} onClick={() => void exportAndReanalyze()} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-4 w-4" />{busy ? t('resourceWorkbenchV2.schematicEditor.exporting') : t('resourceWorkbenchV2.schematicEditor.export')}</button>
+      <button type="button" disabled={!canExport || savingVersion} onClick={() => void saveAsNewVersion()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--primary)] px-4 text-sm font-semibold text-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-40">{savingVersion ? t('resourceWorkbenchV2.schematicEditor.savingVersion') : t('resourceWorkbenchV2.schematicEditor.saveVersion')}</button>
       <span className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.rotationStatus', { count: rotation, mirror: mirrorX ? t('resourceWorkbenchV2.schematicEditor.enabled') : t('resourceWorkbenchV2.schematicEditor.disabled') })}</span>
     </div>
     {actionError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">{actionError}</div>}
@@ -377,5 +420,6 @@ export default function SchematicLightEditor({
       })}</p>
       {analysis.findings.length > 0 && <ul className="mt-2 list-inside list-disc">{analysis.findings.map((finding, index) => <li key={`${finding.key || finding.code || 'finding'}:${index}`}>{finding.message}</li>)}</ul>}
     </div>}
+    {versionSaved && <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-emerald-800 dark:text-emerald-200">{t('resourceWorkbenchV2.schematicEditor.versionSaved')}</p>}
   </div>;
 }
