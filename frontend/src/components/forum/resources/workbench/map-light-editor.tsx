@@ -183,7 +183,9 @@ export default function MapLightEditor({
         ...(version.game_version_min ? { game_version_min: version.game_version_min } : {}),
         ...(version.game_version_max ? { game_version_max: version.game_version_max } : {}),
       }, saveAttempt.current.key);
-      await uploadResourceDirectDraft(draft.version_public_id, file);
+      if (draft.draft_status !== 'completed') {
+        await uploadResourceDirectDraft(draft.version_public_id, file);
+      }
       await onSaved?.(draft.version_public_id);
       saveAttempt.current = null;
       setSaved(true);
