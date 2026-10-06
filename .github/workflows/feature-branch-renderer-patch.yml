@@ -27,11 +27,12 @@ jobs:
           replacements = {
               'private static final int MAX_MAP_LAYER_ITEMS = 5_000;': 'private static final int MAX_MAP_LAYER_ITEMS = 40_000;',
               'private static final String VERSION = "v160.2-preview-6-editors";': 'private static final String VERSION = "v160.2-preview-7-full-editors";',
-              'if (block == null || isA(block, "LegacyBlock") || block.size != 1\n                    || !reserveSchematicFootprint(finalPositions, block, add.x(), add.y(), source.width, source.height)) {': 'if (block == null || isA(block, "LegacyBlock")\n                    || !reserveSchematicFootprint(finalPositions, block, add.x(), add.y(), source.width, source.height)) {',
+              ' || block.size != 1': '',
           }
           for before, after in replacements.items():
-              if before not in text:
-                  raise SystemExit(f'missing expected renderer source fragment: {before}')
+              count = text.count(before)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one renderer fragment, got {count}: {before}')
               text = text.replace(before, after, 1)
           path.write_text(text)
 
