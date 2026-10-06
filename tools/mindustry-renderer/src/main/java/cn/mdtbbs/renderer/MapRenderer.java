@@ -23,6 +23,7 @@ import mindustry.game.Schematics;
 import mindustry.io.MapIO;
 import mindustry.io.SaveIO;
 import mindustry.io.SaveMeta;
+import mindustry.io.SaveVersion;
 import mindustry.maps.Map;
 import mindustry.net.Net;
 import mindustry.world.Block;
@@ -38,11 +39,13 @@ import java.awt.RenderingHints;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.util.zip.InflaterInputStream;
+import java.util.zip.DeflaterOutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -869,7 +872,7 @@ public final class MapRenderer {
             if (!sourceTiles.containsKey(positionKey(move.fromX(), move.fromY()))) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
         }
 
-        Seq<Schematic.Stile> editedTiles = new Seq<>(source.tiles.size + addedBlocks.size);
+        Seq<Schematic.Stile> editedTiles = new Seq<>(source.tiles.size + addedBlocks.size());
         for (Schematic.Stile tile : source.tiles) {
             long position = positionKey(tile.x, tile.y);
             if (requested.contains(position)) continue;
