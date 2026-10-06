@@ -346,7 +346,7 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
         <button type="button" disabled={!canExport} onClick={() => void exportAndReanalyze()} className="inline-flex min-h-11 items-center gap-2 border border-[var(--border)] px-4 text-sm disabled:opacity-40"><Download className="h-4 w-4" />{busy ? '处理中…' : '导出并重新分析'}</button>
         {versionSaved ? <span role="status" className="text-sm text-emerald-700 dark:text-emerald-300">新 revision 已创建</span> : null}{downloaded ? <span role="status" className="text-sm text-emerald-700 dark:text-emerald-300">已导出</span> : null}
       </div>
-      {analysis ? <div className="border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-[var(--text-secondary)]">重新分析完成，renderer 状态：{analysis.status}</div> : null}
+      {analysis ? <div className="border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-[var(--text-secondary)]">重新分析完成，renderer 已重新校验导出文件。</div> : null}
       {actionError ? <div role="alert" className="border border-red-500/30 p-3 text-sm text-red-700 dark:text-red-300">{actionError}</div> : null}
     </> : null}
 
