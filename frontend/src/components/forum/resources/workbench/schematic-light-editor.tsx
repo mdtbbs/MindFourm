@@ -9,6 +9,10 @@ import {
   createResourceDirectVersionDraft,
   uploadResourceDirectDraft,
   type ResourceV2SchematicBlock,
+  type ResourceV2SchematicBlockPosition,
+  type ResourceV2SchematicConfigDescriptor,
+  type ResourceV2SchematicConfigValue,
+  type ResourceV2SchematicLogicConfig,
   type ResourceWorkbenchV2Response,
   type ResourceWorkbenchV2Version,
   type ResourceWorkbenchV2VersionAnalysis,
@@ -26,6 +30,8 @@ type Placement = {
   size: number;
   block: string;
   displayName: string;
+  config?: ResourceV2SchematicConfigValue | ResourceV2SchematicLogicConfig;
+  configTypes?: ResourceV2SchematicConfigDescriptor[];
   logicSource?: string;
   logicLinks?: LogicLink[];
 };
@@ -37,6 +43,7 @@ type EditSnapshot = {
   moves: SchematicMove[];
   additions: SchematicAddition[];
   logicEdits: Record<string, string>;
+  configEdits: Record<string, ResourceV2SchematicConfigValue>;
   rotation: number;
   mirrorX: boolean;
 };
@@ -64,17 +71,20 @@ function makeGroups(blocks: ResourceV2SchematicBlock[]) {
     const positions = Array.isArray(block.positions) ? block.positions : [];
     const placements = positions.flatMap((position): Placement[] => {
       if (!Number.isInteger(position.x) || !Number.isInteger(position.y)) return [];
-      const config = position.config && typeof position.config === 'object' && !Array.isArray(position.config) ? position.config as Record<string, unknown> : null;
-      const source = config?.format_version === 1 && typeof config.source === 'string' && position.logic_source_available === true ? config.source : undefined;
-      const links = config?.format_version === 1 && Array.isArray(config.links) ? config.links.flatMap((raw): LogicLink[] => {
+      const config = position.config;
+      const logicConfig = config && typeof config === 'object' && 'format_version' in config && config.format_version === 1
+        ? config as ResourceV2SchematicLogicConfig : null;
+      const source = logicConfig && typeof logicConfig.source === 'string' && position.logic_source_available === true ? logicConfig.source : undefined;
+      const links = logicConfig && Array.isArray(logicConfig.links) ? logicConfig.links.flatMap((raw): LogicLink[] => {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
-        const link = raw as Record<string, unknown>;
-        return typeof link.name === 'string' && Number.isInteger(link.x) && Number.isInteger(link.y) ? [{ name: link.name, x: link.x as number, y: link.y as number }] : [];
+        return typeof raw.name === 'string' && Number.isInteger(raw.x) && Number.isInteger(raw.y) ? [{ name: raw.name, x: raw.x, y: raw.y }] : [];
       }) : undefined;
       const size = Number.isInteger(position.size) && Number(position.size) > 0 ? Math.min(16, Number(position.size)) : 1;
       return [{ key: `${position.x}:${position.y}`, sourceKey: `${position.x}:${position.y}`, x: position.x as number, y: position.y as number,
         rotation: Number.isInteger(position.rotation) ? Number(position.rotation) & 3 : 0, size, block: block.internal_name,
-        displayName: block.display_name || block.internal_name, ...(source !== undefined ? { logicSource: source } : {}), ...(links ? { logicLinks: links } : {}) }];
+        displayName: block.display_name || block.internal_name,
+        ...(config ? { config } : {}), ...(position.config_types?.length ? { configTypes: position.config_types } : {}),
+        ...(source !== undefined ? { logicSource: source } : {}), ...(links ? { logicLinks: links } : {}) }];
     });
     if (placements.length !== block.count || placements.length !== positions.length) complete = false;
     total += placements.length;
@@ -82,6 +92,78 @@ function makeGroups(blocks: ResourceV2SchematicBlock[]) {
   }).sort((left, right) => (left.displayName || left.name).localeCompare(right.displayName || right.name));
   if (total > 10_000) complete = false;
   return { groups, complete, total };
+}
+
+const CONTENT_NAME_SUGGESTIONS: Record<string, string[]> = {
+  item: ['copper', 'lead', 'metaglass', 'graphite', 'sand', 'coal', 'titanium', 'thorium', 'scrap', 'silicon', 'plastanium', 'phase-fabric', 'surge-alloy', 'spore-pod', 'blast-compound', 'pyratite', 'beryllium', 'tungsten', 'oxide', 'carbide', 'fissile-matter', 'dormant-cyst'],
+  liquid: ['water', 'slag', 'oil', 'cryofluid', 'gallium', 'ozone', 'hydrogen', 'nitrogen', 'cyanogen', 'arkycite'],
+  unit: ['alpha', 'beta', 'gamma', 'dagger', 'mace', 'fortress', 'scepter', 'reign', 'nova', 'pulsar', 'quasar', 'vela', 'corvus', 'flare', 'horizon', 'zenith', 'antumbra', 'mono', 'poly', 'mega', 'quad', 'oct'],
+  block: [], unitCommand: ['move', 'repair', 'rebuild', 'assist', 'mine', 'enterPayload', 'loadUnits', 'loadBlocks', 'unloadPayload', 'loopPayload'],
+  status: [], planet: [], weather: [],
+};
+
+function defaultConfigForDescriptor(descriptor: ResourceV2SchematicConfigDescriptor): ResourceV2SchematicConfigValue | null {
+  switch (descriptor.type) {
+    case 'none': return { type: 'none' };
+    case 'integer': return { type: 'integer', value: 0 };
+    case 'long': return { type: 'long', value: '0' };
+    case 'float': return { type: 'float', value: 0 };
+    case 'double': return { type: 'double', value: 0 };
+    case 'boolean': return { type: 'boolean', value: false };
+    case 'text': return { type: 'text', value: '' };
+    case 'content': return descriptor.content_type ? { type: 'content', content_type: descriptor.content_type, name: '' } : null;
+    case 'tech_node': return { type: 'tech_node', content_type: 'item', name: '' };
+    case 'point': return { type: 'point', x: 0, y: 0 };
+    case 'point_array': return { type: 'point_array', points: [] };
+    case 'int_seq': return { type: 'int_seq', values: [] };
+    case 'int_array': return { type: 'int_array', values: [] };
+    case 'boolean_array': return { type: 'boolean_array', values: [] };
+    case 'vec2': return { type: 'vec2', x: 0, y: 0 };
+    case 'vec2_array': return { type: 'vec2_array', points: [] };
+    case 'team': return { type: 'team', name: 'sharded' };
+    case 'l_access': return { type: 'l_access', name: 'health' };
+    case 'unit_command': return { type: 'unit_command', name: 'move' };
+    case 'color': return { type: 'color', value: '#ffffffff' };
+    default: return null;
+  }
+}
+
+function SchematicConfigEditor({ value, configTypes, disabled, onChange, onBeginEdit }: {
+  value: ResourceV2SchematicConfigValue | null;
+  configTypes: ResourceV2SchematicConfigDescriptor[];
+  disabled: boolean;
+  onChange: (next: ResourceV2SchematicConfigValue) => void;
+  onBeginEdit: () => void;
+}) {
+  const selectedType = value?.type || '';
+  const available = configTypes.filter((entry) => entry.type !== 'logic');
+  const inputClass = 'min-h-11 w-full min-w-0 border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base text-[var(--text)] sm:text-sm';
+  const change = (next: ResourceV2SchematicConfigValue) => { onBeginEdit(); onChange(next); };
+  const selectedDescriptor = available.find((entry) => entry.type === selectedType);
+  return <div className="space-y-3">
+    <label className="block space-y-1 text-xs text-[var(--text-muted)]"><span>官方配置类型</span><select disabled={disabled} value={selectedType} onChange={(event) => {
+      const descriptor = available.find((entry) => entry.type === event.target.value);
+      const next = descriptor ? defaultConfigForDescriptor(descriptor) : null;
+      if (next) change(next);
+    }} className={inputClass}>
+      {!selectedType ? <option value="">选择可用配置</option> : null}
+      {available.map((entry, index) => <option key={`${entry.type}:${entry.content_type || ''}:${index}`} value={entry.type}>{entry.type}{entry.content_type ? ` · ${entry.content_type}` : ''}</option>)}
+    </select></label>
+    {value?.type === 'none' ? <p className="text-sm text-[var(--text-muted)]">此方块不携带额外配置。</p> : null}
+    {value?.type === 'integer' || value?.type === 'long' || value?.type === 'float' || value?.type === 'double' ? <label className="block space-y-1 text-xs text-[var(--text-muted)]"><span>数值</span><input type="number" step={value.type === 'integer' || value.type === 'long' ? 1 : 'any'} disabled={disabled} value={value.value} onChange={(event) => change(value.type === 'long' ? { ...value, value: event.target.value } : { ...value, value: Number(event.target.value) || 0 })} className={inputClass} /></label> : null}
+    {value?.type === 'color' ? <label className="block space-y-1 text-xs text-[var(--text-muted)]"><span>RGBA 颜色（#RRGGBBAA）</span><input disabled={disabled} value={value.value} maxLength={9} onChange={(event) => change({ ...value, value: event.target.value })} className={inputClass} /></label> : null}
+    {value?.type === 'boolean' ? <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" disabled={disabled} checked={value.value} onChange={(event) => change({ ...value, value: event.target.checked })} className="h-5 w-5" />启用</label> : null}
+    {value?.type === 'text' ? <label className="block space-y-1 text-xs text-[var(--text-muted)]"><span>文本</span><textarea maxLength={1200} disabled={disabled} value={value.value} onChange={(event) => change({ ...value, value: event.target.value })} className={`${inputClass} min-h-24 py-2`} /></label> : null}
+    {value?.type === 'content' || value?.type === 'tech_node' ? <div className="grid gap-2 sm:grid-cols-[10rem_minmax(0,1fr)]">
+      {value.type === 'tech_node' ? <select disabled={disabled} value={value.content_type} onChange={(event) => change({ ...value, content_type: event.target.value })} className={inputClass}>{['item', 'block', 'unit', 'liquid', 'status', 'planet'].map((kind) => <option key={kind}>{kind}</option>)}</select> : <span className="flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-muted)]">{value.content_type}</span>}
+      <label className="block space-y-1 text-xs text-[var(--text-muted)]"><span>官方内容</span><input list={`content-${value.content_type}`} disabled={disabled} value={value.name} onChange={(event) => change({ ...value, name: event.target.value })} className={inputClass} /><datalist id={`content-${value.content_type}`}>{[...new Set([...(CONTENT_NAME_SUGGESTIONS[value.content_type] || []), ...((selectedDescriptor?.content_type === value.content_type && value.type === 'content' && value.name) ? [value.name] : [])])].map((name) => <option key={name} value={name} />)}</datalist></label>
+    </div> : null}
+    {value?.type === 'point' || value?.type === 'vec2' ? <div className="grid grid-cols-2 gap-2">{(['x', 'y'] as const).map((axis) => <label key={axis} className="block space-y-1 text-xs text-[var(--text-muted)]"><span>{axis === 'x' ? 'X 偏移' : 'Y 偏移'}</span><input type="number" min={value.type === 'point' ? -127 : 0} max={127} step="any" disabled={disabled} value={value[axis]} onChange={(event) => change({ ...value, [axis]: Number(event.target.value) || 0 })} className={inputClass} /></label>)}</div> : null}
+    {value?.type === 'point_array' || value?.type === 'vec2_array' ? <div className="space-y-2">{value.points.map((point, index) => <div key={index} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.75rem] gap-2"><input aria-label={`链接 ${index + 1} X`} type="number" min={value.type === 'point_array' ? -127 : 0} max={127} step="any" disabled={disabled} value={point.x} onChange={(event) => { const points = value.points.map((entry, itemIndex) => itemIndex === index ? { ...entry, x: Number(event.target.value) || 0 } : entry); change({ ...value, points }); }} className={inputClass} /><input aria-label={`链接 ${index + 1} Y`} type="number" min={value.type === 'point_array' ? -127 : 0} max={127} step="any" disabled={disabled} value={point.y} onChange={(event) => { const points = value.points.map((entry, itemIndex) => itemIndex === index ? { ...entry, y: Number(event.target.value) || 0 } : entry); change({ ...value, points }); }} className={inputClass} /><button type="button" disabled={disabled} aria-label={`删除链接 ${index + 1}`} onClick={() => change({ ...value, points: value.points.filter((_entry, itemIndex) => itemIndex !== index) })} className="min-h-11 border border-[var(--border)]">×</button></div>)}<button type="button" disabled={disabled} onClick={() => change({ ...value, points: [...value.points, { x: 0, y: 0 }] })} className="min-h-11 border border-[var(--border)] px-3 text-sm">添加坐标引用</button><p className="text-xs text-[var(--text-muted)]">保存时 Renderer 会按该方块位置检查引用是否落在蓝图边界内。</p></div> : null}
+    {value?.type === 'int_seq' || value?.type === 'int_array' ? <div className="space-y-2">{value.values.map((number, index) => <div key={index} className="grid grid-cols-[minmax(0,1fr)_2.75rem] gap-2"><input type="number" min={-16384} max={16383} disabled={disabled} value={number} onChange={(event) => change({ ...value, values: value.values.map((entry, itemIndex) => itemIndex === index ? Number(event.target.value) || 0 : entry) })} className={inputClass} /><button type="button" disabled={disabled} onClick={() => change({ ...value, values: value.values.filter((_entry, itemIndex) => itemIndex !== index) })} className="min-h-11 border border-[var(--border)]">×</button></div>)}<button type="button" disabled={disabled} onClick={() => change({ ...value, values: [...value.values, 0] })} className="min-h-11 border border-[var(--border)] px-3 text-sm">添加数值</button></div> : null}
+    {value?.type === 'boolean_array' ? <div className="space-y-2">{value.values.map((flag, index) => <label key={index} className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" disabled={disabled} checked={flag} onChange={(event) => change({ ...value, values: value.values.map((entry, itemIndex) => itemIndex === index ? event.target.checked : entry) })} className="h-5 w-5" />值 {index + 1}<button type="button" disabled={disabled} onClick={() => change({ ...value, values: value.values.filter((_entry, itemIndex) => itemIndex !== index) })} className="ml-auto min-h-10 border border-[var(--border)] px-3">删除</button></label>)}<button type="button" disabled={disabled} onClick={() => change({ ...value, values: [...value.values, false] })} className="min-h-11 border border-[var(--border)] px-3 text-sm">添加布尔值</button></div> : null}
+    {value?.type === 'team' || value?.type === 'unit_command' || value?.type === 'l_access' ? <label className="block space-y-1 text-xs text-[var(--text-muted)]"><span>{value.type === 'team' ? '队伍' : value.type === 'unit_command' ? '单位指令' : '逻辑访问字段'}</span>{value.type === 'team' || value.type === 'unit_command' ? <select disabled={disabled} value={value.name} onChange={(event) => change({ ...value, name: event.target.value })} className={inputClass}>{(value.type === 'team' ? ['sharded', 'crux', 'malis', 'green', 'blue', 'neoplastic', 'derelict'] : CONTENT_NAME_SUGGESTIONS.unitCommand).map((name) => <option key={name}>{name}</option>)}</select> : <input list="logic-access-values" disabled={disabled} value={value.name} onChange={(event) => change({ ...value, name: event.target.value })} className={inputClass} />}{value.type === 'l_access' ? <datalist id="logic-access-values">{['health', 'maxHealth', 'x', 'y', 'team', 'type', 'rotation', 'enabled', 'progress', 'efficiency', 'memoryCapacity', 'bufferSize', 'color', 'building'].map((name) => <option key={name} value={name} />)}</datalist> : null}</label> : null}
+  </div>;
 }
 
 function suggestedFilename(version: ResourceWorkbenchV2Version) {
@@ -112,6 +194,7 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
   const [moves, setMoves] = useState<SchematicMove[]>([]);
   const [additions, setAdditions] = useState<SchematicAddition[]>([]);
   const [logicEdits, setLogicEdits] = useState<Record<string, string>>({});
+  const [configEdits, setConfigEdits] = useState<Record<string, ResourceV2SchematicConfigValue>>({});
   const [tool, setTool] = useState<Tool>('select');
   const [moveAnchor, setMoveAnchor] = useState<string | null>(null);
   const [paletteBlock, setPaletteBlock] = useState('');
@@ -134,7 +217,7 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
   const versionStatus = version?.status;
 
   useEffect(() => {
-    setGroups([]); setDimensions(null); setSelected(new Set()); setDeleted(new Set()); setMoves([]); setAdditions([]); setLogicEdits({}); setUndoStack([]);
+    setGroups([]); setDimensions(null); setSelected(new Set()); setDeleted(new Set()); setMoves([]); setAdditions([]); setLogicEdits({}); setConfigEdits({}); setUndoStack([]);
     setTool('select'); setMoveAnchor(null); setPaletteBlock(''); setRotation(0); setMirrorX(false); setPlacementRotation(0);
     setAnalysis(null); setDownloaded(false); setVersionSaved(false); setActionError(''); setLoadError(''); saveAttempt.current = null;
     if (!canEdit || !versionPublicId || versionStatus !== 'published') { setComplete(false); setTotal(0); return; }
@@ -154,7 +237,7 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
       if (!active) return;
       setDimensions(selectedDimensions); setGroups(normalized.groups); setPaletteBlock(normalized.groups[0]?.name || '');
       setComplete(normalized.complete && !cursor); setTotal(normalized.total);
-    })().catch((caught) => { if (active) setLoadError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.schematicEditor.loadFailed')); })
+    })().catch(() => { if (active) setLoadError(t('resourceWorkbenchV2.schematicEditor.loadFailed')); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [canEdit, t, versionPublicId, versionStatus, workbench.resource.public_id]);
@@ -176,20 +259,30 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
     const source = logicEdits[placement.key];
     return source !== undefined && source !== placement.logicSource ? [{ x: placement.x, y: placement.y, source }] : [];
   })), [groups, logicEdits]);
-  const hasEdits = rotation !== 0 || mirrorX || deleted.size > 0 || moves.length > 0 || additions.length > 0 || logicConfigEdits.length > 0;
+  const typedConfigEdits = useMemo(() => groups.flatMap((group) => group.placements.flatMap((placement) => {
+    const config = configEdits[placement.key];
+    const original = placement.config && placement.config.type !== 'logic' ? placement.config : null;
+    if (!config || JSON.stringify(config) === JSON.stringify(original)) return [];
+    const [x, y] = (placement.sourceKey || placement.key).split(':').map(Number);
+    return [{ x, y, config }];
+  })), [configEdits, groups]);
+  const hasEdits = rotation !== 0 || mirrorX || deleted.size > 0 || moves.length > 0 || additions.length > 0 || logicConfigEdits.length > 0 || typedConfigEdits.length > 0;
   const canExport = Boolean(canEdit && version?.status === 'published' && complete && !loading && !busy && hasEdits);
   const selectedPlacements = useMemo(() => visiblePlacements.filter((placement) => selected.has(placement.key)), [selected, visiblePlacements]);
   const selectedLogicPlacement = selectedPlacements.find((placement) => placement.logicSource !== undefined && !placement.key.startsWith('added:'));
+  const selectedConfigPlacement = selectedPlacements.find((placement) => !placement.key.startsWith('added:')
+    && ((placement.configTypes?.length || 0) > 0 || (placement.config && placement.config.type !== 'logic')));
 
   const rememberEdit = () => setUndoStack((current) => [...current.slice(-49), {
-    deleted: [...deleted], moves: [...moves], additions: additions.map((item) => ({ ...item })), logicEdits: { ...logicEdits }, rotation, mirrorX,
+    deleted: [...deleted], moves: [...moves], additions: additions.map((item) => ({ ...item })), logicEdits: { ...logicEdits },
+    configEdits: JSON.parse(JSON.stringify(configEdits)) as Record<string, ResourceV2SchematicConfigValue>, rotation, mirrorX,
   }]);
   const invalidatePreview = () => { setAnalysis(null); setDownloaded(false); setVersionSaved(false); setActionError(''); };
 
   const undoLast = () => {
     const previous = undoStack[undoStack.length - 1]; if (!previous) return;
     setUndoStack((current) => current.slice(0, -1)); setDeleted(new Set(previous.deleted)); setMoves(previous.moves);
-    setAdditions(previous.additions); setLogicEdits(previous.logicEdits); setRotation(previous.rotation); setMirrorX(previous.mirrorX);
+    setAdditions(previous.additions); setLogicEdits(previous.logicEdits); setConfigEdits(previous.configEdits); setRotation(previous.rotation); setMirrorX(previous.mirrorX);
     setSelected(new Set()); setMoveAnchor(null); invalidatePreview();
   };
 
@@ -258,6 +351,7 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
     move_positions: moves,
     add_blocks: additions.map(({ x, y, block, rotation: itemRotation }) => ({ x, y, block, rotation: itemRotation })),
     logic_configs: logicConfigEdits,
+    config_edits: typedConfigEdits,
   });
 
   const exportAndReanalyze = async () => {
@@ -324,7 +418,7 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
             <g transform={`translate(0 ${dimensions.height}) scale(1 -1)`}>
               {Array.from({ length: dimensions.width * dimensions.height }, (_unused, index) => {
                 const x = index % dimensions.width; const y = Math.floor(index / dimensions.width);
-                return <rect key={`cell:${x}:${y}`} role="gridcell" aria-label={`${x}, ${y}`} x={x} y={y} width="1" height="1" fill="transparent" stroke="rgba(255,255,255,0.12)" strokeWidth="0.025" onClick={(event) => handleCell(x, y, event.ctrlKey || event.metaKey)} />;
+                return <rect key={`cell:${x}:${y}`} role="gridcell" aria-label={`${x}, ${y}`} data-cell={`${x}:${y}`} x={x} y={y} width="1" height="1" fill="transparent" stroke="rgba(255,255,255,0.12)" strokeWidth="0.025" onClick={(event) => handleCell(x, y, event.ctrlKey || event.metaKey)} />;
               })}
               {visiblePlacements.map((placement) => {
                 const index = Math.max(0, groups.findIndex((group) => group.name === placement.block));
@@ -337,7 +431,15 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
         <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--text-muted)]"><span>{dimensions.width}×{dimensions.height} · {total} 方块</span><span>移动 {moves.length}</span><span>新增 {additions.length}</span><span>删除 {deleted.size}</span>{undoStack.length ? <button type="button" disabled={busy} onClick={undoLast} className="inline-flex min-h-10 items-center gap-1 border border-[var(--border)] px-3"><Undo2 className="h-3.5 w-3.5" />撤销</button> : null}</div>
       </section>
 
-      {selectedLogicPlacement ? <section className="space-y-2 border border-[var(--border)] p-3 sm:p-4"><h4 className="text-sm font-semibold text-[var(--text)]">逻辑处理器 · {selectedLogicPlacement.displayName}</h4>{selectedLogicPlacement.logicLinks?.length ? <div className="flex flex-wrap gap-2">{selectedLogicPlacement.logicLinks.map((link, index) => <span key={`${link.name}:${index}`} className="border border-[var(--border)] px-2 py-1 font-mono text-xs">{link.name} → {link.x},{link.y}</span>)}</div> : null}<textarea maxLength={32_768} spellCheck={false} dir="ltr" disabled={busy} value={logicEdits[selectedLogicPlacement.key] ?? selectedLogicPlacement.logicSource ?? ''} onFocus={rememberEdit} onChange={(event) => { setLogicEdits((current) => ({ ...current, [selectedLogicPlacement.key]: event.target.value })); invalidatePreview(); }} className="min-h-48 w-full border border-[var(--border)] bg-[var(--bg-elevated)] p-3 font-mono text-base text-[var(--text)] sm:text-sm" /></section> : null}
+      {selectedLogicPlacement ? <section className="space-y-2 border border-[var(--border)] p-3 sm:p-4"><h4 className="text-sm font-semibold text-[var(--text)]">逻辑处理器 · {selectedLogicPlacement.displayName}</h4>{selectedLogicPlacement.logicLinks?.length ? <div className="flex flex-wrap gap-2">{selectedLogicPlacement.logicLinks.map((link, index) => <span key={`${link.name}:${index}`} className="border border-[var(--border)] px-2 py-1 font-mono text-xs">{link.name} → {link.x},{link.y}</span>)}</div> : null}<textarea id="schematic-logic-source" maxLength={32_768} spellCheck={false} dir="ltr" disabled={busy} value={logicEdits[selectedLogicPlacement.key] ?? selectedLogicPlacement.logicSource ?? ''} onFocus={rememberEdit} onChange={(event) => { setLogicEdits((current) => ({ ...current, [selectedLogicPlacement.key]: event.target.value })); invalidatePreview(); }} className="min-h-48 w-full border border-[var(--border)] bg-[var(--bg-elevated)] p-3 font-mono text-base text-[var(--text)] sm:text-sm" /></section> : null}
+
+      {selectedConfigPlacement ? <section className="space-y-3 border border-[var(--border)] p-3 sm:p-4"><div><h4 className="text-sm font-semibold text-[var(--text)]">方块配置 · {selectedConfigPlacement.displayName}</h4><p className="mt-1 text-xs text-[var(--text-muted)]">控件只显示此方块在 Mindustry v160.5 注册的安全配置类型；内容名和坐标会由官方解析器再次验证。</p></div><SchematicConfigEditor
+        value={configEdits[selectedConfigPlacement.key] ?? (selectedConfigPlacement.config && selectedConfigPlacement.config.type !== 'logic' ? selectedConfigPlacement.config : null)}
+        configTypes={selectedConfigPlacement.configTypes || []}
+        disabled={busy}
+        onBeginEdit={rememberEdit}
+        onChange={(next) => { setConfigEdits((current) => ({ ...current, [selectedConfigPlacement.key]: next })); invalidatePreview(); }}
+      /></section> : null}
 
       <section className="flex flex-wrap gap-2 border border-[var(--border)] p-3"><button type="button" disabled={busy} onClick={() => { rememberEdit(); setRotation((value) => (value + 3) % 4); invalidatePreview(); }} className="inline-flex min-h-11 items-center gap-2 border border-[var(--border)] px-3 text-sm"><RotateCcw className="h-4 w-4" />整体左转</button><button type="button" disabled={busy} onClick={() => { rememberEdit(); setRotation((value) => (value + 1) % 4); invalidatePreview(); }} className="inline-flex min-h-11 items-center gap-2 border border-[var(--border)] px-3 text-sm"><RotateCw className="h-4 w-4" />整体右转</button><button type="button" aria-pressed={mirrorX} disabled={busy} onClick={() => { rememberEdit(); setMirrorX((value) => !value); invalidatePreview(); }} className={`inline-flex min-h-11 items-center gap-2 border px-3 text-sm ${mirrorX ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]' : 'border-[var(--border)]'}`}><FlipHorizontal className="h-4 w-4" />水平镜像</button></section>
 
@@ -346,11 +448,11 @@ export default function SchematicLightEditor({ workbench, version, canEdit, onSa
         <button type="button" disabled={!canExport} onClick={() => void exportAndReanalyze()} className="inline-flex min-h-11 items-center gap-2 border border-[var(--border)] px-4 text-sm disabled:opacity-40"><Download className="h-4 w-4" />{busy ? '处理中…' : '导出并重新分析'}</button>
         {versionSaved ? <span role="status" className="text-sm text-emerald-700 dark:text-emerald-300">新 revision 已创建</span> : null}{downloaded ? <span role="status" className="text-sm text-emerald-700 dark:text-emerald-300">已导出</span> : null}
       </div>
-      {analysis ? <div className="border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-[var(--text-secondary)]">重新分析完成，renderer 已重新校验导出文件。</div> : null}
+      {analysis ? <div className="border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm text-[var(--text-secondary)]">重新分析完成，renderer 已重新校验导出文件。{'renderer_metadata' in analysis && typeof analysis.renderer_metadata?.block_count === 'number' ? <span className="ml-2">解析方块数：{analysis.renderer_metadata.block_count}</span> : null}</div> : null}
       {actionError ? <div role="alert" className="border border-red-500/30 p-3 text-sm text-red-700 dark:text-red-300">{actionError}</div> : null}
     </> : null}
 
-    {!loading && !loadError && groups.length > 0 && !complete ? <div role="alert" className="border border-amber-500/30 p-3 text-sm text-amber-800 dark:text-amber-200">方块坐标数据不完整，为避免破坏蓝图，本版本不开放写入。</div> : null}
+    {!loading && !loadError && groups.length > 0 && !complete ? <div role="alert" className="border border-amber-500/30 p-3 text-sm text-amber-800 dark:text-amber-200">{t('resourceWorkbenchV2.schematicEditor.incompleteBlocks')}</div> : null}
     {!loading && !loadError && groups.length === 0 ? <p className="border border-dashed border-[var(--border)] p-4 text-sm text-[var(--text-muted)]">{t('resourceWorkbenchV2.schematicEditor.noBlocks')}</p> : null}
   </div>;
 }

@@ -11524,7 +11524,7 @@
           "resource.upload"
         ],
         "summary": "安全导出编辑后的蓝图副本",
-        "description": "Owner/Maintainer 可对已发布蓝图执行旋转、水平镜像、删除、移动和放置单格方块。只读取托管版本并返回新文件，不修改原版本；含有不支持内容时拒绝导出。",
+        "description": "需要 resource.upload，并由服务端限制为该资源 Owner/Maintainer。可对已发布蓝图执行旋转、水平镜像、删除、移动、放置方块，以及通过按 Mindustry v160.5 配置类型区分的安全配置编辑。只读取托管版本并返回新文件，不修改原版本；未知或不支持安全写回的配置/内容会拒绝导出。",
         "parameters": [
           {
             "name": "id",
@@ -11604,7 +11604,7 @@
           "resource.upload"
         ],
         "summary": "安全导出编辑后的地图副本",
-        "description": "Owner/Maintainer 可编辑已发布地图的地形、类型化规则字段和波次组。地图通过官方 MapIO 写入并重新导入校验；未知规则与波次字段保留，不支持内容会拒绝导出。",
+        "description": "需要 resource.upload，并由服务端限制为该资源 Owner/Maintainer。可编辑已发布地图的地形、类型化规则字段、波次组和核心/出生点/建筑对象（新增、删除、移动；核心/建筑可改队伍）。多格 footprint、边界、碰撞和对象内容由官方 MapIO 写入及重读验证；未知或不安全对象状态会拒绝导出。未知规则与波次字段保留。",
         "parameters": [
           {
             "name": "id",
@@ -14181,6 +14181,373 @@
           "v1-resources-report-attachments"
         ],
         "security": [
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/discovery/home": {
+      "get": {
+        "operationId": "ResourceDiscoveryController_home",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取资源发现榜单",
+        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。返回精选、趋势、近 7 日上升、评分榜与最新榜，排除删除、未审核、私有和停用主题资源。每个榜单给出理由和限定候选窗口内的分页信息；候选窗口达到上限时可能仍有未扫描结果。",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "description": "按资源类型筛选。",
+            "schema": {
+              "enum": [
+                "mod",
+                "schematic",
+                "map",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "每个榜单返回条数。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "一基页码，按每个榜单的排序结果分页。",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 400
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryHomeEnvelopeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "kind、limit 或 page 不符合契约。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "提交了无法验证的登录凭证。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          }
+        },
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/discovery/hot": {
+      "get": {
+        "operationId": "ResourceDiscoveryController_hot",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取下载量最高的公开资源",
+        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。排除删除、未审核、私有和停用主题资源；返回理由、下载计分和最多 300 个候选的分页状态。",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "One-based page over the bounded download ranking candidate window.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 400
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryHotEnvelopeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "limit 或 page 不符合契约。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "提交了无法验证的登录凭证。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          }
+        },
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/discovery/for-you": {
+      "get": {
+        "operationId": "ResourceDiscoveryController_forYou",
+        "x-rate-limit": {
+          "limit": 45,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取猜你喜欢资源",
+        "description": "匿名访问可用。匿名或无可见偏好时返回非个性化趋势榜；登录且携带有效 Bearer 时需要 resource.read。排除删除、未审核、私有和停用主题资源。个性化仅使用当前公开资源中的站内点赞/收藏，并排除这些种子本身。响应包含 reasons、score 和候选窗口分页，不使用外部浏览行为。",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "description": "Optional resource kind filter.",
+            "schema": {
+              "enum": [
+                "mod",
+                "schematic",
+                "map",
+                "other"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "One-based page over the bounded ranking candidate window.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 400
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryRecommendationsEnvelopeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "kind、limit 或 page 不符合契约。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "提交了无法验证的登录凭证。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          }
+        },
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/discovery/related/{id}": {
+      "get": {
+        "operationId": "ResourceDiscoveryController_related",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取相关推荐资源",
+        "description": "匿名访问可用；携带 MindAuth Bearer 时需要 resource.read。源资源本身必须当前公开，否则返回 404，避免泄露私密资源状态。返回当前公开、审核通过且未关联停用主题的候选资源、解释理由与限定候选窗口分页。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "当前公开 Resource 的 public_id。",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "One-based page over the bounded ranking candidate window.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 400
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryRelatedEnvelopeDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "源资源 ID 不是 UUID，或 limit/page 不符合契约。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "提交了无法验证的登录凭证。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "源资源不存在或当前不可公开访问。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {},
           {
             "MindAuthBearer": []
           }
@@ -25849,6 +26216,671 @@
           "stats"
         ]
       },
+      "ResourceV2SchematicLogicConfigMetadataDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "logic"
+            ]
+          },
+          "format_version": {
+            "type": "number",
+            "enum": [
+              1
+            ]
+          },
+          "source": {
+            "type": "string",
+            "maxLength": 32768
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "x",
+                "y"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "x": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 127
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 127
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "type",
+          "format_version",
+          "source",
+          "links"
+        ]
+      },
+      "ResourceV2SchematicConfigNoneDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "none"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ResourceV2SchematicIntegerConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "integer"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "minimum": -2147483648,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "ResourceV2SchematicLongConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "long"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9][0-9]{0,17}|[1-8][0-9]{18}|9223372036854775807|-(?:[1-9][0-9]{0,17}|[1-8][0-9]{18}|9223372036854775808))$",
+            "description": "Canonical signed 64-bit decimal string preserves the full integer."
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "ResourceV2SchematicFloatConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "float"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "minimum": -1000000,
+            "maximum": 1000000
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "ResourceV2SchematicDoubleConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "double"
+            ]
+          },
+          "value": {
+            "type": "number",
+            "minimum": -1000000000,
+            "maximum": 1000000000
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "ResourceV2SchematicBooleanConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "boolean"
+            ]
+          },
+          "value": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "ResourceV2SchematicTextConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "text"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "maxLength": 1200,
+            "description": "Typed text configuration, such as a message block."
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "ResourceV2SchematicContentConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "content"
+            ]
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "item",
+              "liquid",
+              "unit",
+              "block",
+              "unitCommand",
+              "status",
+              "planet",
+              "weather"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 191,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "example": "copper",
+            "description": "Official v160.5 content name; the renderer validates it against the pinned content registry."
+          }
+        },
+        "required": [
+          "type",
+          "content_type",
+          "name"
+        ]
+      },
+      "ResourceV2SchematicTechNodeConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "tech_node"
+            ]
+          },
+          "content_type": {
+            "type": "string",
+            "enum": [
+              "item",
+              "block",
+              "unit",
+              "liquid",
+              "status",
+              "planet"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 191,
+            "pattern": "^[a-zA-Z0-9_.:-]+$"
+          }
+        },
+        "required": [
+          "type",
+          "content_type",
+          "name"
+        ]
+      },
+      "ResourceV2SchematicPointConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "point"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "minimum": -127,
+            "maximum": 127,
+            "description": "Relative x offset; the resulting reference must remain inside the schematic."
+          },
+          "y": {
+            "type": "number",
+            "minimum": -127,
+            "maximum": 127,
+            "description": "Relative y offset; the resulting reference must remain inside the schematic."
+          }
+        },
+        "required": [
+          "type",
+          "x",
+          "y"
+        ]
+      },
+      "ResourceV2SchematicPointPairDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": -127,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": -127,
+            "maximum": 127
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "ResourceV2SchematicPointArrayConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "point_array"
+            ]
+          },
+          "points": {
+            "maxItems": 255,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicPointPairDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "points"
+        ]
+      },
+      "ResourceV2SchematicIntegerArrayConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "int_seq",
+              "int_array"
+            ]
+          },
+          "values": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "number",
+              "maximum": 16383,
+              "minimum": -16384
+            }
+          }
+        },
+        "required": [
+          "type",
+          "values"
+        ]
+      },
+      "ResourceV2SchematicBooleanArrayConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "boolean_array"
+            ]
+          },
+          "values": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "boolean"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "values"
+        ]
+      },
+      "ResourceV2SchematicVectorConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "vec2"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "required": [
+          "type",
+          "x",
+          "y"
+        ]
+      },
+      "ResourceV2SchematicVectorPairDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      },
+      "ResourceV2SchematicVectorArrayConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "vec2_array"
+            ]
+          },
+          "points": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicVectorPairDto"
+            }
+          }
+        },
+        "required": [
+          "type",
+          "points"
+        ]
+      },
+      "ResourceV2SchematicTeamConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "team"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "example": "sharded"
+          }
+        },
+        "required": [
+          "type",
+          "name"
+        ]
+      },
+      "ResourceV2SchematicAccessConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "l_access"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 40,
+            "example": "health"
+          }
+        },
+        "required": [
+          "type",
+          "name"
+        ]
+      },
+      "ResourceV2SchematicUnitCommandConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "unit_command"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "move"
+          }
+        },
+        "required": [
+          "type",
+          "name"
+        ]
+      },
+      "ResourceV2SchematicColorConfigDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "color"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "pattern": "^#[0-9a-fA-F]{8}$",
+            "example": "#ffffff00",
+            "description": "RGBA8888 color supported by the official illuminator block."
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "ResourceV2SchematicBlockPositionDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 127
+          },
+          "rotation": {
+            "type": "number",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 3
+          },
+          "size": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "config": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicLogicConfigMetadataDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicConfigNoneDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicIntegerConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicLongConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicFloatConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicDoubleConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicBooleanConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicTextConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicContentConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicTechNodeConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicPointConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicPointArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicIntegerArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicBooleanArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicVectorConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicVectorArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicTeamConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicAccessConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicUnitCommandConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicColorConfigDto"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type"
+            }
+          },
+          "config_editable": {
+            "type": "boolean",
+            "description": "True only when the parsed config type is in the v160.5 typed edit matrix and registered for this block."
+          },
+          "config_types": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "integer",
+                    "long",
+                    "float",
+                    "double",
+                    "boolean",
+                    "text",
+                    "content",
+                    "tech_node",
+                    "point",
+                    "point_array",
+                    "int_seq",
+                    "int_array",
+                    "boolean_array",
+                    "vec2",
+                    "vec2_array",
+                    "team",
+                    "l_access",
+                    "unit_command",
+                    "color",
+                    "logic"
+                  ]
+                },
+                "content_type": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Typed config kinds registered by Mindustry for this block."
+          },
+          "logic_source_available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "rotation"
+        ]
+      },
       "ResourceV2BlockDto": {
         "type": "object",
         "properties": {
@@ -25881,11 +26913,11 @@
             "nullable": true
           },
           "positions": {
+            "description": "Parsed grid positions and v160.5 typed config values; empty if the source did not retain them.",
             "type": "array",
             "items": {
-              "type": "object"
-            },
-            "description": "Parsed grid positions; empty if the source did not retain them."
+              "$ref": "#/components/schemas/ResourceV2SchematicBlockPositionDto"
+            }
           },
           "properties": {
             "type": "object"
@@ -26317,6 +27349,90 @@
           "version"
         ]
       },
+      "ResourceV2SchematicConfigEditDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "config": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicConfigNoneDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicIntegerConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicLongConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicFloatConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicDoubleConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicBooleanConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicTextConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicContentConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicTechNodeConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicPointConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicPointArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicIntegerArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicBooleanArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicVectorConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicVectorArrayConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicTeamConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicAccessConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicUnitCommandConfigDto"
+              },
+              {
+                "$ref": "#/components/schemas/ResourceV2SchematicColorConfigDto"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type"
+            }
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "config"
+        ]
+      },
       "ResourceV2SchematicPositionDto": {
         "type": "object",
         "properties": {
@@ -26463,11 +27579,194 @@
             "items": {
               "$ref": "#/components/schemas/ResourceV2SchematicLogicConfigDto"
             }
+          },
+          "config_edits": {
+            "maxItems": 5000,
+            "description": "Discriminated v160.5 typed configuration edits. Unknown config types and unregistered per-block config classes are rejected.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicConfigEditDto"
+            }
           }
         },
         "required": [
           "rotation_quarters",
           "mirror_x"
+        ]
+      },
+      "ResourceV2MapObjectAddDto": {
+        "type": "object",
+        "properties": {
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "spawn",
+              "building"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "add"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 191,
+            "example": "core-shard"
+          },
+          "team": {
+            "type": "string",
+            "maxLength": 40,
+            "example": "sharded",
+            "description": "Required for core and building; omitted for spawn points."
+          },
+          "rotation": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 3,
+            "default": 0
+          }
+        },
+        "required": [
+          "object_type",
+          "action",
+          "x",
+          "y",
+          "name"
+        ]
+      },
+      "ResourceV2MapObjectDeleteDto": {
+        "type": "object",
+        "properties": {
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "spawn",
+              "building"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "delete"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          }
+        },
+        "required": [
+          "object_type",
+          "action",
+          "x",
+          "y"
+        ]
+      },
+      "ResourceV2MapObjectMoveDto": {
+        "type": "object",
+        "properties": {
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "spawn",
+              "building"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "move"
+            ]
+          },
+          "from_x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "from_y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "to_x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "to_y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          }
+        },
+        "required": [
+          "object_type",
+          "action",
+          "from_x",
+          "from_y",
+          "to_x",
+          "to_y"
+        ]
+      },
+      "ResourceV2MapObjectTeamDto": {
+        "type": "object",
+        "properties": {
+          "object_type": {
+            "type": "string",
+            "enum": [
+              "core",
+              "building"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "team"
+            ]
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 32767
+          },
+          "team": {
+            "type": "string",
+            "maxLength": 40,
+            "example": "sharded"
+          }
+        },
+        "required": [
+          "object_type",
+          "action",
+          "x",
+          "y",
+          "team"
         ]
       },
       "ResourceV2MapTerrainChangeDto": {
@@ -26553,6 +27852,35 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ResourceV2MapWaveOperationDto"
+            }
+          },
+          "object_operations": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ResourceV2MapObjectAddDto"
+                },
+                {
+                  "$ref": "#/components/schemas/ResourceV2MapObjectDeleteDto"
+                },
+                {
+                  "$ref": "#/components/schemas/ResourceV2MapObjectMoveDto"
+                },
+                {
+                  "$ref": "#/components/schemas/ResourceV2MapObjectTeamDto"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "action",
+                "mapping": {
+                  "add": "#/components/schemas/ResourceV2MapObjectAddDto",
+                  "delete": "#/components/schemas/ResourceV2MapObjectDeleteDto",
+                  "move": "#/components/schemas/ResourceV2MapObjectMoveDto",
+                  "team": "#/components/schemas/ResourceV2MapObjectTeamDto"
+                }
+              }
             }
           }
         }
@@ -27317,6 +28645,750 @@
       "ResourceStorageReconciliationDto": {
         "type": "object",
         "properties": {}
+      },
+      "ResourceDiscoveryRendererSummaryDto": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "number",
+            "nullable": true
+          },
+          "height": {
+            "type": "number",
+            "nullable": true
+          },
+          "build": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "width",
+          "height",
+          "build"
+        ]
+      },
+      "ResourceDiscoveryUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "username": {
+            "type": "string"
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "role"
+        ]
+      },
+      "ResourceDiscoveryResourceCardDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "public_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true
+          },
+          "user_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "category_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "resource_kind": {
+            "type": "string",
+            "nullable": true
+          },
+          "resource_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "content_language": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "published"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "visibility": {
+            "type": "string",
+            "nullable": true
+          },
+          "file_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "mime_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "content_hash": {
+            "type": "string",
+            "nullable": true
+          },
+          "renderer_status": {
+            "type": "string",
+            "nullable": true
+          },
+          "renderer_error_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "renderer_parser_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "external_url": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "homepage_url": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "source_url": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "license": {
+            "type": "string",
+            "nullable": true
+          },
+          "origin_site": {
+            "type": "string",
+            "nullable": true
+          },
+          "origin_resource_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "origin_url": {
+            "type": "string",
+            "nullable": true,
+            "format": "uri"
+          },
+          "latest_published_version_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "discussion_thread_id": {
+            "type": "number",
+            "nullable": true
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "use_mfl": {
+            "type": "boolean"
+          },
+          "is_featured": {
+            "type": "number"
+          },
+          "view_count": {
+            "type": "number"
+          },
+          "download_count": {
+            "type": "number"
+          },
+          "favorite_count": {
+            "type": "number",
+            "nullable": true
+          },
+          "like_count": {
+            "type": "number",
+            "nullable": true
+          },
+          "is_favorited": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "is_liked": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "is_subscribed": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "trending_score": {
+            "type": "number",
+            "nullable": true
+          },
+          "rating_count": {
+            "type": "number"
+          },
+          "rating_sum": {
+            "type": "number"
+          },
+          "rating_average": {
+            "type": "number"
+          },
+          "comment_count": {
+            "type": "number"
+          },
+          "file_size": {
+            "type": "number"
+          },
+          "username": {
+            "type": "string"
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "category_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "category_icon": {
+            "type": "string",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "renderer_summary": {
+            "$ref": "#/components/schemas/ResourceDiscoveryRendererSummaryDto"
+          },
+          "preview_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "user": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceDiscoveryUserDto"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "public_id",
+          "title",
+          "slug",
+          "resource_kind",
+          "resource_type",
+          "status",
+          "summary",
+          "description",
+          "visibility",
+          "is_public",
+          "use_mfl",
+          "is_featured",
+          "view_count",
+          "download_count",
+          "rating_count",
+          "rating_sum",
+          "rating_average",
+          "comment_count",
+          "file_size",
+          "username",
+          "avatar_url",
+          "category_name",
+          "category_icon",
+          "metadata",
+          "renderer_summary",
+          "preview_url",
+          "user",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "ResourceDiscoveryItemDto": {
+        "type": "object",
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/ResourceDiscoveryResourceCardDto"
+          },
+          "score": {
+            "type": "number",
+            "description": "Ranking score, useful for ordering only; not a quality guarantee."
+          },
+          "reasons": {
+            "example": [
+              "same_kind",
+              "same_category",
+              "shared_tags:logic,power",
+              "kind:schematic",
+              "tags:logic,power",
+              "recent_downloads",
+              "editor_pick",
+              "top_downloaded"
+            ],
+            "description": "Stable reason codes: editor_pick, trending, recent_views, recent_downloads, quality_signals, top_rated, newest, top_downloaded, same_kind, same_category, shared_tags:<tags>, kind:<kind>, category, tags:<tags>, featured, popular_now.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "recent_views": {
+            "type": "number",
+            "description": "Views during the last seven days; present for rising results."
+          },
+          "recent_downloads": {
+            "type": "number",
+            "description": "Completed downloads during the last seven days; present for rising results."
+          }
+        },
+        "required": [
+          "resource",
+          "score",
+          "reasons"
+        ]
+      },
+      "ResourceDiscoveryHomePaginationDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "items_in_window": {
+            "type": "number",
+            "description": "Number of ranked entries available in this bounded candidate window."
+          },
+          "more_in_window": {
+            "type": "boolean",
+            "description": "Whether another page is available within the current candidate window."
+          },
+          "candidate_window_size": {
+            "type": "number",
+            "description": "Maximum number of candidates considered by this ranking query."
+          },
+          "candidate_window_truncated": {
+            "type": "boolean",
+            "description": "True when the source query hit its candidate cap; further candidates may exist."
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "items_in_window",
+          "more_in_window",
+          "candidate_window_size",
+          "candidate_window_truncated"
+        ]
+      },
+      "ResourceDiscoverySectionDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHomePaginationDto"
+          }
+        },
+        "required": [
+          "items",
+          "pagination"
+        ]
+      },
+      "ResourceDiscoveryHomeSectionsDto": {
+        "type": "object",
+        "properties": {
+          "featured": {
+            "description": "Operator-curated public resources.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+              }
+            ]
+          },
+          "trending": {
+            "description": "Resources ranked by public engagement, rating, and recency.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+              }
+            ]
+          },
+          "rising": {
+            "description": "Resources ranked using the last seven days of public view and completed-download counts.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+              }
+            ]
+          },
+          "top_rated": {
+            "description": "Resources ranked by Bayesian-smoothed rating.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+              }
+            ]
+          },
+          "newest": {
+            "description": "Newest currently visible resources.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceDiscoverySectionDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "featured",
+          "trending",
+          "rising",
+          "top_rated",
+          "newest"
+        ]
+      },
+      "ResourceDiscoveryHomeDto": {
+        "type": "object",
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sections": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHomeSectionsDto"
+          }
+        },
+        "required": [
+          "generated_at",
+          "sections"
+        ]
+      },
+      "ResourceDiscoveryForYouPaginationDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 30
+          },
+          "items_in_window": {
+            "type": "number",
+            "description": "Number of ranked entries available in this bounded candidate window."
+          },
+          "more_in_window": {
+            "type": "boolean",
+            "description": "Whether another page is available within the current candidate window."
+          },
+          "candidate_window_size": {
+            "type": "number",
+            "description": "Maximum number of candidates considered by this ranking query."
+          },
+          "candidate_window_truncated": {
+            "type": "boolean",
+            "description": "True when the source query hit its candidate cap; further candidates may exist."
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "items_in_window",
+          "more_in_window",
+          "candidate_window_size",
+          "candidate_window_truncated"
+        ]
+      },
+      "ResourceDiscoveryRecommendationsDto": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "example": "resource-taste-v1"
+          },
+          "personalized": {
+            "type": "boolean",
+            "description": "True only when currently visible in-site likes/favorites produced a profile."
+          },
+          "privacy": {
+            "type": "string",
+            "description": "Explains whether a personal profile was used and its data boundary."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceDiscoveryForYouPaginationDto"
+          }
+        },
+        "required": [
+          "algorithm",
+          "personalized",
+          "privacy",
+          "items",
+          "pagination"
+        ]
+      },
+      "ResourceDiscoveryRelatedPaginationDto": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "number",
+            "minimum": 1
+          },
+          "limit": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 24
+          },
+          "items_in_window": {
+            "type": "number",
+            "description": "Number of ranked entries available in this bounded candidate window."
+          },
+          "more_in_window": {
+            "type": "boolean",
+            "description": "Whether another page is available within the current candidate window."
+          },
+          "candidate_window_size": {
+            "type": "number",
+            "description": "Maximum number of candidates considered by this ranking query."
+          },
+          "candidate_window_truncated": {
+            "type": "boolean",
+            "description": "True when the source query hit its candidate cap; further candidates may exist."
+          }
+        },
+        "required": [
+          "page",
+          "limit",
+          "items_in_window",
+          "more_in_window",
+          "candidate_window_size",
+          "candidate_window_truncated"
+        ]
+      },
+      "ResourceDiscoveryRelatedDto": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "example": "resource-related-v1"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/ResourceDiscoveryRelatedPaginationDto"
+          }
+        },
+        "required": [
+          "algorithm",
+          "items",
+          "pagination"
+        ]
+      },
+      "ResourceDiscoveryV1MetaDto": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "example": "req_01J9N5K0V2"
+          }
+        },
+        "required": [
+          "request_id"
+        ]
+      },
+      "ResourceDiscoveryV1ErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "INSUFFICIENT_SCOPE"
+          },
+          "message": {
+            "type": "string",
+            "example": "授权权限不足"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "details": {
+            "type": "array",
+            "items": {}
+          },
+          "documentation_url": {
+            "type": "string",
+            "example": "https://mdtbbs.cn/api/v1/docs/errors#insufficient-scope"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "details",
+          "documentation_url"
+        ]
+      },
+      "ResourceDiscoveryV1ErrorEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ResourceDiscoveryV1ErrorDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceDiscoveryV1MetaDto"
+          }
+        },
+        "required": [
+          "error",
+          "meta"
+        ]
+      },
+      "ResourceDiscoveryHomeEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHomeDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceDiscoveryV1MetaDto"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "ResourceDiscoveryHotDto": {
+        "type": "object",
+        "properties": {
+          "algorithm": {
+            "type": "string",
+            "example": "resource-download-count-v1"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceDiscoveryItemDto"
+            }
+          },
+          "pagination": {
+            "description": "Pagination over the bounded 300-resource download ranking window.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ResourceDiscoveryForYouPaginationDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "algorithm",
+          "items",
+          "pagination"
+        ]
+      },
+      "ResourceDiscoveryHotEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResourceDiscoveryHotDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceDiscoveryV1MetaDto"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "ResourceDiscoveryRecommendationsEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResourceDiscoveryRecommendationsDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceDiscoveryV1MetaDto"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "ResourceDiscoveryRelatedEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ResourceDiscoveryRelatedDto"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ResourceDiscoveryV1MetaDto"
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
       },
       "MobileExchangeDto": {
         "type": "object",

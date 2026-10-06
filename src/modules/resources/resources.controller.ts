@@ -63,6 +63,7 @@ import { DownloadPolicyService } from '../downloads/download-policy.service';
 import { ResourceDirectUploadService } from './resource-direct-upload.service';
 import { ResourceFileProviderService } from './resource-file-provider.service';
 import { DownloadGrantService } from '../downloads/download-grant.service';
+import { ResourceOperationsService } from './resource-operations.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -159,6 +160,7 @@ export class ResourcesController {
     private readonly siteConfig: SiteConfigService,
     private readonly resourceViews: ResourceViewsService,
     private readonly downloadPolicy: DownloadPolicyService,
+    private readonly resourceOperations: ResourceOperationsService,
     @Optional() private readonly directUploads?: ResourceDirectUploadService,
     @Optional() private readonly fileProvider?: ResourceFileProviderService,
     @Optional() private readonly downloadGrants?: DownloadGrantService,
@@ -790,9 +792,13 @@ export class ResourcesController {
   @Roles('admin', 'moderator')
   async setFeatured(@Param('id', ParseIntPipe) id: number, @Body('featured') featured: unknown, @Req() req: any) {
     if (typeof featured !== 'boolean') throw new BadRequestException('featured 必须是布尔值');
-    const resource = await this.resourcesService.setFeatured(id, featured);
-    await this.logOperation(req, 'resource.featured', id, { featured });
-    return resource;
+    const result = await this.resourceOperations.setFeaturedById(id, featured, {
+      userId: req.user?.id,
+      requestId: req.requestId,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers?.['user-agent'],
+    });
+    return result.resource;
   }
 
   @Delete(':id/admin')

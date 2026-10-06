@@ -10,12 +10,15 @@ import {
   type ResourceWorkbenchV2Response,
   type ResourceWorkbenchV2Version,
   type ResourceV2MapTransformInput,
+  type ResourceV2MapObjectOperation,
 } from '@/lib/api/v1/resources';
 import { useI18n } from '@/i18n/provider';
 import WaveEditor from './wave-editor';
 
 type TerrainCell = { x: number; y: number; floor: string; overlay: string };
-type MapObject = { x: number; y: number; name?: string; team?: string };
+type MapObject = { x: number; y: number; name?: string; team?: string; size?: number };
+type MapObjectType = 'core' | 'spawn' | 'building';
+type MapObjectCatalog = { cores: string[]; spawns: string[]; buildings: string[]; teams: string[] };
 type WaveGroup = Record<string, unknown>;
 type EditorData = {
   width: number;
@@ -25,7 +28,9 @@ type EditorData = {
   buildings: MapObject[];
   enemySpawns: MapObject[];
   cores: MapObject[];
+  catalog: MapObjectCatalog;
   truncated: boolean;
+  objectsTruncated: boolean;
 };
 
 type TerrainSnapshot = Record<string, TerrainCell>;
@@ -51,7 +56,7 @@ function objectLayer(value: unknown): MapObject[] {
   return value.flatMap((item): MapObject[] => {
     const row = record(item);
     if (!row || !Number.isInteger(row.x) || !Number.isInteger(row.y)) return [];
-    return [{ x: row.x as number, y: row.y as number, name: typeof row.name === 'string' ? row.name : undefined, team: typeof row.team === 'string' ? row.team : undefined }];
+    return [{ x: row.x as number, y: row.y as number, name: typeof row.name === 'string' ? row.name : undefined, team: typeof row.team === 'string' ? row.team : undefined, size: Number.isInteger(row.size) ? row.size as number : undefined }];
   });
 }
 
@@ -59,6 +64,8 @@ function readEditorData(summary: Record<string, unknown> | null): EditorData | n
   const width = summary?.width;
   const height = summary?.height;
   const layers = record(summary?.tile_layers);
+  const rawCatalog = record(layers?.object_catalog);
+  const catalogNames = (value: unknown) => Array.isArray(value) ? value.filter((name): name is string => typeof name === 'string' && /^[a-zA-Z0-9_.:-]{1,191}$/.test(name)) : [];
   const rawTerrain = layers?.terrain;
   if (!Number.isInteger(width) || !Number.isInteger(height) || (width as number) <= 0 || (height as number) <= 0
     || (width as number) * (height as number) > 40_000 || !Array.isArray(rawTerrain)) return null;
@@ -77,7 +84,12 @@ function readEditorData(summary: Record<string, unknown> | null): EditorData | n
     buildings: objectLayer(layers?.buildings),
     enemySpawns: objectLayer(layers?.enemy_spawns),
     cores: objectLayer(summary?.cores),
+    catalog: {
+      cores: catalogNames(rawCatalog?.cores), spawns: catalogNames(rawCatalog?.spawns),
+      buildings: catalogNames(rawCatalog?.buildings), teams: catalogNames(rawCatalog?.teams),
+    },
     truncated: summary?.tile_layers_truncated === true,
+    objectsTruncated: layers?.objects_truncated === true,
   };
 }
 
@@ -118,6 +130,13 @@ export default function MapLightEditor({ workbench, version, canEdit, onSaved }:
   const [ruleEdits, setRuleEdits] = useState<Record<string, unknown>>({});
   const [waveGroups, setWaveGroups] = useState<WaveGroup[]>([]);
   const [waveOperations, setWaveOperations] = useState<NonNullable<ResourceV2MapTransformInput['wave_operations']>>([]);
+  const [objectOperations, setObjectOperations] = useState<ResourceV2MapObjectOperation[]>([]);
+  const [newObjectType, setNewObjectType] = useState<MapObjectType>('building');
+  const [newObjectName, setNewObjectName] = useState('');
+  const [newObjectX, setNewObjectX] = useState(0);
+  const [newObjectY, setNewObjectY] = useState(0);
+  const [newObjectTeam, setNewObjectTeam] = useState('');
+  const [newObjectRotation, setNewObjectRotation] = useState(0);
   const [floorChoice, setFloorChoice] = useState('');
   const [overlayChoice, setOverlayChoice] = useState('air');
   const [brushSize, setBrushSize] = useState<1 | 3 | 5>(1);
@@ -131,7 +150,7 @@ export default function MapLightEditor({ workbench, version, canEdit, onSaved }:
   const versionId = version?.public_id;
 
   useEffect(() => {
-    setEditor(null); setTerrainEdits({}); setTerrainUndo([]); setRuleEdits({}); setWaveOperations([]); setWaveGroups([]);
+    setEditor(null); setTerrainEdits({}); setTerrainUndo([]); setRuleEdits({}); setWaveOperations([]); setWaveGroups([]); setObjectOperations([]);
     setLoadError(''); setError(''); setSaved(false); saveAttempt.current = null;
     if (!versionId) return;
     const controller = new AbortController();
@@ -142,6 +161,8 @@ export default function MapLightEditor({ workbench, version, canEdit, onSaved }:
         if (!data) throw new Error(t('resourceWorkbenchV2.mapEditor.unsupportedSize'));
         setEditor(data);
         setFloorChoice(data.terrain[0]?.floor || '');
+        setNewObjectName(data.catalog.buildings[0] || data.catalog.cores[0] || data.catalog.spawns[0] || '');
+        setNewObjectTeam(data.catalog.teams[0] || '');
         setWaveGroups(Array.isArray(data.rules.spawns) ? data.rules.spawns.flatMap((value): WaveGroup[] => record(value) ? [record(value)!] : []) : []);
       })
       .catch((caught) => { if (!controller.signal.aborted) setLoadError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.mapEditor.loadFailed')); })
@@ -160,8 +181,12 @@ export default function MapLightEditor({ workbench, version, canEdit, onSaved }:
   const overlays = useMemo(() => ['air', ...new Set((editor?.terrain || []).map((cell) => cell.overlay).filter((name) => name !== 'air'))].sort((a, b) => a === 'air' ? -1 : b === 'air' ? 1 : a.localeCompare(b)), [editor]);
   const terrainIndex = useMemo(() => new Map((editor?.terrain || []).map((cell) => [`${cell.x}:${cell.y}`, cell])), [editor]);
   const completeTerrain = Boolean(editor && !editor.truncated && editor.terrain.length === editor.width * editor.height);
+  const objectChoices = useMemo(() => {
+    if (!editor) return [];
+    return editor.catalog[`${newObjectType}s` as 'cores' | 'spawns' | 'buildings'];
+  }, [editor, newObjectType]);
   const canSave = Boolean(canEdit && version?.status === 'published' && editor && !loading && !busy
-    && (Object.keys(ruleEdits).length > 0 || waveOperations.length > 0 || (completeTerrain && Object.keys(terrainEdits).length > 0)));
+    && (Object.keys(ruleEdits).length > 0 || waveOperations.length > 0 || (!editor.objectsTruncated && objectOperations.length > 0) || (completeTerrain && Object.keys(terrainEdits).length > 0)));
 
   const paintCell = (x: number, y: number, remember = false) => {
     if (!editor || !completeTerrain || !floorChoice) return;
@@ -188,12 +213,30 @@ export default function MapLightEditor({ workbench, version, canEdit, onSaved }:
 
   const changeRule = (key: string, value: unknown) => { setRuleEdits((current) => ({ ...current, [key]: value })); setSaved(false); setError(''); };
   const ruleValue = (key: string) => Object.prototype.hasOwnProperty.call(ruleEdits, key) ? ruleEdits[key] : editor?.rules[key];
+  const queueObjectChanges = (type: MapObjectType, item: MapObject, next: ResourceV2MapObjectOperation[]) => {
+    setObjectOperations((current) => [
+      ...current.filter((operation) => operation.action === 'add' || operation.object_type !== type
+        || (operation.action === 'move' ? operation.from_x !== item.x || operation.from_y !== item.y : operation.x !== item.x || operation.y !== item.y)),
+      ...next,
+    ]);
+    setSaved(false); setError('');
+  };
+  const addMapObject = () => {
+    if (!editor || !objectChoices.includes(newObjectName) || !Number.isInteger(newObjectX) || !Number.isInteger(newObjectY)
+      || newObjectX < 0 || newObjectY < 0 || newObjectX >= editor.width || newObjectY >= editor.height
+      || (newObjectType !== 'spawn' && !editor.catalog.teams.includes(newObjectTeam))) return;
+    setObjectOperations((current) => [...current, {
+      action: 'add', object_type: newObjectType, x: newObjectX, y: newObjectY, name: newObjectName,
+      ...(newObjectType !== 'spawn' ? { team: newObjectTeam, rotation: newObjectRotation } : {}),
+    }]);
+    setSaved(false); setError('');
+  };
 
   const saveNewVersion = async () => {
     if (!version || !editor || !canSave) return;
     setBusy(true); setError(''); setSaved(false);
     try {
-      const operations: ResourceV2MapTransformInput = { terrain_changes: Object.values(terrainEdits), rule_changes: ruleEdits, wave_operations: waveOperations };
+      const operations: ResourceV2MapTransformInput = { terrain_changes: Object.values(terrainEdits), rule_changes: ruleEdits, wave_operations: waveOperations, object_operations: objectOperations };
       const fingerprint = JSON.stringify({ source: version.public_id, operations });
       if (!saveAttempt.current || saveAttempt.current.fingerprint !== fingerprint) saveAttempt.current = { fingerprint, key: newIdempotencyKey() };
       const blob = await exportResourceWorkbenchMapV2(workbench.resource.public_id, version.public_id, operations);
@@ -270,13 +313,28 @@ export default function MapLightEditor({ workbench, version, canEdit, onSaved }:
       {tab === 'waves' ? <WaveEditor groups={waveGroups} disabled={busy} onGroupsChange={(groups) => { setWaveGroups(groups); setSaved(false); }} onOperation={(operation) => { setWaveOperations((current) => [...current, operation]); setSaved(false); setError(''); }} /> : null}
 
       {tab === 'objects' ? <section className="space-y-4 border border-[var(--border)] p-3 sm:p-4">
-        <div><h4 className="text-sm font-semibold text-[var(--text)]">地图对象</h4><p className="mt-1 text-xs text-[var(--text-muted)]">检查核心、出生点与建筑布局，坐标与队伍信息来自当前版本实际地图数据。</p></div>
-        <ObjectTable title="核心" items={editor.cores} /><ObjectTable title="敌人出生点" items={editor.enemySpawns} /><ObjectTable title="建筑" items={editor.buildings} />
+        <div><h4 className="text-sm font-semibold text-[var(--text)]">地图对象</h4><p className="mt-1 text-xs text-[var(--text-muted)]">新增、删除、移动核心/出生点/建筑，或为核心和建筑改队伍。保存时由官方 Mindustry MapIO 写入并重新读取校验。</p></div>
+        {editor.objectsTruncated ? <p role="alert" className="border border-amber-500/30 p-3 text-sm text-amber-800 dark:text-amber-200">对象列表达到安全展示上限，当前地图对象编辑已关闭，避免修改未显示的对象。</p> : null}
+        <div className="grid gap-3 rounded border border-[var(--border)] p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="对象类型"><select value={newObjectType} onChange={(event) => { const value = event.target.value as MapObjectType; setNewObjectType(value); setNewObjectName(editor.catalog[`${value}s` as 'cores' | 'spawns' | 'buildings'][0] || ''); }} disabled={busy || editor.objectsTruncated} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm"><option value="core">核心</option><option value="spawn">敌人出生点</option><option value="building">建筑</option></select></Field>
+          <Field label="官方内容"><select value={newObjectName} onChange={(event) => setNewObjectName(event.target.value)} disabled={busy || editor.objectsTruncated || !objectChoices.length} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm">{objectChoices.map((name) => <option key={name} value={name}>{name}</option>)}</select></Field>
+          <div className="grid grid-cols-2 gap-2"><Field label="X"><input type="number" min={0} max={editor.width - 1} value={newObjectX} disabled={editor.objectsTruncated} onChange={(event) => setNewObjectX(Number(event.target.value))} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm" /></Field><Field label="Y"><input type="number" min={0} max={editor.height - 1} value={newObjectY} disabled={editor.objectsTruncated} onChange={(event) => setNewObjectY(Number(event.target.value))} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm" /></Field></div>
+          {newObjectType !== 'spawn' ? <Field label="队伍"><select value={newObjectTeam} onChange={(event) => setNewObjectTeam(event.target.value)} disabled={busy || editor.objectsTruncated} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm">{editor.catalog.teams.map((team) => <option key={team}>{team}</option>)}</select></Field> : null}
+          {newObjectType !== 'spawn' ? <Field label="旋转"><select value={newObjectRotation} onChange={(event) => setNewObjectRotation(Number(event.target.value))} disabled={editor.objectsTruncated} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm"><option value={0}>0°</option><option value={1}>90°</option><option value={2}>180°</option><option value={3}>270°</option></select></Field> : null}
+          <button type="button" disabled={busy || editor.objectsTruncated || !objectChoices.length || (newObjectType !== 'spawn' && !editor.catalog.teams.length)} onClick={addMapObject} className="min-h-11 self-end border border-[var(--primary)] px-4 text-sm font-medium text-[var(--primary)] disabled:opacity-40">加入地图</button>
+        </div>
+        <ObjectTable title="核心" objectType="core" items={editor.cores} teams={editor.catalog.teams} width={editor.width} height={editor.height} busy={busy || editor.objectsTruncated} operations={objectOperations} onChange={queueObjectChanges} />
+        <ObjectTable title="敌人出生点" objectType="spawn" items={editor.enemySpawns} teams={editor.catalog.teams} width={editor.width} height={editor.height} busy={busy || editor.objectsTruncated} operations={objectOperations} onChange={queueObjectChanges} />
+        <ObjectTable title="建筑" objectType="building" items={editor.buildings} teams={editor.catalog.teams} width={editor.width} height={editor.height} busy={busy || editor.objectsTruncated} operations={objectOperations} onChange={queueObjectChanges} />
+        <div className="border-t border-[var(--border)] pt-3">
+          <div className="flex items-center justify-between gap-3"><p className="text-sm font-medium">待保存对象操作：{objectOperations.length}</p><button type="button" disabled={!objectOperations.length || busy} onClick={() => setObjectOperations([])} className="min-h-11 px-3 text-sm text-[var(--primary)]">清空对象改动</button></div>
+          {objectOperations.length ? <ul className="mt-2 space-y-1 text-xs text-[var(--text-muted)]">{objectOperations.map((operation, index) => <li key={`${operation.action}:${operation.object_type}:${index}`}>{operation.action} · {operation.object_type} · {operation.action === 'move' ? `${operation.from_x},${operation.from_y} → ${operation.to_x},${operation.to_y}` : operation.action === 'add' ? `${operation.name} @ ${operation.x},${operation.y}` : `${operation.x},${operation.y}`}</li>)}</ul> : null}
+        </div>
       </section> : null}
 
       <div className="sticky bottom-2 z-10 flex flex-wrap items-center gap-3 border border-[var(--border)] bg-[var(--bg-card)]/95 p-3 shadow-lg backdrop-blur">
         <button type="button" disabled={!canSave} onClick={() => void saveNewVersion()} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:flex-none"><Save className="h-4 w-4" />{busy ? t('resourceWorkbenchV2.mapEditor.saving') : '保存为新版本'}</button>
-        <span className="text-xs text-[var(--text-muted)]">地形 {Object.keys(terrainEdits).length} · 规则 {Object.keys(ruleEdits).length} · 波次操作 {waveOperations.length}</span>
+        <span className="text-xs text-[var(--text-muted)]">地形 {Object.keys(terrainEdits).length} · 规则 {Object.keys(ruleEdits).length} · 波次 {waveOperations.length} · 对象 {objectOperations.length}</span>
         {saved ? <span role="status" className="text-sm text-emerald-700 dark:text-emerald-300">{t('resourceWorkbenchV2.mapEditor.saved')}</span> : null}
       </div>
       {error ? <p role="alert" className="border border-red-500/30 p-3 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
@@ -288,6 +346,44 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <label className="min-w-[8rem] flex-1 space-y-1 text-xs text-[var(--text-muted)]"><span className="block">{label}</span>{children}</label>;
 }
 
-function ObjectTable({ title, items }: { title: string; items: MapObject[] }) {
-  return <details open={title !== '建筑'} className="border border-[var(--border)]"><summary className="min-h-11 cursor-pointer px-3 py-2 text-sm font-medium">{title} · {items.length}</summary><div className="max-h-72 overflow-auto border-t border-[var(--border)]"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-[var(--bg-card)]"><tr><th className="px-3 py-2">坐标</th><th className="px-3 py-2">内容</th><th className="px-3 py-2">队伍</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${item.x}:${item.y}:${index}`} className="border-t border-[var(--border)]"><td className="px-3 py-2 font-mono">{item.x}, {item.y}</td><td className="px-3 py-2">{item.name || '—'}</td><td className="px-3 py-2">{item.team || '—'}</td></tr>)}</tbody></table>{!items.length ? <div className="p-4 text-center text-[var(--text-muted)]">暂无数据</div> : null}</div></details>;
+function ObjectTable({ title, objectType, items, teams, width, height, busy, operations, onChange }: {
+  title: string; objectType: MapObjectType; items: MapObject[]; teams: string[]; width: number; height: number; busy: boolean;
+  operations: ResourceV2MapObjectOperation[];
+  onChange: (type: MapObjectType, item: MapObject, operations: ResourceV2MapObjectOperation[]) => void;
+}) {
+  return <details open={title !== '建筑'} className="border border-[var(--border)]"><summary className="min-h-11 cursor-pointer px-3 py-2 text-sm font-medium">{title} · {items.length}</summary>
+    <div className="max-h-[60vh] space-y-2 overflow-auto border-t border-[var(--border)] p-2">
+      {items.map((item, index) => <MapObjectRow key={`${objectType}:${item.x}:${item.y}:${index}`} item={item} objectType={objectType} teams={teams} width={width} height={height} busy={busy}
+        pending={operations.some((operation) => operation.action !== 'add' && operation.object_type === objectType
+          && (operation.action === 'move' ? operation.from_x === item.x && operation.from_y === item.y : operation.x === item.x && operation.y === item.y))}
+        onApply={(next) => onChange(objectType, item, next)} />)}
+      {!items.length ? <div className="p-4 text-center text-sm text-[var(--text-muted)]">暂无该类对象</div> : null}
+    </div>
+  </details>;
+}
+
+function MapObjectRow({ item, objectType, teams, width, height, busy, pending, onApply }: {
+  item: MapObject; objectType: MapObjectType; teams: string[]; width: number; height: number; busy: boolean; pending: boolean;
+  onApply: (operations: ResourceV2MapObjectOperation[]) => void;
+}) {
+  const [toX, setToX] = useState(item.x);
+  const [toY, setToY] = useState(item.y);
+  const [team, setTeam] = useState(item.team || teams[0] || '');
+  const apply = () => {
+    const next: ResourceV2MapObjectOperation[] = [];
+    if (toX !== item.x || toY !== item.y) next.push({ action: 'move', object_type: objectType, from_x: item.x, from_y: item.y, to_x: toX, to_y: toY });
+    if (objectType !== 'spawn' && team && team !== item.team) next.push({ action: 'team', object_type: objectType, x: item.x, y: item.y, team });
+    onApply(next);
+  };
+  return <article className="space-y-2 rounded border border-[var(--border)] p-3">
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm"><strong>{item.name || objectType}</strong><span className="font-mono text-xs text-[var(--text-muted)]">当前位置 {item.x}, {item.y} · 队伍 {item.team || '—'}{item.size ? ` · ${item.size}×${item.size}` : ''}</span></div>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <Field label="移动到 X"><input type="number" min={0} max={width - 1} value={toX} onChange={(event) => setToX(Number(event.target.value))} disabled={busy} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm" /></Field>
+      <Field label="移动到 Y"><input type="number" min={0} max={height - 1} value={toY} onChange={(event) => setToY(Number(event.target.value))} disabled={busy} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm" /></Field>
+      {objectType !== 'spawn' ? <Field label="修改队伍"><select value={team} onChange={(event) => setTeam(event.target.value)} disabled={busy} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base sm:text-sm">{teams.map((name) => <option key={name}>{name}</option>)}</select></Field> : null}
+      <div className="flex flex-wrap items-end gap-2"><button type="button" disabled={busy || (toX === item.x && toY === item.y && (objectType === 'spawn' || team === item.team))} onClick={apply} className="min-h-11 border border-[var(--primary)] px-3 text-sm text-[var(--primary)] disabled:opacity-40">应用</button>
+        <button type="button" disabled={busy} onClick={() => onApply([{ action: 'delete', object_type: objectType, x: item.x, y: item.y }])} className="min-h-11 border border-red-500/50 px-3 text-sm text-red-700 dark:text-red-300">删除</button>
+        {pending ? <button type="button" disabled={busy} onClick={() => onApply([])} className="min-h-11 px-3 text-sm text-[var(--text-muted)]">撤销待处理</button> : null}</div>
+    </div>
+  </article>;
 }

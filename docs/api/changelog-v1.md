@@ -15,6 +15,7 @@
 ### Added
 
 - `POST /api/v1/resources/uploads/init` 和 `/uploads/complete` 增加资源上下文直传：`resource.upload`、登录与站点验证要求不变，限流 10/60s；init 必须携带 pending/draft 版本 UUID、文件名、大小、MIME 和 SHA-256，返回短期 RES 上传信息或去重对象，均需 complete 进行服务端验证与私有绑定。失败可返回 `RESOURCE_STORAGE_UNAVAILABLE` (503)、`RESOURCE_STORAGE_OBJECT_NOT_FOUND` (404)、`RESOURCE_STORAGE_REJECTED` (422)。
+- 新增 `GET /api/v1/resources/discovery/home`、`/discovery/hot`、`/discovery/for-you` 和 `/discovery/related/{id}`，公开精选、趋势、近 7 天上升、评分榜、最新、下载榜、猜你喜欢和相关推荐，匿名可读；携带 MindAuth Bearer 时需要 `resource.read`。响应声明稳定 `reasons`、榜单候选窗口分页、公开资源卡片和 V1 request-id envelope。推荐排除删除、未审核、私有和停用主题资源；相关推荐对不可公开源资源统一返回 404。限流分别为 60、60、45、60 次/分钟。匿名推荐不读取个人行为；个性化只用当前公开资源上的站内点赞/收藏。
 
 ### Changed
 

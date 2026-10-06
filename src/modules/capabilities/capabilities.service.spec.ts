@@ -77,14 +77,14 @@ describe('CapabilitiesService', () => {
     process.env.RES_BASE_URL = 'http://127.0.0.1:4100';
     process.env.RES_API_KEY = 'res-secret';
     const operations = [
-      'schematic.read', 'schematic.write', 'schematic.logic.read', 'schematic.logic.text.write',
-      'map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.waves.read', 'map.waves.write',
+      'schematic.read', 'schematic.write', 'schematic.config.read', 'schematic.config.write', 'schematic.logic.read', 'schematic.logic.text.write',
+      'map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.objects.read', 'map.objects.write', 'map.waves.read', 'map.waves.write',
     ];
     global.fetch = jest.fn(async (input) => {
       const url = String(input);
       const body = url.includes(':6100') ? {
         status: 'ok', protocolVersion: 2, buildDigest: 'a'.repeat(64),
-        runtime: { artifactSha256: 'fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57' },
+        runtime: { artifactSha256: '0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0' },
         supportedOperations: operations,
       } : { status: 'ok' };
       return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });

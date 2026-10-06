@@ -13,6 +13,7 @@ import { ResourceDuplicateService, ResourceDuplicateResult } from './resource-du
 import { ResourceStorageClientService } from './resource-storage-client.service';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceFileProviderService } from './resource-file-provider.service';
+import type { ResourceV2MapObjectOperationInput } from './v2/resources-v2-write.dto';
 
 type RendererResult = {
   metadata?: Record<string, unknown>;
@@ -183,17 +184,19 @@ export class ResourcePreviewService {
     move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
     add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
     logic_configs?: Array<{ x: number; y: number; source: string }>;
+    config_edits?: Array<{ x: number; y: number; config: object }>;
   }): Promise<{ data: Buffer; sha256: string }> {
     if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
     const positions = operations?.delete_positions;
     const moves = operations?.move_positions || [];
     const additions = operations?.add_blocks || [];
     const logicConfigs = operations?.logic_configs || [];
+    const configEdits = operations?.config_edits || [];
     if (!Number.isInteger(operations?.rotation_quarters) || operations.rotation_quarters < 0 || operations.rotation_quarters > 3
       || typeof operations.mirror_x !== 'boolean' || !Array.isArray(positions) || positions.length > 10_000
       || !Array.isArray(moves) || moves.length > 5_000 || !Array.isArray(additions) || additions.length > 5_000
-      || !Array.isArray(logicConfigs) || logicConfigs.length > 1_000
-      || positions.length + moves.length + additions.length + logicConfigs.length > 10_000
+      || !Array.isArray(logicConfigs) || logicConfigs.length > 1_000 || !Array.isArray(configEdits) || configEdits.length > 5_000
+      || positions.length + moves.length + additions.length + logicConfigs.length + configEdits.length > 10_000
     ) {
       throw new BadRequestException('蓝图编辑操作无效');
     }
@@ -238,6 +241,31 @@ export class ResourcePreviewService {
         || !key || logicPositions.has(key)) throw new BadRequestException('蓝图处理器文本无效');
       logicPositions.add(key);
     }
+    const typedConfigPositions = new Set<string>();
+    const allowedConfigKeys: Record<string, string[]> = {
+      none: ['type'], integer: ['type', 'value'], long: ['type', 'value'], float: ['type', 'value'],
+      double: ['type', 'value'], boolean: ['type', 'value'], text: ['type', 'value'],
+      content: ['type', 'content_type', 'name'], tech_node: ['type', 'content_type', 'name'],
+      point: ['type', 'x', 'y'], point_array: ['type', 'points'], int_seq: ['type', 'values'],
+      int_array: ['type', 'values'], boolean_array: ['type', 'values'], vec2: ['type', 'x', 'y'],
+      vec2_array: ['type', 'points'], team: ['type', 'name'], l_access: ['type', 'name'],
+      unit_command: ['type', 'name'], color: ['type', 'value'],
+    };
+    for (const edit of configEdits) {
+      const key = edit && `${edit.x}:${edit.y}`;
+      const config = edit?.config as Record<string, unknown> | undefined;
+      if (!edit || !Number.isInteger(edit.x) || !Number.isInteger(edit.y) || edit.x < 0 || edit.x > 127 || edit.y < 0 || edit.y > 127
+        || !key || typedConfigPositions.has(key) || logicPositions.has(key) || !config || typeof config !== 'object' || Array.isArray(config)) {
+        throw new BadRequestException('蓝图配置编辑无效');
+      }
+      const type = config.type;
+      if (typeof type !== 'string' || !allowedConfigKeys[type]
+        || Object.keys(config).some((property) => !allowedConfigKeys[type].includes(property))
+        || allowedConfigKeys[type].some((property) => !(property in config))) {
+        throw new BadRequestException('蓝图配置类型或字段无效');
+      }
+      typedConfigPositions.add(key);
+    }
     if (!fileName.toLowerCase().endsWith('.msch') || source.length < 5 || source.length > MAX_RENDER_BYTES
       || source.subarray(0, 4).toString('ascii') !== 'msch') {
       throw new BadRequestException('蓝图文件无效或超过大小限制');
@@ -260,6 +288,7 @@ export class ResourcePreviewService {
           move_positions: moves,
           add_blocks: additions,
           logic_configs: logicConfigs,
+          config_edits: configEdits,
         }),
         signal: AbortSignal.timeout(60_000),
       });
@@ -297,12 +326,15 @@ export class ResourcePreviewService {
     terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
     rule_changes?: Record<string, unknown>;
     wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
+    object_operations?: ResourceV2MapObjectOperationInput[];
   }): Promise<{ data: Buffer; sha256: string }> {
     if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
     const terrain = operations?.terrain_changes || [];
     const waves = operations?.wave_operations || [];
+    const objects = operations?.object_operations || [];
     const rules = operations?.rule_changes || {};
     if (!Array.isArray(terrain) || terrain.length > 5_000 || !Array.isArray(waves) || waves.length > 1_000
+      || !Array.isArray(objects) || objects.length > 2_000
       || !rules || typeof rules !== 'object' || Array.isArray(rules) || Object.keys(rules).length > 100) {
       throw new BadRequestException('地图编辑操作无效');
     }
@@ -325,9 +357,32 @@ export class ResourcePreviewService {
         throw new BadRequestException('地图波次编辑操作无效');
       }
     }
-    if (Buffer.byteLength(JSON.stringify({ rules, waves })) > 512 * 1024
-      || !fileName.toLowerCase().endsWith('.msav') || source.length < 8 || source.length > MAX_RENDER_BYTES
-      || source.subarray(0, 4).toString('ascii') !== 'MSAV') {
+    const objectActions = new Set(['add', 'delete', 'move', 'team']);
+    const objectTypes = new Set(['core', 'spawn', 'building']);
+    for (const operation of objects) {
+      if (!operation || !objectActions.has(String(operation.action)) || !objectTypes.has(String(operation.object_type))) {
+        throw new BadRequestException('地图对象编辑操作无效');
+      }
+      const coords = operation.action === 'move'
+        ? [operation.from_x, operation.from_y, operation.to_x, operation.to_y]
+        : [operation.x, operation.y];
+      if (!coords.every(value => Number.isInteger(value) && Number(value) >= 0 && Number(value) <= 32_767)) {
+        throw new BadRequestException('地图对象编辑坐标无效');
+      }
+      if (operation.action === 'add'
+        && (typeof operation.name !== 'string' || !/^[a-zA-Z0-9_.:-]{1,191}$/.test(operation.name)
+          || (operation.object_type !== 'spawn' && (typeof operation.team !== 'string' || !/^[a-zA-Z0-9_#-]{1,40}$/.test(operation.team)))
+          || (operation.object_type === 'spawn' && (operation.team !== undefined || (operation.rotation !== undefined && operation.rotation !== 0)))
+          || (operation.rotation !== undefined && (!Number.isInteger(operation.rotation) || Number(operation.rotation) < 0 || Number(operation.rotation) > 3)))) {
+        throw new BadRequestException('地图对象编辑内容无效');
+      }
+      if (operation.action === 'team' && (!['core', 'building'].includes(String(operation.object_type))
+        || typeof operation.team !== 'string' || !/^[a-zA-Z0-9_#-]{1,40}$/.test(operation.team))) {
+        throw new BadRequestException('地图对象队伍无效');
+      }
+    }
+    if (Buffer.byteLength(JSON.stringify({ rules, waves, objects })) > 512 * 1024
+      || !fileName.toLowerCase().endsWith('.msav') || source.length < 8 || source.length > MAX_RENDER_BYTES) {
       throw new BadRequestException('地图文件无效或编辑数据超过大小限制');
     }
     const sourceHash = createHash('sha256').update(source).digest('hex');
@@ -345,6 +400,7 @@ export class ResourcePreviewService {
           terrain_changes: terrain,
           rule_changes: rules,
           wave_operations: waves,
+          object_operations: objects,
         }),
         signal: AbortSignal.timeout(60_000),
       });
@@ -353,7 +409,7 @@ export class ResourcePreviewService {
         const code = typeof error.errorCode === 'string' ? error.errorCode : '';
         if ([
           'INVALID_MAP_OPERATION', 'INVALID_WAVE_OPERATION', 'UNSUPPORTED_MAP_CONTENT', 'UNSUPPORTED_MAP_SIZE',
-          'UNSUPPORTED_MAP_RULES', 'INVALID_MAP_RULES', 'INVALID_MAP', 'INVALID_FILE',
+          'UNSUPPORTED_MAP_OBJECT', 'INVALID_MAP_OBJECT_OPERATION', 'UNSUPPORTED_MAP_RULES', 'INVALID_MAP_RULES', 'INVALID_MAP', 'INVALID_FILE',
         ].includes(code)) {
           const message = code === 'UNSUPPORTED_MAP_CONTENT'
             ? '地图包含当前编辑器无法安全保留的 Mod 或未知内容，未生成文件'
@@ -372,7 +428,7 @@ export class ResourcePreviewService {
       }
       const data = Buffer.from(result.dataBase64, 'base64');
       const digest = createHash('sha256').update(data).digest('hex');
-      if (!data.length || data.length > MAX_RENDER_BYTES || data.subarray(0, 4).toString('ascii') !== 'MSAV'
+      if (!data.length || data.length > MAX_RENDER_BYTES
         || data.toString('base64') !== result.dataBase64 || digest !== result.sha256) {
         throw new ServiceUnavailableException('Mindustry 地图编辑器返回了无效结果');
       }

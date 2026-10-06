@@ -71,7 +71,7 @@ type EditorReadiness = {
 
 // Kept in sync with tools/mindustry-renderer/test-renderer.sh and the runtime
 // artifact reported by the renderer's health endpoint.
-const REQUIRED_MINDUSTRY_SERVER_SHA256 = 'fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57';
+const REQUIRED_MINDUSTRY_SERVER_SHA256 = '0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0';
 const READINESS_CACHE_MS = 10_000;
 const READINESS_FAILURE_CACHE_MS = 2_000;
 const READINESS_TIMEOUT_MS = 1_000;
@@ -113,11 +113,11 @@ export class CapabilitiesService {
       ? await this.getEditorReadiness()
       : { rendererOperations: new Set<string>(), storageReady: false };
     const schematicLightEditor = resourceCenterAvailable && resourceUpload && editorReadiness.storageReady
-      && this.hasRendererOperations(editorReadiness, ['schematic.read', 'schematic.write']);
+      && this.hasRendererOperations(editorReadiness, ['schematic.read', 'schematic.write', 'schematic.config.read', 'schematic.config.write']);
     const schematicFullEditor = schematicLightEditor
       && this.hasRendererOperations(editorReadiness, ['schematic.logic.read', 'schematic.logic.text.write']);
     const mapEditor = resourceCenterAvailable && resourceUpload && editorReadiness.storageReady
-      && this.hasRendererOperations(editorReadiness, ['map.read', 'map.write', 'map.rules.read', 'map.rules.write']);
+      && this.hasRendererOperations(editorReadiness, ['map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.objects.read', 'map.objects.write']);
     const waveEditor = mapEditor
       && this.hasRendererOperations(editorReadiness, ['map.waves.read', 'map.waves.write']);
     return {

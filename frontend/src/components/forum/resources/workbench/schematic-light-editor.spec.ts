@@ -8,12 +8,18 @@ import {
   type ResourceWorkbenchV2Response,
   type ResourceWorkbenchV2Version,
 } from '@/lib/api/v1/resources';
+import { fetchV1 } from '@/lib/api/v1/transport';
 import SchematicLightEditor from './schematic-light-editor';
 
 jest.mock('@/lib/api/v1/resources', () => ({
   analyzeResourceWorkbenchVersionV2: jest.fn(),
   exportResourceWorkbenchSchematicV2: jest.fn(),
   getResourceV2SchematicBlocks: jest.fn(),
+}));
+
+jest.mock('@/lib/api/v1/transport', () => ({
+  fetchV1: jest.fn(),
+  V1ApiError: class V1ApiError extends Error {},
 }));
 
 jest.mock('@/i18n/provider', () => {
@@ -69,6 +75,7 @@ jest.mock('@/i18n/provider', () => {
 const mockGetBlocks = getResourceV2SchematicBlocks as jest.MockedFunction<typeof getResourceV2SchematicBlocks>;
 const mockExport = exportResourceWorkbenchSchematicV2 as jest.MockedFunction<typeof exportResourceWorkbenchSchematicV2>;
 const mockAnalyze = analyzeResourceWorkbenchVersionV2 as jest.MockedFunction<typeof analyzeResourceWorkbenchVersionV2>;
+const mockFetchV1 = fetchV1 as jest.MockedFunction<typeof fetchV1>;
 
 type TestDom = { window: Window & typeof globalThis & { close: () => void } };
 const { JSDOM } = require('jsdom') as {
@@ -77,6 +84,10 @@ const { JSDOM } = require('jsdom') as {
 
 const RESOURCE_ID = '11111111-1111-4111-8111-111111111111';
 const VERSION_ID = '22222222-2222-4222-8222-222222222222';
+
+async function flushEffects(): Promise<void> {
+  for (let index = 0; index < 8; index += 1) await Promise.resolve();
+}
 
 function version(status = 'published'): ResourceWorkbenchV2Version {
   return {
@@ -155,6 +166,10 @@ describe('SchematicLightEditor', () => {
   });
 
   beforeEach(() => {
+    mockFetchV1.mockReset().mockResolvedValue({
+      version_public_id: VERSION_ID,
+      schematic: { width: 3, height: 2 },
+    } as never);
     mockGetBlocks.mockReset().mockResolvedValue(positionsPage);
     mockExport.mockReset().mockResolvedValue(new Blob([new Uint8Array([0x6d, 0x73, 0x63, 0x68, 1])], { type: 'application/octet-stream' }));
     mockAnalyze.mockReset();
@@ -187,8 +202,7 @@ describe('SchematicLightEditor', () => {
     root = createRoot(container);
     await act(async () => {
       root?.render(createElement(SchematicLightEditor, { workbench: workbench(), version: selectedVersion, canEdit }));
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushEffects();
     });
   }
 
@@ -203,16 +217,12 @@ describe('SchematicLightEditor', () => {
     await mount();
 
     expect(mockGetBlocks).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, { limit: 100, cursor: undefined });
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Rotate left') || null);
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Mirror horizontally') || null);
-    const routerGroup = Array.from(container.querySelectorAll('details > summary')).find((summary) => summary.textContent?.includes('Router'));
-    await click(routerGroup || null);
-    const firstBlock = routerGroup?.parentElement?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-    expect(firstBlock).not.toBeNull();
-    await act(async () => Simulate.change(firstBlock!, { target: { checked: true } as EventTarget & { checked: boolean } }));
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('Delete selected blocks')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('整体左转')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('水平镜像')) || null);
+    await click(container.querySelector('[data-cell="0:0"]'));
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('删除')) || null);
 
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') as HTMLButtonElement | undefined;
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) as HTMLButtonElement | undefined;
     expect(exportButton?.disabled).toBe(false);
     await click(exportButton || null);
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
@@ -222,6 +232,7 @@ describe('SchematicLightEditor', () => {
       move_positions: [],
       add_blocks: [],
       logic_configs: [],
+      config_edits: [],
     });
     expect(mockAnalyze).toHaveBeenCalledTimes(1);
     const form = mockAnalyze.mock.calls[0][1];
@@ -239,8 +250,8 @@ describe('SchematicLightEditor', () => {
     });
     expect(anchorClick).toHaveBeenCalledTimes(1);
     expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
-    expect(container.textContent).toContain('Server reanalysis complete');
-    expect(container.textContent).toContain('Parser block count: 1');
+    expect(container.textContent).toContain('重新分析完成');
+    expect(container.textContent).toContain('解析方块数：1');
   });
 
   it('disables export when the server returns incomplete block positions', async () => {
@@ -251,10 +262,8 @@ describe('SchematicLightEditor', () => {
     await mount();
 
     expect(container.textContent).toContain('Some positions are missing');
-    const rotateButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Rotate left');
-    await click(rotateButton || null);
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') as HTMLButtonElement | undefined;
-    expect(exportButton?.disabled).toBe(true);
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) as HTMLButtonElement | undefined;
+    expect(exportButton).toBeUndefined();
     expect(mockExport).not.toHaveBeenCalled();
   });
 
@@ -265,6 +274,7 @@ describe('SchematicLightEditor', () => {
     });
     const largeWorkbench = workbench();
     largeWorkbench.resource.metadata.schematic = { ...largeWorkbench.resource.metadata.schematic!, width: 6, height: 5 };
+    mockFetchV1.mockResolvedValueOnce({ version_public_id: VERSION_ID, schematic: { width: 6, height: 5 } } as never);
     mockAnalyze.mockResolvedValue({
       resource_public_id: RESOURCE_ID,
       resource_kind: 'schematic',
@@ -273,18 +283,17 @@ describe('SchematicLightEditor', () => {
     await act(async () => {
       root = createRoot(container);
       root.render(createElement(SchematicLightEditor, { workbench: largeWorkbench, version: version(), canEdit: true }));
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushEffects();
     });
 
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Move') || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '移动') || null);
     await click(container.querySelector('[data-cell="2:2"]'));
     await click(container.querySelector('[data-cell="4:2"]'));
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
       rotation_quarters: 0, mirror_x: false, delete_positions: [],
-      move_positions: [{ from_x: 1, from_y: 1, to_x: 4, to_y: 2 }], add_blocks: [], logic_configs: [],
+      move_positions: [{ from_x: 1, from_y: 1, to_x: 4, to_y: 2 }], add_blocks: [], logic_configs: [], config_edits: [],
     });
   });
 
@@ -304,15 +313,44 @@ describe('SchematicLightEditor', () => {
     await mount();
 
     await click(container.querySelector('[data-cell="1:1"]'));
-    expect(container.textContent).toContain('core · 2, 3');
+    expect(container.textContent).toContain('core → 2,3');
     const source = container.querySelector('#schematic-logic-source') as HTMLTextAreaElement;
     await act(async () => Simulate.change(source, { target: { value: 'print("after")' } as EventTarget & { value: string } }));
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
       rotation_quarters: 0, mirror_x: false, delete_positions: [], move_positions: [], add_blocks: [],
       logic_configs: [{ x: 1, y: 1, source: 'print("after")' }],
+      config_edits: [],
     });
+  });
+
+  it('edits a typed item configuration through its content control and includes it in the official transform', async () => {
+    mockGetBlocks.mockResolvedValueOnce({
+      items: [{ internal_name: 'sorter', display_name: 'Sorter', count: 1, positions: [{
+        x: 2, y: 3, rotation: 0, size: 1,
+        config: { type: 'content', content_type: 'item', name: 'copper' },
+        config_editable: true, config_types: [{ type: 'content', content_type: 'item' }],
+      }] }],
+      pagination: { next_cursor: null, has_more: false },
+    });
+    mockFetchV1.mockResolvedValueOnce({ version_public_id: VERSION_ID, schematic: { width: 4, height: 5 } } as never);
+    mockAnalyze.mockResolvedValue({
+      resource_public_id: RESOURCE_ID, resource_kind: 'schematic',
+      analysis: { parser_version: 'renderer-1', renderer_metadata: { block_count: 1 }, duplicate: false, findings: [] },
+    });
+    await mount();
+
+    await click(container.querySelector('[data-cell="2:3"]'));
+    expect(container.textContent).toContain('官方配置类型');
+    const itemInput = Array.from(container.querySelectorAll('input')).find((input) => input.getAttribute('list') === 'content-item') as HTMLInputElement | undefined;
+    expect(itemInput?.value).toBe('copper');
+    await act(async () => Simulate.change(itemInput!, { target: { value: 'lead' } as EventTarget & { value: string } }));
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) || null);
+
+    expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, expect.objectContaining({
+      config_edits: [{ x: 2, y: 3, config: { type: 'content', content_type: 'item', name: 'lead' } }],
+    }));
   });
 
   it('shows position loading failures without enabling export', async () => {
@@ -320,19 +358,17 @@ describe('SchematicLightEditor', () => {
     await mount();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Could not load block positions');
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('positions unavailable');
-    const rotateButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Rotate left');
-    await click(rotateButton || null);
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic') as HTMLButtonElement | undefined;
-    expect(exportButton?.disabled).toBe(true);
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toContain('positions unavailable');
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) as HTMLButtonElement | undefined;
+    expect(exportButton).toBeUndefined();
   });
 
   it('does not download the transformed bytes if server reanalysis fails', async () => {
     mockAnalyze.mockRejectedValueOnce(new Error('server parser unavailable'));
     await mount();
-    const rotateButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Rotate right');
+    const rotateButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('整体右转'));
     await click(rotateButton || null);
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Export edited schematic');
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析'));
     await click(exportButton || null);
 
     expect(anchorClick).not.toHaveBeenCalled();

@@ -328,8 +328,10 @@ export class ResourcesService {
       .createQueryBuilder('resource')
       .leftJoinAndSelect('resource.user', 'user')
       .leftJoin('resource.category', 'category')
-      .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
+      .where('resource.deleted_at IS NULL')
+      .andWhere('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
       .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
+      .andWhere("(resource.visibility IS NULL OR resource.visibility = 'public')")
       .andWhere('(category.id IS NULL OR category.is_active = :categoryActive)', { categoryActive: 1 })
       .orderBy('resource.created_at', 'DESC')
       .getMany();

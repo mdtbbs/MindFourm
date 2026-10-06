@@ -19,6 +19,10 @@ GET /api/v1/resources/{resource_public_id}/preview
 GET /api/v1/resources/{resource_public_id}/manifest
 GET /api/v1/resources/{resource_public_id}/versions
 GET /api/v1/resources/{resource_public_id}/versions/{version_public_id}/preview
+GET /api/v1/resources/discovery/home
+GET /api/v1/resources/discovery/hot
+GET /api/v1/resources/discovery/for-you
+GET /api/v1/resources/discovery/related/{id}
 GET /api/v1/resources/{resource_public_id}/relations
 GET /api/v1/resources/{resource_public_id}/stats
 GET /api/v1/resources/{resource_public_id}/workbench
@@ -196,6 +200,27 @@ GET /api/v1/resources/topics
 ```
 
 资源类别用于主导航和投稿类型；主题是可选的用途或分类筛选条件。迁移期间，旧版 `category_id` 参数仍可作为主题筛选使用，但不会改变资源类别。旧字段 `resource_type` 仍描述文件交付方式（`upload` 或 `external`），不能代替 `resource_kind`。
+
+## 资源发现与推荐
+
+以下 GET 接口允许匿名访问。携带 MindAuth Bearer token 时需要 `resource.read`；无效凭证返回 401，缺少 scope 返回 403。登录会话可读取公开结果。四条接口只返回未删除、`is_public = true`、状态为 `approved` 或 `published`、公开 visibility 且有 `public_id` 的资源，并排除已停用主题下的资源；相关推荐的源资源也必须符合相同条件，否则统一返回 404。
+
+```text
+GET /api/v1/resources/discovery/home?kind=schematic&limit=8&page=1
+GET /api/v1/resources/discovery/hot?limit=10&page=1
+GET /api/v1/resources/discovery/for-you?kind=map&limit=12&page=1
+GET /api/v1/resources/discovery/related/{id}?limit=8&page=1
+```
+
+`home` 的 `kind` 可选值为 `mod`、`schematic`、`map`、`other`；`limit` 为 1–20，`page` 为 1–400。响应 `data.sections` 固定包含 `featured`、`trending`、`rising`、`top_rated`、`newest`。`for-you` 支持相同 `kind`，`limit` 为 1–30；登录用户仅在存在当前仍公开可见的站内点赞/收藏种子时获得个性化结果，否则返回趋势兜底。`related` 的 `{id}` 是源资源公开 UUID，`limit` 为 1–24。两个推荐接口的 `page` 均为 1–400。
+
+`hot` 按公开资源累计下载量排序，`limit` 为 1–30（默认 10），`page` 为 1–400；它在最多 300 个候选组成的窗口内分页，原因码为 `top_downloaded`。
+
+每个结果条目包含公开资源卡片、排序用 `score` 和稳定 `reasons`。原因值可能是 `editor_pick`、`trending`、`recent_views`、`recent_downloads`、`quality_signals`、`top_rated`、`newest`、`top_downloaded`、`same_kind`、`same_category`、`shared_tags:<tags>`、`kind:<kind>`、`category`、`tags:<tags>`、`featured` 或 `popular_now`。客户端应把原因作为可解释提示，不应把分数当作质量保证。
+
+分页信息位于对应 `data` 中，包含 `page`、`limit`、`items_in_window`、`more_in_window`、`candidate_window_size` 和 `candidate_window_truncated`。榜单通过有上限的候选窗口计算；`candidate_window_truncated: true` 表示可能还有未扫描结果。V1 外层响应仍包含 `meta.request_id`。匿名 for-you 不使用外部浏览历史；个性化只读取用户在 MDTBBS 对当前公开资源的点赞/收藏，以及这些公开资源的公开元数据。
+
+限流：`home` 60 次/分钟，`for-you` 45 次/分钟，`related` 60 次/分钟。参数边界、资源卡片 schema、Reasons 与安全响应以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
 系统解析结果与发布者声明保持区分。兼容记录在可用时会包含来源和可信度，例如 `file_metadata`、`inferred`、`user_declared`、`verified` 或 `admin_verified`。解析器运行版本不等于地图存档中的游戏版本，不能混为一谈。只有存档本身包含游戏版本时，地图元数据才会报告该版本；存档格式版本单独提供。蓝图兼容性是根据已知内容和格式推断的结果，不保证蓝图可在每个游戏版本中加载。
 

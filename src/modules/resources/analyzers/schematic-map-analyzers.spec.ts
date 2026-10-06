@@ -40,7 +40,7 @@ describe('schematic and map metadata analyzers', () => {
     expect(result.blocks.find((item) => item.internal_name === 'graphite-press')?.positions_json).toEqual([{ x: 3, y: 4, rotation: 1, size: 1 }]);
     expect(result.blocks.find((item) => item.internal_name === 'logic-processor')?.positions_json).toEqual([{
       x: 7, y: 2, rotation: null, size: 1,
-      config: { format_version: 1, source: 'print("inert source")', links: [{ name: 'node1', x: 2, y: 3 }] },
+      config: { type: 'logic', format_version: 1, source: 'print("inert source")', links: [{ name: 'node1', x: 2, y: 3 }] },
       logic_source_available: true,
     }]);
     expect(result.materials).toEqual([{ internal_name: 'copper', amount: 29 }, { internal_name: 'lead', amount: 12 }]);

@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceViewEvent } from '@entities/resource-view-event.entity';
 import { DownloadEvent } from '@entities/download-event.entity';
 import { toPublicResource } from './resource-public.dto';
+import { LogsService } from '../logs/logs.service';
 
 @Injectable()
 export class ResourceOperationsService {
@@ -12,6 +13,8 @@ export class ResourceOperationsService {
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
     @InjectRepository(ResourceViewEvent) private readonly views: Repository<ResourceViewEvent>,
     @InjectRepository(DownloadEvent) private readonly downloads: Repository<DownloadEvent>,
+    private readonly dataSource: DataSource,
+    private readonly logs: LogsService,
   ) {}
 
   async summary(requestedDays = 7) {
@@ -57,16 +60,55 @@ export class ResourceOperationsService {
     };
   }
 
-  async setFeatured(publicId: string, featured: boolean) {
-    const resource = await this.resources.findOne({ where: { public_id: publicId } });
-    if (!resource || resource.deleted_at) throw new NotFoundException('Resource not found');
-    resource.is_featured = featured ? 1 : 0;
-    await this.resources.save(resource);
-    return {
-      public_id: resource.public_id,
-      is_featured: featured,
-      resource: toPublicResource(resource, true),
-    };
+  async setFeatured(publicId: string, featured: boolean, audit: {
+    userId?: number;
+    requestId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }) {
+    return this.updateFeatured({ public_id: publicId }, featured, audit, featured ? 'resource.featured.add' : 'resource.featured.remove');
+  }
+
+  async setFeaturedById(id: number, featured: boolean, audit: {
+    userId?: number;
+    requestId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+  }) {
+    return this.updateFeatured({ id }, featured, audit, 'resource.featured');
+  }
+
+  private async updateFeatured(
+    where: { public_id: string } | { id: number },
+    featured: boolean,
+    audit: { userId?: number; requestId?: string; ipAddress?: string; userAgent?: string },
+    action: string,
+  ) {
+    return this.dataSource.transaction(async (manager: EntityManager) => {
+      const repository = manager.getRepository(Resource);
+      const resource = await repository.findOne({
+        where,
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!resource || resource.deleted_at) throw new NotFoundException('Resource not found');
+      resource.is_featured = featured ? 1 : 0;
+      await repository.save(resource);
+      const result = {
+        public_id: resource.public_id,
+        is_featured: featured,
+        resource: toPublicResource(resource, true),
+      };
+      await this.logs.log({
+        user_id: audit.userId,
+        action,
+        target_type: 'resource',
+        target_id: resource.id,
+        details: JSON.stringify({ public_id: resource.public_id, featured, request_id: audit.requestId }),
+        ip_address: audit.ipAddress,
+        user_agent: audit.userAgent,
+      }, manager);
+      return result;
+    });
   }
 
   private publicQuery(alias: string) {
