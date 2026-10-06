@@ -22,6 +22,7 @@
 
 - 在线开发者文档：`/api/v1`
 - API 参数参考：`/api/v1/reference`
+- Markdown 指南：`/api/v1/docs/*`，包括错误代码、富文本、更新记录和生命周期
 - Swagger 文档：`/api/docs/v1`（只读，不提供在线调用）
 - OpenAPI JSON：`/api/openapi/v1.json`
 - 明确命名的公开 OpenAPI：`/api/openapi/public-v1.json`（与兼容地址内容相同）
@@ -43,6 +44,7 @@
 - [公开 V1 错误代码](./errors-v1.md)
 - [公开 API 更新记录](./changelog-v1.md)
 - [公开 API 生命周期](./lifecycle-v1.md)
+
 第三方客户端的契约边界以公开 V1 OpenAPI 和本目录的客户端接入指南为准。仓库中的实现、运维资料和兼容代码不是额外的公开 API 契约。
 
 ## V1 响应格式
@@ -174,8 +176,9 @@ V1 OpenAPI 必须只暴露 `/v1/*` 路径。部分 Nest 模块同时包含历史
 1. 同步补充 Swagger 装饰器和 DTO 数据结构。
 2. 检查 `/api/openapi/v1.json` 是否只包含 `/v1/*`。
 3. 更新对应 Markdown 文档中的行为说明、限制和示例。
-4. 若仓库提交 `openapi-v1.json` 快照，重新导出后再提交。
+4. 运行 `npm run openapi:export` 更新 `openapi-public-v1.json`、公开兼容镜像 `openapi-v1.json` 和内部快照；确认公开两个 JSON 保持同步。
 5. 不要为了满足客户端需求而手工把历史接口加入 V1 文档；应先设计稳定的 V1 接口。
+6. 同步更新 [`changelog-v1.md`](./changelog-v1.md)。CI 会在 Public V1 contract snapshot 改变而 changelog 未改变时失败。
 
 ## 各类接口的边界
 

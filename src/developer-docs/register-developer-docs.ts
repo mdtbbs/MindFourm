@@ -69,6 +69,8 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   resources: 'resources-v1-contract.md',
   multiplayer: 'multiplayer-v1.md',
   'cloud-saves': 'cloud-saves-v1.md',
+  changelog: 'changelog-v1.md',
+  lifecycle: 'lifecycle-v1.md',
 };
 
 const MARKDOWN_GUIDE_SLUGS: Record<string, string> = Object.fromEntries(

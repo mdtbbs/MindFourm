@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, UnprocessableEntityException, Optional } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, Like, LessThan, In } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
@@ -6,7 +6,16 @@ import { ResourceCategory } from '@entities/resource-category.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceAttribution } from '@entities/resource-attribution.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceDirectUploadDraft } from '@entities/resource-direct-upload-draft.entity';
+import { ResourceDirectUploadSession } from '@entities/resource-direct-upload-session.entity';
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
+import {
+  ResourceAnalysisRun, ResourceCompatibility, ResourceDependency, ResourceMember,
+  ResourceReviewEvent,
+} from '@entities/resource-center-v2.entity';
+import {
+  ModContent, ModIdAlias, ModLocalization, ModProfile, ModVersionMetadata,
+} from '@entities/mod-resource-v2.entity';
 import { ResourceRating } from '@entities/resource-rating.entity';
 import { User } from '@entities/user.entity';
 import { CreateResourceDto } from './dto/create-resource.dto';
@@ -24,6 +33,7 @@ import { ResourceCategoryService } from './resource-categories.service';
 import { isValidRating, ratingAggregateDelta, validateResourceSort } from './resource-rating.util';
 import { mergeResourceMetadata, normalizeResourceMetadata } from './resource-detail.util';
 import { ResourceStorageService } from './resource-storage.service';
+import { ResourceStorageClientService } from './resource-storage-client.service';
 import { ContentSafetyService, ContentRisk } from '@modules/content-safety/content-safety.service';
 import { ResourceSubscriptionsService } from './resource-subscriptions.service';
 import { randomUUID } from 'crypto';
@@ -33,6 +43,13 @@ import { ResourceDuplicateService, RESOURCE_DUPLICATE_STATUSES } from './resourc
 import { SiteConfigService } from '@config/site-profile';
 import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
 import { toPublicResource, RESOURCE_CARD_COLUMNS } from './resource-public.dto';
+import {
+  analyzeModArchive, applyModAuthorOverrides, MOD_ARCHIVE_LIMITS, ModArchiveAnalysis,
+  ModManifest, ModUploadValidationError, validateModManifest,
+} from './analyzers/mod-package-parser';
+import { validateResourceVersion } from './analyzers/version-constraint.util';
+import { persistRendererAnalysis } from './v2/resource-version-analysis.persistence';
+import { RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS } from './resource-direct-upload.constants';
 
 export interface ResourceFileMeta {
   file_name: string;
@@ -40,6 +57,9 @@ export interface ResourceFileMeta {
   file_size: number;
   mime_type: string;
   content_hash: string;
+  storage_backend?: string;
+  provider_object_id?: string;
+  provider_binding_id?: string;
 }
 
 // Only retained for migration/legacy-resource compatibility. New submissions
@@ -53,12 +73,31 @@ interface MflFileMeta {
 
 type ResourceListScope = 'public' | 'admin';
 
+type PreparedModArchive = {
+  analysis: ModArchiveAnalysis | null;
+  effectiveManifest: ModManifest | null;
+  modId: string;
+  parsedModId: string | null;
+  idConflict: boolean;
+  findings: Array<{ code: string; severity: 'ERROR' | 'WARNING' | 'INFO'; message: string }>;
+};
+
 const RESOURCE_STATUS_PENDING = RESOURCE_STATUS.pending;
 const RESOURCE_STATUS_APPROVED = RESOURCE_STATUS.approved;
 const RESOURCE_STATUS_REJECTED = RESOURCE_STATUS.rejected;
 
 @Injectable()
 export class ResourcesService {
+  async resolveMflDownloadUrl(fileId: number, fallback?: string | null): Promise<string> {
+    try {
+      return await this.mflClientService.resolveDownloadUrl(fileId);
+    } catch {
+      // Historical rows may have only the old ID-based URL. Preserve that
+      // link when download-site metadata is temporarily unavailable.
+      return fallback || this.mflClientService.getDownloadUrl(fileId);
+    }
+  }
+
   constructor(
     @InjectRepository(Resource)
     private resourceRepository: Repository<Resource>,
@@ -84,6 +123,7 @@ export class ResourcesService {
     @Optional() private resourceDuplicateService?: ResourceDuplicateService,
     @Optional() private siteConfig?: SiteConfigService,
     @Optional() private customEmojis?: CustomEmojisService,
+    @Optional() private resClient?: ResourceStorageClientService,
   ) {}
 
   private emptyContentRisk(): ContentRisk {
@@ -123,6 +163,12 @@ export class ResourcesService {
     return Number(value) ? 1 : 0;
   }
 
+  private async saveEntityBatches(manager: EntityManager, target: unknown, values: unknown[], batchSize = 500): Promise<void> {
+    for (let offset = 0; offset < values.length; offset += batchSize) {
+      await manager.save(target as any, values.slice(offset, offset + batchSize) as any);
+    }
+  }
+
   private normalizeVersion(version: ResourceVersion) {
     return {
       ...Object.fromEntries(['id', 'public_id', 'resource_id', 'version', 'file_name', 'file_size', 'mime_type', 'content_hash', 'content', 'content_html', 'created_at', 'release_channel', 'status', 'release_notes_markdown', 'published_at', 'is_legacy_root_release', 'compatibility'].filter((key) => Object.prototype.hasOwnProperty.call(version, key)).map((key) => [key, (version as any)[key]])),
@@ -131,6 +177,74 @@ export class ResourcesService {
       checksum: (version as any).content_hash || null,
       release_notes: (version as any).release_notes_markdown || version.content || null,
     };
+  }
+
+  private async readResUpload(file: ResourceFileMeta, maxBytes: number): Promise<Buffer> {
+    if (!this.resClient || !file.provider_object_id) throw new BadRequestException('资源存储对象缺失');
+    return this.resClient.getObjectContent(file.provider_object_id, { maxBytes });
+  }
+
+  private async prepareInitialModArchive(
+    kind: string,
+    resourceType: string,
+    dto: CreateResourceDto,
+    file?: ResourceFileMeta,
+    directUploadDraft = false,
+  ): Promise<PreparedModArchive | null> {
+    const versionMode = dto.version_mode || (kind === 'mod' ? 'semver' : 'compatibility');
+    try {
+      validateResourceVersion(dto.version, versionMode);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : '版本号格式无效');
+    }
+    if (kind !== 'mod') return null;
+
+    if (directUploadDraft && !file) return null;
+
+    let analysis: ModArchiveAnalysis | null = null;
+    if (resourceType === 'upload') {
+      if (!file || (file.storage_backend !== 'res' && !this.resourceStorageService)) throw new BadRequestException('Mod 上传文件不可用');
+      if (file.file_size > MOD_ARCHIVE_LIMITS.maxArchiveBytes) throw new BadRequestException('Mod JAR/ZIP 文件超过 50 MiB 安全限制');
+      if (!/\.(?:jar|zip)$/i.test(file.file_name)) throw new BadRequestException('Mod 仅支持 .jar 或 .zip 文件');
+      try {
+        analysis = analyzeModArchive(file.storage_backend === 'res'
+          ? await this.readResUpload(file, MOD_ARCHIVE_LIMITS.maxArchiveBytes)
+          : await this.resourceStorageService!.readManagedFile(file.file_path, MOD_ARCHIVE_LIMITS.maxArchiveBytes));
+      } catch (error) {
+        if (error instanceof ModUploadValidationError) throw new BadRequestException({ code: error.code, message: error.message });
+        throw error;
+      }
+    }
+
+    const effectiveManifest = analysis
+      ? applyModAuthorOverrides(analysis.manifest, dto.mod_author_overrides)
+      : null;
+    const parsedModId = effectiveManifest?.name?.trim().toLowerCase() || null;
+    const requestedId = dto.mod_id?.trim().toLowerCase();
+    const modId = requestedId || parsedModId || '';
+    if (!/^[a-z0-9][a-z0-9_.-]{0,127}$/.test(modId)) {
+      throw new BadRequestException('必须提供有效的 Mod ID，或在 mod.json/mod.hjson 中声明 name');
+    }
+
+    const findings = [
+      ...(analysis?.findings || []),
+      ...(effectiveManifest ? validateModManifest(effectiveManifest) : []),
+    ];
+    const aliases = parsedModId && parsedModId !== modId ? [parsedModId] : [];
+    const identifiers = [...new Set([modId, ...aliases])];
+    if (identifiers.length) {
+      const rows = await this.dataSource.query(
+        `SELECT resource_id FROM mod_profiles WHERE mod_id IN (${identifiers.map(() => '?').join(',')})
+         UNION SELECT resource_id FROM mod_id_aliases WHERE alias IN (${identifiers.map(() => '?').join(',')}) LIMIT 1`,
+        [...identifiers, ...identifiers],
+      ) as Array<{ resource_id: number }>;
+      if (rows.length) findings.push({
+        code: 'mod_id_conflict', severity: 'ERROR',
+        message: 'This Mod ID or one of its aliases already belongs to another resource and requires moderator review.',
+      });
+      return { analysis, effectiveManifest, modId, parsedModId, idConflict: rows.length > 0, findings };
+    }
+    return { analysis, effectiveManifest, modId, parsedModId, idConflict: false, findings };
   }
 
   private normalizeResource(resource: Resource, versions?: ResourceVersion[], card = false) {
@@ -176,12 +290,13 @@ export class ResourcesService {
   async isResourcePubliclyAccessible(resource: {
     status?: string;
     is_public?: number;
+    visibility?: string | null;
     category_id?: number | null;
   }): Promise<boolean> {
     const isApproved = (PUBLIC_RESOURCE_STATUSES as readonly string[]).includes(
       resource.status ?? '',
     );
-    if (!isApproved || resource.is_public !== 1) {
+    if (!isApproved || resource.is_public !== 1 || resource.visibility === 'private') {
       return false;
     }
 
@@ -237,6 +352,170 @@ export class ResourcesService {
     return isAccessible ? this.normalizeOneResource(resource) : null;
   }
 
+  async createDirectUploadDraft(dto: CreateResourceDto, userId: number, idempotencyHeader: string | undefined, ipAddress?: string) {
+    if (this.normalizeResourceType(dto.resource_type) !== 'upload') throw new BadRequestException('直接上传草稿必须是本站托管资源');
+    if (dto.preview_draft_id || dto.schematic_code) throw new BadRequestException('直接上传草稿不能附带本地预览或蓝图代码');
+    const idempotencyKey = this.validateIdempotencyKey(idempotencyHeader);
+    if (!idempotencyKey) throw new BadRequestException('直接上传草稿必须提供 Idempotency-Key');
+    const idempotencyKeyHash = createHash('sha256').update(idempotencyKey).digest('hex');
+    const requestFingerprint = this.hashCanonical({ operation: 'initial-resource-direct-upload', dto });
+    const expiresAt = new Date(Date.now() + RESOURCE_DIRECT_UPLOAD_DRAFT_TTL_MS);
+    const resource = await this.create(dto, userId, undefined, {
+      ipAddress,
+      idempotencyKey,
+      idempotencyPayload: dto,
+      directUploadDraft: { idempotencyKeyHash, requestFingerprint, expiresAt, requestMetadata: dto as unknown as Record<string, unknown> },
+    });
+    const version = await this.versionRepository.findOne({ where: { resource_id: resource.id }, order: { id: 'DESC' } });
+    if (!version?.public_id) throw new ConflictException('资源上传草稿版本不存在');
+    const rows = await this.dataSource.query(
+      `SELECT draft.id, draft.expires_at, draft.status AS draft_status, version.status AS version_status, version.revision
+       FROM resource_direct_upload_drafts draft JOIN resource_versions version ON version.id=draft.resource_version_id
+       WHERE draft.resource_version_id=? AND draft.user_id=? LIMIT 1`,
+      [version.id, userId],
+    ) as Array<{ id: string; expires_at: Date | string; draft_status: 'open' | 'completed'; version_status: 'upload_pending' | 'pending_review'; revision: number }>;
+    const draft = rows[0];
+    if (!draft) throw new ConflictException('资源上传草稿已失效');
+    if (draft.draft_status !== 'open' || draft.version_status !== 'upload_pending' || new Date(draft.expires_at).getTime() <= Date.now()) {
+      throw new ConflictException({ code: 'UPLOAD_DRAFT_EXPIRED', message: '资源上传草稿已完成或过期，请重新创建。' });
+    }
+    return {
+      resource_public_id: resource.public_id,
+      resource_id: resource.id,
+      version_public_id: version.public_id,
+      upload_draft_id: draft.id,
+      expires_at: new Date(draft.expires_at).toISOString(),
+      draft_status: draft.draft_status,
+      version_status: draft.version_status,
+      revision: Number(draft.revision),
+    };
+  }
+
+  /** Complete an initial metadata-only draft after re-reading the verified RES bytes. */
+  async completeInitialDirectUpload(
+    input: { versionId: number; draftId: string; sessionId: string; objectPublicId: string; actor: { id: number; role?: string }; file: ResourceFileMeta },
+  ): Promise<{ file_public_id: string; version_public_id: string }> {
+    const version = await this.versionRepository.findOne({ where: { id: input.versionId } });
+    if (!version?.public_id) throw new NotFoundException('资源版本不存在');
+    const resource = await this.resourceRepository.findOne({ where: { id: version.resource_id } });
+    if (!resource || resource.deleted_at || resource.status !== 'draft') throw new ConflictException('初始资源草稿状态已变化');
+    if (resource.user_id !== input.actor.id && input.actor.role !== 'admin') throw new ForbiddenException('没有权限完成此资源上传');
+    const draft = await this.dataSource.getRepository(ResourceDirectUploadDraft).findOne({ where: { id: input.draftId, user_id: input.actor.id, resource_version_id: version.id } });
+    const dto = draft?.request_metadata as unknown as CreateResourceDto | null;
+    if (!draft || draft.status !== 'open' || draft.expires_at.getTime() <= Date.now() || !dto) {
+      throw new ConflictException('资源上传草稿不存在、已完成或已过期');
+    }
+    if (version.status !== 'upload_pending' || dto.version?.trim() !== version.version) throw new ConflictException('初始资源版本草稿元数据不匹配');
+    const createdResBindings: Array<{ objectId: string; bindingId: string }> = [];
+    let rendererDraft: ConsumedResourcePreviewDraft | undefined;
+    let previewStored = false;
+    try {
+      const preparedMod = await this.prepareInitialModArchive(resource.resource_kind || 'other', resource.resource_type, dto, input.file, false);
+      const contentSource = resolveOptionalContentSource(dto.content, dto.content_json, dto.content_schema_version);
+      if (contentSource) dto.content = contentSource.content;
+      if (resource.resource_kind === 'map' || resource.resource_kind === 'schematic') {
+        if (!this.resourcePreviewService) throw new BadRequestException('地图或蓝图解析服务不可用');
+        const preview = await this.resourcePreviewService.createDraft(input.actor.id, resource.resource_kind, input.file as any);
+        rendererDraft = await this.resourcePreviewService.consumeDraft(input.actor.id, preview.id, resource.resource_kind);
+        if (preview.duplicate?.exact) throw this.duplicateConflict(preview.duplicate.existing_resources[0]);
+        if (preview.duplicate?.structure && !dto.duplicate_note?.trim()) {
+          throw new ConflictException({ code: 'RESOURCE_STRUCTURE_DUPLICATE', message: '发现一个结构相同的蓝图。请说明用途或内容上的区别后继续提交。', existing_resources: preview.duplicate.existing_resources });
+        }
+      }
+      const rendererMetadata = rendererDraft?.metadata || null;
+      const structureHash = typeof rendererMetadata?.structure_hash === 'string' ? rendererMetadata.structure_hash : null;
+      const normalizedStructureHash = typeof rendererMetadata?.normalized_structure_hash === 'string' ? rendererMetadata.normalized_structure_hash : null;
+      const duplicate = this.resourceDuplicateService ? await this.resourceDuplicateService.inspect({
+        contentHash: input.file.content_hash, structureHash, normalizedStructureHash,
+        resourceKind: resource.resource_kind, sourceUrl: resource.source_url, title: resource.title,
+      }) : null;
+      if (duplicate?.exact) throw this.duplicateConflict(duplicate.existing_resources[0]);
+      if (duplicate?.structure && !dto.duplicate_note?.trim()) throw new ConflictException({
+        code: 'RESOURCE_STRUCTURE_DUPLICATE', message: '发现一个结构相同的蓝图。请说明用途或内容上的区别后继续提交。', existing_resources: duplicate.existing_resources,
+      });
+
+      const result = await this.dataSource.transaction(async (manager) => {
+        const lockedResource = await manager.findOne(Resource, { where: { id: resource.id }, lock: { mode: 'pessimistic_write' } });
+        const lockedVersion = await manager.findOne(ResourceVersion, { where: { id: version.id, resource_id: resource.id }, lock: { mode: 'pessimistic_write' } });
+        const lockedDraft = await manager.findOne(ResourceDirectUploadDraft, { where: { id: input.draftId, user_id: input.actor.id, resource_version_id: version.id, status: 'open' }, lock: { mode: 'pessimistic_write' } });
+        const lockedSession = await manager.findOne(ResourceDirectUploadSession, { where: { id: input.sessionId, user_id: input.actor.id, resource_version_id: version.id }, lock: { mode: 'pessimistic_write' } });
+        if (!lockedResource || lockedResource.status !== 'draft' || lockedResource.deleted_at
+          || !lockedVersion || lockedVersion.status !== 'upload_pending' || !lockedDraft || !lockedSession) {
+          throw new ConflictException('初始资源上传草稿状态已变化');
+        }
+        if (lockedResource.user_id !== input.actor.id && input.actor.role !== 'admin') throw new ForbiddenException('没有权限完成此资源上传');
+        if (lockedDraft.expires_at.getTime() <= Date.now() || lockedSession.expires_at.getTime() <= Date.now()
+          || lockedSession.resource_file_public_id || lockedSession.role !== 'primary'
+          || lockedSession.filename !== input.file.file_name || Number(lockedSession.size_bytes) !== input.file.file_size
+          || lockedSession.sha256 !== input.file.content_hash.toLowerCase()
+          || (lockedSession.object_public_id && lockedSession.object_public_id !== input.objectPublicId)) {
+          throw new ConflictException('上传会话或草稿已过期或与资源文件不匹配');
+        }
+        if (await manager.exists(ResourceFile, { where: { resource_version_id: version.id, role: 'primary' } })) {
+          throw new ConflictException('此版本已有主文件');
+        }
+        await this.claimContentHash(manager, input.file.content_hash, resource.id);
+        if (structureHash) await this.claimStructureHash(manager, structureHash, resource.id, dto.duplicate_note?.trim() || '');
+        Object.assign(lockedResource, {
+          file_path: null,
+          file_name: input.file.file_name,
+          file_size: input.file.file_size,
+          mime_type: input.file.mime_type,
+          content_hash: input.file.content_hash,
+          structure_hash: structureHash,
+          normalized_structure_hash: normalizedStructureHash,
+          status: RESOURCE_STATUS_PENDING,
+          renderer_status: rendererDraft ? 'ready' : lockedResource.renderer_status,
+          renderer_error_code: rendererDraft ? null : lockedResource.renderer_error_code,
+          renderer_preview_key: rendererDraft?.previewKey || null,
+          renderer_parser_version: rendererDraft?.parserVersion || null,
+          renderer_metadata_json: rendererMetadata as any,
+        });
+        await manager.update(Resource, resource.id, {
+          file_path: null as unknown as string,
+          file_name: input.file.file_name,
+          file_size: input.file.file_size,
+          mime_type: input.file.mime_type,
+          content_hash: input.file.content_hash,
+          structure_hash: structureHash,
+          normalized_structure_hash: normalizedStructureHash,
+          status: RESOURCE_STATUS_PENDING,
+          renderer_status: rendererDraft ? 'ready' : lockedResource.renderer_status,
+          renderer_error_code: rendererDraft ? null : lockedResource.renderer_error_code,
+          renderer_preview_key: rendererDraft?.previewKey || null,
+          renderer_parser_version: rendererDraft?.parserVersion || null,
+          renderer_metadata_json: rendererMetadata as any,
+        });
+        await this.createInitialV2Aggregate(
+          manager, lockedResource, dto, input.actor.id, input.file, contentSource, preparedMod || undefined,
+          createdResBindings, undefined, lockedVersion, true,
+        );
+        const primary = await manager.findOne(ResourceFile, { where: { resource_version_id: version.id, role: 'primary' } });
+        if (!primary) throw new ConflictException('资源文件记录未创建');
+        await manager.update(ResourceDirectUploadDraft, lockedDraft.id, { status: 'completed', completed_at: new Date() });
+        await manager.update(ResourceDirectUploadSession, lockedSession.id, { resource_file_public_id: primary.public_id, object_public_id: input.objectPublicId });
+        return { filePublicId: primary.public_id, resource: lockedResource };
+      });
+
+      if (rendererDraft?.previewKey && this.resourcePreviewService) {
+        try {
+          await this.resourcePreviewService.storePreviewInRes(result.resource, rendererDraft.previewKey);
+          previewStored = true;
+        } catch {
+          await this.resourceRepository.update(resource.id, { renderer_status: 'failed', renderer_error_code: 'RES_PREVIEW_UNAVAILABLE', renderer_preview_key: null });
+        }
+      }
+      return { file_public_id: result.filePublicId, version_public_id: version.public_id };
+    } catch (error) {
+      for (const binding of createdResBindings) await this.resClient?.deleteBinding(binding.objectId, binding.bindingId).catch(() => undefined);
+      throw error;
+    } finally {
+      if (rendererDraft?.previewKey && this.resourcePreviewService && !previewStored) {
+        await this.resourcePreviewService.discardConsumedDraft(rendererDraft);
+      }
+    }
+  }
+
   async create(
     dto: CreateResourceDto,
     userId: number,
@@ -247,6 +526,7 @@ export class ResourcesService {
       uploadSessionId?: string;
       idempotencyKey?: string;
       idempotencyPayload?: unknown;
+      directUploadDraft?: { idempotencyKeyHash: string; requestFingerprint: string; expiresAt: Date; requestMetadata?: Record<string, unknown> };
       origin?: { site: string; resourceId: string; url: string };
     } = {},
   ): Promise<any> {
@@ -306,17 +586,21 @@ export class ResourcesService {
       throw new BadRequestException('无效的资源类型');
     }
 
-    if (resourceType === 'upload' && !file) {
+    if (resourceType === 'upload' && !file && !provenance.directUploadDraft) {
       throw new BadRequestException('文件类资源必须上传文件');
     }
 
     if (resourceType === 'external' && !dto.external_url) {
       throw new BadRequestException('外链类资源必须填写外链地址');
     }
-    this.assertKindFileContract(resourceKind, resourceType, file?.file_name);
+    if (!provenance.directUploadDraft) this.assertKindFileContract(resourceKind, resourceType, file?.file_name);
+    if (resourceKind === 'mod' && resourceType === 'external' && file) {
+      throw new BadRequestException('外链 Mod 不能同时上传文件');
+    }
     if ((resourceKind === 'map' || resourceKind === 'schematic') && dto.external_url) {
       throw new BadRequestException('地图和蓝图只能使用本站托管文件，不能设置外链地址');
     }
+    const preparedMod = await this.prepareInitialModArchive(resourceKind, resourceType, dto, file, Boolean(provenance.directUploadDraft));
 
     const canonicalJson = dto.content_json && this.customEmojis
       ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, true)
@@ -332,7 +616,12 @@ export class ResourcesService {
         fileName: file?.file_name,
       }), { actorId: userId, surface: 'resource' })
       : this.emptyContentRisk();
-    const requiresModeration = risk.mustReview || (this.siteConfig?.isEnabled('resourcePreModeration') ?? true);
+    // Resource moderation and binary-version review are separate workflows. Even
+    // when metadata can publish immediately, each new binary stays in review.
+    const requiresModeration = Boolean(provenance.directUploadDraft) || file?.storage_backend === 'res' || risk.mustReview
+      || ['mod', 'schematic', 'map'].includes(resourceKind)
+      || Boolean(preparedMod?.idConflict)
+      || (this.siteConfig?.isEnabled('resourcePreModeration') ?? true);
 
     const newResource = this.resourceRepository.create({
       user_id: userId,
@@ -344,7 +633,7 @@ export class ResourcesService {
       summary: dto.description || null,
       visibility: this.toTinyInt((dto as any).is_public, 1) ? 'public' : 'private',
       file_name: file?.file_name,
-      file_path: file?.file_path,
+      file_path: file?.storage_backend === 'res' ? null : file?.file_path,
       file_size: file?.file_size,
       mime_type: file?.mime_type,
       content_hash: file?.content_hash,
@@ -366,7 +655,7 @@ export class ResourcesService {
       content_schema_version: contentSource?.content_schema_version || 2,
       category_id: categoryId,
       is_public: this.toTinyInt((dto as any).is_public, 1),
-      status: requiresModeration ? RESOURCE_STATUS_PENDING : RESOURCE_STATUS_APPROVED,
+      status: provenance.directUploadDraft ? 'draft' : requiresModeration ? RESOURCE_STATUS_PENDING : RESOURCE_STATUS_APPROVED,
       ...(provenance.uploadSessionId ? { game_content_upload_session_id: provenance.uploadSessionId } : {}),
       ...(provenance.rendererDraft ? {
         renderer_status: 'ready' as const,
@@ -380,6 +669,7 @@ export class ResourcesService {
       metadata_json: (dto as any).metadata ? normalizeResourceMetadata((dto as any).metadata) : null,
     } as any) as unknown as Resource;
 
+    const createdResBindings: Array<{ objectId: string; bindingId: string }> = [];
     let replayed = false;
     let saved: Resource;
     try {
@@ -416,13 +706,16 @@ export class ResourcesService {
       const resource = await manager.save(Resource, newResource);
       if (file?.content_hash) await this.claimContentHash(manager, file.content_hash, resource.id);
       if (structureHash) await this.claimStructureHash(manager, structureHash, resource.id, dto.duplicate_note?.trim() || '');
-      await this.createInitialV2Aggregate(manager, resource, dto, userId, file, contentSource);
+      await this.createInitialV2Aggregate(manager, resource, dto, userId, file, contentSource, preparedMod || undefined, createdResBindings, provenance.directUploadDraft);
       if (idempotencyKey) {
         await manager.query('UPDATE resource_submission_idempotency SET resource_id = ? WHERE user_id = ? AND idempotency_key = ?', [resource.id, userId, idempotencyKey]);
       }
         return resource;
       });
     } catch (error: any) {
+      for (const binding of createdResBindings) {
+        await this.resClient?.deleteBinding(binding.objectId, binding.bindingId).catch(() => undefined);
+      }
       const duplicateEntry = error?.code === 'ER_DUP_ENTRY' || error?.errno === 1062;
       if (provenance.origin && duplicateEntry && String(error?.message || '').includes('uq_resources_origin_identity')) {
         throw new ConflictException({
@@ -431,6 +724,15 @@ export class ResourcesService {
         });
       }
       throw error;
+    }
+
+    if (!replayed && provenance.rendererDraft?.previewKey && this.resourcePreviewService) {
+      try { await this.resourcePreviewService.storePreviewInRes(saved, provenance.rendererDraft.previewKey); }
+      catch {
+        // The resource transaction has committed. Keep the successful submission
+        // retryable via preview regeneration instead of reporting a failed create.
+        await this.resourceRepository.update(saved.id, { renderer_status: 'failed', renderer_error_code: 'RES_PREVIEW_UNAVAILABLE', renderer_preview_key: null });
+      }
     }
 
     const finalResult = await this.resourceRepository.findOne({
@@ -482,43 +784,87 @@ export class ResourcesService {
     submitterUserId: number,
     file: ResourceFileMeta | undefined,
     contentSource: ReturnType<typeof resolveOptionalContentSource>,
+    preparedMod?: PreparedModArchive,
+    createdResBindings: Array<{ objectId: string; bindingId: string }> = [],
+    directUploadDraft?: { idempotencyKeyHash: string; requestFingerprint: string; expiresAt: Date; requestMetadata?: Record<string, unknown> },
+    existingRelease?: ResourceVersion,
+    finalizingDirectDraft = false,
   ): Promise<void> {
-      const release = await manager.save(ResourceVersion, manager.create(ResourceVersion, {
+      const versionMode = dto.version_mode || (resource.resource_kind === 'mod' ? 'semver' : 'compatibility');
+      const manifest = preparedMod?.effectiveManifest || null;
+      const gameVersionMin = dto.game_version_min?.trim() || manifest?.minGameVersion || null;
+      const gameVersionMax = dto.game_version_max?.trim() || null;
+      if (preparedMod && !preparedMod.idConflict) {
+        const rows = await manager.query(
+          `SELECT resource_id FROM mod_profiles WHERE mod_id = ?
+           UNION SELECT resource_id FROM mod_id_aliases WHERE alias = ? LIMIT 1`,
+          [preparedMod.modId, preparedMod.modId],
+        ) as Array<{ resource_id: number }>;
+        if (rows.length) {
+          preparedMod.idConflict = true;
+          preparedMod.findings.push({
+            code: 'mod_id_conflict', severity: 'ERROR',
+            message: 'This Mod ID already belongs to another resource and requires moderator review.',
+          });
+          resource.status = RESOURCE_STATUS_PENDING;
+          await manager.update(Resource, resource.id, { status: RESOURCE_STATUS_PENDING });
+        }
+      }
+      const releaseValues = {
         resource_id: resource.id,
-        public_id: randomUUID(),
+        public_id: existingRelease?.public_id || randomUUID(),
         // This is strictly the resource's own release version. Mindustry build
         // compatibility is represented below in ResourceVersionCompatibility.
         version: dto.version.trim(),
-        release_channel: 'stable',
-        status: resource.status === RESOURCE_STATUS_APPROVED ? 'published' : 'pending_review',
-        ...(resource.status === RESOURCE_STATUS_APPROVED ? { published_at: new Date() } : {}),
+        version_mode: versionMode,
+        revision: existingRelease?.revision || 1,
+        recommended: 0,
+        game_version_min: gameVersionMin,
+        game_version_max: gameVersionMax,
+        release_channel: dto.release_channel || 'release',
+        // A Resource approval does not review its binary. Initial and later
+        // uploads enter the same version-scoped review queue.
+        status: directUploadDraft ? 'upload_pending' : 'pending_review',
+        published_at: null,
         release_notes_markdown: contentSource?.content.trim() || null,
         release_notes_html: contentSource?.content_html || null,
         created_by_user_id: submitterUserId,
-        file_path: file?.file_path || null,
+        file_path: file?.storage_backend === 'res' ? null : file?.file_path || null,
         file_name: file?.file_name || null,
         file_size: file?.file_size || null,
         mime_type: file?.mime_type || null,
         content_hash: file?.content_hash || null,
-      } as Partial<ResourceVersion>));
-      if (resource.status === RESOURCE_STATUS_APPROVED) {
-        await manager.update(Resource, resource.id, { latest_published_version_id: release.id });
-      }
-
+      } as Partial<ResourceVersion>;
+      const release = existingRelease
+        ? Object.assign(existingRelease, releaseValues, { id: existingRelease.id })
+        : manager.create(ResourceVersion, releaseValues);
+      if (existingRelease) await manager.update(ResourceVersion, existingRelease.id, releaseValues);
+      else await manager.save(ResourceVersion, release);
       const credits = [
         { role: 'submitter', subject_type: 'local_user', user_id: submitterUserId, display_name: null },
-        ...this.normalizeCredits(dto.original_authors).map((display_name) => ({ role: 'original_author', subject_type: 'external_person', user_id: null, display_name })),
+        ...this.normalizeCredits([...(dto.original_authors || []), ...(manifest?.author ? [manifest.author] : [])]).map((display_name) => ({ role: 'original_author', subject_type: 'external_person', user_id: null, display_name })),
         ...this.normalizeCredits(dto.maintainers).map((display_name) => ({ role: 'maintainer', subject_type: 'external_person', user_id: null, display_name })),
       ];
-      await manager.save(ResourceAttribution, credits.map((credit, sort_order) => manager.create(ResourceAttribution, {
+      if (!finalizingDirectDraft) await manager.save(ResourceAttribution, credits.map((credit, sort_order) => manager.create(ResourceAttribution, {
         resource_id: resource.id,
         ...credit,
         sort_order,
       })));
 
       const hosted = resource.resource_type === 'upload';
-      await manager.save(ResourceFile, manager.create(ResourceFile, {
-        public_id: randomUUID(),
+      const filePublicId = randomUUID();
+      let resBindingId = file?.provider_binding_id || null;
+      if (hosted && file?.storage_backend === 'res') {
+        if (!file.provider_object_id || !this.resClient) throw new BadRequestException('资源存储对象缺失');
+        const binding = await this.resClient.createBinding(file.provider_object_id, {
+          namespace: 'mindforum', owner_type: 'resource_file', owner_id: filePublicId,
+          visibility: 'private',
+        });
+        resBindingId = binding.id;
+        createdResBindings.push({ objectId: file.provider_object_id, bindingId: binding.id });
+      }
+      if (!(hosted && directUploadDraft)) await manager.save(ResourceFile, manager.create(ResourceFile, {
+        public_id: filePublicId,
         resource_version_id: release.id,
         role: 'primary',
         delivery_mode: hosted ? 'managed' : 'external',
@@ -528,12 +874,28 @@ export class ResourcesService {
         hash_algorithm: hosted ? 'sha256' : null,
         content_hash: hosted ? file?.content_hash || null : null,
         integrity_status: hosted ? 'verified' : 'unverified_legacy',
-        storage_backend: hosted ? 'local' : null,
-        storage_key: hosted ? file?.file_path || null : null,
+        storage_backend: hosted ? file?.storage_backend || 'local' : null,
+        storage_key: hosted ? (file?.storage_backend === 'res' ? `sha256:${file.content_hash}` : file?.file_path || null) : null,
+        provider_object_id: hosted && file?.storage_backend === 'res' ? file.provider_object_id : null,
+        provider_binding_id: resBindingId,
         external_url: hosted ? null : resource.external_url,
-        availability_status: hosted ? (file ? 'available' : 'unavailable') : 'available',
+        availability_status: hosted ? (file?.storage_backend === 'res' ? 'pending' : file ? 'available' : 'unavailable') : 'available',
         sort_order: 0,
       }));
+
+      if (directUploadDraft) {
+        await manager.save(ResourceDirectUploadDraft, manager.create(ResourceDirectUploadDraft, {
+          id: randomUUID(),
+          resource_version_id: release.id,
+          user_id: submitterUserId,
+          idempotency_key_hash: directUploadDraft.idempotencyKeyHash,
+          request_fingerprint: directUploadDraft.requestFingerprint,
+          request_metadata: directUploadDraft.requestMetadata || null,
+          status: 'open',
+          expires_at: directUploadDraft.expiresAt,
+          completed_at: null,
+        }));
+      }
 
       const compatibility: Array<{
         min_version_value?: string;
@@ -550,8 +912,11 @@ export class ResourcesService {
         min_version_value: String(inferredBuild), max_version_value: undefined, channel: undefined,
         notes: '基于蓝图内容自动推测', provenance: 'inferred', confidence: renderer.compatibility.confidence || 'low',
       });
-      if (compatibility.length) {
-        await manager.save(ResourceVersionCompatibility, compatibility.map((item) => manager.create(ResourceVersionCompatibility, {
+      const compatibilityToSave = finalizingDirectDraft
+        ? compatibility.filter((item) => item.provenance === 'inferred')
+        : compatibility;
+      if (compatibilityToSave.length) {
+        await manager.save(ResourceVersionCompatibility, compatibilityToSave.map((item) => manager.create(ResourceVersionCompatibility, {
           resource_version_id: release.id,
           runtime: 'mindustry',
           min_version_value: item.min_version_value?.trim() || null,
@@ -559,8 +924,194 @@ export class ResourcesService {
           channel: item.channel?.trim() || null,
           notes: item.notes?.trim() || null,
           provenance: item.provenance || 'user_declared',
-          confidence: item.confidence || null,
+        confidence: item.confidence || null,
         })));
+      }
+
+      if (!finalizingDirectDraft) await manager.save(ResourceMember, manager.create(ResourceMember, {
+        resource_id: resource.id,
+        user_id: submitterUserId,
+        role: 'owner',
+        status: 'active',
+        invited_by_user_id: null,
+        accepted_at: new Date(),
+      }));
+      if (!directUploadDraft) await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
+        resource_id: resource.id,
+        resource_version_id: release.id,
+        actor_user_id: submitterUserId,
+        event_type: 'submitted',
+        result: 'pending_review',
+        reason: null,
+      }));
+
+      const v2Compatibility = [
+        ...(gameVersionMin || gameVersionMax ? [{
+          source: 'author' as const,
+          runtime: 'mindustry',
+          platform_key: null,
+          game_version: null,
+          min_game_version: gameVersionMin,
+          max_game_version: gameVersionMax,
+          channel: dto.release_channel || 'release',
+          status: 'declared',
+          confidence: null,
+          notes: null,
+          created_by_user_id: submitterUserId,
+        }] : []),
+        ...(dto.compatibility || []).map((item) => ({
+          source: 'author' as const,
+          runtime: 'mindustry',
+          platform_key: null,
+          game_version: null,
+          min_game_version: item.min_version_value?.trim() || null,
+          max_game_version: item.max_version_value?.trim() || null,
+          channel: item.channel?.trim() || dto.release_channel || 'release',
+          status: 'declared',
+          confidence: null,
+          notes: item.notes?.trim() || null,
+          created_by_user_id: submitterUserId,
+        })),
+      ];
+      if (v2Compatibility.length && !finalizingDirectDraft) {
+        await manager.save(ResourceCompatibility, v2Compatibility.map((item) => manager.create(ResourceCompatibility, {
+          resource_version_id: release.id,
+          ...item,
+        })));
+      }
+
+      if (!directUploadDraft && (resource.resource_kind === 'schematic' || resource.resource_kind === 'map')) {
+        await persistRendererAnalysis(manager, {
+          resourceId: resource.id,
+          versionId: release.id,
+          actorId: submitterUserId,
+          kind: resource.resource_kind,
+          rendererMetadata: renderer,
+          publisherMetadata: resource.metadata_json,
+          previewKey: resource.renderer_preview_key,
+        });
+      }
+
+      if (preparedMod) {
+        if (!preparedMod.idConflict) {
+          await manager.save(ModProfile, manager.create(ModProfile, {
+            resource_id: resource.id,
+            mod_id: preparedMod.modId,
+            display_name: manifest?.displayName || dto.title,
+            runtime_type: preparedMod.analysis?.runtime_type === 'unknown' ? null : preparedMod.analysis?.runtime_type || null,
+            description: manifest?.description || dto.description || null,
+            upstream_url: dto.source_url || null,
+          }));
+          if (preparedMod.parsedModId && preparedMod.parsedModId !== preparedMod.modId) {
+            const aliasRows = await manager.query(
+              `SELECT resource_id FROM mod_profiles WHERE mod_id = ?
+               UNION SELECT resource_id FROM mod_id_aliases WHERE alias = ? LIMIT 1`,
+              [preparedMod.parsedModId, preparedMod.parsedModId],
+            ) as Array<{ resource_id: number }>;
+            if (!aliasRows.length) {
+              await manager.save(ModIdAlias, manager.create(ModIdAlias, {
+                resource_id: resource.id,
+                alias: preparedMod.parsedModId,
+                created_by_user_id: submitterUserId,
+              }));
+            } else {
+              preparedMod.idConflict = true;
+              preparedMod.findings.push({ code: 'mod_id_alias_conflict', severity: 'ERROR', message: 'The previous Mod ID belongs to another resource and requires moderator review.' });
+              resource.status = RESOURCE_STATUS_PENDING;
+              await manager.update(Resource, resource.id, { status: RESOURCE_STATUS_PENDING });
+              await manager.update(ResourceVersion, release.id, { status: 'pending_review', recommended: 0, published_at: null });
+            }
+          }
+        }
+        if (preparedMod.analysis && manifest) {
+          const parsed = preparedMod.analysis;
+          await manager.save(ModVersionMetadata, manager.create(ModVersionMetadata, {
+            resource_version_id: release.id,
+            parser_version: parsed.parser_version,
+            runtime_type: parsed.runtime_type,
+            manifest_name: parsed.manifest.name,
+            display_name: manifest.displayName,
+            author: manifest.author,
+            version: manifest.version || dto.version,
+            min_game_version: manifest.minGameVersion,
+            description: manifest.description,
+            main_class: parsed.java.entrypoint || manifest.main,
+            package_name: manifest.package,
+            parsed_manifest_json: parsed.manifest.raw,
+            author_overrides_json: dto.mod_author_overrides || null,
+            archive_files_json: parsed.files,
+          }));
+          if (parsed.content.length) await this.saveEntityBatches(manager, ModContent, parsed.content.map((item) => manager.create(ModContent, {
+            public_id: randomUUID(),
+            resource_version_id: release.id,
+            content_type: item.content_type,
+            internal_name: item.internal_name,
+            display_name: item.display_name,
+            description: item.description,
+            icon_key: item.icon_key,
+            properties_json: item.properties,
+          })));
+          if (parsed.localizations.length) await this.saveEntityBatches(manager, ModLocalization, parsed.localizations.map((item) => manager.create(ModLocalization, {
+            resource_version_id: release.id,
+            locale: item.locale,
+            translated_count: item.translated,
+            total_count: item.total,
+            percentage: item.percentage,
+            missing_keys_json: item.missing_keys,
+          })));
+
+          const dependencies = manifest.dependencies || [];
+          let targets = new Map<string, number>();
+          if (dependencies.length) {
+            const ids = [...new Set(dependencies.map((dependency) => dependency.mod_id.toLowerCase()))];
+            const targetRows = await manager.query(
+              `SELECT LOWER(mod_id) AS mod_id, resource_id FROM mod_profiles WHERE LOWER(mod_id) IN (${ids.map(() => '?').join(',')})
+               UNION SELECT LOWER(alias) AS mod_id, resource_id FROM mod_id_aliases WHERE LOWER(alias) IN (${ids.map(() => '?').join(',')})`,
+              [...ids, ...ids],
+            ) as Array<{ mod_id: string; resource_id: number }>;
+            targets = new Map(targetRows.map((row) => [row.mod_id, Number(row.resource_id)]));
+            await this.saveEntityBatches(manager, ResourceDependency, dependencies.map((dependency, sort_order) => manager.create(ResourceDependency, {
+              resource_version_id: release.id,
+              dependency_type: dependency.kind,
+              target_resource_id: targets.get(dependency.mod_id.toLowerCase()) || null,
+              external_identifier: dependency.mod_id,
+              upstream_url: null,
+              version_constraint: dependency.version_constraint,
+              resolution_status: targets.has(dependency.mod_id.toLowerCase()) ? 'resolved' : 'unresolved',
+              notes: null,
+              sort_order,
+            })));
+          }
+          await manager.save(ResourceAnalysisRun, manager.create(ResourceAnalysisRun, {
+            resource_id: resource.id,
+            resource_version_id: release.id,
+            analyzer: 'mod-static-analysis',
+            parser_version: parsed.parser_version,
+            status: 'completed',
+            summary_json: {
+              status: parsed.status,
+              runtime_type: parsed.runtime_type,
+              content_count: parsed.content.length,
+              localization_count: parsed.localizations.length,
+              java: parsed.java,
+            },
+            findings_json: [...preparedMod.findings],
+            started_at: new Date(),
+            completed_at: new Date(),
+          }));
+        } else {
+          await manager.save(ResourceAnalysisRun, manager.create(ResourceAnalysisRun, {
+            resource_id: resource.id,
+            resource_version_id: release.id,
+            analyzer: 'mod-static-analysis',
+            parser_version: 'mdtbbs-mod-static-1',
+            status: 'partial',
+            summary_json: { status: 'partial', external_source: resource.resource_type === 'external' },
+            findings_json: [...preparedMod.findings],
+            started_at: new Date(),
+            completed_at: new Date(),
+          }));
+        }
       }
   }
 
@@ -682,6 +1233,12 @@ export class ResourcesService {
   }
 
   private assertKindFileContract(kind: string, resourceType: string, fileName?: string): void {
+    if (kind === 'mod') {
+      if (resourceType === 'upload' && (!fileName || !/\.(?:jar|zip)$/i.test(fileName))) {
+        throw new BadRequestException('Mod 仅支持上传 .jar 或 .zip 文件');
+      }
+      return;
+    }
     if (kind !== 'map' && kind !== 'schematic') return;
     if (resourceType !== 'upload' || !fileName) {
       throw new BadRequestException(`${kind === 'map' ? '地图' : '蓝图'}必须上传本站托管文件`);
@@ -734,7 +1291,7 @@ export class ResourcesService {
     try {
       await this.resourceRepository.update(resourceId, {
         mfl_file_id: mflResult.id,
-        mfl_download_url: this.mflClientService.getDownloadUrl(mflResult.id),
+        mfl_download_url: this.mflClientService.getDownloadUrl(mflResult.id, mflResult.file_path),
       });
     } catch (err) {
       // The file exists on MFL but nothing will ever reference it — block it from
@@ -788,6 +1345,7 @@ export class ResourcesService {
         .addSelect('resource.filter_width', 'resource_card_width')
         .addSelect('resource.filter_height', 'resource_card_height')
         .addSelect("LEFT(JSON_UNQUOTE(JSON_EXTRACT(resource.renderer_metadata_json, '$.build')), 32)", 'resource_card_build')
+        .addSelect('resource.file_path', 'resource_card_file_path')
         .maxExecutionTime(2500)
         .where('resource.status IN (:...statuses)', { statuses: PUBLIC_RESOURCE_STATUSES })
         .andWhere('resource.is_public = :isPublic', { isPublic: 1 })
@@ -825,24 +1383,28 @@ export class ResourcesService {
       }
 
       if (planet?.trim()) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `resource.filter_planet = :resourcePlanet`,
           { resourcePlanet: planet.trim() },
         );
       }
       if (block?.trim()) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `JSON_SEARCH(resource.renderer_metadata_json, 'one', :resourceBlock, NULL, '$.block_types[*].name') IS NOT NULL`,
           { resourceBlock: block.trim() },
         );
       }
       if (width !== undefined) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `resource.filter_width = :resourceWidth`,
           { resourceWidth: width },
         );
       }
       if (height !== undefined) {
+        qb.andWhere('(resource.file_path IS NULL OR resource.file_path NOT LIKE :quarantineResourcePath)', { quarantineResourcePath: '%/.quarantine/%' });
         qb.andWhere(
           `resource.filter_height = :resourceHeight`,
           { resourceHeight: height },
@@ -875,7 +1437,7 @@ export class ResourcesService {
         // JSON metadata remains a legacy fallback until reconciliation proves
         // every historical resource has been migrated.
         qb.andWhere(
-          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
+          `(EXISTS (SELECT 1 FROM resource_versions rv INNER JOIN resource_version_compatibilities rvc ON rvc.resource_version_id = rv.id WHERE rv.resource_id = resource.id AND rv.status = 'published' AND rvc.runtime = 'mindustry' AND (rvc.min_version_value IS NULL OR rvc.min_version_value <= :supportedVersion) AND (rvc.max_version_value IS NULL OR rvc.max_version_value >= :supportedVersion)) OR JSON_CONTAINS(resource.metadata_json, JSON_QUOTE(:supportedVersion), '$.supported_versions'))`,
           { supportedVersion: supported_version.trim() },
         );
       }
@@ -912,6 +1474,8 @@ export class ResourcesService {
         return Object.assign(entity, {
           description: row?.resource_card_description || null,
           renderer_summary: { width: row?.resource_card_width, height: row?.resource_card_height, build: row?.resource_card_build },
+          unreviewed_quarantined_binary: typeof row?.resource_card_file_path === 'string'
+            && /[\\/]\.quarantine[\\/]/.test(row.resource_card_file_path),
           ...(options.trendingOnly ? { trending_score: Number(row?.trending_score) || 0 } : {}),
         });
       });
@@ -1095,12 +1659,37 @@ export class ResourcesService {
   async getForFileAccess(id: number, viewer?: { id: number; role: string }): Promise<Resource> {
     const resource = await this.resourceRepository.findOne({
       where: { id },
-      select: ['id', 'user_id', 'category_id', 'status', 'is_public', 'resource_kind', 'resource_type',
+      select: ['id', 'public_id', 'user_id', 'category_id', 'status', 'is_public', 'visibility', 'resource_kind', 'resource_type',
         'file_path', 'file_name', 'file_size', 'mime_type', 'content_hash', 'use_mfl', 'mfl_download_url',
-        'external_url', 'renderer_status', 'renderer_preview_key'],
+        'external_url', 'renderer_status', 'renderer_preview_key', 'renderer_preview_object_id', 'renderer_preview_binding_id', 'latest_published_version_id'],
     });
     if (!resource) throw new NotFoundException('资源不存在');
     await this.assertResourceVisible(resource, viewer);
+    const publishedVersion = resource.latest_published_version_id
+      ? await this.versionRepository.findOne({
+        where: { id: resource.latest_published_version_id, resource_id: id, status: 'published' },
+      })
+      : null;
+    if (publishedVersion) {
+      resource.file_path = publishedVersion.file_path;
+      resource.file_name = publishedVersion.file_name;
+      resource.file_size = publishedVersion.file_size;
+      resource.mime_type = publishedVersion.mime_type;
+      resource.content_hash = publishedVersion.content_hash;
+    } else {
+      const initialBinaryIsQuarantined = Boolean(resource.file_path && /[\\/]\.quarantine[\\/]/.test(resource.file_path));
+      if (initialBinaryIsQuarantined) {
+        // Resource-level moderation does not publish a binary. Never let the
+        // legacy default download path expose an initial version awaiting review.
+        (resource as any).file_path = null;
+      }
+      if (initialBinaryIsQuarantined && !await this.canViewUnpublishedVersions(resource, viewer)) {
+        // Initial map/schematic previews are derived from the submitted bytes;
+        // root Resource approval must not expose them before version approval.
+        resource.renderer_status = 'unavailable';
+        resource.renderer_preview_key = null;
+      }
+    }
     return resource;
   }
 
@@ -1131,14 +1720,18 @@ export class ResourcesService {
 
     await this.assertResourceVisible(resource, viewer);
 
+    const canViewUnpublished = await this.canViewUnpublishedVersions(resource, viewer);
     const versions = await this.versionRepository.find({
       where: { resource_id: id },
       order: { created_at: 'DESC' },
     });
-    const compatibilities = versions.length ? await this.dataSource.query(
+    const visibleVersions = canViewUnpublished
+      ? versions
+      : versions.filter((version) => version.status === 'published');
+    const compatibilities = visibleVersions.length ? await this.dataSource.query(
       `SELECT resource_version_id, runtime, min_version_value, max_version_value, channel, notes, provenance, confidence
-       FROM resource_version_compatibilities WHERE resource_version_id IN (${versions.map(() => '?').join(',')})
-       ORDER BY id ASC`, versions.map(({ id: versionId }) => versionId),
+       FROM resource_version_compatibilities WHERE resource_version_id IN (${visibleVersions.map(() => '?').join(',')})
+       ORDER BY id ASC`, visibleVersions.map(({ id: versionId }) => versionId),
     ) : [];
     const byVersion = new Map<number, any[]>();
     for (const item of compatibilities || []) {
@@ -1148,9 +1741,19 @@ export class ResourcesService {
         channel: item.channel, notes: item.notes, provenance: item.provenance, confidence: item.confidence });
       byVersion.set(versionId, rows);
     }
-    return this.normalizeOneResource(resource, versions.map((version) => ({ ...version,
+    return this.normalizeOneResource(resource, visibleVersions.map((version) => ({ ...version,
       compatibility: byVersion.get(version.id) || [],
     } as ResourceVersion)));
+  }
+
+  private async canViewUnpublishedVersions(resource: Resource, viewer?: { id: number; role: string }): Promise<boolean> {
+    if (!viewer) return false;
+    if (['admin', 'moderator'].includes(viewer.role) || Number(resource.user_id) === Number(viewer.id)) return true;
+    const rows = await this.dataSource.query(
+      `SELECT role FROM resource_members WHERE resource_id=? AND user_id=? AND status='active' LIMIT 1`,
+      [resource.id, viewer.id],
+    ) as Array<{ role: string }>;
+    return ['owner', 'maintainer', 'publisher'].includes(String(rows[0]?.role || ''));
   }
 
   async getTransferExportData(id: number, viewer: { id: number; role: string }): Promise<any> {
@@ -1310,7 +1913,10 @@ export class ResourcesService {
 
   async mergeResource(sourceId: number, targetId: number, adminUserId: number) {
     if (sourceId === targetId) throw new BadRequestException('来源资源和目标资源不能相同');
-    return this.dataSource.transaction(async (manager) => {
+    let previousSource: Resource | null = null;
+    let previousTarget: Resource | null = null;
+    try {
+    return await this.dataSource.transaction(async (manager) => {
       const locked = await manager.query('SELECT * FROM resources WHERE id IN (?, ?) ORDER BY id FOR UPDATE', [sourceId, targetId]);
       const source = locked.find((row: any) => Number(row.id) === sourceId);
       const target = locked.find((row: any) => Number(row.id) === targetId);
@@ -1453,12 +2059,23 @@ export class ResourcesService {
       if (present.has('resource_structure_hash_claims')) {
         await safely('resource_structure_hash_claims', 'UPDATE resource_structure_hash_claims SET resource_id = ? WHERE resource_id = ?', [targetId, sourceId]);
       }
+      previousSource = source as Resource;
+      previousTarget = target as Resource;
+      await this.setResourceStorageVisibility({ ...source, status: 'merged', is_public: 0, visibility: 'private' } as Resource, 'private', manager);
+      await this.setResourceStorageVisibility({ ...target, ...updates } as Resource, targetPublic ? 'public' : 'private', manager);
       await manager.query(`UPDATE resources SET status = 'merged', is_public = 0, visibility = 'private', merged_into_resource_id = ?, updated_at = NOW()
         WHERE id = ?`, [targetId, sourceId]);
       await manager.query(`INSERT INTO resource_merge_logs (source_resource_id, target_resource_id, admin_user_id, migrated_counts)
         VALUES (?, ?, ?, ?)`, [sourceId, targetId, adminUserId, JSON.stringify({ ...migrated, preview_counts: counts, version_collision_mappings: versionCollisionMappings })]);
       return { source_id: sourceId, target_id: targetId, status: 'merged', migrated_counts: migrated, version_collision_mappings: versionCollisionMappings };
     });
+    } catch (error) {
+      for (const resource of [previousSource, previousTarget] as Array<Resource | null>) {
+        if (resource) await this.setResourceStorageVisibility(resource,
+          PUBLIC_RESOURCE_STATUSES.includes(resource.status as any) ? 'public' : 'private').catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   async getRelatedResources(id: number, limit = 6): Promise<any[]> {
@@ -1643,7 +2260,11 @@ export class ResourcesService {
       : undefined;
     if (contentSource) dto.content = contentSource.content;
 
-    const updateResult = await this.dataSource.transaction(async (manager) => {
+    let previousStorageResource: Resource | null = null;
+    let updateResult: { resource: Resource; risk: ContentRisk; needsModerationNotice: boolean };
+    try {
+    updateResult = await this.dataSource.transaction(async (manager) => {
+      await manager.query('SELECT id FROM resources WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id]);
       const resource = await manager.findOne(Resource, {
         where: { id },
         relations: ['user'],
@@ -1749,6 +2370,12 @@ export class ResourcesService {
         updateData.status = 'pending';
       }
 
+      if (updateData.status !== undefined || updateData.is_public !== undefined) {
+        previousStorageResource = resource;
+        const next = { ...resource, ...updateData } as Resource;
+        await this.setResourceStorageVisibility(next, PUBLIC_RESOURCE_STATUSES.includes(next.status as any) ? 'public' : 'private', manager);
+      }
+
       await manager.update(Resource, id, updateData);
 
       const result = await manager.findOne(Resource, {
@@ -1766,6 +2393,14 @@ export class ResourcesService {
         needsModerationNotice: updateData.status === RESOURCE_STATUS_PENDING && resource.status !== RESOURCE_STATUS_PENDING,
       };
     });
+
+    } catch (error) {
+      if (previousStorageResource) {
+        const previous = previousStorageResource as Resource;
+        await this.setResourceStorageVisibility(previous, PUBLIC_RESOURCE_STATUSES.includes(previous.status as any) ? 'public' : 'private').catch(() => undefined);
+      }
+      throw error;
+    }
 
     if (this.contentSafety) {
       await this.contentSafety.recordFlag({
@@ -1835,15 +2470,19 @@ export class ResourcesService {
    * `resources` yet.
    */
   private async softDeleteResource(resource: Resource): Promise<void> {
-    if (resource.use_mfl && resource.mfl_file_id) {
-      await this.mflClientService.blockDownloads(
-        resource.mfl_file_id,
-        resource.id,
-        'the forum resource was deleted',
-      );
+    const priorVisibility = PUBLIC_RESOURCE_STATUSES.includes(resource.status as any) && Number(resource.is_public) === 1 && resource.visibility !== 'private' ? 'public' : 'private';
+    try {
+      await this.setResFileVisibility(resource.id, 'private');
+      await this.resourcePreviewService?.setResPreviewVisibility(resource, 'private');
+      if (resource.use_mfl && resource.mfl_file_id) {
+        await this.mflClientService.blockDownloads(resource.mfl_file_id, resource.id, 'the forum resource was deleted');
+      }
+      await this.resourceRepository.softDelete(resource.id);
+    } catch (error) {
+      await this.setResFileVisibility(resource.id, priorVisibility).catch(() => undefined);
+      await this.resourcePreviewService?.setResPreviewVisibility(resource, priorVisibility).catch(() => undefined);
+      throw error;
     }
-
-    await this.resourceRepository.softDelete(resource.id);
     if (resource.content_hash) await this.releaseContentHashClaim(resource.content_hash);
     if (resource.structure_hash) await this.releaseStructureHashClaim(resource.structure_hash);
   }
@@ -1884,22 +2523,66 @@ export class ResourcesService {
     }
   }
 
-  private async promoteResourceFile(filePath: string | null | undefined): Promise<string | null | undefined> {
-    if (!this.resourceStorageService || !filePath) return filePath;
-    try {
-      return await this.resourceStorageService.promote(filePath);
-    } catch (error: any) {
-      if (error?.code === 'ENOENT') {
-        throw new UnprocessableEntityException('资源文件不存在或已失效，请重新上传后再审核');
+  private async setResFileVisibility(resourceId: number, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
+    const files = manager ? (await manager.query(
+      `SELECT file.* FROM resource_files file INNER JOIN resource_versions version ON version.id=file.resource_version_id
+       WHERE version.resource_id=? AND file.storage_backend='res' FOR UPDATE`, [resourceId],
+    ) as ResourceFile[]).filter((file) => file.storage_backend === 'res') : await this.resourceFileRepository.createQueryBuilder('file')
+      .innerJoin(ResourceVersion, 'version', 'version.id = file.resource_version_id')
+      .where('version.resource_id = :resourceId', { resourceId })
+      .andWhere('file.storage_backend = :backend', { backend: 'res' })
+      .getMany();
+    const versions = files.length ? (manager
+      ? await manager.find(ResourceVersion, { where: { resource_id: resourceId } })
+      : await this.versionRepository.find({ where: { resource_id: resourceId }, order: { created_at: 'DESC', id: 'DESC' } })) : [];
+    for (const file of files) {
+      if (!file.provider_object_id || !this.resClient) throw new BadRequestException('资源存储对象缺失');
+      const version = versions.find((item) => item.id === file.resource_version_id);
+      const eligible = version?.status === 'published';
+      const fileVisibility = visibility === 'public' && eligible ? 'public' : 'private';
+      const binding = await this.resClient.createBinding(file.provider_object_id, {
+        namespace: 'mindforum', owner_type: 'resource_file', owner_id: file.public_id, visibility: fileVisibility,
+      });
+      if (file.provider_binding_id !== binding.id) {
+        if (manager) await manager.update(ResourceFile, file.id, { provider_binding_id: binding.id });
+        else await this.resourceFileRepository.update(file.id, { provider_binding_id: binding.id });
       }
-      throw error;
+      const availability = eligible ? 'available' : 'pending';
+      if (manager) await manager.update(ResourceFile, file.id, { availability_status: availability });
+      else await this.resourceFileRepository.update(file.id, { availability_status: availability });
     }
+  }
+
+  async setResourceStorageVisibility(resource: Resource, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
+    if (Number(resource.is_public) !== 1 || resource.visibility === 'private') visibility = 'private';
+    await this.setResFileVisibility(resource.id, visibility, manager);
+    await this.resourcePreviewService?.setResPreviewVisibility(resource, visibility, manager);
+  }
+
+  async findStoredDownloadFile(resourceId: number, versionId?: number, viewer?: { id: number; role: string }): Promise<{ version: ResourceVersion; file: ResourceFile } | null> {
+    const version = versionId
+      ? await this.versionRepository.findOne({ where: { id: versionId, resource_id: resourceId } })
+      : (await this.versionRepository.find({ where: { resource_id: resourceId, status: 'published' }, order: { published_at: 'DESC', revision: 'DESC', id: 'DESC' }, take: 1 }))[0];
+    if (!version) return null;
+    if (version.status !== 'published') {
+      const resource = await this.resourceRepository.findOne({ where: { id: resourceId } });
+      let allowed = Boolean(viewer && resource && (Number(resource.user_id) === Number(viewer.id) || ['admin', 'moderator'].includes(viewer.role)));
+      if (!allowed && viewer) {
+        const rows = await this.dataSource.query(
+          "SELECT role FROM resource_members WHERE resource_id=? AND user_id=? AND status='active' LIMIT 1", [resourceId, viewer.id],
+        ) as Array<{ role: string }>;
+        allowed = ['owner', 'maintainer', 'publisher'].includes(rows[0]?.role || '');
+      }
+      if (!allowed) throw new NotFoundException('资源版本不存在');
+    }
+    const file = await this.resourceFileRepository.findOne({ where: { resource_version_id: version.id, role: 'primary' }, order: { sort_order: 'ASC', id: 'ASC' } });
+    return file ? { version, file } : null;
   }
 
   async updateStatus(
     id: number,
     status: string,
-    options: { actorUsername?: string | null; rejectReason?: string | null } = {},
+    options: { actorUsername?: string | null; actorUserId?: number | null; rejectReason?: string | null } = {},
   ): Promise<any> {
     const validStatuses: string[] = [
       RESOURCE_STATUS_PENDING,
@@ -1920,24 +2603,6 @@ export class ResourcesService {
     }
 
     if (existingResource.status !== status) {
-      if (status === RESOURCE_STATUS_APPROVED && this.resourceStorageService) {
-        const promotedResourcePath = await this.promoteResourceFile(existingResource.file_path);
-        if (typeof promotedResourcePath === 'string' && promotedResourcePath !== existingResource.file_path) {
-          await this.resourceRepository.update(id, { file_path: promotedResourcePath });
-          existingResource.file_path = promotedResourcePath;
-        }
-        const versions = await this.versionRepository.find({ where: { resource_id: id } });
-        for (const version of versions) {
-          const promotedVersionPath = await this.promoteResourceFile(version.file_path);
-          if (typeof promotedVersionPath === 'string' && promotedVersionPath !== version.file_path) {
-            await this.versionRepository.update(version.id, { file_path: promotedVersionPath });
-            await this.resourceFileRepository.update(
-              { resource_version_id: version.id, role: 'primary' },
-              { storage_key: promotedVersionPath },
-            );
-          }
-        }
-      }
       const updateData: Partial<Resource> = { status };
       if (status === RESOURCE_STATUS_REJECTED) {
         updateData.reject_reason = options.rejectReason || null;
@@ -1955,7 +2620,12 @@ export class ResourcesService {
           .orderBy('resource.id', 'ASC').getOne();
         if (conflicting) throw this.duplicateConflict({ id: conflicting.id, public_id: conflicting.public_id, title: conflicting.title, status: conflicting.status, is_public: Number(conflicting.is_public), category_visible: !conflicting.category_id || Number(conflicting.category?.is_active) === 1, url: `/resources/${conflicting.id}` });
       }
+      const resVisibility = status === RESOURCE_STATUS_APPROVED && Number(existingResource.is_public) === 1 && existingResource.visibility !== 'private' ? 'public' : 'private';
+      try {
       await this.dataSource.transaction(async (manager) => {
+        await manager.query('SELECT id FROM resources WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id]);
+        await this.setResFileVisibility(id, resVisibility, manager);
+        await this.resourcePreviewService?.setResPreviewVisibility({ ...existingResource, ...updateData } as Resource, resVisibility, manager);
         await manager.update(Resource, id, updateData);
         if (status !== RESOURCE_STATUS_REJECTED && existingResource.content_hash) {
           await this.claimContentHash(manager, existingResource.content_hash, id);
@@ -1963,10 +2633,16 @@ export class ResourcesService {
         if (status !== RESOURCE_STATUS_REJECTED && existingResource.structure_hash) {
           await this.claimStructureHash(manager, existingResource.structure_hash, id, existingResource.duplicate_note || '');
         }
+        await this.syncLatestV2ReleaseStatus(manager, id, status, options.actorUserId || null, options.rejectReason || null);
       });
+      } catch (error) {
+        const oldVisibility = PUBLIC_RESOURCE_STATUSES.includes(existingResource.status as any) && Number(existingResource.is_public) === 1 && existingResource.visibility !== 'private' ? 'public' : 'private';
+        await this.setResFileVisibility(id, oldVisibility).catch(() => undefined);
+        await this.resourcePreviewService?.setResPreviewVisibility(existingResource, oldVisibility).catch(() => undefined);
+        throw error;
+      }
       if (status === RESOURCE_STATUS_REJECTED && existingResource.content_hash) await this.releaseContentHashClaim(existingResource.content_hash);
       if (status === RESOURCE_STATUS_REJECTED && existingResource.structure_hash) await this.releaseStructureHashClaim(existingResource.structure_hash);
-      await this.syncLatestV2ReleaseStatus(id, status);
 
       // Sync approval status to MFL if applicable
       if (existingResource.use_mfl && existingResource.mfl_file_id) {
@@ -2025,10 +2701,24 @@ export class ResourcesService {
       );
 
       if (status === RESOURCE_STATUS_APPROVED) {
-        if (resource.renderer_status !== 'ready' && this.resourcePreviewService?.supports(resource)) {
-          void this.resourcePreviewService.enqueue(resource).catch((err) =>
-            console.error(`Resource preview enqueue error for ${resource.id}:`, err),
-          );
+        const latestPublishedVersion = await this.versionRepository.findOne({
+          where: { resource_id: id, status: 'published' },
+          order: { published_at: 'DESC', created_at: 'DESC', revision: 'DESC', id: 'DESC' },
+        });
+        if (latestPublishedVersion?.file_path) {
+          const publishedResource = {
+            ...resource,
+            file_path: latestPublishedVersion.file_path,
+            file_name: latestPublishedVersion.file_name,
+            file_size: latestPublishedVersion.file_size,
+            mime_type: latestPublishedVersion.mime_type,
+            content_hash: latestPublishedVersion.content_hash,
+          };
+          if (publishedResource.renderer_status !== 'ready' && this.resourcePreviewService?.supports(publishedResource)) {
+            void this.resourcePreviewService.enqueue(publishedResource).catch((err) =>
+              console.error(`Resource preview enqueue error for ${publishedResource.id}:`, err),
+            );
+          }
         }
         this.resourceSubscriptionsService?.notifyResourceUpdate(resource)
           .catch((err) => console.error('Resource subscriber notification error:', err));
@@ -2046,28 +2736,23 @@ export class ResourcesService {
     return updated ? this.normalizeOneResource(updated) : null;
   }
 
-  /** Keep the resource-level moderation workflow projected onto its latest release. */
-  private async syncLatestV2ReleaseStatus(resourceId: number, resourceStatus: string): Promise<void> {
-    const latest = await this.versionRepository.find({
-      where: { resource_id: resourceId },
-      order: { created_at: 'DESC', id: 'DESC' },
-      take: 1,
-    });
-    const release = latest[0];
-    if (!release) return;
-
-    if (resourceStatus === RESOURCE_STATUS_APPROVED) {
-      await this.versionRepository.update(release.id, {
-        status: 'published',
-        published_at: new Date(),
-      } as Partial<ResourceVersion>);
-      await this.resourceRepository.update(resourceId, {
-        latest_published_version_id: release.id,
-      });
-    } else if (resourceStatus === RESOURCE_STATUS_REJECTED) {
-      await this.versionRepository.update(release.id, {
-        status: 'rejected',
-      } as Partial<ResourceVersion>);
+  /** Resource approval is separate from reviewing any uploaded binary version. */
+  private async syncLatestV2ReleaseStatus(manager: EntityManager, resourceId: number, resourceStatus: string, actorUserId: number | null, reason: string | null): Promise<void> {
+    const rows = await manager.query(
+      `SELECT id,release_channel FROM resource_versions WHERE resource_id = ? AND public_id IS NOT NULL
+       ORDER BY created_at DESC, revision DESC, id DESC LIMIT 1 FOR UPDATE`,
+      [resourceId],
+    ) as Array<{ id: number; release_channel: string }>;
+    const release = rows[0];
+    if (resourceStatus === RESOURCE_STATUS_APPROVED || resourceStatus === RESOURCE_STATUS_REJECTED) {
+      await manager.save(ResourceReviewEvent, manager.create(ResourceReviewEvent, {
+        resource_id: resourceId,
+        resource_version_id: release ? Number(release.id) : null,
+        actor_user_id: actorUserId,
+        event_type: resourceStatus === RESOURCE_STATUS_APPROVED ? 'resource_approved' : 'resource_rejected',
+        result: resourceStatus,
+        reason: resourceStatus === RESOURCE_STATUS_REJECTED ? reason : null,
+      }));
     }
   }
 

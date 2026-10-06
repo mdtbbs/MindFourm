@@ -78,6 +78,7 @@ authTest.describe('Resource Submission Flow', () => {
         title,
         resource_type: 'external',
         resource_kind: 'mod',
+        mod_id: `e2e-resource-discussion-${stamp}`,
         version: '1.0.0',
         is_public: '1',
         external_url: `https://example.com/e2e/resource-discussion/${stamp}`,

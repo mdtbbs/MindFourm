@@ -133,6 +133,13 @@ describe('collectConfigIssues', () => {
     expect(withEasyManager.errors.join(' ')).toContain('EASYMANAGER_API_KEY is required');
   });
 
+  it('requires enabled ResourceStorage credentials and an HTTPS URL in production', () => {
+    const { errors } = collectConfigIssues(makeConfig({ res: { enabled: true, baseUrl: 'http://res.example.com', apiKey: '' } }));
+    expect(errors).toContain('RES_API_KEY is required in production (RES_ENABLED=true)');
+    expect(errors).toContain('RES_BASE_URL must use HTTPS in production');
+    expect(collectConfigIssues(makeConfig({ res: { enabled: false, baseUrl: '', apiKey: '' } })).errors).toEqual([]);
+  });
+
   it('requires the shared Relay credentials and Agent allowlist when any Relay setting is configured in production', () => {
     const { errors } = collectConfigIssues(makeConfig({ multiplayer: {
       relayCredentialSecret: 'credential-secret-that-is-at-least-32-bytes',

@@ -13,19 +13,32 @@ java {
 application { mainClass = 'cn.mdtbbs.renderer.MapRenderer' }
 
 tasks.register('rendererRegression', JavaExec) {
-    dependsOn(tasks.named('testClasses'))
+    dependsOn(tasks.named('testClasses'), tasks.named('copyMindustryAssets'))
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'cn.mdtbbs.renderer.RendererVisualRegression'
+    environment 'ASSETS_ROOT', textureAssetsDir.absolutePath
+    jvmArgs '-Djava.awt.headless=true'
 }
 tasks.named('test') { dependsOn(tasks.named('rendererRegression')) }
 
 // Keep this runtime current: MapIO cannot read save formats introduced after
 // the bundled Mindustry build.  The forum preview service must be able to
 // render maps authored by the current official client.
-def mindustryVersion = findProperty('mindustryVersion') ?: 'v160.2'
+// Keep renderer parsing and fixture verification reproducible across CI and local builds.
+def mindustryVersion = 'v160.2'
+def mindustryServerSha256 = 'fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57'
+def mindustryDesktopSha256 = '7f210295dfffb4c17b582b27bab41f4dde83f557f00f0877572fdac943f40539'
 def mindustryJar = file("$buildDir/deps/server-release-${mindustryVersion}.jar")
 def mindustryDesktopJar = file("$buildDir/deps/Mindustry-${mindustryVersion}.jar")
 def textureAssetsDir = file("$buildDir/assets")
+
+def verifySha256 = { File artifact, String expected ->
+    def actual = java.security.MessageDigest.getInstance('SHA-256').digest(artifact.bytes)
+        .collect { String.format('%02x', it) }.join()
+    if (actual != expected) {
+        throw new GradleException("SHA-256 mismatch for ${artifact.name}: expected ${expected}, got ${actual}")
+    }
+}
 
 repositories { mavenCentral() }
 
@@ -38,6 +51,7 @@ tasks.register('downloadMindustry') {
                 mindustryJar.withOutputStream { output -> output << input }
             }
         }
+        verifySha256(mindustryJar, mindustryServerSha256)
     }
 }
 
@@ -51,6 +65,7 @@ tasks.register('downloadMindustryDesktop') {
                 mindustryDesktopJar.withOutputStream { output -> output << input }
             }
         }
+        verifySha256(mindustryDesktopJar, mindustryDesktopSha256)
     }
 }
 

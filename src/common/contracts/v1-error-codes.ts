@@ -17,6 +17,18 @@ export type V1ErrorCodeDefinition = {
 };
 
 export const V1_ERROR_CODES: Record<string, V1ErrorCodeDefinition> = {
+  RESOURCE_STORAGE_UNAVAILABLE: {
+    code: 'RESOURCE_STORAGE_UNAVAILABLE', httpStatus: 503, retryable: true,
+    defaultMessage: '资源存储服务暂不可用，请稍后重试', description: 'RES is disabled, unavailable, timed out, or service credentials were rejected.',
+  },
+  RESOURCE_STORAGE_OBJECT_NOT_FOUND: {
+    code: 'RESOURCE_STORAGE_OBJECT_NOT_FOUND', httpStatus: 404, retryable: false,
+    defaultMessage: '资源存储对象不存在', description: 'The referenced RES object does not exist.',
+  },
+  RESOURCE_STORAGE_REJECTED: {
+    code: 'RESOURCE_STORAGE_REJECTED', httpStatus: 422, retryable: false,
+    defaultMessage: '资源存储对象校验失败', description: 'RES rejected the request or returned invalid object metadata.',
+  },
   DOC_NOT_FOUND: {
     code: 'DOC_NOT_FOUND', httpStatus: 404, retryable: false,
     defaultMessage: '文档页面不存在',

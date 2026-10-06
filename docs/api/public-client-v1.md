@@ -215,6 +215,25 @@ if (status !in 200..299) error("Forum API returned $status: $body")
 connection.disconnect()
 ```
 
+### Python 3.11+
+
+```python
+import os
+import requests
+
+forum_base_url = os.environ["FORUM_BASE_URL"].rstrip("/")
+access_token = os.environ["ACCESS_TOKEN"]
+response = requests.get(
+    f"{forum_base_url}/api/v1/me",
+    headers={"Authorization": f"Bearer {access_token}"},
+    timeout=10,
+)
+if not response.ok:
+    body = response.json()
+    raise RuntimeError(f"Forum API returned {response.status_code}: {body.get('error', {}).get('code', 'REQUEST_FAILED')}")
+me = response.json()
+```
+
 成功的 JSON 响应默认使用 V1 响应封装；数组型旧响应可能直接返回数组，同时由 `meta.pagination` 提供分页。错误处理应依据 HTTP 状态码和 `error.code`。
 
 ## 兼容与迁移

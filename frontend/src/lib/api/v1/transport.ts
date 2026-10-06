@@ -165,14 +165,61 @@ export async function requestV1<T>(path: string, init: RequestInit): Promise<T> 
     await fetch(buildPublicApiUrl('/api/auth/check'), { credentials: 'include' }).catch(() => undefined);
     csrf = document.cookie.split('; ').find((item) => item.startsWith('csrf_token='))?.slice('csrf_token='.length);
   }
+  const isMultipart = typeof FormData !== 'undefined' && init.body instanceof FormData;
   return fetchV1<T>(path, {
     init: {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        ...(isMultipart ? {} : { 'Content-Type': 'application/json' }),
         ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
         ...(init.headers as Record<string, string> | undefined),
       },
     },
   });
+}
+
+/** Build the API host's WebSocket endpoint using the same base as V1 fetches. */
+export function buildV1WebSocketUrl(path: string): string {
+  const url = new URL(buildPublicApiUrl(path), typeof window === 'undefined' ? 'http://127.0.0.1' : window.location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
+
+/** V1 mutation helper for endpoints that return a raw file instead of JSON. */
+export async function requestV1Blob(path: string, init: RequestInit): Promise<Blob> {
+  let csrf = typeof document === 'undefined'
+    ? undefined
+    : document.cookie.split('; ').find((item) => item.startsWith('csrf_token='))?.slice('csrf_token='.length);
+  if (!csrf && typeof document !== 'undefined') {
+    await fetch(buildPublicApiUrl('/api/auth/check'), { credentials: 'include' }).catch(() => undefined);
+    csrf = document.cookie.split('; ').find((item) => item.startsWith('csrf_token='))?.slice('csrf_token='.length);
+  }
+  const response = await fetch(buildV1ApiUrl(path), {
+    ...init,
+    headers: {
+      Accept: 'application/octet-stream',
+      ...(init.body && !(typeof FormData !== 'undefined' && init.body instanceof FormData)
+        ? { 'Content-Type': 'application/json' }
+        : {}),
+      ...(csrf ? { 'X-CSRF-Token': decodeURIComponent(csrf) } : {}),
+      ...(init.headers as Record<string, string> | undefined),
+    },
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    let errorBody: V1ErrorBody | null = null;
+    try { errorBody = await response.json() as V1ErrorBody; } catch { /* non-JSON proxy errors */ }
+    if (errorBody?.error) {
+      throw new V1ApiError(
+        errorBody.error.code,
+        response.status,
+        errorBody.error.retryable,
+        errorBody.error.details ?? [],
+        errorBody.error.message,
+      );
+    }
+    throw new V1ApiError('HTTP_ERROR', response.status, response.status >= 500, [], response.statusText || `HTTP ${response.status}`);
+  }
+  return response.blob();
 }

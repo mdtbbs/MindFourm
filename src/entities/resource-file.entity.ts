@@ -61,6 +61,13 @@ export class ResourceFile {
   @Column({ type: 'int', nullable: true })
   provider_file_id: number | null;
 
+  /** ResourceStorage public_id; historic provider_file_id remains the MFL integer. */
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  provider_object_id: string | null;
+
+  @Column({ type: 'varchar', length: 128, nullable: true })
+  provider_binding_id: string | null;
+
   @Column({ type: 'varchar', length: 500, nullable: true })
   external_url: string | null;
 

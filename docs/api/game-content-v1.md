@@ -257,6 +257,20 @@ GET /api/v1/game-content/tags
 搜索限流：`60 / 60s`。
 标签限流：`60 / 60s`。
 
+## Mod Content 索引（新增 V2 读取面）
+
+以下路径使用相同的 `/api/v1/game-content` 前缀，给客户端提供 Mod 版本级静态 Content 索引；不会改变本页前述蓝图/地图接口的 DTO、ID 或下载行为：
+
+```http
+GET /api/v1/game-content/content/search?q=conveyor&type=block&limit=20
+GET /api/v1/game-content/content/{content_public_id}
+GET /api/v1/game-content/content/by-name/{type}/{internalName}
+```
+
+`search` 要求非空 `q`（最多 255 字符），可选 `type`（最多 50 字符）。Content public UUID 稳定标识单条内容；`by-name` 接受当前 `internal_name` 或已登记的历史 alias，可返回多个资源/版本。查询只返回公开、已审核 Resource 的已发布 Mod 版本；响应使用 `{ data, meta }` V1 包装，列表 `data` 是 `{ items, pagination: { next_cursor, has_more } }`。`limit` 默认为 20、最大 100，游标只应原样传回。
+
+每个 Content 对象包含 `public_id`、`content_type`、`internal_name`、展示名/说明、结构化 `properties`、所属资源摘要和 `version_public_id`。内部图标键、文件存储位置及数据库数字 ID 不会进入公开 DTO；没有可信公开图标地址时 `icon_url` 为 `null`。携带 MindAuth Bearer 时需要 `resource.read` scope，限流为 `60 / 60s`。完整 DTO 和错误示例见[Resource Center V2 契约](../resource-center-v2.md)。
+
 ## 提交蓝图
 
 ```http

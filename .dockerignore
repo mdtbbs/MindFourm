@@ -10,7 +10,10 @@ docker-compose*.yml
 .git
 .gitignore
 *.md
-docs/
+docs/*
+!docs/api/
+docs/api/*
+!docs/api/*.md
 tests/
 playwright-report/
 test-results/

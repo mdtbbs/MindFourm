@@ -635,8 +635,49 @@ export class MultiplayerService implements OnModuleInit, OnModuleDestroy {
   async listInvites(userId: number) {
     await this.requireEnabled('multiplayer_sessions_v1');
     await this.requireEnabled('multiplayer_invites_v1');
-    const rows = await this.invites.find({ where: { target_user_id: userId, status: 'pending' }, order: { created_at: 'DESC' }, take: 50 });
+    const rows = await this.invites.find({ where: { target_user_id: userId, status: 'pending', expires_at: MoreThan(new Date()) }, order: { created_at: 'DESC' }, take: 50 });
     return Promise.all(rows.map(async (invite) => this.toPublicInvite(invite, await this.sessions.findOneBy({ id: invite.session_id }))));
+  }
+
+  async listJoinRequests(ownerId: number) {
+    await this.requireEnabled('multiplayer_sessions_v1');
+    await this.requireEnabled('multiplayer_invites_v1');
+    const [rows, total] = await this.joinRequests.createQueryBuilder('join_request')
+      .leftJoinAndSelect('join_request.requester', 'requester')
+      .leftJoinAndSelect('join_request.session', 'session')
+      .select([
+        'join_request.id', 'join_request.session_id', 'join_request.expires_at', 'join_request.created_at',
+        'requester.id', 'requester.username', 'requester.avatar_url',
+        'session.id', 'session.game_id', 'session.game_version', 'session.activity_name', 'session.status', 'session.expires_at',
+      ])
+      .where('join_request.target_user_id = :ownerId', { ownerId })
+      .andWhere("join_request.status = 'pending'")
+      .andWhere('join_request.expires_at > :now', { now: new Date() })
+      .orderBy('join_request.created_at', 'DESC')
+      .take(50)
+      .getManyAndCount();
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        session_id: row.session_id,
+        expires_at: row.expires_at,
+        created_at: row.created_at,
+        requester: row.requester ? {
+          id: row.requester.id,
+          username: row.requester.username,
+          avatar_url: row.requester.avatar_url,
+        } : null,
+        session: row.session ? {
+          id: row.session.id,
+          game_id: row.session.game_id,
+          game_version: row.session.game_version,
+          activity_name: row.session.activity_name,
+          status: row.session.status,
+          expires_at: row.session.expires_at,
+        } : null,
+      })),
+      total: Math.min(total, 50),
+    };
   }
 
   async acceptInvite(userId: number, inviteId: string) {

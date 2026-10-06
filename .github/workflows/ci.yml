@@ -25,6 +25,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Require changelog update for Public V1 contract changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/check-api-changelog.cjs
+
       - name: Check forum version increment on master pushes
         if: github.event_name == 'push'
         env:
@@ -55,6 +60,41 @@ jobs:
 
       - name: Check committed Public V1 OpenAPI contract
         run: npm run openapi:check
+
+      - name: Test Public V1 changelog guard
+        run: npm run test:api-changelog
+
+  production-image:
+    name: Production Docker API docs smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Build production Docker image
+        run: docker build --tag mindfourm-docs-smoke .
+
+      - name: Verify runtime Markdown guides in the image
+        run: |
+          docker run --rm --entrypoint /bin/sh mindfourm-docs-smoke -ec '
+            for guide in \
+              first-party-v1.md \
+              public-client-v1.md \
+              rich-content-schema-v2.md \
+              authentication.md \
+              game-content-v1.md \
+              resources-v1-contract.md \
+              multiplayer-v1.md \
+              cloud-saves-v1.md \
+              changelog-v1.md \
+              lifecycle-v1.md; do
+              test -s "/app/docs/api/$guide" || {
+                echo "Missing runtime API guide: /app/docs/api/$guide" >&2
+                exit 1
+              }
+            done
+          '
 
   frontend:
     name: Frontend lint, types, and build
@@ -88,6 +128,34 @@ jobs:
       - name: Production build
         working-directory: frontend
         run: npm run build
+
+  renderer:
+    name: Mindustry renderer compile and fixture tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Download pinned Mindustry v160.2 artifacts
+        shell: bash
+        run: |
+          mkdir -p tools/mindustry-renderer/build/deps
+          curl --fail --location --retry 3 \
+            https://github.com/Anuken/Mindustry/releases/download/v160.2/server-release.jar \
+            --output tools/mindustry-renderer/build/deps/server-release-v160.2.jar
+          curl --fail --location --retry 3 \
+            https://github.com/Anuken/Mindustry/releases/download/v160.2/Mindustry.jar \
+            --output tools/mindustry-renderer/build/deps/Mindustry-v160.2.jar
+
+      - name: Compile renderer and run safe fixture tests
+        run: bash tools/mindustry-renderer/test-renderer.sh
 
   android:
     name: Android auth tests and debug build

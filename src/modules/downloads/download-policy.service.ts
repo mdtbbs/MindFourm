@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull } from 'typeorm';
 import { Resource } from '@entities/resource.entity';
 import { ResourceFile } from '@entities/resource-file.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
+import { SettingsService } from '../settings/settings.service';
 
 /**
  * Download Policy — the single authority for whether a file can be delivered.
@@ -33,7 +34,25 @@ export class DownloadPolicyService {
     @InjectRepository(Resource) private readonly resourceRepo: Repository<Resource>,
     @InjectRepository(ResourceVersion) private readonly versionRepo: Repository<ResourceVersion>,
     @InjectRepository(ResourceFile) private readonly fileRepo: Repository<ResourceFile>,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
+
+  async requiresAuthentication(resourceKind: string | null | undefined): Promise<boolean> {
+    const key = resourceKind === 'mod' ? 'resource_download_mod_auth_required'
+      : resourceKind === 'schematic' ? 'resource_download_schematic_auth_required'
+        : resourceKind === 'map' ? 'resource_download_map_auth_required' : null;
+    if (!key) return false;
+    // Fail closed if SettingsService is unavailable; production defaults are
+    // seeded to true and admins can switch each resource kind independently.
+    return this.settings ? this.settings.getBoolean(key, true) : true;
+  }
+
+  async assertDownloadAuthentication(resourceKind: string | null | undefined, user?: { id?: unknown } | null): Promise<void> {
+    const userId = Number(user?.id);
+    if (await this.requiresAuthentication(resourceKind) && (!Number.isSafeInteger(userId) || userId < 1)) {
+      throw new UnauthorizedException({ code: 'RESOURCE_DOWNLOAD_AUTH_REQUIRED', message: '登录后才能下载此类资源。' });
+    }
+  }
 
   /**
    * Check whether a file is eligible for download.

@@ -32,4 +32,4 @@
 
 视频来源由部署使用的站点配置决定。MDTBBS 支持 Bilibili、抖音和 HTTPS MP4/WebM；Mindustry Club 支持 YouTube、Bilibili 和 HTTPS MP4/WebM。第三方播放器只会在读者主动打开视频卡片后加载。
 
-启用 V2 写入后，旧 Markdown 内容仍可读取；新客户端应按本页数据结构提交结构化 JSON。具体服务端上线安排不属于客户端 API 契约。
+当前 V1 写入接口接受 Schema V2 的结构化正文；新客户端应发送 `content_schema_version: 2` 和 `content_json`。旧 Markdown-only 请求仍通过兼容路径转换为 V2 JSON。已有历史记录的批量回填由 `src/scripts/content-json-backfill.ts` 处理，部署环境是否已执行回填应以该环境的迁移/运维记录为准。

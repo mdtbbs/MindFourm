@@ -39,16 +39,54 @@ export type ClientCapabilities = {
   blueprint_production_analysis: boolean;
   minimum_supported_client_version: string | null;
   recommended_client_version: string | null;
+  resource_mod_workbench: boolean;
+  resource_schematic_workbench: boolean;
+  resource_map_workbench: boolean;
+  resource_versions_v2: boolean;
+  resource_relations_v1: boolean;
+  mod_content_index: boolean;
+  mod_dependency_resolver: boolean;
+  mod_compatibility_reports: boolean;
+  schematic_deep_analysis: boolean;
+  schematic_light_editor: boolean;
+  map_deep_analysis: boolean;
+  map_wave_viewer: boolean;
+  schematic_full_editor: boolean;
+  map_editor: boolean;
+  wave_editor: boolean;
 };
+
+type RendererHealth = {
+  status?: unknown;
+  protocolVersion?: unknown;
+  buildDigest?: unknown;
+  runtime?: { artifactSha256?: unknown };
+  supportedOperations?: unknown;
+};
+
+type EditorReadiness = {
+  rendererOperations: ReadonlySet<string>;
+  storageReady: boolean;
+};
+
+// Kept in sync with tools/mindustry-renderer/test-renderer.sh and the runtime
+// artifact reported by the renderer's health endpoint.
+const REQUIRED_MINDUSTRY_SERVER_SHA256 = 'fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57';
+const READINESS_CACHE_MS = 10_000;
+const READINESS_FAILURE_CACHE_MS = 2_000;
+const READINESS_TIMEOUT_MS = 1_000;
 
 @Injectable()
 export class CapabilitiesService {
+  private editorReadinessCache: { expiresAt: number; value: EditorReadiness } | null = null;
+  private editorReadinessPromise: Promise<EditorReadiness> | null = null;
+
   constructor(private readonly settingsService: SettingsService, private readonly siteConfig: SiteConfigService) {}
 
   async getCapabilities(): Promise<ClientCapabilities> {
     const [resourceRead, forumWrite, imageUpload, resourceDownload, resourceUpload,
       notifications, messages, thirdPartyMessages, socialPresence, richActivity, sessions, invites, relay, thirdPartyMultiplayer,
-      cloudSavesEnabled, cloudSavePath] = await Promise.all([
+      cloudSavesEnabled, cloudSavePath, resourceCenterEnabled] = await Promise.all([
       this.settingsService.getBoolean('feature_resources_v1_read_enabled', true),
       this.settingsService.getBoolean('feature_public_api_forum_write_enabled', true),
       this.settingsService.getBoolean('feature_public_api_image_upload_enabled', true),
@@ -65,10 +103,23 @@ export class CapabilitiesService {
       this.settingsService.getBoolean('feature_third_party_multiplayer_v1_enabled', false),
       this.settingsService.getBoolean('cloud_saves_enabled', false),
       this.settingsService.get('cloud_saves_storage_path'),
+      this.settingsService.getBoolean('feature_resources_enabled', true),
     ]);
     const cloudSavesAvailable = cloudSavesEnabled && isCloudSaveStorageConfigured(
       cloudSavePath || process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'),
     );
+    const resourceCenterAvailable = Boolean(this.siteConfig.current.features.resources && resourceCenterEnabled && resourceRead);
+    const editorReadiness = resourceCenterAvailable && resourceUpload
+      ? await this.getEditorReadiness()
+      : { rendererOperations: new Set<string>(), storageReady: false };
+    const schematicLightEditor = resourceCenterAvailable && resourceUpload && editorReadiness.storageReady
+      && this.hasRendererOperations(editorReadiness, ['schematic.read', 'schematic.write']);
+    const schematicFullEditor = schematicLightEditor
+      && this.hasRendererOperations(editorReadiness, ['schematic.logic.read', 'schematic.logic.text.write']);
+    const mapEditor = resourceCenterAvailable && resourceUpload && editorReadiness.storageReady
+      && this.hasRendererOperations(editorReadiness, ['map.read', 'map.write', 'map.rules.read', 'map.rules.write']);
+    const waveEditor = mapEditor
+      && this.hasRendererOperations(editorReadiness, ['map.waves.read', 'map.waves.write']);
     return {
       site: {
         profile: this.siteConfig.current.profile,
@@ -100,7 +151,6 @@ export class CapabilitiesService {
       },
       cloud_saves_v1: cloudSavesAvailable,
       client: { minimum_supported_version: null, recommended_version: null },
-      // Legacy aliases remain until official clients migrate to nested capabilities.
       resource_read: resourceRead,
       resource_files: resourceRead,
       download_grants: resourceRead && resourceDownload,
@@ -111,7 +161,100 @@ export class CapabilitiesService {
       blueprint_production_analysis: Boolean(process.env.RESOURCE_RENDERER_URL),
       minimum_supported_client_version: null,
       recommended_client_version: null,
+      resource_mod_workbench: resourceRead,
+      resource_schematic_workbench: resourceRead,
+      resource_map_workbench: resourceRead,
+      resource_versions_v2: resourceRead,
+      resource_relations_v1: resourceRead,
+      mod_content_index: resourceRead,
+      mod_dependency_resolver: resourceRead,
+      mod_compatibility_reports: resourceRead,
+      schematic_deep_analysis: resourceRead,
+      schematic_light_editor: schematicLightEditor,
+      map_deep_analysis: resourceRead,
+      map_wave_viewer: resourceRead,
+      schematic_full_editor: schematicFullEditor,
+      map_editor: mapEditor,
+      wave_editor: waveEditor,
     };
+  }
+
+  private hasRendererOperations(readiness: EditorReadiness, operations: string[]): boolean {
+    return operations.every((operation) => readiness.rendererOperations.has(operation));
+  }
+
+  private async getEditorReadiness(): Promise<EditorReadiness> {
+    const now = Date.now();
+    if (this.editorReadinessCache && this.editorReadinessCache.expiresAt > now) {
+      return this.editorReadinessCache.value;
+    }
+    if (this.editorReadinessPromise) return this.editorReadinessPromise;
+    this.editorReadinessPromise = this.checkEditorReadiness();
+    try {
+      const value = await this.editorReadinessPromise;
+      const ready = value.storageReady && value.rendererOperations.size > 0;
+      this.editorReadinessCache = {
+        value,
+        expiresAt: Date.now() + (ready ? READINESS_CACHE_MS : READINESS_FAILURE_CACHE_MS),
+      };
+      return value;
+    } finally {
+      this.editorReadinessPromise = null;
+    }
+  }
+
+  private async checkEditorReadiness(): Promise<EditorReadiness> {
+    const rendererUrl = process.env.RESOURCE_RENDERER_URL?.trim();
+    const storageBaseUrl = process.env.RES_BASE_URL?.trim();
+    const storageConfigured = process.env.RES_ENABLED === 'true'
+      && Boolean(process.env.RES_API_KEY?.trim())
+      && this.isHttpOrigin(storageBaseUrl);
+
+    const storageHealth = storageConfigured && storageBaseUrl
+      ? this.fetchHealth(`${storageBaseUrl.replace(/\/+$/, '')}/health`)
+      : Promise.resolve(null);
+    const rendererHealth = this.isHttpOrigin(rendererUrl)
+      ? this.fetchHealth(`${rendererUrl!.replace(/\/+$/, '')}/health`, process.env.RESOURCE_RENDERER_TOKEN)
+      : Promise.resolve(null);
+    const [storage, renderer] = await Promise.all([storageHealth, rendererHealth]);
+    const storageReady = storage?.status === 'ok';
+    const runtimeHash = String(renderer?.runtime?.artifactSha256 || '').toLowerCase();
+    const buildDigest = String(renderer?.buildDigest || '').toLowerCase();
+    const operationList = Array.isArray(renderer?.supportedOperations) ? renderer!.supportedOperations : [];
+    const rendererOperations = renderer?.status === 'ok'
+      && Number(renderer.protocolVersion) >= 2
+      && /^[a-f0-9]{64}$/.test(buildDigest)
+      && runtimeHash === REQUIRED_MINDUSTRY_SERVER_SHA256
+      ? new Set(operationList.filter((value): value is string => typeof value === 'string'))
+      : new Set<string>();
+    return { rendererOperations, storageReady };
+  }
+
+  private isHttpOrigin(value: string | undefined): boolean {
+    if (!value) return false;
+    try {
+      const url = new URL(value);
+      return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password;
+    } catch {
+      return false;
+    }
+  }
+
+  private async fetchHealth(url: string, token?: string): Promise<RendererHealth | null> {
+    try {
+      const response = await fetch(url, {
+        headers: token ? { authorization: `Bearer ${token}` } : undefined,
+        signal: AbortSignal.timeout(READINESS_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        await response.body?.cancel().catch(() => undefined);
+        return null;
+      }
+      const body: unknown = await response.json();
+      return body && typeof body === 'object' && !Array.isArray(body) ? body as RendererHealth : null;
+    } catch {
+      return null;
+    }
   }
 
   async getAndroidClientConfig(platform?: string, _versionCode?: number) {

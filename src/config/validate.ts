@@ -92,6 +92,12 @@ export function collectConfigIssues(config: AppConfig): ValidationResult {
   if (config.mfl?.baseUrl) {
     requireInProduction(config.mfl.apiKey, 'MFL_API_KEY', 'MFL_BASE_URL is configured');
   }
+  const res = config.res;
+  if (res?.enabled) {
+    requireInProduction(res.apiKey, 'RES_API_KEY', 'RES_ENABLED=true');
+    if (!/^https?:\/\/[^/]+$/.test(res.baseUrl || '')) errors.push('RES_BASE_URL must be an absolute HTTP URL without a path');
+    if (isProduction && res.baseUrl && !res.baseUrl.startsWith('https://')) errors.push('RES_BASE_URL must use HTTPS in production');
+  }
   if (isProduction && !process.env.FORUM_INTERNAL_API_KEY) {
     warnings.push('FORUM_INTERNAL_API_KEY is not set — only loopback frontend-to-backend requests bypass user rate limits');
   }

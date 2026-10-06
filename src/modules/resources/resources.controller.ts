@@ -16,6 +16,7 @@ import {
   ParseIntPipe,
   StreamableFile,
   BadRequestException,
+  Optional,
   NotFoundException,
   ValidationPipe,
 } from '@nestjs/common';
@@ -58,6 +59,10 @@ import { SiteConfigService } from '@config/site-profile';
 import { buildResourceExportManifest, parseResourceImportManifest } from './resource-transfer.util';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { ResourceViewsService } from './resource-views.service';
+import { DownloadPolicyService } from '../downloads/download-policy.service';
+import { ResourceDirectUploadService } from './resource-direct-upload.service';
+import { ResourceFileProviderService } from './resource-file-provider.service';
+import { DownloadGrantService } from '../downloads/download-grant.service';
 
 const RESOURCE_INCOMING_DIR = './uploads/.incoming/resources';
 export const MAX_RESOURCE_SIZE = 50 * 1024 * 1024;
@@ -153,6 +158,10 @@ export class ResourcesController {
     private readonly duplicateService: ResourceDuplicateService,
     private readonly siteConfig: SiteConfigService,
     private readonly resourceViews: ResourceViewsService,
+    private readonly downloadPolicy: DownloadPolicyService,
+    @Optional() private readonly directUploads?: ResourceDirectUploadService,
+    @Optional() private readonly fileProvider?: ResourceFileProviderService,
+    @Optional() private readonly downloadGrants?: DownloadGrantService,
   ) {}
 
   @Get()
@@ -354,7 +363,9 @@ export class ResourcesController {
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
       if (file) storedFile = await this.resourceStorageService.storeIncoming(file);
 
-      const resource = await this.resourcesService.create(dto, Number(req.user.id), storedFile, {
+      const resFile = storedFile ? await this.directUploads?.uploadManagedFile(storedFile) : undefined;
+      if (storedFile && !resFile) throw new BadRequestException('资源存储服务暂不可用，请稍后重试');
+      const resource = await this.resourcesService.create(dto, Number(req.user.id), resFile, {
         ipAddress: getClientIp(req),
         origin: {
           site: manifest.origin.site,
@@ -362,6 +373,7 @@ export class ResourcesController {
           url: manifest.origin.url,
         },
       });
+      if (storedFile?.file_path) await this.resourceStorageService.removeManaged(storedFile.file_path).catch(() => undefined);
       await this.logOperation(req, 'resource.import', resource.id, {
         origin_site: manifest.origin.site,
         origin_resource_id: manifest.origin.resource_id,
@@ -449,6 +461,11 @@ export class ResourcesController {
   @RawHttpResponse()
   @UseGuards(JwtAuthGuard)
   async getDraftPreview(@Param('draftId') draftId: string, @Req() req: any, @Res() res: Response) {
+    const redirect = await this.resourcePreviewService.getDraftResPreviewUrl(req.user.id, draftId);
+    if (redirect) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.redirect(302, redirect);
+    }
     const preview = await this.resourcePreviewService.readDraftPreview(req.user.id, draftId);
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'private, no-store');
@@ -468,6 +485,9 @@ export class ResourcesController {
   @UseGuards(JwtAuthGuard)
   async getPreview(@Param('id', ParseIntPipe) id: number, @Req() req: any, @Res() res: Response) {
     const resource = await this.resourcesService.getForFileAccess(id, req?.user);
+
+    const resUrl = await this.resourcePreviewService.getResPreviewUrl(resource);
+    if (resUrl) return res.redirect(302, resUrl);
     const preview = await this.resourcePreviewService.readPreview(resource);
     if (!preview) throw new NotFoundException('预览尚未生成');
     res.setHeader('Content-Type', 'image/png');
@@ -526,12 +546,32 @@ export class ResourcesController {
   ) {
     // Resolve storage fields internally, with the same visibility rules as the public DTO.
     const resource = await this.resourcesService.getForFileAccess(id, req?.user);
+    await this.downloadPolicy.assertDownloadAuthentication(resource.resource_kind, req?.user);
+
+    if (versionId && (!Number.isSafeInteger(Number(versionId)) || Number(versionId) < 1)) throw new BadRequestException('Invalid version id');
+    const stored = await this.resourcesService.findStoredDownloadFile?.(id, versionId ? Number(versionId) : undefined, req?.user);
+    if (stored?.file.storage_backend === 'res') {
+      if (!this.fileProvider || !this.downloadGrants) throw new NotFoundException('资源文件暂不可用');
+      const privateFile = !['approved', 'published'].includes(resource.status) || Number(resource.is_public) !== 1
+        || resource.visibility === 'private' || stored.version.status !== 'published' || stored.file.availability_status !== 'available';
+      const downloadTarget = await this.fileProvider.getDownloadTarget(stored.file, { private: privateFile });
+      if (downloadTarget.kind !== 'redirect') throw new NotFoundException('资源文件暂不可用');
+      const userId = req?.user?.id || null;
+      await this.downloadGrants.recordGrant({
+        resourceId: id, versionId: stored.version.id, fileId: stored.file.id, userId,
+        grantedAt: new Date(), clientType: 'web', clientVersion: null, platform: null, backend: 'res',
+      }, userId ? `user:${userId}` : `ipua:${getClientIp(req || {}) || 'unknown'}:${String(req?.headers?.['user-agent'] || '')}`);
+      return res.redirect(302, downloadTarget.url);
+    }
 
     // MFL redirect: if resource uses MFL, redirect to MFL download URL
-    if (!versionId && resource.use_mfl && resource.mfl_download_url) {
-      assertSafeRedirectUrl(resource.mfl_download_url);
+    if (!versionId && resource.use_mfl && (resource.mfl_file_id || resource.mfl_download_url)) {
+      const mflUrl = resource.mfl_file_id
+        ? await this.resourcesService.resolveMflDownloadUrl(resource.mfl_file_id, resource.mfl_download_url)
+        : resource.mfl_download_url;
+      assertSafeRedirectUrl(mflUrl);
       await this.resourcesService.incrementDownload(id);
-      return res.redirect(resource.mfl_download_url);
+      return res.redirect(mflUrl);
     }
 
     if (!versionId && resource.resource_type === 'external' && resource.external_url) {
@@ -547,7 +587,7 @@ export class ResourcesController {
     }
 
     const target = versionId
-      ? await this.versionService.getDownloadTarget(id, Number(versionId))
+      ? await this.versionService.getDownloadTarget(id, Number(versionId), req?.user)
       : resource;
 
     if (!target.file_path) {
@@ -577,7 +617,7 @@ export class ResourcesController {
   async getVersions(@Param('id', ParseIntPipe) id: number, @Req() req: any) {
     // Resolve the resource first so version listings inherit its visibility rules.
     await this.resourcesService.getById(id, req?.user);
-    return this.versionService.list(id);
+    return this.versionService.list(id, req?.user);
   }
 
   @Post()
@@ -626,12 +666,15 @@ export class ResourcesController {
       } else storedFile = schematicCode
         ? await this.resourceStorageService.storePastedSchematic(schematicCode)
         : await this.resourceStorageService.storeIncoming(file);
-      const resource = await this.resourcesService.create(body, userId, storedFile, {
+      const resFile = storedFile ? await this.directUploads?.uploadManagedFile(storedFile) : undefined;
+      if (storedFile && !resFile) throw new BadRequestException('资源存储服务暂不可用，请稍后重试');
+      const resource = await this.resourcesService.create(body, userId, resFile, {
         ipAddress: getClientIp(req),
         rendererDraft,
         idempotencyKey,
         idempotencyPayload: body,
       });
+      if (storedFile?.file_path) await this.resourceStorageService.removeManaged(storedFile.file_path).catch(() => undefined);
       await this.logOperation(req, 'resource.create', resource.id, { title: resource.title, resource_type: resource.resource_type });
       return resource;
     } catch (error) {
@@ -694,11 +737,14 @@ export class ResourcesController {
     try {
       if (file) await assertSafeUploadedFile(file, MAX_RESOURCE_SIZE);
       storedFile = await this.resourceStorageService.storeIncoming(file);
+      const resFile = storedFile ? await this.directUploads?.uploadManagedFile(storedFile) : undefined;
+      if (storedFile && !resFile) throw new BadRequestException('资源存储服务暂不可用，请稍后重试');
       const version = await this.versionService.create(
         { resource_id: id, version: body.version || '', content: body.content },
-        storedFile,
+        resFile,
         userId,
       );
+      if (storedFile?.file_path) await this.resourceStorageService.removeManaged(storedFile.file_path).catch(() => undefined);
       await this.logOperation(req, 'resource.version_create', id, { version_id: version.id, version: version.version });
       return version;
     } catch (error) {
@@ -732,6 +778,7 @@ export class ResourcesController {
   ) {
     const resource = await this.resourcesService.updateStatus(id, status, {
       actorUsername: req.user?.username,
+      actorUserId: Number(req.user?.id) || null,
       rejectReason,
     });
     await this.logOperation(req, 'resource.moderate', id, { status, reject_reason: rejectReason || null });

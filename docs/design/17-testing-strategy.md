@@ -2,6 +2,8 @@
 
 > 本文档记录了论坛系统的测试策略。
 > 创建时间: 2026-06-07
+>
+> **现状说明（2026-10）：** 本文示例是早期测试设计，包含的 Markdown textarea 用例不是当前正文编辑器契约。当前代码、Jest 配置、Playwright 配置和 [`CLAUDE.md`](../../CLAUDE.md) 中的 Definition of Done 是执行依据。
 
 ## 测试架构
 

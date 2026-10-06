@@ -13,8 +13,11 @@ describe('ResourceLifecycleService', () => {
       { id: 11, resource_id: 1, file_path: '/uploads/.quarantine/resources/rejected-v.zip' },
       { id: 12, resource_id: 2, file_path: '/uploads/.quarantine/resources/pending-v.zip' },
     ]), update: jest.fn() };
+    const reportAttachmentRepository = { find: jest.fn().mockResolvedValue([
+      { file_path: '/uploads/.quarantine/resources/report-log.txt' },
+    ]) };
     const storage = { removeManaged: jest.fn().mockResolvedValue(true), cleanupOrphanedQuarantine: jest.fn().mockResolvedValue(2) };
-    const service = new ResourceLifecycleService(resourceRepository as any, versionRepository as any, storage as any, { getNumber: jest.fn().mockResolvedValue(30) } as any, {} as any);
+    const service = new ResourceLifecycleService(resourceRepository as any, versionRepository as any, reportAttachmentRepository as any, storage as any, { getNumber: jest.fn().mockResolvedValue(30) } as any, {} as any);
 
     const result = await service.cleanup(new Date('2026-02-15'));
     expect(result).toEqual({ quarantined_orphans: 2, retired_resource_files: 1, retired_version_files: 1 });
@@ -22,5 +25,8 @@ describe('ResourceLifecycleService', () => {
     expect(storage.removeManaged).not.toHaveBeenCalledWith('/uploads/.quarantine/resources/pending.zip');
     expect(resourceRepository.update).toHaveBeenCalledWith(1, { file_path: '' });
     expect(versionRepository.update).toHaveBeenCalledWith(11, { file_path: '' });
+    expect(storage.cleanupOrphanedQuarantine).toHaveBeenCalledWith(expect.any(Date), expect.any(Set));
+    const references = storage.cleanupOrphanedQuarantine.mock.calls[0][1] as Set<string>;
+    expect(references.has('/uploads/.quarantine/resources/report-log.txt')).toBe(true);
   });
 });

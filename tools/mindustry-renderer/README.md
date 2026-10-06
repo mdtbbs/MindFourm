@@ -13,6 +13,11 @@ cd tools/mindustry-renderer
 gradle clean build copyMindustryRuntime copyMindustryAssets
 ```
 
+The renderer is locked to Mindustry v160.2. Both the server and desktop JAR
+downloads are checked against their committed SHA-256 values. PR CI compiles
+the Java renderer and runs `RendererVisualRegression` with the bundled vanilla
+map and generated schematic fixtures through `bash test-renderer.sh`.
+
 Start it with the same preview root as the forum:
 
 ```bash

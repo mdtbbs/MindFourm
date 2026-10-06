@@ -1,14 +1,18 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { LessThanOrEqual, MoreThan, Repository } from 'typeorm';
-import { readFile, unlink } from 'fs/promises';
+import { EntityManager, LessThanOrEqual, MoreThan, Repository } from 'typeorm';
+import { readFile, stat, unlink } from 'fs/promises';
 import * as path from 'path';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { Resource } from '@entities/resource.entity';
+import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourceStorageService, StoredResourceFile } from './resource-storage.service';
 import { ResourceUploadDraft } from '@entities/resource-upload-draft.entity';
 import { normalizeTiptapDocument } from '@common/utils/tiptap-content.util';
 import { ResourceDuplicateService, ResourceDuplicateResult } from './resource-duplicate.service';
+import { ResourceStorageClientService } from './resource-storage-client.service';
+import { ResourceFile } from '@entities/resource-file.entity';
+import { ResourceFileProviderService } from './resource-file-provider.service';
 
 type RendererResult = {
   metadata?: Record<string, unknown>;
@@ -22,7 +26,7 @@ const MAX_RENDER_BYTES = 20 * 1024 * 1024;
 const DRAFT_TTL_MS = 30 * 60 * 1000;
 const MAX_DRAFTS_PER_USER = 5;
 
-type RenderableFile = Pick<Resource, 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash'>;
+type RenderableFile = Pick<Resource, 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash'> & { id?: number };
 type RenderedPreview = Required<Pick<RendererResult, 'previewKey'>> & Pick<RendererResult, 'metadata' | 'parserVersion'>;
 type RenderAttempt = { preview: RenderedPreview | null; errorCode: string };
 type PreviewDraft = {
@@ -31,6 +35,8 @@ type PreviewDraft = {
   kind: string;
   file: StoredResourceFile;
   previewKey: string | null;
+  previewObjectId?: string | null;
+  previewBindingId?: string | null;
   metadata: Record<string, unknown> | null;
   parserVersion: string | null;
   expiresAt: number;
@@ -61,10 +67,321 @@ export class ResourcePreviewService {
     private readonly storage?: ResourceStorageService,
     @Optional() @InjectRepository(ResourceUploadDraft) private readonly uploadDrafts?: Repository<ResourceUploadDraft>,
     @Optional() private readonly duplicates?: ResourceDuplicateService,
+    @Optional() private readonly resClient?: ResourceStorageClientService,
+    @Optional() private readonly fileProvider?: ResourceFileProviderService,
+    @Optional() @InjectRepository(ResourceVersion) private readonly versions?: Repository<ResourceVersion>,
   ) {}
+
+  /** Move a newly rendered PNG into RES after the resource has a stable public identity. */
+  async storePreviewInRes(resource: Resource, previewKey: string): Promise<void> {
+    if (!this.isValidPreviewKey(previewKey, resource.resource_kind, resource.content_hash)) return;
+    if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    const preview = await readFile(path.resolve(this.previewRoot, previewKey));
+    if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
+    const object = await this.resClient.uploadServerGeneratedObject({
+      body: preview, sizeBytes: preview.length, mimeType: 'image/png', filename: 'preview.png', purpose: 'resource_preview',
+    });
+    const visibility = this.isResourcePreviewPublic(resource) ? 'public' : 'private';
+    const binding = await this.resClient.createBinding(object.public_id, {
+      namespace: 'mindforum', owner_type: 'resource_preview', owner_id: resource.public_id, visibility,
+    });
+    await this.resources.update(resource.id, {
+      renderer_preview_object_id: object.public_id,
+      renderer_preview_binding_id: binding.id,
+      renderer_preview_key: null,
+    });
+    // Keep PNGs referenced by historical version metadata.
+  }
+
+  async storeVersionPreviewInRes(resource: Resource, version: ResourceVersion, previewKey: string): Promise<{
+    renderer_preview_object_id: string; renderer_preview_binding_id: string;
+  }> {
+    if (!this.isValidPreviewKey(previewKey, resource.resource_kind, version.content_hash)) throw new BadRequestException('版本预览文件无效');
+    if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    const preview = await readFile(path.resolve(this.previewRoot, previewKey));
+    if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
+    const object = await this.resClient.uploadServerGeneratedObject({
+      body: preview, sizeBytes: preview.length, mimeType: 'image/png', filename: 'preview.png', purpose: 'resource_preview',
+    });
+    const visibility = this.isVersionPreviewPublic(resource, version) ? 'public' : 'private';
+    const binding = await this.resClient.createBinding(object.public_id, {
+      namespace: 'mindforum', owner_type: 'resource_version_preview', owner_id: version.public_id, visibility,
+    });
+    // A renderer key can be shared by historic versions of identical content.
+    // Keep local PNGs and metadata keys until a separate migration verifies all references.
+    return { renderer_preview_object_id: object.public_id, renderer_preview_binding_id: binding.id };
+  }
+
+  private isResourcePreviewPublic(resource: Partial<Resource>): boolean {
+    return ['approved', 'published'].includes(resource.status || '') && Number(resource.is_public) === 1
+      && resource.visibility !== 'private' && !resource.deleted_at;
+  }
+
+  private isVersionPreviewPublic(resource: Resource, version: Pick<ResourceVersion, 'status'>): boolean {
+    return this.isResourcePreviewPublic(resource) && version.status === 'published';
+  }
+
+  async setVersionResPreviewVisibility(resource: Resource, version: ResourceVersion, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
+    if (!version.renderer_preview_object_id) return;
+    if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    const binding = await this.resClient.createBinding(version.renderer_preview_object_id, {
+      namespace: 'mindforum', owner_type: 'resource_version_preview', owner_id: version.public_id,
+      visibility: visibility === 'public' && this.isVersionPreviewPublic(resource, version) ? 'public' : 'private',
+    });
+    if (version.renderer_preview_binding_id !== binding.id) {
+      if (manager) await manager.update(ResourceVersion, version.id, { renderer_preview_binding_id: binding.id });
+      else if (this.versions) await this.versions.update(version.id, { renderer_preview_binding_id: binding.id });
+    }
+    version.renderer_preview_binding_id = binding.id;
+  }
+
+  async getVersionResPreviewUrl(resource: Resource, version: ResourceVersion): Promise<string | null> {
+    if (!version.renderer_preview_object_id || !this.resClient) return null;
+    if (this.isVersionPreviewPublic(resource, version)) return this.resClient.buildPublicDownloadUrl(version.renderer_preview_object_id, 'preview.png');
+    return (await this.resClient.createPrivateDownloadUrl(version.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
+  }
+
+  async setResPreviewVisibility(resource: Resource, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
+    if (resource.renderer_preview_object_id) {
+      if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
+      if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+      const binding = await this.resClient.createBinding(resource.renderer_preview_object_id, {
+        namespace: 'mindforum', owner_type: 'resource_preview', owner_id: resource.public_id,
+        visibility: visibility === 'public' && this.isResourcePreviewPublic(resource) ? 'public' : 'private',
+      });
+      if (resource.renderer_preview_binding_id !== binding.id) {
+        if (manager) await manager.update(Resource, resource.id, { renderer_preview_binding_id: binding.id });
+        else await this.resources.update(resource.id, { renderer_preview_binding_id: binding.id });
+      }
+    }
+    if (this.versions || manager) {
+      const versions = manager
+        ? await manager.find(ResourceVersion, { where: { resource_id: resource.id } })
+        : await this.versions!.find({ where: { resource_id: resource.id } });
+      for (const version of versions) await this.setVersionResPreviewVisibility(resource, version, visibility, manager);
+    }
+  }
+
+  async getResPreviewUrl(resource: Pick<Resource, 'renderer_status' | 'renderer_preview_object_id' | 'status'> & { is_public?: number | boolean; visibility?: string | null; deleted_at?: Date | null }): Promise<string | null> {
+    if (resource.renderer_status !== 'ready' || !resource.renderer_preview_object_id || !this.resClient) return null;
+    if (this.isResourcePreviewPublic(resource as Partial<Resource>)) {
+      return this.resClient.buildPublicDownloadUrl(resource.renderer_preview_object_id, 'preview.png');
+    }
+    return (await this.resClient.createPrivateDownloadUrl(resource.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
+  }
 
   supports(resource: Pick<Resource, 'resource_kind'>): boolean {
     return PREVIEWABLE_KINDS.has(resource.resource_kind || '');
+  }
+
+  /** Transform a schematic through the bundled official Mindustry reader/writer. */
+  async transformSchematic(fileName: string, source: Buffer, operations: {
+    rotation_quarters: number; mirror_x: boolean; delete_positions: Array<{ x: number; y: number }>;
+    move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
+    add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+    logic_configs?: Array<{ x: number; y: number; source: string }>;
+  }): Promise<{ data: Buffer; sha256: string }> {
+    if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
+    const positions = operations?.delete_positions;
+    const moves = operations?.move_positions || [];
+    const additions = operations?.add_blocks || [];
+    const logicConfigs = operations?.logic_configs || [];
+    if (!Number.isInteger(operations?.rotation_quarters) || operations.rotation_quarters < 0 || operations.rotation_quarters > 3
+      || typeof operations.mirror_x !== 'boolean' || !Array.isArray(positions) || positions.length > 10_000
+      || !Array.isArray(moves) || moves.length > 5_000 || !Array.isArray(additions) || additions.length > 5_000
+      || !Array.isArray(logicConfigs) || logicConfigs.length > 1_000
+      || positions.length + moves.length + additions.length + logicConfigs.length > 10_000
+    ) {
+      throw new BadRequestException('蓝图编辑操作无效');
+    }
+    const uniquePositions = new Set<string>();
+    for (const position of positions) {
+      const key = position && `${position.x}:${position.y}`;
+      if (!position || !Number.isInteger(position.x) || !Number.isInteger(position.y)
+        || position.x < 0 || position.x > 127 || position.y < 0 || position.y > 127
+        || !key || uniquePositions.has(key)) throw new BadRequestException('蓝图编辑操作无效');
+      uniquePositions.add(key);
+    }
+    const moveSources = new Set<string>();
+    const moveTargets = new Set<string>();
+    for (const move of moves) {
+      const sourceKey = move && `${move.from_x}:${move.from_y}`;
+      const targetKey = move && `${move.to_x}:${move.to_y}`;
+      if (!move || ![move.from_x, move.from_y, move.to_x, move.to_y].every(Number.isInteger)
+        || [move.from_x, move.from_y, move.to_x, move.to_y].some((value) => value < 0 || value > 127)
+        || !sourceKey || !targetKey || uniquePositions.has(sourceKey) || moveSources.has(sourceKey) || moveTargets.has(targetKey)) {
+        throw new BadRequestException('蓝图编辑操作无效');
+      }
+      moveSources.add(sourceKey);
+      moveTargets.add(targetKey);
+    }
+    const addedPositions = new Set<string>();
+    for (const addition of additions) {
+      const key = addition && `${addition.x}:${addition.y}`;
+      if (!addition || !Number.isInteger(addition.x) || !Number.isInteger(addition.y)
+        || addition.x < 0 || addition.x > 127 || addition.y < 0 || addition.y > 127
+        || !/^[a-zA-Z0-9_.:-]{1,191}$/.test(addition.block)
+        || (addition.rotation !== undefined && (!Number.isInteger(addition.rotation) || addition.rotation < 0 || addition.rotation > 3))
+        || !key || addedPositions.has(key) || moveTargets.has(key)) {
+        throw new BadRequestException('蓝图编辑操作无效');
+      }
+      addedPositions.add(key);
+    }
+    const logicPositions = new Set<string>();
+    for (const edit of logicConfigs) {
+      const key = edit && `${edit.x}:${edit.y}`;
+      if (!edit || !Number.isInteger(edit.x) || !Number.isInteger(edit.y) || edit.x < 0 || edit.x > 127 || edit.y < 0 || edit.y > 127
+        || typeof edit.source !== 'string' || edit.source.length > 32_768 || edit.source.includes('\0')
+        || !key || logicPositions.has(key)) throw new BadRequestException('蓝图处理器文本无效');
+      logicPositions.add(key);
+    }
+    if (!fileName.toLowerCase().endsWith('.msch') || source.length < 5 || source.length > MAX_RENDER_BYTES
+      || source.subarray(0, 4).toString('ascii') !== 'msch') {
+      throw new BadRequestException('蓝图文件无效或超过大小限制');
+    }
+    const sourceHash = createHash('sha256').update(source).digest('hex');
+    try {
+      const response = await fetch(`${this.rendererUrl}/v2/transform-schematic`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({
+          filename: fileName,
+          sha256: sourceHash,
+          dataBase64: source.toString('base64'),
+          rotation_quarters: operations.rotation_quarters,
+          mirror_x: operations.mirror_x,
+          delete_positions: operations.delete_positions,
+          move_positions: moves,
+          add_blocks: additions,
+          logic_configs: logicConfigs,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({})) as { errorCode?: unknown };
+        const code = typeof error.errorCode === 'string' ? error.errorCode : '';
+        if (['INVALID_SCHEMATIC_OPERATION', 'UNSUPPORTED_SCHEMATIC_CONTENT', 'UNSUPPORTED_SCHEMATIC_FORMAT', 'INVALID_SCHEMATIC', 'INVALID_FILE'].includes(code)) {
+          throw new BadRequestException(code === 'UNSUPPORTED_SCHEMATIC_CONTENT'
+            ? '蓝图包含当前编辑器无法安全保留的 Mod 方块或配置，未生成文件'
+            : code === 'UNSUPPORTED_SCHEMATIC_FORMAT'
+              ? '此蓝图格式暂不支持安全编辑，未生成文件'
+              : '蓝图编辑操作无效或文件无法解析');
+        }
+        throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
+      }
+      const result = await response.json() as { dataBase64?: unknown; sha256?: unknown };
+      if (typeof result.dataBase64 !== 'string' || typeof result.sha256 !== 'string'
+        || !/^[a-f0-9]{64}$/.test(result.sha256)) throw new ServiceUnavailableException('Mindustry 蓝图编辑器返回了无效结果');
+      const data = Buffer.from(result.dataBase64, 'base64');
+      const digest = createHash('sha256').update(data).digest('hex');
+      if (!data.length || data.length > MAX_RENDER_BYTES || data.subarray(0, 4).toString('ascii') !== 'msch'
+        || data.toString('base64') !== result.dataBase64 || digest !== result.sha256) {
+        throw new ServiceUnavailableException('Mindustry 蓝图编辑器返回了无效结果');
+      }
+      return { data, sha256: digest };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
+      this.logger.warn(`Schematic transform failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
+    }
+  }
+
+  /** Transform a derived map through official MapIO and retain unknown Rules/wave JSON fields. */
+  async transformMap(fileName: string, source: Buffer, operations: {
+    terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
+    rule_changes?: Record<string, unknown>;
+    wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
+  }): Promise<{ data: Buffer; sha256: string }> {
+    if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
+    const terrain = operations?.terrain_changes || [];
+    const waves = operations?.wave_operations || [];
+    const rules = operations?.rule_changes || {};
+    if (!Array.isArray(terrain) || terrain.length > 5_000 || !Array.isArray(waves) || waves.length > 1_000
+      || !rules || typeof rules !== 'object' || Array.isArray(rules) || Object.keys(rules).length > 100) {
+      throw new BadRequestException('地图编辑操作无效');
+    }
+    const positions = new Set<string>();
+    for (const change of terrain) {
+      const key = change && `${change.x}:${change.y}`;
+      if (!change || !Number.isInteger(change.x) || !Number.isInteger(change.y)
+        || change.x < 0 || change.y < 0 || change.x > 32_767 || change.y > 32_767
+        || !/^[a-zA-Z0-9_.:-]{1,191}$/.test(change.floor)
+        || typeof change.overlay !== 'string' || change.overlay.length > 191
+        || (change.overlay !== '' && !/^[a-zA-Z0-9_.:-]{1,191}$/.test(change.overlay))
+        || !key || positions.has(key)) throw new BadRequestException('地图地形编辑操作无效');
+      positions.add(key);
+    }
+    for (const operation of waves) {
+      if (!operation || !['add', 'update', 'delete', 'move'].includes(operation.action)
+        || !Number.isInteger(operation.index) || operation.index < 0 || operation.index > 5_000
+        || (operation.action === 'move' && (!Number.isInteger(operation.to_index) || operation.to_index! < 0 || operation.to_index! > 5_000))
+        || (['add', 'update'].includes(operation.action) && (!operation.fields || typeof operation.fields !== 'object' || Array.isArray(operation.fields)))) {
+        throw new BadRequestException('地图波次编辑操作无效');
+      }
+    }
+    if (Buffer.byteLength(JSON.stringify({ rules, waves })) > 512 * 1024
+      || !fileName.toLowerCase().endsWith('.msav') || source.length < 8 || source.length > MAX_RENDER_BYTES
+      || source.subarray(0, 4).toString('ascii') !== 'MSAV') {
+      throw new BadRequestException('地图文件无效或编辑数据超过大小限制');
+    }
+    const sourceHash = createHash('sha256').update(source).digest('hex');
+    try {
+      const response = await fetch(`${this.rendererUrl}/v2/transform-map`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({
+          filename: fileName,
+          sha256: sourceHash,
+          dataBase64: source.toString('base64'),
+          terrain_changes: terrain,
+          rule_changes: rules,
+          wave_operations: waves,
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({})) as { errorCode?: unknown };
+        const code = typeof error.errorCode === 'string' ? error.errorCode : '';
+        if ([
+          'INVALID_MAP_OPERATION', 'INVALID_WAVE_OPERATION', 'UNSUPPORTED_MAP_CONTENT', 'UNSUPPORTED_MAP_SIZE',
+          'UNSUPPORTED_MAP_RULES', 'INVALID_MAP_RULES', 'INVALID_MAP', 'INVALID_FILE',
+        ].includes(code)) {
+          const message = code === 'UNSUPPORTED_MAP_CONTENT'
+            ? '地图包含当前编辑器无法安全保留的 Mod 或未知内容，未生成文件'
+            : code === 'UNSUPPORTED_MAP_SIZE'
+              ? '地图尺寸超过当前安全编辑上限，未生成文件'
+              : code === 'UNSUPPORTED_MAP_RULES'
+                ? '地图规则格式无法安全保留，未生成文件'
+                : '地图编辑操作无效或文件无法解析';
+          throw new BadRequestException(message);
+        }
+        throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
+      }
+      const result = await response.json() as { dataBase64?: unknown; sha256?: unknown };
+      if (typeof result.dataBase64 !== 'string' || typeof result.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(result.sha256)) {
+        throw new ServiceUnavailableException('Mindustry 地图编辑器返回了无效结果');
+      }
+      const data = Buffer.from(result.dataBase64, 'base64');
+      const digest = createHash('sha256').update(data).digest('hex');
+      if (!data.length || data.length > MAX_RENDER_BYTES || data.subarray(0, 4).toString('ascii') !== 'MSAV'
+        || data.toString('base64') !== result.dataBase64 || digest !== result.sha256) {
+        throw new ServiceUnavailableException('Mindustry 地图编辑器返回了无效结果');
+      }
+      return { data, sha256: digest };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
+      this.logger.warn(`Map transform failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 地图编辑器暂不可用');
+    }
   }
 
   isConfigured(): boolean {
@@ -132,6 +449,7 @@ export class ResourcePreviewService {
     if (!this.isConfigured()) throw new BadRequestException('预览服务暂不可用，请稍后重试');
     if (file.file_size <= 0 || file.file_size > MAX_RENDER_BYTES) throw new BadRequestException('文件大小不支持生成预览');
     await this.makeRoomForDraft(userId);
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
 
     const rendered = await this.render({ resource_kind: kind, ...file });
     if (!rendered.preview) throw new BadRequestException('文件无法解析为有效的 Mindustry 地图或蓝图');
@@ -153,8 +471,19 @@ export class ResourcePreviewService {
       draftData: null,
     };
     try {
+      const preview = await this.readPreviewKey(rendered.preview.previewKey);
+      if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
+      const object = await this.resClient.uploadServerGeneratedObject({
+        body: preview, sizeBytes: preview.length, mimeType: 'image/png', filename: 'preview.png', purpose: 'resource_preview',
+      });
+      const binding = await this.resClient.createBinding(object.public_id, {
+        namespace: 'mindforum', owner_type: 'resource_preview_draft', owner_id: id, visibility: 'private',
+      });
+      draft.previewObjectId = object.public_id;
+      draft.previewBindingId = binding.id;
       await this.storeDraft(draft);
     } catch (error) {
+      await this.removeDraftPreviewBinding(draft);
       await this.removePreviewKey(draft.previewKey);
       throw error;
     }
@@ -204,6 +533,13 @@ export class ResourcePreviewService {
     await this.cleanupDraftFiles(draft);
   }
 
+  async getDraftResPreviewUrl(userId: number, id: string): Promise<string | null> {
+    const draft = await this.requireDraft(userId, id);
+    if (!draft.previewObjectId) return null;
+    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    return (await this.resClient.createPrivateDownloadUrl(draft.previewObjectId, { filename: 'preview.png', expires_in: 300 })).url;
+  }
+
   async readDraftPreview(userId: number, id: string): Promise<Buffer> {
     const draft = await this.requireDraft(userId, id);
     if (!draft.previewKey) throw new NotFoundException('预览尚未生成');
@@ -225,12 +561,13 @@ export class ResourcePreviewService {
       const deleted = await this.uploadDrafts.delete({ id, user_id: userId, expires_at: MoreThan(new Date()) });
       if (!deleted.affected) throw new NotFoundException('预览草稿不存在或已过期');
     } else this.drafts.delete(id);
+    await this.removeDraftPreviewBinding(draft);
     return { file: draft.file, previewKey: draft.previewKey, metadata: draft.metadata, parserVersion: draft.parserVersion };
   }
 
   async discardConsumedDraft(draft: ConsumedResourcePreviewDraft): Promise<void> {
     if (!draft.previewKey || !this.isValidPreviewKey(draft.previewKey)) return;
-    await unlink(path.resolve(this.previewRoot, draft.previewKey)).catch(() => undefined);
+    await this.removePreviewKey(draft.previewKey);
   }
 
   async enqueue(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash'>): Promise<void> {
@@ -239,7 +576,7 @@ export class ResourcePreviewService {
       await this.resources.update(resource.id, { renderer_status: 'unavailable', renderer_error_code: 'RENDERER_UNAVAILABLE' });
       return;
     }
-    if (!resource.file_path || !resource.file_name || !resource.content_hash) {
+    if (!resource.file_name || !resource.content_hash) {
       await this.fail(resource.id, 'RENDER_SOURCE_MISSING');
       return;
     }
@@ -264,6 +601,11 @@ export class ResourcePreviewService {
         renderer_parser_version: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
         renderer_metadata_json: this.safeMetadata(rendered.preview.metadata) as any,
       });
+      if (this.resClient) {
+        const owner = await this.resources.findOne({ where: { id: resource.id } });
+        if (!owner) throw new NotFoundException('资源不存在');
+        await this.storePreviewInRes(owner, rendered.preview.previewKey);
+      }
     } catch { await this.fail(resource.id, 'RENDER_FAILED'); }
   }
 
@@ -312,6 +654,19 @@ export class ResourcePreviewService {
 
   async removePreviewKey(previewKey: string | null | undefined): Promise<void> {
     if (!previewKey || !this.isValidPreviewKey(previewKey)) return;
+    // Identical content shares a renderer key. Draft cleanup must not erase an
+    // already published historic version's PNG. Retain it if reference checks fail.
+    if (this.resources.manager?.query) {
+      try {
+        const references = await this.resources.manager.query(
+          `SELECT id FROM resources WHERE renderer_preview_key = ?
+           UNION ALL SELECT resource_version_id AS id FROM map_version_metadata WHERE preview_key = ?
+           UNION ALL SELECT resource_version_id AS id FROM schematic_version_metadata WHERE preview_key = ? LIMIT 1`,
+          [previewKey, previewKey, previewKey],
+        );
+        if (references.length) return;
+      } catch { return; }
+    }
     await unlink(path.resolve(this.previewRoot, previewKey)).catch(() => undefined);
   }
 
@@ -331,7 +686,7 @@ export class ResourcePreviewService {
     const allowed = new Set([
       'name', 'author', 'description', 'width', 'height', 'spawns', 'version', 'build',
       'planet', 'game_modes', 'teams', 'tags', 'mod_dependencies', 'waves', 'wave_groups',
-      'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'blocks', 'block_count', 'block_types',
+      'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'tile_layers', 'tile_layers_truncated', 'blocks', 'block_count', 'block_types',
       'block_positions', 'block_positions_truncated', 'requirements', 'power_production',
       'power_consumption', 'net_power', 'labels', 'production',
     ]);
@@ -349,7 +704,7 @@ export class ResourcePreviewService {
 
   private sanitizeMetadataValue(value: unknown, depth = 0): unknown {
     if (depth > 4) return undefined;
-    if (typeof value === 'string') return value.slice(0, 20_000);
+    if (typeof value === 'string') return value.slice(0, 32_768);
     if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
     if (typeof value === 'boolean' || value === null) return value;
     if (Array.isArray(value)) {
@@ -376,8 +731,20 @@ export class ResourcePreviewService {
 
   private async render(resource: RenderableFile): Promise<RenderAttempt> {
     try {
-      if (!resource.file_path || !resource.file_name || !resource.content_hash) return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
-      const payload = await readFile(resource.file_path);
+      if (!resource.file_name || !resource.content_hash) return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
+      let payload: Buffer;
+      if (resource.file_path) {
+        const source = await stat(resource.file_path);
+        if (!source.isFile() || source.size > MAX_RENDER_BYTES) return { preview: null, errorCode: 'FILE_TOO_LARGE_FOR_PREVIEW' };
+        payload = await readFile(resource.file_path);
+      }
+      else if (resource.id && this.fileProvider) {
+        const file = await this.resources.manager.getRepository(ResourceFile).findOne({
+          where: { role: 'primary', resource_version: { resource_id: resource.id } }, order: { id: 'DESC' },
+        });
+        if (!file) return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
+        payload = await this.fileProvider.getReadableContent(file, MAX_RENDER_BYTES);
+      } else return { preview: null, errorCode: 'RENDER_SOURCE_MISSING' };
       if (payload.length === 0 || payload.length > MAX_RENDER_BYTES) return { preview: null, errorCode: 'FILE_TOO_LARGE_FOR_PREVIEW' };
       const response = await fetch(`${this.rendererUrl}/v1/analyze`, {
         method: 'POST',
@@ -474,6 +841,8 @@ export class ResourcePreviewService {
       mime_type: draft.file.mime_type,
       content_hash: draft.file.content_hash,
       preview_key: draft.previewKey,
+      preview_object_id: draft.previewObjectId || null,
+      preview_binding_id: draft.previewBindingId || null,
       metadata_json: draft.metadata,
       parser_version: draft.parserVersion,
       draft_json: draft.draftData,
@@ -494,6 +863,8 @@ export class ResourcePreviewService {
         content_hash: row.content_hash,
       },
       previewKey: row.preview_key,
+      previewObjectId: row.preview_object_id || null,
+      previewBindingId: row.preview_binding_id || null,
       metadata: row.metadata_json || null,
       parserVersion: row.parser_version || null,
       expiresAt: new Date(row.expires_at).getTime(),
@@ -516,7 +887,16 @@ export class ResourcePreviewService {
     };
   }
 
+  private async removeDraftPreviewBinding(draft: PreviewDraft): Promise<void> {
+    if (draft.previewObjectId && draft.previewBindingId && this.resClient) {
+      await this.resClient.deleteBinding(draft.previewObjectId, draft.previewBindingId).catch(() => {
+        this.logger.warn('Draft preview binding cleanup failed; retained private binding');
+      });
+    }
+  }
+
   private async cleanupDraftFiles(draft: PreviewDraft): Promise<void> {
+    await this.removeDraftPreviewBinding(draft);
     if (this.storage) await this.storage.removeManaged(draft.file.file_path).catch(() => undefined);
     else await unlink(draft.file.file_path).catch(() => undefined);
     await this.removePreviewKey(draft.previewKey);

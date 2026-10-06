@@ -37,8 +37,10 @@ describe('MdtbbsResourceSearchProvider content-language relevance', () => {
       setParameter: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
       getRawAndEntities: jest.fn().mockResolvedValue({ entities: [resource], raw: [{ resource_card_description: 'Map pack summary' }] }),
+      getCount: jest.fn().mockResolvedValue(1),
     };
     const repository = { createQueryBuilder: jest.fn().mockReturnValue(query) };
     const provider = new MdtbbsResourceSearchProvider(repository as any, { register: jest.fn() } as any);
@@ -55,6 +57,9 @@ describe('MdtbbsResourceSearchProvider content-language relevance', () => {
     );
     expect(query.setParameter).toHaveBeenCalledWith('preferredContentLanguage', 'ru');
     expect(query.orderBy).toHaveBeenCalledWith('search_language_match', 'DESC');
+    expect(query.skip).toHaveBeenCalledWith(0);
+    expect(query.take).toHaveBeenCalledWith(10);
+    expect(query.andWhere.mock.calls.some(([clause]) => String(clause).includes('MATCH(r.title, r.description, r.summary)'))).toBe(true);
     expect(result.items[0]).toMatchObject({ content_language: 'ru', description: 'Map pack summary' });
   });
 });

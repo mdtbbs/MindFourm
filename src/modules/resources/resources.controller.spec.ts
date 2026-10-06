@@ -100,11 +100,13 @@ describe('ResourcesController internal file access', () => {
   function setup(resource: any) {
     const controller = Object.create(ResourcesController.prototype) as ResourcesController;
     const domain = { getForFileAccess: jest.fn().mockResolvedValue(resource), incrementDownload: jest.fn().mockResolvedValue(undefined) };
-    const previews = { readPreview: jest.fn().mockResolvedValue(Buffer.from('png')), supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
+    const previews = { getResPreviewUrl: jest.fn().mockResolvedValue(null), readPreview: jest.fn().mockResolvedValue(Buffer.from('png')), supports: jest.fn().mockReturnValue(true), enqueue: jest.fn().mockResolvedValue(undefined) };
+    const downloadPolicy = { assertDownloadAuthentication: jest.fn().mockResolvedValue(undefined) };
     Object.defineProperty(controller, 'resourcesService', { value: domain });
     Object.defineProperty(controller, 'resourcePreviewService', { value: previews });
+    Object.defineProperty(controller, 'downloadPolicy', { value: downloadPolicy });
     Object.defineProperty(controller, 'logOperation', { value: jest.fn() });
-    return { controller, domain, previews };
+    return { controller, domain, previews, downloadPolicy };
   }
 
   it('passes the authorized storage key to the preview reader and returns only image bytes', async () => {
@@ -115,6 +117,21 @@ describe('ResourcesController internal file access', () => {
     expect(domain.getForFileAccess).toHaveBeenCalledWith(12, null);
     expect(previews.readPreview).toHaveBeenCalledWith(resource);
     expect(response.send).toHaveBeenCalledWith(Buffer.from('png'));
+  });
+
+  it('redirects a RES file after recording DownloadGrant on the legacy web download route', async () => {
+    const { controller, domain } = setup({ id: 12, status: 'approved', is_public: 1, file_path: null });
+    const stored = { version: { id: 31 }, file: { id: 42, storage_backend: 'res' } };
+    Object.assign(domain, { findStoredDownloadFile: jest.fn().mockResolvedValue(stored) });
+    const provider = { getDownloadTarget: jest.fn().mockResolvedValue({ kind: 'redirect', url: 'https://res.example/o/object/map.msav' }) };
+    const grants = { recordGrant: jest.fn().mockResolvedValue(true) };
+    Object.defineProperty(controller, 'fileProvider', { value: provider });
+    Object.defineProperty(controller, 'downloadGrants', { value: grants });
+    const response = { redirect: jest.fn() };
+    await controller.download(12, undefined, response as any, { user: { id: 9 } });
+    expect(grants.recordGrant).toHaveBeenCalledWith(expect.objectContaining({ resourceId: 12, versionId: 31, fileId: 42, backend: 'res' }), 'user:9');
+    expect(response.redirect).toHaveBeenCalledWith(302, 'https://res.example/o/object/map.msav');
+    expect(domain.incrementDownload).not.toHaveBeenCalled();
   });
 
   it('streams a root resource file without requiring a version id', async () => {

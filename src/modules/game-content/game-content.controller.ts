@@ -100,7 +100,7 @@ export class GameContentController {
 
   @Get('maps/:id/download') @OptionalAuth() @OAuthScopeIfBearer('resource.download')
   @RateLimit({ max: 60, window: 60 })
-  mapDownload(@Param('id') id: string) { return this.gameContent.downloadInfo(id); }
+  mapDownload(@Param('id') id: string, @Req() req: any) { return this.gameContent.downloadInfo(id, req.user?.id || null); }
 
   @Get('maps/:id/download/file') @OptionalAuth() @OAuthScopeIfBearer('resource.download') @RawHttpResponse() @RateLimit({ max: 30, window: 60 })
   async mapDownloadFile(@Param('id') id: string, @Req() req: any, @Res({ passthrough: true }) res: Response) {
@@ -118,7 +118,12 @@ export class GameContentController {
     const logLifecycle = (event: 'started' | 'completed' | 'failed') => this.gameContent.recordDownloadLifecycle(target, event, context.userId, context.clientType, platform, context.clientVersion)
       .catch((error) => this.logger.warn(`Download ${event} analytics persistence failed: ${(error as Error).message}`));
     await logLifecycle('started');
-    if (target.externalUrl) return res.redirect(target.externalUrl);
+    if (target.externalUrl) {
+      // Each request must pass through the forum's grant ledger, including
+      // Range retries. Caching the redirect would bypass that accounting.
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.redirect(target.externalUrl);
+    }
     if (!target.path) throw new BadRequestException({ code: 'RESOURCE_NOT_AVAILABLE', message: '地图文件暂不可用' });
     res.set({
       'Content-Type': target.file?.mime_type || target.version?.mime_type || target.resource.mime_type || 'application/octet-stream',
@@ -150,6 +155,10 @@ export class GameContentController {
   private async sendPreview(type: GameResourceType, id: string, res: Response) {
     const image = await this.gameContent.preview(type, id);
     if (!image) throw new BadRequestException({ code: 'RESOURCE_NOT_AVAILABLE', message: '预览暂不可用' });
+    if ('redirectUrl' in image) {
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.redirect(image.redirectUrl);
+    }
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('ETag', `"${createHash('sha256').update(image).digest('hex')}"`);

@@ -8,21 +8,29 @@ import arc.graphics.Pixmap;
 import arc.graphics.PixmapIO;
 import arc.util.serialization.JsonReader;
 import arc.util.serialization.JsonValue;
+import arc.util.serialization.JsonWriter;
 import arc.util.serialization.Json;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import mindustry.Vars;
+import mindustry.core.Logic;
 import mindustry.core.Platform;
 import mindustry.core.Version;
 import mindustry.ctype.ContentType;
+import mindustry.entities.units.BuildPlan;
 import mindustry.game.Schematic;
 import mindustry.game.Schematics;
 import mindustry.io.MapIO;
 import mindustry.io.SaveIO;
 import mindustry.io.SaveMeta;
+import mindustry.io.SaveVersion;
 import mindustry.maps.Map;
 import mindustry.net.Net;
 import mindustry.world.Block;
+import mindustry.world.blocks.logic.LogicBlock;
+import arc.math.geom.Point2;
+import arc.struct.Seq;
+import arc.struct.StringMap;
 
 import javax.imageio.ImageIO;
 import java.awt.Color;
@@ -31,11 +39,13 @@ import java.awt.RenderingHints;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStreamReader;
 import java.util.zip.InflaterInputStream;
+import java.util.zip.DeflaterOutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -56,8 +66,12 @@ import java.util.concurrent.Executors;
  * only uses official MapIO/Schematics readers and writes a derived PNG.
  */
 public final class MapRenderer {
+    private static final int MAX_MAP_LAYER_ITEMS = 5_000;
+    private static final int MAX_MAP_TILE_AREA = 2_000_000;
     private static final int MAX_BYTES = 20 * 1024 * 1024;
-    private static final String VERSION = "v160.2-preview-4-production";
+    private static final int PROTOCOL_VERSION = 2;
+    private static final String VERSION = "v160.2-preview-6-editors";
+    private static final String MINDUSTRY_SERVER_SHA256 = "fc686a6198419a91cbc1649f93f10cc54f8e1e65160313840c9aab7c2c78fe57";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
     private static String token;
@@ -91,17 +105,21 @@ public final class MapRenderer {
         Vars.init();
         Vars.content.createBaseContent();
         Vars.content.init();
+        Vars.logic = new Logic();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
         chineseBundle = loadChineseBundle();
     }
 
     static void initializeForFixture(Path root) {
         storageRoot = root.toAbsolutePath().normalize();
+        Vars.platform = new Platform() {};
+        Vars.net = new Net(Vars.platform.getNet());
         Vars.headless = true;
         Core.settings.setDataDirectory(new Fi(storageRoot.resolve("worker-config").toFile()));
         Vars.init();
         Vars.content.createBaseContent();
         Vars.content.init();
+        Vars.logic = new Logic();
         spriteAtlas = SpriteAtlas.load(env("ASSETS_ROOT", ""));
         chineseBundle = new Properties();
     }
@@ -110,6 +128,9 @@ public final class MapRenderer {
         HttpServer server = HttpServer.create(new InetSocketAddress(env("WORKER_HOST", "127.0.0.1"), Integer.parseInt(env("WORKER_PORT", "6100"))), 8);
         server.createContext("/health", MapRenderer::health);
         server.createContext("/v1/analyze", MapRenderer::analyze);
+        server.createContext("/v1/transform-schematic", MapRenderer::transformSchematic);
+        server.createContext("/v2/transform-schematic", MapRenderer::transformSchematic);
+        server.createContext("/v2/transform-map", MapRenderer::transformMap);
         server.createContext("/v1/content-metadata", MapRenderer::contentMetadata);
         server.setExecutor(Executors.newSingleThreadExecutor());
         server.start();
@@ -118,7 +139,27 @@ public final class MapRenderer {
 
     private static void health(HttpExchange exchange) throws IOException {
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
-        send(exchange, 200, "{\"status\":\"ok\",\"mindustryVersion\":\"" + VERSION + "\",\"textureAssets\":" + (spriteAtlas != null) + "}");
+        send(exchange, 200, healthMetadata());
+    }
+
+    static String healthMetadata() {
+        return "{\"status\":\"ok\",\"protocolVersion\":" + PROTOCOL_VERSION
+            + ",\"rendererVersion\":" + quote(VERSION)
+            + ",\"buildDigest\":" + quote(rendererBuildDigest())
+            + ",\"runtime\":{\"name\":\"Mindustry\",\"version\":\"v160.2\",\"build\":" + Version.build
+            + ",\"artifactSha256\":" + quote(MINDUSTRY_SERVER_SHA256) + "}"
+            + ",\"supportedOperations\":[\"schematic.read\",\"schematic.write\",\"schematic.logic.read\",\"schematic.logic.text.write\",\"map.read\",\"map.write\",\"map.rules.read\",\"map.rules.write\",\"map.waves.read\",\"map.waves.write\"]"
+            + ",\"textureAssets\":" + (spriteAtlas != null) + "}";
+    }
+
+    /** Hashes the compiled entry class so health reports the running worker build, not just its source label. */
+    private static String rendererBuildDigest() {
+        try (var input = MapRenderer.class.getResourceAsStream("MapRenderer.class")) {
+            if (input == null) return "unavailable";
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(input.readAllBytes()));
+        } catch (Exception ignored) {
+            return "unavailable";
+        }
     }
 
     /** Resolve all requested vanilla icons/names in one request, using the bundled official atlas and zh_CN bundle. */
@@ -218,6 +259,835 @@ public final class MapRenderer {
         }
     }
 
+    /** Applies only official in-memory schematic transforms; uploaded content is never loaded as code or executed. */
+    private static void transformSchematic(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        Path input = null;
+        try {
+            JsonValue request = JSON.parse(new String(readLimited(exchange, MAX_BYTES * 2), StandardCharsets.UTF_8));
+            String filename = request.getString("filename", "");
+            String sourceHash = request.getString("sha256", "").toLowerCase();
+            String encoded = request.getString("dataBase64", "");
+            int rotation = request.getInt("rotation_quarters", 0);
+            boolean mirrorX = request.getBoolean("mirror_x", false);
+            JsonValue rawDeletes = request.get("delete_positions");
+            JsonValue rawMoves = request.get("move_positions");
+            JsonValue rawAdds = request.get("add_blocks");
+            JsonValue rawLogicConfigs = request.get("logic_configs");
+            if (filename.length() > 255 || !filename.toLowerCase().endsWith(".msch")
+                || !sourceHash.matches("[a-f0-9]{64}") || encoded.isEmpty()
+                || rotation < 0 || rotation > 3 || (rawDeletes != null && !rawDeletes.isArray())
+                || (rawMoves != null && !rawMoves.isArray()) || (rawAdds != null && !rawAdds.isArray())
+                || (rawLogicConfigs != null && !rawLogicConfigs.isArray())) {
+                send(exchange, 422, error("INVALID_SCHEMATIC_OPERATION")); return;
+            }
+            byte[] source = Base64.getDecoder().decode(encoded);
+            String actualHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source));
+            if (source.length == 0 || source.length > MAX_BYTES || !actualHash.equals(sourceHash)) {
+                send(exchange, 422, error("INVALID_FILE")); return;
+            }
+            List<Point2> deletePositions = readDeletePositions(rawDeletes);
+            List<MovePosition> movePositions = readMovePositions(rawMoves);
+            List<AddedBlock> addedBlocks = readAddedBlocks(rawAdds);
+            List<LogicConfigEdit> logicConfigs = readLogicConfigEdits(rawLogicConfigs);
+            Path inputs = storageRoot.resolve("worker-input").normalize();
+            Files.createDirectories(inputs);
+            input = Files.createTempFile(inputs, "schematic-edit-", ".msch");
+            Files.write(input, source);
+            byte[] output = transformSchematicBytes(input, rotation, mirrorX, deletePositions, movePositions, addedBlocks, logicConfigs);
+            String outputHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(output));
+            String result = "{\"dataBase64\":" + quote(Base64.getEncoder().encodeToString(output))
+                + ",\"sha256\":" + quote(outputHash) + "}";
+            send(exchange, 200, result);
+        } catch (SchematicTransformException exception) {
+            send(exchange, 422, error(exception.errorCode));
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 422, error("INVALID_SCHEMATIC_OPERATION"));
+        } catch (Exception exception) {
+            exception.printStackTrace(System.err);
+            send(exchange, 422, error("INVALID_SCHEMATIC"));
+        } finally {
+            if (input != null) Files.deleteIfExists(input);
+        }
+    }
+
+    /** Edits a derived .msav copy with official MapIO and validates it by loading the result again. */
+    private static void transformMap(HttpExchange exchange) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        Path input = null;
+        Path output = null;
+        try {
+            JsonValue request = JSON.parse(new String(readLimited(exchange, MAX_BYTES * 2), StandardCharsets.UTF_8));
+            String filename = request.getString("filename", "");
+            String sourceHash = request.getString("sha256", "").toLowerCase();
+            String encoded = request.getString("dataBase64", "");
+            JsonValue rawTerrain = request.get("terrain_changes");
+            JsonValue rawRules = request.get("rule_changes");
+            JsonValue rawWaves = request.get("wave_operations");
+            if (filename.length() > 255 || !filename.toLowerCase().endsWith(".msav")
+                || !sourceHash.matches("[a-f0-9]{64}") || encoded.isEmpty()
+                || (rawTerrain != null && !rawTerrain.isArray())
+                || (rawRules != null && !rawRules.isObject())
+                || (rawWaves != null && !rawWaves.isArray())) {
+                send(exchange, 422, error("INVALID_MAP_OPERATION")); return;
+            }
+            byte[] source = Base64.getDecoder().decode(encoded);
+            String actualHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(source));
+            if (source.length < 8 || source.length > MAX_BYTES || source[0] != 'M' || source[1] != 'S' || source[2] != 'A' || source[3] != 'V'
+                || !actualHash.equals(sourceHash)) {
+                send(exchange, 422, error("INVALID_FILE")); return;
+            }
+            List<MapTerrainChange> terrain = readMapTerrainChanges(rawTerrain);
+            List<MapWaveOperation> waves = readMapWaveOperations(rawWaves);
+            Path inputs = storageRoot.resolve("worker-input").normalize();
+            Files.createDirectories(inputs);
+            input = Files.createTempFile(inputs, "map-edit-", ".msav");
+            output = Files.createTempFile(inputs, "map-edited-", ".msav");
+            Files.write(input, source);
+            byte[] edited = transformMapBytes(input, output, terrain, rawRules, waves);
+            String outputHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(edited));
+            send(exchange, 200, "{\"dataBase64\":" + quote(Base64.getEncoder().encodeToString(edited))
+                + ",\"sha256\":" + quote(outputHash) + "}");
+        } catch (MapTransformException exception) {
+            send(exchange, 422, error(exception.errorCode));
+        } catch (IllegalArgumentException exception) {
+            send(exchange, 422, error("INVALID_MAP_OPERATION"));
+        } catch (Exception exception) {
+            exception.printStackTrace(System.err);
+            send(exchange, 422, error("INVALID_MAP"));
+        } finally {
+            if (input != null) Files.deleteIfExists(input);
+            if (output != null) Files.deleteIfExists(output);
+        }
+    }
+
+    private static List<MapTerrainChange> readMapTerrainChanges(JsonValue raw) throws MapTransformException {
+        java.util.ArrayList<MapTerrainChange> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        java.util.HashSet<Long> unique = new java.util.HashSet<>();
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= MAX_MAP_LAYER_ITEMS || !item.isObject()) throw new MapTransformException("INVALID_MAP_OPERATION");
+            int x = item.getInt("x", Integer.MIN_VALUE);
+            int y = item.getInt("y", Integer.MIN_VALUE);
+            String floor = item.getString("floor", "");
+            String overlay = item.getString("overlay", "");
+            if (x < 0 || y < 0 || x >= 32_768 || y >= 32_768
+                || !floor.matches("[a-zA-Z0-9_.:-]{1,191}")
+                || (!overlay.isEmpty() && !overlay.matches("[a-zA-Z0-9_.:-]{1,191}"))
+                || !unique.add(positionKey(x, y))) throw new MapTransformException("INVALID_MAP_OPERATION");
+            result.add(new MapTerrainChange(x, y, floor, overlay));
+        }
+        return result;
+    }
+
+    private static List<MapWaveOperation> readMapWaveOperations(JsonValue raw) throws MapTransformException {
+        java.util.ArrayList<MapWaveOperation> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= 1_000 || !item.isObject()) throw new MapTransformException("INVALID_WAVE_OPERATION");
+            String action = item.getString("action", "");
+            int index = item.getInt("index", Integer.MIN_VALUE);
+            int toIndex = item.getInt("to_index", Integer.MIN_VALUE);
+            JsonValue fields = item.get("fields");
+            if (!(action.equals("add") || action.equals("update") || action.equals("delete") || action.equals("move"))
+                || (action.equals("add") ? index < 0 || index > 5_000 || fields == null || !fields.isObject()
+                    : index < 0 || index > 5_000)
+                || (action.equals("update") && (fields == null || !fields.isObject()))
+                || (action.equals("move") && (toIndex < 0 || toIndex > 5_000))) {
+                throw new MapTransformException("INVALID_WAVE_OPERATION");
+            }
+            result.add(new MapWaveOperation(action, index, toIndex, fields));
+        }
+        return result;
+    }
+
+    static byte[] transformMapBytes(Path input, Path output, List<MapTerrainChange> terrainChanges,
+        JsonValue ruleChanges, List<MapWaveOperation> waveOperations) throws Exception {
+        Map map = MapIO.createMap(new Fi(input.toFile()), true);
+        SaveMeta meta = SaveIO.getMeta(new Fi(input.toFile()));
+        if ((long)map.width * map.height <= 0 || (long)map.width * map.height > MAX_MAP_TILE_AREA) {
+            throw new MapTransformException("UNSUPPORTED_MAP_SIZE");
+        }
+        if (hasMods(meta) || (map.mod != null) || !map.tags.get("mod", "").isBlank()) {
+            throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+        }
+        MapIO.loadMap(map);
+        if (Vars.world == null || Vars.world.tiles == null || Vars.world.tiles.width != map.width || Vars.world.tiles.height != map.height) {
+            throw new MapTransformException("INVALID_MAP");
+        }
+        for (mindustry.world.Tile tile : Vars.world.tiles) {
+            if (isA(tile.block(), "LegacyBlock") || isA(tile.floor(), "LegacyBlock") || isA(tile.overlay(), "LegacyBlock")) {
+                throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+            }
+        }
+        java.util.Map<Long, mindustry.world.Tile> tilesByPosition = new java.util.HashMap<>();
+        for (mindustry.world.Tile tile : Vars.world.tiles) tilesByPosition.put(positionKey(tile.x, tile.y), tile);
+        Block airBlock = Vars.content.getByName(ContentType.block, "air");
+        if (airBlock == null || !airBlock.isFloor()) throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+        for (MapTerrainChange change : terrainChanges) {
+            mindustry.world.Tile tile = tilesByPosition.get(positionKey(change.x(), change.y()));
+            Block floor = Vars.content.getByName(ContentType.block, change.floor());
+            boolean clearOverlay = change.overlay().isEmpty() || change.overlay().equals("air");
+            Block overlay = clearOverlay ? airBlock : Vars.content.getByName(ContentType.block, change.overlay());
+            if (tile == null || floor == null || !floor.isFloor()
+                || (!clearOverlay && overlay != null && (!overlay.isFloor() || !overlay.asFloor().isOverlay()))) {
+                throw new MapTransformException(floor == null || (!change.overlay().isEmpty() && overlay == null)
+                    ? "UNSUPPORTED_MAP_CONTENT" : "INVALID_MAP_OPERATION");
+            }
+        }
+        String rawRules = map.tags.get("rules", "{}");
+        JsonValue editedRules;
+        try {
+            editedRules = JSON.parse(rawRules);
+            if (editedRules == null || !editedRules.isObject()) throw new IllegalArgumentException("rules root is not an object");
+        } catch (Exception exception) {
+            throw new MapTransformException("UNSUPPORTED_MAP_RULES");
+        }
+        if (ruleChanges != null) applyRuleChanges(editedRules, ruleChanges);
+        JsonValue waves = editedRules.get("spawns");
+        if (!waveOperations.isEmpty()) {
+            waves = applyWaveOperations(waves, waveOperations);
+            setJsonChild(editedRules, "spawns", waves);
+        }
+        rawRules = editedRules.toJson(JsonWriter.OutputType.minimal);
+        try {
+            Vars.state.rules = mindustry.io.JsonIO.read(mindustry.game.Rules.class, rawRules);
+            if (Vars.state.rules == null) throw new IllegalArgumentException("rules could not be read");
+        } catch (Exception exception) {
+            throw new MapTransformException("INVALID_MAP_RULES");
+        }
+        map.tags.put("rules", rawRules);
+
+        for (MapTerrainChange change : terrainChanges) {
+            mindustry.world.Tile tile = tilesByPosition.get(positionKey(change.x(), change.y()));
+            Block floor = Vars.content.getByName(ContentType.block, change.floor());
+            Block overlay = change.overlay().isEmpty() || change.overlay().equals("air")
+                ? airBlock : Vars.content.getByName(ContentType.block, change.overlay());
+            tile.setFloor(floor.asFloor());
+            tile.setOverlay(overlay.asFloor());
+        }
+        Vars.state.map = map;
+        MapStructure beforeWrite = mapStructure();
+        MapIO.writeMap(new Fi(output.toFile()), map, false);
+        byte[] officialOutput = Files.readAllBytes(output);
+        if (officialOutput.length < 8 || officialOutput.length > MAX_BYTES) throw new MapTransformException("INVALID_MAP");
+        byte[] withPreservedRules = patchMapRules(officialOutput, rawRules);
+        Files.write(output, withPreservedRules);
+
+        Map roundTrip = MapIO.createMap(new Fi(output.toFile()), true);
+        if (!rawRules.equals(roundTrip.tags.get("rules", "{}"))) throw new MapTransformException("INVALID_MAP_RULES");
+        MapIO.loadMap(roundTrip);
+        MapStructure afterRoundTrip = mapStructure();
+        if (!beforeWrite.equals(afterRoundTrip)) throw new MapTransformException("INVALID_MAP");
+        for (MapTerrainChange change : terrainChanges) {
+            mindustry.world.Tile tile = Vars.world.tiles.getn(change.x(), change.y());
+            Block floor = Vars.content.getByName(ContentType.block, change.floor());
+            Block overlay = change.overlay().isEmpty() || change.overlay().equals("air")
+                ? airBlock : Vars.content.getByName(ContentType.block, change.overlay());
+            if (tile.floor() != floor || tile.overlay() != overlay) throw new MapTransformException("INVALID_MAP");
+        }
+        return withPreservedRules;
+    }
+
+    private static boolean hasMods(SaveMeta metadata) {
+        if (metadata == null || metadata.mods == null) return false;
+        for (String mod : metadata.mods) if (mod != null && !mod.isBlank()) return true;
+        return false;
+    }
+
+    private static void applyRuleChanges(JsonValue rules, JsonValue changes) throws MapTransformException {
+        java.util.Set<String> booleans = java.util.Set.of(
+            "allowEditRules", "infiniteResources", "coreBuildAndConfig", "waveTimer", "waveSending", "waves", "airUseSpawns", "wavesSpawnAtCores",
+            "pvp", "pvpAutoPause", "pauseDisabled", "waitEnemies", "attackMode", "editor", "derelictRepair", "canGameOver", "coreCapture",
+            "reactorExplosions", "possessionAllowed", "schematicsAllowed", "damageExplosions", "fire", "randomWaveAI", "unitPayloadUpdate",
+            "unitPayloadsExplode", "unitCapVariable", "hideSpawns", "ghostBlocks", "showOtherTeamPings", "logicUnitControl", "logicUnitBuild",
+            "logicUnitDeconstruct", "worldProcessorPlayerLink", "allowEditWorldProcessors", "disableWorldProcessors", "polygonCoreProtection",
+            "placeRangeCheck", "cleanupDeadTeams", "onlyDepositCore", "allowCoreUnloaders", "coreDestroyClear", "hideBannedBlocks",
+            "allowEnvironmentDeconstruct", "instantBuild", "blockWhitelist", "unitWhitelist", "disableUnitCap", "lighting"
+        );
+        java.util.Set<String> integers = java.util.Set.of("unitCap", "winWave", "environment");
+        java.util.Set<String> numbers = java.util.Set.of(
+            "solarMultiplier", "unitBuildSpeedMultiplier", "unitCostMultiplier", "unitDamageMultiplier", "unitHealthMultiplier",
+            "unitCrashDamageMultiplier", "unitMineSpeedMultiplier", "unitFactoryActivationDelay", "blockHealthMultiplier", "blockDamageMultiplier",
+            "buildCostMultiplier", "buildSpeedMultiplier", "deconstructRefundMultiplier", "enemyCoreBuildRadius", "dropZoneRadius", "waveSpacing",
+            "initialWaveSpacing", "itemDepositCooldown"
+        );
+        java.util.Set<String> arrays = java.util.Set.of("bannedBlocks", "bannedUnits");
+        for (JsonValue change = changes.child; change != null; change = change.next) {
+            String key = change.name;
+            JsonValue value = change;
+            if (key == null) throw new MapTransformException("INVALID_MAP_RULES");
+            if (booleans.contains(key)) {
+                if (!value.isBoolean()) throw new MapTransformException("INVALID_MAP_RULES");
+            } else if (integers.contains(key)) {
+                if (!value.isNumber() || value.asDouble() != Math.rint(value.asDouble()) || value.asLong() < (key.equals("environment") ? 0 : 0)
+                    || value.asLong() > (key.equals("environment") ? Integer.MAX_VALUE : 1_000_000)) throw new MapTransformException("INVALID_MAP_RULES");
+            } else if (numbers.contains(key)) {
+                if (!value.isNumber() || !Double.isFinite(value.asDouble()) || Math.abs(value.asDouble()) > 1_000_000_000d) throw new MapTransformException("INVALID_MAP_RULES");
+            } else if (key.equals("modeName")) {
+                if (!value.isString() || value.asString().length() > 100) throw new MapTransformException("INVALID_MAP_RULES");
+            } else if (arrays.contains(key)) {
+                if (!value.isArray() || value.size > 500) throw new MapTransformException("INVALID_MAP_RULES");
+                ContentType type = key.equals("bannedBlocks") ? ContentType.block : ContentType.unit;
+                for (JsonValue entry = value.child; entry != null; entry = entry.next) {
+                    if (!entry.isString() || entry.asString().length() > 191 || Vars.content.getByName(type, entry.asString()) == null) {
+                        throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+                    }
+                }
+            } else {
+                throw new MapTransformException("INVALID_MAP_RULES");
+            }
+            setJsonChild(rules, key, cloneJson(value));
+        }
+    }
+
+    private static JsonValue applyWaveOperations(JsonValue source, List<MapWaveOperation> operations) throws MapTransformException {
+        java.util.ArrayList<JsonValue> groups = new java.util.ArrayList<>();
+        if (source != null) {
+            if (!source.isArray() || source.size > 5_000) throw new MapTransformException("UNSUPPORTED_MAP_RULES");
+            for (JsonValue group = source.child; group != null; group = group.next) {
+                if (!group.isObject()) throw new MapTransformException("UNSUPPORTED_MAP_RULES");
+                groups.add(cloneJson(group));
+            }
+        }
+        for (MapWaveOperation operation : operations) {
+            if (operation.action().equals("add")) {
+                if (groups.size() >= 5_000 || operation.index() > groups.size()) throw new MapTransformException("INVALID_WAVE_OPERATION");
+                validateWaveGroupFields(operation.fields(), true);
+                JsonValue group = new JsonValue(JsonValue.ValueType.object);
+                for (JsonValue field = operation.fields().child; field != null; field = field.next) setJsonChild(group, field.name, cloneJson(field));
+                groups.add(operation.index(), group);
+            } else {
+                if (operation.index() >= groups.size()) throw new MapTransformException("INVALID_WAVE_OPERATION");
+                if (operation.action().equals("delete")) {
+                    groups.remove(operation.index());
+                } else if (operation.action().equals("move")) {
+                    if (operation.toIndex() >= groups.size()) throw new MapTransformException("INVALID_WAVE_OPERATION");
+                    JsonValue group = groups.remove(operation.index());
+                    groups.add(operation.toIndex(), group);
+                } else {
+                    validateWaveGroupFields(operation.fields(), false);
+                    JsonValue group = groups.get(operation.index());
+                    for (JsonValue field = operation.fields().child; field != null; field = field.next) setJsonChild(group, field.name, cloneJson(field));
+                }
+            }
+        }
+        JsonValue result = new JsonValue(JsonValue.ValueType.array);
+        for (JsonValue group : groups) result.addChild(cloneJson(group));
+        return result;
+    }
+
+    private static void validateWaveGroupFields(JsonValue fields, boolean isNew) throws MapTransformException {
+        java.util.Set<String> allowed = java.util.Set.of("type", "begin", "end", "spacing", "max", "scaling", "shields", "shieldScaling", "amount", "spawn", "effect", "payloads", "items", "team");
+        if (isNew && !fields.has("type")) throw new MapTransformException("INVALID_WAVE_OPERATION");
+        for (JsonValue field = fields.child; field != null; field = field.next) {
+            String key = field.name;
+            if (key == null || !allowed.contains(key)) throw new MapTransformException("INVALID_WAVE_OPERATION");
+            if (key.equals("type")) {
+                if (!field.isString() || Vars.content.getByName(ContentType.unit, field.asString()) == null) throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+            } else if (key.equals("effect")) {
+                if (!field.isString() || Vars.content.getByName(ContentType.status, field.asString()) == null) throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+            } else if (key.equals("payloads")) {
+                if (!field.isArray() || field.size > 100) throw new MapTransformException("INVALID_WAVE_OPERATION");
+                for (JsonValue payload = field.child; payload != null; payload = payload.next) {
+                    if (!payload.isString() || Vars.content.getByName(ContentType.unit, payload.asString()) == null) throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+                }
+            } else if (key.equals("items")) {
+                JsonValue item = field.get("item");
+                JsonValue amount = field.get("amount");
+                if (!field.isObject() || field.size > 2 || item == null || !item.isString()
+                    || Vars.content.getByName(ContentType.item, item.asString()) == null || amount == null
+                    || !amount.isNumber() || amount.asInt() < 0 || amount.asInt() > 1_000_000 || amount.asDouble() != amount.asInt()) {
+                    throw new MapTransformException("UNSUPPORTED_MAP_CONTENT");
+                }
+            } else if (key.equals("team")) {
+                if (!field.isNumber() || field.asInt() < 0 || field.asInt() > 255 || field.asDouble() != field.asInt()) throw new MapTransformException("INVALID_WAVE_OPERATION");
+            } else if (key.equals("spawn")) {
+                if (!field.isNumber() || field.asInt() < -1 || field.asInt() > 1_000_000 || field.asDouble() != field.asInt()) throw new MapTransformException("INVALID_WAVE_OPERATION");
+            } else if (key.equals("begin") || key.equals("end") || key.equals("spacing") || key.equals("max") || key.equals("amount")) {
+                if (!field.isNumber() || field.asInt() < (key.equals("spacing") ? 1 : 0) || field.asInt() > 2_147_483_647 || field.asDouble() != field.asInt()) {
+                    throw new MapTransformException("INVALID_WAVE_OPERATION");
+                }
+            } else if (!field.isNumber() || !Double.isFinite(field.asDouble()) || field.asDouble() < 0 || field.asDouble() > 1_000_000_000d) {
+                throw new MapTransformException("INVALID_WAVE_OPERATION");
+            }
+        }
+    }
+
+    private static void setJsonChild(JsonValue object, String key, JsonValue value) {
+        object.remove(key);
+        object.addChild(key, value);
+        object.size++;
+    }
+
+    private static JsonValue cloneJson(JsonValue value) {
+        JsonValue copy;
+        if (value.isObject()) copy = new JsonValue(JsonValue.ValueType.object);
+        else if (value.isArray()) copy = new JsonValue(JsonValue.ValueType.array);
+        else if (value.isString()) copy = new JsonValue(value.asString());
+        else if (value.isLong()) copy = new JsonValue(value.asLong());
+        else if (value.isDouble()) copy = new JsonValue(value.asDouble());
+        else if (value.isBoolean()) copy = new JsonValue(value.asBoolean());
+        else copy = new JsonValue((String)null);
+        for (JsonValue child = value.child; child != null; child = child.next) {
+            JsonValue cloned = cloneJson(child);
+            if (value.isObject()) copy.addChild(child.name, cloned); else copy.addChild(cloned);
+            copy.size++;
+        }
+        return copy;
+    }
+
+    static byte[] patchMapRules(byte[] save, String rawRules) throws IOException {
+        byte[] uncompressed;
+        try (InflaterInputStream inflater = new InflaterInputStream(new java.io.ByteArrayInputStream(save));
+             ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            inflater.transferTo(bytes);
+            uncompressed = bytes.toByteArray();
+        }
+        try (DataInputStream data = new DataInputStream(new java.io.ByteArrayInputStream(uncompressed));
+             ByteArrayOutputStream patched = new ByteArrayOutputStream(uncompressed.length);
+             DataOutputStream output = new DataOutputStream(patched)) {
+            SaveIO.readHeader(data);
+            int version = data.readInt();
+            int metaLength = data.readInt();
+            if (metaLength < 0 || metaLength > uncompressed.length - 12) throw new IOException("invalid map metadata chunk");
+            byte[] metaBytes = data.readNBytes(metaLength);
+            if (metaBytes.length != metaLength) throw new IOException("truncated map metadata chunk");
+            SaveVersion writer = SaveIO.getSaveWriter(version);
+            if (writer == null) throw new IOException("unsupported output save version");
+            StringMap tags = writer.readStringMap(new DataInputStream(new java.io.ByteArrayInputStream(metaBytes)));
+            tags.put("rules", rawRules);
+            ByteArrayOutputStream updatedMeta = new ByteArrayOutputStream();
+            writer.writeStringMap(new DataOutputStream(updatedMeta), tags);
+            output.write(SaveIO.header);
+            output.writeInt(version);
+            output.writeInt(updatedMeta.size());
+            updatedMeta.writeTo(output);
+            data.transferTo(output);
+            output.flush();
+            ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+            try (DeflaterOutputStream deflater = new DeflaterOutputStream(compressed)) {
+                deflater.write(patched.toByteArray());
+            }
+            byte[] result = compressed.toByteArray();
+            if (result.length > MAX_BYTES) throw new IOException("edited map exceeds size bound");
+            return result;
+        }
+    }
+
+    private static MapStructure mapStructure() throws IOException {
+        java.util.ArrayList<String> tiles = new java.util.ArrayList<>(Vars.world.width() * Vars.world.height());
+        java.util.ArrayList<String> buildings = new java.util.ArrayList<>();
+        for (mindustry.world.Tile tile : Vars.world.tiles) {
+            String team = tile.build == null || tile.build.team == null ? "" : Integer.toString(tile.build.team.id);
+            tiles.add(tile.floorID() + ":" + tile.overlayID() + ":" + tile.blockID() + ":" + tile.data + ":" + tile.floorData + ":" + tile.overlayData + ":" + tile.extraData + ":" + team);
+            if (tile.isCenter() && tile.build != null) {
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                try (DataOutputStream data = new DataOutputStream(bytes)) {
+                    tile.build.writeAll(new arc.util.io.Writes(data));
+                }
+                String buildHash;
+                try {
+                    buildHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes.toByteArray()));
+                } catch (java.security.NoSuchAlgorithmException exception) {
+                    throw new IOException("SHA-256 unavailable", exception);
+                }
+                buildings.add(tile.x + ":" + tile.y + ":" + tile.build.block.name + ":" + tile.build.rotation + ":"
+                    + buildHash);
+            }
+        }
+        return new MapStructure(Vars.world.width(), Vars.world.height(), List.copyOf(tiles), List.copyOf(buildings));
+    }
+
+    record MapTerrainChange(int x, int y, String floor, String overlay) {}
+    record MapWaveOperation(String action, int index, int toIndex, JsonValue fields) {}
+    record MapStructure(int width, int height, List<String> tiles, List<String> buildings) {}
+    static final class MapTransformException extends Exception {
+        final String errorCode;
+        MapTransformException(String errorCode) { super(errorCode); this.errorCode = errorCode; }
+    }
+
+    private static List<Point2> readDeletePositions(JsonValue raw) throws SchematicTransformException {
+        java.util.ArrayList<Point2> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        java.util.HashSet<Long> unique = new java.util.HashSet<>();
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= 10_000 || !item.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            int x = item.getInt("x", Integer.MIN_VALUE);
+            int y = item.getInt("y", Integer.MIN_VALUE);
+            if (x == Integer.MIN_VALUE || y == Integer.MIN_VALUE || Math.abs(x) > 128 || Math.abs(y) > 128
+                || !unique.add((((long)x) << 32) ^ (y & 0xffffffffL))) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+            result.add(new Point2(x, y));
+        }
+        return result;
+    }
+
+    private static List<MovePosition> readMovePositions(JsonValue raw) throws SchematicTransformException {
+        java.util.ArrayList<MovePosition> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        java.util.HashSet<Long> sources = new java.util.HashSet<>();
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= 5_000 || !item.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            int fromX = item.getInt("from_x", Integer.MIN_VALUE);
+            int fromY = item.getInt("from_y", Integer.MIN_VALUE);
+            int toX = item.getInt("to_x", Integer.MIN_VALUE);
+            int toY = item.getInt("to_y", Integer.MIN_VALUE);
+            long source = positionKey(fromX, fromY);
+            if (!validSchematicCoordinate(fromX, fromY) || !validSchematicCoordinate(toX, toY) || !sources.add(source)) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+            result.add(new MovePosition(fromX, fromY, toX, toY));
+        }
+        return result;
+    }
+
+    private static List<AddedBlock> readAddedBlocks(JsonValue raw) throws SchematicTransformException {
+        java.util.ArrayList<AddedBlock> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= 5_000 || !item.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            int x = item.getInt("x", Integer.MIN_VALUE);
+            int y = item.getInt("y", Integer.MIN_VALUE);
+            int rotation = item.getInt("rotation", 0);
+            String block = item.getString("block", "");
+            if (!validSchematicCoordinate(x, y) || rotation < 0 || rotation > 3
+                || !block.matches("[a-zA-Z0-9_.:-]{1,191}")) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+            result.add(new AddedBlock(x, y, block, rotation));
+        }
+        return result;
+    }
+
+    private static List<LogicConfigEdit> readLogicConfigEdits(JsonValue raw) throws SchematicTransformException {
+        java.util.ArrayList<LogicConfigEdit> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        java.util.HashSet<Long> unique = new java.util.HashSet<>();
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= 1_000 || !item.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            int x = item.getInt("x", Integer.MIN_VALUE);
+            int y = item.getInt("y", Integer.MIN_VALUE);
+            String source = item.getString("source", "");
+            if (!validSchematicCoordinate(x, y) || source.length() > 32_768 || source.indexOf('\0') >= 0
+                || !unique.add(positionKey(x, y))) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            result.add(new LogicConfigEdit(x, y, source));
+        }
+        return result;
+    }
+
+    private static boolean validSchematicCoordinate(int x, int y) {
+        return x >= 0 && x < 128 && y >= 0 && y < 128;
+    }
+
+    private static long positionKey(int x, int y) {
+        return (((long)x) << 32) ^ (y & 0xffffffffL);
+    }
+
+    record MovePosition(int fromX, int fromY, int toX, int toY) {}
+    record AddedBlock(int x, int y, String block, int rotation) {}
+    record LogicConfigEdit(int x, int y, String source) {}
+
+    /**
+     * Decodes with Mindustry's official reader and serializes with its official
+     * writer. Unknown block/content definitions are rejected because read()
+     * deliberately replaces unknown blocks with air and could otherwise lose data.
+     */
+    static byte[] transformSchematicBytes(Path input, int rotationQuarterTurns, boolean mirrorX, List<Point2> deletePositions) throws IOException, SchematicTransformException {
+        return transformSchematicBytes(input, rotationQuarterTurns, mirrorX, deletePositions, List.of(), List.of(), List.of());
+    }
+
+    static byte[] transformSchematicBytes(Path input, int rotationQuarterTurns, boolean mirrorX,
+        List<Point2> deletePositions, List<MovePosition> movePositions, List<AddedBlock> addedBlocks,
+        List<LogicConfigEdit> logicConfigs)
+        throws IOException, SchematicTransformException {
+        if (rotationQuarterTurns < 0 || rotationQuarterTurns > 3) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+        List<String> unknown = unknownSchematicEditContent(input);
+        if (!unknown.isEmpty()) throw new SchematicTransformException("UNSUPPORTED_SCHEMATIC_CONTENT");
+
+        Schematic source = Schematics.read(new Fi(input.toFile()));
+        java.util.HashSet<Long> requested = new java.util.HashSet<>();
+        for (Point2 position : deletePositions) {
+            if (position.x < 0 || position.y < 0 || position.x >= source.width || position.y >= source.height
+                || !requested.add(positionKey(position.x, position.y))) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+        }
+        if (deletePositions.size() > 10_000 || movePositions.size() > 5_000 || addedBlocks.size() > 5_000 || logicConfigs.size() > 1_000
+            || deletePositions.size() + movePositions.size() + addedBlocks.size() + logicConfigs.size() > 10_000) {
+            throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+        }
+        java.util.HashMap<Long, Schematic.Stile> sourceTiles = new java.util.HashMap<>();
+        for (Schematic.Stile tile : source.tiles) {
+            if (tile.x < 0 || tile.y < 0 || tile.x >= source.width || tile.y >= source.height
+                || sourceTiles.put(positionKey(tile.x, tile.y), tile) != null) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC");
+            }
+        }
+        for (LogicConfigEdit edit : logicConfigs) {
+            Schematic.Stile tile = sourceTiles.get(positionKey(edit.x(), edit.y()));
+            if (tile == null || !(tile.block instanceof LogicBlock) || !(tile.config instanceof byte[])) {
+                throw new SchematicTransformException("UNSUPPORTED_LOGIC_CONFIG");
+            }
+            tile.config = editLogicSource(tile.config, edit.source());
+        }
+        java.util.HashMap<Long, MovePosition> movesBySource = new java.util.HashMap<>();
+        java.util.HashSet<Long> changedSources = new java.util.HashSet<>(requested);
+        java.util.HashSet<Long> destinations = new java.util.HashSet<>();
+        for (MovePosition move : movePositions) {
+            long from = positionKey(move.fromX(), move.fromY());
+            long to = positionKey(move.toX(), move.toY());
+            Schematic.Stile tile = sourceTiles.get(from);
+            if (tile == null || !changedSources.add(from) || !destinations.add(to)) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+            movesBySource.put(from, move);
+        }
+        java.util.HashSet<Long> finalPositions = new java.util.HashSet<>();
+        for (var entry : sourceTiles.entrySet()) {
+            if (!changedSources.contains(entry.getKey())
+                && !reserveSchematicFootprint(finalPositions, entry.getValue().block, entry.getValue().x, entry.getValue().y, source.width, source.height)) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC");
+            }
+        }
+        for (MovePosition move : movePositions) {
+            long to = positionKey(move.toX(), move.toY());
+            Schematic.Stile moving = sourceTiles.get(positionKey(move.fromX(), move.fromY()));
+            if (move.toX() >= source.width || move.toY() >= source.height
+                || !reserveSchematicFootprint(finalPositions, moving.block, move.toX(), move.toY(), source.width, source.height)) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+        }
+        for (AddedBlock add : addedBlocks) {
+            if (add.x() >= source.width || add.y() >= source.height) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            Block block = Vars.content.getByName(ContentType.block, add.block());
+            long position = positionKey(add.x(), add.y());
+            if (block == null || isA(block, "LegacyBlock") || block.size != 1
+                || !reserveSchematicFootprint(finalPositions, block, add.x(), add.y(), source.width, source.height)) {
+                throw new SchematicTransformException(block == null || isA(block, "LegacyBlock")
+                    ? "UNSUPPORTED_SCHEMATIC_CONTENT" : "INVALID_SCHEMATIC_OPERATION");
+            }
+        }
+        for (Point2 position : deletePositions) {
+            if (!sourceTiles.containsKey(positionKey(position.x, position.y))) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+        }
+        for (MovePosition move : movePositions) {
+            if (!sourceTiles.containsKey(positionKey(move.fromX(), move.fromY()))) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+        }
+
+        Seq<Schematic.Stile> editedTiles = new Seq<>(source.tiles.size + addedBlocks.size());
+        for (Schematic.Stile tile : source.tiles) {
+            long position = positionKey(tile.x, tile.y);
+            if (requested.contains(position)) continue;
+            MovePosition move = movesBySource.get(position);
+            if (move == null) editedTiles.add(tile);
+            else {
+                Schematic.Stile moved = tile.copy();
+                if (tile.block instanceof LogicBlock) {
+                    if (!(tile.config instanceof byte[])) throw new SchematicTransformException("UNSUPPORTED_LOGIC_CONFIG");
+                    try {
+                        parseLogicConfig(tile.config);
+                        int dx = move.toX() - move.fromX();
+                        int dy = move.toY() - move.fromY();
+                        moved.config = tile.block.pointConfig(tile.config, point -> { point.x -= dx; point.y -= dy; });
+                    } catch (IOException exception) {
+                        throw new SchematicTransformException("UNSUPPORTED_LOGIC_CONFIG");
+                    }
+                }
+                moved.x = (short)move.toX();
+                moved.y = (short)move.toY();
+                editedTiles.add(moved);
+            }
+        }
+        for (AddedBlock add : addedBlocks) {
+            Block block = Vars.content.getByName(ContentType.block, add.block());
+            editedTiles.add(new Schematic.Stile(block, add.x(), add.y(), null, (byte)add.rotation()));
+        }
+        source.tiles.clear();
+        source.tiles.addAll(editedTiles);
+
+        StringMap tags = new StringMap();
+        tags.putAll(source.tags);
+        Seq<String> labels = new Seq<>();
+        if (source.labels != null) labels.addAll(source.labels);
+        Schematic rotated = Schematics.rotate(source, rotationQuarterTurns);
+        Schematic result = copySchematic(rotated);
+        result.tags.clear();
+        result.tags.putAll(tags);
+        result.labels.clear();
+        result.labels.addAll(labels);
+        if (mirrorX) mirrorSchematicX(result);
+        for (Schematic.Stile tile : result.tiles) {
+            if (tile.x < 0 || tile.y < 0 || tile.x >= result.width || tile.y >= result.height) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC");
+            }
+        }
+
+        java.io.ByteArrayOutputStream output = new java.io.ByteArrayOutputStream();
+        Schematics.write(result, output);
+        byte[] bytes = output.toByteArray();
+        if (bytes.length < 5 || bytes.length > MAX_BYTES) throw new SchematicTransformException("INVALID_SCHEMATIC");
+        Schematic verified = Schematics.read(new java.io.ByteArrayInputStream(bytes));
+        if (verified.width != result.width || verified.height != result.height || verified.tiles.size != result.tiles.size
+            || !SchematicFingerprint.exact(verified).equals(SchematicFingerprint.exact(result))) {
+            throw new SchematicTransformException("INVALID_SCHEMATIC");
+        }
+        return bytes;
+    }
+
+    /** Reserve the exact tile footprint used by Mindustry for a BuildPlan. */
+    private static boolean reserveSchematicFootprint(java.util.Set<Long> occupied, Block block, int anchorX, int anchorY, int width, int height) {
+        int left = anchorX + block.sizeOffset;
+        int bottom = anchorY + block.sizeOffset;
+        for (int x = left; x < left + block.size; x++) {
+            for (int y = bottom; y < bottom + block.size; y++) {
+                if (x < 0 || y < 0 || x >= width || y >= height || !occupied.add(positionKey(x, y))) return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean isLogicProcessor(String name) {
+        return name != null && name.toLowerCase(java.util.Locale.ROOT).contains("processor");
+    }
+
+    private static LogicConfigData parseLogicConfig(Object raw) throws IOException {
+        if (!(raw instanceof byte[] bytes) || bytes.length == 0 || bytes.length > 16_000) throw new IOException("unsupported logic config bytes");
+        try (DataInputStream data = new DataInputStream(new InflaterInputStream(new java.io.ByteArrayInputStream(bytes)))) {
+            int version = data.readUnsignedByte();
+            if (version != 1) throw new IOException("unsupported logic config version");
+            int sourceLength = data.readInt();
+            if (sourceLength < 0 || sourceLength > 100_000) throw new IOException("invalid logic source length");
+            byte[] source = new byte[sourceLength];
+            data.readFully(source);
+            int count = data.readInt();
+            if (count < 0 || count > 6_000) throw new IOException("invalid logic link count");
+            java.util.ArrayList<LogicLinkData> links = new java.util.ArrayList<>(count);
+            for (int index = 0; index < count; index++) {
+                String name = data.readUTF();
+                int x = data.readShort();
+                int y = data.readShort();
+                links.add(new LogicLinkData(name, x, y));
+            }
+            if (data.read() != -1) throw new IOException("trailing logic config bytes");
+            return new LogicConfigData(new String(source, StandardCharsets.UTF_8), links);
+        }
+    }
+
+    private static byte[] editLogicSource(Object raw, String source) throws SchematicTransformException {
+        try {
+            LogicConfigData original = parseLogicConfig(raw);
+            Seq<LogicBlock.LogicLink> links = new Seq<>(original.links().size());
+            for (LogicLinkData link : original.links()) links.add(new LogicBlock.LogicLink(link.x(), link.y(), link.name(), false));
+            byte[] encoded = LogicBlock.compress(source, links);
+            if (encoded.length > 16_000) throw new SchematicTransformException("INVALID_LOGIC_SOURCE");
+            return encoded;
+        } catch (SchematicTransformException exception) {
+            throw exception;
+        } catch (IOException exception) {
+            throw new SchematicTransformException("UNSUPPORTED_LOGIC_CONFIG");
+        }
+    }
+
+    private record LogicLinkData(String name, int x, int y) {}
+    private record LogicConfigData(String source, List<LogicLinkData> links) {}
+
+    private static LogicConfigMetadata logicConfigMetadata(Object raw, int sourceBudget, int linkBudget) {
+        try {
+            LogicConfigData data = parseLogicConfig(raw);
+            if (data.source().length() > 32_768 || data.source().length() > sourceBudget || data.links().size() > linkBudget) {
+                return new LogicConfigMetadata(null, 0, 0, false);
+            }
+            StringBuilder links = new StringBuilder("[");
+            boolean first = true;
+            for (LogicLinkData link : data.links()) {
+                if (!first) links.append(',');
+                first = false;
+                links.append("{\"name\":").append(quote(link.name()))
+                    .append(",\"x\":").append(link.x()).append(",\"y\":").append(link.y()).append('}');
+            }
+            links.append(']');
+            String json = "{\"source\":" + quote(data.source()) + ",\"links\":" + links + ",\"format_version\":1}";
+            return new LogicConfigMetadata(json, data.source().length(), data.links().size(), true);
+        } catch (Exception ignored) {
+            return new LogicConfigMetadata(null, 0, 0, false);
+        }
+    }
+
+    private record LogicConfigMetadata(String json, int sourceChars, int linkCount, boolean available) {}
+
+    private static Schematic copySchematic(Schematic source) {
+        Seq<Schematic.Stile> tiles = new Seq<>(source.tiles.size);
+        for (Schematic.Stile tile : source.tiles) tiles.add(tile.copy());
+        StringMap tags = new StringMap();
+        tags.putAll(source.tags);
+        Schematic copy = new Schematic(tiles, tags, source.width, source.height);
+        if (source.labels != null) copy.labels.addAll(source.labels);
+        return copy;
+    }
+
+    /** Horizontal reflection through the schematic's vertical centerline. */
+    private static void mirrorSchematicX(Schematic schematic) {
+        for (Schematic.Stile tile : schematic.tiles) {
+            tile.x = (short)(schematic.width - 1 - tile.x);
+            BuildPlan plan = new BuildPlan(tile.x, tile.y, tile.rotation, tile.block, tile.config);
+            plan.config = BuildPlan.pointConfig(tile.block, tile.config, point -> point.x = -point.x);
+            tile.block.flipRotation(plan, true);
+            tile.rotation = (byte)plan.rotation;
+            tile.config = plan.config;
+        }
+    }
+
+    private static List<String> unknownSchematicEditContent(Path input) throws IOException, SchematicTransformException {
+        try (DataInputStream file = new DataInputStream(Files.newInputStream(input))) {
+            if (file.readInt() != 0x6d736368) throw new SchematicTransformException("INVALID_SCHEMATIC");
+            int formatVersion = file.readUnsignedByte();
+            if (formatVersion != 1) throw new SchematicTransformException("UNSUPPORTED_SCHEMATIC_FORMAT");
+            try (DataInputStream data = new DataInputStream(new InflaterInputStream(file))) {
+                int width = data.readShort();
+                int height = data.readShort();
+                if (width <= 0 || height <= 0 || width > 128 || height > 128) throw new SchematicTransformException("INVALID_SCHEMATIC");
+                StringMap tags = new StringMap();
+                int tagCount = data.readUnsignedByte();
+                for (int index = 0; index < tagCount; index++) tags.put(data.readUTF(), data.readUTF());
+                String contentMap = tags.get("contentMap");
+                if (contentMap == null || contentMap.isBlank()) throw new SchematicTransformException("UNSUPPORTED_SCHEMATIC_CONTENT");
+                JsonValue mappedContent = JSON.parse(contentMap);
+                if (mappedContent == null || !mappedContent.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC");
+                java.util.ArrayList<String> unknown = new java.util.ArrayList<>();
+                for (JsonValue typeEntry = mappedContent.child; typeEntry != null; typeEntry = typeEntry.next) {
+                    int typeOrdinal;
+                    try { typeOrdinal = Integer.parseInt(typeEntry.name); }
+                    catch (NumberFormatException exception) { throw new SchematicTransformException("INVALID_SCHEMATIC"); }
+                    if (typeOrdinal < 0 || typeOrdinal >= ContentType.all.length || !typeEntry.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC");
+                    ContentType type = ContentType.all[typeOrdinal];
+                    for (JsonValue contentEntry = typeEntry.child; contentEntry != null; contentEntry = contentEntry.next) {
+                        if (Vars.content.getByName(type, contentEntry.name) == null) unknown.add(type.name() + ":" + contentEntry.name);
+                    }
+                }
+                int blockCount = data.readUnsignedByte();
+                for (int index = 0; index < blockCount; index++) {
+                    String name = data.readUTF();
+                    Block block = Vars.content.getByName(ContentType.block, mindustry.io.SaveFileReader.fallback.get(name, name));
+                    if (block == null || isA(block, "LegacyBlock")) unknown.add("block:" + name);
+                }
+                return List.copyOf(unknown);
+            }
+        } catch (SchematicTransformException | IOException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw new SchematicTransformException("INVALID_SCHEMATIC");
+        }
+    }
+
+    static final class SchematicTransformException extends Exception {
+        final String errorCode;
+        SchematicTransformException(String errorCode) { super(errorCode); this.errorCode = errorCode; }
+    }
+
     private static void renderMap(HttpExchange exchange, Path input, String hash) throws IOException {
         Map map = MapIO.createMap(new Fi(input.toFile()), true);
         SaveMeta storedMeta = SaveIO.getMeta(new Fi(input.toFile()));
@@ -286,7 +1156,7 @@ public final class MapRenderer {
         String dependencies = map.mod != null ? map.mod.name : map.tags.get("mod", "");
         String teams = teamNames(map);
         String waves = rules == null ? "null" : Boolean.toString(rules.waves);
-        String rulesJson = rulesJson(rules);
+        String rulesJson = rulesJson(rules, map);
         String spawnGroups = spawnGroupsJson(rules);
         String bannedBlocks = rules == null ? "[]" : contentNames(rules.bannedBlocks);
         String bannedUnits = rules == null ? "[]" : unitNames(rules.bannedUnits);
@@ -318,36 +1188,60 @@ public final class MapRenderer {
             ",\"core_count\":" + jsonField(tileMetadata, "core_count", "0") +
             ",\"cores\":" + jsonField(tileMetadata, "cores", "[]") +
             ",\"core_teams\":" + jsonField(tileMetadata, "core_teams", "[]") +
+            ",\"tile_layers\":" + jsonField(tileMetadata, "tile_layers", "{}") +
+            ",\"tile_layers_truncated\":" + jsonField(tileMetadata, "tile_layers_truncated", "false") +
             "}";
     }
 
     private static String mapTileMetadata(Map map, boolean tilesLoaded) {
         if (!tilesLoaded || Vars.world == null || Vars.world.tiles == null || Vars.world.tiles.width != map.width || Vars.world.tiles.height != map.height) {
-            return "{\"core_count\":0,\"cores\":[],\"core_teams\":[]}";
+            return "{\"core_count\":0,\"cores\":[],\"core_teams\":[],\"tile_layers\":{},\"tile_layers_truncated\":false}";
         }
-        StringBuilder cores = new StringBuilder("[");
-        StringBuilder teams = new StringBuilder("[");
+        JsonArrayBuilder cores = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder terrain = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder resources = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder ores = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder enemySpawns = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder buildings = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
+        JsonArrayBuilder liquids = new JsonArrayBuilder(MAX_MAP_LAYER_ITEMS);
         java.util.HashSet<String> coreTeams = new java.util.HashSet<>();
-        int[] count = {0};
-        boolean[] firstCore = {true};
+        int count = 0;
         for (mindustry.world.Tile tile : Vars.world.tiles) {
-            if (!(tile.build instanceof mindustry.world.blocks.storage.CoreBlock.CoreBuild)) continue;
-            mindustry.game.Team team = tile.team();
-            String teamName = team == null ? "" : team.name;
-            if (!firstCore[0]) cores.append(',');
-            firstCore[0] = false;
-            cores.append("{\"x\":").append(tile.x).append(",\"y\":").append(tile.y)
-                .append(",\"team\":").append(quote(teamName)).append('}');
-            coreTeams.add(teamName);
-            count[0]++;
+            String position = "\"x\":" + tile.x + ",\"y\":" + tile.y;
+            terrain.add("{" + position + ",\"name\":" + quote(tile.floor().name)
+                + ",\"overlay\":" + quote(tile.overlay() == null ? "air" : tile.overlay().name) + "}");
+            mindustry.type.Item drop = tile.drop();
+            if (drop != null) resources.add("{" + position + ",\"name\":" + quote(drop.name) + "}");
+            if (tile.overlay().wallOre && tile.overlay().itemDrop != null) {
+                ores.add("{" + position + ",\"name\":" + quote(tile.overlay().itemDrop.name) + "}");
+            }
+            if (tile.floor().liquidDrop != null) {
+                liquids.add("{" + position + ",\"name\":" + quote(tile.floor().liquidDrop.name) + "}");
+            }
+            if (isA(tile.block(), "SpawnBlock")) {
+                enemySpawns.add("{" + position + ",\"name\":" + quote(tile.block().name) + "}");
+            }
+            if (tile.isCenter() && tile.build != null) {
+                mindustry.game.Team team = tile.team();
+                String teamName = team == null ? "" : team.name;
+                buildings.add("{" + position + ",\"name\":" + quote(tile.block().name) + ",\"team\":" + quote(teamName) + "}");
+                if (tile.build instanceof mindustry.world.blocks.storage.CoreBlock.CoreBuild) {
+                    cores.add("{" + position + ",\"team\":" + quote(teamName) + "}");
+                    coreTeams.add(teamName);
+                    count++;
+                }
+            }
         }
-        boolean firstTeam = true;
+        JsonArrayBuilder teams = new JsonArrayBuilder(100);
         for (String team : coreTeams) {
-            if (!firstTeam) teams.append(',');
-            firstTeam = false;
-            teams.append(quote(team));
+            teams.add(quote(team));
         }
-        return "{\"core_count\":" + count[0] + ",\"cores\":" + cores.append(']') + ",\"core_teams\":" + teams.append(']') + "}";
+        String tileLayers = "{\"terrain\":" + terrain + ",\"resources\":" + resources + ",\"ores\":" + ores
+            + ",\"enemy_spawns\":" + enemySpawns + ",\"buildings\":" + buildings + ",\"player_area\":[]"
+            + ",\"liquid\":" + liquids + "}";
+        boolean truncated = cores.truncated || terrain.truncated || resources.truncated || ores.truncated || enemySpawns.truncated || buildings.truncated || liquids.truncated;
+        return "{\"core_count\":" + count + ",\"cores\":" + cores + ",\"core_teams\":" + teams
+            + ",\"tile_layers\":" + tileLayers + ",\"tile_layers_truncated\":" + truncated + "}";
     }
 
     private static String jsonField(String json, String key, String fallback) {
@@ -355,9 +1249,49 @@ public final class MapRenderer {
         int start = json.indexOf(marker);
         if (start < 0) return fallback;
         start += marker.length();
-        int end = json.indexOf(',', start);
-        if (end < 0) end = json.indexOf('}', start);
-        return end < 0 ? fallback : json.substring(start, end);
+        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
+        if (start >= json.length()) return fallback;
+        char first = json.charAt(start);
+        if (first == '{' || first == '[') {
+            int depth = 0;
+            boolean inString = false;
+            boolean escaped = false;
+            for (int index = start; index < json.length(); index++) {
+                char current = json.charAt(index);
+                if (inString) {
+                    if (escaped) escaped = false;
+                    else if (current == '\\') escaped = true;
+                    else if (current == '"') inString = false;
+                    continue;
+                }
+                if (current == '"') inString = true;
+                else if (current == '{' || current == '[') depth++;
+                else if (current == '}' || current == ']') {
+                    if (--depth == 0) return json.substring(start, index + 1);
+                }
+            }
+            return fallback;
+        }
+        int end = start;
+        while (end < json.length() && json.charAt(end) != ',' && json.charAt(end) != '}') end++;
+        return end == start ? fallback : json.substring(start, end);
+    }
+
+    private static final class JsonArrayBuilder {
+        private final int limit;
+        private final StringBuilder value = new StringBuilder("[");
+        private int count;
+        private boolean first = true;
+        private boolean truncated;
+        private JsonArrayBuilder(int limit) { this.limit = limit; }
+        private void add(String item) {
+            if (count >= limit) { truncated = true; return; }
+            if (!first) value.append(',');
+            first = false;
+            value.append(item);
+            count++;
+        }
+        @Override public String toString() { return value.append(']').toString(); }
     }
 
     private static String schematicMetadata(Schematic schematic) {
@@ -374,6 +1308,8 @@ public final class MapRenderer {
         StringBuilder positions = new StringBuilder("[");
         boolean firstPosition = true;
         int positionLimit = 10000;
+        int logicSourceCharBudget = 1_000_000;
+        int logicLinkBudget = 10_000;
         for (Schematic.Stile tile : schematic.tiles) {
             String name = tile.block == null ? "unknown" : tile.block.name;
             counts.put(name, counts.getOrDefault(name, 0) + 1);
@@ -384,7 +1320,15 @@ public final class MapRenderer {
                 .append(",\"x\":").append(tile.x)
                 .append(",\"y\":").append(tile.y)
                 .append(",\"rotation\":").append(tile.rotation & 3)
-                .append(",\"config\":").append(configValue(tile.config)).append('}');
+                .append(",\"size\":").append(tile.block == null ? 1 : tile.block.size);
+            if (tile.block instanceof LogicBlock) {
+                LogicConfigMetadata logic = logicConfigMetadata(tile.config, logicSourceCharBudget, logicLinkBudget);
+                positions.append(",\"logic_source_available\":").append(logic.available());
+                if (logic.json() != null) positions.append(",\"config\":").append(logic.json());
+                logicSourceCharBudget -= logic.sourceChars();
+                logicLinkBudget -= logic.linkCount();
+            }
+            positions.append('}');
         }
         positions.append(']');
 
@@ -745,7 +1689,14 @@ public final class MapRenderer {
         return stringField(content, "localizedName", fallback);
     }
 
-    private static String rulesJson(mindustry.game.Rules rules) {
+    private static String rulesJson(mindustry.game.Rules rules, Map map) {
+        String stored = map == null ? null : map.tags.get("rules");
+        if (stored != null && !stored.isBlank()) {
+            try {
+                JsonValue raw = JSON.parse(stored);
+                if (raw != null && raw.isObject()) return raw.toJson(JsonWriter.OutputType.minimal);
+            } catch (Exception ignored) { /* use the typed projection below */ }
+        }
         if (rules == null) return "{}";
         return "{\"waves\":" + rules.waves +
             ",\"wave_timer\":" + rules.waveTimer +
@@ -772,6 +1723,10 @@ public final class MapRenderer {
                 .append(",\"end\":").append(group.end)
                 .append(",\"spacing\":").append(group.spacing)
                 .append(",\"amount\":").append(group.unitAmount)
+                .append(",\"unit_health\":").append(number(group.type == null ? 0d : group.type.health))
+                .append(",\"shields\":").append(number(group.shields))
+                .append(",\"flying\":").append(group.type != null && group.type.flying)
+                .append(",\"boss\":").append(group.effect != null && "boss".equals(group.effect.name))
                 .append(",\"team\":").append(quote(group.team == null ? "" : group.team.name)).append('}');
         }
         return result.append(']').toString();

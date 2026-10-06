@@ -119,6 +119,11 @@ export class MultiplayerV1Controller {
   revokeInvite(@Param('id') id: string, @Req() request: any) { return this.multiplayer.revokeInvite(request.user.id, id); }
 
   @ApiTags('加入请求')
+  @MultiplayerOAuthProtected('multiplayer.read')
+  @Get('join-requests')
+  listJoinRequests(@Req() request: any) { return this.multiplayer.listJoinRequests(request.user.id); }
+
+  @ApiTags('加入请求')
   @MultiplayerOAuthProtected('multiplayer.write')
   @Post('sessions/:id/join-requests')
   @RateLimit({ max: 10, window: 60 })

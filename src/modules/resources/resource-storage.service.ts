@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createReadStream } from 'fs';
-import { createHash } from 'crypto';
+import { constants as fsConstants } from 'fs';
+import { createHash, randomUUID } from 'crypto';
 import { SettingsService } from '../settings/settings.service';
 import { repairMojibakeFilename } from '@common/utils/filename.util';
 
@@ -14,8 +15,16 @@ export type StoredResourceFile = {
   content_hash: string;
 };
 
+export type PreparedResourcePromotion = {
+  sourcePath: string;
+  targetPath: string;
+  createdTarget: boolean;
+};
+
 @Injectable()
 export class ResourceStorageService {
+  private readonly logger = new Logger(ResourceStorageService.name);
+
   constructor(private readonly settingsService: SettingsService) {}
 
   private get uploadRoot(): string {
@@ -131,6 +140,21 @@ export class ResourceStorageService {
     return fs.readFile(managed.path);
   }
 
+  /** Read a bounded file only from private quarantine, never from public resource storage. */
+  async readQuarantinedFile(filePath: string, maxBytes: number): Promise<Buffer> {
+    const root = await fs.realpath(await this.getQuarantineDirectory());
+    const candidate = path.resolve(filePath);
+    let resolved: string;
+    try { resolved = await fs.realpath(candidate); }
+    catch (error: any) { if (error?.code === 'ENOENT') throw new BadRequestException('私有附件不存在'); throw error; }
+    if (!this.isInside(resolved, root)) throw new BadRequestException('私有附件存储路径无效');
+    const stat = await fs.lstat(resolved);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size < 1 || stat.size > maxBytes) {
+      throw new BadRequestException('私有附件大小或类型无效');
+    }
+    return fs.readFile(resolved);
+  }
+
   async statManagedFile(filePath: string): Promise<{ path: string; size: number }> {
     const candidate = path.resolve(filePath);
     const roots = [await this.getQuarantineDirectory(), await this.getResourceDirectory()];
@@ -147,6 +171,97 @@ export class ResourceStorageService {
       if (error?.code !== 'EXDEV') throw error;
       await fs.copyFile(source, target);
       await fs.unlink(source);
+    }
+  }
+
+  private async hashFile(filePath: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      const hash = createHash('sha256');
+      const stream = createReadStream(filePath);
+      stream.on('error', reject);
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
+    });
+  }
+
+  private async existingPromotionMatches(targetPath: string, sourceHash: string): Promise<boolean> {
+    let stat: import('fs').Stats;
+    try { stat = await fs.lstat(targetPath); }
+    catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
+    if (stat.isSymbolicLink() || !stat.isFile()) {
+      throw new BadRequestException('正式资源路径已存在非普通文件，无法发布');
+    }
+    if (await this.hashFile(targetPath) !== sourceHash) {
+      throw new BadRequestException('正式资源目录中已存在不同内容的同名文件，无法覆盖');
+    }
+    return true;
+  }
+
+  /**
+   * Copy a private quarantined payload into published storage without consuming
+   * the source. The final name is installed with an exclusive hard link so a
+   * concurrent or pre-existing file is never silently overwritten.
+   */
+  async preparePromotion(filePath: string): Promise<PreparedResourcePromotion> {
+    const quarantinePath = await this.getQuarantineDirectory();
+    const quarantineRealPath = await fs.realpath(quarantinePath);
+    const sourceCandidate = path.resolve(filePath);
+    if (!this.isInside(sourceCandidate, quarantinePath)) {
+      throw new BadRequestException('只能发布 Resource quarantine 中的文件');
+    }
+
+    let candidateStat: import('fs').Stats;
+    try { candidateStat = await fs.lstat(sourceCandidate); }
+    catch (error: any) {
+      if (error?.code === 'ENOENT') throw new BadRequestException('待发布的 Resource quarantine 文件不存在');
+      throw error;
+    }
+    if (candidateStat.isSymbolicLink() || !candidateStat.isFile()) {
+      throw new BadRequestException('待发布的 Resource quarantine 对象必须是普通文件');
+    }
+
+    let sourcePath: string;
+    try { sourcePath = await fs.realpath(sourceCandidate); }
+    catch (error: any) {
+      if (error?.code === 'ENOENT') throw new BadRequestException('待发布的 Resource quarantine 文件不存在');
+      throw error;
+    }
+    if (!this.isInside(sourcePath, quarantineRealPath)) {
+      throw new BadRequestException('待发布的 Resource quarantine 路径无效');
+    }
+
+    const targetDirectory = await this.getResourceDirectory();
+    const targetRealPath = await fs.realpath(targetDirectory);
+    if (targetRealPath === quarantineRealPath || this.isInside(targetRealPath, quarantineRealPath)) {
+      throw new BadRequestException('正式资源存储目录不能位于私有隔离区');
+    }
+    const targetPath = path.join(targetDirectory, path.basename(sourcePath));
+    const sourceHash = await this.hashFile(sourcePath);
+    if (await this.existingPromotionMatches(targetPath, sourceHash)) {
+      return { sourcePath, targetPath, createdTarget: false };
+    }
+
+    // Stage in the destination directory, verify the bytes, then install using
+    // link(2), which fails with EEXIST instead of replacing a concurrent file.
+    const temporaryPath = path.join(targetDirectory, `.${path.basename(sourcePath)}.${randomUUID()}.pending`);
+    let createdTarget = false;
+    try {
+      await fs.copyFile(sourcePath, temporaryPath, fsConstants.COPYFILE_EXCL);
+      if (await this.hashFile(temporaryPath) !== sourceHash) {
+        throw new BadRequestException('Resource quarantine 文件在发布准备期间发生变化');
+      }
+      try {
+        await fs.link(temporaryPath, targetPath);
+        createdTarget = true;
+      } catch (error: any) {
+        if (error?.code !== 'EEXIST' || !(await this.existingPromotionMatches(targetPath, sourceHash))) throw error;
+      }
+      return { sourcePath, targetPath, createdTarget };
+    } finally {
+      try { await fs.unlink(temporaryPath); }
+      catch (error: any) {
+        if (error?.code !== 'ENOENT') this.logger.warn(`Failed to remove temporary Resource promotion copy: ${error.message}`);
+      }
     }
   }
 
@@ -192,6 +307,20 @@ export class ResourceStorageService {
     const roots = [await this.getQuarantineDirectory(), await this.getResourceDirectory()];
     if (!roots.some((root) => this.isInside(candidate, root))) return false;
     try { await fs.unlink(candidate); return true; } catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
+  }
+
+  /** Delete only a regular private-quarantine file; never unlink a public resource file. */
+  async removeQuarantinedFile(filePath: string | null | undefined): Promise<boolean> {
+    if (!filePath) return false;
+    const root = await fs.realpath(await this.getQuarantineDirectory());
+    const candidate = path.resolve(filePath);
+    let resolved: string;
+    try { resolved = await fs.realpath(candidate); }
+    catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
+    if (!this.isInside(resolved, root)) return false;
+    const stat = await fs.lstat(resolved);
+    if (!stat.isFile() || stat.isSymbolicLink()) return false;
+    try { await fs.unlink(resolved); return true; } catch (error: any) { if (error?.code === 'ENOENT') return false; throw error; }
   }
 
   /** Remove old unreferenced files left by interrupted uploads, never active references. */

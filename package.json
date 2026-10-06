@@ -1,6 +1,6 @@
 {
   "name": "mindforum",
-  "version": "2.6.2",
+  "version": "2.7.0",
   "description": "Forum with MindAuth integration - NestJS + TypeScript + TypeORM",
   "main": "dist/main.js",
   "scripts": {
@@ -13,6 +13,7 @@
     "typecheck:frontend": "npm --prefix frontend run typecheck",
     "openapi:export": "npm run build:backend && node scripts/export-openapi.js",
     "openapi:check": "node scripts/check-openapi.cjs",
+    "test:api-changelog": "node --test scripts/check-api-changelog.test.cjs",
     "readiness:production": "node scripts/production-readiness.cjs",
     "build:backend": "nest build",
     "build:frontend": "cd frontend && npm run build",
@@ -33,6 +34,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:report": "playwright show-report",
     "audit:resources": "npm run build:backend && node dist/scripts/resource-migration-audit.js",
+    "resource-storage:migrate": "npm run build:backend && node dist/scripts/resource-storage-migrate.js",
     "report:resource-duplicates": "npm run build:backend && node dist/scripts/resource-duplicate-report.js",
     "backfill:resources-v2": "npm run build:backend && node dist/scripts/resource-v2-backfill.js",
     "backfill:content-json": "npm run build:backend && node dist/scripts/content-json-backfill.js",

@@ -79,8 +79,27 @@ import { UserDataDeletionRequest } from './user-data-deletion-request.entity';
 // P0-B: Resource aggregate
 import { ResourceAttribution } from './resource-attribution.entity';
 import { ResourceFile } from './resource-file.entity';
+import { ResourceDirectUploadSession } from './resource-direct-upload-session.entity';
+import { ResourceDirectUploadDraft } from './resource-direct-upload-draft.entity';
 import { ResourceVersionDependency } from './resource-version-dependency.entity';
 import { ResourceVersionCompatibility } from './resource-version-compatibility.entity';
+import {
+  ResourceMember, ResourceRelation, ResourceReviewEvent, ResourceReviewAnnotation,
+  ResourceAnalysisRun, ResourceAnalysisOverride, ResourceCompatibility,
+  ResourceDependency, ResourceVersionDiff, ResourceSourceSync,
+} from './resource-center-v2.entity';
+import {
+  ModProfile, ModIdAlias, ModVersionMetadata, ModContent, ModContentAlias,
+  ModLocalization, ModCompatibilityReport, ModIssueReport, ModConflictReport, ModConflictMember,
+} from './mod-resource-v2.entity';
+import {
+  SchematicVersionMetadata, SchematicBlock, SchematicMaterial,
+  SchematicLogicProcessor, SchematicAnalysis,
+} from './schematic-resource-v2.entity';
+import {
+  MapVersionMetadata, MapResourceEntry, MapSpawn, MapCore,
+  MapWaveSummary, MapAnalysis, MapFeedback,
+} from './map-resource-v2.entity';
 
 // Phase 4 (refactor): Media
 import { MediaAsset } from './media-asset.entity';
@@ -120,6 +139,7 @@ import { ResourceViewEvent } from './resource-view-event.entity';
 import { ResourcePackItem } from './resource-pack-item.entity';
 import { GameContentUploadSession } from './game-content-upload-session.entity';
 import { ResourceSubmissionIdempotency } from './resource-submission-idempotency.entity';
+import { ModReportAttachment } from './mod-report-attachment.entity';
 import { SocialPrivacySetting } from './social-privacy-setting.entity';
 import { UserPresencePreference } from './user-presence-preference.entity';
 import { MultiplayerSession } from './multiplayer-session.entity';
@@ -153,6 +173,7 @@ export const coreEntities = [
   Resource,
   ResourceUploadDraft,
   ResourceSubmissionIdempotency,
+  ModReportAttachment,
   ResourceCategory,
   ResourceVersion,
   PostLike,
@@ -212,8 +233,44 @@ export const coreEntities = [
   // P0-B: Resource aggregate
   ResourceAttribution,
   ResourceFile,
+  ResourceDirectUploadSession,
+  ResourceDirectUploadDraft,
   ResourceVersionDependency,
   ResourceVersionCompatibility,
+  // Resource Center V2: these classes must be present in the root DataSource,
+  // not only exported for feature-module imports.
+  ResourceMember,
+  ResourceRelation,
+  ResourceReviewEvent,
+  ResourceReviewAnnotation,
+  ResourceAnalysisRun,
+  ResourceAnalysisOverride,
+  ResourceCompatibility,
+  ResourceDependency,
+  ResourceVersionDiff,
+  ResourceSourceSync,
+  ModProfile,
+  ModIdAlias,
+  ModVersionMetadata,
+  ModContent,
+  ModContentAlias,
+  ModLocalization,
+  ModCompatibilityReport,
+  ModIssueReport,
+  ModConflictReport,
+  ModConflictMember,
+  SchematicVersionMetadata,
+  SchematicBlock,
+  SchematicMaterial,
+  SchematicLogicProcessor,
+  SchematicAnalysis,
+  MapVersionMetadata,
+  MapResourceEntry,
+  MapSpawn,
+  MapCore,
+  MapWaveSummary,
+  MapAnalysis,
+  MapFeedback,
   // Phase 4 (refactor): Media
   MediaAsset,
   ResourceMediaLink,
@@ -317,7 +374,15 @@ export {
   LegalAcceptance,
   UserDataDeletionRequest,
   // P0-B: Resource aggregate
-  ResourceAttribution, ResourceFile, ResourceVersionDependency, ResourceVersionCompatibility,
+  ResourceAttribution, ResourceFile, ResourceDirectUploadSession, ResourceDirectUploadDraft, ResourceVersionDependency, ResourceVersionCompatibility,
+  ResourceMember, ResourceRelation, ResourceReviewEvent, ResourceReviewAnnotation,
+  ResourceAnalysisRun, ResourceAnalysisOverride, ResourceCompatibility, ResourceDependency,
+  ResourceVersionDiff, ResourceSourceSync,
+  ModProfile, ModIdAlias, ModVersionMetadata, ModContent, ModContentAlias, ModLocalization,
+  ModCompatibilityReport, ModIssueReport, ModConflictReport, ModConflictMember,
+  ModReportAttachment,
+  SchematicVersionMetadata, SchematicBlock, SchematicMaterial, SchematicLogicProcessor, SchematicAnalysis,
+  MapVersionMetadata, MapResourceEntry, MapSpawn, MapCore, MapWaveSummary, MapAnalysis, MapFeedback,
   // Phase 4 (refactor): Media
   MediaAsset, ResourceMediaLink,
   // Phase 5 (refactor): Events

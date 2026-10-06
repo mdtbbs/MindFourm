@@ -17,6 +17,35 @@ GET /api/v1/resources
 GET /api/v1/resources/{resource_public_id}
 GET /api/v1/resources/{resource_public_id}/preview
 GET /api/v1/resources/{resource_public_id}/manifest
+GET /api/v1/resources/{resource_public_id}/versions
+GET /api/v1/resources/{resource_public_id}/versions/{version_public_id}/preview
+GET /api/v1/resources/{resource_public_id}/relations
+GET /api/v1/resources/{resource_public_id}/stats
+GET /api/v1/resources/{resource_public_id}/workbench
+GET /api/v1/resources/mods/{resource_public_id}/dependency-resolution
+GET /api/v1/resources/mods/{resource_public_id}/issue-reports
+POST /api/v1/resources/mods/issue-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/issue-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/issue-reports/{report_public_id}/attachments/{attachment_public_id}
+DELETE /api/v1/resources/mods/issue-reports/{report_public_id}/attachments/{attachment_public_id}
+POST /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments
+GET /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments/{attachment_public_id}
+DELETE /api/v1/resources/mods/compatibility-reports/{report_public_id}/attachments/{attachment_public_id}
+PUT /api/v1/resources/{resource_public_id}/source-sync/github
+GET /api/v1/resources/{resource_public_id}/source-sync/github/releases
+POST /api/v1/resources/{resource_public_id}/source-sync/github/import
+GET /api/v1/resources/{resource_public_id}/review-events
+POST /api/v1/resources/{resource_public_id}/versions/{version_public_id}/analysis/overrides
+DELETE /api/v1/resources/{resource_public_id}/versions/{version_public_id}/analysis/overrides
+POST /api/v1/resources/{resource_public_id}/review-annotations
+POST /api/v1/resources/{resource_public_id}/versions/analyze
+POST /api/v1/resources/{resource_public_id}/versions
+PATCH /api/v1/resources/{resource_public_id}
+POST /api/v1/resources/{resource_public_id}/relations
+POST /api/v1/resources/{resource_public_id}/members
+POST /api/v1/resources/{resource_public_id}/members/respond
+POST /api/v1/resources/{resource_public_id}/owner-transfer
 GET /api/v1/resources/{resource_public_id}/versions/{version_public_id}/files/{file_public_id}/download
 GET /api/v1/packs/{pack_public_id}/versions/{version_public_id}/manifest
 POST /api/v1/packs/{pack_public_id}/versions/{version_public_id}/download-grants
@@ -186,3 +215,41 @@ POST /api/v1/resources/drafts
 最终创建资源或提交草稿时，客户端可以发送 `Idempotency-Key` 请求头。键按已认证账号隔离，并保留 24 小时。请求超时后，使用相同的键和完全相同的请求重试，即可重放首次结果。相同键搭配不同请求体会返回 HTTP 409 `IDEMPOTENCY_KEY_REUSED`；并发中的同键请求可能返回 `IDEMPOTENCY_IN_PROGRESS`。修改请求内容时必须生成新键。
 
 若公开资源已合并，客户端应遵循 V1 响应中的规范资源重定向信息；资源合并审核属于后台流程，不属于公开客户端操作。
+
+## Resource Center V2 API
+
+V2 在相同的 `resources` 聚合上增加 Mod、蓝图、地图结构化读取视图、owner/collaborator 管理操作、审核时间线/批注和社区工作流。已有 `GET /api/v1/resources/{id}`、`GET /api/v1/resources/{id}/manifest` 和 `/api/v1/game-content/*` 保持原响应语义。V2 类型专属字段、分页、OAuth scope、错误响应、角色、社区反馈/报告和 capabilities 见[Resource Center V2 契约](../resource-center-v2.md)。
+
+V2 路径中的 `{id}` 是 Resource public UUID；版本、文件、Content、报告对象也通过 UUID 暴露。响应仍使用 `{ data, meta }` 外层封装。列表在 `data` 中带 `{ items, pagination: { next_cursor, has_more } }`，cursor 为不透明值；默认 `limit=20`，最大 100。匿名读取可用；携带 MindAuth Bearer 时需要 `resource.read` scope。
+
+Content 索引复用兼容的 Game Content 前缀：`GET /api/v1/game-content/content/search`、`GET /api/v1/game-content/content/{id}` 和 `GET /api/v1/game-content/content/by-name/{type}/{internalName}`。它只搜索已发布 Mod Content，并返回所属 Resource public UUID。旧版 Game Content 蓝图、地图、上传和下载路径均未改动。
+
+Mod 依赖解析 `GET /api/v1/resources/mods/{id}/dependency-resolution` 可选 `version_public_id`（已发布版本 UUID）、`max_depth`（1–12，默认 12）和 `max_nodes`（1–200，默认 200）。响应包括 `unresolved` 未收录依赖、`cycles` 循环路径和 `truncated` 遍历是否受限制；`warnings` 说明限制或其他解析问题。该只读端点匿名可用，携带 Bearer 时需 `resource.read`，限流为 `30 / 60s`。
+
+公开 Mod 问题报告列表 `GET /api/v1/resources/mods/{id}/issue-reports` 支持可选 `version_public_id`、不透明 `cursor` 和 `limit`（默认 20、最大 100）；响应包含报告与作者回复的公开字段，不包含附件元数据或数据库数字 ID。该端点匿名可用，携带 Bearer 时需 `resource.read`，限流为 `60 / 60s`。
+
+提交 Mod 问题报告 `POST /api/v1/resources/mods/{id}/versions/{versionId}/issue-reports` 对同一账号和同一 Release 使用唯一键做幂等 upsert：重复提交更新现有报告内容，不重复创建记录，并保留原 public UUID 与状态。首次提交创建 `open` 报告。
+
+审核 API 包括 `GET /api/v1/resources/{id}/review-events`、分析覆盖忽略的 POST/DELETE `/api/v1/resources/{id}/versions/{versionId}/analysis/overrides`，以及 `POST /api/v1/resources/{id}/review-annotations`。时间线需要 `resource.read`，只对 Resource Owner、active Maintainer/Publisher、管理员或版主开放；支持 UUID `version_public_id` 过滤、`limit=1..100`（默认 50）和 `offset=0..100000`（默认 0），限流 `60 / 60s`。忽略/清除接口需要 `resource.upload`，Owner/Maintainer 可操作且仅能处理现有 ERROR/WARNING finding，限流 `20 / 60s`。字段批注需要 `resource.upload`，仅管理员/版主可写，可带可选版本 UUID，限流 `30 / 60s`。时间线和写响应只返回公开 UUID，不包含内部数值 ID；字段和 DTO 示例见[Resource Center V2 契约](../resource-center-v2.md)。
+
+GitHub Release 来源 API 使用 Resource public UUID。`PUT /api/v1/resources/{id}/source-sync/github` 由 Owner/Maintainer 配置 HTTPS GitHub 仓库 URL、稳定/预发行选择和资产名 include/exclude 过滤（`resource.upload`，10/60s）；`enabled=true` 同时选择加入每 15 分钟一次的有界后台轮询和自动导入，`false` 保留手动读取/导入但关闭调度。`GET /api/v1/resources/{id}/source-sync/github/releases` 供作者手动读取公开 Mod 的 Release 列表及 README/License 预览，可选 `limit=1..30`（默认 20），匿名可读、Bearer 可选 `resource.read`，限流 12/60s；`POST /api/v1/resources/{id}/source-sync/github/import` 由 Owner/Maintainer 显式选取 tag 与资产名，经过隔离区和既有版本分析流程导入（`resource.upload`，5/60s）。自动导入不覆盖既有版本；上游 tag/资产变化、资产匹配歧义或无法验证时会暂停并通知 Owner，等待人工确认。请求验证错误为 400，未登录/无权限为 401/403，资源/来源/资产不可用为 404，GitHub 或下载失败为 502。字段和过滤边界见[Resource Center V2 契约](../resource-center-v2.md)。
+
+版本预览 `GET /api/v1/resources/{id}/versions/{versionId}/preview` 对新 RES 预览返回 302，对历史预览返回原始 PNG 字节，不使用 JSON 响应封装。它优先使用该已发布版本对应的安全预览，并在版本级预览缺失时尝试资源级预览；版本 DTO 只公开预览 URL，不公开存储键。
+
+关系列表包含 `relation_type`、`relation_direction`、非空 `relation_context`，以及目标资源已发布版本的 `version_public_id` 和 `version` 显示值（如有）。`recommended_for` 使用 `opening`、`production`、`defense`、`logistics` 和 `general` 表示推荐用途。创建支持 `recommended_for`、`fork_of`、`successor_of`、`related`、`requires` 和 `compatible_with`；Fork/继任必须关联相同资源类型的目标资源和一个已发布目标版本。工作台会显示关联方向、上游资源及其版本。
+
+管理操作使用 `resource.upload` scope，并按角色控制：Owner/Maintainer 可编辑资料和关系，Owner/Maintainer/Publisher 可分析或发布版本，协作者邀请由 Owner/Maintainer 发起，Owner/Admin 可发起所有权转让，接收方需接受。分析与发布的 multipart 上传限流为 `5 / 60s`。来源 URL 或许可证声明变更会将已审核资源重新置为待审核。
+
+社区写操作也使用 `resource.upload` scope：地图版本反馈、Mod 兼容性/问题报告和冲突报告需要登录及手机号验证；每个地图版本每个账号只保留一份反馈，公开 GET 只返回计数与评分平均值。报告作者可以更新自己的报告，Owner/Maintainer 可回复涉及的 Mod 报告。报告 JSON 的兼容 `attachments` 字段仍只接受元数据；问题报告二进制证据通过 `POST /api/v1/resources/mods/issue-reports/{reportId}/attachments` 上传，兼容性报告使用 `POST /api/v1/resources/mods/compatibility-reports/{reportId}/attachments`。两种路径均支持同路径 GET 清单、追加 `/{attachmentId}` 的 GET 原始字节下载或 DELETE 管理。上传限 PNG/JPEG/GIF/WebP 与 UTF-8 TXT/LOG/JSON/CRASH，单文件最多 5 MiB、每报告最多 10 个文件且总计最多 20 MiB；超单文件限制返回 413，其他格式/单报告限制返回 400。仅报告作者可上传/删除，上传还需手机号验证。私有附件留在隔离目录，`resource.read` 读取仅向报告作者、关联 Resource Owner/active Owner/Maintainer/Publisher、管理员/版主开放；附件清单的 `can_delete` 仅对报告作者为 `true`。公开报告投影不含附件字段。下载使用 `Cache-Control: private, no-store` 与 `nosniff`。上传前请清除 IP、令牌、用户名、本机路径等敏感内容。所有公开资源、版本、报告与附件标识均为 UUID；具体字段、限流和状态枚举见上述 V2 契约。
+
+## ResourceStorage 直传
+
+`POST /api/v1/resources/uploads/init` 接受 `version_public_id`、`filename`、`size_bytes`、`mime_type`、必填 `sha256` 和可选 `role`（primary/supplementary/documentation）。需要 `resource.upload`、登录、站点验证和资源 Owner/active Maintainer/Publisher（Admin 可管理），限流 10/60s。已发布版本不可变。已有主文件不可替换。
+
+客户端使用返回的短期 token 向 RES PUT 原始字节（或接收去重对象），随后 `POST /api/v1/resources/uploads/complete` 携带论坛 `session_id` 和 `object_public_id`。论坛重新验证权限、版本状态和 RES verified 元数据，创建 pending ResourceFile 与私有 binding；重放 complete 返回同一 file_public_id。论坛不会向客户端暴露服务 API key。
+
+资源首次创建可使用 `POST /api/v1/resources/direct-drafts`，只提交元数据并返回 upload_pending 首版本；已有 Resource 可使用 `POST /api/v1/resources/{id}/versions/direct-drafts` 创建新的 upload_pending revision。两个接口都要求 `Idempotency-Key`，文件字节只经过 RES，不经过论坛的 multipart body。直传 complete 仍必须由论坛重新读取对象元数据并进入审核，不能通过客户端自报大小、MIME 或哈希提前发布。
+
+Owner/Maintainer 可以对已发布蓝图调用 `POST /api/v1/resources/{id}/versions/{versionId}/schematic-editor/export`，或对已发布地图调用 `POST /api/v1/resources/{id}/versions/{versionId}/map-editor/export`。两者返回官方 Mindustry 文件，不修改源版本；客户端应把导出文件作为新 direct-upload revision 提交。蓝图编辑支持有限的方块/静态逻辑操作，地图编辑支持完整小型地形网格、类型化规则和波次子集；未知或超界内容会拒绝导出，具体边界见[蓝图安全编辑器](../schematic-editor.md)和[地图安全编辑器](../map-editor.md)。
+
+RES 文件下载与新预览使用 302；客户端应跟随跳转。下载授权和 DownloadGrant 保留在论坛，私有链接短期有效。存储不可用返回 503，不会持久回退本地。历史 managed/MFL/external 保持兼容。上传与手动迁移运维细节见 [ResourceStorage](../resource-storage.md)。

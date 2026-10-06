@@ -2,7 +2,7 @@
 
 本文面向生产环境部署当前 MindFourm 版本。生产环境由 NestJS 后端、Next.js 前端、MySQL 8 和 Redis 7 组成；MindAuth 和 MindFileList 为外部依赖。
 
-当前发布注意事项：EasyManager 默认关闭；资源 V1 默认关闭；下载事件统计目前仍是内存实现，不能作为持久化审计数据。投票和群聊 UI 尚未实现。
+当前发布注意事项：EasyManager 默认关闭；下载生命周期事件由数据库持久化，管理统计从数据库聚合。Resource V1 公开读取和稳定 `public_id` 已在代码及 Public V1 OpenAPI 中实现，实际可用性仍受运行时 feature setting 和部署状态控制。投票和完整群聊 UI 尚未实现。
 
 ## 1. 发布前检查
 
@@ -60,7 +60,7 @@ cp frontend/.env.local.example frontend/.env.production
 | `LANLINK_ENABLED` / `LANLINK_URL` | LanLink 集成开关和控制面地址 |
 | `EASYMANAGER_ENABLED` | 当前默认 `false`，除非已恢复 EasyManager |
 
-下载统计目前只在进程内去重和聚合；服务重启、扩容或多实例部署时不能依赖其累计值。正式上线前应完成 `download_events` 持久化。
+`download_events` 保存 requested、granted、started、completed、failed 生命周期事件；新 grant 通过数据库去重表按短窗口去重。管理仪表盘按数据库事件聚合 downloads 与 failed counts。它是业务统计数据，不包含完整客户端 IP 审计记录。
 
 生产环境不要使用 `.env.example` 中的 `change-me` 值。
 
@@ -94,6 +94,8 @@ npm run migration:show
 npm run migration:run
 ```
 
+应用 DataSource 目前配置 `migrationsRun: true`，应用初始化也会执行尚未记录的 TypeORM migrations。生产发布仍应在启动应用前显式查看并执行迁移、记录结果，再启动服务并验证 schema；不要依赖 `synchronize`。
+
 当前功能涉及的重点表包括：
 
 - `resource_comments`
@@ -101,8 +103,7 @@ npm run migration:run
 - `users` presence 相关字段（如当前迁移版本需要）
 - `resources`、`resource_versions`、`resource_ratings`
 
-资源 V1 相关开关 `feature_resources_v1_read_enabled` 默认关闭。启用前应完成
-`public_id` 回填、公开 ID 解析验证和兼容性测试；旧版 `/api/resources` 仍是默认资源接口。
+Resource V1 使用资源/版本/文件 `public_id` UUID 作为稳定公开标识。`feature_resources_v1_read_enabled` 的代码默认值为开启，但后台运行时配置可以关闭它；发布前应检查目标环境设置和公开路由。Resource Center V2 migrations、历史数据回填与文件审核/发布状态需要单独完成生产验收；本清单不把本地构建或 migration 文件存在视为生产验收。
 
 不要在生产环境使用 TypeORM `synchronize` 替代迁移。
 
@@ -210,3 +211,9 @@ curl -fsS https://forum.example.com/api/version
 5. 修复后重新执行测试、构建和冒烟检查。
 
 不要删除 Redis 或 MySQL 数据作为常规回滚手段。
+
+## ResourceStorage 配置
+
+新资源持久上传要求 `RES_ENABLED=true`、`RES_BASE_URL=https://res.mdtbbs.cn` 与服务端 `RES_API_KEY`，超时默认请求 10000ms、上传 120000ms，可用 `RES_REQUEST_TIMEOUT_MS` / `RES_UPLOAD_TIMEOUT_MS` 调整。API key 只在后端环境配置。禁用或缺失配置时历史 managed/MFL/external 读取保持兼容，新上传明确返回服务不可用。
+
+上线前单独验收新增迁移、RES API 可达性及 binding 权限；历史迁移为显式 CLI，默认保留旧文件。详见 [ResourceStorage](resource-storage.md)。本接入 PR 不执行生产迁移或部署。
