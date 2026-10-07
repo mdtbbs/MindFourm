@@ -45,6 +45,7 @@ export default function ResourceSubmitForm({
   const [content, setContent] = useState('');
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
   const [externalUrl, setExternalUrl] = useState('');
+  const [modId, setModId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [schematicSource, setSchematicSource] = useState<SchematicSource>('file');
   const [schematicCode, setSchematicCode] = useState('');
@@ -60,10 +61,10 @@ export default function ResourceSubmitForm({
   const draft = useDraft(resourceKindIsLocked ? `resource-${initialResourceKind}` : 'resource');
   const saveDraft = draft.save;
   const draftValues = useMemo(
-    () => ({ resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode }),
-    [resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode],
+    () => ({ resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, modId, schematicSource, schematicCode }),
+    [resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, modId, schematicSource, schematicCode],
   );
-  const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl || schematicCode);
+  const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl || modId || schematicCode);
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
   useEffect(() => {
@@ -90,6 +91,7 @@ export default function ResourceSubmitForm({
     if (typeof saved.content === 'string') setContent(saved.content);
     if (saved.contentJson && typeof saved.contentJson === 'object') setContentJson(saved.contentJson as Record<string, unknown>);
     if (typeof saved.externalUrl === 'string') setExternalUrl(saved.externalUrl);
+    if (typeof saved.modId === 'string') setModId(saved.modId);
     if (saved.schematicSource === 'file' || saved.schematicSource === 'paste') setSchematicSource(saved.schematicSource);
     if (typeof saved.schematicCode === 'string') setSchematicCode(saved.schematicCode);
     setRecoverableDraft(null);
@@ -188,6 +190,11 @@ export default function ResourceSubmitForm({
       return;
     }
 
+    if (isMod && resourceType === 'external' && !/^[a-z0-9][a-z0-9_.-]{0,127}$/i.test(modId.trim())) {
+      setError(t('resourceSubmit.validModId'));
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
 
@@ -197,6 +204,7 @@ export default function ResourceSubmitForm({
       formData.append('resource_type', resourceType);
       formData.append('resource_kind', resourceKind);
       formData.append('content_language', contentLanguage || 'unknown');
+      if (isMod && resourceType === 'external') formData.append('mod_id', modId.trim().toLowerCase());
 
       formData.append('version', version.trim());
       if (description.trim()) formData.append('description', description.trim());
@@ -235,7 +243,7 @@ export default function ResourceSubmitForm({
         setError(t('resourceSubmit.duplicateDetected'));
         return;
       }
-      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), content, contentJson, contentLanguage, categoryId, isPublic, schematicCode: isSchematic && schematicSource === 'paste' ? schematicCode.trim() : null });
+      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, modId: isMod && resourceType === 'external' ? modId.trim().toLowerCase() : null, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), content, contentJson, contentLanguage, categoryId, isPublic, schematicCode: isSchematic && schematicSource === 'paste' ? schematicCode.trim() : null });
       if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
         submissionKey.current = { fingerprint, key: crypto.randomUUID() };
       }
@@ -494,15 +502,34 @@ export default function ResourceSubmitForm({
       </div>
 
       {resourceType === 'external' && (
-        <Input
-          data-testid="resource-external-url-input"
-          label={t('resourceSubmit.externalUrl')}
-          value={externalUrl}
-          onChange={(e) => setExternalUrl(e.target.value)}
-          placeholder={t('resourceSubmit.externalUrlPlaceholder')}
-          required
-          type="url"
-        />
+        <div className="space-y-4">
+          {isMod && (
+            <div>
+              <Input
+                data-testid="resource-mod-id-input"
+                label={`${t('resourceSubmit.modId')} *`}
+                value={modId}
+                onChange={(event) => setModId(event.target.value)}
+                placeholder={t('resourceSubmit.modIdPlaceholder')}
+                required
+                maxLength={128}
+                pattern="[A-Za-z0-9][A-Za-z0-9_.-]{0,127}"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+              <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{t('resourceSubmit.modIdHelp')}</p>
+            </div>
+          )}
+          <Input
+            data-testid="resource-external-url-input"
+            label={t('resourceSubmit.externalUrl')}
+            value={externalUrl}
+            onChange={(e) => setExternalUrl(e.target.value)}
+            placeholder={t('resourceSubmit.externalUrlPlaceholder')}
+            required
+            type="url"
+          />
+        </div>
       )}
 
       {isSchematic && (
