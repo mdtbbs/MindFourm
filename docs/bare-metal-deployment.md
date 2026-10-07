@@ -65,8 +65,9 @@ Use `nginx/conf.d/default.conf` as the base reverse proxy config. It routes:
 The cloud-save upload path has a more specific direct-to-backend location with
 request buffering disabled. Keep that rule in the active public Nginx/宝塔
 vhost when it handles forum traffic. If ESA sends API traffic directly to
-Next.js, the dedicated upload Route Handler streams the body to NestJS before
-the generic `/api/:path*` rewrite is considered.
+Next.js, the dedicated upload Route Handler streams the body to NestJS; the
+generic `/api/:path*` rewrite must remain a fallback so it runs after dynamic
+Route Handlers.
 
 Add HTTPS certificates in the server-level Nginx setup used by your host.
 

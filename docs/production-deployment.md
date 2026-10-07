@@ -170,7 +170,7 @@ Nginx 至少需要：
 - `X-Forwarded-For`、`X-Forwarded-Proto` 正确传递。
 - HTTPS 终止在 Nginx，并将 HTTP 重定向到 HTTPS。
 
-`nginx/conf.d/default.conf` 已包含云存档上传专用 location。实际部署若使用宝塔 vhost 或其他反向代理，可在接收 ESA/公网流量的那一层添加等价规则；该规则必须透传 `Authorization` 和 `X-Request-ID`，并设置 `proxy_request_buffering off`。当前应用也包含 `frontend/src/app/api/v1/game-saves/uploads/[uploadId]/file/route.ts`，在公网入口仍经过 Next.js 时直接以流方式转发请求体，不读取整段文件到内存。Next.js 的通用 `/api/:path*` rewrite 是 filesystem route 之后的 fallback，专用 Route Handler 会先接管该 PUT。
+`nginx/conf.d/default.conf` 已包含云存档上传专用 location。实际部署若使用宝塔 vhost 或其他反向代理，可在接收 ESA/公网流量的那一层添加等价规则；该规则必须透传 `Authorization` 和 `X-Request-ID`，并设置 `proxy_request_buffering off`。当前应用也包含 `frontend/src/app/api/v1/game-saves/uploads/[uploadId]/file/route.ts`，在公网入口仍经过 Next.js 时直接以流方式转发请求体，不读取整段文件到内存。`frontend/next.config.js` 将通用 `/api/:path*` rewrite 配置为 `fallback`，在动态路由之后执行，确保专用 Route Handler 先接管该 PUT。
 
 ```nginx
 location ^~ /api/v1/game-saves/uploads/ {

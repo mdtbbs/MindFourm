@@ -36,19 +36,24 @@ const nextConfig = {
   },
 
   async rewrites() {
-    // 生产和开发环境都使用 rewrites
-    // 浏览器请求 /api/* 和 /uploads/* 时，由 Next.js 代理到后端
+    // Keep these generic proxies in fallback so dynamic Route Handlers run
+    // first. The cloud-save file PUT must reach its streaming handler instead
+    // of Next's rewrite proxy, which buffers request bodies.
     const apiUrl = process.env.API_URL || 'http://127.0.0.1:4000';
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${apiUrl}/api/:path*`,
-      },
-      {
-        source: '/uploads/:path*',
-        destination: `${apiUrl}/uploads/:path*`,
-      },
-    ];
+    return {
+      beforeFiles: [],
+      afterFiles: [],
+      fallback: [
+        {
+          source: '/api/:path*',
+          destination: `${apiUrl}/api/:path*`,
+        },
+        {
+          source: '/uploads/:path*',
+          destination: `${apiUrl}/uploads/:path*`,
+        },
+      ],
+    };
   },
 
   images: {
