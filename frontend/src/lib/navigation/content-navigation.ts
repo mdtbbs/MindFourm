@@ -19,6 +19,7 @@ export type ContentNavigationSection = {
   id: string;
   label?: string;
   collapsible?: boolean;
+  defaultCollapsed?: boolean;
   items: ContentNavigationItem[];
 };
 
@@ -66,7 +67,7 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
     const sections: ContentNavigationSection[] = [{ id: 'global', label: profile.branding.shortName, items: globalItems }];
     if (context.mode === 'resources' && featureEnabled(context.settings, 'feature_resources_enabled')) {
       sections.push({
-        id: 'context', label: translate('navigation.resourceBrowsing'), collapsible: true,
+        id: 'context', label: translate('navigation.resourceBrowsing'), collapsible: true, defaultCollapsed: true,
         items: [
           { id: 'all-resources', label: translate('navigation.allResources'), href: '/resources', icon: 'Package', activeMatch: '/resources' },
           ...resourceKinds.filter((kind) => kind.showInNavigation).map((kind) => ({
@@ -86,7 +87,7 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
           children.forEach((child) => boards.push({ id: `forum-category-${child.id}`, label: child.name, href: `/categories/${child.id}`, icon: child.icon || undefined, activeMatch: `/categories/${child.id}`, indent: true, count: child.post_count, groupLabel: group.label }));
         }
       }
-      sections.push({ id: 'context', label: translate('navigation.discussionBoards'), collapsible: true, items: boards });
+      sections.push({ id: 'context', label: translate('navigation.discussionBoards'), collapsible: true, defaultCollapsed: true, items: boards });
     }
 
     if (context.isAuthenticated) {
@@ -116,7 +117,7 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
   const sections: ContentNavigationSection[] = [{ id: 'global', label: 'MDTBBS', items: globalItems }];
   if (context.mode === 'resources' && featureEnabled(context.settings, 'feature_resources_enabled')) {
     sections.push({
-      id: 'context', label: '资源浏览', collapsible: true,
+      id: 'context', label: '资源浏览', collapsible: true, defaultCollapsed: true,
       items: [
         { id: 'all-resources', label: '全部资源', href: '/resources', icon: 'Package', activeMatch: '/resources' },
         ...resourceKinds.map((kind) => ({
@@ -136,7 +137,7 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
         children.forEach((child) => boards.push({ id: `forum-category-${child.id}`, label: child.name, href: `/categories/${child.id}`, icon: child.icon || undefined, activeMatch: `/categories/${child.id}`, indent: true, count: child.post_count, groupLabel: group.label }));
       }
     }
-    sections.push({ id: 'context', label: '讨论板块', collapsible: true, items: boards });
+    sections.push({ id: 'context', label: '讨论板块', collapsible: true, defaultCollapsed: true, items: boards });
   }
 
   const discover = configured.filter((item) => ['tags', 'notices'].includes(item.id)).map(configuredItem);

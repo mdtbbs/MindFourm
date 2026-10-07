@@ -4,7 +4,9 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Home, MessageCircle, Package, Radio, UserRound, Wrench } from 'lucide-react';
 import SidebarUserPanel from '@/components/layout/sidebar-user-panel';
-import { isWorkspaceActive, WORKSPACE_SPACES } from '@/lib/navigation/workspace-navigation';
+import ContentNavigation from '@/components/layout/content-navigation';
+import { useNavigation } from '@/lib/navigation/context';
+import { isWorkspaceActive, resolveWorkspace, WORKSPACE_SPACES } from '@/lib/navigation/workspace-navigation';
 import { useI18n } from '@/i18n/provider';
 
 export type ContentSidebarMode = 'forum' | 'resources';
@@ -23,7 +25,7 @@ function SidebarBrand({ siteName, logoUrl, sidebarLogoUrl }: { siteName: string;
 }
 
 export default function ContentSidebar({
-  siteName, logoUrl, sidebarLogoUrl, userName, userId, userMeta,
+  siteName, logoUrl, sidebarLogoUrl, userName, userId, userMeta, isAuthenticated = false, settings = {},
 }: {
   mode?: ContentSidebarMode; siteName: string; sidebarTitle?: string; logoUrl?: string; sidebarLogoUrl?: string;
   userName?: string; userId?: number; isAuthenticated?: boolean; userMeta?: string;
@@ -31,20 +33,34 @@ export default function ContentSidebar({
 }) {
   const { t } = useI18n();
   const pathname = usePathname();
+  const navigation = useNavigation();
+  const workspace = resolveWorkspace(pathname, userId);
+  const contextMode = workspace === 'resources' ? 'resources' : workspace === 'community' ? 'forum' : null;
   const icons = { home: Home, community: MessageCircle, resources: Package, multiplayer: Radio, tools: Wrench, me: UserRound } as const;
+  const renderWorkspaceLink = (space: (typeof WORKSPACE_SPACES)[number]) => {
+    const Icon = icons[space.id];
+    const active = isWorkspaceActive(pathname, space.href, userId);
+    return <div key={space.id} className={space.id === 'me' ? 'mt-auto border-t border-[var(--border)] pt-3' : ''}>
+      {space.id === 'me' && <div className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{t('navigation.personal')}</div>}
+      <Link href={space.href} aria-current={active ? 'page' : undefined} className={`relative flex min-h-11 items-center gap-3 px-3 text-sm transition-colors before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-[var(--primary)] ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`}>
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{t(space.labelKey)}</span>
+      </Link>
+    </div>;
+  };
   return <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
     <SidebarBrand siteName={siteName} logoUrl={logoUrl} sidebarLogoUrl={sidebarLogoUrl} />
     <nav data-testid="sidebar-nav" aria-label={t('navigation.siteNavigation')} className={`${SIDEBAR_LAYOUT_CLASSES.nav} gap-1`}>
-      {WORKSPACE_SPACES.map((space) => {
-        const Icon = icons[space.id];
-        const active = isWorkspaceActive(pathname, space.href, userId);
-        return <div key={space.id} className={space.id === 'me' ? 'mt-auto border-t border-[var(--border)] pt-3' : ''}>
-          {space.id === 'me' && <div className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{t('navigation.personal')}</div>}
-          <Link href={space.href} aria-current={active ? 'page' : undefined} className={`relative flex min-h-11 items-center gap-3 px-3 text-sm transition-colors before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-[var(--primary)] ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`}>
-            <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{t(space.labelKey)}</span>
-          </Link>
-        </div>;
-      })}
+      {WORKSPACE_SPACES.filter((space) => space.id !== 'me').map(renderWorkspaceLink)}
+      {contextMode && <ContentNavigation
+        mode={contextMode}
+        settings={settings}
+        isAuthenticated={isAuthenticated}
+        userId={userId}
+        forumCategories={navigation.forumCategories}
+        resourceCategories={navigation.resourceCategories}
+        contextOnly
+      />}
+      {WORKSPACE_SPACES.filter((space) => space.id === 'me').map(renderWorkspaceLink)}
     </nav>
     <div data-testid="sidebar-user" className={SIDEBAR_LAYOUT_CLASSES.user}><SidebarUserPanel userName={userName} userMeta={userMeta} /></div>
   </aside>;

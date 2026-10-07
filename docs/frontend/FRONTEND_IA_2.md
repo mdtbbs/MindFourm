@@ -17,11 +17,11 @@ The shell changes navigation and discovery. Existing content routes remain canon
 | Tools | `/tools` | Schematic, map, wave, and analysis workbench guides plus cloud saves |
 | My | `/me` | Notifications, messages, friends, bookmarks, posts, resource management, drafts, and settings |
 
-Primary navigation follows tasks rather than backend entities. Each space owns its own page-level navigation. The desktop sidebar has six stable links; My is visually separated at the bottom. Mobile uses five bottom tabs (Home, Community, Resources, Multiplayer, My), keeping the established five-item touch pattern. Tools remain reachable from the home shortcuts, My, feature search, resource details, and the desktop sidebar.
+Primary navigation follows tasks rather than backend entities. Each space owns its own page-level navigation. The desktop sidebar has six stable links; My is visually separated at the bottom. Community and Resources pages also show a contextual list of discussion boards or resource kinds, collapsed by default and opened from its heading. Mobile uses five bottom tabs (Home, Community, Resources, Multiplayer, My), keeping the established five-item touch pattern. Tools remain reachable from the home shortcuts, My, feature search, resource details, and the desktop sidebar.
 
 ## Desktop shell
 
-`ContentShell` composes the fixed `ContentSidebar`, `ContentToolbar`, page body, footer, mobile bottom navigation, and the search dialog. The sidebar uses one icon family and marks the active workspace with both an accent bar and text styling. It does not expand into category, tag, or resource-kind menus.
+`ContentShell` composes the fixed `ContentSidebar`, `ContentToolbar`, page body, footer, mobile bottom navigation, and the search dialog. The sidebar uses one icon family and marks the active workspace with both an accent bar and text styling. Its Community and Resources context lists start collapsed and expand when the user activates the section heading.
 
 The top bar keeps global actions visible: workspace breadcrumb, global search, `+ Create`, notifications with the existing unread state, and the authenticated user menu. Developer Center is available to regular signed-in users from that menu. Admin appears only for `user.role === 'admin'`. The existing admin shell and admin route groups remain separate.
 
@@ -66,7 +66,7 @@ Tool cards describe the current Resource Center V2 workbench honestly. Wave edit
 
 - Keep the existing MDTBBS color tokens, typography, theme support, and page components.
 - Keep primary navigation shallow: space → local section → content.
-- Put categories and filters on their product page. Preserve shareable resource query state and expose advanced filters progressively.
+- Keep resource categories and filters on the product page. Use the contextual sidebar for discussion-board and resource-kind shortcuts, collapsed by default. Preserve shareable resource query state and expose advanced filters progressively.
 - Use the existing resource aggregate, file and download pipeline, renderer, and ownership checks. Do not create a parallel resource model or editor workflow.
 - Add new user capabilities to the appropriate space and Feature Registry; add a desktop/mobile entry only where its task frequency supports it.
 - Keep administrator tools inside the admin shell. Add public API docs and client services to the Developer Center, not the primary user sidebar.

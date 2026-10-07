@@ -10,7 +10,7 @@ import type { Category, ResourceCategory } from '@/types';
 import { useI18n } from '@/i18n/provider';
 
 export default function ContentNavigation({
-  mode, settings, isAuthenticated, userId, forumCategories = [], resourceCategories = [], onNavigate,
+  mode, settings, isAuthenticated, userId, forumCategories = [], resourceCategories = [], onNavigate, contextOnly = false,
 }: {
   mode: 'forum' | 'resources';
   settings: Record<string, string>;
@@ -19,17 +19,19 @@ export default function ContentNavigation({
   forumCategories?: Category[];
   resourceCategories?: ResourceCategory[];
   onNavigate?: () => void;
+  contextOnly?: boolean;
 }) {
   const pathname = usePathname();
   const search = useSearchParams();
   const { t } = useI18n();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const sections = buildContentNavigation({ mode, settings, isAuthenticated, userId, forumCategories, resourceCategories, translate: t });
+  const builtSections = buildContentNavigation({ mode, settings, isAuthenticated, userId, forumCategories, resourceCategories, translate: t });
+  const sections = contextOnly ? builtSections.filter((section) => section.id === 'context') : builtSections;
   const linkClass = (active: boolean, indent?: boolean) => `relative flex min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-[var(--motion-fast)] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r before:bg-[var(--primary)] before:transition-opacity before:duration-[var(--motion-fast)] ${indent ? 'ml-3' : ''} ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`;
 
   return <>
     {sections.map((section) => {
-      const isCollapsed = collapsed[section.id] ?? false;
+      const isCollapsed = collapsed[section.id] ?? section.defaultCollapsed ?? false;
       return <section key={section.id} className={section.id === 'global' ? 'space-y-1' : 'mt-4 border-t border-[var(--border)] pt-3'}>
         {section.label && (section.collapsible ? <button type="button" className="flex w-full items-center justify-between rounded-md px-3 py-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)] hover:bg-[var(--bg-elevated)]" onClick={() => setCollapsed((value) => ({ ...value, [section.id]: !isCollapsed }))} aria-expanded={!isCollapsed}>
           <span>{section.label}</span><ChevronDown className={`h-3.5 w-3.5 transition-transform duration-[var(--motion-fast)] ${isCollapsed ? '-rotate-90' : ''}`} />
