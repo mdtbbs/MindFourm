@@ -8,6 +8,7 @@ import { adminApi } from '@/lib/api/client';
 import type { AdminStats, Resource } from '@/types';
 import ResourceTable from '@/components/admin/resource-table';
 import { useI18n } from '@/i18n/provider';
+import { resourceDetailHref } from '@/lib/resources/resource-detail-href';
 
 type OperationsSummary = {
   range_days: number;
@@ -133,7 +134,7 @@ function Metric({ icon, label, value, detail, warn = false }: { icon: React.Reac
 function ResourceRanking({ title, items, metric, bordered = false }: { title: string; items: Resource[]; metric: (resource: Resource) => string; bordered?: boolean }) {
   return <div className={`p-4 ${bordered ? 'border-t border-surface-200 lg:border-l lg:border-t-0' : ''}`}>
     <h3 className="text-sm font-medium text-surface-800">{title}</h3>
-    <div className="mt-3 divide-y divide-surface-100">{items.slice(0, 5).map((resource, index) => <Link key={resource.public_id || resource.id} href={`/resources/${encodeURIComponent(resource.public_id || String(resource.id))}`} className="flex min-h-11 items-center gap-3 py-2 hover:bg-surface-50">
+    <div className="mt-3 divide-y divide-surface-100">{items.slice(0, 5).map((resource, index) => <Link key={resource.public_id || resource.id} href={resourceDetailHref(resource)} className="flex min-h-11 items-center gap-3 py-2 hover:bg-surface-50">
       <span className="w-5 text-center font-mono text-xs text-surface-400">{index + 1}</span><span className="min-w-0 flex-1 truncate text-sm text-surface-800">{resource.title}</span><span className="shrink-0 text-xs tabular-nums text-surface-500">{metric(resource)}</span>
     </Link>)}{!items.length ? <div className="py-6 text-center text-xs text-surface-400">暂无数据</div> : null}</div>
   </div>;

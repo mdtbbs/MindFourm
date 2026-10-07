@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Download, Eye, Sparkles, Star, TrendingUp } from 'lucide-react';
 import type { Resource } from '@/types';
+import { resourceDetailHref } from '@/lib/resources/resource-detail-href';
 
 type Recommendation = { resource: Resource; score: number; reasons: string[] };
 type DiscoverySection = { items: Array<Recommendation & { recent_views?: number; recent_downloads?: number }>; pagination: { page: number; limit: number; items_in_window: number; more_in_window: boolean; candidate_window_size: number; candidate_window_truncated: boolean } };
@@ -100,9 +101,9 @@ export default function ResourceDiscoveryShelves({ kind }: { kind?: string }) {
 
 function ResourceDiscoveryCard({ item }: { item: Recommendation }) {
   const { resource, reasons } = item;
-  const id = resource.public_id || String(resource.id);
+  const detailPath = resourceDetailHref(resource);
   const tags = Array.isArray(resource.metadata?.tags) ? resource.metadata.tags.slice(0, 2) : [];
-  return <Link href={`/resources/${encodeURIComponent(id)}`} className="block min-w-[15rem] max-w-[18rem] snap-start border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)] sm:min-w-0 sm:max-w-none">
+  return <Link href={detailPath} className="block min-w-[15rem] max-w-[18rem] snap-start border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)] sm:min-w-0 sm:max-w-none">
     <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{resource.title}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{resource.resource_kind || resource.resource_type}</div></div>{Number(resource.is_featured) === 1 ? <Star className="h-4 w-4 shrink-0 text-amber-500" fill="currentColor" /> : null}</div>
     <p className="mt-3 line-clamp-2 min-h-10 text-xs leading-5 text-[var(--text-secondary)]">{resource.description || '暂无简介'}</p>
     {reasons.length ? <div className="mt-2 flex min-h-5 flex-wrap gap-1">{reasons.slice(0, 2).map((reason) => <span key={reason} title={reason} className="max-w-full truncate border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">{reasonLabel(reason)}</span>)}</div> : <div className="mt-2 min-h-5" />}
