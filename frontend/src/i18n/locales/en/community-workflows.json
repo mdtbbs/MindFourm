@@ -80,6 +80,7 @@
     "closeFilters": "Close filters",
     "filterResources": "Filter resources",
     "clear": "Clear",
+    "removeFilter": "Remove filter: {filter}",
     "apply": "Apply filters",
     "resourceType": "Resource type",
     "all": "All",

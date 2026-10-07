@@ -13,7 +13,8 @@
     "menu": "メニュー",
     "theme": "テーマを変更",
     "switchToLight": "ライトテーマに切替",
-    "switchToDark": "ダークテーマに切替"
+    "switchToDark": "ダークテーマに切替",
+    "retry": "再試行"
   },
   "home": {
     "intro": "Mindustryプレイヤーのコミュニティです。Mod、マップ、設計図を探して、ゲームについて話しましょう。",
@@ -57,8 +58,32 @@
     "register": "新規登録",
     "login": "ログイン",
     "publishDiscussion": "ディスカッションを開始",
-    "publishResource": "リソースを投稿"
+    "publishResource": "リソースを投稿",
+    "community": "コミュニティ",
+    "multiplayer": "マルチプレイ",
+    "tools": "ツール",
+    "me": "マイページ",
+    "personal": "マイページ",
+    "myContent": "自分のコンテンツ",
+    "myResources": "自分のリソース",
+    "developerCenter": "開発者センター",
+    "categories": "カテゴリ",
+    "tags": "タグ",
+    "announcements": "お知らせ",
+    "latest": "最新",
+    "discussion": "ディスカッション",
+    "resourceDetails": "リソース詳細",
+    "uploadResource": "リソースを投稿",
+    "lobby": "ロビー",
+    "breadcrumb": "ページの場所",
+    "page": "ページ"
   },
+  "create": {"title":"作成","description":"投稿する内容を選択","post":"ディスカッションを開始","postDescription":"質問や近況を共有","mod":"Mod を投稿","modDescription":"新しい Mod リソースを投稿","map":"マップを投稿・クイック投稿","mapDescription":".msav マップファイルを投稿","schematic":"設計図を投稿・クイック投稿","schematicDescription":".msch ファイルまたは設計図コードを投稿","otherResource":"その他のリソースを投稿","otherResourceDescription":"ゲームバージョン、プラグイン、テクスチャなど","loginRequired":"投稿するにはログインしてください。"},
+  "community": {"title":"コミュニティ","description":"ディスカッション、カテゴリ、タグ、お知らせを閲覧できます。","recommended":"おすすめ","recommendedDescription":"コミュニティのおすすめを見る","latest":"最新","latestDescription":"最近更新されたディスカッションを見る","categories":"カテゴリ","categoriesDescription":"カテゴリ別にトピックを見る","tags":"タグ","tagsDescription":"タグから関連する話題を探す","announcements":"お知らせ","announcementsDescription":"公式のお知らせと重要な通知","createPost":"ディスカッションを開始","sections":"コミュニティの項目","following":"フォロー中","followingUnavailable":"フォロー中フィード用の専用 API はありません。","comingSoon":"利用できません"},
+  "multiplayer": {"title":"マルチプレイ","description":"フレンドやサーバーを探し、一緒に遊ぶための機能へ移動できます。","sections":"マルチプレイの項目","lobby":"ロビー","lobbyDescription":"LanLink のルームとクイック参加を開く","serversDescription":"サーバーの閲覧、状態確認、自分のサーバー管理","friendsDescription":"フレンドのオンライン状態や招待を確認","featureNote":"サーバー一覧、Presence、LanLink はサイトの機能設定に従います。","friendsOnline":"オンラインのフレンド","friendsOnlineDescription":"オンライン状態は既存のフレンド API から取得します。招待や参加操作はフレンドページで行えます。","signInForPresence":"ログインするとフレンドの状態を確認できます。","presenceLoadFailed":"フレンドの状態を読み込めません。再試行するかフレンドページを開いてください。","noFriendsOnline":"現在オンラインのフレンドはいません。フレンドページで一覧や招待を確認できます。","online":"オンライン","joinFromFriends":"参加方法を見る","onlineServers":"稼働中のサーバー","onlineServersDescription":"既存の公開サーバー検索 API から取得した一覧です。","serversUnavailable":"稼働中サーバーの概要を読み込めません。","noActiveServers":"現在、公開中のサーバーはありません。"},
+  "tools": {"title":"ツールボックス","description":"Resource Center の設計図、マップ、ウェーブのワークベンチを開き、クラウドセーブを管理します。","available":"ツール","recent":"最近使ったツール","recentEmpty":"開いたツールはこのブラウザの履歴に保存されます。","open":"開く","blueprintEditor":"設計図エディタ","blueprintEditorDescription":"対応する設計図リソースをプレビュー、編集、エクスポート","blueprintEditorDetails":"設計図リソースを選ぶと、Resource Center V2 でプレビュー、ブロック構成、分析を確認できます。管理権限があれば対応する編集操作から新しいバージョンを作成できます。","mapEditor":"マップエディタ","mapEditorDescription":"マップをプレビューし、対応する地形、ルール、オブジェクトを編集","mapEditorDetails":"マップリソースを選ぶと、Resource Center V2 でデータを確認し、対応する編集操作を使えます。","waveEditor":"ウェーブエディタ","waveEditorDescription":"マップのワークベンチでウェーブデータを作成、編集","waveEditorDetails":"ウェーブ編集はマップワークベンチ内のタブです。既存マップを開くか、先に投稿してください。単独の空白キャンバスではありません。","blueprintAnalysis":"設計図分析","blueprintAnalysisDescription":"分析結果からブロック構成と建材を確認","blueprintAnalysisDetails":"設計図分析は Resource Center V2 のバージョン分析データを使います。公開済みの設計図ワークベンチで選択バージョンの情報を確認してください。","cloudSaves":"クラウドセーブ","cloudSavesDescription":"許可済みランチャーと同期したセーブと履歴を管理","openBlueprintEditor":"設計図エディタで開く","openMapEditor":"マップエディタで開く","workbenchNote":"編集と分析は Resource Center V2 の renderer、権限、バージョン管理を使用します。選択したリソースが対応する操作だけを有効にします。","chooseResource":"リソースを選んでワークベンチを開く","submitResource":"リソースを投稿","backToTools":"ツールボックスに戻る"},
+  "mySpace": {"title":"マイページ","loginDescription":"ログインすると通知、ブックマーク、コンテンツ、設定を確認できます。","welcome":"ようこそ、{name} さん","description":"コンテンツ、交流、アカウント設定を管理します。","sections":"マイページのリンク","notificationsDescription":"返信、メンション、システム通知","messagesDescription":"プライベートメッセージを続ける","friendsDescription":"フレンドとオンライン状態","bookmarksDescription":"保存したディスカッション","posts":"自分の投稿","postsDescription":"プロフィールで公開したトピックを見る","resourcesDescription":"リソース、バージョン、ファイル、審査状況を管理","settingsDescription":"プライバシー、通知、安全、言語を設定","postDrafts":"投稿の下書きを続ける","postDraftsDescription":"この端末に保存した下書きを投稿エディタで復元できます。","resourceDrafts":"リソースの下書きを続ける","resourceDraftsDescription":"この端末に保存した下書きを投稿フォームで復元できます。","downloads":"ダウンロード履歴","downloadsUnavailable":"ユーザー向けダウンロード履歴ページや照会 API がないため、一覧は表示しません。","tools":"ツールボックス","toolsDescription":"リソース編集、分析、クラウドセーブのワークスペースを開きます。"},
+  "searchCommand": {"title":"グローバル検索","inputLabel":"機能、リソース、投稿、ユーザー、サーバーを検索","placeholder":"機能、リソース、投稿、ユーザー、サーバーを検索…","shortcut":"Ctrl / ⌘ K","hint":"「設計図」「クラウドセーブ」「フレンド」「API」などで検索","categoriesHint":"機能、リソース、投稿、ユーザー、サーバー","keyboardHint":"↑↓ 選択 · Enter 開く · Esc 閉じる","features":"機能","navigation":"スペース","resources":"リソース","posts":"投稿","users":"ユーザー","servers":"サーバー","allResults":"すべての結果","searchAll":"「{query}」を検索","searchAllDescription":"統合検索結果を開く","noResults":"一致する機能やコンテンツがありません。","error":"検索を利用できません。再試行するか全検索を開いてください。","resourcesDescription":"Mod、マップ、設計図などを閲覧","mods":"Mod","modsDescription":"Mod を閲覧、ダウンロード","maps":"マップ","mapsDescription":"マップを閲覧、ダウンロード","schematics":"設計図","schematicsDescription":"設計図を閲覧、ダウンロード","developerDescription":"サードパーティアプリ、OAuth、開発者ドキュメント","apiDocs":"OpenAPI リファレンス","apiDocsDescription":"Public V1 API 仕様","myResourcesDescription":"自分のリソースとバージョンを管理","bookmarksDescription":"保存したコンテンツ","notificationsDescription":"通知を確認","settingsDescription":"アカウントとプライバシーの設定"},
   "forum": {
     "createPost": "新しい話題を投稿",
     "latestDiscussions": "新着ディスカッション",

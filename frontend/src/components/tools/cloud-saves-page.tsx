@@ -153,8 +153,8 @@ export default function CloudSavesPage() {
   };
 
   if (loading) return <main className="mx-auto flex max-w-6xl items-center justify-center px-4 py-16" aria-live="polite"><LoaderCircle className="h-5 w-5 animate-spin" /><span className="ml-2">{t('cloudSaves.loading')}</span></main>;
-  if (enabled === null) return <main className="mx-auto max-w-3xl px-4 py-10"><h1 className="text-2xl font-semibold">{t('cloudSaves.title')}</h1><p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">{error || t('cloudSaves.loadFailed')}</p><button type="button" onClick={() => void loadAll()} className="mt-4 rounded border border-[var(--border)] px-3 py-2 text-sm">{t('cloudSaves.refresh')}</button><Link className="ml-4 inline-block text-sm text-primary hover:underline" href="/settings">{t('cloudSaves.backToSettings')}</Link></main>;
-  if (enabled === false) return <main className="mx-auto max-w-3xl px-4 py-10"><h1 className="text-2xl font-semibold">{t('cloudSaves.title')}</h1><p className="mt-3 text-sm text-[var(--text-secondary)]">{t('cloudSaves.disabled')}</p><Link className="mt-5 inline-block text-sm text-primary hover:underline" href="/settings">{t('cloudSaves.backToSettings')}</Link></main>;
+  if (enabled === null) return <main className="mx-auto max-w-3xl px-4 py-10"><h1 className="text-2xl font-semibold">{t('cloudSaves.title')}</h1><p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">{error || t('cloudSaves.loadFailed')}</p><button type="button" onClick={() => void loadAll()} className="mt-4 rounded border border-[var(--border)] px-3 py-2 text-sm">{t('cloudSaves.refresh')}</button><Link className="ml-4 inline-block text-sm text-primary hover:underline" href="/tools">{t('tools.backToTools')}</Link></main>;
+  if (enabled === false) return <main className="mx-auto max-w-3xl px-4 py-10"><h1 className="text-2xl font-semibold">{t('cloudSaves.title')}</h1><p className="mt-3 text-sm text-[var(--text-secondary)]">{t('cloudSaves.disabled')}</p><Link className="mt-5 inline-block text-sm text-primary hover:underline" href="/tools">{t('tools.backToTools')}</Link></main>;
 
   const percent = quota ? Math.min(100, Math.round((quota.used_bytes / Math.max(1, quota.limit_bytes)) * 100)) : 0;
 
@@ -162,7 +162,7 @@ export default function CloudSavesPage() {
     <main className="mx-auto max-w-6xl px-4 py-7 sm:py-10">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <nav className="mb-3 flex items-center gap-2 text-sm text-[var(--text-muted)]"><Link href="/settings" className="hover:text-[var(--text)]">{t('cloudSaves.settings')}</Link><span>/</span><span>{t('cloudSaves.title')}</span></nav>
+          <nav className="mb-3 flex items-center gap-2 text-sm text-[var(--text-muted)]"><Link href="/tools" className="hover:text-[var(--text)]">{t('tools.title')}</Link><span>/</span><span>{t('cloudSaves.title')}</span></nav>
           <h1 className="text-2xl font-semibold text-[var(--text)]">{t('cloudSaves.title')}</h1>
           <p className="mt-1 text-sm text-[var(--text-secondary)]">{t('cloudSaves.privateNotice')}</p>
         </div>

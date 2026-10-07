@@ -19,6 +19,8 @@
 
 ## 当前系统与运维
 
+- [`frontend/FRONTEND_IA_2.md`](frontend/FRONTEND_IA_2.md)、[`frontend/FRONTEND_IA_2_ROUTES.md`](frontend/FRONTEND_IA_2_ROUTES.md)、[`frontend/FRONTEND_IA_2_AUDIT.md`](frontend/FRONTEND_IA_2_AUDIT.md)：前台信息架构、route map 与现状审计。
+
 - [`resource-center-v2.md`](resource-center-v2.md)：Resource Center V2 业务与 API。
 - [`platform-2.7.0.md`](platform-2.7.0.md)：2.7.0 平台能力收口、证据层和已知限制。
 - [`schematic-editor.md`](schematic-editor.md)、[`map-editor.md`](map-editor.md)：蓝图/地图安全编辑器边界与版本流程。

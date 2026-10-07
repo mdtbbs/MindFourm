@@ -80,6 +80,7 @@
     "closeFilters": "Закрыть фильтры",
     "filterResources": "Фильтры ресурсов",
     "clear": "Сбросить",
+    "removeFilter": "Удалить фильтр: {filter}",
     "apply": "Применить",
     "resourceType": "Тип ресурса",
     "all": "Все",

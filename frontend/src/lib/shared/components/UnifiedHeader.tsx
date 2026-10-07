@@ -28,7 +28,7 @@ export interface UnifiedHeaderProps {
   siteName?: string;
   siteTagline?: string;
   logoUrl?: string;
-  labels?: Partial<Record<'searchCommunity' | 'search' | 'switchToLight' | 'switchToDark' | 'theme' | 'menu' | 'notifications' | 'messages' | 'friends' | 'servers' | 'createPost' | 'profile' | 'bookmarks' | 'admin' | 'settings' | 'logout' | 'register' | 'login', string>>;
+  labels?: Partial<Record<'searchCommunity' | 'search' | 'searchShortcut' | 'create' | 'switchToLight' | 'switchToDark' | 'theme' | 'menu' | 'notifications' | 'messages' | 'friends' | 'servers' | 'createPost' | 'profile' | 'myContent' | 'developerCenter' | 'bookmarks' | 'admin' | 'settings' | 'logout' | 'register' | 'login', string>>;
 
   user?: User | null;
   isAuthenticated?: boolean;
@@ -41,11 +41,13 @@ export interface UnifiedHeaderProps {
   onRegister?: () => void;
   onLogout?: () => void;
   onSearch?: (query: string) => void;
+  onOpenSearch?: () => void;
   onPostCreate?: () => void;
   onMobileMenuClick?: () => void;
 
   // Slots for custom content
   topNavigationSlot?: React.ReactNode;
+  createMenuSlot?: React.ReactNode;
   notificationDropdownSlot?: React.ReactNode;
   userMenuSlot?: React.ReactNode;
   utilitySlot?: React.ReactNode;
@@ -74,9 +76,11 @@ export function UnifiedHeader({
   onRegister,
   onLogout,
   onSearch,
+  onOpenSearch,
   onPostCreate,
   onMobileMenuClick,
   topNavigationSlot,
+  createMenuSlot,
   notificationDropdownSlot,
   userMenuSlot,
   utilitySlot,
@@ -105,18 +109,16 @@ export function UnifiedHeader({
 
           {showSearch && (
             <div className="hidden min-w-0 flex-1 lg:block lg:max-w-lg">
-              <div className="relative">
+              {onOpenSearch ? <button type="button" data-testid="global-search-trigger-desktop" onClick={onOpenSearch} aria-keyshortcuts="Control+K Meta+K" className="relative flex min-h-11 w-full items-center border border-[var(--border)] bg-[var(--bg-elevated)] px-3 text-left text-sm text-[var(--text-muted)] hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
                 <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
                   <Search className="h-4 w-4" />
                 </div>
-                <input
-                  type="text"
-                  placeholder={labels.searchCommunity || "搜索帖子、资源、用户..."}
-                  aria-label={labels.search || "搜索"}
-                  className="w-full border-0 bg-[var(--bg-elevated)] py-2 pl-10 pr-4 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--primary)]"
-                  onKeyDown={handleSearchKeyDown}
-                />
-              </div>
+                <span className="min-w-0 flex-1 truncate pl-7">{labels.searchCommunity || "搜索帖子、资源、用户..."}</span>
+                <kbd className="ml-2 hidden shrink-0 items-center gap-1 border border-[var(--border)] bg-[var(--bg-card)] px-1.5 py-1 text-[10px] text-[var(--text-muted)] xl:inline-flex">{labels.searchShortcut || 'Ctrl K'}</kbd>
+              </button> : <div className="relative">
+                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"><Search className="h-4 w-4" /></div>
+                <input type="text" placeholder={labels.searchCommunity || "搜索帖子、资源、用户..."} aria-label={labels.search || "搜索"} className="w-full border-0 bg-[var(--bg-elevated)] py-2 pl-10 pr-4 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--primary)]" onKeyDown={handleSearchKeyDown} />
+              </div>}
             </div>
           )}
 
@@ -148,20 +150,14 @@ export function UnifiedHeader({
               </button>
             )}
 
-            {showSearch && (
-              <Link
-                href="/search"
-                className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] lg:hidden"
-                aria-label={labels.search || "搜索"}
-              >
-                <Search className="h-5 w-5" />
-              </Link>
-            )}
+            {showSearch && (onOpenSearch ? <button type="button" data-testid="global-search-trigger-mobile" onClick={onOpenSearch} aria-keyshortcuts="Control+K Meta+K" className="flex min-h-11 min-w-11 items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></button> : <Link href="/search" className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></Link>)}
+
+            {createMenuSlot && <div className="block">{createMenuSlot}</div>}
 
             {isAuthenticated && user ? (
               <>
                 {showNotifications && (
-                  <div className="hidden lg:block">
+                  <div className="block">
                     {notificationDropdownSlot || (
                       <Link
                         href="/notifications"
@@ -229,7 +225,7 @@ export function UnifiedHeader({
                   </div>
                 )}
 
-                {showPostButton && (
+                {showPostButton && !createMenuSlot && (
                   <div className="hidden lg:block">
                     <Link
                       href="/posts/new"
@@ -246,55 +242,46 @@ export function UnifiedHeader({
 
                 <div className="hidden lg:block">
                   <details className="group relative">
-                    <summary className="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]">
-                      <UserIcon className="h-4 w-4" />
+                    <summary aria-haspopup="menu" className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
+                      {user.avatar_url ? <img src={user.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" /> : <UserIcon className="h-5 w-5" />}
                       <span className="hidden sm:inline">{user.username}</span>
                     </summary>
-                    <div className="absolute right-0 top-full z-20 mt-2 min-w-40 border border-[var(--border)] bg-[var(--bg-card)] p-1 shadow-lg">
+                    <div role="menu" className="absolute right-0 top-full z-20 mt-2 min-w-52 border border-[var(--border)] bg-[var(--bg-card)] p-1 shadow-lg">
                       <Link
                         href={`/users/${user.id}`}
-                        className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
+                        role="menuitem"
+                        onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}
+                        className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                       >
                         {labels.profile || "个人主页"}
                       </Link>
                       <Link
-                        href="/messages"
-                        className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
+                        href="/me"
+                        role="menuitem"
+                        onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}
+                        className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                       >
-                        {labels.messages || "私信"}
+                        {labels.myContent || "我的内容"}
                       </Link>
-                      <Link
-                        href="/friends"
-                        className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
-                      >
-                        {labels.friends || "好友"}
-                      </Link>
-                      <Link
-                        href="/bookmarks"
-                        className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
-                      >
-                        {labels.bookmarks || "收藏"}
-                      </Link>
+                      <Link href="/settings" role="menuitem" onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')} className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">{labels.settings || "设置"}</Link>
+                      <Link href="/developers" role="menuitem" onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')} className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">{labels.developerCenter || "开发者中心"}</Link>
                       {user.role === "admin" && (
                         <Link
                           href="/admin"
-                          className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
+                          role="menuitem"
+                          onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}
+                          className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                         >
                           {labels.admin || "管理后台"}
                         </Link>
                       )}
-                      <Link
-                        href="/settings"
-                        className="block px-3 py-2 text-sm hover:bg-[var(--bg-hover)]"
-                      >
-                        {labels.settings || "设置"}
-                      </Link>
                       {userMenuSlot}
                       {onLogout && (
                         <button
                           type="button"
-                          onClick={onLogout}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-[var(--bg-hover)]"
+                          onClick={(event) => { event.currentTarget.closest('details')?.removeAttribute('open'); onLogout(); }}
+                          role="menuitem"
+                          className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                         >
                           <LogOut className="h-4 w-4" />
                           {labels.logout || "退出登录"}

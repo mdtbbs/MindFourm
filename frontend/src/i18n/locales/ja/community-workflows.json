@@ -80,6 +80,7 @@
     "closeFilters": "絞り込みを閉じる",
     "filterResources": "リソースを絞り込む",
     "clear": "クリア",
+    "removeFilter": "フィルターを削除: {filter}",
     "apply": "適用",
     "resourceType": "リソースの種類",
     "all": "すべて",

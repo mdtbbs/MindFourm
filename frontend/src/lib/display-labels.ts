@@ -1,3 +1,5 @@
+import resourceKinds from '../../../src/common/resource-kinds.json';
+
 export const ROLE_LABELS: Record<string, string> = {
   super_admin: "超级管理员",
   admin: "管理员",
@@ -34,4 +36,3 @@ export function resourceKindLabel(kind?: string | null): string {
   if (!kind) return "资源";
   return RESOURCE_KIND_LABELS[kind] || "其他";
 }
-import resourceKinds from '../../../src/common/resource-kinds.json';

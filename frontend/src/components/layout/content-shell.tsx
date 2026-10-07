@@ -1,25 +1,17 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { useSse } from "@/hooks/use-sse";
+import { Suspense, useCallback, useState } from "react";
 import { useForumRealtime } from '@/hooks/use-forum-realtime';
 import { useAuth } from "@/lib/auth/context";
 import { useSettings } from "@/lib/settings/context";
 import { resolveBrand } from "@/lib/theme/brand";
-import {
-  messageApi,
-  friendsApi,
-} from "@/lib/api/client";
-import type { Notification } from "@/types";
 import Footer from "@/components/forum/footer";
 import AnnouncementBanner from "@/components/forum/announcement-banner";
 import PrivacyNotice from "@/components/legal/privacy-notice";
 import ContentSidebar from "@/components/layout/content-sidebar";
-import ContentDrawer from "@/components/layout/content-drawer";
 import ContentToolbar from "@/components/layout/content-toolbar";
-import { useNavigation } from '@/lib/navigation/context';
 import MobileBottomNavigation from '@/components/layout/mobile-bottom-navigation';
+import GlobalSearchCommand from '@/components/layout/global-search-command';
 import { useI18n } from '@/i18n/provider';
 
 export default function ContentShell({
@@ -30,69 +22,20 @@ export default function ContentShell({
   const { user, isAuthenticated, logout } = useAuth();
   const { locale, t } = useI18n();
   const settings = useSettings();
-  const navigation = useNavigation();
   const brand = resolveBrand(settings);
-  const router = useRouter();
-  const pathname = usePathname();
-  const isResources = pathname.startsWith('/resources');
-  // Global navigation remains stable; only the context section follows the route.
-  const sidebarMode = isResources ? 'resources' : 'forum';
   const mindauthUrl =
     process.env.NEXT_PUBLIC_MINDAUTH_URL || "http://localhost:4001";
-
-  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
-  const [unreadFriendRequestCount, setUnreadFriendRequestCount] = useState(0);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      setUnreadMsgCount(0);
-      setUnreadFriendRequestCount(0);
-      return;
-    }
-
-    let cancelled = false;
-    messageApi
-      .unreadCount()
-      .then((res) => {
-        if (!cancelled) setUnreadMsgCount(res.count);
-      })
-      .catch(() => {});
-
-    friendsApi
-      .getRequests(1, 1)
-      .then((res) => {
-        if (!cancelled) setUnreadFriendRequestCount(res.total || 0);
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isAuthenticated]);
-
-  const handleMessageEvent = useCallback((notification: Notification) => {
-    if (notification.type === "message") {
-      messageApi
-        .unreadCount()
-        .then((res) => setUnreadMsgCount(res.count))
-        .catch(() => {});
-    }
-
-    if (notification.type === "friend_request") {
-      friendsApi
-        .getRequests(1, 1)
-        .then((res) => setUnreadFriendRequestCount(res.total || 0))
-        .catch(() => {});
-    }
-  }, []);
-
-  useSse("notification", handleMessageEvent, { enabled: isAuthenticated });
   useForumRealtime(user?.id, isAuthenticated);
+
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    window.requestAnimationFrame(() => {
+      const trigger = Array.from(document.querySelectorAll<HTMLElement>('[data-testid^="global-search-trigger-"]'))
+        .find((element) => element.getClientRects().length > 0);
+      trigger?.focus();
+    });
+  }, []);
 
   const buildAuthUrl = (endpoint: "login" | "register") => {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
@@ -103,16 +46,7 @@ export default function ContentShell({
     return `${mindauthUrl}/${endpoint}?redirect=${redirectUrl}&client_id=${clientId}&state=${encodeURIComponent(redirectPath)}&ui_locales=${encodeURIComponent(locale)}`;
   };
 
-  const handleSearch = (query: string) => {
-    if (query.trim()) {
-      router.push(`/search?q=${encodeURIComponent(query.trim())}`);
-    }
-  };
-
   const userMeta = isAuthenticated ? t('auth.signedIn') : t('auth.guest');
-  // Admin lives in its own route layout. Every SiteShell page keeps this
-  // sidebar, with resource pages merely changing which section is emphasised.
-  const showDesktopSidebar = true;
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:min-h-0">
@@ -122,45 +56,18 @@ export default function ContentShell({
       >
         {t('common.skipToContent')}
       </a>
-      {showDesktopSidebar && (
-        <Suspense fallback={null}>
-          <ContentSidebar
-            mode={sidebarMode}
-            siteName={brand.siteName}
-            sidebarTitle={brand.sidebarTitle}
-            logoUrl={brand.logoUrl || undefined}
-            sidebarLogoUrl={brand.sidebarLogoUrl || undefined}
-            userName={user?.username || undefined}
-            userId={user?.id}
-            isAuthenticated={isAuthenticated}
-            userMeta={userMeta}
-            settings={settings}
-            resourceCategories={navigation.resourceCategories}
-            forumCategories={navigation.forumCategories}
-          />
-        </Suspense>
-      )}
-
-      {mobileMenuOpen && (
-        <Suspense fallback={null}>
-          <ContentDrawer
-            open
-            mode={sidebarMode}
-            onClose={() => setMobileMenuOpen(false)}
-            siteName={brand.siteName}
-            sidebarTitle={brand.sidebarTitle}
-            logoUrl={brand.logoUrl || undefined}
-            sidebarLogoUrl={brand.sidebarLogoUrl || undefined}
-            userName={user?.username || undefined}
-            userId={user?.id}
-            isAuthenticated={isAuthenticated}
-            userMeta={userMeta}
-            settings={settings}
-            resourceCategories={navigation.resourceCategories}
-            forumCategories={navigation.forumCategories}
-          />
-        </Suspense>
-      )}
+      <Suspense fallback={null}>
+        <ContentSidebar
+          siteName={brand.siteName}
+          logoUrl={brand.logoUrl || undefined}
+          sidebarLogoUrl={brand.sidebarLogoUrl || undefined}
+          userName={user?.username || undefined}
+          userId={user?.id}
+          isAuthenticated={isAuthenticated}
+          userMeta={userMeta}
+          settings={settings}
+        />
+      </Suspense>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
         <ContentToolbar
@@ -168,8 +75,6 @@ export default function ContentShell({
           logoUrl={brand.logoUrl || undefined}
           user={user}
           isAuthenticated={isAuthenticated}
-          unreadMessageCount={unreadMsgCount}
-          unreadFriendRequestCount={unreadFriendRequestCount}
           onLogin={() => {
             window.location.href = buildAuthUrl("login");
           }}
@@ -177,16 +82,15 @@ export default function ContentShell({
             window.location.href = buildAuthUrl("register");
           }}
           onLogout={logout}
-          onSearch={handleSearch}
-          onOpenDrawer={() => setMobileMenuOpen(true)}
-          navigationMode={sidebarMode}
+          onOpenSearch={() => setSearchOpen(true)}
         />
         <AnnouncementBanner />
         <PrivacyNotice />
         <main id="main-content" data-theme-surface tabIndex={-1} className="min-w-0 flex-1">{children}</main>
         <Footer />
       </div>
-      <MobileBottomNavigation isAuthenticated={isAuthenticated} userId={user?.id} />
+      <MobileBottomNavigation userId={user?.id} />
+      <GlobalSearchCommand open={searchOpen} onClose={closeSearch} onOpenChange={setSearchOpen} />
     </div>
   );
 }

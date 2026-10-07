@@ -1,33 +1,21 @@
 /**
- * Sidebar Navigation – E2E Tests
- *
- * Verifies that the admin sidebar navigation settings page renders correctly,
- * that navigation configuration flows through to the desktop sidebar and
- * mobile drawer, and that invalid input is rejected.
- *
- * These tests require the dev servers (backend + frontend) to be running.
+ * Frontend IA 2.0 navigation smoke tests.
+ * These tests require the frontend and backend dev servers to be running.
  */
 
 import { test, expect } from '../fixtures/page-objects/base.po';
+import { test as authTest, adminTest } from '../fixtures/auth.fixture';
 
 const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:4000';
-
-// ---------------------------------------------------------------------------
-// Public API shape
-// ---------------------------------------------------------------------------
+const SPACE_ROUTES = ['/', '/community', '/resources', '/multiplayer', '/tools', '/me'];
 
 test.describe('Sidebar Navigation API', () => {
-  test('GET /api/settings/admin/sidebar-navigation returns an array', async ({ request }) => {
-    // The endpoint requires admin auth, so it should return 401 without session.
+  test('GET /api/settings/admin/sidebar-navigation returns an array or requires auth', async ({ request }) => {
     const response = await request.get(`${API_URL}/api/settings/admin/sidebar-navigation`);
-    // Either 401 (unauthenticated) or 200 with array body
-    const status = response.status();
-    expect([200, 401, 403]).toContain(status);
-
-    if (status === 200) {
+    expect([200, 401, 403]).toContain(response.status());
+    if (response.status() === 200) {
       const body = await response.json();
-      const data = body.data ?? body;
-      expect(Array.isArray(data)).toBeTruthy();
+      expect(Array.isArray(body.data ?? body)).toBeTruthy();
     }
   });
 
@@ -36,233 +24,105 @@ test.describe('Sidebar Navigation API', () => {
       data: { items: [] },
       headers: { 'Content-Type': 'application/json' },
     });
-    // Unauthenticated request should be rejected
     expect([401, 403]).toContain(response.status());
   });
 });
 
-// ---------------------------------------------------------------------------
-// Desktop Sidebar
-// ---------------------------------------------------------------------------
-
-test.describe('Desktop Sidebar Navigation', () => {
-  test('sidebar is visible at desktop viewport', async ({ page }) => {
+test.describe('Desktop IA navigation', () => {
+  test('sidebar presents the six stable user spaces in order', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    const sidebar = page.locator('[data-testid="content-sidebar"]');
-    await expect(sidebar).toBeVisible({ timeout: 10000 });
+    const sidebar = page.getByTestId('content-sidebar');
+    await expect(sidebar).toBeVisible();
+    const links = sidebar.getByRole('navigation').getByRole('link');
+    await expect(links).toHaveCount(6);
+    await expect(links.evaluateAll((items) => items.map((item) => item.getAttribute('href')))).resolves.toEqual(SPACE_ROUTES);
   });
 
-  test('sidebar contains a nav element with links', async ({ page }) => {
+  test('active state follows the current workspace and provides a breadcrumb', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/community', { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    await expect(page.getByTestId('sidebar-nav').getByRole('link', { name: '社区' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: '页面位置' })).toContainText('社区');
+  });
+
+  test('search and create remain global topbar actions', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const sidebarNav = page.locator('[data-testid="content-sidebar"] nav');
-    await expect(sidebarNav).toBeVisible({ timeout: 10000 });
-
-    // Should have at least one navigation link
-    const links = sidebarNav.locator('a');
-    const count = await links.count();
-    expect(count).toBeGreaterThan(0);
-  });
-
-  test('sidebar shows default navigation items', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const sidebar = page.locator('[data-testid="content-sidebar"]');
-    await expect(sidebar).toBeVisible({ timeout: 10000 });
-
-    // Default items: 首页, 分类, 标签, 资源中心
-    // At least the "首页" link should be present
-    const homeLink = page.locator('[data-testid="sidebar-nav-item-home"]');
-    await expect(homeLink).toBeVisible({ timeout: 5000 });
-  });
-
-  test('sidebar home link points to /', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const homeLink = page.locator('[data-testid="sidebar-nav-item-home"]');
-    const href = await homeLink.getAttribute('href');
-    expect(href).toBe('/');
-  });
-
-  test('sidebar is hidden at mobile viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const sidebar = page.locator('[data-testid="content-sidebar"]');
-    // The sidebar has `hidden lg:flex` — hidden on mobile
-    await expect(sidebar).not.toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('global-search-trigger-desktop')).toBeVisible();
+    await expect(page.getByRole('button', { name: '创建' })).toBeVisible();
   });
 });
 
-// ---------------------------------------------------------------------------
-// Mobile Drawer
-// ---------------------------------------------------------------------------
-
-test.describe('Mobile Drawer Navigation', () => {
-  test('mobile menu button is visible at mobile viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
+test.describe('Mobile IA navigation', () => {
+  test('bottom navigation has five stable spaces and no desktop sidebar or drawer', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
-    const menuButton = page.locator('[data-testid="mobile-menu-button"]');
-    await expect(menuButton).toBeVisible({ timeout: 10000 });
+    const nav = page.getByTestId('mobile-bottom-navigation');
+    await expect(nav).toBeVisible();
+    const links = nav.getByRole('link');
+    await expect(links).toHaveCount(5);
+    await expect(links.evaluateAll((items) => items.map((item) => item.getAttribute('href')))).resolves.toEqual(['/', '/community', '/resources', '/multiplayer', '/me']);
+    await expect(page.getByTestId('content-sidebar')).toBeHidden();
+    await expect(page.getByTestId('mobile-menu-button')).toHaveCount(0);
+    await expect(page.getByTestId('global-search-trigger-mobile')).toBeVisible();
+    await expect(page.getByRole('button', { name: '创建' })).toBeVisible();
   });
 
-  test('mobile menu button is hidden at desktop viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 });
+  test('global search finds cloud saves and follows its protected route', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const menuButton = page.locator('[data-testid="mobile-menu-button"]');
-    await expect(menuButton).not.toBeVisible({ timeout: 5000 });
-  });
-
-  test('drawer opens when mobile menu button is clicked', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    // Drawer should not be visible initially
-    const drawer = page.locator('[data-testid="mobile-drawer"]');
-    await expect(drawer).not.toBeVisible({ timeout: 5000 });
-
-    // Click the menu button
-    await page.locator('[data-testid="mobile-menu-button"]').click();
-
-    // Drawer should now be visible
-    await expect(drawer).toBeVisible({ timeout: 5000 });
-  });
-
-  test('drawer contains navigation links', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    // Open the drawer
-    await page.locator('[data-testid="mobile-menu-button"]').click();
-
-    const drawerNav = page.locator('[data-testid="mobile-drawer-nav"]');
-    await expect(drawerNav).toBeVisible({ timeout: 5000 });
-
-    // Should have at least one navigation link
-    const links = drawerNav.locator('a');
-    const count = await links.count();
-    expect(count).toBeGreaterThan(0);
-  });
-
-  test('drawer shows the same navigation items as sidebar', async ({ page }) => {
-    // First check desktop sidebar items
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const desktopLinks = page.locator('[data-testid="content-sidebar"] nav a');
-    const desktopCount = await desktopLinks.count();
-    const desktopTexts: string[] = [];
-    for (let i = 0; i < desktopCount; i++) {
-      const text = await desktopLinks.nth(i).textContent();
-      desktopTexts.push((text || '').trim());
-    }
-
-    // Now check mobile drawer items
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    await page.locator('[data-testid="mobile-menu-button"]').click();
-
-    const drawerLinks = page.locator('[data-testid="mobile-drawer-nav"] a');
-    const drawerCount = await drawerLinks.count();
-    const drawerTexts: string[] = [];
-    for (let i = 0; i < drawerCount; i++) {
-      const text = await drawerLinks.nth(i).textContent();
-      drawerTexts.push((text || '').trim());
-    }
-
-    // Both should have the same number of links
-    expect(drawerCount).toBe(desktopCount);
-    // And the same text content (same labels)
-    expect(drawerTexts).toEqual(desktopTexts);
-  });
-
-  test('drawer closes when clicking backdrop', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    // Open the drawer
-    await page.locator('[data-testid="mobile-menu-button"]').click();
-    const drawer = page.locator('[data-testid="mobile-drawer"]');
-    await expect(drawer).toBeVisible({ timeout: 5000 });
-
-    // Click the backdrop (the semi-transparent overlay)
-    // The backdrop is the direct child button of the drawer
-    await drawer.locator('button[aria-label="关闭导航菜单"]').click();
-
-    // Drawer should close (no longer visible)
-    await expect(drawer).not.toBeVisible({ timeout: 5000 });
-  });
-
-  test('drawer closes when clicking close button', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    // Open the drawer
-    await page.locator('[data-testid="mobile-menu-button"]').click();
-    const drawer = page.locator('[data-testid="mobile-drawer"]');
-    await expect(drawer).toBeVisible({ timeout: 5000 });
-
-    // Click the X close button in the drawer header
-    await drawer.locator('button[aria-label="关闭"]').click();
-
-    // Drawer should close
-    await expect(drawer).not.toBeVisible({ timeout: 5000 });
+    await page.getByTestId('global-search-trigger-mobile').click();
+    const dialog = page.getByRole('dialog', { name: '全局搜索' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('combobox').fill('云存档');
+    const cloudSaves = dialog.getByRole('option', { name: /云存档/ });
+    await expect(cloudSaves).toBeVisible();
+    await cloudSaves.click();
+    await expect(page).toHaveURL(/\/login\?redirect=.*tools%2Fcloud-saves/);
   });
 });
 
-// ---------------------------------------------------------------------------
-// Desktop ↔ Mobile sync
-// ---------------------------------------------------------------------------
-
-test.describe('Desktop and Mobile Navigation Stay in Sync', () => {
-  test('both views render the same nav items from the same data source', async ({ page }) => {
-    // The desktop sidebar and mobile drawer share the same `sidebarItems` from
-    // `ContentShell`, which calls `buildSidebarNavigation()`. Verify both views
-    // produce matching item counts and labels.
-
-    // Gather desktop items
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    const desktopSidebar = page.locator('[data-testid="sidebar-nav"]');
-    await expect(desktopSidebar).toBeVisible({ timeout: 10000 });
-    const desktopItems = desktopSidebar.locator('a');
-    const desktopCount = await desktopItems.count();
-
-    // Gather mobile items
-    await page.setViewportSize({ width: 375, height: 667 });
-    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-
-    await page.locator('[data-testid="mobile-menu-button"]').click();
-    const drawerNav = page.locator('[data-testid="mobile-drawer-nav"]');
-    await expect(drawerNav).toBeVisible({ timeout: 5000 });
-    const mobileItems = drawerNav.locator('a');
-    const mobileCount = await mobileItems.count();
-
-    expect(mobileCount).toBe(desktopCount);
-    expect(mobileCount).toBeGreaterThan(0);
-  });
+test('the retired user cloud-save URL returns 404 without a compatibility redirect', async ({ page }) => {
+  const response = await page.goto('/settings/cloud-saves', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  expect(response?.status()).toBe(404);
+  await expect(page).not.toHaveURL(/\/login/);
 });
 
-// ---------------------------------------------------------------------------
-// Admin settings page (smoke tests — no authentication)
-// ---------------------------------------------------------------------------
+authTest('authenticated creation menu exposes resource upload shortcuts', async ({ authenticatedPage }) => {
+  await authenticatedPage.setViewportSize({ width: 390, height: 844 });
+  await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await authenticatedPage.getByRole('button', { name: '创建' }).click();
 
-test.describe('Admin Sidebar Navigation Settings Page', () => {
-  test('admin settings sidebar page requires authentication', async ({ page }) => {
-    await page.goto('/admin/settings/sidebar', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  const dialog = authenticatedPage.getByRole('dialog', { name: '创建' });
+  await expect(dialog.getByRole('link', { name: /上传蓝图/ })).toHaveAttribute('href', '/resources/submit/schematic');
+  await expect(dialog.getByRole('link', { name: /上传地图/ })).toHaveAttribute('href', '/resources/submit/map');
+  await authenticatedPage.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+});
 
-    // Should redirect to login or show unauthorized for unauthenticated users
-    const url = page.url();
-    const isProtected = url.includes('login') || url.includes('unauthorized');
-    expect(isProtected).toBeTruthy();
-  });
+authTest('developer center is discoverable to a regular user but admin entry is hidden', async ({ authenticatedPage }) => {
+  await authenticatedPage.setViewportSize({ width: 1280, height: 800 });
+  await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await authenticatedPage.locator('header details summary').click();
+  const menu = authenticatedPage.getByRole('menu');
+  await expect(menu.getByRole('menuitem', { name: '开发者中心' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: '管理后台' })).toHaveCount(0);
+});
+
+adminTest('admin entry appears only in the authenticated admin user menu', async ({ authenticatedPage }) => {
+  await authenticatedPage.setViewportSize({ width: 1280, height: 800 });
+  await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await authenticatedPage.locator('header details summary').click();
+  await expect(authenticatedPage.getByRole('menu').getByRole('menuitem', { name: '管理后台' })).toBeVisible();
+});
+
+test('anonymous visits to private workspace tools enter the login flow', async ({ page }) => {
+  for (const route of ['/me', '/friends', '/resources/my', '/tools/cloud-saves']) {
+    await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await expect(page).toHaveURL(new RegExp(`/login\\?redirect=.*${route.replaceAll('/', '%2F').slice(1)}`));
+  }
 });

@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from 'next/navigation';
 import { UnifiedHeader } from "@/lib/shared";
 import type { User } from "@/types";
 import NotificationDropdown from "@/components/forum/notification-dropdown";
+import CreateMenu from '@/components/layout/create-menu';
 import { LocaleSwitcher, useI18n } from '@/i18n/provider';
+import { resolveWorkspaceBreadcrumb } from '@/lib/navigation/workspace-navigation';
 
 function UserMobileIdentity({
   siteName,
@@ -24,27 +27,34 @@ function UserMobileIdentity({
   );
 }
 
+function WorkspaceBreadcrumb({ userId }: { userId?: number }) {
+  const pathname = usePathname();
+  const { t } = useI18n();
+  const items = resolveWorkspaceBreadcrumb(pathname, userId);
+  return <nav aria-label={t('navigation.breadcrumb')} className="hidden min-w-0 items-center gap-2 text-sm lg:flex">
+    {items.map((item, index) => <span key={`${item.labelKey}-${index}`} className="flex min-w-0 items-center gap-2">
+      {index > 0 && <span aria-hidden="true" className="text-[var(--text-muted)]">/</span>}
+      {item.href ? <Link href={item.href} className="truncate text-[var(--text-muted)] hover:text-[var(--text)]">{t(item.labelKey)}</Link> : <span aria-current="page" className="truncate font-medium text-[var(--text)]">{t(item.labelKey)}</span>}
+    </span>)}
+  </nav>;
+}
+
 export default function ContentToolbar(props: {
   siteName: string;
   logoUrl?: string;
   user: User | null;
   isAuthenticated: boolean;
-  unreadMessageCount: number;
-  unreadFriendRequestCount: number;
   onLogin: () => void;
   onRegister: () => void;
   onLogout: () => void;
-  onSearch: (query: string) => void;
-  onOpenDrawer: () => void;
-  navigationMode?: 'forum' | 'resources';
+  onOpenSearch: () => void;
 }) {
   const { t } = useI18n();
   return (
     <UnifiedHeader
       showSearch
-      showPostButton
       showNotifications
-      showMobileMenu
+      onOpenSearch={props.onOpenSearch}
       siteName={props.siteName}
       logoUrl={props.logoUrl}
       labels={{
@@ -53,26 +63,21 @@ export default function ContentToolbar(props: {
         theme: t('common.theme'), menu: t('common.menu'), notifications: t('navigation.notifications'),
         messages: t('navigation.messages'), friends: t('navigation.friends'), servers: t('navigation.servers'),
         createPost: t('forum.createPost'), profile: t('navigation.profile'), bookmarks: t('navigation.bookmarks'),
+        myContent: t('navigation.myContent'), developerCenter: t('navigation.developerCenter'),
         admin: t('navigation.admin'), settings: t('navigation.settings'), logout: t('navigation.logout'),
         register: t('navigation.register'), login: t('navigation.login'),
+        searchShortcut: t('searchCommand.shortcut'), create: t('create.title'),
       }}
       user={props.user}
       isAuthenticated={props.isAuthenticated}
-      unreadMessageCount={props.unreadMessageCount}
-      unreadFriendRequestCount={props.unreadFriendRequestCount}
       onLogin={props.onLogin}
       onRegister={props.onRegister}
       onLogout={props.onLogout}
-      onSearch={props.onSearch}
-      onMobileMenuClick={props.onOpenDrawer}
-      notificationDropdownSlot={<NotificationDropdown />}
+      onSearch={() => props.onOpenSearch()}
+      notificationDropdownSlot={props.isAuthenticated ? <NotificationDropdown /> : undefined}
+      createMenuSlot={<CreateMenu isAuthenticated={props.isAuthenticated} />}
       userMenuSlot={<div className="border-t border-[var(--border)]"><LocaleSwitcher className="w-full" /></div>}
-      utilitySlot={<LocaleSwitcher className="hidden lg:block" />}
-      topNavigationSlot={
-        props.navigationMode ? (
-          <UserMobileIdentity siteName={props.siteName} logoUrl={props.logoUrl} />
-        ) : undefined
-      }
+      topNavigationSlot={<><UserMobileIdentity siteName={props.siteName} logoUrl={props.logoUrl} /><WorkspaceBreadcrumb userId={props.user?.id} /></>}
     />
   );
 }

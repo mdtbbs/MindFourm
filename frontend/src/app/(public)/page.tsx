@@ -62,6 +62,7 @@ export default async function HomePage() {
   } : loadedHome;
   const brand = resolveBrand(settings);
   const locale = await getRequestLocale();
+  const t = (key: string) => translate(locale, key);
   const staleSections = [home.discussions, home.resources, home.news, home.notices].filter((section) => section.state === 'stale').length;
 
   if (siteProfile.profile === 'mindustry-club') {
@@ -73,9 +74,10 @@ export default async function HomePage() {
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{t('home.intro')}</p>
         <form action="/search" className="relative mt-5 max-w-2xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label={t('common.search')} placeholder={t('home.searchPlaceholder')} className="h-11 w-full rounded border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
         <nav aria-label={t('navigation.siteNavigation')} className="mt-5 flex flex-wrap gap-2">
-          {siteProfile.navigation.filter((entry) => ['posts', 'resources', 'discover', 'developers'].includes(entry.key))
+          {siteProfile.navigation.filter((entry) => ['posts', 'resources', 'discover'].includes(entry.key))
             .filter((entry) => !entry.feature || siteProfile.features[entry.feature])
             .map((entry) => <Link key={entry.key} href={entry.href} className="border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{t(`navigation.${entry.key}`)} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
+          <Link href="/tools" className="border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{t('navigation.tools')} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>
         </nav>
         <nav aria-label={t('home.quickLinks')} className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
           {[
@@ -114,8 +116,15 @@ export default async function HomePage() {
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{brand.siteName}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry 中文玩家社区</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">找 Mod、地图、蓝图、服务器，或加入正在发生的讨论。</p>
-        <form action="/search" className="relative mt-5 max-w-xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label="搜索社区内容" placeholder="搜索 Mod、地图、蓝图、帖子、服务器…" className="h-10 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
-        <nav aria-label="快捷入口" className="mt-4 flex flex-wrap gap-2">{[{ href: '/resources?resource_kind=mod', label: '找 Mod' }, { href: '/resources?resource_kind=map', label: '找地图' }, { href: '/resources?resource_kind=schematic', label: '找蓝图' }, { href: '/servers', label: '找服务器' }].map((entry) => <Link key={entry.href} href={entry.href} className="rounded border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-[background-color,border-color,color,scale,translate] duration-[var(--motion-fast)] hover:-translate-y-px hover:border-[color-mix(in_srgb,var(--primary)_35%,var(--border))] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary)] active:scale-[0.98]">{entry.label}</Link>)}</nav>
+        <form action="/search" className="relative mt-5 max-w-xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label={t('common.search')} placeholder={t('home.searchPlaceholder')} className="h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
+        <nav aria-label={t('home.quickLinks')} className="mt-4 flex flex-wrap gap-2">{[
+          { href: '/community', label: t('navigation.community') },
+          { href: '/posts/new', label: t('create.post') },
+          { href: '/resources/submit', label: t('create.mod') },
+          { href: '/tools/blueprint-editor', label: t('tools.blueprintEditor') },
+          { href: '/multiplayer', label: t('navigation.multiplayer') },
+          { href: '/servers', label: t('navigation.servers') },
+        ].map((entry) => <Link key={entry.href} href={entry.href} className="inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{entry.label}</Link>)}</nav>
       </section>
 
       {staleSections > 0 && <p role="status" className="-mt-4 mb-5 text-xs text-[var(--text-muted)]">部分内容来自最近一次成功加载的缓存。</p>}

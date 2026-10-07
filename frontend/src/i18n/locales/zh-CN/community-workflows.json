@@ -80,6 +80,7 @@
     "closeFilters": "关闭筛选",
     "filterResources": "筛选资源",
     "clear": "清除",
+    "removeFilter": "移除筛选：{filter}",
     "apply": "应用筛选",
     "resourceType": "资源类型",
     "all": "全部",
