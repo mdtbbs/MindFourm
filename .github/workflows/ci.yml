@@ -143,16 +143,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Download pinned Mindustry v160.2 artifacts
+      - name: Download pinned Mindustry v160.5 artifacts
         shell: bash
         run: |
           mkdir -p tools/mindustry-renderer/build/deps
           curl --fail --location --retry 3 \
-            https://github.com/Anuken/Mindustry/releases/download/v160.2/server-release.jar \
-            --output tools/mindustry-renderer/build/deps/server-release-v160.2.jar
+            https://github.com/Anuken/Mindustry/releases/download/v160.5/server-release.jar \
+            --output tools/mindustry-renderer/build/deps/server-release-v160.5.jar
           curl --fail --location --retry 3 \
-            https://github.com/Anuken/Mindustry/releases/download/v160.2/Mindustry.jar \
-            --output tools/mindustry-renderer/build/deps/Mindustry-v160.2.jar
+            https://github.com/Anuken/Mindustry/releases/download/v160.5/Mindustry.jar \
+            --output tools/mindustry-renderer/build/deps/Mindustry-v160.5.jar
 
       - name: Compile renderer and run safe fixture tests
         run: bash tools/mindustry-renderer/test-renderer.sh

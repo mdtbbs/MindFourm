@@ -19,6 +19,10 @@ GET /api/v1/resources/{resource_public_id}/preview
 GET /api/v1/resources/{resource_public_id}/manifest
 GET /api/v1/resources/{resource_public_id}/versions
 GET /api/v1/resources/{resource_public_id}/versions/{version_public_id}/preview
+GET /api/v1/resources/discovery/home
+GET /api/v1/resources/discovery/hot
+GET /api/v1/resources/discovery/for-you
+GET /api/v1/resources/discovery/related/{id}
 GET /api/v1/resources/{resource_public_id}/relations
 GET /api/v1/resources/{resource_public_id}/stats
 GET /api/v1/resources/{resource_public_id}/workbench
@@ -196,6 +200,66 @@ GET /api/v1/resources/topics
 ```
 
 资源类别用于主导航和投稿类型；主题是可选的用途或分类筛选条件。迁移期间，旧版 `category_id` 参数仍可作为主题筛选使用，但不会改变资源类别。旧字段 `resource_type` 仍描述文件交付方式（`upload` 或 `external`），不能代替 `resource_kind`。
+
+## 资源发现与推荐
+
+以下 GET 接口允许匿名访问。携带 MindAuth Bearer token 时需要 `resource.read`；无效凭证返回 401，缺少 scope 返回 403。登录会话可读取公开结果。四条接口只返回未删除、`is_public = true`、状态为 `approved` 或 `published`、公开 visibility 且有 `public_id` 的资源，并排除已停用主题下的资源；相关推荐的源资源也必须符合相同条件，否则统一返回 404。
+
+```text
+GET /api/v1/resources/discovery/home?kind=schematic&limit=8&page=1
+GET /api/v1/resources/discovery/hot?limit=10&page=1
+GET /api/v1/resources/discovery/for-you?kind=map&limit=12&page=1
+GET /api/v1/resources/discovery/related/{id}?limit=8&page=1
+```
+
+`home` 的 `kind` 可选值为 `mod`、`schematic`、`map`、`other`；`limit` 为 1–20，`page` 为 1–400。响应 `data.sections` 固定包含 `featured`、`trending`、`rising`、`top_rated`、`newest`，每个 section 都返回稳定的 `algorithm` ID、`items` 和 `pagination`。`for-you` 支持相同 `kind`，`limit` 为 1–30；登录用户仅在存在当前仍公开可见的站内点赞/收藏种子时获得个性化结果，否则返回趋势兜底。`related` 的 `{id}` 是源资源公开 UUID，`limit` 为 1–24。`for-you`、`related` 的 `page` 均为 1–400。
+
+`hot` 按公开资源累计下载量排序，`limit` 为 1–30（默认 10），`page` 为 1–400；它在最多 300 个候选组成的窗口内分页，原因码为 `top_downloaded`。
+
+每个结果条目包含公开资源卡片、排序用 `score` 和稳定 `reasons`。`score` 四舍五入到三位小数，只能在相同 `algorithm` 下比较，不是质量保证。原因值可能是 `editor_pick`、`trending`、`recent_views`、`recent_downloads`、`quality_signals`、`top_rated`、`newest`、`top_downloaded`、`same_kind`、`same_category`、`shared_tags:<tags>`、`kind:<kind>`、`category`、`tags:<tags>`、`featured` 或 `popular_now`。算法 ID 表示对应权重和输入口径的版本；服务端改变这些语义时会发布新的 ID，不应把 ID 硬编码为固定列表。
+
+### 排序算法与公开信号
+
+排序在服务端执行，客户端可直接调用发现接口读取结果；本节与在线 API 参考共同构成公开契约。资源过滤先于排序：候选必须未删除、`is_public = true`、处于 `approved` 或 `published` 状态、公开可见且有 `public_id`，并且不能属于已停用主题。类别/主题筛选由 `kind` 参数完成。算法不把私有、审核中或已删除资源作为候选或个性化种子。
+
+| 榜单 / 返回 ID | 候选与排序 | `score` / `reasons` |
+| --- | --- | --- |
+| Home 精选 `resource-featured-v1` | 仅取运营精选资源；按公开人气分降序 | 人气分；`editor_pick` |
+| Home 趋势 `resource-trending-v1` | 按质量分和更新时间新鲜度排序 | 趋势分；`trending` |
+| Home 近 7 日上升 `resource-rising-v1` | 按质量分、近 7 日浏览和已完成下载排序 | 上升分；有信号时返回 `recent_views` / `recent_downloads`，否则 `quality_signals` |
+| Home 评分榜 `resource-bayesian-rating-v1` | 只包含至少有一条评分的资源，按贝叶斯平滑评分降序 | 平滑评分；`top_rated` |
+| Home 最新 `resource-newest-v1` | 按创建时间倒序 | 新鲜度分；`newest` |
+| 下载榜 `resource-download-count-v1` | 按累计下载量倒序 | 累计下载量；`top_downloaded` |
+| 相关推荐 `resource-related-v1` | 对当前公开源资源，从候选窗口按类别、主题、标签和公开质量信号排序 | 相关度分及对应匹配原因；没有匹配原因时为 `popular_now` |
+| 猜你喜欢 `resource-taste-v1` | 从当前仍公开可见的用户点赞/收藏建立偏好，再为其他公开资源排序 | 质量和偏好匹配分；返回 `kind:<kind>`、`category`、`tags:<tags>` 等原因 |
+| 猜你喜欢兜底 `resource-trending-v1` | 匿名、没有偏好或所有种子均不可见时使用趋势排序 | 趋势分；`trending`，且 `personalized: false` |
+
+公式中的计数均按非负值计算，`ln` 是自然对数，日期单位为天。定义公开人气分 `P`、平滑评分 `B` 和质量分 `Q`：
+
+```text
+P = 0.8 × ln(1 + views) + 2.4 × ln(1 + downloads) + 1.4 × ln(1 + rating_count)
+B = (rating_count × clamp(rating_average, 0, 5) + 5 × 3.5) / (rating_count + 5)
+Q = P + 2 × B + (is_featured ? 2 : 0)
+```
+
+各算法按以下规则计算：
+
+- `resource-featured-v1` 对精选候选按 `P` 排序。
+- `resource-trending-v1` 使用 `Q + 8 / sqrt(age_days + 1)`；`age_days` 从 `updated_at`（缺失时使用 `created_at`）计算。
+- `resource-rising-v1` 使用 `0.45 × Q + 3 × ln(1 + views_7d) + 6 × ln(1 + completed_downloads_7d)`。近 7 日下载只统计 `completed` 事件。
+- `resource-bayesian-rating-v1` 使用 `B`，并排除 `rating_count = 0` 的资源。
+- `resource-newest-v1` 按 `created_at` 倒序，`score = 1 / (1 + age_days)`。
+- `resource-download-count-v1` 使用累计 `download_count`，按该数值倒序。
+- `resource-related-v1` 从 `Q` 开始；同资源类型加 34，同主题/类别加 20，每个重合标签加 14、总加分最多 42，精选再加 3。标签先去重并转小写；`shared_tags:<tags>` 只列最多三个匹配标签。
+- `resource-taste-v1` 从 `Q` 开始。每个匹配类型加 `min(36, 18 + 8 × log2(type_weight + 1))`；类别加 `min(24, 12 + 5 × log2(category_weight + 1))`；每个匹配标签加 `10 + 3 × log2(tag_weight + 1)`，标签合计最多 44；精选加 2。偏好权重是最多 120 个最新点赞和 120 个最新收藏（去重后）的可见种子在类型、类别和标签上的出现次数。
+
+候选窗口与响应分页：Home 每个榜单最多先取最近更新的 400 个候选；相关推荐最多 300 个；下载榜先取累计下载量最高的 300 个；个性化最多从最近更新的 350 个候选计算。for-you 兜底窗口为 `max(limit × 4, 60)`。`pagination` 返回 `items_in_window`、`more_in_window`、`candidate_window_size` 和 `candidate_window_truncated`；候选窗口被截断时可能存在尚未扫描的资源。分页不是对全库做无限深度扫描，平分时的内部次序不属于客户端稳定契约。
+
+`for-you` 最多读取各 120 条最新站内点赞和收藏，再重新验证种子当前是否可见；仅用这些资源公开元数据中的类型、类别和标签，不使用外部浏览记录，也不返回种子本身。`privacy` 字段声明当前响应是否使用了个性化画像。匿名调用不建立个人画像。
+
+分页信息位于对应 `data` 中，包含 `page`、`limit`、`items_in_window`、`more_in_window`、`candidate_window_size` 和 `candidate_window_truncated`。V1 外层响应仍包含 `meta.request_id`，可用于关联单次 API 请求。
+
+限流：`home` 60 次/分钟，`hot` 60 次/分钟，`for-you` 45 次/分钟，`related` 60 次/分钟。参数边界、资源卡片 schema、算法 ID、Reasons 与安全响应以[公开 OpenAPI](/api/openapi/v1.json)为准；算法权重和样本窗口以本节为准。
 
 系统解析结果与发布者声明保持区分。兼容记录在可用时会包含来源和可信度，例如 `file_metadata`、`inferred`、`user_declared`、`verified` 或 `admin_verified`。解析器运行版本不等于地图存档中的游戏版本，不能混为一谈。只有存档本身包含游戏版本时，地图元数据才会报告该版本；存档格式版本单独提供。蓝图兼容性是根据已知内容和格式推断的结果，不保证蓝图可在每个游戏版本中加载。
 

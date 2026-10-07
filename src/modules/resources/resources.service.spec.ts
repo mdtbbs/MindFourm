@@ -217,7 +217,8 @@ describe('ResourcesService', () => {
     const { service, resourceRepository } = createService();
     await expect(service.isResourcePubliclyAccessible({ status: 'draft', is_public: 1, visibility: 'public' })).resolves.toBe(false);
     await service.getPublicResources();
-    expect(resourceRepository.createQueryBuilder().where).toHaveBeenCalledWith(
+    expect(resourceRepository.createQueryBuilder().where).toHaveBeenCalledWith('resource.deleted_at IS NULL');
+    expect(resourceRepository.createQueryBuilder().andWhere).toHaveBeenCalledWith(
       'resource.status IN (:...statuses)', expect.objectContaining({ statuses: expect.not.arrayContaining(['draft']) }),
     );
   });

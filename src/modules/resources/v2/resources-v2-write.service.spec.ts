@@ -48,7 +48,7 @@ describe('ResourcesV2WriteService resource relations', () => {
 describe('ResourcesV2WriteService schematic export storage', () => {
   const publicId = '11111111-1111-4111-8111-111111111111';
   const versionId = '22222222-2222-4222-8222-222222222222';
-  const operations = { rotation_quarters: 1, mirror_x: false, delete_positions: [], move_positions: [], add_blocks: [], logic_configs: [] };
+  const operations = { rotation_quarters: 1, mirror_x: false, delete_positions: [], move_positions: [], add_blocks: [], logic_configs: [], config_edits: [] };
   function setup(primary: any) {
     const bytes = Buffer.from('msch-original');
     const dataSource = {

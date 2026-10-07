@@ -8,13 +8,13 @@ reverse proxy.
 ## Build
 
 The worker source is in `tools/mindustry-renderer`. It builds against the
-official Mindustry v160.2 server runtime by default (`-PmindustryVersion` can
+official Mindustry v160.5 server runtime by default (`-PmindustryVersion` can
 select another compatible official release).
 
 Schematic previews use Mindustry's generated block icon composition from the
 official desktop atlas, including the generated `block-*-full` region when it
 exists. The fallback composes the block's `getGeneratedIcons()` regions in
-their official order. Map previews use v160.2 `MapIO.generatePreview(Map)`,
+their official order. Map previews use v160.5 `MapIO.generatePreview(Map)`,
 which reads the saved `preview_map` region and combines floor, overlay, solid
 block, and building team-color layers without needing a loaded global world.
 
@@ -41,7 +41,7 @@ Environment=STORAGE_ROOT=/data/mindfourm/uploads/previews
 Environment=WORKER_TOKEN=replace-with-a-secret
 Environment=WORKER_HOST=127.0.0.1
 Environment=WORKER_PORT=6100
-ExecStart=/usr/bin/java -Xmx512m -cp build/libs/mindfourm-mindustry-renderer-0.1.0.jar:build/libs/mindustry-server-v160.2.jar cn.mdtbbs.renderer.MapRenderer
+ExecStart=/usr/bin/java -Xmx512m -cp build/libs/mindfourm-mindustry-renderer-0.1.0.jar:build/libs/mindustry-server-v160.5.jar cn.mdtbbs.renderer.MapRenderer
 Restart=on-failure
 NoNewPrivileges=true
 PrivateTmp=true

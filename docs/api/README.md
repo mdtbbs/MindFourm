@@ -40,7 +40,7 @@
 - [富文本格式 V2](./rich-content-schema-v2.md)
 - [认证与凭证](./authentication.md)
 - [游戏内容 API V1](./game-content-v1.md)
-- [资源中心 API V1](./resources-v1-contract.md)
+- [资源中心 API V1](./resources-v1-contract.md)：包含公开发现榜单、推荐算法版本、计分公式、候选窗口与隐私边界；在线地址为 `/api/v1/docs/resources`。
 - [多人联机 API V1](./multiplayer-v1.md)
 - [云存档 API V1](./cloud-saves-v1.md)
 - [公开 V1 错误代码](./errors-v1.md)

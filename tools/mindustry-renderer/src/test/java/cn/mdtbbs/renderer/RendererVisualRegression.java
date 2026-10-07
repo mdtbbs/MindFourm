@@ -88,7 +88,9 @@ public final class RendererVisualRegression {
                         require(oldSaveMetadata.contains("\"stored_game_build\":null") && oldSaveMetadata.contains("\"source\":\"unknown\""), "old maps without a stored build must report unknown");
                         require(oldSaveMetadata.contains("\"mindustry_build\":" + Version.build), "parser runtime must remain a separate field");
                         require(!oldSaveMetadata.contains("\"build\":" + Version.build), "parser runtime must never be emitted as the map's stored build");
-                        require(oldSaveMetadata.contains("\"tile_layers\":{}"), "header-only map metadata must not invent tile layer coordinates");
+                        JsonValue headerOnly = new JsonReader().parse(oldSaveMetadata);
+                        require(headerOnly.get("tile_layers") == null || headerOnly.get("tile_layers").get("terrain") == null,
+                            "header-only map metadata must not invent tile layer coordinates");
                         MapIO.loadMap(map);
                         JsonValue layeredMap = new JsonReader().parse(MapRenderer.mapMetadata(map, true, savedMeta));
                         JsonValue tileLayers = layeredMap.get("tile_layers");

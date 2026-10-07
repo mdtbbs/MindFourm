@@ -15,6 +15,7 @@ import { parseMarkdown } from '@common/utils/markdown.util';
 import { isSafeExternalUrl } from '@common/utils/safe-url.util';
 import { analyzeMapMetadata } from '../analyzers/map-analyzer';
 import { analyzeSchematicMetadata } from '../analyzers/schematic-analyzer';
+import type { ResourceV2MapObjectOperationInput, ResourceV2SchematicConfigDtoUnion } from './resources-v2-write.dto';
 
 type ManagedRole = 'owner' | 'maintainer' | 'publisher';
 
@@ -113,6 +114,7 @@ export class ResourcesV2WriteService {
     move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
     add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
     logic_configs?: Array<{ x: number; y: number; source: string }>;
+    config_edits?: Array<{ x: number; y: number; config: ResourceV2SchematicConfigDtoUnion }>;
   }, actorId: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
     const resource = await this.getResource(publicId);
     await this.assertRole(resource, actorId, ['owner', 'maintainer']);
@@ -121,8 +123,8 @@ export class ResourcesV2WriteService {
     if (!Number.isInteger(input.rotation_quarters) || input.rotation_quarters < 0 || input.rotation_quarters > 3
       || typeof input.mirror_x !== 'boolean' || (input.delete_positions?.length || 0) > 10_000
       || (input.move_positions?.length || 0) > 5_000 || (input.add_blocks?.length || 0) > 5_000
-      || (input.logic_configs?.length || 0) > 1_000
-      || (input.delete_positions?.length || 0) + (input.move_positions?.length || 0) + (input.add_blocks?.length || 0) + (input.logic_configs?.length || 0) > 10_000) {
+      || (input.logic_configs?.length || 0) > 1_000 || (input.config_edits?.length || 0) > 5_000
+      || (input.delete_positions?.length || 0) + (input.move_positions?.length || 0) + (input.add_blocks?.length || 0) + (input.logic_configs?.length || 0) + (input.config_edits?.length || 0) > 10_000) {
       throw new BadRequestException('蓝图编辑操作无效');
     }
     const rows = await this.dataSource.query(
@@ -158,6 +160,7 @@ export class ResourcesV2WriteService {
       move_positions: input.move_positions || [],
       add_blocks: input.add_blocks || [],
       logic_configs: input.logic_configs || [],
+      config_edits: input.config_edits || [],
     });
     const stem = filename.split(/[\\/]/).pop()!.replace(/\.msch$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'schematic';
     return { data: transformed.data, file_name: `${stem}-edited.msch`, sha256: transformed.sha256 };
@@ -168,6 +171,7 @@ export class ResourcesV2WriteService {
     terrain_changes?: Array<{ x: number; y: number; floor: string; overlay: string }>;
     rule_changes?: Record<string, unknown>;
     wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
+    object_operations?: ResourceV2MapObjectOperationInput[];
   }, actorId: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
     const resource = await this.getResource(publicId);
     await this.assertRole(resource, actorId, ['owner', 'maintainer']);
@@ -204,6 +208,7 @@ export class ResourcesV2WriteService {
       terrain_changes: terrain,
       rule_changes: input.rule_changes,
       wave_operations: waveOperations,
+      object_operations: input.object_operations,
     });
     const stem = filename.split(/[\\/]/).pop()!.replace(/\.msav$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'map';
     return { data: transformed.data, file_name: `${stem}-edited.msav`, sha256: transformed.sha256 };
