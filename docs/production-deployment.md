@@ -163,10 +163,34 @@ npm start
 Nginx 至少需要：
 
 - `/api/` 转发到后端。
+- 云存档二进制上传 `/api/v1/game-saves/uploads/{uploadId}/file` 应由公网入口直接流式转发到后端；若入口流量经过 Next.js，则由专用 Route Handler 流式转发，不能落入通用 `/api/:path*` rewrite。
+- 云存档上传 location 将请求体直接流向 NestJS，并将 `client_max_body_size` 设为后端单文件限制（默认 50 MiB）。
 - 前端页面和静态资源转发到 Next.js。
 - SSE `/api/notifications/events` 保持长连接，不缓冲。
 - `X-Forwarded-For`、`X-Forwarded-Proto` 正确传递。
 - HTTPS 终止在 Nginx，并将 HTTP 重定向到 HTTPS。
+
+`nginx/conf.d/default.conf` 已包含云存档上传专用 location。实际部署若使用宝塔 vhost 或其他反向代理，可在接收 ESA/公网流量的那一层添加等价规则；该规则必须透传 `Authorization` 和 `X-Request-ID`，并设置 `proxy_request_buffering off`。当前应用也包含 `frontend/src/app/api/v1/game-saves/uploads/[uploadId]/file/route.ts`，在公网入口仍经过 Next.js 时直接以流方式转发请求体，不读取整段文件到内存。Next.js 的通用 `/api/:path*` rewrite 是 filesystem route 之后的 fallback，专用 Route Handler 会先接管该 PUT。
+
+```nginx
+location ^~ /api/v1/game-saves/uploads/ {
+    client_max_body_size 50m;
+    client_body_timeout 300s;
+    proxy_pass http://mindforum_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Authorization $http_authorization;
+    proxy_set_header X-Request-ID $http_x_request_id;
+    proxy_request_buffering off;
+    proxy_buffering off;
+    proxy_send_timeout 300s;
+    proxy_read_timeout 300s;
+    proxy_set_header Connection '';
+}
+```
 
 SSE location 应关闭代理缓冲并允许较长读取超时，例如：
 
@@ -191,6 +215,7 @@ curl -fsS https://forum.example.com/api/version
 浏览器检查：
 
 - 首页和帖子列表可加载。
+- 使用真实测试账号上传一个大于 10 MiB 的云存档并完成提交；同一 `X-Request-ID` 应出现在后端请求日志中，Next.js 日志不应再出现该 PUT 的 10 MiB 请求体警告。
 - 登录、OAuth callback、条款接受流程可完成。
 - 桌面端出现左侧主导航，顶部只显示工具栏。
 - 手机/平板可以打开 Drawer，不存在 `md ~ lg` 导航断档。

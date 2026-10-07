@@ -62,6 +62,12 @@ Use `nginx/conf.d/default.conf` as the base reverse proxy config. It routes:
 - `/api` and `/uploads` to `127.0.0.1:4000`
 - the frontend to `127.0.0.1:3000`
 
+The cloud-save upload path has a more specific direct-to-backend location with
+request buffering disabled. Keep that rule in the active public Nginx/宝塔
+vhost when it handles forum traffic. If ESA sends API traffic directly to
+Next.js, the dedicated upload Route Handler streams the body to NestJS before
+the generic `/api/:path*` rewrite is considered.
+
 Add HTTPS certificates in the server-level Nginx setup used by your host.
 
 HTML responses must not be stored by browsers or shared CDNs. Next.js may emit a
