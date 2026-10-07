@@ -1,4 +1,5 @@
 import { ApiExtraModels, ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, Max, Min } from 'class-validator';
 
 export class ResourceDiscoveryUserDto {
@@ -79,46 +80,55 @@ export class ResourceDiscoveryQueryDto {
   kind?: 'mod' | 'schematic' | 'map' | 'other';
 
   @ApiPropertyOptional({ minimum: 1, maximum: 30, default: 8 })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(30)
   limit = 8;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 400, default: 1, description: 'One-based page over the bounded ranking candidate window.' })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(400)
   page = 1;
 }
 
 export class ResourceDiscoveryHomeQueryDto extends ResourceDiscoveryQueryDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 20, default: 8, description: 'Maximum number of results per home section.' })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(20)
   limit = 8;
 }
 
 export class ResourceDiscoveryPageQueryDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 30, default: 8 })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(30)
   limit = 8;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 400, default: 1, description: 'One-based page over the bounded ranking candidate window.' })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(400)
   page = 1;
 }
 
 export class ResourceDiscoveryRelatedQueryDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 24, default: 8 })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(24)
   limit = 8;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 400, default: 1, description: 'One-based page over the bounded ranking candidate window.' })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(400)
   page = 1;
 }
 
 export class ResourceDiscoveryHotQueryDto {
   @ApiPropertyOptional({ minimum: 1, maximum: 30, default: 10 })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(30)
   limit = 10;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 400, default: 1, description: 'One-based page over the bounded download ranking candidate window.' })
+  @Type(() => Number)
   @IsOptional() @IsInt() @Min(1) @Max(400)
   page = 1;
 }
