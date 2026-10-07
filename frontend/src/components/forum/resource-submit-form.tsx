@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { ClipboardPaste, ExternalLink, Loader2, Map, Upload } from 'lucide-react';
+import { ClipboardPaste, ExternalLink, Loader2, Map, Puzzle, Upload } from 'lucide-react';
 import { resourceApi } from '@/lib/api/client';
 import { Input } from '@/components/ui/input';
 import { ResourceCategory } from '@/types';
@@ -23,13 +23,19 @@ const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   loading: () => null,
 });
 
-export default function ResourceSubmitForm() {
+export default function ResourceSubmitForm({
+  initialResourceKind = 'other',
+  lockResourceKind = false,
+}: {
+  initialResourceKind?: string;
+  lockResourceKind?: boolean;
+}) {
   const { t } = useI18n();
   const router = useRouter();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
   const [resourceType, setResourceType] = useState<ResourceType | null>(null);
-  const [resourceKind, setResourceKind] = useState('other');
+  const [resourceKind, setResourceKind] = useState(initialResourceKind);
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
@@ -50,7 +56,8 @@ export default function ResourceSubmitForm() {
   const fileHash = useRef<{ file: File; hash: string } | null>(null);
   const duplicateCheckSequence = useRef(0);
   const [recoverableDraft, setRecoverableDraft] = useState<DraftSnapshot | null>(null);
-  const draft = useDraft('resource');
+  const resourceKindIsLocked = lockResourceKind && Boolean(initialResourceKind);
+  const draft = useDraft(resourceKindIsLocked ? `resource-${initialResourceKind}` : 'resource');
   const saveDraft = draft.save;
   const draftValues = useMemo(
     () => ({ resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, schematicSource, schematicCode }),
@@ -73,7 +80,7 @@ export default function ResourceSubmitForm() {
     const saved = recoverableDraft?.values;
     if (!saved) return;
     if (saved.resourceType === 'upload' || saved.resourceType === 'external') setResourceType(saved.resourceType);
-    if (typeof saved.resourceKind === 'string') setResourceKind(saved.resourceKind);
+    if (!resourceKindIsLocked && typeof saved.resourceKind === 'string') setResourceKind(saved.resourceKind);
     if (typeof saved.title === 'string') setTitle(saved.title);
     if (typeof saved.version === 'string') setVersion(saved.version);
     if (typeof saved.description === 'string') setDescription(saved.description);
@@ -110,7 +117,13 @@ export default function ResourceSubmitForm() {
 
   const isMap = resourceKind === 'map';
   const isSchematic = resourceKind === 'schematic';
+  const isMod = resourceKind === 'mod';
   const isForumManagedKind = isMap || isSchematic;
+  const kindTranslationKey = `resourceList.resourceKind.${initialResourceKind}`;
+  const translatedKindLabel = t(kindTranslationKey);
+  const lockedKindLabel = translatedKindLabel === kindTranslationKey
+    ? RESOURCE_KINDS.find(({ value }) => value === initialResourceKind)?.label || initialResourceKind
+    : translatedKindLabel;
 
   useEffect(() => {
     if (isForumManagedKind && resourceType !== 'upload') setResourceType('upload');
@@ -317,7 +330,7 @@ export default function ResourceSubmitForm() {
               <div>
                 <div className="text-sm font-medium text-[var(--text)]">{t('resourceSubmit.file')}</div>
                 <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                  {t('resourceSubmit.fileDescription')}
+                  {isMod ? t('resourceSubmit.modFileDescription') : t('resourceSubmit.fileDescription')}
                 </p>
               </div>
             </div>
@@ -344,7 +357,7 @@ export default function ResourceSubmitForm() {
               <div>
                 <div className="text-sm font-medium text-[var(--text)]">{t('resourceSubmit.external')}</div>
                 <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
-                  {t('resourceSubmit.externalDescription')}
+                  {isMod ? t('resourceSubmit.modExternalDescription') : t('resourceSubmit.externalDescription')}
                 </p>
               </div>
             </div>
@@ -370,33 +383,43 @@ export default function ResourceSubmitForm() {
         </div>
       )}
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.kindRequired')}</label>
-        <select
-          value={resourceKind}
-          onChange={(event) => {
-            const nextKind = event.target.value;
-            if (nextKind === 'map' || nextKind === 'schematic') {
-              router.push(`/resources/submit/${nextKind}`);
-              return;
-            }
-            setResourceKind(nextKind);
-            setFile(null);
-            setSchematicCode('');
-            setSchematicSource('file');
-            if (nextKind === 'map' || nextKind === 'schematic') setResourceType('upload');
-          }}
-          className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
-        >
-          {RESOURCE_KINDS.map(({ value, label }) => {
-            const translatedKey = `resourceList.resourceKind.${value}`;
-            const translatedLabel = t(translatedKey);
-            const kindName = translatedLabel === translatedKey ? label : translatedLabel;
-            return <option key={value} value={value}>{value === 'map' || value === 'schematic' ? `${kindName} (${t('resourceSubmit.dedicatedWorkspace')})` : kindName}</option>;
-          })}
-        </select>
-        {(resourceKind === 'map' || resourceKind === 'schematic') && <p className="text-xs text-[var(--text-muted)]">{resourceKind === 'map' ? t('resourceSubmit.mapOnly') : t('resourceSubmit.schematicOnly')}</p>}
-      </div>
+      {resourceKindIsLocked ? (
+        <div data-testid="resource-kind-locked" className="flex items-start gap-3 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4">
+          <Puzzle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
+          <div>
+            <p className="text-sm font-semibold text-[var(--text)]">{t('resourceSubmit.kindRequired')}: {lockedKindLabel}</p>
+            <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{t('resourceSubmit.modKindLocked')}</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.kindRequired')}</label>
+          <select
+            value={resourceKind}
+            onChange={(event) => {
+              const nextKind = event.target.value;
+              if (nextKind === 'map' || nextKind === 'schematic') {
+                router.push(`/resources/submit/${nextKind}`);
+                return;
+              }
+              setResourceKind(nextKind);
+              setFile(null);
+              setSchematicCode('');
+              setSchematicSource('file');
+              if (nextKind === 'map' || nextKind === 'schematic') setResourceType('upload');
+            }}
+            className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
+          >
+            {RESOURCE_KINDS.map(({ value, label }) => {
+              const translatedKey = `resourceList.resourceKind.${value}`;
+              const translatedLabel = t(translatedKey);
+              const kindName = translatedLabel === translatedKey ? label : translatedLabel;
+              return <option key={value} value={value}>{value === 'map' || value === 'schematic' ? `${kindName} (${t('resourceSubmit.dedicatedWorkspace')})` : kindName}</option>;
+            })}
+          </select>
+          {(resourceKind === 'map' || resourceKind === 'schematic') && <p className="text-xs text-[var(--text-muted)]">{resourceKind === 'map' ? t('resourceSubmit.mapOnly') : t('resourceSubmit.schematicOnly')}</p>}
+        </div>
+      )}
 
       <Input
         data-testid="resource-title-input"
@@ -523,16 +546,16 @@ export default function ResourceSubmitForm() {
 
       {resourceType === 'upload' && (!isSchematic || schematicSource === 'file') && (
         <div>
-          <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{isMap ? t('resourceSubmit.mapFile') : isSchematic ? t('resourceSubmit.schematicFile') : t('resourceSubmit.fileRequired')}</label>
+          <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{isMap ? t('resourceSubmit.mapFile') : isSchematic ? t('resourceSubmit.schematicFile') : isMod ? t('resourceSubmit.modFile') : t('resourceSubmit.fileRequired')}</label>
           <label className="flex cursor-pointer items-center gap-3 rounded-[var(--radius)] border-2 border-dashed border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-4">
             <Upload className="h-5 w-5 text-[var(--text-muted)]" />
             <span className="flex-1 truncate text-sm text-[var(--text)]">
-              {file?.name || (isMap ? t('resourceSubmit.chooseMapFile') : isSchematic ? t('resourceSubmit.chooseSchematicFile') : t('resourceSubmit.chooseUploadFile'))}
+              {file?.name || (isMap ? t('resourceSubmit.chooseMapFile') : isSchematic ? t('resourceSubmit.chooseSchematicFile') : isMod ? t('resourceSubmit.chooseModFile') : t('resourceSubmit.chooseUploadFile'))}
             </span>
             <input
               data-testid="resource-file-input"
               type="file"
-              accept={resourceKind === 'map' ? '.msav' : resourceKind === 'schematic' ? '.msch' : '.zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif'}
+              accept={resourceKind === 'map' ? '.msav' : resourceKind === 'schematic' ? '.msch' : isMod ? '.jar,.zip' : '.zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif'}
               onChange={(e) => { const selectedFile = e.target.files?.[0] || null; setFile(selectedFile); void checkSelectedFile(selectedFile); }}
               className="hidden"
             />
