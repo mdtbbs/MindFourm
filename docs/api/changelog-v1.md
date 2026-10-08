@@ -4,6 +4,24 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.4.0
+
+本次修订把云存档上传、冲突、下载和配额在实际运行中的行为写回契约，并补上客户端做分支判断需要的字段。所有既有操作、必填参数和响应字段保持不变；新增字段为兼容性新增，旧客户端可忽略。
+
+### Added
+
+- `POST /api/v1/game-saves/{slotId}/uploads` 在云端已有相同内容摘要时返回 `no_upload_required: true` 并附带一个**已提交**的 `upload_id`。此前该分支只返回 `snapshot_id`，按文档流程“拿到 `upload_id` 就 PUT”的客户端会拿到空值；现在两种响应形状一致，客户端按 `upload_id` 走完整流程即可。该分支一直存在，本次将其文档化并补齐字段。
+- 冲突响应的 `details[0]` 新增 `suggested_resolution`：`normal` 策略遇到云端新版本时为 `create_conflict_copy`。上传 PUT 的限流从 20 次/5 分钟调整为 60 次/10 分钟，避免断点续传在会话有效期内被限流。
+- `POST /api/v1/game-saves/{slotId}/snapshots/{snapshotId}/download` 新增 `expires_at`（固定为 `null`）和 `reusable: true`，明确该地址不是签名地址、可重复使用；二进制 GET 响应新增 `ETag`（`sha256-<摘要>`）与 `Last-Modified`。
+
+### Fixed
+
+- 文档中云存档列表的 `limit` 默认值从 `20` 更正为 `30`，与实现一致。
+- 修正云存档接口中混入的繁体中文文案。
+- 提交阶段配额校验失败时会把上传会话置为 `failed`，暂存文件随维护任务回收，不再留下永远无法提交的悬空会话。
+
+Ref: #12
+
 ## Public API 1.3.0
 
 - `POST /api/v1/resources/{id}/versions/{versionId}/schematic-editor/export` 和 `map-editor/export` 支持匿名导出已审核公开资源的已发布版本副本；携带 OAuth Bearer 时需要 `resource.read`。私有资源仍校验 Owner/Maintainer，发布新版本仍需 `resource.upload` 和原角色。CSRF、封禁、限流、源文件 SHA-256、官方读写校验继续生效。

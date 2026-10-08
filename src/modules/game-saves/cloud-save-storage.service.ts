@@ -113,11 +113,14 @@ export class CloudSaveStorageService {
     return size === expectedSize && hash.digest('hex') === expectedSha256;
   }
 
-  async openObject(objectKey: string) {
+  async openObject(objectKey: string): Promise<{ stream: Readable; size: number; last_modified: Date }> {
     const objectPath = this.objectPath(objectKey);
-    const info = await this.statObject(objectKey);
-    if (!info.exists) throw this.storageError('Cloud save is missing from local storage');
-    return { stream: createReadStream(objectPath), size: info.size_bytes! };
+    const info = await stat(objectPath).catch((error: any) => {
+      if (error?.code === 'ENOENT') return null;
+      throw this.storageError('Could not inspect cloud save in local storage');
+    });
+    if (!info?.isFile()) throw this.storageError('Cloud save is missing from local storage');
+    return { stream: createReadStream(objectPath), size: info.size, last_modified: info.mtime };
   }
 
   async deleteObject(objectKey: string): Promise<void> {

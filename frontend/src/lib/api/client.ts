@@ -26,15 +26,45 @@ class ApiRequestError extends Error {
   code?: string;
   existingResource?: { id: number | null; public_id?: string | null; title: string; status: string; url: string } | null;
   challenge?: CommunityChallengeDescriptor;
+  /** Seconds the server asked the client to wait, from `Retry-After`. */
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource'], challenge?: CommunityChallengeDescriptor) {
+  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource'], challenge?: CommunityChallengeDescriptor, retryAfterSeconds?: number) {
     super(message);
     this.name = 'ApiRequestError';
     this.status = status;
     this.code = code;
     this.existingResource = existingResource;
     this.challenge = challenge;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/**
+ * Parse `Retry-After` in its delta-seconds form.
+ *
+ * The HTTP-date form is legal but the backend only ever emits seconds; treating an
+ * unparsable value as "no hint" is safer than guessing a delay.
+ */
+function readRetryAfterSeconds(response: Response): number | undefined {
+  const raw = response.headers?.get?.('retry-after');
+  if (!raw) return undefined;
+  const seconds = Number(raw.trim());
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(Math.ceil(seconds), 300) : undefined;
+}
+
+/**
+ * Exponential backoff with full jitter.
+ *
+ * The previous fixed 250/500ms schedule made the client part of the outage: when
+ * the backend answered 503 because it was overloaded, three immediate retries per
+ * read tripled the load and every client retried in lockstep. Jitter spreads the
+ * retries out, and a server-provided `Retry-After` wins over the computed delay.
+ */
+function backoffDelayMs(attempt: number, retryAfterSeconds?: number): number {
+  if (retryAfterSeconds) return retryAfterSeconds * 1000;
+  const ceiling = Math.min(250 * 2 ** attempt, 4_000);
+  return Math.round(ceiling / 2 + Math.random() * (ceiling / 2));
 }
 
 export type CommunityChallengeDescriptor = {
@@ -207,43 +237,23 @@ function isWriteMethod(method: string): boolean {
 
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 
-/** Cap on a single backoff sleep, so a hostile `Retry-After` cannot hang the UI. */
-const MAX_RETRY_DELAY_MS = 8_000;
-
-/**
- * Delay before retry N (0-based): exponential base with full jitter.
- *
- * The previous fixed 250/500ms delay retried an overloaded backend almost
- * immediately, tripling read traffic exactly when the origin was already
- * struggling. Jitter also stops many clients from retrying in lockstep.
- */
-function backoffDelay(attempt: number): number {
-  const base = Math.min(MAX_RETRY_DELAY_MS, 500 * 2 ** attempt);
-  return Math.floor(base / 2 + Math.random() * (base / 2));
-}
-
-/**
- * Parse `Retry-After` (delta-seconds or HTTP-date) into milliseconds.
- * Returns undefined when the header is absent or unparseable.
- */
-function parseRetryAfter(response: Response): number | undefined {
-  const raw = response.headers?.get?.('Retry-After');
-  if (!raw) return undefined;
-
-  const seconds = Number(raw);
-  if (Number.isFinite(seconds) && seconds >= 0) {
-    return Math.min(MAX_RETRY_DELAY_MS, seconds * 1000);
-  }
-
-  const date = Date.parse(raw);
-  if (!Number.isNaN(date)) {
-    return Math.min(MAX_RETRY_DELAY_MS, Math.max(0, date - Date.now()));
-  }
-  return undefined;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Cancellable wait: an aborted request must not sit out the remaining backoff. */
+function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort);
+  });
 }
 
 async function fetchWithReadRetry(url: string, options: RequestInit, method: string): Promise<Response> {
@@ -260,11 +270,13 @@ async function fetchWithReadRetry(url: string, options: RequestInit, method: str
         // the UI can tell the user when to try again.
         return response;
       }
-      await sleep(parseRetryAfter(response) ?? backoffDelay(attempt));
+      // Retrying an overloaded origin is what turns its 503 into a sustained
+      // outage, so honour the server's own delay before adding another request.
+      await sleep(backoffDelayMs(attempt, readRetryAfterSeconds(response)), options.signal);
     } catch (error) {
       lastError = error;
       if (attempt === attempts - 1 || (error instanceof Error && error.name === 'AbortError')) throw error;
-      await sleep(backoffDelay(attempt));
+      await sleep(backoffDelayMs(attempt), options.signal);
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Network error');
@@ -365,7 +377,9 @@ async function request<T>(
       }
     }
 
-    throw new ApiRequestError(message, res.status, code, existingResource, challenge);
+    // A 429 is a deliberate answer with a stated wait. Surfacing it as a plain
+    // failure left the user to guess, and for writes the guess was "retry now".
+    throw new ApiRequestError(message, res.status, code, existingResource, challenge, readRetryAfterSeconds(res));
   }
 
   let data: unknown;

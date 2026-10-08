@@ -105,6 +105,14 @@ export async function fetchV1<T>(
   if (options?.cookies) {
     headers['Cookie'] = options.cookies;
   }
+  // Server Components are not end-user traffic: they resolve one page request into
+  // several API reads from the same Node address. Without this key the backend can
+  // only see a private-network IP, so every SSR read lands in one shared rate-limit
+  // bucket and the whole site starts returning 429 from an otherwise idle origin.
+  const internalKey = process.env.FORUM_INTERNAL_API_KEY;
+  if (internalKey && typeof window === 'undefined') {
+    headers['X-Forum-Internal-Key'] = internalKey;
+  }
 
   // Server Components are not end users: without this key their calls arrive as
   // an ordinary IP request and consume the visitor-facing rate-limit bucket by

@@ -66,6 +66,11 @@ export const appConfig = () => ({
     apiKey: process.env.RES_API_KEY || '',
     requestTimeoutMs: parsePositiveInt(process.env.RES_REQUEST_TIMEOUT_MS, 10_000),
     uploadTimeoutMs: parsePositiveInt(process.env.RES_UPLOAD_TIMEOUT_MS, 120_000),
+    // Circuit breaker around the dependency. Without it a RES that is merely slow
+    // makes every resource request wait out the timeout and answer 503, while the
+    // frontend multiplies each of those reads by its own retry count.
+    circuitFailureThreshold: parsePositiveInt(process.env.RES_CIRCUIT_FAILURE_THRESHOLD, 3),
+    circuitCooldownMs: parsePositiveInt(process.env.RES_CIRCUIT_COOLDOWN_MS, 15_000),
   },
   automation: {
     apiKey: process.env.FORUM_API_KEY || '',
@@ -120,4 +125,15 @@ export const appConfig = () => ({
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+/**
+ * Shared key for trusted server-side callers (the Next.js frontend).
+ *
+ * Read from the environment rather than injected so bootstrap-time routes that are
+ * registered outside the DI container can apply the same trust decision as the
+ * global guards.
+ */
+export function getInternalApiKey(): string {
+  return process.env.FORUM_INTERNAL_API_KEY || '';
 }

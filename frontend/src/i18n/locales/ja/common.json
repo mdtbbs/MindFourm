@@ -194,6 +194,7 @@
     "phoneVerificationRequired": "続行するには電話番号の確認が必要です。"
   },
   "errors": {
+    "RATE_LIMITED": "リクエストが多すぎます。しばらく待ってから再試行してください。",
     "EMAIL_VERIFICATION_REQUIRED": "メールアドレスを確認してください。",
     "RATE_LIMITED": "リクエストが多すぎます。しばらくしてから再試行してください。",
     "PHONE_NOT_VERIFIED": "電話番号を確認してください。",

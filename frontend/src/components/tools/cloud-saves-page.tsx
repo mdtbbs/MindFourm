@@ -12,6 +12,7 @@ import {
 import { useI18n } from '@/i18n/provider';
 import { confirmDialog, promptDialog } from '@/store/interaction-dialog-store';
 import { buildPublicApiUrl } from '@/lib/api/client';
+import { siteProfile } from '@/config/site-profile';
 
 type Capability = { cloud_saves_v1: boolean };
 
@@ -119,7 +120,7 @@ export default function CloudSavesPage() {
 
   const restore = async (snapshot: GameSaveSnapshot) => {
     if (!selected) return;
-    if (!await confirmDialog({ message: t('cloudSaves.restoreConfirm', { revision: snapshot.revision }), confirmLabel: '恢复', destructive: true })) return;
+    if (!await confirmDialog({ message: t('cloudSaves.restoreConfirm', { revision: snapshot.revision }), confirmLabel: t('cloudSaves.restoreConfirmLabel'), destructive: true })) return;
     setBusy(`restore:${snapshot.id}`);
     setError('');
     try {
@@ -190,7 +191,7 @@ export default function CloudSavesPage() {
       <div className="grid gap-7 lg:grid-cols-[minmax(250px,0.8fr)_minmax(0,1.7fr)]">
         <section aria-label={t('cloudSaves.slots')}>
           <div className="mb-3 flex items-center justify-between"><h2 className="text-base font-semibold">{t('cloudSaves.slots')}</h2><span className="text-xs text-[var(--text-muted)]">{slots.length}</span></div>
-          {slots.length === 0 ? <div className="border-y border-[var(--border)] py-8 text-sm text-[var(--text-secondary)]">{t('cloudSaves.empty')}</div> : <ul className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
+          {slots.length === 0 ? <div className="border-y border-[var(--border)] py-8 text-sm text-[var(--text-secondary)]">{t('cloudSaves.empty', { site: siteProfile.branding.siteName })}</div> : <ul className="divide-y divide-[var(--border)] border-y border-[var(--border)]">
             {slots.map((slot) => <li key={slot.id}>
               <button type="button" onClick={() => void selectSlot(slot.id)} aria-current={selectedId === slot.id ? 'true' : undefined} className={`block w-full px-3 py-3 text-left transition-colors ${selectedId === slot.id ? 'bg-[var(--bg-elevated)]' : 'hover:bg-[var(--bg-elevated)]/60'}`}>
                 <span className="block truncate font-medium text-[var(--text)]">{slot.name}</span>
