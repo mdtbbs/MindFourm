@@ -705,8 +705,8 @@
       "put": {
         "operationId": "GameSavesController_uploadFile",
         "x-rate-limit": {
-          "limit": 20,
-          "window_seconds": 300,
+          "limit": 60,
+          "window_seconds": 600,
           "basis": "authenticated_user_or_session_or_ip"
         },
         "x-required-scopes": [
@@ -778,7 +778,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "按账号重放同一提交操作，保留 24 小時。",
+            "description": "按账号重放同一提交操作，保留 24 小时。",
             "required": false,
             "schema": {
               "type": "string"
@@ -24315,7 +24315,7 @@
   "info": {
     "title": "MDTBBS Internal V1 API",
     "description": "Internal development contract. This specification may contain privileged operations and must not be exposed from the public developer portal. Third-party clients use the separately filtered Public Client V1 contract. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "contact": {}
   },
   "tags": [],

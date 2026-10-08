@@ -306,7 +306,7 @@ GET /api/v1/threads/123/replies?page=1&limit=20
 | 方法 | 路径 | OAuth 权限范围 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/api/v1/capabilities` | 公开 | 检查 `cloud_saves_v1` 能力是否启用 |
-| GET | `/api/v1/game-saves?limit=20&cursor=...` | `game_content.saves.read` | 通过游标分页列出自己的存档槽 |
+| GET | `/api/v1/game-saves?limit=30&cursor=...` | `game_content.saves.read` | 通过游标分页列出自己的存档槽（`limit` 默认 30） |
 | GET | `/api/v1/game-saves/quota` | `game_content.saves.read` | 查看存储额度与限制 |
 | POST | `/api/v1/game-saves` | `game_content.saves.write` | 创建存档槽 |
 | GET | `/api/v1/game-saves/{slotId}` | `game_content.saves.read` | 查看存档槽与当前快照 |
@@ -323,7 +323,7 @@ GET /api/v1/threads/123/replies?page=1&limit=20
 | POST | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/download` | `game_content.saves.read` | 获取需继续认证的私有下载地址 |
 | GET | `/api/v1/game-saves/{slotId}/snapshots/{snapshotId}/file` | `game_content.saves.read` | 从论坛本地存储下载存档文件 |
 
-云存档文件属于用户私有数据。客户端应按 [云存档 API](./cloud-saves-v1.md) 的流程完成校验和传输，并且不要缓存签名地址或私有响应。
+云存档文件属于用户私有数据。客户端应按 [云存档 API](./cloud-saves-v1.md) 的流程完成校验和传输。下载地址不是签名地址、也不过期，可以复用；需要保密的是 Bearer 令牌。
 
 ## 通知与私信
 

@@ -1,3 +1,10 @@
+/**
+ * Streaming proxy for the cloud-save binary upload. The web UI does not upload
+ * saves (launchers do, straight to the forum API), but the flow it protects is
+ * reachable through this origin whenever an ingress sends `/api/*` here, so the
+ * body must stay a stream: buffering it would defeat the whole upload path.
+ * Covered by `docs/production-deployment.md`; keep it in sync if this moves.
+ */
 import { randomUUID } from 'node:crypto';
 
 export const runtime = 'nodejs';
