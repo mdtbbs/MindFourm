@@ -5,8 +5,9 @@
 ## 面向用户与第三方开发者
 
 - [`product/overview.md`](product/overview.md)：论坛功能概览与从 1.0 开始的主要演进里程碑。
-- [`product/changelog.md`](product/changelog.md)：面向用户的产品更新记录。
+- [`product/changelog.md`](product/changelog.md)：面向用户的产品更新记录，按论坛版本从新到旧排列。
 - [`product/roadmap.md`](product/roadmap.md)：已公开的研发方向、计划边界和功能下线公告。
+- [`VERSION_RULE.md`](VERSION_RULE.md)：论坛版本号规则、递增时机与发布操作。
 
 ## API 与客户端
 
