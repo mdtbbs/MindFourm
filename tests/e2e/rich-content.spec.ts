@@ -1,6 +1,7 @@
 import { test as authTest, expect } from '../fixtures/auth.fixture';
 import type { Page } from '@playwright/test';
 import { TEST_USERS } from '../fixtures/test-users';
+import presentationFixture from '../fixtures/rich-presentation.json';
 import {
   API_URL,
   approveAsAdmin,
@@ -265,7 +266,7 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
 // This case uses the real API and authentication fixtures. The independent
 // presentation fixture suite is not a substitute for this publication check.
 authTest('Presentation contract: preview and real published post share styles', async ({ authenticatedPage: page, request }) => {
-  const fixture = (await import('../fixtures/rich-presentation.json')).default;
+  const fixture = presentationFixture;
   const document = { ...fixture, content: fixture.content.filter((node) => !['attachment', 'postQuote', 'replyQuote'].includes(node.type)).map((node) => node.type === 'paragraph' ? { ...node, content: node.content?.filter((child: any) => child.type !== 'customEmoji') } : node) };
   await page.evaluate((json) => localStorage.setItem('draft:post:new', JSON.stringify({ timestamp: Date.now(), values: { title: `E2E Presentation ${Date.now()}`, content: 'Presentation projection', contentJson: json, status: 'published' } })), document);
   await page.goto('/posts/new');
