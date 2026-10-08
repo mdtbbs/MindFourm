@@ -230,7 +230,7 @@ public final class MapRenderer {
         boolean first = true;
         for (Content content : Vars.content.getBy(type)) {
             if (!(content instanceof UnlockableContent unlockable) || unlockable.name == null) continue;
-            if (type == ContentType.block && (content instanceof mindustry.world.blocks.environment.LegacyBlock || "air".equals(unlockable.name))) continue;
+            if (type == ContentType.block && (isA(content, "LegacyBlock") || "air".equals(unlockable.name))) continue;
             if (!first) result.append(',');
             first = false;
             String id = unlockable.name;
