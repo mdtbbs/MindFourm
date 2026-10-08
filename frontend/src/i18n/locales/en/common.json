@@ -382,7 +382,7 @@
       },
       "content": {
         "title": "Your content",
-        "body": "You keep ownership of content you create. You grant Mindustry Club permission to host, display, distribute, and make that content available as needed to operate the service. You may remove your content where the service provides that option, subject to legal, security, and backup needs."
+        "body": "You keep ownership of content you create. You grant {site} permission to host, display, distribute, and make that content available as needed to operate the service. You may remove your content where the service provides that option, subject to legal, security, and backup needs."
       },
       "conduct": {
         "title": "Community conduct",
@@ -390,14 +390,14 @@
       },
       "moderation": {
         "title": "Moderation and availability",
-        "body": "Members may report content. Administrators may hide or remove content and restrict accounts to address safety, rights, or abuse reports. Mindustry Club is an independent player community, is not affiliated with or endorsed by Anuken or the official Mindustry project, and may change or be unavailable."
+        "body": "Members may report content. Administrators may hide or remove content and restrict accounts to address safety, rights, or abuse reports. {site} is an independent player community, is not affiliated with or endorsed by Anuken or the official Mindustry project, and may change or be unavailable."
       }
     },
     "privacy": {
       "title": "Privacy Policy",
       "identity": {
         "title": "Account data",
-        "body": "MindAuth provides account identity. Mindustry Club stores its own profile, posts, replies, resource records, and moderation decisions in an independent community database."
+        "body": "MindAuth provides account identity. {site} stores its own profile, posts, replies, resource records, and moderation decisions in an independent community database."
       },
       "data": {
         "title": "Data we process",
@@ -462,7 +462,7 @@
       "title": "Copyright and Takedown Policy",
       "submit": {
         "title": "Submit a request",
-        "body": "If you believe content on Mindustry Club infringes your rights, send the site administrators the page or resource URL, identify the material and the right you hold, explain what action you request, and include a way to contact you."
+        "body": "If you believe content on {site} infringes your rights, send the site administrators the page or resource URL, identify the material and the right you hold, explain what action you request, and include a way to contact you."
       },
       "review": {
         "title": "Review and action",

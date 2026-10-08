@@ -4,6 +4,7 @@ import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
 import ClubLegalDocument from '@/components/forum/club-legal-document';
 import { siteProfile } from '@/config/site-profile';
 import { getRequestLocale } from '@/i18n/server';
+import { getServerSiteName } from '@/lib/settings/server';
 import { translate } from '@/i18n';
 
 const DESCRIPTION = '使用本站时需遵守的服务条款与社区规则';
@@ -82,14 +83,15 @@ function MdtbbsTermsFallback() {
 
 export default async function TermsPage() {
   const locale = await getRequestLocale();
+  const siteName = getServerSiteName();
   const club = siteProfile.profile === 'mindustry-club';
   return (
     <ConfiguredFooterPage
-      eyebrow={club ? 'Mindustry Club' : 'Terms'}
+      eyebrow={club ? siteName : 'Terms'}
       title={club ? translate(locale, 'legal.terms.title') : '服务条款'}
       settingKey="footer_terms_content"
       preferFallback={club}
-      fallback={club ? <ClubLegalDocument document="terms" locale={locale} /> : <MdtbbsTermsFallback />}
+      fallback={club ? <ClubLegalDocument document="terms" locale={locale} siteName={siteName} /> : <MdtbbsTermsFallback />}
     />
   );
 }

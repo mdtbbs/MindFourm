@@ -8,10 +8,13 @@
     volumes:
       - /root/.npm:copy-on-write
   stages:
-    # `npm run test:frontend-unit` resolves the ts-jest binary from the root
-    # install, so the root dependencies have to exist before it runs.
     - name: install backend dependencies
       script: npm ci
+    # Jest aliases the Tiptap/editor contract suites into frontend/src and
+    # frontend/node_modules, so the frontend tree has to be installed too.
+    # `npm run test:frontend-unit` also resolves its ts-jest binary from the
+    # root install, so the root dependencies must exist before it runs.
+    # Keep this in sync with .github/workflows/ci.yml.
     - name: install frontend dependencies
       script: cd frontend && npm ci
     - name: build backend

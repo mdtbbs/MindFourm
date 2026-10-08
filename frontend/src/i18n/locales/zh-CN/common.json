@@ -110,7 +110,7 @@
     "createPost": "发布主题",
     "sections": "社区栏目",
     "following": "关注动态",
-    "followingUnavailable": "当前没有独立的关注动态流接口，因此此入口暂不开放。",
+    "followingUnavailable": "关注动态暂不可用。",
     "comingSoon": "暂不可用"
   },
   "multiplayer": {
@@ -123,14 +123,14 @@
     "friendsDescription": "查看好友在线状态、Presence 和邀请。",
     "featureNote": "服务器目录、好友 Presence 和 LanLink 会按当前站点功能开关提供。",
     "friendsOnline": "好友在线",
-    "friendsOnlineDescription": "在线状态来自现有好友 Presence 接口；邀请和加入操作可在好友页继续。",
+    "friendsOnlineDescription": "查看好友的在线状态，邀请和加入操作可在好友页继续。",
     "signInForPresence": "登录后查看好友在线状态。",
     "presenceLoadFailed": "暂时无法加载好友状态，请重试或打开好友页。",
     "noFriendsOnline": "当前没有在线好友。打开好友页可查看完整列表与待处理邀请。",
     "online": "在线",
     "joinFromFriends": "查看加入选项",
     "onlineServers": "正在运行的服务器",
-    "onlineServersDescription": "以下服务器来自现有公开发现接口。",
+    "onlineServersDescription": "以下是当前公开的服务器。",
     "serversUnavailable": "暂时无法加载服务器摘要。",
     "noActiveServers": "当前没有公开的活跃服务器。"
   },
@@ -152,7 +152,7 @@
     "waveEditorDetails": "新建或导入波次配置，也可直接编辑地图中的波次；地图编辑器支持导入配置并导出游戏文件。",
     "blueprintAnalysis": "蓝图分析",
     "blueprintAnalysisDescription": "查看已分析蓝图的方块组成与建造材料。",
-    "blueprintAnalysisDetails": "蓝图分析通过 Resource Center V2 的版本分析数据提供。打开已发布蓝图的工作台后，可查看当前版本真实返回的分析字段。",
+    "blueprintAnalysisDetails": "打开已发布蓝图的工作台，可查看当前版本的分析数据。",
     "cloudSaves": "云存档",
     "cloudSavesDescription": "管理授权启动器同步的个人存档与历史版本。",
     "openBlueprintEditor": "在蓝图编辑器中打开",
@@ -181,7 +181,7 @@
     "resourceDrafts": "继续编辑资源草稿",
     "resourceDraftsDescription": "资源投稿表单会恢复保存在此设备上的草稿。",
     "downloads": "下载记录",
-    "downloadsUnavailable": "当前没有面向用户的个人下载历史页面或查询接口，因此不展示伪造的下载列表。",
+    "downloadsUnavailable": "暂不提供下载记录。",
     "tools": "工具箱",
     "toolsDescription": "打开资源编辑、分析与云存档工作台。"
   },
@@ -354,7 +354,7 @@
   },
   "admin": {
     "language": "管理后台语言",
-    "english": "English",
+    "english": "英文",
     "chinese": "简体中文"
   },
   "languageSettings": {
@@ -382,7 +382,7 @@
       },
       "content": {
         "title": "用户内容",
-        "body": "你保留自己创作内容的所有权，并授予 Mindustry Club 为运营服务而托管、展示和分发该内容的许可。法律、安全和备份需要可能影响内容删除。"
+        "body": "你保留自己创作内容的所有权，并授予 {site} 为运营服务而托管、展示和分发该内容的许可。法律、安全和备份需要可能影响内容删除。"
       },
       "conduct": {
         "title": "社区行为",
@@ -390,14 +390,14 @@
       },
       "moderation": {
         "title": "审核与服务可用性",
-        "body": "成员可以举报内容。管理员可以隐藏或删除内容、限制账户，以应对安全、权利或滥用问题。Mindustry Club 是独立的玩家社区，与 Anuken 或 Mindustry 官方项目无关，也未获其认可；服务可能调整或暂时不可用。"
+        "body": "成员可以举报内容。管理员可以隐藏或删除内容、限制账户，以应对安全、权利或滥用问题。{site} 是独立的玩家社区，与 Anuken 或 Mindustry 官方项目无关，也未获其认可；服务可能调整或暂时不可用。"
       }
     },
     "privacy": {
       "title": "隐私政策",
       "identity": {
         "title": "账户数据",
-        "body": "MindAuth 提供账户身份认证。Mindustry Club 使用独立社区数据库保存本地个人资料、帖子、回复、资源记录和审核决定。"
+        "body": "MindAuth 提供账户身份认证。{site} 使用独立社区数据库保存本地个人资料、帖子、回复、资源记录和审核决定。"
       },
       "data": {
         "title": "处理的数据",
@@ -462,7 +462,7 @@
       "title": "版权与下架政策",
       "submit": {
         "title": "提交请求",
-        "body": "如认为 Mindustry Club 上的内容侵害了你的权利，请向管理员提供页面或资源链接、相关材料、你拥有的权利、希望采取的措施，以及可联系你的方式。"
+        "body": "如认为 {site} 上的内容侵害了你的权利，请向管理员提供页面或资源链接、相关材料、你拥有的权利、希望采取的措施，以及可联系你的方式。"
       },
       "review": {
         "title": "审查与处理",
