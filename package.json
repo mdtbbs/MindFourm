@@ -17,6 +17,7 @@
     "readiness:production": "node scripts/production-readiness.cjs",
     "build:backend": "nest build",
     "build:frontend": "cd frontend && npm run build",
+    "check:frontend-budget": "node scripts/check-frontend-budget.cjs",
     "start": "node dist/main",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
