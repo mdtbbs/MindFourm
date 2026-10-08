@@ -3,9 +3,12 @@
 // config deliberately avoids (see `FRONTEND_RENDERING_SPECS` in
 // ../jest.config.js). Requires `npm ci` in `frontend/` and at the repo root.
 //
-// Run it via the repo root so ts-jest resolves the root install:
+// Run it via the repo root so ts-jest resolves the root install and the
+// `process.cwd()`-relative repo paths in the specs stay valid:
 //   npx jest --config frontend/jest.config.js
-// `frontend/package.json` wires this up as `test:frontend-unit`.
+// `frontend/package.json` wires this up as `test:frontend-unit`, which forces
+// `--rootDir ..` for exactly that reason — running it from inside `frontend/`
+// would make `process.cwd()` == `<repo>/frontend` and break every repo path.
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');

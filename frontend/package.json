@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && npm run test:frontend-unit",
     "lint": "eslint src --ext .js,.jsx,.ts,.tsx",
-    "test:frontend-unit": "jest --config jest.config.js"
+    "test:frontend-unit": "jest --config jest.config.js --rootDir .."
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
