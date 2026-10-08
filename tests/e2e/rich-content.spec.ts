@@ -260,3 +260,35 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
     await expect(authenticatedPage.getByTestId('reply-input').locator('aside[data-quote-type="reply"]')).toHaveAttribute('data-post-id', String(hostPostId));
   });
 });
+
+
+// This case uses the real API and authentication fixtures. The independent
+// presentation fixture suite is not a substitute for this publication check.
+authTest('Presentation contract: preview and real published post share styles', async ({ authenticatedPage: page, request }) => {
+  const fixture = (await import('../fixtures/rich-presentation.json')).default;
+  const document = { ...fixture, content: fixture.content.filter((node) => !['attachment', 'postQuote', 'replyQuote'].includes(node.type)).map((node) => node.type === 'paragraph' ? { ...node, content: node.content?.filter((child: any) => child.type !== 'customEmoji') } : node) };
+  await page.evaluate((json) => localStorage.setItem('draft:post:new', JSON.stringify({ timestamp: Date.now(), values: { title: `E2E Presentation ${Date.now()}`, content: 'Presentation projection', contentJson: json, status: 'published' } })), document);
+  await page.goto('/posts/new');
+  await page.getByRole('button', { name: /恢复草稿/ }).click();
+  await expect(page.getByTestId('post-content-editor').locator('h1')).toBeVisible();
+  await page.getByTestId('post-preview-tab').click();
+  const preview = page.getByTestId('post-preview').getByTestId('rich-content-renderer');
+  // Capture common nodes present in this real-API fixture; ID-sensitive cards
+  // are covered by the existing permission/binding tests above.
+  const snapshot = async (root: ReturnType<typeof page.locator>) => root.locator('p,h1,h2,h3,blockquote,ul,ol,li,code,pre,table,th,td,img:not(.rich-custom-emoji):not(.ProseMirror-separator)').evaluateAll((nodes) => nodes.map((element) => {
+    const style = getComputedStyle(element);
+    return ['fontSize','lineHeight','fontWeight','marginTop','marginBottom','paddingLeft','paddingRight','backgroundColor','borderLeftWidth','borderTopWidth','listStyleType'].map((key) => style[key as keyof CSSStyleDeclaration]);
+  }));
+  const styles = await snapshot(preview);
+  const response = page.waitForResponse((res) => res.request().method() === 'POST' && new URL(res.url()).pathname === '/api/posts');
+  await page.getByTestId('publish-button').click();
+  const created = await response;
+  expect(created.ok()).toBeTruthy();
+  const post = unwrap(await created.json());
+  const id = Number(post?.id ?? post?.post?.id);
+  await approveAsAdmin(request, 'post', id);
+  await page.goto(`/posts/${id}`);
+  const published = visiblePostContent(page).getByTestId('rich-content-renderer');
+  await expect(published).toBeVisible();
+  expect(await snapshot(published)).toEqual(styles);
+});

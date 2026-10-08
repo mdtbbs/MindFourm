@@ -113,5 +113,12 @@
       "copyright": "著作権侵害",
       "other": "その他"
     }
+  },
+  "richPresentation": {
+    "mode": "本文の表示",
+    "edit": "編集",
+    "preview": "プレビュー",
+    "untitled": "無題の投稿",
+    "saveLocal": "端末に保存"
   }
 }
