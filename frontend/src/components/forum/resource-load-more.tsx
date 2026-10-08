@@ -6,6 +6,7 @@ import ResourceRow from "./resource-row";
 import { resourceApi } from "@/lib/api/client";
 import ErrorState from "@/components/ui/error-state";
 import InlineLoading from "@/components/ui/inline-loading";
+import { useI18n } from "@/i18n/provider";
 
 interface ResourceLoadMoreProps {
   initialResources: Resource[];
@@ -34,6 +35,7 @@ export default function ResourceLoadMore({
   resourceKind,
   planet,
 }: ResourceLoadMoreProps) {
+  const { t } = useI18n();
   const [resources, setResources] = useState<Resource[]>(initialResources);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
   const [hasMore, setHasMore] = useState(initialHasMore);
@@ -79,8 +81,8 @@ export default function ResourceLoadMore({
       <div className="mt-4">
         {error && (
           <ErrorState
-            title="加载更多资源失败"
-            description="请稍后重试。"
+            title={t('cards.loadMoreFailed')}
+            description={t('cards.loadMoreFailedHint')}
             onRetry={loadMore}
             className="min-h-0 py-4"
           />
@@ -89,13 +91,13 @@ export default function ResourceLoadMore({
       {hasMore && (
         <div className="mt-6 flex justify-center">
           {loading ? (
-            <InlineLoading label="正在加载更多资源" />
+            <InlineLoading label={t('cards.loadingMore')} />
           ) : (
             <button
               onClick={loadMore}
               className="inline-flex items-center gap-2 rounded-[var(--radius)] bg-[var(--bg-elevated)] px-6 py-2 text-sm font-medium text-[var(--text)] transition-colors hover:bg-[var(--bg-card)] disabled:cursor-not-allowed disabled:opacity-50"
             >
-              加载更多
+              {t('cards.loadMore')}
             </button>
           )}
         </div>

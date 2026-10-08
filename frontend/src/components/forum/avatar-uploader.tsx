@@ -93,7 +93,7 @@ export default function AvatarUploader({ currentAvatar, onUpload, onRemove }: Av
           onChange={handleFileSelect}
           className="hidden"
           disabled={uploading}
-          aria-label="上传头像图片"
+          aria-label={t('cards.uploadAvatarLabel')}
         />
         <button
           type="button"

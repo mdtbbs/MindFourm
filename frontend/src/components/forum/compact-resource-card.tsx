@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Blocks, FileArchive, Map as MapIcon, Package } from 'lucide-react';
 import { resourceKindLabel } from '@/lib/display-labels';
 import SearchHighlight from './search-highlight';
+import { useI18n } from '@/i18n/provider';
 
 export interface CompactResource {
   id: number;
@@ -17,6 +18,7 @@ export interface CompactResource {
 }
 
 export default function CompactResourceCard({ resource, highlightTerm }: { resource: CompactResource; highlightTerm?: string }) {
+  const { t } = useI18n();
   const isMap = resource.resource_kind === 'map';
   const isSchematic = resource.resource_kind === 'schematic';
   const Icon = isMap ? MapIcon : isSchematic ? FileArchive : ['development_tool', 'server_plugin'].includes(resource.resource_kind || '') ? Blocks : Package;
@@ -32,7 +34,7 @@ export default function CompactResourceCard({ resource, highlightTerm }: { resou
         <span className="shrink-0 text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}</span>
       </span>
       {resource.description && <span className="mt-1 block line-clamp-1 text-xs text-[var(--text-secondary)]">{highlightTerm ? <SearchHighlight text={resource.description} query={highlightTerm} /> : resource.description}</span>}
-      <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">{[resource.version ? `资源版本 ${resource.version}` : null, resource.category_name, resource.author_name || resource.username].filter(Boolean).join(' · ') || '查看资源详情'}</span>
+      <span className="mt-1 block truncate text-xs text-[var(--text-muted)]">{[resource.version ? t('cards.resourceVersionLabel', { version: resource.version }) : null, resource.category_name, resource.author_name || resource.username].filter(Boolean).join(' · ') || t('resources.title')}</span>
     </span>
   </Link>;
 }

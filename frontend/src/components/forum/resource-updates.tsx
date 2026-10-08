@@ -3,18 +3,20 @@
 import { Resource } from '@/types';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
 import { GitBranch, Calendar } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 interface ResourceUpdatesProps {
   resource: Resource;
 }
 
 export default function ResourceUpdates({ resource }: ResourceUpdatesProps) {
+  const { t, locale } = useI18n();
   const versions = resource.versions || [];
 
   if (versions.length === 0) {
     return (
       <div className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-6">
-        <p className="text-center text-[var(--text-muted)]">暂无更新记录</p>
+        <p className="text-center text-[var(--text-muted)]">{t('cards.noUpdates')}</p>
       </div>
     );
   }
@@ -23,7 +25,7 @@ export default function ResourceUpdates({ resource }: ResourceUpdatesProps) {
     <div className="space-y-4">
       <h2 className="text-xl font-bold text-[var(--text)] flex items-center gap-2">
         <GitBranch className="w-5 h-5" />
-        更新日志 ({versions.length})
+        {t('cards.changelog', { count: versions.length })}
       </h2>
       <div className="space-y-4">
         {versions.map((version, index) => (
@@ -37,13 +39,13 @@ export default function ResourceUpdates({ resource }: ResourceUpdatesProps) {
                   {version.version}
                   {index === 0 && (
                     <span className="ml-2 px-2 py-0.5 text-xs rounded-full bg-[var(--primary-soft)] text-[var(--primary)]">
-                      最新版本
+                      {t('cards.latestVersion')}
                     </span>
                   )}
                 </h3>
                 <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
                   <Calendar className="w-4 h-4" />
-                  {new Date(version.created_at).toLocaleDateString()}
+                  {new Date(version.created_at).toLocaleDateString(locale)}
                 </div>
               </div>
             </div>
