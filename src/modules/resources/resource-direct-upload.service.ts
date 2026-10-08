@@ -189,7 +189,7 @@ export class ResourceDirectUploadService {
   /** Move a temporary, locally validated upload to RES before durable forum creation. */
   async uploadManagedFile(file: ResourceFileMeta): Promise<ResourceFileMeta> {
     if (file.storage_backend === 'res') return file;
-    if (!this.res.isAvailable) throw new ResourceStorageClientError('unavailable');
+    if (!this.res.isReachable) throw new ResourceStorageClientError('unavailable', undefined, this.res.retryAfterSeconds);
     const object = await this.res.uploadServerGeneratedObject({
       body: createReadStream(file.file_path), sizeBytes: file.file_size, sha256: file.content_hash,
       mimeType: file.mime_type, filename: file.file_name, purpose: 'resource_version',

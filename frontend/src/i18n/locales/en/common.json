@@ -328,6 +328,7 @@
     "phoneVerificationRequired": "Verify your phone number to continue."
   },
   "errors": {
+    "RATE_LIMITED": "Too many requests. Please wait a moment and try again.",
     "EMAIL_VERIFICATION_REQUIRED": "Verify your email address before continuing.",
     "PHONE_NOT_VERIFIED": "Verify your phone number before continuing.",
     "phoneRetry": "Verify your phone number to continue this action. It will resume automatically when verification is complete.",
