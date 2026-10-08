@@ -19,7 +19,7 @@ This map reflects the Next.js pages in `frontend/src/app` and backend-served dev
 | Resources | Resource Center | `/resources` | Resources sidebar | Resources tab | Public |
 | Resources | Resource detail | `/resources/[id]` | Resource list, search, post references | Resource list, search, post references | Public; private files/actions follow existing access checks |
 | Resources | Edit resource metadata | `/resources/[id]/edit` | Resource detail → Manage | Resource detail → Manage | Owner/member/reviewer as currently enforced |
-| Resources | Resource workbench | `/resources/[id]/workbench` | Resource detail → Open in editor | Resource detail → Open in editor | Existing ownership and workbench permissions |
+| Resources | Resource workbench | `/resources/[id]/workbench` | Resource detail → Version workbench | Resource detail → Version workbench | Public copy editing; original management requires owner/member role |
 | Resources | Version detail | `/resources/[id]/versions/[versionId]` | Resource detail → Versions | Resource detail → Versions | Public metadata; file access follows current contract |
 | Resources | Resource submit | `/resources/submit` | Create → Other resource; Resources CTA | Create sheet; Resources CTA | Sign-in required |
 | Resources | Map submit | `/resources/submit/map` | Create → Map | Create sheet → Map | Sign-in required |
@@ -31,9 +31,9 @@ This map reflects the Next.js pages in `frontend/src/app` and backend-served dev
 | Multiplayer | Apply for a server | `/apply-server`, `/servers/apply` | Servers → Apply | Servers → Apply | Sign-in/site-feature gate; legacy route redirects to `/servers?section=apply` |
 | Multiplayer | Friends, Presence, invitations, and join requests | `/friends` | Multiplayer → Friends | Multiplayer → Friends | Sign-in required; invitations and join requests are managed in the page's pending section |
 | Tools | Toolbox | `/tools` | Tools sidebar | Home shortcut, My, search, resource detail | Public |
-| Tools | Schematic editor guide | `/tools/blueprint-editor` | Tools → Schematic editor | Home shortcut, search, resource detail | Public guide; editing keeps workbench permissions |
-| Tools | Map editor guide | `/tools/map-editor` | Tools → Map editor | Home shortcut, search, resource detail | Public guide; editing keeps workbench permissions |
-| Tools | Wave editor guide | `/tools/wave-editor` | Tools → Wave editor | Toolbox, search, map workbench | Public guide; wave tab requires a map workbench |
+| Tools | Schematic editor | `/tools/blueprint-editor` | Tools → Schematic editor | Home shortcut, search, resource detail | Public local-file and public-version copy editing; sign-in required to publish |
+| Tools | Map editor | `/tools/map-editor` | Tools → Map editor | Home shortcut, search, resource detail | Public local-file and public-version copy editing; sign-in required to publish |
+| Tools | Wave editor | `/tools/wave-editor` | Tools → Wave editor | Toolbox, search, map workbench | Public new/imported wave config and map editing; map required for .msav export |
 | Tools | Schematic analysis guide | `/tools/blueprint-analysis` | Tools → Analysis | Toolbox, search, schematic workbench | Public guide; underlying analysis follows resource visibility |
 | Tools | User cloud saves | `/tools/cloud-saves` | Tools → Cloud saves | Toolbox, My, search | Sign-in required; service capability must be enabled |
 | My | Personal dashboard | `/me` | Sidebar → My | My tab | Sign-in required |

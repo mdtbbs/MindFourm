@@ -1,4 +1,5 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { CapabilitiesService } from '../../capabilities/capabilities.service';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { DataSource, EntityManager, Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -30,6 +31,7 @@ export class ResourcesV2WriteService {
     @Optional() private readonly storage?: ResourceStorageService,
     @Optional() private readonly fileProvider?: ResourceFileProviderService,
     @Optional() private readonly resourceLifecycle?: ResourcesService,
+    @Optional() private readonly editorCapabilities?: CapabilitiesService,
   ) {}
 
   private assertUuid(value: string): void {
@@ -76,6 +78,17 @@ export class ResourcesV2WriteService {
     return role;
   }
 
+  private async assertCanEditCopy(resource: Resource, actorId?: number): Promise<void> {
+    // Copy editing never grants permission to change the source aggregate.
+    if ((resource as any).deleted_at) throw new NotFoundException('资源不存在或不可见');
+    const publicSource = this.resourceLifecycle
+      ? await this.resourceLifecycle.isResourcePubliclyAccessible(resource)
+      : Number(resource.is_public) === 1 && resource.visibility !== 'private' && !resource.category_id && ['approved', 'published'].includes(String(resource.status));
+    if (publicSource) return;
+    if (!actorId) throw new NotFoundException('资源不存在或不可见');
+    await this.assertRole(resource, actorId, ['owner', 'maintainer']);
+  }
+
   async analyzeVersion(publicId: string, file: ResourceFileMeta, input: {
     mod_author_overrides?: Record<string, unknown>;
   }, actorId: number): Promise<Record<string, unknown>> {
@@ -112,12 +125,12 @@ export class ResourcesV2WriteService {
   async exportSchematic(publicId: string, versionPublicId: string, input: {
     rotation_quarters: number; mirror_x: boolean; delete_positions?: Array<{ x: number; y: number }>;
     move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
-    add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+    add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number; copy_from_x?: number; copy_from_y?: number; config?: Record<string, unknown>; logic_source?: string }>;
     logic_configs?: Array<{ x: number; y: number; source: string }>;
     config_edits?: Array<{ x: number; y: number; config: ResourceV2SchematicConfigDtoUnion }>;
-  }, actorId: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
+  }, actorId?: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
     const resource = await this.getResource(publicId);
-    await this.assertRole(resource, actorId, ['owner', 'maintainer']);
+    await this.assertCanEditCopy(resource, actorId);
     if (resource.resource_kind !== 'schematic') throw new BadRequestException('只有蓝图资源支持在线编辑');
     this.assertUuid(versionPublicId);
     if (!Number.isInteger(input.rotation_quarters) || input.rotation_quarters < 0 || input.rotation_quarters > 3
@@ -172,9 +185,9 @@ export class ResourcesV2WriteService {
     rule_changes?: Record<string, unknown>;
     wave_operations?: Array<{ action: 'add' | 'update' | 'delete' | 'move'; index: number; to_index?: number; fields?: Record<string, unknown> }>;
     object_operations?: ResourceV2MapObjectOperationInput[];
-  }, actorId: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
+  }, actorId?: number): Promise<{ data: Buffer; file_name: string; sha256: string }> {
     const resource = await this.getResource(publicId);
-    await this.assertRole(resource, actorId, ['owner', 'maintainer']);
+    await this.assertCanEditCopy(resource, actorId);
     if (resource.resource_kind !== 'map') throw new BadRequestException('只有地图资源支持在线编辑');
     this.assertUuid(versionPublicId);
     const terrain = input.terrain_changes || [];
@@ -212,6 +225,25 @@ export class ResourcesV2WriteService {
     });
     const stem = filename.split(/[\\/]/).pop()!.replace(/\.msav$/i, '').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120) || 'map';
     return { data: transformed.data, file_name: `${stem}-edited.msav`, sha256: transformed.sha256 };
+  }
+
+  async mapRegion(publicId: string, versionPublicId: string, x: number, y: number, actorId?: number) {
+    const copy = await this.exportMap(publicId, versionPublicId, { rule_changes: {} }, actorId);
+    return this.previews.mapRegion(copy.data, x, y);
+  }
+
+  async editorData(publicId: string, versionPublicId: string, actorId?: number) {
+    const resource = await this.getResource(publicId);
+    const kind = resource.resource_kind;
+    if (kind !== 'map' && kind !== 'schematic') throw new BadRequestException('此资源不支持在线编辑');
+    if (!this.editorCapabilities) throw new ServiceUnavailableException('编辑器暂不可用');
+    await this.editorCapabilities.assertEditorAvailable(kind);
+    const copy = kind === 'map' ? await this.exportMap(publicId, versionPublicId, { rule_changes: {} }, actorId)
+      : await this.exportSchematic(publicId, versionPublicId, { rotation_quarters: 0, mirror_x: false }, actorId);
+    const result = await this.previews.analyzeEditorBytes(kind, copy.file_name, copy.data);
+    return { ...result, blocks: kind === 'schematic' ? analyzeSchematicMetadata(result.metadata).blocks.map(block => ({
+      internal_name: block.internal_name, display_name: block.display_name, count: block.count, positions: block.positions_json || [],
+    })) : [] };
   }
 
   async createVersion(publicId: string, file: ResourceFileMeta, input: {

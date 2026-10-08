@@ -39,10 +39,12 @@ async function prepare() {
       .filter((migration) => [
         'GameContentDurability1720000060000',
         'ResourceIntegrityAndMerge1720000110000',
+        'ResourceViewsAnalytics1720000200000',
       ].includes(migration.name));
     const expectedRuntimeMigrations = new Set([
       'GameContentDurability1720000060000',
       'ResourceIntegrityAndMerge1720000110000',
+      'ResourceViewsAnalytics1720000200000',
     ]);
     if (runtimeSchemaMigrations.length !== expectedRuntimeMigrations.size) {
       throw new Error('A required runtime schema migration is missing from the migration registry.');

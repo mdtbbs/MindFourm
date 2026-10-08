@@ -208,6 +208,17 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('resolves detail UUIDs while rejecting malformed and missing identifiers', async () => {
+    const { service, resourceRepository } = createService();
+    await expect(service.resolveDetailId('27')).resolves.toBe(27);
+    expect(resourceRepository.findOne).not.toHaveBeenCalled();
+    resourceRepository.findOne.mockResolvedValueOnce({ id: 27 });
+    await expect(service.resolveDetailId('11111111-1111-4111-8111-111111111111')).resolves.toBe(27);
+    await expect(service.resolveDetailId('1-invalid')).rejects.toThrow('资源编号无效');
+    resourceRepository.findOne.mockResolvedValueOnce(null);
+    await expect(service.resolveDetailId('22222222-2222-4222-8222-222222222222')).rejects.toThrow('资源不存在');
+  });
+
   it('honors explicit private visibility before issuing a file URL', async () => {
     const { service } = createService();
     await expect(service.isResourcePubliclyAccessible({ status: 'approved', is_public: 1, visibility: 'private' })).resolves.toBe(false);

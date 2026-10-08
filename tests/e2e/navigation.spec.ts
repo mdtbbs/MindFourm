@@ -79,10 +79,12 @@ test.describe('Mobile IA navigation', () => {
     const dialog = page.getByRole('dialog', { name: '全局搜索' });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('combobox').fill('云存档');
-    const cloudSaves = dialog.getByRole('option', { name: /云存档/ });
+    const cloudSaves = dialog.getByRole('option', { name: /^云存档 / });
     await expect(cloudSaves).toBeVisible();
+    await page.route('**/authorize?**', route => route.fulfill({ status: 200, contentType: 'text/html', body: '<main>测试身份提供方</main>' }));
     await cloudSaves.click();
-    await expect(page).toHaveURL(/\/login\?redirect=.*tools%2Fcloud-saves/);
+    await expect(page).toHaveURL(/\/authorize\?/);
+    expect(new URL(page.url()).searchParams.get('state')).toBe('/tools/cloud-saves');
   });
 });
 
@@ -95,6 +97,7 @@ test('the retired user cloud-save URL returns 404 without a compatibility redire
 authTest('authenticated creation menu exposes resource upload shortcuts', async ({ authenticatedPage }) => {
   await authenticatedPage.setViewportSize({ width: 390, height: 844 });
   await authenticatedPage.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await expect(authenticatedPage.getByRole('button', { name: /^通知/ })).toBeVisible();
   await authenticatedPage.getByRole('button', { name: '创建' }).click();
 
   const dialog = authenticatedPage.getByRole('dialog', { name: '创建' });
@@ -120,9 +123,14 @@ adminTest('admin entry appears only in the authenticated admin user menu', async
   await expect(authenticatedPage.getByRole('menu').getByRole('menuitem', { name: '管理后台' })).toBeVisible();
 });
 
-test('anonymous visits to private workspace tools enter the login flow', async ({ page }) => {
+test('anonymous visits to private workspace tools enter the login flow', async ({ request }) => {
+  // Check the protected route's first hop. /login immediately redirects onward
+  // to MindAuth, so asserting an intermediate browser URL races that redirect.
   for (const route of ['/me', '/friends', '/resources/my', '/tools/cloud-saves']) {
-    await page.goto(route, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await expect(page).toHaveURL(new RegExp(`/login\\?redirect=.*${route.replaceAll('/', '%2F').slice(1)}`));
+    const response = await request.get(route, { maxRedirects: 0 });
+    expect(response.status()).toBe(307);
+    const destination = new URL(response.headers().location);
+    expect(destination.pathname).toBe('/login');
+    expect(destination.searchParams.get('redirect')).toBe(route);
   }
 });

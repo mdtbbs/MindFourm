@@ -1,5 +1,6 @@
-import ToolGuide from '@/components/tools/tool-guide';
+import EditorToolWorkspace from '@/components/tools/editor-tool-workspace';
 
-export default function BlueprintEditorPage() {
-  return <ToolGuide id="blueprint-editor" />;
+export default async function BlueprintEditorPage({ searchParams }: { searchParams: Promise<{ resource?: string; version?: string }> }) {
+  const query = await searchParams;
+  return <EditorToolWorkspace id="blueprint-editor" resourceId={query.resource} versionId={query.version} />;
 }

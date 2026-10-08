@@ -26,6 +26,16 @@ describe('ResourcePreviewService', () => {
   });
 
 
+  it('preserves nested official connection and logic metadata without exposing extra top-level fields', () => {
+    const service = new ResourcePreviewService({} as any);
+    const blocks = [{ positions: [{ config: { type: 'points', value: [{ x: 2, y: -1 }] }, logic_links: [{ x: 4, y: 3, name: 'switch1' }] }] }];
+    const metadata = (service as any).safeMetadata({ blocks, width: 6, token: 'private', tile_layers: { terrain: Array.from({ length: 10001 }, (_, x) => ({ x, y: 0, floor: 'stone', overlay: 'air' })) } });
+    expect(metadata.blocks).toEqual(blocks);
+    expect(metadata.token).toBeUndefined();
+    expect(metadata.tile_layers.terrain).toHaveLength(10000);
+    expect(metadata.tile_layers_truncated).toBe(true);
+  });
+
   it('keeps version previews private until the resource and version are published and retains the PNG', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-version-preview-'));
     try {

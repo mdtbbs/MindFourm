@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { resolve } from 'node:path';
 import { SettingsService } from '../settings/settings.service';
 import { SiteConfigService } from '../../config/site-profile';
@@ -177,6 +177,15 @@ export class CapabilitiesService {
       map_editor: mapEditor,
       wave_editor: waveEditor,
     };
+  }
+
+  async assertEditorAvailable(kind: 'map' | 'schematic') {
+    const capabilities = await this.getCapabilities();
+    const readiness = await this.getEditorReadiness();
+    const operations = kind === 'schematic' ? ['editor.catalog', 'schematic.copy.write'] : ['editor.catalog', 'map.region.read', 'map.objects.rotate'];
+    if (!(kind === 'schematic' ? capabilities.schematic_full_editor : capabilities.wave_editor) || !this.hasRendererOperations(readiness, operations)) {
+      throw new ServiceUnavailableException('编辑器暂不可用，请稍后重试；需要就绪的官方解析器与资源存储服务');
+    }
   }
 
   private hasRendererOperations(readiness: EditorReadiness, operations: string[]): boolean {

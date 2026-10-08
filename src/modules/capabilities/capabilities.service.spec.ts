@@ -95,6 +95,7 @@ describe('CapabilitiesService', () => {
     const [first, second] = await Promise.all([service.getCapabilities(), service.getCapabilities()]);
     expect(first).toMatchObject({ schematic_light_editor: true, schematic_full_editor: true, map_editor: true, wave_editor: true });
     expect(second).toMatchObject({ schematic_light_editor: true, schematic_full_editor: true, map_editor: true, wave_editor: true });
+    await expect(service.assertEditorAvailable('schematic')).rejects.toThrow('编辑器暂不可用');
     expect(global.fetch).toHaveBeenCalledTimes(2);
     expect(global.fetch).toHaveBeenCalledWith('http://127.0.0.1:6100/health', expect.objectContaining({
       headers: { authorization: 'Bearer renderer-secret' },

@@ -456,7 +456,8 @@ try {
   const schematicEditorKey = 'POST /v1/resources/{id}/versions/{versionId}/schematic-editor/export';
   const schematicEditorOperation = generatedPublic.paths?.['/v1/resources/{id}/versions/{versionId}/schematic-editor/export']?.post;
   if (!schematicEditorOperation || schematicEditorOperation.operationId !== 'exportResourceSchematicEdit'
-      || JSON.stringify(schematicEditorOperation['x-required-scopes']) !== JSON.stringify(['resource.upload'])
+      || JSON.stringify(schematicEditorOperation['x-oauth-scopes-if-bearer']) !== JSON.stringify(['resource.read'])
+      || !schematicEditorOperation.security?.some(requirement => Object.keys(requirement).length === 0)
       || schematicEditorOperation['x-rate-limit']?.limit !== 5
       || schematicEditorOperation['x-rate-limit']?.window_seconds !== 60
       || schematicEditorOperation.responses?.['200']?.content?.['application/octet-stream']?.schema?.format !== 'binary'

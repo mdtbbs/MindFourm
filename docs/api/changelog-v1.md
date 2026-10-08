@@ -4,6 +4,13 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.3.0
+
+- `POST /api/v1/resources/{id}/versions/{versionId}/schematic-editor/export` 和 `map-editor/export` 支持匿名导出已审核公开资源的已发布版本副本；携带 OAuth Bearer 时需要 `resource.read`。私有资源仍校验 Owner/Maintainer，发布新版本仍需 `resource.upload` 和原角色。CSRF、封禁、限流、源文件 SHA-256、官方读写校验继续生效。
+- 蓝图 `add_blocks` 增加可选 `copy_from_x`/`copy_from_y`、类型化 `config` 和纯文本 `logic_source`，用于保留复制方块配置；地图对象新增 `rotate`（0–3，出生点不支持）。原字段兼容，非法配置和越界引用返回 400。
+- `GET /api/v1/resources/{id}/workbench` 新增可选 `version_public_id`，详情和分析严格匹配所选版本。旧版本缺少结构化索引时可从校验后的源文件读取，不写回数据库。
+- 新增 `GET /api/v1/resources/{id}/versions/{versionId}/editor-data` 与 `map-editor/region?x=…&y=…`。前者返回官方编辑元数据和有界方块列表（5 次/分钟），后者读取最多 128×128 的地图分区（20 次/分钟）。公开版本匿名可读；OAuth Bearer 要求 `resource.read`。私有版本保留角色验证；编辑器未就绪返回 503、非法坐标返回 400、不存在的已发布版本返回 404。
+
 ## Public API 1.2.0
 
 本次为发现榜单补充可机器读取的算法版本标识，并公布各算法的评分口径。既有路由、筛选、排序和隐私行为不变；新响应字段是兼容性新增，旧客户端可忽略未知字段。算法版本或分数权重改变时会更新算法 ID，并同步文档与 OpenAPI。
