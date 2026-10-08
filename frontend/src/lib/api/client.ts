@@ -207,20 +207,64 @@ function isWriteMethod(method: string): boolean {
 
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 
+/** Cap on a single backoff sleep, so a hostile `Retry-After` cannot hang the UI. */
+const MAX_RETRY_DELAY_MS = 8_000;
+
+/**
+ * Delay before retry N (0-based): exponential base with full jitter.
+ *
+ * The previous fixed 250/500ms delay retried an overloaded backend almost
+ * immediately, tripling read traffic exactly when the origin was already
+ * struggling. Jitter also stops many clients from retrying in lockstep.
+ */
+function backoffDelay(attempt: number): number {
+  const base = Math.min(MAX_RETRY_DELAY_MS, 500 * 2 ** attempt);
+  return Math.floor(base / 2 + Math.random() * (base / 2));
+}
+
+/**
+ * Parse `Retry-After` (delta-seconds or HTTP-date) into milliseconds.
+ * Returns undefined when the header is absent or unparseable.
+ */
+function parseRetryAfter(response: Response): number | undefined {
+  const raw = response.headers?.get?.('Retry-After');
+  if (!raw) return undefined;
+
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.min(MAX_RETRY_DELAY_MS, seconds * 1000);
+  }
+
+  const date = Date.parse(raw);
+  if (!Number.isNaN(date)) {
+    return Math.min(MAX_RETRY_DELAY_MS, Math.max(0, date - Date.now()));
+  }
+  return undefined;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function fetchWithReadRetry(url: string, options: RequestInit, method: string): Promise<Response> {
   // Never transparently repeat a mutation: an interrupted upload/post may already
-  // have reached the origin. Idempotent reads get two short, cancellable retries.
+  // have reached the origin. Idempotent reads get two cancellable retries.
   const attempts = isWriteMethod(method) ? 1 : 3;
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const response = await fetch(url, options);
-      if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) return response;
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) {
+        // A 429 is not retried automatically — the caller decides what a
+        // rate limit means — but the wait the server asked for is exposed so
+        // the UI can tell the user when to try again.
+        return response;
+      }
+      await sleep(parseRetryAfter(response) ?? backoffDelay(attempt));
     } catch (error) {
       lastError = error;
       if (attempt === attempts - 1 || (error instanceof Error && error.name === 'AbortError')) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      await sleep(backoffDelay(attempt));
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Network error');

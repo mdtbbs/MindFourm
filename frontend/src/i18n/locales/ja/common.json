@@ -195,6 +195,7 @@
   },
   "errors": {
     "EMAIL_VERIFICATION_REQUIRED": "メールアドレスを確認してください。",
+    "RATE_LIMITED": "リクエストが多すぎます。しばらくしてから再試行してください。",
     "PHONE_NOT_VERIFIED": "電話番号を確認してください。",
     "phoneRetry": "電話番号の確認が必要です。確認が完了すると、この操作は自動的に再開されます。",
     "USER_BANNED": "このアカウントでは操作できません。",

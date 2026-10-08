@@ -7,6 +7,7 @@ import { API_V1_BASE_PATH, API_V1_VERSION } from '../openapi/api-version';
 import { parseMarkdown } from '../common/utils/markdown.util';
 import { getAllV1ErrorCodes } from '../common/contracts/v1-error-codes';
 import { apiV1Error, v1ErrorCodeAnchor, v1ErrorDocumentationUrl } from '../common/contracts/api-v1.contract';
+import { createRateLimitMiddleware } from '../common/rate-limit/simple-rate-limiter';
 
 type CodeLanguage = 'curl' | 'javascript' | 'typescript' | 'python' | 'java' | 'kotlin';
 
@@ -2245,28 +2246,39 @@ export function registerDeveloperDocs(
   document: OpenAPIObject,
   forumVersion: string,
 ): void {
-  const adapter = app.getHttpAdapter();
+  // `getHttpAdapter()` narrows `get` to the single-handler overload Nest declares,
+  // but the underlying Express app accepts a middleware chain. Cast to the shape
+  // we actually use rather than loosening every route signature.
+  const adapter = app.getHttpAdapter() as unknown as {
+    get(path: string, ...handlers: Array<(req: any, res: any, next?: any) => void>): unknown;
+  };
+
+  // These pages are mounted directly on the Express adapter, so they skip the
+  // Nest guard chain entirely. Each request re-renders several thousand lines of
+  // HTML, so without a limiter a crawler can drive CPU to saturation — the same
+  // gap the OpenAPI JSON routes had. A modest per-IP ceiling is enough here.
+  const docsLimiter = createRateLimitMiddleware({ max: 120, windowMs: 60_000 });
 
   // Swagger UI ships English-only labels. Keep its former public entry point
   // useful by redirecting browser users to the fully localized API reference.
   const redirectToChineseReference = (_req: any, res: any) =>
     res.redirect(302, '/api/v1/reference');
-  adapter.get('/api/docs/v1', redirectToChineseReference);
-  adapter.get('/api/docs/v1/', redirectToChineseReference);
+  adapter.get('/api/docs/v1', docsLimiter, redirectToChineseReference);
+  adapter.get('/api/docs/v1/', docsLimiter, redirectToChineseReference);
 
-  adapter.get('/developers', (_req: any, res: any) => {
+  adapter.get('/developers', docsLimiter, (_req: any, res: any) => {
     const html = renderHome(forumVersion);
     setHtmlHeaders(res, html);
     res.status(200).send(html);
   });
 
-  adapter.get('/api/v1', (_req: any, res: any) => {
+  adapter.get('/api/v1', docsLimiter, (_req: any, res: any) => {
     const html = renderHome(forumVersion);
     setHtmlHeaders(res, html);
     res.status(200).send(html);
   });
 
-  adapter.get('/api/v1/docs/:slug', (req: any, res: any) => {
+  adapter.get('/api/v1/docs/:slug', docsLimiter, (req: any, res: any) => {
     const slug = String(req.params?.slug || '');
     const page = slug === 'errors'
       ? null
@@ -2293,13 +2305,13 @@ export function registerDeveloperDocs(
     res.status(200).send(html);
   });
 
-  adapter.get('/api/v1/reference', (_req: any, res: any) => {
+  adapter.get('/api/v1/reference', docsLimiter, (_req: any, res: any) => {
     const html = renderReference(document, forumVersion);
     setHtmlHeaders(res, html);
     res.status(200).send(html);
   });
 
-  adapter.get('/api/v1/debugger', (_req: any, res: any) => {
+  adapter.get('/api/v1/debugger', docsLimiter, (_req: any, res: any) => {
     const method = String(_req.query?.method || '').toLowerCase();
     const path = String(_req.query?.path || '');
     const html = renderDebugger(forumVersion, method, path);
@@ -2307,7 +2319,7 @@ export function registerDeveloperDocs(
     res.status(200).send(html);
   });
 
-  adapter.get('/api/v1/debug/callback', (_req: any, res: any) => {
+  adapter.get('/api/v1/debug/callback', docsLimiter, (_req: any, res: any) => {
     const html = renderOAuthCallback(forumVersion);
     setHtmlHeaders(res, html, { noStore: true });
     res.status(200).send(html);
