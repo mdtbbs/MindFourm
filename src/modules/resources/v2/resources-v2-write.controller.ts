@@ -220,7 +220,7 @@ export class ResourcesV2WriteController {
 
   @Get(':id/versions/:versionId/editor-data')
   @OAuthOptionalProtected('resource.read')
-  @RateLimit({ max: 5, window: 60 })
+  @RateLimit({ max: 60, window: 60 })
   @ApiOperation({ operationId: 'readResourceEditorData', summary: '读取已发布版本的官方编辑数据', description: '历史版本缺少结构化索引时，校验源文件并按官方 reader/writer 重新解析；不修改原资源或回填数据库。公开资源允许编辑副本。' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiParam({ name: 'versionId', format: 'uuid' })

@@ -11711,7 +11711,7 @@
       "get": {
         "operationId": "readResourceEditorData",
         "x-rate-limit": {
-          "limit": 5,
+          "limit": 60,
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         },
