@@ -344,7 +344,7 @@ public final class MapRenderer {
             || !java.util.Set.of("survival", "sandbox", "attack", "pvp", "custom").contains(template)) throw new IOException("invalid map template or floor");
         var tiles = Vars.world.resize(width, height);
         for (int x = 0; x < width; x++) for (int y = 0; y < height; y++) {
-            tiles.set(x, y, new EditorTile(x, y, floor.id, (short)0, (short)0));
+            tiles.set(x, y, new mindustry.world.Tile(x, y, floor.id, 0, 0));
         }
         mindustry.game.Rules rules = new mindustry.game.Rules();
         switch (template) {
@@ -1274,7 +1274,8 @@ public final class MapRenderer {
         }
         for (PlannedMapObject change : planned) {
             if (change.deleted()) continue;
-            if (change.addition() || change.x() != change.source().x() || change.y() != change.source().y()) {
+            if (change.addition() || change.x() != change.source().x() || change.y() != change.source().y()
+                || change.rotation() != change.source().rotation()) {
                 mindustry.world.Tile destination = Vars.world.tile(change.x(), change.y());
                 if (destination == null) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
                 destination.setBlock(change.source().block(), change.team(), change.rotation());
@@ -1286,6 +1287,7 @@ public final class MapRenderer {
                         throw new MapTransformException("UNSUPPORTED_MAP_OBJECT");
                     }
                 }
+                if (destination.build != null) destination.build.rotation = change.rotation();
             } else if (change.team() != change.source().team()) {
                 mindustry.world.Tile existing = Vars.world.tile(change.source().x(), change.source().y());
                 if (existing == null || existing.build == null) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");

@@ -74,11 +74,11 @@ public final class EditorSafetyRegression {
 
         byte[] addedBytes = MapRenderer.transformSchematicBytes(
             file, 0, false, List.of(), List.of(),
-            List.of(new MapRenderer.AddedBlock(0, 5, "core-shard", 0)), List.of());
+            List.of(new MapRenderer.AddedBlock(4, 5, "core-shard", 0)), List.of());
         Schematic added = Schematics.read(new ByteArrayInputStream(addedBytes));
         require(added.tiles.count(tile -> tile.block == coreShard) == 2,
             "the editor must serialize a valid added multiblock with its official block size");
-        require(added.tiles.contains(tile -> tile.block == coreShard && tile.x == 0 && tile.y == 5),
+        require(added.tiles.contains(tile -> tile.block == coreShard && tile.x == 4 && tile.y == 5),
             "the added multiblock anchor must round-trip through official .msch serialization");
 
         byte[] movedBytes = MapRenderer.transformSchematicBytes(
