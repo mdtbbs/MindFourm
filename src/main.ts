@@ -149,6 +149,12 @@ async function bootstrap() {
   });
   app.use(clientContextMiddleware);
   app.use(requestIdMiddleware);
+  // Include CORS headers on CSRF failures so browser clients can show/retry them.
+  app.enableCors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    credentials: true,
+  });
+
   app.use(csrfMiddleware);
 
   // Global pipes
@@ -166,12 +172,6 @@ async function bootstrap() {
 
   // Global filters
   app.useGlobalFilters(new AllExceptionsFilter());
-
-  // CORS
-  app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    credentials: true,
-  });
 
   // Initialize database schema if needed
   await initializeDatabase(app.get(DataSource));

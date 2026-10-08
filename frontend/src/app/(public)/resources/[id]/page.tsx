@@ -12,7 +12,7 @@ import JsonLd from '@/components/seo/json-ld';
 import { resourceKindLabel } from '@/lib/display-labels';
 import { buildHybridParam, extractIdFromHybridParam } from '@/lib/seo/hybrid-param';
 
-const fetchResource = cache(async (id: number): Promise<Resource | null> => {
+const fetchResource = cache(async (id: number | string): Promise<Resource | null> => {
   // Public resources should render without depending on the current user's
   // MindAuth/session state. This keeps a stale or temporarily unavailable auth
   // session from taking down a public resource detail page.
@@ -36,8 +36,8 @@ const fetchResource = cache(async (id: number): Promise<Resource | null> => {
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const resourceId = extractIdFromHybridParam(id) ?? parseInt(id);
-  const resource = Number.isFinite(resourceId) ? await fetchResource(resourceId) : null;
+  const resourceId = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id) ? id : extractIdFromHybridParam(id) ?? parseInt(id);
+  const resource = typeof resourceId === 'string' || Number.isFinite(resourceId) ? await fetchResource(resourceId) : null;
   if (!resource) notFound();
   const description = toMetaDescription(resource.description || resource.content);
   const canonical = `/resources/${buildHybridParam(resource.id, resource.slug || '')}`;
@@ -58,8 +58,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function ResourceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const resourceId = extractIdFromHybridParam(id) ?? parseInt(id);
-  const resource = Number.isFinite(resourceId) ? await fetchResource(resourceId) : null;
+  const resourceId = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(id) ? id : extractIdFromHybridParam(id) ?? parseInt(id);
+  const resource = typeof resourceId === 'string' || Number.isFinite(resourceId) ? await fetchResource(resourceId) : null;
   if (!resource) notFound();
   const resourcePath = `/resources/${buildHybridParam(resource.id, resource.slug || '')}`;
   const resourceJsonLd = {

@@ -1695,6 +1695,14 @@ export class ResourcesService {
     return resource;
   }
 
+  async resolveDetailId(identifier: string): Promise<number> {
+    if (/^[1-9]\d*$/.test(identifier) && Number.isSafeInteger(Number(identifier))) return Number(identifier);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)) throw new BadRequestException('资源编号无效');
+    const resource = await this.resourceRepository.findOne({ where: { public_id: identifier }, select: ['id'] });
+    if (!resource) throw new NotFoundException('资源不存在');
+    return resource.id;
+  }
+
   async getById(id: number, viewer?: { id: number; role: string }): Promise<any> {
     const resource = await this.resourceRepository.findOne({
       where: { id },

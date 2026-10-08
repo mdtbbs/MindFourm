@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { playerLabel } from './player-labels';
 import {
   getResourceWorkbenchV2KindTabData,
   type ResourceWorkbenchV2Kind,
@@ -24,7 +25,7 @@ function detailText(value: unknown, depth = 0): string {
   if (isRecord(value)) {
     return Object.entries(value).slice(0, 16).map(([key, item]) => {
       const rendered = detailText(item, depth + 1);
-      return rendered ? `${key.replaceAll('_', ' ')}: ${rendered}` : '';
+      return rendered ? `${playerLabel(key, 'zh-CN')}: ${rendered}` : '';
     }).filter(Boolean).join(' · ');
   }
   return '';
@@ -39,7 +40,7 @@ function DetailRows({ value }: { value: Record<string, unknown> | null }) {
   const rows = Object.entries(value).filter(([, item]) => detailText(item) !== '');
   if (!rows.length) return null;
   return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3">
-    <dt className="text-xs capitalize text-[var(--text-muted)]">{key.replaceAll('_', ' ')}</dt>
+    <dt className="text-xs capitalize text-[var(--text-muted)]">{playerLabel(key, 'zh-CN')}</dt>
     <dd className="mt-1 break-words text-sm text-[var(--text)]">{detailText(item)}</dd>
   </div>)}</dl>;
 }
