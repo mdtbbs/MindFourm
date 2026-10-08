@@ -15,12 +15,36 @@ export interface ForumRealtimeMessage {
 }
 
 const activeSockets = new Map<number, WebSocket>();
+/** Sessions each connection has asked the gateway to stream, keyed by user. */
+const subscribedSessions = new Map<number, Set<string>>();
 
-/** ACK is intentionally explicit: approval outbox rows stay pending until the user consumes the intent. */
+/**
+ * ACK is intentionally explicit: approval outbox rows stay pending until the user
+ * consumes the intent. The server replays `multiplayer.join_request.approved`
+ * (under a new event id each time) until it sees this acknowledgement.
+ */
 export function ackForumRealtimeEvent(userId: number, id: string): boolean {
   const socket = activeSockets.get(userId);
   if (!socket || socket.readyState !== WebSocket.OPEN) return false;
   socket.send(JSON.stringify({ type: 'ack', stream: 'user', id }));
+  return true;
+}
+
+/**
+ * Ask the gateway to stream session-scoped events (`peer.*`, `candidate.*`,
+ * `relay.*`, `session.closed`, ...) for the given sessions. Session events are
+ * only delivered after an explicit subscribe; they carry a `session_id` and are
+ * never part of the user stream.
+ */
+export function subscribeForumRealtimeSessions(userId: number, sessionIds: readonly string[]): boolean {
+  const socket = activeSockets.get(userId);
+  const valid = sessionIds.filter((id) => /^ses_[A-Za-z0-9_-]{16,32}$/.test(id));
+  if (!socket || socket.readyState !== WebSocket.OPEN) return false;
+  if (valid.length === 0) return false;
+  const tracked = subscribedSessions.get(userId) || new Set<string>();
+  for (const id of valid) tracked.add(id);
+  subscribedSessions.set(userId, tracked);
+  socket.send(JSON.stringify({ type: 'subscribe', sessions: valid }));
   return true;
 }
 
@@ -82,6 +106,10 @@ export function useForumRealtime(userId: number | undefined, enabled: boolean): 
             let lastEventId: string | null = null;
             try { lastEventId = window.sessionStorage.getItem(storageKey); } catch { /* Storage may be unavailable. */ }
             next.send(JSON.stringify({ type: 'resume', last_event_id: lastEventId }));
+            // Re-establish session subscriptions after a reconnect; the gateway
+            // keeps them per-connection and drops them when the socket closes.
+            const tracked = subscribedSessions.get(userId);
+            if (tracked && tracked.size > 0) next.send(JSON.stringify({ type: 'subscribe', sessions: [...tracked] }));
             return;
           }
           if (value.type === 'event' && value.id) {
@@ -127,6 +155,7 @@ export function useForumRealtime(userId: number | undefined, enabled: boolean): 
 
     return () => {
       active = false;
+      subscribedSessions.delete(userId);
       window.removeEventListener('forum:presence-preference-change', preferenceChanged);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (heartbeatTimer) clearInterval(heartbeatTimer);

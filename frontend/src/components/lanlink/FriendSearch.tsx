@@ -2,8 +2,10 @@
 
 import { useState, useCallback } from 'react';
 import { friendsApi, type FriendSearchResult } from '@/lib/api/client';
+import { useI18n } from '@/i18n/provider';
 
 export default function FriendSearch() {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FriendSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -21,24 +23,24 @@ export default function FriendSearch() {
       const users = await friendsApi.search(q, 10);
       setResults(users ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '搜索失败');
+      setError(err instanceof Error ? err.message : t('lanlink.searchFailed'));
     } finally {
       setSearching(false);
     }
-  }, [query]);
+  }, [query, t]);
 
   const sendRequest = async (userId: number) => {
     try {
       await friendsApi.sendRequest(userId);
       setSentRequests((prev) => new Set(prev).add(userId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : '发送失败');
+      setError(err instanceof Error ? err.message : t('lanlink.sendFailed'));
     }
   };
 
   return (
     <div className="card p-4">
-      <h2 className="text-lg font-bold mb-3">添加好友</h2>
+      <h2 className="text-lg font-bold mb-3">{t('lanlink.addFriend')}</h2>
       <div className="flex gap-2">
         <input
           type="text"
@@ -46,14 +48,14 @@ export default function FriendSearch() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && doSearch()}
           className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
-          placeholder="搜索用户名…"
+          placeholder={t('lanlink.searchPlaceholder')}
         />
         <button
           onClick={doSearch}
           disabled={searching || !query.trim()}
           className="rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium disabled:opacity-50"
         >
-          {searching ? '搜索中…' : '搜索'}
+          {searching ? t('lanlink.searching') : t('lanlink.search')}
         </button>
       </div>
 
@@ -77,7 +79,7 @@ export default function FriendSearch() {
                 disabled={sentRequests.has(user.id)}
                 className="rounded bg-primary/10 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
               >
-                {sentRequests.has(user.id) ? '已发送 ✓' : '添加好友'}
+                {sentRequests.has(user.id) ? t('lanlink.requestSent') : t('lanlink.addFriend')}
               </button>
             </div>
           ))}
@@ -85,7 +87,7 @@ export default function FriendSearch() {
       )}
 
       {hasSearched && !searching && !error && results.length === 0 && (
-        <p className="mt-3 text-sm text-muted-foreground">未找到符合条件的用户</p>
+        <p className="mt-3 text-sm text-muted-foreground">{t('lanlink.noSearchResults')}</p>
       )}
     </div>
   );

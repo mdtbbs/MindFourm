@@ -5,30 +5,48 @@ import Link from 'next/link';
 import { friendsApi, multiplayerApi, socialPresenceApi, userBlocksApi, type IncomingJoinRequest, type SocialFriendPresenceItem } from '@/lib/api/client';
 import FriendRequests from '@/components/lanlink/FriendRequests';
 import { confirmDialog } from '@/store/interaction-dialog-store';
-import { type ForumRealtimeMessage } from '@/hooks/use-forum-realtime';
+import { ackForumRealtimeEvent, subscribeForumRealtimeSessions, type ForumRealtimeMessage } from '@/hooks/use-forum-realtime';
 import { useAuth } from '@/lib/auth/context';
+import { useI18n } from '@/i18n/provider';
+import { V1ApiError } from '@/lib/api/v1/transport';
+
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+/** Map a multiplayer V1 failure to a user-facing string via stable error.code. */
+function resolveMultiplayerError(error: unknown, t: Translate, fallbackKey: string): string {
+  if (error instanceof V1ApiError) {
+    if (error.status === 401) return t('errors.AUTH_REQUIRED');
+    if (error.code) {
+      const key = `errors.${error.code}`;
+      const translated = t(key);
+      if (translated !== key) return translated;
+    }
+  }
+  return t(fallbackKey);
+}
 
 type Tab = 'all' | 'online' | 'pending' | 'blocked';
 
-function lastSeenLabel(timestamp?: number) {
-  if (!timestamp) return '离线';
+function lastSeenLabel(t: Translate, timestamp?: number) {
+  if (!timestamp) return t('friends.offline');
   const age = Math.max(0, Date.now() - timestamp * 1000);
-  if (age < 60_000) return '刚刚在线';
-  if (age < 3_600_000) return `${Math.floor(age / 60_000)} 分钟前在线`;
-  if (age < 86_400_000) return `${Math.floor(age / 3_600_000)} 小时前在线`;
-  return `${Math.floor(age / 86_400_000)} 天前在线`;
+  if (age < 60_000) return t('friends.lastSeenJustNow');
+  if (age < 3_600_000) return t('friends.lastSeenMinutes', { count: Math.floor(age / 60_000) });
+  if (age < 86_400_000) return t('friends.lastSeenHours', { count: Math.floor(age / 3_600_000) });
+  return t('friends.lastSeenDays', { count: Math.floor(age / 86_400_000) });
 }
 
-function activityDuration(startedAt?: number) {
+function activityDuration(t: Translate, startedAt?: number) {
   if (!startedAt) return null;
   const seconds = Math.max(0, Math.floor(Date.now() / 1000 - startedAt));
-  if (seconds < 60) return `持续 ${seconds} 秒`;
-  if (seconds < 3600) return `持续 ${Math.floor(seconds / 60)} 分钟`;
-  return `持续 ${Math.floor(seconds / 3600)} 小时 ${Math.floor((seconds % 3600) / 60)} 分钟`;
+  if (seconds < 60) return t('friends.durationSeconds', { count: seconds });
+  if (seconds < 3600) return t('friends.durationMinutes', { count: Math.floor(seconds / 60) });
+  return t('friends.durationHours', { hours: Math.floor(seconds / 3600), minutes: Math.floor((seconds % 3600) / 60) });
 }
 
 export default function FriendsList() {
   const { user } = useAuth();
+  const { t } = useI18n();
   const [tab, setTab] = useState<Tab>('all');
   const [friends, setFriends] = useState<SocialFriendPresenceItem[]>([]);
   const [blocked, setBlocked] = useState<Array<{ id: number; user: { id: number; username: string; avatar_url: string | null } }>>([]);
@@ -51,15 +69,27 @@ export default function FriendsList() {
       socialPresenceApi.getFriends(1, 50), userBlocksApi.list(1, 50), multiplayerApi.getPreferences(),
       friendsApi.getRequests(1, 50), multiplayerApi.listInvites(), multiplayerApi.listJoinRequests(),
     ]);
-    if (presenceResult.status === 'fulfilled') setFriends(presenceResult.value.data || []);
-    else setError('好友状态暂时无法加载，请稍后重试。');
+    if (presenceResult.status === 'fulfilled') {
+      const items = presenceResult.value.data || [];
+      setFriends(items);
+      // The viewer's own sessions surface as `invite_session_id`; subscribe so
+      // session-scoped events (peer/candidate/relay/session.closed) reach the UI.
+      const sessionIds = new Set<string>();
+      for (const item of items) if (item.actions.invite_session_id) sessionIds.add(item.actions.invite_session_id);
+      if (user?.id && sessionIds.size > 0) subscribeForumRealtimeSessions(user.id, [...sessionIds]);
+    } else setError(resolveMultiplayerError(presenceResult.reason, t, 'friends.errorPresence'));
     if (blocksResult.status === 'fulfilled') setBlocked(blocksResult.value.data || []);
+    else if (blocksResult.status === 'rejected') setError(resolveMultiplayerError(blocksResult.reason, t, 'friends.errorBlocks'));
     if (preferencesResult.status === 'fulfilled') setLauncher(preferencesResult.value);
     if (friendRequestsResult.status === 'fulfilled') setFriendRequestCount(friendRequestsResult.value.total || 0);
+    // Pending counts drive the tab badge; a silent failure would read as zero pending.
+    if (friendRequestsResult.status === 'rejected' || invitesResult.status === 'rejected' || joinRequestsResult.status === 'rejected') {
+      setError((current) => current || t('errors.loadError'));
+    }
     if (invitesResult.status === 'fulfilled') setInvites(invitesResult.value);
     if (joinRequestsResult.status === 'fulfilled') setJoinRequests(joinRequestsResult.value.data || []);
     setLoading(false);
-  }, []);
+  }, [user?.id, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -73,7 +103,9 @@ export default function FriendsList() {
       const requestId = typeof message.data?.join_request_id === 'string' ? message.data.join_request_id : '';
       const intentId = typeof message.data?.intent_id === 'string' ? message.data.intent_id : '';
       if (!requestId || !intentId) return;
-      setApprovals((current) => current.some((item) => item.id === message.id) ? current : [...current, {
+      // The server replays this approval under a fresh event id every few seconds
+      // until it is acknowledged, so dedup on the stable requestId, not the id.
+      setApprovals((current) => current.some((item) => item.requestId === requestId) ? current : [...current, {
         id: message.id!, requestId, intentId,
         sessionId: typeof message.data?.session_id === 'string' ? message.data.session_id : undefined,
       }]);
@@ -89,17 +121,17 @@ export default function FriendsList() {
   });
 
   const removeFriend = async (userId: number) => {
-    if (!await confirmDialog({ message: '确定要删除这位好友吗？', destructive: true })) return;
+    if (!await confirmDialog({ message: t('friends.removeFriendConfirm'), destructive: true })) return;
     markBusy(userId, true);
     try { await friendsApi.removeFriend(userId); setFriends((items) => items.filter((item) => item.user.id !== userId)); }
-    catch { setError('删除好友失败，请重试。'); }
+    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorRemoveFriend')); }
     finally { markBusy(userId, false); }
   };
 
   const unblock = async (userId: number) => {
     markBusy(userId, true);
     try { await userBlocksApi.unblock(userId); setBlocked((items) => items.filter((item) => item.user.id !== userId)); }
-    catch { setError('解除屏蔽失败，请重试。'); }
+    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorUnblock')); }
     finally { markBusy(userId, false); }
   };
 
@@ -113,12 +145,12 @@ export default function FriendsList() {
       if (selected?.launch_uri_template) {
         const launchUri = selected.launch_uri_template.replace('{intent_id}', encodeURIComponent(intent.intent_id));
         window.location.assign(launchUri);
-        setNotice(`正在通过 ${selected.name} 打开一次性加入凭证。`);
+        setNotice(t('friends.noticeOpeningLauncher', { client: selected.name, label: t('friends.labelInvite') }));
       } else {
-        setNotice(`已创建一次性加入凭证 ${intent.intent_id}（${intent.expires_in} 秒内有效）。请先设置默认联机客户端，或在客户端中使用该 Intent。`);
+        setNotice(t('friends.noticeIntentCopied', { intent: intent.intent_id, seconds: intent.expires_in }));
       }
       try { await navigator.clipboard.writeText(intent.intent_id); } catch { /* Clipboard may be unavailable. */ }
-    } catch { setError('无法加入该房间，权限或房间状态可能已变化。'); }
+    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorJoin')); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -126,8 +158,8 @@ export default function FriendsList() {
     const sessionId = item.activity?.join?.session_id;
     if (!sessionId) return;
     markBusy(item.user.id, true);
-    try { await multiplayerApi.requestJoin(sessionId); setNotice(`已向 ${item.user.username} 发送加入请求。`); }
-    catch { setError('发送加入请求失败，请重试。'); }
+    try { await multiplayerApi.requestJoin(sessionId); setNotice(t('friends.noticeInviteSent', { name: item.user.username })); }
+    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorRequestJoin')); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -135,8 +167,8 @@ export default function FriendsList() {
     const sessionId = item.actions.invite_session_id;
     if (!sessionId) return;
     markBusy(item.user.id, true);
-    try { await multiplayerApi.invite(sessionId, item.user.id); setNotice(`已邀请 ${item.user.username} 加入房间。`); }
-    catch { setError('发送联机邀请失败，请重试。'); }
+    try { await multiplayerApi.invite(sessionId, item.user.id); setNotice(t('friends.noticeInvited', { name: item.user.username })); }
+    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorInvite')); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -150,9 +182,9 @@ export default function FriendsList() {
     const selected = launcher.clients.find((client) => client.client_id === launcher.default_client_id);
     if (selected?.launch_uri_template) {
       window.location.assign(selected.launch_uri_template.replace('{intent_id}', encodeURIComponent(intent.intent_id)));
-      setNotice(`正在通过 ${selected.name} 打开 ${label}。`);
+      setNotice(t('friends.noticeOpeningLauncher', { client: selected.name, label }));
     } else {
-      setNotice(`已获得 ${label}的一次性加入凭证，请在 ${intent.expires_in} 秒内使用；可先设置默认联机客户端。`);
+      setNotice(t('friends.noticeIntentReady', { label, seconds: intent.expires_in }));
     }
     try { await navigator.clipboard.writeText(intent.intent_id); } catch { /* Clipboard may be unavailable. */ }
   };
@@ -161,16 +193,16 @@ export default function FriendsList() {
     markActionBusy(inviteId, true);
     try {
       const accepted = await multiplayerApi.acceptInvite(inviteId);
-      await launchIntent(accepted.join_intent, '联机邀请');
+      await launchIntent(accepted.join_intent, t('friends.labelInvite'));
       await load();
-    } catch { setError('接受联机邀请失败，邀请或房间状态可能已变化。'); }
+    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorAcceptInvite')); }
     finally { markActionBusy(inviteId, false); }
   };
 
   const declineInvite = async (inviteId: string) => {
     markActionBusy(inviteId, true);
     try { await multiplayerApi.declineInvite(inviteId); await load(); }
-    catch { setError('拒绝联机邀请失败，请重试。'); }
+    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorDeclineInvite')); }
     finally { markActionBusy(inviteId, false); }
   };
 
@@ -178,16 +210,16 @@ export default function FriendsList() {
     markActionBusy(requestId, true);
     try {
       const approved = await multiplayerApi.approveJoinRequest(requestId);
-      setNotice(`已批准加入请求。请求者将收到一次性加入凭证（${approved.join_intent.expires_in} 秒内有效）。`);
+      setNotice(t('friends.noticeApproved', { seconds: approved.join_intent.expires_in }));
       await load();
-    } catch { setError('批准加入请求失败，请求或房间状态可能已变化。'); }
+    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorApprove')); }
     finally { markActionBusy(requestId, false); }
   };
 
   const rejectJoinRequest = async (requestId: string) => {
     markActionBusy(requestId, true);
     try { await multiplayerApi.rejectJoinRequest(requestId); await load(); }
-    catch { setError('拒绝加入请求失败，请重试。'); }
+    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorReject')); }
     finally { markActionBusy(requestId, false); }
   };
 
@@ -197,25 +229,30 @@ export default function FriendsList() {
       const selected = launcher.clients.find((client) => client.client_id === launcher.default_client_id);
       try { await navigator.clipboard.writeText(approval.intentId); } catch { /* Clipboard may be unavailable. */ }
       if (!selected?.launch_uri_template) {
-        setNotice(`已复制一次性加入凭证 ${approval.intentId}。请先设置默认联机客户端，或在客户端中使用该 Intent。`);
+        setNotice(t('friends.noticeHandoffCopied', { intent: approval.intentId }));
+        // No launcher to hand off to yet: keep the event pending so it replays
+        // once the user configures a client and returns to Continue joining.
         return;
       }
       window.location.assign(selected.launch_uri_template.replace('{intent_id}', encodeURIComponent(approval.intentId)));
-      // The web client must not consume or acknowledge this one-time intent.
-      // The selected launcher/client owns consumption; keeping the realtime
-      // event unacknowledged lets it be replayed if handoff fails.
+      // The web client does not consume the one-time intent; the launcher owns
+      // that. Acknowledging here stops the server from replaying the approval,
+      // and the user-scoped ACK is only valid once the intent has been handed off.
       setApprovals((current) => current.filter((item) => item.requestId !== approval.requestId));
-      setNotice(`已将一次性加入凭证交给 ${selected.name}，由客户端完成加入。`);
-    } catch { setError('无法打开联机客户端；加入凭证尚未被网页消费，可以重试。'); }
+      const acknowledged = user?.id ? ackForumRealtimeEvent(user.id, approval.id) : false;
+      setNotice(acknowledged
+        ? t('friends.noticeHandoffDone', { client: selected.name })
+        : t('friends.noticeHandoffUnacked', { client: selected.name }));
+    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorHandoff')); }
     finally { markActionBusy(approval.requestId, false); }
   };
 
   const onlineCount = friends.filter((item) => item.presence.status !== 'offline').length;
   const tabs: Array<{ id: Tab; label: string; count: number }> = [
-    { id: 'all', label: '全部', count: friends.length },
-    { id: 'online', label: '在线', count: onlineCount },
-    { id: 'pending', label: '待处理', count: friendRequestCount + invites.length + joinRequests.length + approvals.length },
-    { id: 'blocked', label: '已屏蔽', count: blocked.length },
+    { id: 'all', label: t('friends.tabAll'), count: friends.length },
+    { id: 'online', label: t('friends.tabOnline'), count: onlineCount },
+    { id: 'pending', label: t('friends.tabPending'), count: friendRequestCount + invites.length + joinRequests.length + approvals.length },
+    { id: 'blocked', label: t('friends.tabBlocked'), count: blocked.length },
   ];
   const visibleFriends = tab === 'online' ? friends.filter((item) => item.presence.status !== 'offline') : friends;
 
@@ -224,23 +261,23 @@ export default function FriendsList() {
       <div className="border-b border-border px-4 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold">好友</h2>
-            <p className="mt-1 text-sm text-muted-foreground">好友、在线状态与联机动作由 MDTBBS 社交策略统一提供。</p>
+            <h2 className="text-lg font-bold">{t('friends.heading')}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{t('friends.subtitle')}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-          <label className="text-xs text-muted-foreground">默认联机客户端
-              <select aria-label="默认联机客户端" value={launcher.default_client_id || ''} onChange={async (event) => {
+          <label className="text-xs text-muted-foreground">{t('friends.defaultClient')}
+              <select aria-label={t('friends.defaultClient')} value={launcher.default_client_id || ''} onChange={async (event) => {
                 const value = event.target.value || null;
                 try { await multiplayerApi.setDefaultClient(value); setLauncher((current) => ({ ...current, default_client_id: value })); }
-                catch { setError('保存默认联机客户端失败。'); }
+                catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorDefaultClient')); }
               }} className="ml-2 min-h-11 rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground">
-                <option value="">未设置</option>{launcher.clients.map((client) => <option key={client.client_id} value={client.client_id}>{client.name}</option>)}
+                <option value="">{t('friends.noDefaultClient')}</option>{launcher.clients.map((client) => <option key={client.client_id} value={client.client_id}>{client.name}</option>)}
               </select>
             </label>
-            <button type="button" onClick={() => void load()} className="min-h-11 rounded border border-border px-3 py-1.5 text-sm hover:bg-muted">刷新</button>
+            <button type="button" onClick={() => void load()} className="min-h-11 rounded border border-border px-3 py-1.5 text-sm hover:bg-muted">{t('friends.refresh')}</button>
           </div>
         </div>
-        <nav aria-label="好友视图" className="mt-4 flex gap-1 overflow-x-auto">
+        <nav aria-label={t('friends.views')} className="mt-4 flex gap-1 overflow-x-auto">
           {tabs.map((item) => (
             <button key={item.id} type="button" onClick={() => setTab(item.id)} aria-current={tab === item.id ? 'page' : undefined}
               className={`min-h-11 whitespace-nowrap rounded-t-md border-b-2 px-3 py-2 text-sm ${tab === item.id ? 'border-primary font-semibold text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
@@ -251,65 +288,65 @@ export default function FriendsList() {
       </div>
 
       {error && <p role="alert" className="mx-4 mt-4 rounded bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p>}
-      {notice && <div role="status" className="mx-4 mt-4 rounded bg-primary/10 px-3 py-2 text-sm">{notice}<button type="button" className="ml-2 underline" onClick={() => setNotice('')}>关闭</button></div>}
-      {loading ? <div className="space-y-3 p-5" aria-label="正在加载好友"><div className="h-12 animate-pulse rounded bg-muted" /><div className="h-12 animate-pulse rounded bg-muted" /></div> : null}
+      {notice && <div role="status" className="mx-4 mt-4 rounded bg-primary/10 px-3 py-2 text-sm">{notice}<button type="button" className="ml-2 underline" onClick={() => setNotice('')}>{t('friends.closing')}</button></div>}
+      {loading ? <div className="space-y-3 p-5" aria-label={t('friends.loadingFriends')}><div className="h-12 animate-pulse rounded bg-muted" /><div className="h-12 animate-pulse rounded bg-muted" /></div> : null}
 
       {!loading && tab === 'pending' && <div className="space-y-5 p-4">
         <FriendRequests onChanged={() => void load()} />
         <section aria-labelledby="incoming-invites-title">
-          <h3 id="incoming-invites-title" className="mb-2 text-sm font-semibold">联机邀请（{invites.length}）</h3>
-          {invites.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">没有待处理的联机邀请</p> : <ul className="space-y-2">
+          <h3 id="incoming-invites-title" className="mb-2 text-sm font-semibold">{t('friends.invitesTitle', { count: invites.length })}</h3>
+          {invites.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">{t('friends.noInvites')}</p> : <ul className="space-y-2">
             {invites.map((item) => <li key={item.invite_id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
-              <span className="min-w-0 flex-1 text-sm">用户 #{item.sender_user_id} 邀请你加入 {item.session?.activity_name || item.session?.game_id || '联机房间'}{item.session?.game_version ? ` · ${item.session.game_version}` : ''}</span>
-              <button type="button" disabled={busyActions.has(item.invite_id)} onClick={() => void acceptInvite(item.invite_id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">接受并加入</button>
-              <button type="button" disabled={busyActions.has(item.invite_id)} onClick={() => void declineInvite(item.invite_id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">拒绝</button>
+              <span className="min-w-0 flex-1 text-sm">{t('friends.invitedYouTo', { id: item.sender_user_id, name: item.session?.activity_name || item.session?.game_id || t('friends.sessionFallback') })}{item.session?.game_version ? ` · ${item.session.game_version}` : ''}</span>
+              <button type="button" disabled={busyActions.has(item.invite_id)} onClick={() => void acceptInvite(item.invite_id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">{t('friends.acceptAndJoin')}</button>
+              <button type="button" disabled={busyActions.has(item.invite_id)} onClick={() => void declineInvite(item.invite_id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">{t('friends.decline')}</button>
             </li>)}
           </ul>}
         </section>
         <section aria-labelledby="incoming-join-requests-title">
-          <h3 id="incoming-join-requests-title" className="mb-2 text-sm font-semibold">加入请求（{joinRequests.length}）</h3>
-          {joinRequests.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">没有待处理的加入请求</p> : <ul className="space-y-2">
+          <h3 id="incoming-join-requests-title" className="mb-2 text-sm font-semibold">{t('friends.joinRequestsTitle', { count: joinRequests.length })}</h3>
+          {joinRequests.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">{t('friends.noJoinRequests')}</p> : <ul className="space-y-2">
             {joinRequests.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
               {item.requester ? <Link href={`/users/${item.requester.id}`} className="flex min-w-0 flex-1 items-center gap-3">
                 {item.requester.avatar_url ? <img src={item.requester.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted font-semibold">{item.requester.username.slice(0, 1).toUpperCase()}</span>}
-                <span className="truncate text-sm">{item.requester.username} 请求加入 {item.session?.activity_name || item.session?.game_id || '你的房间'}</span>
-              </Link> : <span className="min-w-0 flex-1 text-sm">用户请求加入 {item.session?.activity_name || item.session?.game_id || '你的房间'}</span>}
-              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void approveJoinRequest(item.id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">批准</button>
-              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void rejectJoinRequest(item.id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">拒绝</button>
+                <span className="truncate text-sm">{t('friends.requestedToJoin', { name: item.requester.username, session: item.session?.activity_name || item.session?.game_id || t('friends.yourRoom') })}</span>
+              </Link> : <span className="min-w-0 flex-1 text-sm">{t('friends.requestedToJoin', { name: t('friends.unknownUser'), session: item.session?.activity_name || item.session?.game_id || t('friends.yourRoom') })}</span>}
+              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void approveJoinRequest(item.id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">{t('friends.approve')}</button>
+              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void rejectJoinRequest(item.id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">{t('friends.reject')}</button>
             </li>)}
           </ul>}
         </section>
         {approvals.length > 0 && <section aria-labelledby="approved-join-requests-title">
-          <h3 id="approved-join-requests-title" className="mb-2 text-sm font-semibold">已批准的加入请求</h3>
+          <h3 id="approved-join-requests-title" className="mb-2 text-sm font-semibold">{t('friends.approvedTitle')}</h3>
           <ul className="space-y-2">{approvals.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
-            <span className="min-w-0 flex-1 text-sm">你的加入请求已批准{item.sessionId ? `（${item.sessionId}）` : ''}。</span>
-            <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => void handoffApproval(item)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">继续加入</button>
+            <span className="min-w-0 flex-1 text-sm">{t('friends.yourRequestApproved')}{item.sessionId ? `（${item.sessionId}）` : ''}</span>
+            <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => void handoffApproval(item)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">{t('friends.continueJoining')}</button>
           </li>)}</ul>
         </section>}
       </div>}
 
       {!loading && tab === 'blocked' && (
         <div className="divide-y divide-border">
-          {blocked.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">没有已屏蔽的用户</p> : blocked.map((item) => (
+          {blocked.length === 0 ? <p className="p-8 text-center text-sm text-muted-foreground">{t('friends.noBlocked')}</p> : blocked.map((item) => (
             <div key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <Link href={`/users/${item.user.id}`} className="flex min-w-0 items-center gap-3">
                 {item.user.avatar_url ? <img src={item.user.avatar_url} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" /> : <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted font-semibold">{item.user.username.slice(0, 1).toUpperCase()}</span>}
                 <span className="truncate text-sm font-medium">{item.user.username}</span>
               </Link>
-              <button type="button" disabled={busy.has(item.user.id)} onClick={() => void unblock(item.user.id)} className="min-h-11 rounded border border-border px-3 text-xs hover:bg-muted disabled:opacity-50">解除屏蔽</button>
+              <button type="button" disabled={busy.has(item.user.id)} onClick={() => void unblock(item.user.id)} className="min-h-11 rounded border border-border px-3 text-xs hover:bg-muted disabled:opacity-50">{t('friends.unblock')}</button>
             </div>
           ))}
         </div>
       )}
 
       {!loading && (tab === 'all' || tab === 'online') && (
-        visibleFriends.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{tab === 'online' ? '目前没有在线好友' : '还没有好友，在下方搜索添加好友吧'}</div> :
+        visibleFriends.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground">{tab === 'online' ? t('friends.noFriendsOnline') : t('friends.noFriends')}</div> :
         <div className="divide-y divide-border">
           {visibleFriends.map((item) => {
             const friend = item.user;
             const activity = item.activity;
             const sessionId = activity?.join?.session_id;
-            const statusLabel = item.presence.status === 'online' ? '在线' : item.presence.status === 'idle' ? '离开' : item.presence.status === 'dnd' ? '请勿打扰' : lastSeenLabel(item.presence.last_seen_at);
+            const statusLabel = item.presence.status === 'online' ? t('friends.online') : item.presence.status === 'idle' ? t('friends.idle') : item.presence.status === 'dnd' ? t('friends.dnd') : lastSeenLabel(t, item.presence.last_seen_at);
             const dot = item.presence.status === 'offline' ? 'bg-gray-400' : item.presence.status === 'dnd' ? 'bg-red-500' : item.presence.status === 'idle' ? 'bg-amber-400' : 'bg-green-500';
             return (
               <article key={friend.id} className="group flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-muted/30">
@@ -319,27 +356,27 @@ export default function FriendsList() {
                   </span>
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-semibold">{friend.username}</span>
-                  {activity ? <span className="block truncate text-xs text-muted-foreground">{activity.name}{activity.details ? ` · ${activity.details}` : ''}{activity.party?.current !== undefined ? ` · ${activity.party.current}${activity.party.max !== undefined ? ` / ${activity.party.max}` : ''} 人` : ''}</span>
+                  {activity ? <span className="block truncate text-xs text-muted-foreground">{activity.name}{activity.details ? ` · ${activity.details}` : ''}{activity.party?.current !== undefined ? ` · ${t('friends.partySize', { current: activity.party.current, max: activity.party.max !== undefined ? ` / ${activity.party.max}` : '' })}` : ''}</span>
                       : <span className="block truncate text-xs text-muted-foreground">{statusLabel}</span>}
                   </span>
                 </Link>
-                {activity && <span className="max-w-full truncate text-xs text-muted-foreground" title={activity.client?.name || activity.client_id}>通过 {activity.client?.name || activity.client_id}{activity.client?.developer_name ? `（${activity.client.developer_name}）` : ''} · {activity.platform}{activity.game?.version ? ` · ${activity.game.version}` : ''}</span>}
+                {activity && <span className="max-w-full truncate text-xs text-muted-foreground" title={activity.client?.name || activity.client_id}>{t('friends.byClient', { client: activity.client?.name || activity.client_id })}{activity.client?.developer_name ? `（${activity.client.developer_name}）` : ''} · {activity.platform}{activity.game?.version ? ` · ${activity.game.version}` : ''}</span>}
                 <div className="ml-auto flex flex-wrap items-center gap-2">
-                  <Link href={`/messages/${friend.id}`} className="inline-flex min-h-11 items-center rounded border border-border px-3 text-xs hover:bg-muted">发消息</Link>
+                  <Link href={`/messages/${friend.id}`} className="inline-flex min-h-11 items-center rounded border border-border px-3 text-xs hover:bg-muted">{t('friends.sendMessage')}</Link>
                   <button type="button" aria-expanded={cardUserId === friend.id} aria-controls={`friend-card-${friend.id}`}
                     onClick={() => setCardUserId((current) => current === friend.id ? null : friend.id)}
-                    className="min-h-11 rounded border border-border px-3 text-xs hover:bg-muted">联机资料</button>
-                  {item.actions.can_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void makeJoinIntent(item)} className="min-h-11 rounded bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-50">加入游戏</button>}
-                  {item.actions.can_request_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void requestJoin(item)} className="min-h-11 rounded border border-primary/40 px-3 text-xs text-primary disabled:opacity-50">请求加入</button>}
-                  {item.actions.can_invite && item.actions.invite_session_id && <button type="button" disabled={busy.has(friend.id)} onClick={() => void invite(item)} className="min-h-11 rounded border border-primary/40 px-3 text-xs text-primary disabled:opacity-50">邀请加入我的房间</button>}
-                  <button type="button" disabled={busy.has(friend.id)} onClick={() => void removeFriend(friend.id)} className="min-h-11 rounded border border-border px-3 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50">删除好友</button>
+                    className="min-h-11 rounded border border-border px-3 text-xs hover:bg-muted">{t('friends.multiplayerProfile')}</button>
+                  {item.actions.can_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void makeJoinIntent(item)} className="min-h-11 rounded bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-50">{t('friends.joinGame')}</button>}
+                  {item.actions.can_request_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void requestJoin(item)} className="min-h-11 rounded border border-primary/40 px-3 text-xs text-primary disabled:opacity-50">{t('friends.requestJoin')}</button>}
+                  {item.actions.can_invite && item.actions.invite_session_id && <button type="button" disabled={busy.has(friend.id)} onClick={() => void invite(item)} className="min-h-11 rounded border border-primary/40 px-3 text-xs text-primary disabled:opacity-50">{t('friends.inviteToRoom')}</button>}
+                  <button type="button" disabled={busy.has(friend.id)} onClick={() => void removeFriend(friend.id)} className="min-h-11 rounded border border-border px-3 text-xs text-muted-foreground hover:bg-muted disabled:opacity-50">{t('friends.removeFriend')}</button>
                 </div>
-                <div id={`friend-card-${friend.id}`} role="region" aria-label={`${friend.username} 的联机资料`}
+                <div id={`friend-card-${friend.id}`} role="region" aria-label={t('friends.profileLabel', { name: friend.username })}
                   className={`basis-full rounded-lg border border-border bg-background p-3 text-sm shadow-sm ${cardUserId === friend.id ? 'block' : 'hidden group-hover:block group-focus-within:block'}`}>
                   <div className="flex flex-wrap items-center gap-3">
                     <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />
                     <span className="font-medium">{statusLabel}</span>
-                    {item.presence.status === 'offline' && item.presence.last_seen_at && <span className="text-xs text-muted-foreground">{lastSeenLabel(item.presence.last_seen_at)}</span>}
+                    {item.presence.status === 'offline' && item.presence.last_seen_at && <span className="text-xs text-muted-foreground">{lastSeenLabel(t, item.presence.last_seen_at)}</span>}
                   </div>
                   {activity && <div className="mt-3 flex items-start gap-2">
                     {activity.client?.application_icon_url && <img src={activity.client.application_icon_url} alt="" className="h-7 w-7 rounded object-cover" />}
@@ -347,17 +384,17 @@ export default function FriendsList() {
                       <p className="font-medium">{activity.name}{activity.details ? ` · ${activity.details}` : ''}</p>
                       {activity.state && <p className="text-xs text-muted-foreground">{activity.state}</p>}
                       <p className="text-xs text-muted-foreground">
-                        {activity.client?.name || activity.client_id} · {activity.client?.developer_name || '未知开发者'} · {activity.platform}
+                        {activity.client?.name || activity.client_id} · {activity.client?.developer_name || t('friends.unknownDeveloper')} · {activity.platform}
                         {activity.game?.version ? ` · ${activity.game.version}` : ''}
                       </p>
-                      {activity.party && <p className="text-xs text-muted-foreground">房间人数：{activity.party.current ?? 0}{activity.party.max !== undefined ? ` / ${activity.party.max}` : ''}</p>}
-                      {activityDuration(activity.timestamps?.started_at) && <p className="text-xs text-muted-foreground">{activityDuration(activity.timestamps?.started_at)}</p>}
+                      {activity.party && <p className="text-xs text-muted-foreground">{t('friends.partySize', { current: activity.party.current ?? 0, max: activity.party.max !== undefined ? ` / ${activity.party.max}` : '' })}</p>}
+                      {activityDuration(t, activity.timestamps?.started_at) && <p className="text-xs text-muted-foreground">{activityDuration(t, activity.timestamps?.started_at)}</p>}
                     </div>
                   </div>}
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {item.actions.can_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void makeJoinIntent(item)} className="rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50">加入游戏</button>}
-                    {item.actions.can_request_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void requestJoin(item)} className="rounded border border-primary/40 px-2.5 py-1.5 text-xs text-primary disabled:opacity-50">请求加入</button>}
-                    {item.actions.can_invite && item.actions.invite_session_id && <button type="button" disabled={busy.has(friend.id)} onClick={() => void invite(item)} className="rounded border border-primary/40 px-2.5 py-1.5 text-xs text-primary disabled:opacity-50">邀请加入我的房间</button>}
+                    {item.actions.can_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void makeJoinIntent(item)} className="rounded bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50">{t('friends.joinGame')}</button>}
+                    {item.actions.can_request_join && sessionId && <button type="button" disabled={busy.has(friend.id)} onClick={() => void requestJoin(item)} className="rounded border border-primary/40 px-2.5 py-1.5 text-xs text-primary disabled:opacity-50">{t('friends.requestJoin')}</button>}
+                    {item.actions.can_invite && item.actions.invite_session_id && <button type="button" disabled={busy.has(friend.id)} onClick={() => void invite(item)} className="rounded border border-primary/40 px-2.5 py-1.5 text-xs text-primary disabled:opacity-50">{t('friends.inviteToRoom')}</button>}
                   </div>
                 </div>
               </article>
