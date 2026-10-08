@@ -4,6 +4,7 @@ import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
 import ClubLegalDocument from '@/components/forum/club-legal-document';
 import { siteProfile } from '@/config/site-profile';
 import { getRequestLocale } from '@/i18n/server';
+import { getServerSiteName } from '@/lib/settings/server';
 import { translate } from '@/i18n';
 
 const DESCRIPTION = '本站的数据收集、使用与保护说明';
@@ -102,14 +103,15 @@ function MdtbbsPrivacyFallback() {
 
 export default async function PrivacyPage() {
   const locale = await getRequestLocale();
+  const siteName = getServerSiteName();
   const club = siteProfile.profile === 'mindustry-club';
   return (
     <ConfiguredFooterPage
-      eyebrow={club ? 'Mindustry Club' : 'Privacy'}
+      eyebrow={club ? siteName : 'Privacy'}
       title={club ? translate(locale, 'legal.privacy.title') : '隐私政策'}
       settingKey="footer_privacy_content"
       preferFallback={club}
-      fallback={club ? <ClubLegalDocument document="privacy" locale={locale} /> : <MdtbbsPrivacyFallback />}
+      fallback={club ? <ClubLegalDocument document="privacy" locale={locale} siteName={siteName} /> : <MdtbbsPrivacyFallback />}
     />
   );
 }

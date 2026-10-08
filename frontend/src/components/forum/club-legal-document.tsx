@@ -14,10 +14,12 @@ const SECTIONS: Record<ClubLegalDocumentName, readonly string[]> = {
   copyright: ['submit', 'review', 'abuse'],
 };
 
-export default function ClubLegalDocument({ document, locale }: { document: ClubLegalDocumentName; locale: Locale }) {
-  // Legal bodies reference the community by name; resolve it from site settings
-  // so one catalog serves every deployment instead of hard-coding a brand.
-  const site = resolveBrand(useSettings()).siteName;
+export default function ClubLegalDocument({ document, locale, siteName }: { document: ClubLegalDocumentName; locale: Locale; siteName?: string }) {
+  // Legal bodies reference the community by name. `siteName` is resolved on the
+  // server so the prerendered HTML carries the brand; the settings store only
+  // takes over for a runtime override (admin save) during hydration.
+  const settings = useSettings();
+  const site = siteName ?? resolveBrand(settings).siteName;
   return <div className="space-y-6">
     {SECTIONS[document].map((section) => <section key={section}>
       <h2 className="mb-1 font-semibold text-[var(--text)]">{translate(locale, `legal.${document}.${section}.title`)}</h2>
