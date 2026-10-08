@@ -366,7 +366,8 @@ export type ResourceV2MapObjectOperation =
   | { action: 'add'; object_type: 'core' | 'spawn' | 'building'; x: number; y: number; name: string; team?: string; rotation?: number }
   | { action: 'delete'; object_type: 'core' | 'spawn' | 'building'; x: number; y: number }
   | { action: 'move'; object_type: 'core' | 'spawn' | 'building'; from_x: number; from_y: number; to_x: number; to_y: number }
-  | { action: 'team'; object_type: 'core' | 'building'; x: number; y: number; team: string };
+  | { action: 'team'; object_type: 'core' | 'building'; x: number; y: number; team: string }
+  | { action: 'rotate'; object_type: 'core' | 'building'; x: number; y: number; rotation: number };
 
 export type ResourceV2MapFeedbackAggregate = {
   feedback_count: number;

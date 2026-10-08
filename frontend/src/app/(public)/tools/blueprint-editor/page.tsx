@@ -1,5 +1,5 @@
-import ToolGuide from '@/components/tools/tool-guide';
+import { EditorWorkspace } from '@/components/editors/editor-workspace';
 
 export default function BlueprintEditorPage() {
-  return <ToolGuide id="blueprint-editor" />;
+  return <EditorWorkspace pageKind="schematic" />;
 }

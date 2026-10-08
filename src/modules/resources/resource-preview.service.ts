@@ -21,6 +21,39 @@ type RendererResult = {
   parserVersion?: string;
 };
 
+export type RendererContentCatalogEntry = {
+  internal_name: string;
+  display_name: string;
+  icon: string | null;
+  size?: number;
+  size_offset?: number;
+  id?: number;
+  category?: string;
+  category_name?: string;
+  placeable?: boolean;
+  has_config?: boolean;
+  logic?: boolean;
+  floor?: boolean;
+  overlay?: boolean;
+  ore?: boolean;
+  liquid_floor?: boolean;
+  core?: boolean;
+  spawn?: boolean;
+  rotatable?: boolean;
+  color?: string;
+  config_types?: Array<{ type: string; content_type?: string }>;
+};
+
+export type RendererContentCatalog = {
+  blocks: RendererContentCatalogEntry[];
+  items: RendererContentCatalogEntry[];
+  liquids: RendererContentCatalogEntry[];
+  units: RendererContentCatalogEntry[];
+  statuses: RendererContentCatalogEntry[];
+  teams: RendererContentCatalogEntry[];
+  rule_defaults: Record<string, boolean | number | string | string[]>;
+};
+
 const PREVIEW_KEY = /^resources\/(map|schematic)\/([a-f0-9]{2})\/([a-f0-9]{64})\/preview\.png$/;
 const PREVIEWABLE_KINDS = new Set(['map', 'schematic']);
 const MAX_RENDER_BYTES = 20 * 1024 * 1024;
@@ -178,10 +211,167 @@ export class ResourcePreviewService {
     return PREVIEWABLE_KINDS.has(resource.resource_kind || '');
   }
 
+  /** Read a local editor source with the pinned official renderer without creating a Resource or upload draft. */
+  async analyzeEditorFile(kind: 'map' | 'schematic', fileName: string, source: Buffer): Promise<{
+    resource_kind: 'map' | 'schematic'; file_name: string; sha256: string; parser_version: string | null;
+    renderer_metadata: Record<string, unknown>;
+  }> {
+    const extension = kind === 'map' ? '.msav' : '.msch';
+    if (!fileName.toLowerCase().endsWith(extension) || source.length < (kind === 'map' ? 8 : 5) || source.length > MAX_RENDER_BYTES) {
+      throw new BadRequestException(`文件无效或超过 ${MAX_RENDER_BYTES / (1024 * 1024)} MiB 安全上限`);
+    }
+    if (kind === 'schematic' && source.subarray(0, 4).toString('ascii') !== 'msch') throw new BadRequestException('这不是有效的 Mindustry 蓝图文件');
+    if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 在线编辑器暂不可用');
+    const sha256 = createHash('sha256').update(source).digest('hex');
+    try {
+      const response = await fetch(`${this.rendererUrl}/v1/analyze`, {
+        method: 'POST', headers: {
+          'content-type': 'application/json',
+          ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({ filename: path.basename(fileName).slice(0, 255), resourceType: kind, sha256, dataBase64: source.toString('base64') }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { errorCode?: unknown };
+        const code = this.safeErrorCode(body.errorCode);
+        const message = kind === 'schematic'
+          ? '蓝图无法读取；Mod 内容、未知方块或不支持的格式可能无法在线编辑'
+          : '地图无法读取；Mod 内容、未知对象或超过安全尺寸的地图可能无法在线编辑';
+        throw new BadRequestException(`${message}（${code}）`);
+      }
+      const result = await response.json() as RendererResult;
+      const metadata = result.metadata && typeof result.metadata === 'object' && !Array.isArray(result.metadata)
+        ? this.safeMetadata(result.metadata) : null;
+      if (!metadata) throw new ServiceUnavailableException('Renderer 返回了无效的编辑器数据');
+      return {
+        resource_kind: kind, file_name: path.basename(fileName).slice(0, 255), sha256,
+        parser_version: typeof result.parserVersion === 'string' ? result.parserVersion.slice(0, 100) : null,
+        renderer_metadata: metadata,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
+      this.logger.warn(`Standalone ${kind} editor analysis failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 在线编辑器暂不可用');
+    }
+  }
+
+  /** The catalog is generated from the same pinned vanilla runtime used by MapIO/Schematics. */
+  async resolveContentCatalog(): Promise<RendererContentCatalog> {
+    if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 内容数据暂不可用');
+    try {
+      const response = await fetch(`${this.rendererUrl}/v1/content-catalog`, {
+        headers: process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : undefined,
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!response.ok) throw new Error(`renderer responded ${response.status}`);
+      const body = await response.json() as Record<string, unknown>;
+      const entryLists = ['blocks', 'items', 'liquids', 'units', 'statuses', 'teams'] as const;
+      const catalog = {} as RendererContentCatalog;
+      for (const listName of entryLists) {
+        const raw = body[listName];
+        if (!Array.isArray(raw) || raw.length > 5_000) throw new Error(`invalid ${listName} catalog`);
+        const entries = raw.flatMap((value): RendererContentCatalogEntry[] => {
+          if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+          const row = value as Record<string, unknown>;
+          if (typeof row.internal_name !== 'string' || !/^[a-zA-Z0-9_.:-]{1,191}$/.test(row.internal_name)) return [];
+          const icon = typeof row.icon === 'string' && row.icon.startsWith('data:image/png;base64,') && row.icon.length <= 100_000 ? row.icon : null;
+          const entry: RendererContentCatalogEntry = {
+            internal_name: row.internal_name,
+            display_name: typeof row.display_name === 'string' && row.display_name.length <= 200 ? row.display_name : row.internal_name,
+            icon,
+          };
+          if (Number.isInteger(row.size) && Number(row.size) >= 1 && Number(row.size) <= 16) entry.size = Number(row.size);
+          if (Number.isInteger(row.size_offset) && Math.abs(Number(row.size_offset)) <= 16) entry.size_offset = Number(row.size_offset);
+          for (const key of ['category', 'category_name'] as const) if (typeof row[key] === 'string' && row[key].length <= 80) entry[key] = row[key] as string;
+          for (const key of ['placeable', 'has_config', 'logic', 'floor', 'overlay', 'ore', 'liquid_floor', 'core', 'spawn', 'rotatable'] as const) {
+            if (typeof row[key] === 'boolean') entry[key] = row[key] as boolean;
+          }
+          if (listName === 'blocks' && Array.isArray(row.config_types) && row.config_types.length <= 32) {
+            entry.config_types = row.config_types.flatMap((value) => {
+              if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+              const descriptor = value as Record<string, unknown>;
+              if (typeof descriptor.type !== 'string' || !/^[a-z_]{1,32}$/.test(descriptor.type)) return [];
+              return [{ type: descriptor.type, ...(typeof descriptor.content_type === 'string' && /^[a-z_]{1,32}$/.test(descriptor.content_type) ? { content_type: descriptor.content_type } : {}) }];
+            });
+          }
+          if (typeof row.color === 'string' && /^#[0-9a-fA-F]{8}$/.test(row.color)) entry.color = row.color;
+          if (listName === 'teams' && Number.isInteger(row.id) && Number(row.id) >= 0 && Number(row.id) <= 255) entry.id = Number(row.id);
+          return [entry];
+        });
+        catalog[listName] = entries;
+      }
+      catalog.rule_defaults = this.validateEditorRuleDefaults(body.rule_defaults);
+      return catalog;
+    } catch (error) {
+      this.logger.warn(`Mindustry content catalog unavailable: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 内容数据暂不可用');
+    }
+  }
+
+  private validateEditorRuleDefaults(value: unknown): Record<string, boolean | number | string | string[]> {
+    const allowed = new Set([
+      'allowEditRules', 'infiniteResources', 'coreBuildAndConfig', 'waveTimer', 'waveSending', 'waves', 'airUseSpawns', 'wavesSpawnAtCores', 'pvp', 'pvpAutoPause', 'pauseDisabled', 'waitEnemies', 'attackMode', 'editor', 'derelictRepair', 'canGameOver', 'coreCapture', 'reactorExplosions', 'possessionAllowed', 'schematicsAllowed', 'damageExplosions', 'fire', 'randomWaveAI', 'unitPayloadUpdate', 'unitPayloadsExplode', 'unitCapVariable', 'hideSpawns', 'ghostBlocks', 'showOtherTeamPings', 'logicUnitControl', 'logicUnitBuild', 'logicUnitDeconstruct', 'worldProcessorPlayerLink', 'allowEditWorldProcessors', 'disableWorldProcessors', 'polygonCoreProtection', 'placeRangeCheck', 'cleanupDeadTeams', 'onlyDepositCore', 'allowCoreUnloaders', 'coreDestroyClear', 'hideBannedBlocks', 'allowEnvironmentDeconstruct', 'instantBuild', 'blockWhitelist', 'unitWhitelist', 'disableUnitCap', 'lighting', 'unitCap', 'winWave', 'environment', 'solarMultiplier', 'unitBuildSpeedMultiplier', 'unitCostMultiplier', 'unitDamageMultiplier', 'unitHealthMultiplier', 'unitCrashDamageMultiplier', 'unitMineSpeedMultiplier', 'unitFactoryActivationDelay', 'blockHealthMultiplier', 'blockDamageMultiplier', 'buildCostMultiplier', 'buildSpeedMultiplier', 'deconstructRefundMultiplier', 'enemyCoreBuildRadius', 'dropZoneRadius', 'waveSpacing', 'initialWaveSpacing', 'itemDepositCooldown', 'modeName', 'bannedBlocks', 'bannedUnits',
+    ]);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid rule defaults');
+    const defaults: Record<string, boolean | number | string | string[]> = {};
+    for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+      if (!allowed.has(key)) continue;
+      if (typeof raw === 'boolean' || typeof raw === 'string' && raw.length <= 100
+        || typeof raw === 'number' && Number.isFinite(raw)) defaults[key] = raw;
+      else if (Array.isArray(raw) && raw.length <= 500 && raw.every((entry) => typeof entry === 'string' && entry.length <= 191)) defaults[key] = raw as string[];
+    }
+    return defaults;
+  }
+
+  /** Generate an empty official Mindustry file through the pinned renderer. */
+  async createBlankEditorFile(kind: 'map' | 'schematic', width: number, height: number, name: string, floor = 'stone', template = 'survival'): Promise<{ data: Buffer; sha256: string }> {
+    const maximum = kind === 'map' ? 2_000_000 : 16_384;
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1
+      || width * height > maximum || (kind === 'schematic' && (width > 128 || height > 128))
+      || typeof name !== 'string' || !name.trim() || name.length > 120 || /[\u0000-\u001f]/.test(name)) {
+      throw new BadRequestException('新建文件的名称或尺寸无效');
+    }
+    if (kind === 'map' && (!/^[a-zA-Z0-9_.:-]{1,191}$/.test(floor)
+      || !['survival', 'sandbox', 'attack', 'pvp', 'custom'].includes(template))) {
+      throw new BadRequestException('地图地形或游戏模式模板无效');
+    }
+    if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 在线编辑器暂不可用');
+    const endpoint = kind === 'map' ? 'map' : 'schematic';
+    try {
+      const response = await fetch(`${this.rendererUrl}/v1/create-${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(process.env.RESOURCE_RENDERER_TOKEN ? { authorization: `Bearer ${process.env.RESOURCE_RENDERER_TOKEN}` } : {}),
+        },
+        body: JSON.stringify({ width, height, name: name.trim(), ...(kind === 'map' ? { floor, template } : {}) }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok) throw new BadRequestException(kind === 'map' ? 'Renderer 无法创建空白地图' : 'Renderer 无法创建空白蓝图');
+      const result = await response.json() as { dataBase64?: unknown; sha256?: unknown };
+      if (typeof result.dataBase64 !== 'string' || typeof result.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(result.sha256)) {
+        throw new ServiceUnavailableException('Renderer 返回了无效的新建文件');
+      }
+      const data = Buffer.from(result.dataBase64, 'base64');
+      const digest = createHash('sha256').update(data).digest('hex');
+      if (!data.length || data.length > MAX_RENDER_BYTES || data.toString('base64') !== result.dataBase64 || digest !== result.sha256
+        || (kind === 'schematic' && data.subarray(0, 4).toString('ascii') !== 'msch')) {
+        throw new ServiceUnavailableException('Renderer 返回了无效的新建文件');
+      }
+      return { data, sha256: digest };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof ServiceUnavailableException) throw error;
+      this.logger.warn(`Blank ${kind} editor file creation failed: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Mindustry 在线编辑器暂不可用');
+    }
+  }
+
   /** Transform a schematic through the bundled official Mindustry reader/writer. */
   async transformSchematic(fileName: string, source: Buffer, operations: {
     rotation_quarters: number; mirror_x: boolean; delete_positions: Array<{ x: number; y: number }>;
     move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
+    rotate_positions?: Array<{ x: number; y: number; rotation_quarters: number }>;
     add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
     logic_configs?: Array<{ x: number; y: number; source: string }>;
     config_edits?: Array<{ x: number; y: number; config: object }>;
@@ -189,14 +379,16 @@ export class ResourcePreviewService {
     if (!this.isConfigured()) throw new ServiceUnavailableException('Mindustry 蓝图编辑器暂不可用');
     const positions = operations?.delete_positions;
     const moves = operations?.move_positions || [];
+    const rotations = operations?.rotate_positions || [];
     const additions = operations?.add_blocks || [];
     const logicConfigs = operations?.logic_configs || [];
     const configEdits = operations?.config_edits || [];
     if (!Number.isInteger(operations?.rotation_quarters) || operations.rotation_quarters < 0 || operations.rotation_quarters > 3
       || typeof operations.mirror_x !== 'boolean' || !Array.isArray(positions) || positions.length > 10_000
       || !Array.isArray(moves) || moves.length > 5_000 || !Array.isArray(additions) || additions.length > 5_000
+      || !Array.isArray(rotations) || rotations.length > 5_000
       || !Array.isArray(logicConfigs) || logicConfigs.length > 1_000 || !Array.isArray(configEdits) || configEdits.length > 5_000
-      || positions.length + moves.length + additions.length + logicConfigs.length + configEdits.length > 10_000
+      || positions.length + moves.length + rotations.length + additions.length + logicConfigs.length + configEdits.length > 10_000
     ) {
       throw new BadRequestException('蓝图编辑操作无效');
     }
@@ -220,6 +412,17 @@ export class ResourcePreviewService {
       }
       moveSources.add(sourceKey);
       moveTargets.add(targetKey);
+    }
+    const rotationSources = new Set<string>();
+    for (const rotation of rotations) {
+      const key = rotation && `${rotation.x}:${rotation.y}`;
+      if (!rotation || !Number.isInteger(rotation.x) || !Number.isInteger(rotation.y)
+        || rotation.x < 0 || rotation.x > 127 || rotation.y < 0 || rotation.y > 127
+        || !Number.isInteger(rotation.rotation_quarters) || rotation.rotation_quarters < 1 || rotation.rotation_quarters > 3
+        || !key || uniquePositions.has(key) || rotationSources.has(key)) {
+        throw new BadRequestException('蓝图编辑操作无效');
+      }
+      rotationSources.add(key);
     }
     const addedPositions = new Set<string>();
     for (const addition of additions) {
@@ -286,6 +489,7 @@ export class ResourcePreviewService {
           mirror_x: operations.mirror_x,
           delete_positions: operations.delete_positions,
           move_positions: moves,
+          rotate_positions: rotations,
           add_blocks: additions,
           logic_configs: logicConfigs,
           config_edits: configEdits,
@@ -742,7 +946,7 @@ export class ResourcePreviewService {
     const allowed = new Set([
       'name', 'author', 'description', 'width', 'height', 'spawns', 'version', 'build',
       'planet', 'game_modes', 'teams', 'tags', 'mod_dependencies', 'waves', 'wave_groups',
-      'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'tile_layers', 'tile_layers_truncated', 'blocks', 'block_count', 'block_types',
+      'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'tile_layers', 'tile_layers_truncated', 'unknown_content', 'blocks', 'block_count', 'block_types',
       'block_positions', 'block_positions_truncated', 'requirements', 'power_production',
       'power_consumption', 'net_power', 'labels', 'production',
     ]);

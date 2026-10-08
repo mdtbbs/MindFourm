@@ -65,6 +65,9 @@ export default function ResourceDetail({ resource, selectedVersionPublicId }: Re
     ? resource.versions?.find((version) => version.public_id === selectedVersionPublicId)
     : undefined;
   const primaryVersion = selectedVersion || resource.versions?.[0];
+  const editorHref = resource.public_id && (isSchematic || isMap)
+    ? `/tools/${isSchematic ? 'blueprint-editor' : 'map-editor'}?resource=${encodeURIComponent(resource.public_id)}${primaryVersion?.public_id ? `&version=${encodeURIComponent(primaryVersion.public_id)}` : ''}`
+    : null;
   const primaryChecksum = primaryVersion?.checksum || resource.content_hash;
   const displayedSupportedVersions = metadata?.supported_versions || [];
   const displayedCompatibility = metadata?.compatibility || [];
@@ -216,7 +219,7 @@ export default function ResourceDetail({ resource, selectedVersionPublicId }: Re
                 <span className="inline-flex items-center gap-1"><Eye className="h-4 w-4" />{t('resourceDetail.views', { count: new Intl.NumberFormat(locale).format(viewCount) })}</span>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">{displayTags.map((tag) => <span key={tag} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-3 py-1 text-sm text-[var(--text-secondary)]"><Tag className="h-3.5 w-3.5" />{tag}</span>)}</div>
-              {resource.public_id && <Link href={`/resources/${encodeURIComponent(resource.public_id)}/workbench`} aria-label={resource.resource_kind === 'schematic' ? t('tools.openBlueprintEditor') : resource.resource_kind === 'map' ? t('tools.openMapEditor') : t('resourceWorkbenchV2.openWorkbench')} className="mt-4 inline-flex min-h-11 items-center gap-2 border border-[var(--border)] px-3 text-sm font-medium text-[var(--primary)] transition-colors hover:bg-[var(--primary-soft)]"><Package className="h-4 w-4" />{resource.resource_kind === 'schematic' ? t('tools.openBlueprintEditor') : resource.resource_kind === 'map' ? t('tools.openMapEditor') : t('resourceWorkbenchV2.openWorkbench')}</Link>}
+              {resource.public_id && <Link href={editorHref || `/resources/${encodeURIComponent(resource.public_id)}/workbench`} aria-label={resource.resource_kind === 'schematic' ? t('tools.openBlueprintEditor') : resource.resource_kind === 'map' ? t('tools.openMapEditor') : t('resourceWorkbenchV2.openWorkbench')} className="mt-4 inline-flex min-h-11 items-center gap-2 border border-[var(--border)] px-3 text-sm font-medium text-[var(--primary)] transition-colors hover:bg-[var(--primary-soft)]"><Package className="h-4 w-4" />{resource.resource_kind === 'schematic' ? t('tools.openBlueprintEditor') : resource.resource_kind === 'map' ? t('tools.openMapEditor') : t('resourceWorkbenchV2.openWorkbench')}</Link>}
               {['map', 'schematic'].includes(resource.resource_kind || '') && resource.renderer_status !== 'ready' && <p className="mt-3 text-sm text-[var(--text-muted)]">{resource.renderer_status === 'processing' ? t('resourceDetail.rendererProcessing') : resource.renderer_status === 'failed' ? t('resourceDetail.rendererFailed') : t('resourceDetail.rendererUnavailable')}</p>}
             </div>
           </div>

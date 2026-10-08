@@ -4,6 +4,16 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.3.0
+
+新增独立 Mindustry 蓝图、地图和波次编辑所需的 Renderer 工具接口。它们允许匿名调用；携带 MindAuth Bearer 时要求 `resource.read`，每个创建、分析或导出操作限流为 20 次/分钟。文件分析、空白文件创建和导出只处理当前请求，不创建 Resource、版本或 RES binding；保存到资源中心仍使用原有上传/版本接口及其 `resource.upload` 和资源成员权限。所有变更均为兼容新增，未改变既有 Public V1 操作。
+
+### Added
+
+- `GET /api/v1/editor-tools/status` 返回固定 Renderer runtime 与编辑操作的实际可用状态；`GET /api/v1/editor-tools/content-catalog` 返回 Renderer 生成的 vanilla 方块、地形、物品、液体、单位、状态效果、队伍、图标及 Rules 默认值。
+- `POST /api/v1/editor-tools/{kind}/create` 通过官方 Mindustry 写入器创建 `.msch` 或 `.msav` 原始文件；`POST /api/v1/editor-tools/{kind}/analyze` 接收最多 20 MiB 的本地文件并返回经过筛选的分析元数据。`kind` 为 `schematic` 或 `map`。
+- `POST /api/v1/editor-tools/schematic/export` 与 `POST /api/v1/editor-tools/map/export` 接收文件和类型化编辑操作，分别由官方 Schematics / MapIO 写入器导出原始文件。Mod/未知内容、不安全配置、非法对象和超限操作继续失败关闭。
+
 ## Public API 1.2.0
 
 本次为发现榜单补充可机器读取的算法版本标识，并公布各算法的评分口径。既有路由、筛选、排序和隐私行为不变；新响应字段是兼容性新增，旧客户端可忽略未知字段。算法版本或分数权重改变时会更新算法 ID，并同步文档与 OpenAPI。
@@ -38,7 +48,7 @@
 
 ## Public V1 当前能力摘要
 
-以下内容概览当前 V1 契约，不是逐次 API 修订清单。初始 OpenAPI 契约版本为 `1.0.0`；当前契约版本为 `1.2.0`。论坛应用版本与 API 契约版本相互独立。
+以下内容概览当前 V1 契约，不是逐次 API 修订清单。初始 OpenAPI 契约版本为 `1.0.0`；当前契约版本为 `1.3.0`。论坛应用版本与 API 契约版本相互独立。
 
 #### Added
 
@@ -46,6 +56,7 @@
 - **讨论、回复与消息：** `GET/POST /api/v1/threads`、`GET/PUT/DELETE /api/v1/threads/{id}`、`GET/POST /api/v1/threads/{id}/replies`、`PUT/DELETE /api/v1/threads/{threadId}/replies/{replyId}` 支持 V1 讨论和回复读写；消息包含 `GET /api/v1/messages`、`GET /api/v1/messages/unread-count`、`GET /api/v1/messages/{userId}`、`POST /api/v1/messages`。写操作按 OpenAPI 声明 `forum.write` 或 `message.write`；消息读取使用 `message.read`。标准成功/错误 envelope 保持 `{ data, meta }` / `{ error, meta }`；新增能力不改变旧字段语义。
 - **Tiptap 富文本：** 上述讨论/回复写操作及读取模型包含 `content_format: "tiptap_json"`、`content_schema_version`、`content_json`、`content_html` 和 `content_text`。新客户端提交 `content_schema_version: 2` 与 `content_json`；`content_json` 是规范正文，Markdown `content` 作为兼容输入与纯文本投影保留。旧 Markdown-only 写入仍可由服务端转换，客户端无需因新字段移除旧字段。节点、标记及字段约束见[富文本格式 V2](./rich-content-schema-v2.md)。
 - **资源中心（Mod、Map、Schematic）：** 通用资源包括 `GET /api/v1/resources`、`GET /api/v1/resources/{id}`、`GET /api/v1/resources/{id}/manifest`、`GET /api/v1/resources/{id}/versions`、`GET /api/v1/resources/{id}/relations`、`GET /api/v1/resources/{id}/stats` 和 `GET /api/v1/resources/{id}/workbench`。版本写入和资料编辑使用 `POST /api/v1/resources/{id}/versions`、`PATCH /api/v1/resources/{id}`。类型化读取包括 `GET /api/v1/resources/mods/{id}/manifest`、`GET /api/v1/resources/maps/{id}/manifest`、`GET /api/v1/resources/schematics/{id}/manifest`，以及对应的版本、依赖/内容/分析端点；完整路径见[资源中心 API V1](./resources-v1-contract.md)。对象以 `public_id` UUID 对外标识；数据库整数 ID 不作为跨客户端身份。
+- **独立 Mindustry 编辑器：** `GET /api/v1/editor-tools/status`、`GET /api/v1/editor-tools/content-catalog` 与 `/api/v1/editor-tools/{kind}/create|analyze`、`POST /api/v1/editor-tools/{schematic|map}/export` 支持普通玩家本地创建、分析、编辑和导出官方文件。匿名访问可用；OAuth Bearer 使用 `resource.read`，原始文件响应不使用 JSON envelope。保存到资源中心仍遵循资源上传 scope 和成员权限。
 - **资源协作、审核和来源同步：** `POST /api/v1/resources/{id}/members`、`POST /api/v1/resources/{id}/members/respond`、`POST /api/v1/resources/{id}/owner-transfer` 提供成员邀请与所有权转移；`GET /api/v1/resources/{id}/review-events`、`POST /api/v1/resources/{id}/review-annotations`、`POST /api/v1/resources/{id}/versions/analyze` 和 `POST/DELETE /api/v1/resources/{id}/versions/{versionId}/analysis/overrides` 提供审核记录与分析流程；`PUT /api/v1/resources/{id}/source-sync/github`、`GET /api/v1/resources/{id}/source-sync/github/releases`、`POST /api/v1/resources/{id}/source-sync/github/import` 支持 GitHub Release 来源同步。关系、兼容性、依赖、manifest 和文件接口均使用公开 UUID。受保护的资源操作分别按 OpenAPI 声明 `resource.read`、`resource.upload` 或 `resource.download`。新路由为增量能力；Resource V2 的公开读取不会改变既有 V1 资源详情和 Game Content 响应结构。
 - **游戏内容：** 蓝图通过 `GET/POST /api/v1/game-content/blueprints` 读取和直接投稿；地图列表使用 `GET /api/v1/game-content/maps`，该 collection 不提供 POST。地图投稿走上传会话：`POST /api/v1/game-content/maps/uploads` 创建会话，`GET /api/v1/game-content/maps/uploads/{uploadId}` 查询状态，`GET /api/v1/game-content/maps/uploads/{uploadId}/preview` 预览，最后由 `POST /api/v1/game-content/maps/uploads/{uploadId}/complete` 完成提交。详情、下载、蓝图代码以及点赞/收藏操作也面向公开客户端。写入按 OpenAPI 要求 `resource.upload` 或 `forum.write`。文件下载可返回原始文件响应；其授权、限流与错误语义以 OpenAPI 和[游戏内容 API V1](./game-content-v1.md)为准。新增操作与已发布资源结构保持兼容。
 - **云存档：** `/api/v1/game-saves`、`/api/v1/game-saves/{slotId}`、快照、上传会话、文件上传、提交、下载、恢复、固定与删除操作提供用户云存档。读取、写入、删除分别使用 `game_content.saves.read`、`game_content.saves.write`、`game_content.saves.delete`。这是新增能力；字段、限额、冲突和错误处理见[云存档 API V1](./cloud-saves-v1.md)。

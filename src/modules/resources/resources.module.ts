@@ -47,6 +47,7 @@ import { ResourcesV1WriteController } from './v1/resources-v1-write.controller';
 import { ResourcesV2Controller, GameContentIndexV2Controller } from './v2/resources-v2.controller';
 import { ResourcesV2Service } from './v2/resources-v2.service';
 import { ResourcesV2WriteController } from './v2/resources-v2-write.controller';
+import { EditorToolsController } from './v2/editor-tools.controller';
 import { ResourcesV2WriteService } from './v2/resources-v2-write.service';
 import { ResourceV2CommunityWriteService } from './v2/resource-v2-community-write.service';
 import { ResourcesV2CommunityWriteController } from './v2/resources-v2-community-write.controller';
@@ -82,7 +83,7 @@ import { ResourceOperationsController } from './resource-operations.controller';
     TypeOrmModule.forFeature([Resource, ResourceMember, ResourceUploadDraft, ResourceDirectUploadSession, ResourceDirectUploadDraft, ResourceCategory, ResourceVersion, ResourceRating, User, ResourceAttribution, ResourceFile, ResourceFavorite, ResourceLike, ResourceSubscription, ResourceViewEvent, DownloadEvent, ModReportAttachment]),
   ],
   providers: [OAuthScopeGuard, ResourceDuplicateService, ResourceViewsService, ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceSubscriptionsService, MflClientService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourceDirectUploadService, ResourcePreviewService, ResourceLifecycleService, ResourceStorageReconciliationService, RevalidationService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourcesV2Service, ResourcesV2WriteService, ResourceV2CommunityWriteService, ResourceV2ReportAttachmentService, ResourceV2ReviewService, ResourceSourceSyncService, ResourceDiscoveryService, ResourceOperationsService],
-  controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController, ResourceStorageReconciliationController, ResourceDiscoveryController, ResourceOperationsController],
+  controllers: [ResourcesController, ResourcesV1Controller, ResourcesV1WriteController, ResourcesV2Controller, GameContentIndexV2Controller, ResourcesV2WriteController, EditorToolsController, ResourcesV2CommunityWriteController, ResourcesV2ReviewController, ResourcesV2SourceSyncController, ResourcesV2ReportAttachmentController, ResourceStorageReconciliationController, ResourceDiscoveryController, ResourceOperationsController],
   exports: [ResourcesService, ResourceCategoryService, ResourceVersionService, ResourceFavoritesService, ResourceLikesService, ResourceStorageService, ResourceStorageClientService, ResourceFileProviderService, ResourcePreviewService, ResourceDuplicateService, MflClientService, ResourceAggregateService, ResourceLegacyProjectionService, ResourceReadAdapterService, ResourceDiscoveryService, ResourceOperationsService],
 })
 export class ResourcesModule {}

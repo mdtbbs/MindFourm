@@ -30,6 +30,13 @@ export class ResourceV2SchematicMoveDto {
   to_y!: number;
 }
 
+export class ResourceV2SchematicRotateDto {
+  @ApiProperty({ minimum: 0, maximum: 127 }) @IsInt() @Min(0) @Max(127) x!: number;
+  @ApiProperty({ minimum: 0, maximum: 127 }) @IsInt() @Min(0) @Max(127) y!: number;
+  @ApiProperty({ minimum: 1, maximum: 3, description: 'Clockwise quarter turns applied to one block.' })
+  @IsInt() @Min(1) @Max(3) rotation_quarters!: number;
+}
+
 export class ResourceV2SchematicAddedBlockDto {
   @ApiProperty({ minimum: 0, maximum: 127 })
   @IsInt() @Min(0) @Max(127)
@@ -245,6 +252,10 @@ export class ResourceV2ExportSchematicDto {
   @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicMoveDto)
   move_positions?: ResourceV2SchematicMoveDto[];
 
+  @ApiPropertyOptional({ type: [ResourceV2SchematicRotateDto], maxItems: 5_000, description: 'Rotate individual blocks whose configs do not contain coordinate links.' })
+  @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicRotateDto)
+  rotate_positions?: ResourceV2SchematicRotateDto[];
+
   @ApiPropertyOptional({ type: [ResourceV2SchematicAddedBlockDto], maxItems: 5_000 })
   @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2SchematicAddedBlockDto)
   add_blocks?: ResourceV2SchematicAddedBlockDto[];
@@ -324,6 +335,15 @@ export class ResourceV2MapObjectMoveDto extends ResourceV2MapObjectOperationBase
   @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) to_y!: number;
 }
 
+export class ResourceV2MapObjectRotateDto extends ResourceV2MapObjectOperationBaseDto {
+  @ApiProperty({ enum: ['rotate'] }) @Equals('rotate') action: 'rotate' = 'rotate';
+  @ApiProperty({ enum: ['core', 'building'] }) @IsIn(['core', 'building'])
+  declare object_type: 'core' | 'building';
+  @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) x!: number;
+  @ApiProperty({ minimum: 0, maximum: 32_767 }) @IsInt() @Min(0) @Max(32_767) y!: number;
+  @ApiProperty({ minimum: 0, maximum: 3 }) @IsInt() @Min(0) @Max(3) rotation!: number;
+}
+
 export class ResourceV2MapObjectTeamDto extends ResourceV2MapObjectOperationBaseDto {
   @ApiProperty({ enum: ['team'] }) @Equals('team') action: 'team' = 'team';
   @ApiProperty({ enum: ['core', 'building'] }) @IsIn(['core', 'building'])
@@ -334,14 +354,15 @@ export class ResourceV2MapObjectTeamDto extends ResourceV2MapObjectOperationBase
 }
 
 export type ResourceV2MapObjectOperationDtoUnion = ResourceV2MapObjectAddDto | ResourceV2MapObjectDeleteDto
-  | ResourceV2MapObjectMoveDto | ResourceV2MapObjectTeamDto;
+  | ResourceV2MapObjectMoveDto | ResourceV2MapObjectTeamDto | ResourceV2MapObjectRotateDto;
 export type ResourceV2MapObjectOperationInput =
   | { action: 'add'; object_type: 'core' | 'spawn' | 'building'; x: number; y: number; name: string; team?: string; rotation?: number }
   | { action: 'delete'; object_type: 'core' | 'spawn' | 'building'; x: number; y: number }
   | { action: 'move'; object_type: 'core' | 'spawn' | 'building'; from_x: number; from_y: number; to_x: number; to_y: number }
-  | { action: 'team'; object_type: 'core' | 'building'; x: number; y: number; team: string };
+  | { action: 'team'; object_type: 'core' | 'building'; x: number; y: number; team: string }
+  | { action: 'rotate'; object_type: 'core' | 'building'; x: number; y: number; rotation: number };
 
-@ApiExtraModels(ResourceV2MapObjectAddDto, ResourceV2MapObjectDeleteDto, ResourceV2MapObjectMoveDto, ResourceV2MapObjectTeamDto)
+@ApiExtraModels(ResourceV2MapObjectAddDto, ResourceV2MapObjectDeleteDto, ResourceV2MapObjectMoveDto, ResourceV2MapObjectTeamDto, ResourceV2MapObjectRotateDto)
 export class ResourceV2ExportMapDto {
   @ApiPropertyOptional({ type: [ResourceV2MapTerrainChangeDto], maxItems: 5_000 })
   @IsOptional() @IsArray() @ArrayMaxSize(5_000) @ValidateNested({ each: true }) @Type(() => ResourceV2MapTerrainChangeDto)
@@ -357,15 +378,16 @@ export class ResourceV2ExportMapDto {
 
   @ApiPropertyOptional({ type: 'array', maxItems: 2_000, items: { oneOf: [
     { $ref: getSchemaPath(ResourceV2MapObjectAddDto) }, { $ref: getSchemaPath(ResourceV2MapObjectDeleteDto) },
-    { $ref: getSchemaPath(ResourceV2MapObjectMoveDto) }, { $ref: getSchemaPath(ResourceV2MapObjectTeamDto) },
+    { $ref: getSchemaPath(ResourceV2MapObjectMoveDto) }, { $ref: getSchemaPath(ResourceV2MapObjectTeamDto) }, { $ref: getSchemaPath(ResourceV2MapObjectRotateDto) },
   ], discriminator: { propertyName: 'action', mapping: {
     add: getSchemaPath(ResourceV2MapObjectAddDto), delete: getSchemaPath(ResourceV2MapObjectDeleteDto),
-    move: getSchemaPath(ResourceV2MapObjectMoveDto), team: getSchemaPath(ResourceV2MapObjectTeamDto),
+    move: getSchemaPath(ResourceV2MapObjectMoveDto), team: getSchemaPath(ResourceV2MapObjectTeamDto), rotate: getSchemaPath(ResourceV2MapObjectRotateDto),
   } } } })
   @IsOptional() @IsArray() @ArrayMaxSize(2_000) @ValidateNested({ each: true })
   @Type(() => ResourceV2MapObjectAddDto, { discriminator: { property: 'action', subTypes: [
     { name: 'add', value: ResourceV2MapObjectAddDto }, { name: 'delete', value: ResourceV2MapObjectDeleteDto },
     { name: 'move', value: ResourceV2MapObjectMoveDto }, { name: 'team', value: ResourceV2MapObjectTeamDto },
+    { name: 'rotate', value: ResourceV2MapObjectRotateDto },
   ] }, keepDiscriminatorProperty: true })
   object_operations?: ResourceV2MapObjectOperationDtoUnion[];
 }

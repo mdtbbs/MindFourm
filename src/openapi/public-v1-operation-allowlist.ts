@@ -3,6 +3,12 @@
  * New V1 operations stay internal until a product owner approves and documents them.
  */
 export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
+  'GET /v1/editor-tools/status',
+  'GET /v1/editor-tools/content-catalog',
+  'POST /v1/editor-tools/{kind}/create',
+  'POST /v1/editor-tools/{kind}/analyze',
+  'POST /v1/editor-tools/schematic/export',
+  'POST /v1/editor-tools/map/export',
   'GET /v1/game-saves/quota',
   'GET /v1/game-saves',
   'POST /v1/game-saves',

@@ -60,6 +60,9 @@ try {
     }
   }
   const required = [
+    '/v1/editor-tools/status', '/v1/editor-tools/content-catalog',
+    '/v1/editor-tools/{kind}/create', '/v1/editor-tools/{kind}/analyze',
+    '/v1/editor-tools/schematic/export', '/v1/editor-tools/map/export',
     '/v1/capabilities', '/v1/me', '/v1/threads', '/v1/threads/{id}',
     '/v1/threads/{id}/replies', '/v1/resources', '/v1/resources/kinds',
     '/v1/resources/topics', '/v1/resources/drafts/preview', '/v1/resources/drafts',
@@ -462,6 +465,31 @@ try {
       || schematicEditorOperation.responses?.['200']?.content?.['application/octet-stream']?.schema?.format !== 'binary'
       || !/Owner\/Maintainer/.test(schematicEditorOperation.description || '')) {
     resourceV2Mismatches.push(`${schematicEditorKey} must document role, scope, rate limit, and a raw schematic binary response`);
+  }
+  const standaloneEditorOperations = [
+    ['GET /v1/editor-tools/status', 'getEditorToolStatus'],
+    ['GET /v1/editor-tools/content-catalog', 'getMindustryEditorContentCatalog'],
+    ['POST /v1/editor-tools/{kind}/create', 'createStandaloneMindustryEditorFile', true],
+    ['POST /v1/editor-tools/{kind}/analyze', 'analyzeEditorSourceFile'],
+    ['POST /v1/editor-tools/schematic/export', 'exportStandaloneSchematicEdit', true],
+    ['POST /v1/editor-tools/map/export', 'exportStandaloneMapEdit', true],
+  ];
+  for (const [key, operationId, rawFile] of standaloneEditorOperations) {
+    const [method, route] = key.split(' ');
+    const operation = generatedPublic.paths?.[route]?.[method.toLowerCase()];
+    if (!operation || operation.operationId !== operationId) {
+      resourceV2Mismatches.push(`${key} must publish operationId ${operationId}`);
+      continue;
+    }
+    if (JSON.stringify(operation['x-oauth-scopes-if-bearer']) !== JSON.stringify(['resource.read'])) {
+      resourceV2Mismatches.push(`${key} must allow anonymous use and document resource.read for a Bearer token`);
+    }
+    if (method === 'POST' && (operation['x-rate-limit']?.limit !== 20 || operation['x-rate-limit']?.window_seconds !== 60)) {
+      resourceV2Mismatches.push(`${key} must declare a 20/60s rate limit`);
+    }
+    if (rawFile && operation.responses?.['200']?.content?.['application/octet-stream']?.schema?.format !== 'binary') {
+      resourceV2Mismatches.push(`${key} must document raw Mindustry file bytes`);
+    }
   }
   for (const key of requiredResourceV2WriteOperations) {
     const [method, route] = key.split(' ');
