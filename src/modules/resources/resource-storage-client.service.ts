@@ -54,9 +54,19 @@ export interface ResBindingInput {
   visibility: 'public' | 'private';
 }
 
-/** Safe operational error: never embeds a response body, URL token, or service key. */
+/**
+ * Safe operational error: never embeds a response body, URL token, or service key.
+ *
+ * `retryAfterSeconds` is advisory metadata for the HTTP layer: callers that can set
+ * headers should copy it into `Retry-After` so clients back off deliberately instead
+ * of retrying into a dependency that is already known to be slow.
+ */
 export class ResourceStorageClientError extends HttpException {
-  constructor(public readonly code: 'unavailable' | 'unauthorized' | 'not_found' | 'rejected' | 'timeout', public readonly upstreamStatus?: number) {
+  constructor(
+    public readonly code: 'unavailable' | 'unauthorized' | 'not_found' | 'rejected' | 'timeout',
+    public readonly upstreamStatus?: number,
+    public readonly retryAfterSeconds = 0,
+  ) {
     const unavailable = ['unavailable', 'unauthorized', 'timeout'].includes(code);
     super({ code: unavailable ? 'RESOURCE_STORAGE_UNAVAILABLE' : code === 'not_found' ? 'RESOURCE_STORAGE_OBJECT_NOT_FOUND' : 'RESOURCE_STORAGE_REJECTED',
       message: unavailable ? '资源存储服务暂不可用，请稍后重试' : code === 'not_found' ? '资源存储对象不存在' : '资源存储对象校验失败', retryable: unavailable },
@@ -73,20 +83,86 @@ export class ResourceStorageClientService {
   private readonly requestTimeoutMs: number;
   private readonly uploadTimeoutMs: number;
 
-  constructor(configService: ConfigService, @Optional() private readonly dataSource?: DataSource) {
+  /** Consecutive dependency failures; reset by any successful call. */
+  private consecutiveFailures = 0;
+  /** Epoch ms until which calls short-circuit; 0 means closed. */
+  private circuitOpenUntil = 0;
+
+  private readonly now: () => number;
+  private readonly circuitFailureThreshold: number;
+  private readonly circuitCooldownMs: number;
+
+  constructor(
+    configService: ConfigService,
+    @Optional() private readonly dataSource?: DataSource,
+    clock: { now?: () => number } = {},
+  ) {
     this.baseUrl = (configService.get<string>('res.baseUrl') || '').replace(/\/+$/, '');
     this.apiKey = configService.get<string>('res.apiKey') || '';
     this.enabled = configService.get<boolean>('res.enabled') !== false;
     this.requestTimeoutMs = configService.get<number>('res.requestTimeoutMs') || 10_000;
     this.uploadTimeoutMs = configService.get<number>('res.uploadTimeoutMs') || 120_000;
+    this.now = clock.now ?? (() => Date.now());
+    // One slow dependency should not need many failed requests to be recognised,
+    // but a single blip should not cut the dependency off either.
+    this.circuitFailureThreshold = Math.max(1, configService.get<number>('res.circuitFailureThreshold') || 3);
+    this.circuitCooldownMs = Math.max(1_000, configService.get<number>('res.circuitCooldownMs') || 15_000);
   }
 
+  /**
+   * Static configuration check only.
+   *
+   * Deliberately does *not* include circuit-breaker state: this is what callers
+   * inside resolution/availability logic (for example
+   * `ResourcePreviewService.resolveBytes`) use to decide whether RES delivery is
+   * even possible. Folding a transient outage in here would silently change
+   * which backend serves an already-resolvable preview.
+   */
   get isAvailable(): boolean {
     return this.enabled && Boolean(this.baseUrl && this.apiKey);
   }
 
+  /** Whether calls will currently be attempted (configuration plus circuit state). */
+  get isReachable(): boolean {
+    return this.isAvailable && this.now() >= this.circuitOpenUntil;
+  }
+
+  /** Whole seconds before the next probe, or 0 when calls may proceed now. */
+  get retryAfterSeconds(): number {
+    return Math.max(0, Math.ceil((this.circuitOpenUntil - this.now()) / 1000));
+  }
+
+  /**
+   * Trip the circuit after a dependency failure.
+   *
+   * Slowness is not the same as being down: a single 10s timeout used to make
+   * *every* subsequent resource request wait 10s and then answer 503, and the
+   * frontend retried each of those reads three times. Cutting the dependency off
+   * for a short cooldown converts a slow RES into one fast, honest 503 with a
+   * `Retry-After`, instead of a queue of requests that all time out together.
+   */
+  private tripCircuit(): void {
+    this.consecutiveFailures += 1;
+    if (this.consecutiveFailures < this.circuitFailureThreshold) return;
+    this.circuitOpenUntil = this.now() + this.circuitCooldownMs;
+    this.consecutiveFailures = 0;
+  }
+
+  private resetCircuit(): void {
+    this.consecutiveFailures = 0;
+    this.circuitOpenUntil = 0;
+  }
+
+  /** Whether the last call failed against an open circuit, and how long to wait. */
+  private circuitRetryAfter(): number {
+    return this.now() < this.circuitOpenUntil ? this.retryAfterSeconds : 0;
+  }
+
   private assertAvailable(): void {
     if (!this.isAvailable) throw new ResourceStorageClientError('unavailable');
+    if (this.now() < this.circuitOpenUntil) {
+      throw new ResourceStorageClientError('unavailable', undefined, this.retryAfterSeconds);
+    }
   }
 
   private async request(path: string, init: RequestInit = {}, timeoutMs = this.requestTimeoutMs): Promise<Response> {
@@ -101,10 +177,25 @@ export class ResourceStorageClientService {
         signal,
       });
     } catch (error) {
-      if (signal.aborted) throw new ResourceStorageClientError('timeout');
-      throw new ResourceStorageClientError('unavailable');
+      this.tripCircuit();
+      const retryAfter = this.circuitRetryAfter();
+      if (signal.aborted) throw new ResourceStorageClientError('timeout', undefined, retryAfter);
+      throw new ResourceStorageClientError('unavailable', undefined, retryAfter);
     }
-    if (response.ok) return response;
+    if (response.ok) {
+      this.resetCircuit();
+      return response;
+    }
+    // 5xx means the dependency itself is unhealthy; 4xx is an answer about this
+    // request and must not affect the circuit.
+    if (response.status >= 500) {
+      this.tripCircuit();
+      const retryAfter = this.circuitRetryAfter();
+      if (retryAfter) {
+        await response.body?.cancel().catch(() => undefined);
+        throw new ResourceStorageClientError('unavailable', response.status, retryAfter);
+      }
+    }
     // Drain without exposing upstream payload, which may contain sensitive details.
     await response.body?.cancel().catch(() => undefined);
     const code = response.status === 401 || response.status === 403 ? 'unauthorized'

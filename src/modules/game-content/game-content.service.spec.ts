@@ -41,7 +41,7 @@ describe('GameContentService', () => {
     const redis = { setIfNotExists: jest.fn().mockResolvedValue(false) };
     const config = { get: jest.fn().mockReturnValue('test-secret') };
     const uploadSessions = { create: jest.fn(), getOwned: jest.fn(), claim: jest.fn(), setCompleted: jest.fn(), setUploaded: jest.fn(), getPreview: jest.fn() };
-    const resClient = { isAvailable: true, uploadServerGeneratedObject: jest.fn().mockImplementation(async ({ body }) => {
+    const resClient = { isAvailable: true, isReachable: true, uploadServerGeneratedObject: jest.fn().mockImplementation(async ({ body }) => {
       body.destroy?.();
       return { public_id: 'res-object', state: 'verified', sha256: 'b'.repeat(64), size_bytes: 123, mime_type: 'application/octet-stream' };
     }) };

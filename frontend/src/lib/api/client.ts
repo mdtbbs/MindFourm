@@ -27,15 +27,45 @@ class ApiRequestError extends Error {
   code?: string;
   existingResource?: { id: number | null; public_id?: string | null; title: string; status: string; url: string } | null;
   challenge?: CommunityChallengeDescriptor;
+  /** Seconds the server asked the client to wait, from `Retry-After`. */
+  retryAfterSeconds?: number;
 
-  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource'], challenge?: CommunityChallengeDescriptor) {
+  constructor(message: string, status: number, code?: string, existingResource?: ApiRequestError['existingResource'], challenge?: CommunityChallengeDescriptor, retryAfterSeconds?: number) {
     super(message);
     this.name = 'ApiRequestError';
     this.status = status;
     this.code = code;
     this.existingResource = existingResource;
     this.challenge = challenge;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/**
+ * Parse `Retry-After` in its delta-seconds form.
+ *
+ * The HTTP-date form is legal but the backend only ever emits seconds; treating an
+ * unparsable value as "no hint" is safer than guessing a delay.
+ */
+function readRetryAfterSeconds(response: Response): number | undefined {
+  const raw = response.headers?.get?.('retry-after');
+  if (!raw) return undefined;
+  const seconds = Number(raw.trim());
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(Math.ceil(seconds), 300) : undefined;
+}
+
+/**
+ * Exponential backoff with full jitter.
+ *
+ * The previous fixed 250/500ms schedule made the client part of the outage: when
+ * the backend answered 503 because it was overloaded, three immediate retries per
+ * read tripled the load and every client retried in lockstep. Jitter spreads the
+ * retries out, and a server-provided `Retry-After` wins over the computed delay.
+ */
+function backoffDelayMs(attempt: number, retryAfterSeconds?: number): number {
+  if (retryAfterSeconds) return retryAfterSeconds * 1000;
+  const ceiling = Math.min(250 * 2 ** attempt, 4_000);
+  return Math.round(ceiling / 2 + Math.random() * (ceiling / 2));
 }
 
 export type CommunityChallengeDescriptor = {
@@ -210,18 +240,20 @@ const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 
 async function fetchWithReadRetry(url: string, options: RequestInit, method: string): Promise<Response> {
   // Never transparently repeat a mutation: an interrupted upload/post may already
-  // have reached the origin. Idempotent reads get two short, cancellable retries.
+  // have reached the origin. Idempotent reads get two backoff retries.
   const attempts = isWriteMethod(method) ? 1 : 3;
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const response = await fetch(url, options);
       if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) return response;
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      // Retrying an overloaded origin is what turns its 503 into a sustained
+      // outage, so honour the server's own delay before adding another request.
+      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, readRetryAfterSeconds(response))));
     } catch (error) {
       lastError = error;
       if (attempt === attempts - 1 || (error instanceof Error && error.name === 'AbortError')) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Network error');
@@ -322,7 +354,9 @@ async function request<T>(
       }
     }
 
-    throw new ApiRequestError(message, res.status, code, existingResource, challenge);
+    // A 429 is a deliberate answer with a stated wait. Surfacing it as a plain
+    // failure left the user to guess, and for writes the guess was "retry now".
+    throw new ApiRequestError(message, res.status, code, existingResource, challenge, readRetryAfterSeconds(res));
   }
 
   let data: unknown;

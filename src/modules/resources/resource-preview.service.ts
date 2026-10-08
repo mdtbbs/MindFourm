@@ -77,7 +77,7 @@ export class ResourcePreviewService {
   async storePreviewInRes(resource: Resource, previewKey: string): Promise<void> {
     if (!this.isValidPreviewKey(previewKey, resource.resource_kind, resource.content_hash)) return;
     if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const preview = await readFile(path.resolve(this.previewRoot, previewKey));
     if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
     const object = await this.resClient.uploadServerGeneratedObject({
@@ -100,7 +100,7 @@ export class ResourcePreviewService {
   }> {
     if (!this.isValidPreviewKey(previewKey, resource.resource_kind, version.content_hash)) throw new BadRequestException('版本预览文件无效');
     if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const preview = await readFile(path.resolve(this.previewRoot, previewKey));
     if (!preview.length || preview.length > 10 * 1024 * 1024) throw new BadRequestException('预览文件大小无效');
     const object = await this.resClient.uploadServerGeneratedObject({
@@ -127,7 +127,7 @@ export class ResourcePreviewService {
   async setVersionResPreviewVisibility(resource: Resource, version: ResourceVersion, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
     if (!version.renderer_preview_object_id) return;
     if (!version.public_id) throw new BadRequestException('版本公开标识缺失');
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const binding = await this.resClient.createBinding(version.renderer_preview_object_id, {
       namespace: 'mindforum', owner_type: 'resource_version_preview', owner_id: version.public_id,
       visibility: visibility === 'public' && this.isVersionPreviewPublic(resource, version) ? 'public' : 'private',
@@ -142,13 +142,14 @@ export class ResourcePreviewService {
   async getVersionResPreviewUrl(resource: Resource, version: ResourceVersion): Promise<string | null> {
     if (!version.renderer_preview_object_id || !this.resClient) return null;
     if (this.isVersionPreviewPublic(resource, version)) return this.resClient.buildPublicDownloadUrl(version.renderer_preview_object_id, 'preview.png');
+    if (!this.resClient.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     return (await this.resClient.createPrivateDownloadUrl(version.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
   }
 
   async setResPreviewVisibility(resource: Resource, visibility: 'public' | 'private', manager?: EntityManager): Promise<void> {
     if (resource.renderer_preview_object_id) {
       if (!resource.public_id) throw new BadRequestException('资源公开标识缺失');
-      if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+      if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
       const binding = await this.resClient.createBinding(resource.renderer_preview_object_id, {
         namespace: 'mindforum', owner_type: 'resource_preview', owner_id: resource.public_id,
         visibility: visibility === 'public' && this.isResourcePreviewPublic(resource) ? 'public' : 'private',
@@ -171,6 +172,7 @@ export class ResourcePreviewService {
     if (this.isResourcePreviewPublic(resource as Partial<Resource>)) {
       return this.resClient.buildPublicDownloadUrl(resource.renderer_preview_object_id, 'preview.png');
     }
+    if (!this.resClient.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     return (await this.resClient.createPrivateDownloadUrl(resource.renderer_preview_object_id, { filename: 'preview.png', expires_in: 300 })).url;
   }
 
@@ -552,7 +554,7 @@ export class ResourcePreviewService {
     if (!this.isConfigured()) throw new BadRequestException('预览服务暂不可用，请稍后重试');
     if (file.file_size <= 0 || file.file_size > MAX_RENDER_BYTES) throw new BadRequestException('文件大小不支持生成预览');
     await this.makeRoomForDraft(userId);
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
 
     const rendered = await this.render({ resource_kind: kind, ...file });
     if (!rendered.preview) throw new BadRequestException('文件无法解析为有效的 Mindustry 地图或蓝图');
@@ -650,7 +652,7 @@ export class ResourcePreviewService {
   async getDraftResPreviewUrl(userId: number, id: string): Promise<string | null> {
     const draft = await this.requireDraft(userId, id);
     if (!draft.previewObjectId) return null;
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     return (await this.resClient.createPrivateDownloadUrl(draft.previewObjectId, { filename: 'preview.png', expires_in: 300 })).url;
   }
 

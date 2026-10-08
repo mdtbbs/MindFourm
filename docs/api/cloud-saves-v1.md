@@ -16,7 +16,7 @@
 
 | 方法 | 路径 | 权限 | 用途 |
 |---|---|---|---|
-| GET | `/game-saves?limit=20&cursor=...` | 读取 | 列出当前用户的存档槽 |
+| GET | `/game-saves?limit=30&cursor=...` | 读取 | 列出当前用户的存档槽；`limit` 默认 30，范围 1–100 |
 | GET | `/game-saves/quota` | 读取 | 查看已用空间、配额、单文件上限和存档槽数量 |
 | POST | `/game-saves` | 写入 | 创建存档槽 |
 | GET | `/game-saves/{slotId}` | 读取 | 查看存档槽元数据和当前快照 |
@@ -55,7 +55,9 @@ Content-Type: application/json
 }
 ```
 
-成功响应示例：
+响应有两种形状，客户端要按 `no_upload_required` 分支处理：
+
+**A. 需要上传**（常见情况）——拿到 `upload_id` 后把字节流 PUT 到 `upload.url`：
 
 ```json
 {
@@ -70,6 +72,20 @@ Content-Type: application/json
   }
 }
 ```
+
+**B. 无需上传**（`no_upload_required: true`）——服务端已经持有相同的内容摘要，不会再产生需要传输的字节：
+
+```json
+{
+  "data": {
+    "upload_id": "<上传 UUID>",
+    "no_upload_required": true,
+    "snapshot_id": "<当前快照 UUID>"
+  }
+}
+```
+
+这种响应同样带有 `upload_id`，但它指向的是一个**已提交**的会话：对 `.../file` 的 PUT 会返回 `SAVE_UPLOAD_EXPIRED` (410)，而 `POST .../commit` 会直接回放该快照。也就是说客户端不需要为“无需上传”写特殊分支——照常 PUT + commit 也能得到正确结果，提前判断 `no_upload_required` 只是省掉一次请求。
 
 将原始文件字节流写入响应返回的路径。计算摘要后到上传完成前，不要对文件进行 JSON 编码、压缩或其他修改。
 
@@ -93,6 +109,8 @@ Content-Type: application/json
 
 服务器会再次读取上传文件，并在创建快照前校验字节数和 SHA-256。如果上传中断，请新建会话，或在会话过期前重试同一上传。对已经提交的同一上传会话重复提交具有幂等性。
 
+上传会话默认 10 分钟（`expires_at`）。PUT 的限流按请求次数计，单次 PUT 无论传输多久都只算一次；请把重试控制在限流窗口内，超限时返回 `RATE_LIMITED` (429)，带 `Retry-After` 和 `retryable: true`，与云存档自身的错误码（`SAVE_*`）区分开。
+
 ## 下载流程
 
 先请求已授权的下载路径，再使用同一个 Bearer 令牌 GET 论坛 API 路径。第二个响应为 `application/octet-stream` 附件，并带有安全的 `Content-Disposition` 文件名。
@@ -114,23 +132,36 @@ Content-Type: application/json
       "headers": {},
       "size": 1048576,
       "sha256": "<64 个小写十六进制字符>",
-      "file_name": "Example.msav"
+      "file_name": "Example.msav",
+      "expires_at": null,
+      "reusable": true
     }
   }
 }
 ```
 
-客户端应先将文件流式写入临时文件，校验文件大小和 SHA-256，保留现有本地存档，确认无误后再替换。论坛会在二进制 GET 请求时再次校验文件所有权。
+`url` **不是签名地址、也不是一次性地址**：它没有时效参数，只要快照仍可访问就一直是同一条路径，可以重复使用和缓存到本地状态里。真正的授权发生在二进制 GET 请求上——服务端每次都会重新校验当前账号对槽位和快照的所有权。所以禁止缓存的是 Bearer 令牌与私有响应内容，而不是这个路径本身。
+
+二进制 GET 响应带有 `ETag: "sha256-<摘要>"` 和 `Last-Modified`，客户端可以据此判断本地副本是否已经是最新内容。
+
+客户端应先将文件流式写入临时文件，校验文件大小和 SHA-256，保留现有本地存档，确认无误后再替换。
 
 ## 冲突、去重与保留策略
 
 - 每个存档槽都有不可变且递增的快照历史。恢复旧快照会创建一个新版本。
 - `base_snapshot_id` 用于防止客户端覆盖更新的云端快照。冲突响应会返回当前快照 ID。
+- 冲突的 `details[0]` 中还有一个 `suggested_resolution` 字段：采用 `normal` 策略且服务端检测到云端有新版本时，它取值为 `create_conflict_copy`。客户端据此提示用户改用该策略重试，不必自己猜测该选什么。
 - 支持的冲突策略为 `normal`、`create_conflict_copy` 和 `force_replace_head`。强制替换时必须确认准确的当前快照 ID。
+- 创建会话和提交阶段都会重新检查冲突：创建会话时的检查可能通过，但提交时云端已被其他设备更新，此时返回 `SAVE_CONFLICT` (409)，本次上传的字节已经作废，需要按新策略重新发起。
 - 同一用户重复上传相同内容摘要时会共用一份本地文件，配额也只计算一次。
 - 服务会为待处理上传预留配额，并在提交时使用行锁。若文件超过单文件上限或用户剩余配额，服务会拒绝上传。
+- 配额在创建会话和提交时各校验一次。如果管理员在两次校验之间调低了配额，提交会以 `SAVE_QUOTA_EXCEEDED` (409) 失败，该会话会被标记为 `failed`，暂存文件随下一轮维护任务删除——客户端需要新建会话并自行腾出空间。
 - 未固定的历史快照受保留数量限制。已固定的快照会保留，直到用户取消固定或删除所属存档槽。
 - 已删除或不再被引用的文件，会在维护任务等待宽限期后清理。
+
+## 保留策略的取值范围
+
+`GET /game-saves/quota` 返回的 `limit_bytes`、`max_file_size_bytes` 和管理端可改；`slots.limit`（每用户槽位上限）、`retention.max_unpinned_versions_per_slot` 和 `retention.max_unpinned_age_days` 由部署时的环境变量决定（`CLOUD_SAVES_MAX_SLOTS`、`CLOUD_SAVES_MAX_HISTORY_PER_SLOT`、`CLOUD_SAVES_RETENTION_DAYS`），修改后需重启服务。要拿到当前生效值，读这个接口，不要假设默认值。
 
 ## 功能可用性
 

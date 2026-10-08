@@ -50,3 +50,64 @@ describe('public API documentation HTTP routes', () => {
     expect(body).toContain('href="/api/v1/docs/lifecycle"');
   });
 });
+
+describe('developer docs route protection', () => {
+  it('keeps the CSP nonce matching the rendered HTML across cached responses', async () => {
+    const app = express();
+    const document = { openapi: '3.0.0', info: { title: 'Public API', version: '1.0.0' }, paths: {} } as any;
+    const nestLikeApp = { getHttpAdapter: () => app } as any;
+    registerDeveloperDocs(nestLikeApp, document, '2.6.3');
+
+    const server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const { port } = server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      const first = await fetch(`${baseUrl}/api/v1/docs/changelog`);
+      const second = await fetch(`${baseUrl}/api/v1/docs/changelog`);
+
+      // The rendered page is cached per process; it must still be served with the
+      // CSP header that matches the nonce baked into that HTML, or the stylesheet
+      // is blocked and the page renders unstyled.
+      const nonceFromHeader = (policy: string | null) => /'nonce-([^']+)'/.exec(policy || '')?.[1];
+      const firstPolicy = first.headers.get('content-security-policy');
+      const secondPolicy = second.headers.get('content-security-policy');
+      expect(nonceFromHeader(firstPolicy)).toBeTruthy();
+      expect(nonceFromHeader(secondPolicy)).toBe(nonceFromHeader(firstPolicy));
+
+      const body = await second.text();
+      expect(body).toContain(`nonce="${nonceFromHeader(secondPolicy)}"`);
+    } finally {
+      if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
+  it('rate limits documentation reads per client with Retry-After', async () => {
+    const app = express();
+    const document = { openapi: '3.0.0', info: { title: 'Public API', version: '1.0.0' }, paths: {} } as any;
+    const nestLikeApp = { getHttpAdapter: () => app } as any;
+    registerDeveloperDocs(nestLikeApp, document, '2.6.3');
+
+    const server = app.listen(0);
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const { port } = server.address() as AddressInfo;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    try {
+      let sawRateLimit = false;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const response = await fetch(`${baseUrl}/api/v1/docs/changelog`);
+        if (response.status === 429) {
+          expect(response.headers.get('retry-after')).toBeTruthy();
+          await expect(response.json()).resolves.toMatchObject({ code: 'RATE_LIMITED' });
+          sawRateLimit = true;
+          break;
+        }
+      }
+      expect(sawRateLimit).toBe(true);
+    } finally {
+      if (server?.listening) await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+});
