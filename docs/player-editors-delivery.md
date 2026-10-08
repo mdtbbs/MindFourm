@@ -80,6 +80,7 @@
 
 ## 修改文件列表
 
+- `tests/e2e/post.spec.ts`
 - `.github/workflows/ci.yml`
 - `.github/workflows/e2e.yml`
 - `docs/api/changelog-v1.md`

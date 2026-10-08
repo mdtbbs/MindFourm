@@ -69,7 +69,8 @@ test('public resource detail opens the editor directly and visitors can export w
   const unchanged = await assertOk(await request.get(`${API_URL}/api/v1/resources/${publicId}/workbench`, { headers }));
   expect(unchanged.versions).toHaveLength(1);
   const visitor = await testLogin(request, 'user');
-  await page.context().addCookies([{ name: 'forum_session', value: visitor.cookieHeader.split('forum_session=')[1], url: 'http://localhost:4502' }, { name: 'csrf_token', value: visitor.csrfToken, url: 'http://localhost:4502' }]);
+  const editorOrigin = new URL(page.url()).origin;
+  await page.context().addCookies([{ name: 'forum_session', value: visitor.cookieHeader.split('forum_session=')[1], url: editorOrigin }, { name: 'csrf_token', value: visitor.csrfToken, url: editorOrigin }]);
   await page.reload();
   await expect(page.getByRole('button', { name: '发布为我的资源', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '整体左转', exact: true }).click();
