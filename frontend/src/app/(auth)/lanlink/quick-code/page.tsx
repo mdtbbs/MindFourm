@@ -8,24 +8,33 @@ import QuickCodeDisplay from '@/components/lanlink/QuickCodeDisplay';
 import { QuickCodeGenerator } from '@/components/lanlink/QuickCodeGenerator';
 import { QuickCodeInstructions } from '@/components/lanlink/QuickCodeInstructions';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { useI18n } from '@/i18n/provider';
+import { isSiteFeatureEnabled } from '@/config/site-profile';
 
 export default function QuickCodePage() {
+  const { t } = useI18n();
   const [status, setStatus] = useState<QuickCodeStatusType | null>(null);
   const [newCode, setNewCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if LanLink feature is enabled
-  const isLanLinkEnabled = process.env.NEXT_PUBLIC_LANLINK_ENABLED === 'true';
+  // The site profile owns this toggle. Reading NEXT_PUBLIC_LANLINK_ENABLED here
+  // made the page disagree with the layout guard and the middleware, which
+  // rely on the profile — a correctly configured site could still land on
+  // "LanLink is not enabled".
+  const isLanLinkEnabled = isSiteFeatureEnabled('lanlink');
 
   useEffect(() => {
     if (isLanLinkEnabled) {
-      loadStatus();
+      void loadStatus();
     } else {
       setLoading(false);
-      setError('LanLink 功能未启用');
+      setError(t('lanlink.quickCodeDisabled'));
     }
-  }, [isLanLinkEnabled]);
+    // loadStatus is intentionally not a dependency: it is re-created on each
+    // render, and including it would refetch the status on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLanLinkEnabled, t]);
 
   const loadStatus = async () => {
     try {
@@ -34,7 +43,7 @@ export default function QuickCodePage() {
       setStatus(response);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载状态失败');
+      setError(err instanceof Error ? err.message : t('lanlink.quickCodeLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -42,8 +51,8 @@ export default function QuickCodePage() {
 
   const handleCodeGenerated = (code: string) => {
     setNewCode(code);
-    // 重新加载状态
-    loadStatus();
+    // Refresh the status so the panel reflects the new code.
+    void loadStatus();
   };
 
   if (loading) {
@@ -61,7 +70,7 @@ export default function QuickCodePage() {
           <div className="text-center">
             <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
             <button onClick={loadStatus} className="btn btn-primary">
-              重试
+              {t('lanlink.retry')}
             </button>
           </div>
         </div>
@@ -72,27 +81,25 @@ export default function QuickCodePage() {
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-2">LanLink 快速码</h1>
-        <p className="text-muted-foreground">
-          管理你的快速码，用于在 Mindustry 游戏中连接到论坛服务器。
-        </p>
+        <h1 className="text-3xl font-bold mb-2">{t('lanlink.quickCodeTitle')}</h1>
+        <p className="text-muted-foreground">{t('lanlink.quickCodeIntro')}</p>
       </div>
 
-      {/* 新生成的快速码显示（一次性） */}
+      {/* Newly generated quick code (shown once). */}
       {newCode && (
         <QuickCodeDisplay code={newCode} />
       )}
 
-      {/* 当前状态 */}
+      {/* Current status. */}
       {status && <QuickCodeStatus status={status} />}
 
-      {/* 生成/重置按钮 */}
+      {/* Generate / reset actions. */}
       <QuickCodeGenerator
         hasExistingCode={status?.has_code || false}
         onCodeGenerated={handleCodeGenerated}
       />
 
-      {/* 使用说明 */}
+      {/* Instructions. */}
       <QuickCodeInstructions />
     </div>
   );

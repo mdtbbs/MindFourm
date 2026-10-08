@@ -1,13 +1,16 @@
 import RoomList from '@/components/lanlink/RoomList';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
-export default function LanLinkPage() {
+export default async function LanLinkPage() {
+  const locale = await getRequestLocale();
+  const t = (key: string) => translate(locale, key);
+
   return (
     <>
       <div>
-        <h1 className="text-3xl font-bold mb-2">在线房间</h1>
-        <p className="text-muted-foreground">
-          查看 LanLink 当前公开的 Mindustry 联机房间，无需登录。
-        </p>
+        <h1 className="text-3xl font-bold mb-2">{t('lanlink.onlineRoomsTitle')}</h1>
+        <p className="text-muted-foreground">{t('lanlink.onlineRoomsIntro')}</p>
       </div>
       <RoomList />
     </>
