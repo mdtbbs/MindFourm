@@ -3,17 +3,25 @@ import { Blocks, FileArchive, Map as MapIcon, Package, User } from 'lucide-react
 import type { Resource } from '@/types';
 import { markdownToPlainExcerpt } from '@/lib/markdown/excerpt';
 import { formatDate } from '@/lib/utils';
-import { resourceKindLabel } from '@/lib/display-labels';
+import { resourceKindLabelKey } from '@/lib/display-labels';
 import { resourceCardFacts, resolveResourceCardPresentation } from '@/lib/resources/presentation';
 import ResourceCardActions from './resource-card-actions';
 import { useI18n } from '@/i18n/provider';
 
 function KindFacts({ resource }: { resource: Resource }) {
+  const { t } = useI18n();
   const facts = resourceCardFacts(resource);
   if (!facts.length) return null;
   return <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--text-secondary)]">
-    {facts.map((fact) => <div key={fact.label} className="flex min-w-0 gap-1"><dt className="shrink-0 text-[var(--text-muted)]">{fact.label}</dt><dd className="truncate font-medium">{fact.value}</dd></div>)}
+    {facts.map((fact) => <div key={fact.label} className="flex min-w-0 gap-1"><dt className="shrink-0 text-[var(--text-muted)]">{t(fact.label)}</dt><dd className="truncate font-medium">{renderFactValue(t, fact)}</dd></div>)}
   </dl>;
+}
+
+/** Some facts carry a composed unit (`{count}`, `{value}`); others are final. */
+function renderFactValue(t: (key: string, values?: Record<string, string | number>) => string, fact: { label: string; value: string }): string {
+  if (fact.label === 'editor.coresUnit') return t(fact.label, { count: fact.value });
+  if (fact.label === 'editor.netPowerUnit') return t(fact.label, { value: fact.value });
+  return fact.value;
 }
 
 export default function ResourceRow({ resource }: { resource: Resource }) {
@@ -32,13 +40,13 @@ export default function ResourceRow({ resource }: { resource: Resource }) {
       <Link href={resourceHref} aria-label={t('cards.viewResource', { title: resource.title })} className="block h-full">
         {resource.preview_url ? <img src={resource.preview_url} alt={t('cards.previewAlt', { title: resource.title })} loading="lazy" className="h-full w-full object-contain transition-[scale] duration-[var(--motion-normal)] group-hover:scale-[1.015] motion-reduce:scale-100" /> : <div className="flex h-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]"><PreviewIcon className="h-9 w-9" aria-hidden /><span className="text-xs">{t('cards.noPreview', { kind: previewLabel })}</span></div>}
       </Link>
-      <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white">{resourceKindLabel(resource.resource_kind)}</span>
+      <span className="absolute left-3 top-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white">{t(resourceKindLabelKey(resource.resource_kind))}</span>
     </div> : <div className="flex min-w-0 items-start gap-4 border-b border-[var(--border)] p-4">
       <Link href={resourceHref} aria-label={t('cards.viewResource', { title: resource.title })} className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[var(--radius)] bg-[var(--bg-elevated)] text-[var(--primary)]">
         {resource.preview_url ? <img src={resource.preview_url} alt="" loading="lazy" className="h-full w-full object-cover transition-[scale] duration-[var(--motion-normal)] group-hover:scale-[1.015] motion-reduce:scale-100" /> : <PreviewIcon className="h-7 w-7" aria-hidden />}
       </Link>
       <div className="min-w-0 flex-1">
-        <span className="text-xs text-[var(--text-muted)]">{resourceKindLabel(resource.resource_kind)}</span>
+        <span className="text-xs text-[var(--text-muted)]">{t(resourceKindLabelKey(resource.resource_kind))}</span>
         <Link href={resourceHref} className="mt-0.5 block truncate text-base font-semibold text-[var(--text)] group-hover:text-[var(--primary)]">{resource.title}</Link>
         <p className="mt-1 line-clamp-2 text-sm leading-5 text-[var(--text-secondary)]">{summary || t('cards.noSummary')}</p>
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { playerLabel } from './player-labels';
+import { useI18n } from '@/i18n/provider';
 import {
   getResourceWorkbenchV2KindTabData,
   type ResourceWorkbenchV2Kind,
@@ -15,33 +16,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function detailText(value: unknown, depth = 0): string {
+/**
+ * `locale` is threaded through instead of being pinned to zh-CN. The pinned
+ * value meant the English site rendered Chinese field labels here even though
+ * `playerLabel` exists precisely to localize them.
+ */
+function detailText(value: unknown, locale: string, depth = 0): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (depth >= 3) return '';
   if (Array.isArray(value)) {
-    return value.slice(0, 12).map((item) => detailText(item, depth + 1)).filter(Boolean).join(' · ');
+    return value.slice(0, 12).map((item) => detailText(item, locale, depth + 1)).filter(Boolean).join(' · ');
   }
   if (isRecord(value)) {
     return Object.entries(value).slice(0, 16).map(([key, item]) => {
-      const rendered = detailText(item, depth + 1);
-      return rendered ? `${playerLabel(key, 'zh-CN')}: ${rendered}` : '';
+      const rendered = detailText(item, locale, depth + 1);
+      return rendered ? `${playerLabel(key, locale)}: ${rendered}` : '';
     }).filter(Boolean).join(' · ');
   }
   return '';
 }
 
-function hasDetails(value: Record<string, unknown> | null): boolean {
-  return Boolean(value && Object.values(value).some((item) => detailText(item) !== ''));
+function hasDetails(value: Record<string, unknown> | null, locale: string): boolean {
+  return Boolean(value && Object.values(value).some((item) => detailText(item, locale) !== ''));
 }
 
 function DetailRows({ value }: { value: Record<string, unknown> | null }) {
+  const { locale } = useI18n();
   if (!value) return null;
-  const rows = Object.entries(value).filter(([, item]) => detailText(item) !== '');
+  const rows = Object.entries(value).filter(([, item]) => detailText(item, locale) !== '');
   if (!rows.length) return null;
   return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3">
-    <dt className="text-xs capitalize text-[var(--text-muted)]">{playerLabel(key, 'zh-CN')}</dt>
-    <dd className="mt-1 break-words text-sm text-[var(--text)]">{detailText(item)}</dd>
+    <dt className="text-xs capitalize text-[var(--text-muted)]">{playerLabel(key, locale)}</dt>
+    <dd className="mt-1 break-words text-sm text-[var(--text)]">{detailText(item, locale)}</dd>
   </div>)}</dl>;
 }
 
@@ -148,8 +155,9 @@ export default function ResourceKindDataWorkspace({
     }
   };
 
+  const { locale } = useI18n();
   const activeLabel = tabs.find((tab) => tab.key === activeTab)?.label || '';
-  const summaryHasDetails = hasDetails(data?.summary || null);
+  const summaryHasDetails = hasDetails(data?.summary || null, locale);
   return <section className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-5">
     <div className="mb-4">
       <h3 className="text-base font-semibold text-[var(--text)]">{kind === 'map' ? labels.mapWorkspace : labels.schematicWorkspace}</h3>

@@ -133,7 +133,7 @@ describe('MapLightEditor object operations', () => {
     });
     expect(mockGetMapData).toHaveBeenCalledWith(RESOURCE_ID, 'map', 'rules', VERSION_ID, undefined, expect.objectContaining({ signal: expect.any(Object) }));
 
-    const objectsTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('地图对象'));
+    const objectsTab = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.tabObjects'));
     if (!objectsTab) throw new Error('Map object editing tab was not rendered');
     await act(async () => { objectsTab.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
 
@@ -141,7 +141,7 @@ describe('MapLightEditor object operations', () => {
     if (!core) throw new Error('Core editor row was not rendered');
     const coordinates = core.querySelectorAll('input[type="number"]');
     const team = core.querySelector('select');
-    const apply = Array.from(core.querySelectorAll('button')).find((button) => button.textContent?.includes('应用'));
+    const apply = Array.from(core.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.apply'));
     if (!coordinates[0] || !team || !apply) throw new Error('Core edit controls were not rendered');
 
     await act(async () => {
@@ -149,9 +149,9 @@ describe('MapLightEditor object operations', () => {
       Simulate.change(team, { target: { value: 'crux' } as unknown as EventTarget });
     });
     await act(async () => { apply.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
-    expect(container.textContent).toContain('待保存对象操作：2');
+    expect(container.textContent).toContain('editor.pendingObjectOps');
 
-    const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('保存为新版本'));
+    const save = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('editor.saveNewVersion'));
     if (!save) throw new Error('Save as new version control was not rendered');
     await act(async () => {
       save.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));

@@ -37,17 +37,17 @@ function ContentIcon({ entry, kind }: { entry?: ContentEntry; kind: 'item' | 'bl
   </span>;
 }
 
-const factKeys: Record<string, string> = {
-  '地图尺寸': 'mapSize', '模式': 'mode', '星球': 'planet', '出生点': 'spawns', '核心': 'cores',
-  '蓝图尺寸': 'schematicSize', '方块': 'blocks', '净功率': 'netPower', 'Mod 版本': 'modVersion',
-  '支持游戏版本': 'supportedGameVersions', '平台': 'platform', '游戏版本': 'gameVersion', '渠道': 'channel',
-  '资源版本': 'resourceVersion', '适用版本': 'compatibleVersions',
-};
-
-function FactGrid({ resource, t }: { resource: Resource; t: (key: string) => string }) {
+function FactGrid({ resource, t }: { resource: Resource; t: (key: string, values?: Record<string, string | number>) => string }) {
   const facts = resourceCardFacts(resource);
   if (!facts.length) return <p className="text-sm text-[var(--text-muted)]">{t('resourceKindDetails.noFacts')}</p>;
-  return <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">{facts.map((fact) => <div key={fact.label}><dt className="text-xs text-[var(--text-muted)]">{t(`resourceKindDetails.fact.${factKeys[fact.label] || 'resourceVersion'}`)}</dt><dd className="mt-1 break-words font-semibold text-[var(--text)]">{fact.value}</dd></div>)}</dl>;
+  return <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">{facts.map((fact) => <div key={fact.label}><dt className="text-xs text-[var(--text-muted)]">{t(fact.label)}</dt><dd className="mt-1 break-words font-semibold text-[var(--text)]">{renderFactValue(t, fact)}</dd></div>)}</dl>;
+}
+
+/** Some facts carry a composed unit; the label decides how it is rendered. */
+function renderFactValue(t: (key: string, values?: Record<string, string | number>) => string, fact: { label: string; value: string }): string {
+  if (fact.label === 'editor.coresUnit') return t(fact.label, { count: fact.value });
+  if (fact.label === 'editor.netPowerUnit') return t(fact.label, { value: fact.value });
+  return fact.value;
 }
 
 export default function ResourceKindDetails({ resource, selectedVersionPublicId }: { resource: Resource; selectedVersionPublicId?: string }) {
@@ -127,7 +127,7 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
     {(kind === 'map' || kind === 'schematic') && (hasBuildEvidence || compatibilityEvidence.length > 0) && <section className="mt-5 rounded-lg border border-[var(--border)] bg-[var(--bg-elevated)] p-4">
       <h3 className="text-sm font-semibold text-[var(--text)]">{t('resourceKindDetails.buildCompatibility')}</h3>
       <dl className="mt-3 space-y-2 text-sm">
-        {kind === 'map' && typeof mapBuild?.stored_game_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.fileRecord')}</dt><dd className="text-[var(--text)]">构建号 {mapBuild.stored_game_build}</dd></div>}
+        {kind === 'map' && typeof mapBuild?.stored_game_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.fileRecord')}</dt><dd className="text-[var(--text)]">{t('editor.buildNumber', { build: mapBuild.stored_game_build })}</dd></div>}
         {kind === 'schematic' && typeof rendererCompatibility?.minimum_supported_build === 'number' && <div className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{t('resourceKindDetails.contentInference', { confidence: confidenceLabel(rendererCompatibility.confidence) })}</dt><dd className="text-[var(--text)]">{t('resourceKindDetails.minimumBuild', { build: rendererCompatibility.minimum_supported_build })}</dd></div>}
         {compatibilityEvidence.filter((item) => item.provenance !== 'inferred' || !hasBuildEvidence).map((item, index) => <div key={`${item.version}-${item.provenance}-${index}`} className="flex flex-wrap justify-between gap-x-4"><dt className="text-[var(--text-muted)]">{evidenceLabel(item.provenance)} · {t('resourceTabs.versionLabel', { version: item.version || '' })}</dt><dd className="text-[var(--text)]">{evidenceValue(item)}{item.confidence ? ` · ${confidenceLabel(item.confidence)} ${t('resourceKindDetails.confidenceSuffix')}` : ''}</dd></div>)}
       </dl>
@@ -201,6 +201,6 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
       {dependencies.length > 0 && <p className="mt-4 text-sm"><span className="text-[var(--text-muted)]">{t('resourceKindDetails.dependencies')}: </span><span className="text-[var(--text)]">{[...new Set(dependencies)].join('、')}</span></p>}
     </>}
     {kind === 'game_version' && <p className="mt-4 text-sm text-[var(--text-secondary)]">{t('resourceKindDetails.gameVersionNote')}</p>}
-    <p className="mt-5 text-xs text-[var(--text-muted)]">{resourceFileSummary(resource).join(' · ')}</p>
+    <p className="mt-5 text-xs text-[var(--text-muted)]">{resourceFileSummary(resource).map((part) => t(part)).join(' · ')}</p>
   </section>;
 }

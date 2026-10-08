@@ -75,10 +75,11 @@ function displayDetailsValue(value: unknown, depth = 0): string {
 }
 
 function SummaryRows({ value }: { value: Record<string, unknown> | null }) {
+  const { t } = useI18n();
   if (!value) return null;
   const rows = Object.entries(value).filter(([, item]) => displayDetailsValue(item) !== '');
   if (rows.length === 0) return null;
-  return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{({ width: '宽度', height: '高度', block_count: '方块数量', min_supported_build: '最低游戏版本', parser_version: '解析器版本', game_mode: '游戏模式', planet: '星球' } as Record<string, string>)[key] || key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(item)}</dd></div>)}</dl>;
+  return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{({ width: t('editor.labelWidth'), height: t('editor.labelHeight'), block_count: t('editor.labelBlockCount'), min_supported_build: t('editor.labelMinBuild'), parser_version: t('editor.labelParserVersion'), game_mode: t('editor.labelGameMode'), planet: t('editor.labelPlanet') } as Record<string, string>)[key] || key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(item)}</dd></div>)}</dl>;
 }
 
 function FoldCard({ title, children, open = false }: { title: string; children: React.ReactNode; open?: boolean }) {
@@ -287,6 +288,7 @@ function ModDetails({ data, analysis, publicId, versionPublicId, parserVersion, 
 }
 
 function ResourceFacts({ workbench, analysis, versionPublicId, labels }: { workbench: ResourceWorkbenchV2Response; analysis: ResourceWorkbenchV2Analysis | null; versionPublicId: string | null; labels: Record<string, string> }) {
+  const { t } = useI18n();
   const { resource } = workbench;
   const metadata = resource.metadata;
   const map = metadata?.map;
@@ -302,7 +304,7 @@ function ResourceFacts({ workbench, analysis, versionPublicId, labels }: { workb
   return <FoldCard title={labels.parserDetails} open>
     <div className="space-y-4">
       {resource.renderer?.parser_version && <p className="text-xs text-[var(--text-muted)]">{labels.parser}: {resource.renderer.parser_version}</p>}
-      <dl className="grid gap-3 sm:grid-cols-2">{entries.map(([key, value]) => <div key={key}><dt className="text-xs text-[var(--text-muted)]">{({ width: '宽度', height: '高度', block_count: '方块数量', min_supported_build: '最低游戏版本', parser_version: '解析器版本', game_mode: '游戏模式', planet: '星球' } as Record<string, string>)[key] || key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(value)}</dd></div>)}</dl>
+      <dl className="grid gap-3 sm:grid-cols-2">{entries.map(([key, value]) => <div key={key}><dt className="text-xs text-[var(--text-muted)]">{({ width: t('editor.labelWidth'), height: t('editor.labelHeight'), block_count: t('editor.labelBlockCount'), min_supported_build: t('editor.labelMinBuild'), parser_version: t('editor.labelParserVersion'), game_mode: t('editor.labelGameMode'), planet: t('editor.labelPlanet') } as Record<string, string>)[key] || key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(value)}</dd></div>)}</dl>
       {arrays.map(([key, value]) => <div key={key}><h4 className="text-xs font-semibold text-[var(--text-muted)]">{key}</h4><div className="mt-2 flex flex-wrap gap-1.5">{(value as unknown[]).map((item, index) => {
         const label = displayDetailsValue(item);
         return label ? <span key={`${label}:${index}`} className="rounded bg-[var(--bg-elevated)] px-2 py-1 text-xs">{label}</span> : null;
@@ -433,9 +435,10 @@ function VersionWorkspace({ version, locale, kind, publicId, versions, labels }:
 }
 
 function CompatibilityPanel({ version, labels }: { version: ResourceWorkbenchV2Version; labels: Record<string, string> }) {
+  const { t } = useI18n();
   return <div className="space-y-4">
     {version.compatibility.length ? <ul className="grid gap-2 sm:grid-cols-2">{version.compatibility.map((item, index) => <li key={`${item.runtime}:${item.game_version}:${index}`} className="rounded-lg border border-[var(--border)] p-3">
-      <p className="font-medium text-[var(--text)]">{item.runtime}{item.game_version ? ` · ${item.game_version}` : ''}{item.status ? ` · ${({ verified: '已验证', working: '可用', partial: '部分可用', pending: '待审核', unknown: '未确认', cannot_start: '无法启动' } as Record<string, string>)[item.status] || item.status}` : ''}</p>
+      <p className="font-medium text-[var(--text)]">{item.runtime}{item.game_version ? ` · ${item.game_version}` : ''}{item.status ? ` · ${({ verified: t('editor.statusVerified'), working: t('editor.statusWorking'), partial: t('editor.statusPartial'), pending: t('editor.statusPending'), unknown: t('editor.statusUnknown'), cannot_start: t('editor.statusCannotStart') } as Record<string, string>)[item.status] || item.status}` : ''}</p>
       <p className="mt-1 text-sm text-[var(--text-muted)]">{item.min_game_version || labels.unknown} – {item.max_game_version || labels.unknown}{item.channel ? ` · ${item.channel}` : ''}{item.platform ? ` · ${item.platform}` : ''}</p>
       {item.source && <p className="mt-1 text-xs text-[var(--text-muted)]">{labels.source}: {item.source}{item.confidence ? ` · ${item.confidence}` : ''}</p>}
       {item.notes && <p className="mt-1 text-xs text-[var(--text-muted)]">{item.notes}</p>}
@@ -545,7 +548,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
   const canEditProfile = Boolean(workbench?.permissions.can_manage)
     && ['owner', 'maintainer'].includes(workbench?.permissions.role || '');
   const sectionItems: Array<{ key: SectionKey; label: string }> = [
-    ...(workbench && ['map', 'schematic'].includes(workbench.resource.resource_kind) ? [{ key: 'editor' as const, label: '在线编辑' }] : []),
+    ...(workbench && ['map', 'schematic'].includes(workbench.resource.resource_kind) ? [{ key: 'editor' as const, label: t('editor.tabEditor') }] : []),
     { key: 'overview', label: t('resourceWorkbenchV2.overview') },
     { key: 'publish', label: t('resourceWorkbenchV2.publish') },
     { key: 'compatibility', label: t('resourceWorkbenchV2.compatibility') },
@@ -606,14 +609,14 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-soft)] text-[var(--primary)]"><ResourceIcon className="h-5 w-5" /></span>
             <div className="min-w-0"><p className="text-xs uppercase tracking-wide text-[var(--text-muted)]">{resource.resource_kind}</p><h1 className="mt-1 break-words text-2xl font-bold text-[var(--text)] sm:text-3xl">{resource.title}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-secondary)]">{resource.summary || resource.description || t('resourceWorkbenchV2.noDescription')}</p></div>
           </div>
-          <div className="flex shrink-0 flex-col gap-2 sm:items-end"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${workbench.permissions.can_manage ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}><Shield className="h-3.5 w-3.5" />{workbench.permissions.can_manage ? t('resourceWorkbenchV2.manager') : '可编辑副本'}</span></div>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${workbench.permissions.can_manage ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}><Shield className="h-3.5 w-3.5" />{workbench.permissions.can_manage ? t('resourceWorkbenchV2.manager') : t('editor.primaryReadOnlyCopy')}</span></div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[[t('resourceWorkbenchV2.views'), workbench.stats.views], [t('resourceWorkbenchV2.downloads'), workbench.stats.downloads], [t('resourceWorkbenchV2.likes'), workbench.stats.likes], [t('resourceWorkbenchV2.favorites'), workbench.stats.favorites]].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-[var(--bg-elevated)] p-3"><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums text-[var(--text)]">{Number(value).toLocaleString(locale)}</p></div>)}
         </div>
       </header>
 
-      {['schematic', 'map'].includes(resource.resource_kind) ? <div className="mb-4 flex flex-wrap gap-2"><button type="button" onClick={() => navigateTo('editor')} className="min-h-11 bg-[var(--primary)] px-4 text-sm font-semibold text-white">{resource.resource_kind === 'schematic' ? '打开蓝图编辑器' : '打开地图编辑器'}</button><p className="self-center text-sm text-[var(--text-muted)]">编辑副本可下载或发布为自己的资源，原作品保持不变。</p></div> : null}
+      {['schematic', 'map'].includes(resource.resource_kind) ? <div className="mb-4 flex flex-wrap gap-2"><button type="button" onClick={() => navigateTo('editor')} className="min-h-11 bg-[var(--primary)] px-4 text-sm font-semibold text-white">{resource.resource_kind === 'schematic' ? t('editor.openSchematicEditor') : t('editor.openMapEditor')}</button><p className="self-center text-sm text-[var(--text-muted)]">{t('editor.editableCopyHint')}</p></div> : null}
       <div className="mb-4 lg:hidden">
         <button type="button" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((value) => !value)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 text-sm font-semibold text-[var(--text)]"><span>{t('resourceWorkbenchV2.sections')}: {sectionItems.find((item) => item.key === activeSection)?.label}</span><ChevronDown className={`h-4 w-4 transition-transform ${mobileNavOpen ? 'rotate-180' : ''}`} /></button>
         {mobileNavOpen && <nav aria-label={t('resourceWorkbenchV2.sections')} className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-2">{sectionItems.map(({ key, label }) => {

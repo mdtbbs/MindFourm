@@ -9,7 +9,9 @@ import { fetchApiData } from '@/lib/api/server-fetch';
 import { toMetaDescription } from '@/lib/seo/description';
 import { absoluteUrl } from '@/lib/seo/site-url';
 import JsonLd from '@/components/seo/json-ld';
-import { resourceKindLabel } from '@/lib/display-labels';
+import { resourceKindLabelKey } from '@/lib/display-labels';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 import { buildHybridParam, extractIdFromHybridParam } from '@/lib/seo/hybrid-param';
 
 const fetchResource = cache(async (id: number | string): Promise<Resource | null> => {
@@ -41,7 +43,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!resource) notFound();
   const description = toMetaDescription(resource.description || resource.content);
   const canonical = `/resources/${buildHybridParam(resource.id, resource.slug || '')}`;
-  const kind = resourceKindLabel(resource.resource_kind);
+  const locale = await getRequestLocale();
+  const kind = translate(locale, resourceKindLabelKey(resource.resource_kind));
   return {
     title: `${resource.title} - Mindustry ${kind}`,
     description,
@@ -62,6 +65,8 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
   const resource = typeof resourceId === 'string' || Number.isFinite(resourceId) ? await fetchResource(resourceId) : null;
   if (!resource) notFound();
   const resourcePath = `/resources/${buildHybridParam(resource.id, resource.slug || '')}`;
+  const locale = await getRequestLocale();
+  const t = (key: string) => translate(locale, key);
   const resourceJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'CreativeWork',
@@ -70,16 +75,16 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
     description: toMetaDescription(resource.description || resource.content),
     datePublished: resource.created_at,
     dateModified: resource.updated_at || resource.created_at,
-    author: { '@type': 'Person', name: resource.username || `用户 #${resource.user_id}`, url: absoluteUrl(`/users/${resource.user_id}`) },
+    author: { '@type': 'Person', name: resource.username || translate(locale, 'cards.userFallback', { id: resource.user_id }), url: absoluteUrl(`/users/${resource.user_id}`) },
     ...(resource.metadata?.cover_image_url ? { image: absoluteUrl(resource.metadata.cover_image_url) } : {}),
-    ...(resource.resource_kind ? { genre: resourceKindLabel(resource.resource_kind) } : {}),
+    ...(resource.resource_kind ? { genre: translate(locale, resourceKindLabelKey(resource.resource_kind)) } : {}),
   };
   const breadcrumbJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'BreadcrumbList',
     itemListElement: [
-      { '@type': 'ListItem', position: 1, name: '首页', item: absoluteUrl('/') },
-      { '@type': 'ListItem', position: 2, name: '资源中心', item: absoluteUrl('/resources') },
+      { '@type': 'ListItem', position: 1, name: t('navigation.home'), item: absoluteUrl('/') },
+      { '@type': 'ListItem', position: 2, name: t('resources.title'), item: absoluteUrl('/resources') },
       ...(resource.category_name ? [{ '@type': 'ListItem', position: 3, name: resource.category_name, item: absoluteUrl(`/resources?category_id=${resource.category_id}`) }] : []),
       { '@type': 'ListItem', position: resource.category_name ? 4 : 3, name: resource.title, item: absoluteUrl(resourcePath) },
     ],
