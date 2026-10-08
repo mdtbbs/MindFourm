@@ -7,6 +7,7 @@ import { ResourcePreviewService } from './resource-preview.service';
 describe('ResourcePreviewService', () => {
   const resClient = () => ({
     isAvailable: true,
+    isReachable: true,
     uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-preview' }),
     createBinding: jest.fn().mockResolvedValue({ id: 'binding-preview' }),
     deleteBinding: jest.fn().mockResolvedValue(undefined),
@@ -69,7 +70,7 @@ describe('ResourcePreviewService', () => {
 
   it('rejects newly rendered drafts when RES is unavailable', async () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
-    const service = new ResourcePreviewService({} as any, undefined, undefined, undefined, { isAvailable: false } as any);
+    const service = new ResourcePreviewService({} as any, undefined, undefined, undefined, { isAvailable: false, isReachable: false } as any);
     await expect(service.createDraft(17, 'map', { file_size: 10 } as any)).rejects.toThrow('资源存储服务暂不可用');
   });
 
@@ -117,6 +118,7 @@ describe('ResourcePreviewService', () => {
       const update = jest.fn().mockResolvedValue(undefined);
       const client = {
         isAvailable: true,
+        isReachable: true,
         uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-preview' }),
         createBinding: jest.fn().mockResolvedValue({ id: 'binding-preview' }),
         buildPublicDownloadUrl: jest.fn().mockReturnValue('https://res.example/o/res-preview/preview.png'),

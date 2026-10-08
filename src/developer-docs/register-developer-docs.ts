@@ -7,6 +7,9 @@ import { API_V1_BASE_PATH, API_V1_VERSION } from '../openapi/api-version';
 import { parseMarkdown } from '../common/utils/markdown.util';
 import { getAllV1ErrorCodes } from '../common/contracts/v1-error-codes';
 import { apiV1Error, v1ErrorCodeAnchor, v1ErrorDocumentationUrl } from '../common/contracts/api-v1.contract';
+import { AdapterRouteGuard } from '../common/utils/adapter-route-guard.util';
+import { SharedBudget } from '../common/utils/shared-budget.util';
+import { getInternalApiKey } from '../config/app.config';
 
 type CodeLanguage = 'curl' | 'javascript' | 'typescript' | 'python' | 'java' | 'kotlin';
 
@@ -2246,6 +2249,35 @@ export function registerDeveloperDocs(
   forumVersion: string,
 ): void {
   const adapter = app.getHttpAdapter();
+  const guard = new AdapterRouteGuard(new SharedBudget(), () => getInternalApiKey());
+
+  /**
+   * These pages are rendered from the ~1MB OpenAPI document on every hit and are
+   * registered directly on the adapter, so the Nest guard chain never applies. The
+   * budget caps a crawler; the caches make a repeat hit free. Rendering happens
+   * once per distinct page because the content only depends on the document, which
+   * is fixed for the process lifetime.
+   */
+  const renderedPages = new Map<string, string>();
+  const renderOnce = (key: string, render: () => string): string => {
+    const cached = renderedPages.get(key);
+    if (cached !== undefined) return cached;
+    const html = render();
+    renderedPages.set(key, html);
+    return html;
+  };
+
+  const sendGuarded = (
+    request: any,
+    res: any,
+    render: () => string,
+    options: { noStore?: boolean; status?: number } = {},
+  ): void => {
+    if (!guard.check(request, res)) return;
+    const html = render();
+    setHtmlHeaders(res, html, { noStore: options.noStore });
+    res.status(options.status ?? 200).send(html);
+  };
 
   // Swagger UI ships English-only labels. Keep its former public entry point
   // useful by redirecting browser users to the fully localized API reference.
@@ -2254,62 +2286,53 @@ export function registerDeveloperDocs(
   adapter.get('/api/docs/v1', redirectToChineseReference);
   adapter.get('/api/docs/v1/', redirectToChineseReference);
 
-  adapter.get('/developers', (_req: any, res: any) => {
-    const html = renderHome(forumVersion);
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+  const homePage = () => renderOnce('home', () => renderHome(forumVersion));
+
+  adapter.get('/developers', (req: any, res: any) => {
+    sendGuarded(req, res, homePage);
   });
 
-  adapter.get('/api/v1', (_req: any, res: any) => {
-    const html = renderHome(forumVersion);
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+  adapter.get('/api/v1', (req: any, res: any) => {
+    sendGuarded(req, res, homePage);
   });
 
   adapter.get('/api/v1/docs/:slug', (req: any, res: any) => {
     const slug = String(req.params?.slug || '');
-    const page = slug === 'errors'
-      ? null
-      : renderMarkdownGuide(slug) || guidePages()[slug];
     if (slug === 'errors') {
-      const html = renderErrorReference(forumVersion);
-      setHtmlHeaders(res, html);
-      res.status(200).send(html);
+      sendGuarded(req, res, () => renderOnce('errors', () => renderErrorReference(forumVersion)));
       return;
     }
+    const page = renderMarkdownGuide(slug) || guidePages()[slug];
     if (!page) {
+      // A 404 is still a request against the budget; answering it before the guard
+      // would let an unknown-slug scan run unmetered.
+      if (!guard.check(req, res)) return;
       res.status(404).json(apiV1Error('DOC_NOT_FOUND', '文档页面不存在', false, [], req.requestId || ''));
       return;
     }
-    const html = commonShell({
+    sendGuarded(req, res, () => renderOnce(`guide:${slug}`, () => commonShell({
       title: page.title,
       description: page.description,
       body: page.body,
       forumVersion,
-      activePath: `/api/v1/docs/${req.params.slug}`,
+      activePath: `/api/v1/docs/${slug}`,
       toc: page.toc,
-    });
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+    })));
   });
 
-  adapter.get('/api/v1/reference', (_req: any, res: any) => {
-    const html = renderReference(document, forumVersion);
-    setHtmlHeaders(res, html);
-    res.status(200).send(html);
+  adapter.get('/api/v1/reference', (req: any, res: any) => {
+    sendGuarded(req, res, () => renderOnce('reference', () => renderReference(document, forumVersion)));
   });
 
-  adapter.get('/api/v1/debugger', (_req: any, res: any) => {
-    const method = String(_req.query?.method || '').toLowerCase();
-    const path = String(_req.query?.path || '');
-    const html = renderDebugger(forumVersion, method, path);
-    setHtmlHeaders(res, html, { noStore: true });
-    res.status(200).send(html);
+  adapter.get('/api/v1/debugger', (req: any, res: any) => {
+    const method = String(req.query?.method || '').toLowerCase();
+    const path = String(req.query?.path || '');
+    // Query-dependent and intentionally uncached: the debugger renders a request
+    // preview, so `no-store` has to mean no-store.
+    sendGuarded(req, res, () => renderDebugger(forumVersion, method, path), { noStore: true });
   });
 
-  adapter.get('/api/v1/debug/callback', (_req: any, res: any) => {
-    const html = renderOAuthCallback(forumVersion);
-    setHtmlHeaders(res, html, { noStore: true });
-    res.status(200).send(html);
+  adapter.get('/api/v1/debug/callback', (req: any, res: any) => {
+    sendGuarded(req, res, () => renderOAuthCallback(forumVersion), { noStore: true });
   });
 }

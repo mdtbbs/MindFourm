@@ -20,6 +20,17 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly fallback = new MemoryStore();
   private redisAvailable = false;
 
+  /**
+   * Per-process cooldown markers, keyed by caller-supplied scope.
+   *
+   * `setIfNotExists` is not enough for refresh cooldowns: during a Redis outage it
+   * would live only in the fallback store and vanish on the next Redis recovery,
+   * letting every authenticated request call MindAuth again. This map survives that
+   * transition and is pruned lazily, so a Redis hiccup cannot turn read traffic into
+   * a MindAuth + MySQL write storm.
+   */
+  private readonly localCooldowns = new Map<string, number>();
+
   constructor(private config: ConfigService) {}
 
   async onModuleInit() {
@@ -108,6 +119,62 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       password: this.config.get<string>('redis.password') || undefined,
       db: this.config.get<number>('redis.db'),
     };
+  }
+
+  // ── Cooldowns (Redis-backed with a process-local floor) ──────────────────
+
+  /**
+   * Claim a cooldown. Returns true when the caller may proceed, false while the
+   * cooldown is still active. The decision is enforced against both Redis and a
+   * process-local marker, and a Redis write failure must not open the gate.
+   */
+  async acquireCooldown(scope: string, ttlSeconds: number, distinctId?: string): Promise<boolean> {
+    const key = `cooldown:${scope}:${distinctId ?? 'global'}`;
+    const now = Date.now();
+    const localExpiry = this.localCooldowns.get(key);
+    if (localExpiry !== undefined) {
+      if (localExpiry > now) return false;
+      this.localCooldowns.delete(key);
+    }
+
+    let claimed = false;
+    if (this.redisAvailable) {
+      try {
+        claimed = Boolean(await this.client.set(key, '1', 'EX', ttlSeconds, 'NX'));
+      } catch (error) {
+        // Keep the local marker: Redis being unreachable must not disable the gate.
+        this.logger.warn(`Cooldown store failed, enforcing locally: ${(error as Error).message}`);
+        this.redisAvailable = false;
+        claimed = true;
+      }
+    } else {
+      claimed = true;
+    }
+
+    if (claimed) this.localCooldowns.set(key, now + ttlSeconds * 1000);
+    this.pruneLocalCooldowns(now);
+    return claimed;
+  }
+
+  /** Drop a claimed cooldown so the caller can retry immediately (for example after a retryable error). */
+  async releaseCooldown(scope: string, distinctId?: string): Promise<void> {
+    const key = `cooldown:${scope}:${distinctId ?? 'global'}`;
+    this.localCooldowns.delete(key);
+    if (!this.redisAvailable) return;
+    try {
+      await this.client.del(key);
+    } catch {
+      // Local release already happened; Redis will expire the key on its own.
+    }
+  }
+
+  private pruneLocalCooldowns(now = Date.now()): void {
+    // Bounded by the number of distinct cooldown scopes/identities in one TTL, so a
+    // plain sweep on write is enough and no timer is needed.
+    if (this.localCooldowns.size < 512) return;
+    for (const [key, expiry] of this.localCooldowns) {
+      if (expiry <= now) this.localCooldowns.delete(key);
+    }
   }
 
   // String operations
@@ -463,13 +530,43 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Fixed-window counter for the rate-limit guard.
+   *
+   * This used to call `client.eval` directly, so a Redis outage made the guard
+   * throw — and because the guard fails open, rate limiting silently disappeared
+   * exactly when an overloaded site needed it most. The fallback implements the
+   * window in process memory (INCR plus EXPIRE armed for the first hit) so the
+   * limit keeps applying while Redis is down.
+   */
+  async incrementFixedWindow(key: string, windowSeconds: number): Promise<number> {
+    return this.withFallback(
+      async () =>
+        Number(
+          (await this.client.eval(
+            `local current = redis.call('INCR', KEYS[1])
+if current == 1 then redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1])) end
+return current`,
+            1,
+            key,
+            windowSeconds,
+          )) as number,
+        ),
+      () => {
+        if (this.fallback.ttl(key) < 0) this.fallback.expireAfterNextIncr(key, windowSeconds);
+        return this.fallback.incr(key);
+      },
+    );
+  }
+
+  /**
    * Lua script execution.
    *
    * There is no fallback: callers rely on Redis to run state transitions
-   * atomically (including rate limiting and MindAuth refresh recovery). Each
-   * caller handles an outage according to its contract; token rotation fails
-   * closed, while rate limiting may degrade. Do not emulate scripts in process
-   * and risk divergent state across workers.
+   * atomically (including MindAuth refresh recovery). Each caller handles an
+   * outage according to its contract; token rotation fails closed, while rate
+   * limiting — which must degrade rather than disappear — goes through
+   * `incrementFixedWindow` instead. Do not emulate scripts in process and risk
+   * divergent state across workers.
    */
   async eval(script: string, keys: string[], args: (string | number)[]): Promise<any> {
     return this.client.eval(script, keys.length, ...keys, ...args);

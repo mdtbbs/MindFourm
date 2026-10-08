@@ -57,7 +57,7 @@ export class GameContentService {
 
   /** Keep the legacy game-content request contract while making RES the durable byte store. */
   private async uploadGameContentToRes(file: StoredResourceFile) {
-    if (!this.resClient?.isAvailable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
+    if (!this.resClient?.isReachable) throw new ServiceUnavailableException('资源存储服务暂不可用，请稍后重试');
     const object = await this.resClient.uploadServerGeneratedObject({
       body: createReadStream(file.file_path), sizeBytes: file.file_size, sha256: file.content_hash,
       mimeType: file.mime_type || 'application/octet-stream', filename: file.file_name, purpose: 'resource_version',
