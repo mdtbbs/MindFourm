@@ -4,6 +4,7 @@ import {
 import { Response } from 'express';
 import { ApiV1Exception } from '../exceptions/api-v1.exception';
 import { apiV1Error } from '../contracts/api-v1.contract';
+import { lookupV1ErrorCode } from '../contracts/v1-error-codes';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -63,7 +64,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   private handleV1(exception: unknown, response: Response, requestId: string): void {
     if (exception instanceof ApiV1Exception) {
-      response.status(exception.getStatus()).json(
+      response.status(exception.requestedStatus).json(
         apiV1Error(exception.code, exception.message, exception.retryable, exception.details, requestId),
       );
       return;
@@ -72,14 +73,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
-      const message = typeof exceptionResponse === 'string'
-        ? exceptionResponse
-        : (exceptionResponse as any).message || exception.message;
-
-      const isValidation = status === HttpStatus.BAD_REQUEST;
       const structured = typeof exceptionResponse === 'object' && exceptionResponse !== null
         ? exceptionResponse as Record<string, any>
         : {};
+      // `exception.message` is Nest's generic "Conflict Exception" for payload
+      // exceptions, so never let it win over the registry's published message.
+      const explicitMessage = typeof exceptionResponse === 'string'
+        ? exceptionResponse
+        : structured.message;
+
+      const isValidation = status === HttpStatus.BAD_REQUEST;
       const inferredCode = status === HttpStatus.TOO_MANY_REQUESTS ? 'RATE_LIMITED'
         : status === HttpStatus.PAYLOAD_TOO_LARGE ? 'UPLOAD_TOO_LARGE'
         : status === HttpStatus.NOT_FOUND ? 'RESOURCE_NOT_FOUND'
@@ -87,9 +90,23 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const code = typeof structured.code === 'string' && /^[A-Z0-9_]{1,100}$/.test(structured.code)
         ? structured.code
         : inferredCode;
+
+      // Services that raise plain Nest exceptions for stable codes (e.g.
+      // `throw new ConflictException({ code: 'SESSION_FULL' })`) do not carry a
+      // human message. Fall back to the registry's default message instead of
+      // echoing the code back to the client, and honour its retryability.
+      const definition = lookupV1ErrorCode(code);
+      const fallbackMessage = typeof explicitMessage === 'string' && explicitMessage !== code
+        ? explicitMessage
+        : definition?.defaultMessage ?? exception.message;
+      const message = definition && (typeof explicitMessage !== 'string' || explicitMessage === code)
+        ? definition.defaultMessage
+        : fallbackMessage;
       const retryable = typeof structured.retryable === 'boolean'
         ? structured.retryable
-        : status === HttpStatus.TOO_MANY_REQUESTS || status >= 500;
+        : definition
+          ? definition.retryable
+          : status === HttpStatus.TOO_MANY_REQUESTS || status >= 500;
 
       const details: unknown[] = [];
       if (typeof exceptionResponse === 'object' && exceptionResponse !== null) {
@@ -100,7 +117,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         }
       }
 
-      const errorBody = apiV1Error(code, typeof message === 'string' ? message : String(message), retryable, details, requestId);
+      const errorBody = apiV1Error(code, message, retryable, details, requestId);
       if (structured.existing_resource) (errorBody.error as any).existing_resource = structured.existing_resource;
       if (structured.existing_resources) (errorBody.error as any).existing_resources = structured.existing_resources;
       response.status(status).json(errorBody);

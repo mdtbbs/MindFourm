@@ -2,6 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { lanlinkApi } from '@/lib/api/client';
+import { siteProfile } from '@/config/site-profile';
+import { isHrefEnabled } from '@/lib/navigation/top-navigation';
+import { useSettings } from '@/store/settings-store';
 import type { QuickCodeStatus as QuickCodeStatusType } from '@/types/lanlink';
 import { QuickCodeStatus } from '@/components/lanlink/QuickCodeStatus';
 import QuickCodeDisplay from '@/components/lanlink/QuickCodeDisplay';
@@ -15,8 +18,14 @@ export default function QuickCodePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Check if LanLink feature is enabled
-  const isLanLinkEnabled = process.env.NEXT_PUBLIC_LANLINK_ENABLED === 'true';
+  // LanLink has three historical truth sources: the site profile, the runtime
+  // `feature_lanlink_enabled` setting, and NEXT_PUBLIC_LANLINK_ENABLED. The env
+  // var is absent from the standard frontend env files, so the old check made
+  // the page report "LanLink 功能未启用" on a deployment where LanLink works.
+  // The middleware/layout guard and the navigation both use profile + settings.
+  const settings = useSettings();
+  const isLanLinkEnabled = siteProfile.features.lanlink !== false
+    && isHrefEnabled('/lanlink', settings);
 
   useEffect(() => {
     if (isLanLinkEnabled) {

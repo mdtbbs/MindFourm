@@ -5,8 +5,15 @@ import Link from 'next/link';
 import { friendsApi, multiplayerApi, socialPresenceApi, userBlocksApi, type IncomingJoinRequest, type SocialFriendPresenceItem } from '@/lib/api/client';
 import FriendRequests from '@/components/lanlink/FriendRequests';
 import { confirmDialog } from '@/store/interaction-dialog-store';
-import { type ForumRealtimeMessage } from '@/hooks/use-forum-realtime';
+import {
+  ackForumRealtimeEvent,
+  readApprovalIntentId,
+  subscribeForumRealtimeSession,
+  type ForumRealtimeMessage,
+} from '@/hooks/use-forum-realtime';
+import { handleV1Unauthorized, localizeV1Error } from '@/lib/api/v1/transport';
 import { useAuth } from '@/lib/auth/context';
+import { useUserStore } from '@/store/user-store';
 
 type Tab = 'all' | 'online' | 'pending' | 'blocked';
 
@@ -29,6 +36,7 @@ function activityDuration(startedAt?: number) {
 
 export default function FriendsList() {
   const { user } = useAuth();
+  const refreshAuth = useUserStore((state) => state.refreshAuth);
   const [tab, setTab] = useState<Tab>('all');
   const [friends, setFriends] = useState<SocialFriendPresenceItem[]>([]);
   const [blocked, setBlocked] = useState<Array<{ id: number; user: { id: number; username: string; avatar_url: string | null } }>>([]);
@@ -41,25 +49,49 @@ export default function FriendsList() {
   const [invites, setInvites] = useState<Array<{ invite_id: string; session_id: string; sender_user_id: number; expires_at: string; session: { game_id: string; game_version?: string | null; activity_name?: string | null } | null }>>([]);
   const [joinRequests, setJoinRequests] = useState<IncomingJoinRequest[]>([]);
   const [approvals, setApprovals] = useState<Array<{ id: string; requestId: string; intentId: string; sessionId?: string }>>([]);
+  const [joinRequestErrors, setJoinRequestErrors] = useState<Record<string, string>>({});
   const [busyActions, setBusyActions] = useState<Set<string>>(new Set());
   const [launcher, setLauncher] = useState<{ default_client_id: string | null; clients: Array<{ client_id: string; name: string; launch_uri_template: string | null }> }>({ default_client_id: null, clients: [] });
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
-    const [presenceResult, blocksResult, preferencesResult, friendRequestsResult, invitesResult, joinRequestsResult] = await Promise.allSettled([
+    // Silently returning on a failed request made an empty "0 条邀请" list look
+    // identical to a successful one. Collect every failure and report it.
+    const failures: string[] = [];
+    const settled = await Promise.allSettled([
       socialPresenceApi.getFriends(1, 50), userBlocksApi.list(1, 50), multiplayerApi.getPreferences(),
       friendsApi.getRequests(1, 50), multiplayerApi.listInvites(), multiplayerApi.listJoinRequests(),
     ]);
+    const [presenceResult, blocksResult, preferencesResult, friendRequestsResult, invitesResult, joinRequestsResult] = settled;
+    for (const result of settled) {
+      if (result.status === 'rejected' && handleV1Unauthorized(result.reason, () => void refreshAuth())) {
+        setLoading(false);
+        return;
+      }
+    }
     if (presenceResult.status === 'fulfilled') setFriends(presenceResult.value.data || []);
-    else setError('好友状态暂时无法加载，请稍后重试。');
+    else failures.push('好友状态');
     if (blocksResult.status === 'fulfilled') setBlocked(blocksResult.value.data || []);
+    else failures.push('屏蔽列表');
     if (preferencesResult.status === 'fulfilled') setLauncher(preferencesResult.value);
+    else failures.push('联机客户端设置');
     if (friendRequestsResult.status === 'fulfilled') setFriendRequestCount(friendRequestsResult.value.total || 0);
+    else failures.push('好友请求');
     if (invitesResult.status === 'fulfilled') setInvites(invitesResult.value);
+    else failures.push('联机邀请');
     if (joinRequestsResult.status === 'fulfilled') setJoinRequests(joinRequestsResult.value.data || []);
+    else failures.push('加入请求');
+    setError(failures.length ? `${failures.join('、')}暂时无法加载，列表可能不完整。请稍后重试。` : '');
     setLoading(false);
-  }, []);
+  }, [refreshAuth]);
+
+  const reportFailure = useCallback((reason: unknown, fallback: string) => {
+    if (handleV1Unauthorized(reason, () => void refreshAuth())) {
+      setError('登录状态已失效，请重新登录。');
+      return;
+    }
+    setError(localizeV1Error(reason, fallback));
+  }, [refreshAuth]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -67,20 +99,36 @@ export default function FriendsList() {
     const handleRealtime = (event: Event) => {
       const message = (event as CustomEvent<ForumRealtimeMessage>).detail;
       if (!message) return;
-      if (message.type === 'resume_failed' || message.event?.startsWith('friend.') || message.event?.startsWith('presence.')
-        || message.event?.startsWith('activity.') || message.event?.startsWith('multiplayer.')) void load();
-      if (message.event !== 'multiplayer.join_request.approved' || !message.id) return;
+      const isApproval = message.event === 'multiplayer.join_request.approved';
+      // The approval event is a durable outbox row that is replayed with a new
+      // id every 5 seconds until the client ACKs it. Refreshing six endpoints on
+      // every replay turned that into a permanent request storm, and the old
+      // `message.id` dedupe missed every replay because the id changes. The
+      // intent (not the event id) is what must be shown once per request.
+      if (message.type === 'resume_failed' || (!isApproval && message.event?.startsWith('multiplayer.'))
+        || message.event?.startsWith('friend.') || message.event?.startsWith('presence.')
+        || message.event?.startsWith('activity.')) void load();
+      if (!isApproval) return;
       const requestId = typeof message.data?.join_request_id === 'string' ? message.data.join_request_id : '';
-      const intentId = typeof message.data?.intent_id === 'string' ? message.data.intent_id : '';
+      const intentId = readApprovalIntentId(message.data);
       if (!requestId || !intentId) return;
-      setApprovals((current) => current.some((item) => item.id === message.id) ? current : [...current, {
-        id: message.id!, requestId, intentId,
+      setApprovals((current) => current.some((item) => item.requestId === requestId) ? current : [...current, {
+        id: requestId, requestId, intentId,
         sessionId: typeof message.data?.session_id === 'string' ? message.data.session_id : undefined,
       }]);
     };
     window.addEventListener('forum:realtime', handleRealtime);
     return () => window.removeEventListener('forum:realtime', handleRealtime);
   }, [load]);
+
+  // `session:*` events are only pushed to sockets that subscribed to the
+  // session, and an approved request means the user is about to join it.
+  useEffect(() => {
+    if (!user) return;
+    for (const approval of approvals) {
+      if (approval.sessionId) subscribeForumRealtimeSession(user.id, approval.sessionId);
+    }
+  }, [approvals, user]);
 
   const markBusy = (id: number, value: boolean) => setBusy((current) => {
     const next = new Set(current);
@@ -92,14 +140,14 @@ export default function FriendsList() {
     if (!await confirmDialog({ message: '确定要删除这位好友吗？', destructive: true })) return;
     markBusy(userId, true);
     try { await friendsApi.removeFriend(userId); setFriends((items) => items.filter((item) => item.user.id !== userId)); }
-    catch { setError('删除好友失败，请重试。'); }
+    catch (reason) { reportFailure(reason, '删除好友失败，请重试。'); }
     finally { markBusy(userId, false); }
   };
 
   const unblock = async (userId: number) => {
     markBusy(userId, true);
     try { await userBlocksApi.unblock(userId); setBlocked((items) => items.filter((item) => item.user.id !== userId)); }
-    catch { setError('解除屏蔽失败，请重试。'); }
+    catch (reason) { reportFailure(reason, '解除屏蔽失败，请重试。'); }
     finally { markBusy(userId, false); }
   };
 
@@ -118,7 +166,10 @@ export default function FriendsList() {
         setNotice(`已创建一次性加入凭证 ${intent.intent_id}（${intent.expires_in} 秒内有效）。请先设置默认联机客户端，或在客户端中使用该 Intent。`);
       }
       try { await navigator.clipboard.writeText(intent.intent_id); } catch { /* Clipboard may be unavailable. */ }
-    } catch { setError('无法加入该房间，权限或房间状态可能已变化。'); }
+      // The client owns the peer connection, so this browser socket only gets
+      // peer/candidate/relay events after subscribing to the session.
+      if (user) subscribeForumRealtimeSession(user.id, sessionId);
+    } catch (reason) { reportFailure(reason, '无法加入该房间，权限或房间状态可能已变化。'); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -127,7 +178,7 @@ export default function FriendsList() {
     if (!sessionId) return;
     markBusy(item.user.id, true);
     try { await multiplayerApi.requestJoin(sessionId); setNotice(`已向 ${item.user.username} 发送加入请求。`); }
-    catch { setError('发送加入请求失败，请重试。'); }
+    catch (reason) { reportFailure(reason, '发送加入请求失败，请重试。'); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -136,7 +187,7 @@ export default function FriendsList() {
     if (!sessionId) return;
     markBusy(item.user.id, true);
     try { await multiplayerApi.invite(sessionId, item.user.id); setNotice(`已邀请 ${item.user.username} 加入房间。`); }
-    catch { setError('发送联机邀请失败，请重试。'); }
+    catch (reason) { reportFailure(reason, '发送联机邀请失败，请重试。'); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -163,31 +214,48 @@ export default function FriendsList() {
       const accepted = await multiplayerApi.acceptInvite(inviteId);
       await launchIntent(accepted.join_intent, '联机邀请');
       await load();
-    } catch { setError('接受联机邀请失败，邀请或房间状态可能已变化。'); }
+    } catch (reason) { reportFailure(reason, '接受联机邀请失败，邀请或房间状态可能已变化。'); }
     finally { markActionBusy(inviteId, false); }
   };
 
   const declineInvite = async (inviteId: string) => {
     markActionBusy(inviteId, true);
     try { await multiplayerApi.declineInvite(inviteId); await load(); }
-    catch { setError('拒绝联机邀请失败，请重试。'); }
+    catch (reason) { reportFailure(reason, '拒绝联机邀请失败，请重试。'); }
     finally { markActionBusy(inviteId, false); }
   };
 
   const approveJoinRequest = async (requestId: string) => {
     markActionBusy(requestId, true);
+    setJoinRequestErrors((current) => {
+      if (!(requestId in current)) return current;
+      const next = { ...current };
+      delete next[requestId];
+      return next;
+    });
     try {
       const approved = await multiplayerApi.approveJoinRequest(requestId);
       setNotice(`已批准加入请求。请求者将收到一次性加入凭证（${approved.join_intent.expires_in} 秒内有效）。`);
+      // The approved session is where this user's own session events will land.
+      const approvedSessionId = joinRequests.find((item) => item.id === requestId)?.session_id;
+      if (user && approvedSessionId) subscribeForumRealtimeSession(user.id, approvedSessionId);
       await load();
-    } catch { setError('批准加入请求失败，请求或房间状态可能已变化。'); }
+    } catch (reason) {
+      // Keep the failure attached to the row: a shared string slot let one
+      // failing approval overwrite an unrelated notice.
+      if (handleV1Unauthorized(reason, () => void refreshAuth())) {
+        setError('登录状态已失效，请重新登录。');
+      } else {
+        setJoinRequestErrors((current) => ({ ...current, [requestId]: localizeV1Error(reason, '批准加入请求失败，请求或房间状态可能已变化。') }));
+      }
+    }
     finally { markActionBusy(requestId, false); }
   };
 
   const rejectJoinRequest = async (requestId: string) => {
     markActionBusy(requestId, true);
     try { await multiplayerApi.rejectJoinRequest(requestId); await load(); }
-    catch { setError('拒绝加入请求失败，请重试。'); }
+    catch (reason) { reportFailure(reason, '拒绝加入请求失败，请重试。'); }
     finally { markActionBusy(requestId, false); }
   };
 
@@ -201,13 +269,19 @@ export default function FriendsList() {
         return;
       }
       window.location.assign(selected.launch_uri_template.replace('{intent_id}', encodeURIComponent(approval.intentId)));
-      // The web client must not consume or acknowledge this one-time intent.
-      // The selected launcher/client owns consumption; keeping the realtime
-      // event unacknowledged lets it be replayed if handoff fails.
+      // The web client does not consume the one-time intent — the launcher does.
+      // But leaving the event unacknowledged made the server replay it (and this
+      // card) every 5 seconds forever. The handoff itself succeeded, so retire
+      // the outbox row; a failed launch keeps it pending for a retry.
+      if (user) ackForumRealtimeEvent(user.id, approval.id);
       setApprovals((current) => current.filter((item) => item.requestId !== approval.requestId));
       setNotice(`已将一次性加入凭证交给 ${selected.name}，由客户端完成加入。`);
     } catch { setError('无法打开联机客户端；加入凭证尚未被网页消费，可以重试。'); }
     finally { markActionBusy(approval.requestId, false); }
+  };
+
+  const dismissApproval = (approval: { requestId: string }) => {
+    setApprovals((current) => current.filter((item) => item.requestId !== approval.requestId));
   };
 
   const onlineCount = friends.filter((item) => item.presence.status !== 'offline').length;
@@ -269,21 +343,25 @@ export default function FriendsList() {
         <section aria-labelledby="incoming-join-requests-title">
           <h3 id="incoming-join-requests-title" className="mb-2 text-sm font-semibold">加入请求（{joinRequests.length}）</h3>
           {joinRequests.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">没有待处理的加入请求</p> : <ul className="space-y-2">
-            {joinRequests.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
-              {item.requester ? <Link href={`/users/${item.requester.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                {item.requester.avatar_url ? <img src={item.requester.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted font-semibold">{item.requester.username.slice(0, 1).toUpperCase()}</span>}
-                <span className="truncate text-sm">{item.requester.username} 请求加入 {item.session?.activity_name || item.session?.game_id || '你的房间'}</span>
-              </Link> : <span className="min-w-0 flex-1 text-sm">用户请求加入 {item.session?.activity_name || item.session?.game_id || '你的房间'}</span>}
-              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void approveJoinRequest(item.id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">批准</button>
-              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void rejectJoinRequest(item.id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">拒绝</button>
+            {joinRequests.map((item) => <li key={item.id} className="rounded-lg border border-border p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {item.requester ? <Link href={`/users/${item.requester.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  {item.requester.avatar_url ? <img src={item.requester.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted font-semibold">{item.requester.username.slice(0, 1).toUpperCase()}</span>}
+                  <span className="truncate text-sm">{item.requester.username} 请求加入 {item.session?.activity_name || item.session?.game_id || '你的房间'}</span>
+                </Link> : <span className="min-w-0 flex-1 text-sm">用户请求加入 {item.session?.activity_name || item.session?.game_id || '你的房间'}</span>}
+                <button type="button" disabled={busyActions.has(item.id)} onClick={() => void approveJoinRequest(item.id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">批准</button>
+                <button type="button" disabled={busyActions.has(item.id)} onClick={() => void rejectJoinRequest(item.id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">拒绝</button>
+              </div>
+              {joinRequestErrors[item.id] && <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-300">{joinRequestErrors[item.id]}</p>}
             </li>)}
           </ul>}
         </section>
         {approvals.length > 0 && <section aria-labelledby="approved-join-requests-title">
           <h3 id="approved-join-requests-title" className="mb-2 text-sm font-semibold">已批准的加入请求</h3>
-          <ul className="space-y-2">{approvals.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <ul className="space-y-2">{approvals.map((item) => <li key={item.requestId} className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <span className="min-w-0 flex-1 text-sm">你的加入请求已批准{item.sessionId ? `（${item.sessionId}）` : ''}。</span>
             <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => void handoffApproval(item)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">继续加入</button>
+            <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => dismissApproval(item)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">稍后处理</button>
           </li>)}</ul>
         </section>}
       </div>}
