@@ -16,6 +16,7 @@ import DraftRecovery from '@/components/ui/draft-recovery';
 import { Send, Save, Loader2 } from 'lucide-react';
 import { useToastStore } from '@/store/toast-store';
 import { useI18n } from '@/i18n/provider';
+import { PostComposerPresentation } from '@/components/rich-content/post-composer-presentation';
 import ContentLanguageSelect from '@/components/forum/content-language-select';
 import CommunityChallengeDialog from '@/components/forum/community-challenge-dialog';
 
@@ -240,102 +241,105 @@ export default function PostForm() {
       {draft.saveError && <Alert type="error" message={draft.saveError} className="mb-4" />}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-
-        {/* ── Title ─────────────────────────────────── */}
-        <div>
-          <input
-            type="text"
-            value={title}
-            onChange={e => { setTitle(e.target.value); if (titleError) setTitleError(''); }}
-            placeholder={t('postForm.titlePlaceholder')}
-            maxLength={200}
-            className={`w-full rounded-[var(--radius)] border bg-[var(--bg-card)] px-4 py-3 text-xl font-semibold text-[var(--text)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20
-              ${titleError ? 'border-[var(--error)]' : 'border-[var(--border)]'}`}
-          />
-          {titleError && <p className="ml-1 mt-1.5 text-sm text-[var(--error)]">{titleError}</p>}
-        </div>
-
-        {/* ── Editor ────────────────────────────────── */}
-        <div>
-          <TiptapEditor
-            value={content}
-            onChange={setContent}
-            jsonValue={contentJson}
-            onJsonChange={setContentJson}
-            testId="post-content-editor"
-            ariaLabel={t('postForm.bodyLabel')}
-            placeholder={t('postForm.bodyPlaceholder')}
-            minHeight="280px"
-            imageUpload
-            className={contentError ? 'rounded-[var(--radius-card)] ring-1 ring-[var(--error)]' : ''}
-          />
-          {contentError && (
-            <p className="ml-1 mt-1.5 text-sm text-[var(--error)]">{contentError}</p>
-          )}
-        </div>
-
-        {/* ── Metadata row ──────────────────────────── */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {/* Category */}
+        <PostComposerPresentation title={title} json={contentJson} markdown={content}>
+          {/* ── Title ─────────────────────────────────── */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-              {t('postForm.category')}
-            </label>
-            <Select
-              value={categoryId}
-              onChange={e => setCategoryId(e.target.value)}
-              options={categoryOptions}
-            />
-          </div>
-
-          {/* Tags */}
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-              {t('postForm.tags')}
-            </label>
-            <Input
-              value={tagsInput}
-              onChange={e => setTagsInput(e.target.value)}
-              placeholder={t('postForm.tagsPlaceholder')}
+            <input
+              type="text"
+              value={title}
+              onChange={e => { setTitle(e.target.value); if (titleError) setTitleError(''); }}
+              placeholder={t('postForm.titlePlaceholder')}
               maxLength={200}
+              className={`w-full rounded-[var(--radius)] border bg-[var(--bg-card)] px-4 py-3 text-xl font-semibold text-[var(--text)] outline-none transition placeholder:text-[var(--text-muted)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]/20
+                ${titleError ? 'border-[var(--error)]' : 'border-[var(--border)]'}`}
             />
-            {availableTagNames && <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={availableTagNames}>{t('postForm.tagsAvailable', { tags: availableTagNames })}</p>}
+            {titleError && <p className="ml-1 mt-1.5 text-sm text-[var(--error)]">{titleError}</p>}
           </div>
 
-          <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${content}`} />
-
-          {/* Status */}
+          {/* ── Editor ────────────────────────────────── */}
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
-              {t('postForm.status')}
-            </label>
-            <div className="flex gap-4 mt-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="status" value="published"
-                  checked={status === 'published'} onChange={() => setStatus('published')}
-                  className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
-                <span className="text-sm text-[var(--text-secondary)]">{t('postForm.publish')}</span>
+            <TiptapEditor
+              value={content}
+              onChange={setContent}
+              jsonValue={contentJson}
+              onJsonChange={setContentJson}
+              testId="post-content-editor"
+              ariaLabel={t('postForm.bodyLabel')}
+              placeholder={t('postForm.bodyPlaceholder')}
+              minHeight="280px"
+              imageUpload
+              className={contentError ? 'rounded-[var(--radius-card)] ring-1 ring-[var(--error)]' : ''}
+            />
+            {contentError && (
+              <p className="ml-1 mt-1.5 text-sm text-[var(--error)]">{contentError}</p>
+            )}
+          </div>
+
+          {/* ── Metadata row ──────────────────────────── */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Category */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+                {t('postForm.category')}
               </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name="status" value="draft"
-                  checked={status === 'draft'} onChange={() => setStatus('draft')}
-                  className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
-                <span className="text-sm text-[var(--text-secondary)]">{t('postForm.draft')}</span>
+              <Select
+                value={categoryId}
+                onChange={e => setCategoryId(e.target.value)}
+                options={categoryOptions}
+              />
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+                {t('postForm.tags')}
               </label>
+              <Input
+                value={tagsInput}
+                onChange={e => setTagsInput(e.target.value)}
+                placeholder={t('postForm.tagsPlaceholder')}
+                maxLength={200}
+              />
+              {availableTagNames && <p className="mt-1 truncate text-xs text-[var(--text-muted)]" title={availableTagNames}>{t('postForm.tagsAvailable', { tags: availableTagNames })}</p>}
+            </div>
+
+            <ContentLanguageSelect value={contentLanguage} onChange={setContentLanguage} content={`${title}\n${content}`} />
+
+            {/* Status */}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-[var(--text-secondary)]">
+                {t('postForm.status')}
+              </label>
+              <div className="flex gap-4 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="status" value="published"
+                    checked={status === 'published'} onChange={() => setStatus('published')}
+                    className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
+                  <span className="text-sm text-[var(--text-secondary)]">{t('postForm.publish')}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="radio" name="status" value="draft"
+                    checked={status === 'draft'} onChange={() => setStatus('draft')}
+                    className="accent-[var(--primary)] focus:ring-[var(--primary)]" />
+                  <span className="text-sm text-[var(--text-secondary)]">{t('postForm.draft')}</span>
+                </label>
+              </div>
             </div>
           </div>
-        </div>
+
+
+        </PostComposerPresentation>
 
         {/* ── Actions ───────────────────────────────── */}
-        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 -mx-4 flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--bg-card)]/95 px-4 py-3 backdrop-blur lg:static lg:mx-0 lg:bg-transparent lg:px-0 lg:py-4 lg:backdrop-blur-none lg:bottom-auto">
+        <div className="sticky bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 -mx-4 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] bg-[var(--bg-card)]/95 px-4 py-3 backdrop-blur lg:static lg:mx-0 lg:bg-transparent lg:px-0 lg:py-4 lg:backdrop-blur-none lg:bottom-auto">
           <Button type="button" variant="secondary" onClick={() => { if (hasDraftContent) draft.save(draftValues); router.back(); }}>
             {t('postForm.cancel')}
           </Button>
-          <div className="flex gap-3 items-center">
-            <Button type="button" variant="secondary"
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button type="button" variant="secondary" data-testid="save-local-draft"
               onClick={() => { if (draft.save(draftValues)) showSuccess(t('postForm.savedToDevice')); }}>
               <Save className="w-4 h-4 inline mr-1" />
-              {t('postForm.saveToDevice')}
+              <span className="hidden sm:inline">{t('postForm.saveToDevice')}</span><span className="sm:hidden">{t('richPresentation.saveLocal')}</span>
             </Button>
             <Button type="submit" disabled={isSubmitting} data-testid="publish-button">
               {isSubmitting ? (
@@ -356,7 +360,7 @@ export default function PostForm() {
               )}
             </Button>
             {draft.lastSavedAt && hasDraftContent && (
-              <span className="text-xs text-[var(--text-muted)]">{t('postForm.savedToDevice')}</span>
+              <span className="hidden text-xs text-[var(--text-muted)] sm:inline">{t('postForm.savedToDevice')}</span>
             )}
           </div>
         </div>

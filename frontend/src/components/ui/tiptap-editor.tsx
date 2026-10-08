@@ -10,6 +10,8 @@ import { normalizeEditorContent } from "@/lib/editor-content";
 import { siteProfile } from "@/config/site-profile";
 import { projectRichContentToMarkdown } from "@/lib/tiptap/rich-content-projection";
 import { createTiptapEditorExtensions } from "@/lib/tiptap/editor-extensions";
+import { FONT_SIZES } from "@/lib/tiptap/presentation";
+import { rememberAttachmentDraft } from "@/lib/tiptap/attachment-drafts";
 import { parseRichEmbed } from "@/lib/tiptap/rich-embed";
 import { normalizeEditorLink } from "@/lib/tiptap/editor-link";
 import { confirmDialog, promptDialog } from "@/store/interaction-dialog-store";
@@ -161,6 +163,7 @@ export default function TiptapEditor({
     },
     editorProps: {
       attributes: {
+        class: "mdtbbs-rich-content mdtbbs-rich-content--editor rich-content-shell",
         ...(testId ? { "data-testid": testId } : {}),
         ...(id ? { id } : {}),
         "aria-label": ariaLabel,
@@ -299,6 +302,7 @@ export default function TiptapEditor({
     setUploading(true);
     try {
       const result = await attachmentApi.createDrafts(form);
+      result.drafts.forEach(rememberAttachmentDraft);
       editor.chain().focus().insertContent(result.drafts.map((draft) => ({
         type: 'attachment',
         attrs: { draftToken: draft.token },
@@ -737,7 +741,7 @@ function EditorToolbar({
           {menuButton(<span>x₂</span>, "下标", () => editor.chain().focus().toggleMark('subscript').run(), editor.isActive("subscript"))}
           {menuButton(<span>荧光</span>, "黄色高亮", () => editor.chain().focus().setMark('highlight', { color: 'yellow' }).run(), editor.isActive('highlight'))}
           {!compact && <label className="tiptap-select-label" title="文字颜色">颜色<input aria-label="文字颜色" type="color" defaultValue="#C62828" onChange={(event) => editor.chain().focus().setMark('textColor', { color: event.target.value.toUpperCase() }).run()} /></label>}
-          {!compact && <label className="tiptap-select-label" title="字号">字号<select aria-label="字号" defaultValue="16px" onChange={(event) => editor.chain().focus().setMark('fontSize', { size: event.target.value }).run()}>{[12, 14, 16, 18, 20, 24, 28, 32].map((size) => <option key={size} value={`${size}px`}>{size}px</option>)}</select></label>}
+          {!compact && <label className="tiptap-select-label" title="字号">字号<select aria-label="字号" defaultValue="16px" onChange={(event) => editor.chain().focus().setMark('fontSize', { size: event.target.value }).run()}>{FONT_SIZES.map((size) => <option key={size} value={`${size}px`}>{size}px</option>)}</select></label>}
           {!compact && <label className="tiptap-select-label" title="字体">字体<select aria-label="字体" defaultValue="default" onChange={(event) => editor.chain().focus().setMark('fontFamily', { family: event.target.value }).run()}>{[['default','默认'],['serif-cn','宋体'],['sans-cn','黑体'],['kai','楷体'],['source-serif-cn','思源宋体'],['source-sans-cn','思源黑体'],['monospace','等宽字体']].map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
           {menuButton(<Code2 className="w-4 h-4" />, "代码块", () => editor.chain().focus().toggleCodeBlock().run(), editor.isActive("codeBlock"))}
           {context !== 'reply' && menuButton(<TableIcon className="w-4 h-4" />, "插入标准 GFM 表格", () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), editor.isActive("table"))}

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { RichContentShell } from '@/components/rich-content/rich-content-shell';
 import RichContentRenderer from '@/components/ui/rich-content-renderer';
 import { useToast } from '@/lib/toast/context';
 import { Post, UserRole } from '@/types';
@@ -148,7 +149,7 @@ export default function PostContent({
       )}
       {/* Header */}
       <div className="px-5 pt-5 sm:px-6">
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--text)]">{post.title}</h1>
+        <h1 className="rich-post-title">{post.title}</h1>
       </div>
       <div className="mx-5 mt-4 border-t border-[var(--border)] py-3 sm:mx-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -210,8 +211,8 @@ export default function PostContent({
       </div>
 
       {/* Content */}
-      <div className="min-h-[100px] px-5 py-6 text-[16px] leading-8 sm:px-6" data-testid="post-content">
-        <RichContentRenderer json={post.content_json} markdownFallback={post.content} className="text-[var(--text)]" />
+      <div className="min-h-[100px] px-5 py-6 sm:px-6" data-testid="post-content">
+        <RichContentShell><RichContentRenderer json={post.content_json} markdownFallback={post.content} /></RichContentShell>
       </div>
 
       {/* Actions */}
