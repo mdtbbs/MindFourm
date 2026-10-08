@@ -43,12 +43,17 @@ const ESM_ONLY_DEPS = [
 
 module.exports = {
   rootDir: root,
-  preset: 'ts-jest',
+  // No `preset: 'ts-jest'`. The preset injects its own transform key holding
+  // the bare name `ts-jest`, and jest resolves transform modules relative to
+  // `rootDir` (the repo root) — which has no install when only
+  // `cd frontend && npm ci` ran. `transform` below configures ts-jest by
+  // absolute path instead, so the suite stays resolvable from
+  // `frontend/node_modules` alone. The options match ts-jest's preset.
   testEnvironment: 'node',
   testMatch: FRONTEND_TEST_MATCH,
   transform: {
     '^.+\\.[cm]?[tj]sx?$': [
-      'ts-jest',
+      path.join(frontendNodeModules, 'ts-jest'),
       {
         tsconfig: { allowJs: true, module: 'commonjs', target: 'es2022', jsx: 'react-jsx', esModuleInterop: true },
         diagnostics: false,

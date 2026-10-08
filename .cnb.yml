@@ -31,11 +31,11 @@
     volumes:
       - /root/.npm:copy-on-write
   stages:
-    # `frontend/jest.config.js` needs `npm ci` in both `frontend/` and at the
-    # repo root: the frontend install supplies React and the ESM-only editor
-    # deps, the root install supplies the jest/ts-jest binaries. npm does not
-    # walk up to the parent `node_modules/.bin`, so without the root install
-    # this stage dies with `jest: not found` (exit 127).
+    # The frontend install is self-sufficient: `frontend/package.json` declares
+    # jest/ts-jest/jsdom, and `frontend/jest.config.js` points its transform at
+    # `frontend/node_modules` so nothing resolves out of the repo root. The
+    # root install below is only here because `frontend/jest.config.js` imports
+    # the tiptap contract suite under `src/`; drop it if that is ever untangled.
     # Keep this in sync with .github/workflows/ci.yml.
     - name: install frontend dependencies
       script: cd frontend && npm ci
