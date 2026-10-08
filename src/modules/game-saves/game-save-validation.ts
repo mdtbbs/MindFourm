@@ -19,7 +19,7 @@ export function shouldCreateConflictCopy(resolution: string, hasConflict: boolea
 export function normalizeCloudSaveName(value: unknown): string {
   const name = typeof value === 'string' ? value.trim() : '';
   if (!name || name.length > 100 || /[\u0000-\u001f\u007f]/.test(name)) {
-    throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, '存档名称无效。');
+    throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, 'SAVE_INVALID_METADATA');
   }
   return name;
 }
@@ -70,7 +70,7 @@ export function decodeSaveCursor(cursor?: string): { updated_at: string; id: str
     if (typeof value?.id !== 'string' || !UUID_V4_PATTERN.test(value.id) || !Number.isFinite(Date.parse(value.updated_at))) throw new Error();
     return { updated_at: new Date(value.updated_at).toISOString(), id: value.id };
   } catch {
-    throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, '分页游标无效。');
+    throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, 'SAVE_INVALID_METADATA');
   }
 }
 
@@ -87,5 +87,5 @@ function optionalInteger(value: unknown, min: number, max: number, field: string
 }
 
 function invalid(field: string): never {
-  throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, '存档元数据无效。', false, [{ field }]);
+  throw new ApiV1Exception('SAVE_INVALID_METADATA', HttpStatus.BAD_REQUEST, 'SAVE_INVALID_METADATA', false, [{ field }]);
 }

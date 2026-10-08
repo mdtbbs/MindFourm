@@ -1,3 +1,5 @@
+import { getV1ErrorPublicMessage } from './v1-error-codes';
+
 export type ApiV1Meta = { request_id: string; next_cursor?: string | null; pagination?: { page: number; limit: number; total: number; total_pages: number; has_more?: boolean } };
 
 export type ApiV1Success<T> = {
@@ -45,6 +47,15 @@ export function apiV1Success<T>(data: T, requestId: string): ApiV1Success<T> {
   return { data, meta: { request_id: requestId } };
 }
 
+/**
+ * Build a public V1 error body.
+ *
+ * `message` is a convenience for callers that have specific prose for this
+ * request. Callers that only have the stable `code` (or that pass the code back
+ * as the message, which is what an internal registry lookup degenerates into)
+ * get the public English copy for that code instead — an English API must not
+ * answer in the repository's primary language.
+ */
 export function apiV1Error(
   code: string,
   message: string,
@@ -52,8 +63,11 @@ export function apiV1Error(
   details: unknown[],
   requestId: string,
 ): ApiV1Error {
+  const candidate = typeof message === 'string' ? message.trim() : '';
+  const isMachineCode = candidate === '' || candidate === code || /^[A-Z0-9_]+$/.test(candidate);
+  const resolved = isMachineCode ? getV1ErrorPublicMessage(code) : candidate;
   return {
-    error: { code, message, retryable, details, documentation_url: v1ErrorDocumentationUrl(code) },
+    error: { code, message: resolved, retryable, details, documentation_url: v1ErrorDocumentationUrl(code) },
     meta: { request_id: requestId },
   };
 }

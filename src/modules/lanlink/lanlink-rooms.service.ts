@@ -27,10 +27,7 @@ export class LanLinkRoomsService {
     const enabled = this.config.get<boolean>('lanlink.enabled');
     const baseUrl = this.config.get<string>('lanlink.baseUrl')?.trim();
     if (!enabled || !baseUrl) {
-      throw new ApiV1Exception(
-        'LANLINK_UNAVAILABLE',
-        HttpStatus.SERVICE_UNAVAILABLE,
-        '联机大厅暂未启用',
+      throw new ApiV1Exception('LANLINK_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, 'LANLINK_UNAVAILABLE',
         false,
       );
     }
@@ -42,19 +39,13 @@ export class LanLinkRoomsService {
         signal: AbortSignal.timeout(5_000),
       });
     } catch {
-      throw new ApiV1Exception(
-        'LANLINK_UNAVAILABLE',
-        HttpStatus.BAD_GATEWAY,
-        '联机大厅暂时无法连接，请稍后重试',
+      throw new ApiV1Exception('LANLINK_UNAVAILABLE', HttpStatus.BAD_GATEWAY, 'LANLINK_UNAVAILABLE',
         true,
       );
     }
 
     if (!response.ok) {
-      throw new ApiV1Exception(
-        'LANLINK_UNAVAILABLE',
-        HttpStatus.BAD_GATEWAY,
-        '联机大厅暂时无法连接，请稍后重试',
+      throw new ApiV1Exception('LANLINK_UNAVAILABLE', HttpStatus.BAD_GATEWAY, 'LANLINK_UNAVAILABLE',
         true,
       );
     }
@@ -63,10 +54,7 @@ export class LanLinkRoomsService {
     try {
       payload = await response.json();
     } catch {
-      throw new ApiV1Exception(
-        'LANLINK_UPSTREAM_INVALID',
-        HttpStatus.BAD_GATEWAY,
-        '联机大厅返回了无效数据',
+      throw new ApiV1Exception('LANLINK_UPSTREAM_INVALID', HttpStatus.BAD_GATEWAY, 'LANLINK_UPSTREAM_INVALID',
         true,
       );
     }
@@ -77,10 +65,7 @@ export class LanLinkRoomsService {
   private projectRooms(payload: unknown): LanLinkPublicRoom[] {
     const source = isRecord(payload) && Array.isArray(payload.rooms) ? payload.rooms : null;
     if (!source) {
-      throw new ApiV1Exception(
-        'LANLINK_UPSTREAM_INVALID',
-        HttpStatus.BAD_GATEWAY,
-        '联机大厅返回了无效数据',
+      throw new ApiV1Exception('LANLINK_UPSTREAM_INVALID', HttpStatus.BAD_GATEWAY, 'LANLINK_UPSTREAM_INVALID',
         true,
       );
     }

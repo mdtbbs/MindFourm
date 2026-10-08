@@ -6,6 +6,13 @@
  *
  * Clients use the `code` field (not the message) for programmatic decisions.
  * Messages are human-readable and may be translated.
+ *
+ * `defaultMessage` is the operator-facing fallback, not the public copy. It is
+ * emitted to API consumers only for codes that have no public English copy; the
+ * transport resolves `getV1ErrorPublicMessage(code)` first so an English site
+ * never answers an English client in the repository's primary language. New
+ * codes added here are automatically covered by the frontend locale guard,
+ * which fails the build when a registered code has no `en`/`ru`/`ja` entry.
  */
 
 export type V1ErrorCodeDefinition = {
@@ -349,6 +356,127 @@ for (const [code, httpStatus, retryable, defaultMessage, description] of SOCIAL_
 }
 for (const [code, httpStatus, retryable, defaultMessage, description] of CLOUD_SAVE_ERRORS) {
   V1_ERROR_CODES[code] = { code, httpStatus, retryable, defaultMessage, description };
+}
+
+/**
+ * Public English message for a stable error code.
+ *
+ * The registry's `defaultMessage` exists so operators reading logs and the
+ * generated code table see one consistent language; that language is the
+ * repository's, not the API's. Public V1 responses therefore prefer this table
+ * and fall back to `defaultMessage` only for a code that predates it.
+ *
+ * Keep this in sync with `frontend/src/i18n/locales/en/common.json` → `errors`.
+ * `frontend/src/i18n/locale-coverage.spec.ts` fails when a registered code is
+ * missing from the catalogs or when the catalogs start echoing the code back.
+ */
+export const V1_ERROR_PUBLIC_MESSAGES: Record<string, string> = {
+  TOKEN_INVALID: 'Your session is no longer valid. Sign in again.',
+  SCOPE_REQUIRED: 'This request needs a permission your session does not have.',
+  INSUFFICIENT_SCOPE: 'Your account does not have the permission this action needs.',
+  USER_BLOCKED: 'You cannot interact with this account.',
+  FRIEND_REQUIRED: 'Add each other as friends before doing this.',
+  PRIVACY_DENIED: 'This player does not allow that.',
+  CLIENT_CAPABILITY_NOT_APPROVED: 'This client type is not approved for multiplayer yet.',
+  PRESENCE_CONNECTION_NOT_FOUND: 'That presence connection is gone. Refresh to reconnect.',
+  ACTIVITY_INVALID: 'The activity you tried to publish is not valid.',
+  SESSION_NOT_FOUND: 'That game session no longer exists.',
+  SESSION_EXPIRED: 'That game session has expired.',
+  SESSION_CLOSED: 'That game session has closed.',
+  SESSION_FULL: 'That game session is full.',
+  SESSION_NOT_JOINABLE: 'That game session is not accepting new players.',
+  SESSION_PERMISSION_DENIED: 'You are not allowed to do that in this game session.',
+  PEER_NOT_FOUND: 'That peer is no longer connected.',
+  PEER_EXPIRED: 'That peer connection expired.',
+  PEER_RESUME_INVALID: 'This connection cannot be resumed. Reconnect instead.',
+  CANDIDATE_INVALID: 'The network candidate was rejected.',
+  CANDIDATE_LIMIT_REACHED: 'Too many network candidates for this session.',
+  INVITE_NOT_FOUND: 'That invite no longer exists.',
+  INVITE_EXPIRED: 'That invite has expired.',
+  INVITE_ALREADY_ACCEPTED: 'That invite was already accepted.',
+  JOIN_REQUEST_REQUIRED: 'Ask to join before entering that session.',
+  JOIN_REQUEST_EXPIRED: 'That join request expired.',
+  JOIN_INTENT_INVALID: 'That one-time join link is not valid.',
+  JOIN_INTENT_CLIENT_MISMATCH: 'That join link was issued for a different client.',
+  JOIN_INTENT_EXPIRED: 'That join link expired. Ask for a new one.',
+  JOIN_INTENT_CONSUMED: 'That join link was already used.',
+  JOIN_INTENT_RECOVERY_EXPIRED: 'The recovery window for that join link has closed.',
+  JOIN_INTENT_RECOVERY_UNAVAILABLE: 'That join link cannot be recovered right now.',
+  RELAY_UNAVAILABLE: 'No relay server is available right now. Try again shortly.',
+  RELAY_LIMIT_REACHED: 'This session has reached its relay limit.',
+  CLOUD_SAVES_DISABLED: 'Cloud saves are turned off on this site.',
+  SAVE_NOT_FOUND: 'That save no longer exists.',
+  SAVE_SLOT_LIMIT_EXCEEDED: 'You have reached the maximum number of save slots.',
+  SAVE_QUOTA_EXCEEDED: 'You have reached your cloud save storage quota.',
+  SAVE_FILE_TOO_LARGE: 'That save file is larger than the allowed size.',
+  SAVE_UPLOAD_NOT_FOUND: 'That upload session no longer exists.',
+  SAVE_UPLOAD_EXPIRED: 'That upload session expired. Start the upload again.',
+  SAVE_UPLOAD_ALREADY_COMMITTED: 'That upload was already committed.',
+  SAVE_UPLOAD_OBJECT_MISSING: 'The uploaded file has not reached storage yet.',
+  SAVE_UPLOAD_SIZE_MISMATCH: 'The uploaded size does not match what was declared.',
+  SAVE_UPLOAD_CHECKSUM_MISMATCH: 'The uploaded file failed its integrity check.',
+  SAVE_CONFLICT: 'This save was updated elsewhere. Reload before continuing.',
+  SAVE_BASE_SNAPSHOT_INVALID: 'The base snapshot for this save is not valid.',
+  SAVE_SNAPSHOT_NOT_FOUND: 'That snapshot no longer exists.',
+  SAVE_CURRENT_SNAPSHOT_DELETE_FORBIDDEN: 'The current snapshot cannot be deleted on its own. Replace it or delete the whole slot.',
+  SAVE_INVALID_HASH: 'A SHA-256 value must be 64 lowercase hexadecimal characters.',
+  SAVE_INVALID_METADATA: 'The save metadata is not valid.',
+  SAVE_STORAGE_UNAVAILABLE: 'Cloud save storage is unavailable. Try again later.',
+  RESOURCE_STORAGE_UNAVAILABLE: 'Resource storage is unavailable. Try again shortly.',
+  RESOURCE_STORAGE_OBJECT_NOT_FOUND: 'That stored resource object does not exist.',
+  RESOURCE_STORAGE_REJECTED: 'Resource storage rejected the object.',
+  DOC_NOT_FOUND: 'That documentation page does not exist.',
+  CONTENT_REQUIRED: 'Add some content before submitting.',
+  CONTENT_TOO_LARGE: 'This content is longer than the limit.',
+  INVALID_BLUEPRINT: 'That blueprint code is invalid or too large.',
+  INVALID_MAP: 'That map file could not be parsed or is too large.',
+  LANLINK_UNAVAILABLE: 'The game lobby is unreachable right now. Try again shortly.',
+  LANLINK_UPSTREAM_INVALID: 'The game lobby returned data we could not read.',
+  MESSAGING_DISABLED: 'Private messaging is turned off on this site.',
+  NOTICE_NOT_FOUND: 'That notice does not exist or is not public.',
+  REPLIES_UNAVAILABLE: 'Replies are unavailable right now.',
+  SEARCH_UNAVAILABLE: 'Search is unavailable right now.',
+  THIRD_PARTY_ACCESS_DISABLED: 'Third-party clients cannot use private messaging on this site.',
+  CHALLENGE_REQUIRED: 'Complete one security check to continue.',
+  CHALLENGE_INVALID: 'The security check did not pass. Submit again.',
+  CHALLENGE_EXPIRED: 'That security check expired or was already used. Submit again.',
+  CHALLENGE_PROVIDER_UNAVAILABLE: 'The security check is unavailable right now. Try again shortly.',
+  AUTH_REQUIRED: 'Sign in to continue.',
+  TOKEN_EXPIRED: 'Your session expired. Sign in again.',
+  FORBIDDEN: 'You do not have access to this.',
+  RESOURCE_NOT_FOUND: 'That resource does not exist or is not visible to you.',
+  RESOURCE_NOT_VISIBLE: 'That resource is not public.',
+  RESOURCE_VERSION_NOT_PUBLISHED: 'That version has not been published.',
+  RESOURCE_FILE_NOT_READY: 'That file is not ready to download yet.',
+  RESOURCE_DUPLICATE: 'This file has already been submitted.',
+  RESOURCE_STRUCTURE_DUPLICATE: 'A blueprint with the same structure already exists. Explain how yours differs before continuing.',
+  IDEMPOTENCY_KEY_REUSED: 'That Idempotency-Key was already used for a different resource request.',
+  IDEMPOTENCY_IN_PROGRESS: 'An identical request is still being processed. Try again shortly.',
+  RESOURCE_V1_DISABLED: 'The V1 resource API is not enabled on this site.',
+  THREAD_NOT_FOUND: 'That discussion does not exist or is not visible to you.',
+  DOWNLOAD_RATE_LIMITED: 'Too many downloads. Wait a moment and try again.',
+  DELIVERY_TEMPORARILY_UNAVAILABLE: 'Download delivery is unavailable right now.',
+  STORAGE_FAILURE: 'Storage failed. Try again shortly.',
+  HASH_UNAVAILABLE: 'The file hash is unavailable right now.',
+  CLIENT_UPGRADE_REQUIRED: 'Update your client to continue.',
+  VALIDATION_FAILED: 'The request parameters are not valid.',
+  HTTP_ERROR: 'The request failed.',
+  INTERNAL_ERROR: 'Something went wrong on our side. Try again later.',
+  RATE_LIMITED: 'Too many requests. Please wait a moment and try again.',
+  EMAIL_VERIFICATION_REQUIRED: 'Verify your email address before continuing.',
+  PHONE_NOT_VERIFIED: 'Verify your phone number before continuing.',
+  USER_BANNED: 'This account cannot perform this action.',
+  TERMS_ACCEPTANCE_REQUIRED: 'Accept the community terms to continue.',
+  FEATURE_DISABLED: 'This feature is currently unavailable.',
+  RESOURCE_UPLOAD_DISABLED: 'Resource uploads are currently unavailable.',
+};
+
+/**
+ * Resolve the message a public client should see for a stable code.
+ * Falls back to the registry entry, then to the code itself.
+ */
+export function getV1ErrorPublicMessage(code: string): string {
+  return V1_ERROR_PUBLIC_MESSAGES[code] ?? V1_ERROR_CODES[code]?.defaultMessage ?? code;
 }
 
 /**

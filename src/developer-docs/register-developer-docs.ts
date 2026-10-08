@@ -2307,7 +2307,7 @@ export function registerDeveloperDocs(
       // A 404 is still a request against the budget; answering it before the guard
       // would let an unknown-slug scan run unmetered.
       if (!guard.check(req, res)) return;
-      res.status(404).json(apiV1Error('DOC_NOT_FOUND', '文档页面不存在', false, [], req.requestId || ''));
+      res.status(404).json(apiV1Error('DOC_NOT_FOUND', 'DOC_NOT_FOUND', false, [], req.requestId || ''));
       return;
     }
     sendGuarded(req, res, () => renderOnce(`guide:${slug}`, () => commonShell({

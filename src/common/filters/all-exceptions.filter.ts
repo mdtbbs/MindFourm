@@ -101,6 +101,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
 
       const errorBody = apiV1Error(code, typeof message === 'string' ? message : String(message), retryable, details, requestId);
+      // `apiV1Error` already prefers public English copy when `message` is just
+      // the machine code, which is what a bare `HttpException(code)` produces.
       if (structured.existing_resource) (errorBody.error as any).existing_resource = structured.existing_resource;
       if (structured.existing_resources) (errorBody.error as any).existing_resources = structured.existing_resources;
       response.status(status).json(errorBody);
@@ -110,7 +112,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     console.error('Unhandled V1 exception:', exception);
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json(
-      apiV1Error('INTERNAL_ERROR', '服务器内部错误', true, [], requestId),
+      apiV1Error('INTERNAL_ERROR', 'INTERNAL_ERROR', true, [], requestId),
     );
   }
 }

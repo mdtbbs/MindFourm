@@ -4,6 +4,21 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.4.1
+
+本次修订只影响 V1 错误响应中 `error.message` 的语言，不改变任何操作、路径、必填参数、响应字段、错误码、HTTP 状态或限流。
+
+### Fixed
+
+- 所有 `/api/v1/*` 错误响应的 `error.message` 现在返回公开英文文案，而不是服务端错误码注册表里的中文默认文案。此前 `SESSION_FULL`、`RESOURCE_FILE_NOT_READY`、`INTERNAL_ERROR`、`DOC_NOT_FOUND` 等错误码会把中文原文或机器码直接发给英文站（mindustry.club）的用户界面；联机、云存档、资源上下载等流程都受影响。
+- `POST /api/v1/game-saves/*/uploads` 等把错误码当作 message 透传的分支一并修正，`error.code` 与 `error.message` 不再相同。
+
+### Compatibility
+
+`error.code` 的取值集合、HTTP 状态和 `error.retryable` 完全未变；依据 `code` 做分支判断的客户端不受影响。依赖 `message` 字面量的客户端需要改为按 `code` 判断——这本来就是文档约定的用法（见[错误处理](/api/v1/docs/errors)）。四语客户端文案由前端本地目录按 `code` 翻译，不需要解析 `message`。
+
+Ref: #13
+
 ## Public API 1.4.0
 
 本次修订把云存档上传、冲突、下载和配额在实际运行中的行为写回契约，并补上客户端做分支判断需要的字段。所有既有操作、必填参数和响应字段保持不变；新增字段为兼容性新增，旧客户端可忽略。

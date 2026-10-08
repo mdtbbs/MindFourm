@@ -28,7 +28,7 @@ export class UploadsV1Controller {
   async image(@UploadedFile() file?: Express.Multer.File) {
     if (!await this.settings.getBoolean('feature_public_api_image_upload_enabled', true)) {
       await cleanupUploadedPublicImage(file);
-      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭图片上传', false);
+      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, 'FEATURE_DISABLED', false);
     }
     if (!file) throw new BadRequestException('没有收到图片');
     try {

@@ -84,7 +84,7 @@ export class ResourcesV1Controller {
   async getManifest(@Param('id') id: string): Promise<V1ResourceManifest> {
     await this.assertEnabled();
     const manifest = await this.resourceReadAdapter.getManifestByPublicId(id);
-    if (!manifest) throw new ApiV1Exception('RESOURCE_NOT_FOUND', HttpStatus.NOT_FOUND, '资源不存在或不可见', false);
+    if (!manifest) throw new ApiV1Exception('RESOURCE_NOT_FOUND', HttpStatus.NOT_FOUND, 'RESOURCE_NOT_FOUND', false);
     return manifest;
   }
 
@@ -118,7 +118,7 @@ export class ResourcesV1Controller {
   ) {
     await this.assertEnabled();
     const caps = await this.capabilitiesService.getCapabilities();
-    if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭资源下载', false);
+    if (!caps.resources.download) throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, 'FEATURE_DISABLED', false);
     const target = await this.resourceReadAdapter.getPublicFileByPublicIds(resourceId, versionId, fileId, req?.user);
     // The read adapter only returns an unpublished version to an authorized
     // resource manager. RES keeps those bytes privately bound and marks the
@@ -198,10 +198,7 @@ export class ResourcesV1Controller {
         res?.setHeader('Location', redirectUrl);
         return { merged: true, canonical_public_id: canonicalPublicId, redirect_url: redirectUrl };
       }
-      throw new ApiV1Exception(
-        'RESOURCE_NOT_FOUND',
-        HttpStatus.NOT_FOUND,
-        '资源不存在或不可见',
+      throw new ApiV1Exception('RESOURCE_NOT_FOUND', HttpStatus.NOT_FOUND, 'RESOURCE_NOT_FOUND',
         false,
       );
     }
@@ -211,7 +208,7 @@ export class ResourcesV1Controller {
 
   private async assertEnabled(): Promise<void> {
     const caps = await this.capabilitiesService.getCapabilities();
-    if (!caps.resource_read) throw new ApiV1Exception('RESOURCE_V1_DISABLED', HttpStatus.FORBIDDEN, 'V1 资源接口暂未启用', false);
+    if (!caps.resource_read) throw new ApiV1Exception('RESOURCE_V1_DISABLED', HttpStatus.FORBIDDEN, 'RESOURCE_V1_DISABLED', false);
   }
 
   private toDetailDto(dto: V1ResourceDto): V1ResourceDetail {

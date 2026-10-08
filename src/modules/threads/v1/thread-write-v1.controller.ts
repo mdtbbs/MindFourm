@@ -167,7 +167,7 @@ export class ThreadWriteV1Controller {
 
   private async assertWritesEnabled() {
     if (this.settings && !await this.settings.getBoolean('feature_public_api_forum_write_enabled', true)) {
-      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, '站点已关闭 Public Client 论坛写入', false);
+      throw new ApiV1Exception('FEATURE_DISABLED', HttpStatus.FORBIDDEN, 'FEATURE_DISABLED', false);
     }
   }
 }
