@@ -1,3 +1,22 @@
+// Documented backend/API gate (CLAUDE.md, docs/production-deployment.md):
+//   npm ci && npm test
+// Only the root `npm ci` runs there, so the backend suite must be
+// self-contained: it may not resolve anything out of `frontend/node_modules`.
+// Every suite below is a frontend-rendering test that needs those packages;
+// they run through the frontend toolchain instead (`frontend` pipeline and
+// `cd frontend && npm ci && npm test`). Excluding them here keeps the root
+// gate deterministic instead of depending on which install happened first.
+const FRONTEND_RENDERING_SPECS = [
+  // Renders Tiptap components with `lowlight`/`@tiptap/*` from frontend deps.
+  '<rootDir>/src/common/utils/tiptap-content.contract.spec.ts',
+  // Renders React components straight out of the frontend app.
+  '<rootDir>/src/modules/resources/wave-editor-render.spec.ts',
+  '<rootDir>/tests/frontend/',
+  '<rootDir>/tests/unit/active-users-metric.spec.ts',
+  '<rootDir>/tests/unit/reply-thread.spec.ts',
+  '<rootDir>/tests/unit/services/forum-batch-fetch.spec.ts',
+];
+
 // `sanitize-html` pulls in htmlparser2 v12, which is ESM-only. Node 22.12+ loads
 // it through require(esm), but Jest's CJS runtime cannot — so that dependency
 // chain has to be transpiled instead of ignored.
@@ -14,8 +33,6 @@ const ESM_ONLY_DEPS = [
   'domelementtype',
   'dom-serializer',
   'entities',
-  'lowlight',
-  'highlight.js',
 ];
 
 module.exports = {
@@ -26,6 +43,7 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     '<rootDir>/tests/e2e/',
+    ...FRONTEND_RENDERING_SPECS,
   ],
   transform: {
     '^.+\\.[cm]?[tj]sx?$': [
@@ -42,17 +60,11 @@ module.exports = {
     `node_modules[\\\\/](?!(${ESM_ONLY_DEPS.join('|')})[\\\\/])`,
   ],
   moduleNameMapper: {
-    '^react/(.*)$': '<rootDir>/frontend/node_modules/react/$1',
-    '^react$': '<rootDir>/frontend/node_modules/react',
-    '^react-dom/(.*)$': '<rootDir>/frontend/node_modules/react-dom/$1',
     '^@/(.*)$': '<rootDir>/frontend/src/$1',
     '^@entities/(.*)$': '<rootDir>/src/entities/$1',
     '^@common/(.*)$': '<rootDir>/src/common/$1',
     '^@config/(.*)$': '<rootDir>/src/config/$1',
     '^@modules/(.*)$': '<rootDir>/src/modules/$1',
     '^@database/(.*)$': '<rootDir>/src/database/$1',
-    '^@tiptap/([^/]+)$': '<rootDir>/frontend/node_modules/@tiptap/$1',
-    '^lowlight$': '<rootDir>/frontend/node_modules/lowlight',
-    '^tiptap-markdown$': '<rootDir>/frontend/node_modules/tiptap-markdown',
   },
 };

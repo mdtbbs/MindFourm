@@ -36,115 +36,117 @@ function resetStore(): void {
 // ────────────────────────────────────────────────────────────────────────────
 // Test: hydrateFromServer populates an empty store synchronously
 // ────────────────────────────────────────────────────────────────────────────
-(function testHydrateFromServerPopulatesEmptyStore() {
-  resetStore();
+describe('settings store hydration', () => {
+  it('testHydrateFromServerPopulatesEmptyStore', () => {
+    resetStore();
 
-  const serverSettings = {
-    site_name: 'Test Forum',
-    site_tagline: 'Test Tagline',
-    brand_primary: '#ff0000',
-  };
+    const serverSettings = {
+      site_name: 'Test Forum',
+      site_tagline: 'Test Tagline',
+      brand_primary: '#ff0000',
+    };
 
-  hydrateFromServer(serverSettings);
+    hydrateFromServer(serverSettings);
 
-  const state = useSettingsStore.getState();
-  assertDeepEqual(state.settings, serverSettings, 'settings should match server data after hydration');
-  assert(state.lastUpdated !== null, 'lastUpdated should be set after hydration');
-})();
-
-// ────────────────────────────────────────────────────────────────────────────
-// Test: first subscriber sees server data immediately (no flash)
-// ────────────────────────────────────────────────────────────────────────────
-(function testFirstSubscriberSeesServerData() {
-  resetStore();
-
-  const serverSettings = { site_name: 'My Forum' };
-
-  // Hydrate BEFORE any subscription — this simulates the provider rendering
-  // before children.
-  hydrateFromServer(serverSettings);
-
-  // A child component subscribing for the first time should see the data.
-  const settings = useSettingsStore.getState().settings;
-  assert(settings.site_name === 'My Forum', 'first subscriber should see server site_name');
-})();
-
-// ────────────────────────────────────────────────────────────────────────────
-// Test: hydrateFromServer overrides stale localStorage data
-// ────────────────────────────────────────────────────────────────────────────
-(function testHydrateOverridesStaleData() {
-  resetStore();
-
-  // Simulate stale localStorage data already in the store.
-  useSettingsStore.setState({
-    settings: { site_name: 'Stale Name', site_tagline: 'Old Tagline' },
+    const state = useSettingsStore.getState();
+    assertDeepEqual(state.settings, serverSettings, 'settings should match server data after hydration');
+    assert(state.lastUpdated !== null, 'lastUpdated should be set after hydration');
   });
 
-  const serverSettings = { site_name: 'New Name', site_tagline: 'New Tagline' };
-  hydrateFromServer(serverSettings);
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: first subscriber sees server data immediately (no flash)
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFirstSubscriberSeesServerData', () => {
+    resetStore();
 
-  const state = useSettingsStore.getState();
-  assert(state.settings.site_name === 'New Name', 'server data should override stale localStorage');
-  assert(state.settings.site_tagline === 'New Tagline', 'server tagline should override stale data');
-})();
+    const serverSettings = { site_name: 'My Forum' };
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: hydrateFromServer skips when data is identical (no unnecessary writes)
-// ────────────────────────────────────────────────────────────────────────────
-(function testHydrateSkipsIdenticalData() {
-  resetStore();
+    // Hydrate BEFORE any subscription — this simulates the provider rendering
+    // before children.
+    hydrateFromServer(serverSettings);
 
-  const settings = { site_name: 'Same Name' };
-  hydrateFromServer(settings);
-  const firstUpdated = useSettingsStore.getState().lastUpdated;
+    // A child component subscribing for the first time should see the data.
+    const settings = useSettingsStore.getState().settings;
+    assert(settings.site_name === 'My Forum', 'first subscriber should see server site_name');
+  });
 
-  // Small delay to ensure timestamp would differ if setState were called.
-  const start = Date.now();
-  while (Date.now() - start < 5) { /* busy wait */ }
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: hydrateFromServer overrides stale localStorage data
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testHydrateOverridesStaleData', () => {
+    resetStore();
 
-  hydrateFromServer(settings);
-  const secondUpdated = useSettingsStore.getState().lastUpdated;
+    // Simulate stale localStorage data already in the store.
+    useSettingsStore.setState({
+      settings: { site_name: 'Stale Name', site_tagline: 'Old Tagline' },
+    });
 
-  assert(firstUpdated === secondUpdated, 'lastUpdated should not change when data is identical');
-})();
+    const serverSettings = { site_name: 'New Name', site_tagline: 'New Tagline' };
+    hydrateFromServer(serverSettings);
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: hydrateFromServer ignores empty input
-// ────────────────────────────────────────────────────────────────────────────
-(function testHydrateIgnoresEmptyInput() {
-  resetStore();
+    const state = useSettingsStore.getState();
+    assert(state.settings.site_name === 'New Name', 'server data should override stale localStorage');
+    assert(state.settings.site_tagline === 'New Tagline', 'server tagline should override stale data');
+  });
 
-  hydrateFromServer({});
-  assertDeepEqual(
-    useSettingsStore.getState().settings,
-    {},
-    'empty settings should not populate the store',
-  );
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: hydrateFromServer skips when data is identical (no unnecessary writes)
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testHydrateSkipsIdenticalData', () => {
+    resetStore();
 
-  // Also test null/undefined safety (TypeScript prevents this, but defensive).
-  hydrateFromServer(null as any);
-  assertDeepEqual(
-    useSettingsStore.getState().settings,
-    {},
-    'null settings should not populate the store',
-  );
-})();
+    const settings = { site_name: 'Same Name' };
+    hydrateFromServer(settings);
+    const firstUpdated = useSettingsStore.getState().lastUpdated;
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: useSettings backward compat hook returns hydrated data
-// ────────────────────────────────────────────────────────────────────────────
-(function testUseSettingsBackwardCompat() {
-  resetStore();
+    // Small delay to ensure timestamp would differ if setState were called.
+    const start = Date.now();
+    while (Date.now() - start < 5) { /* busy wait */ }
 
-  const serverSettings = { site_name: 'Compat Forum', brand_primary: '#00ff00' };
-  hydrateFromServer(serverSettings);
+    hydrateFromServer(settings);
+    const secondUpdated = useSettingsStore.getState().lastUpdated;
 
-  // We can't call React hooks outside a component, but we can verify that
-  // the selector used by useSettings() would return the hydrated data.
-  // useSettings() is: useSettingsStore((s) => s.settings)
-  const settings = useSettingsStore.getState().settings;
-  assert(settings.site_name === 'Compat Forum', 'backward compat selector should return server site_name');
-  assert(settings.brand_primary === '#00ff00', 'backward compat selector should return server brand_primary');
-})();
+    assert(firstUpdated === secondUpdated, 'lastUpdated should not change when data is identical');
+  });
 
-assert(true, 'settings store hydration spec executed');
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: hydrateFromServer ignores empty input
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testHydrateIgnoresEmptyInput', () => {
+    resetStore();
+
+    hydrateFromServer({});
+    assertDeepEqual(
+      useSettingsStore.getState().settings,
+      {},
+      'empty settings should not populate the store',
+    );
+
+    // Also test null/undefined safety (TypeScript prevents this, but defensive).
+    hydrateFromServer(null as any);
+    assertDeepEqual(
+      useSettingsStore.getState().settings,
+      {},
+      'null settings should not populate the store',
+    );
+  });
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: useSettings backward compat hook returns hydrated data
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testUseSettingsBackwardCompat', () => {
+    resetStore();
+
+    const serverSettings = { site_name: 'Compat Forum', brand_primary: '#00ff00' };
+    hydrateFromServer(serverSettings);
+
+    // We can't call React hooks outside a component, but we can verify that
+    // the selector used by useSettings() would return the hydrated data.
+    // useSettings() is: useSettingsStore((s) => s.settings)
+    const settings = useSettingsStore.getState().settings;
+    assert(settings.site_name === 'Compat Forum', 'backward compat selector should return server site_name');
+    assert(settings.brand_primary === '#00ff00', 'backward compat selector should return server brand_primary');
+  });
+
+
+});

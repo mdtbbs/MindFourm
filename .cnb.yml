@@ -8,12 +8,18 @@
     volumes:
       - /root/.npm:copy-on-write
   stages:
+    # `npm run test:frontend-unit` resolves the ts-jest binary from the root
+    # install, so the root dependencies have to exist before it runs.
     - name: install backend dependencies
       script: npm ci
+    - name: install frontend dependencies
+      script: cd frontend && npm ci
     - name: build backend
       script: npm run build:backend
     - name: test backend
       script: npm test -- --runInBand
+    - name: test frontend units
+      script: npm run test:frontend-unit
 
 .frontend: &frontend
   name: frontend-quality-gates
@@ -28,6 +34,8 @@
       script: cd frontend && npm run lint
     - name: typecheck frontend
       script: cd frontend && npm run typecheck
+    - name: test frontend units
+      script: cd frontend && npm run test:frontend-unit
     - name: build frontend
       env:
         NEXT_PUBLIC_SITE_URL: http://localhost:3000
