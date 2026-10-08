@@ -112,14 +112,14 @@ function FileRow({ file, labels }: { file: ResourceWorkbenchV2File; labels: Reco
   const name = file.display_name || file.original_filename || file.public_id;
   return <li key={file.public_id} className="flex min-w-0 flex-col gap-3 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between">
     <div className="flex min-w-0 items-start gap-3">
-      <FileArchive className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" />
+      <FileArchive className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary-text)]" />
       <div className="min-w-0">
         <p className="break-all text-sm font-medium text-[var(--text)]">{name}</p>
         <p className="mt-1 break-words text-xs text-[var(--text-muted)]">{playerLabel(file.role, locale)} · {playerLabel(file.delivery_mode, locale)} · {formatSize(file.size_bytes, labels.unknown)} · {playerLabel(file.integrity_status, locale)}</p>
       </div>
     </div>
     {file.downloadable && file.download_url
-      ? <a href={file.download_url} className="inline-flex min-h-10 shrink-0 items-center justify-center rounded border border-[var(--border)] px-3 text-sm text-[var(--primary)] hover:bg-[var(--primary-soft)]">{labels.download}</a>
+      ? <a href={file.download_url} className="inline-flex min-h-10 shrink-0 items-center justify-center rounded border border-[var(--border)] px-3 text-sm text-[var(--primary-text)] hover:bg-[var(--primary-soft)]">{labels.download}</a>
       : <span className="inline-flex min-h-10 shrink-0 items-center justify-center rounded border border-[var(--border)] px-3 text-sm text-[var(--text-muted)]">{labels.unavailable}</span>}
   </li>;
 }
@@ -278,8 +278,8 @@ function ModDetails({ data, analysis, publicId, versionPublicId, parserVersion, 
         {indexLoading ? <div role="status" className="text-sm text-[var(--text-muted)]">{labels.indexLoading}</div>
           : indexError ? <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">{labels.indexLoadFailed}: {indexError}</div>
             : <>
-              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.indexedContentCount}</h5>{contents.length ? <ul className="mt-2 space-y-2">{contents.map((item) => <li key={item.public_id} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[var(--bg-card)] px-2 py-1 text-[11px]">{item.content_type}</span><span className="break-all text-sm font-medium text-[var(--text)]">{item.display_name || item.internal_name}</span>{item.display_name && item.display_name !== item.internal_name && <code className="break-all text-xs text-[var(--text-muted)]">{item.internal_name}</code>}</div>{item.description && <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--text-secondary)]">{item.description}</p>}</li>)}</ul> : <EmptyState>{labels.noIndexedContent}</EmptyState>}{contentPagination.has_more && <button type="button" disabled={loadingMore} onClick={() => void loadMoreContent()} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--primary)] disabled:opacity-60">{loadingMore ? labels.loadingMore : labels.loadMoreContent}</button>}</div>
-              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.localizationCoverage}</h5>{localizations.length ? <ul className="mt-2 grid gap-2 sm:grid-cols-2">{localizations.map((item) => <li key={item.locale} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm text-[var(--text)]">{item.locale}</span><span className="text-sm font-semibold tabular-nums text-[var(--text)]">{item.percentage}%</span></div><p className="mt-1 text-xs text-[var(--text-muted)]">{item.translated_count} / {item.total_count} {labels.translatedKeys}</p>{item.missing_keys.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-xs text-[var(--primary)]">{labels.missingKeys} ({item.missing_keys.length})</summary><ul className="mt-2 space-y-1">{item.missing_keys.slice(0, 12).map((key) => <li key={key} className="break-all font-mono text-[11px] text-[var(--text-muted)]">{key}</li>)}</ul></details>}</li>)}</ul> : <EmptyState>{labels.noLocalizationCoverage}</EmptyState>}</div>
+              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.indexedContentCount}</h5>{contents.length ? <ul className="mt-2 space-y-2">{contents.map((item) => <li key={item.public_id} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[var(--bg-card)] px-2 py-1 text-[11px]">{item.content_type}</span><span className="break-all text-sm font-medium text-[var(--text)]">{item.display_name || item.internal_name}</span>{item.display_name && item.display_name !== item.internal_name && <code className="break-all text-xs text-[var(--text-muted)]">{item.internal_name}</code>}</div>{item.description && <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--text-secondary)]">{item.description}</p>}</li>)}</ul> : <EmptyState>{labels.noIndexedContent}</EmptyState>}{contentPagination.has_more && <button type="button" disabled={loadingMore} onClick={() => void loadMoreContent()} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--primary-text)] disabled:opacity-60">{loadingMore ? labels.loadingMore : labels.loadMoreContent}</button>}</div>
+              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.localizationCoverage}</h5>{localizations.length ? <ul className="mt-2 grid gap-2 sm:grid-cols-2">{localizations.map((item) => <li key={item.locale} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm text-[var(--text)]">{item.locale}</span><span className="text-sm font-semibold tabular-nums text-[var(--text)]">{item.percentage}%</span></div><p className="mt-1 text-xs text-[var(--text-muted)]">{item.translated_count} / {item.total_count} {labels.translatedKeys}</p>{item.missing_keys.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-xs text-[var(--primary-text)]">{labels.missingKeys} ({item.missing_keys.length})</summary><ul className="mt-2 space-y-1">{item.missing_keys.slice(0, 12).map((key) => <li key={key} className="break-all font-mono text-[11px] text-[var(--text-muted)]">{key}</li>)}</ul></details>}</li>)}</ul> : <EmptyState>{labels.noLocalizationCoverage}</EmptyState>}</div>
             </>}
       </div>
     </div>}
@@ -415,10 +415,10 @@ function VersionWorkspace({ version, locale, kind, publicId, versions, labels }:
   return <div className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h3 className="text-lg font-semibold text-[var(--text)]">{version.display_version || version.version}</h3><p className="mt-1 text-sm text-[var(--text-muted)]">{playerLabel(version.version_mode, locale)} · {playerLabel(version.release_channel, locale)} · {playerLabel(version.status, locale)}</p></div>
-      {version.recommended && <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary-soft)] px-2.5 py-1 text-xs font-medium text-[var(--primary)]"><Check className="h-3.5 w-3.5" />{labels.recommended}</span>}
+      {version.recommended && <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary-soft)] px-2.5 py-1 text-xs font-medium text-[var(--primary-text)]"><Check className="h-3.5 w-3.5" />{labels.recommended}</span>}
     </div>
     <div className="flex flex-wrap gap-2 border-b border-[var(--border)]" role="tablist" aria-label={labels.versionTabs}>
-      {tabs.map(({ key, label }) => <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`min-h-10 border-b-2 px-3 text-sm ${tab === key ? 'border-[var(--primary)] font-semibold text-[var(--primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{label}</button>)}
+      {tabs.map(({ key, label }) => <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`min-h-10 border-b-2 px-3 text-sm ${tab === key ? 'border-[var(--primary)] font-semibold text-[var(--primary-text)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{label}</button>)}
     </div>
     {tab === 'summary' && <div className="grid gap-3 sm:grid-cols-2">
       <div className="rounded-lg bg-[var(--bg-elevated)] p-3"><p className="text-xs text-[var(--text-muted)]">{labels.revision}</p><p className="mt-1 text-sm text-[var(--text)]">{version.revision ?? labels.unknown}</p></div>
@@ -441,7 +441,7 @@ function CompatibilityPanel({ version, labels }: { version: ResourceWorkbenchV2V
       {item.notes && <p className="mt-1 text-xs text-[var(--text-muted)]">{item.notes}</p>}
     </li>)}</ul> : <EmptyState>{labels.noCompatibility}</EmptyState>}
     <div><h4 className="mb-2 text-sm font-semibold text-[var(--text)]">{labels.dependencies}</h4>{version.dependencies.length ? <ul className="space-y-2">{version.dependencies.map((item, index) => <li key={`${item.dependency_type}:${item.resource_public_id || item.external_identifier}:${index}`} className="rounded-lg border border-[var(--border)] p-3 text-sm">
-      <span className="font-medium text-[var(--text)]">{item.resource_public_id ? <Link className="text-[var(--primary)] hover:underline" href={`/resources/${encodeURIComponent(item.resource_public_id)}/workbench`}>{item.resource_public_id}</Link> : item.external_identifier || item.upstream_url || labels.unknown}</span>
+      <span className="font-medium text-[var(--text)]">{item.resource_public_id ? <Link className="text-[var(--primary-text)] hover:underline" href={`/resources/${encodeURIComponent(item.resource_public_id)}/workbench`}>{item.resource_public_id}</Link> : item.external_identifier || item.upstream_url || labels.unknown}</span>
       <span className="ml-2 text-[var(--text-muted)]">{item.dependency_type}{item.version_constraint ? ` · ${item.version_constraint}` : ''}{item.resolution_status ? ` · ${item.resolution_status}` : ''}</span>
     </li>)}</ul> : <EmptyState>{labels.noDependencies}</EmptyState>}</div>
   </div>;
@@ -592,18 +592,18 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
 
   return <div className="content-width-detail mx-auto min-w-0 px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
     <div className="mb-4 flex items-center justify-between gap-3">
-      <Link href="/resources" className="text-sm text-[var(--text-muted)] hover:text-[var(--primary)]">← {t('resourceWorkbenchV2.backToResources')}</Link>
+      <Link href="/resources" className="text-sm text-[var(--text-muted)] hover:text-[var(--primary-text)]">← {t('resourceWorkbenchV2.backToResources')}</Link>
       <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.v2Badge')}</span>
     </div>
 
     {loading && <div role="status" className="flex min-h-72 items-center justify-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-sm text-[var(--text-muted)]"><RefreshCw className="h-5 w-5 animate-spin" />{t('resourceWorkbenchV2.loading')}</div>}
-    {!loading && error && <div role="alert" className="mx-auto max-w-2xl rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center"><AlertCircle className="mx-auto h-8 w-8 text-red-500" /><h1 className="mt-3 text-xl font-semibold text-[var(--text)]">{t('resourceWorkbenchV2.loadFailed')}</h1><p className="mt-2 break-words text-sm text-[var(--text-muted)]">{error}</p><button type="button" onClick={() => void load()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 text-sm font-semibold text-white"><RefreshCw className="h-4 w-4" />{t('resourceWorkbenchV2.retry')}</button></div>}
+    {!loading && error && <div role="alert" className="mx-auto max-w-2xl rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center"><AlertCircle className="mx-auto h-8 w-8 text-red-500" /><h1 className="mt-3 text-xl font-semibold text-[var(--text)]">{t('resourceWorkbenchV2.loadFailed')}</h1><p className="mt-2 break-words text-sm text-[var(--text-muted)]">{error}</p><button type="button" onClick={() => void load()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary-button)] px-4 text-sm font-semibold text-white"><RefreshCw className="h-4 w-4" />{t('resourceWorkbenchV2.retry')}</button></div>}
 
     {!loading && !error && workbench && resource && <>
       <header className="mb-5 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-soft)] text-[var(--primary)]"><ResourceIcon className="h-5 w-5" /></span>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-soft)] text-[var(--primary-text)]"><ResourceIcon className="h-5 w-5" /></span>
             <div className="min-w-0"><p className="text-xs uppercase tracking-wide text-[var(--text-muted)]">{resource.resource_kind}</p><h1 className="mt-1 break-words text-2xl font-bold text-[var(--text)] sm:text-3xl">{resource.title}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-secondary)]">{resource.summary || resource.description || t('resourceWorkbenchV2.noDescription')}</p></div>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:items-end"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${workbench.permissions.can_manage ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}><Shield className="h-3.5 w-3.5" />{workbench.permissions.can_manage ? t('resourceWorkbenchV2.manager') : '可编辑副本'}</span></div>
@@ -613,19 +613,19 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
         </div>
       </header>
 
-      {['schematic', 'map'].includes(resource.resource_kind) ? <div className="mb-4 flex flex-wrap gap-2"><button type="button" onClick={() => navigateTo('editor')} className="min-h-11 bg-[var(--primary)] px-4 text-sm font-semibold text-white">{resource.resource_kind === 'schematic' ? '打开蓝图编辑器' : '打开地图编辑器'}</button><p className="self-center text-sm text-[var(--text-muted)]">编辑副本可下载或发布为自己的资源，原作品保持不变。</p></div> : null}
+      {['schematic', 'map'].includes(resource.resource_kind) ? <div className="mb-4 flex flex-wrap gap-2"><button type="button" onClick={() => navigateTo('editor')} className="min-h-11 bg-[var(--primary-button)] px-4 text-sm font-semibold text-white">{resource.resource_kind === 'schematic' ? '打开蓝图编辑器' : '打开地图编辑器'}</button><p className="self-center text-sm text-[var(--text-muted)]">编辑副本可下载或发布为自己的资源，原作品保持不变。</p></div> : null}
       <div className="mb-4 lg:hidden">
         <button type="button" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((value) => !value)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 text-sm font-semibold text-[var(--text)]"><span>{t('resourceWorkbenchV2.sections')}: {sectionItems.find((item) => item.key === activeSection)?.label}</span><ChevronDown className={`h-4 w-4 transition-transform ${mobileNavOpen ? 'rotate-180' : ''}`} /></button>
         {mobileNavOpen && <nav aria-label={t('resourceWorkbenchV2.sections')} className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-2">{sectionItems.map(({ key, label }) => {
           const Icon = SECTION_ICONS[key];
-          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-left text-sm ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
+          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-left text-sm ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
         })}</nav>}
       </div>
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <aside className="hidden lg:block"><nav aria-label={t('resourceWorkbenchV2.sections')} className="sticky top-5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-2">{sectionItems.map(({ key, label }) => {
           const Icon = SECTION_ICONS[key];
-          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`mb-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm last:mb-0 ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
+          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`mb-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm last:mb-0 ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
         })}</nav></aside>
 
         <main className="min-w-0 space-y-4">
@@ -741,7 +741,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
                 : relation.relation_type;
               const versionLabel = relation.version || relation.version_public_id;
               return <li key={`${relation.relation_type}:${relation.resource.public_id}:${relation.version_public_id || ''}`} className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between">
-                <Link href={`/resources/${encodeURIComponent(relation.resource.public_id)}/workbench`} className="min-w-0 break-words font-medium text-[var(--primary)] hover:underline">{relation.resource.title}</Link>
+                <Link href={`/resources/${encodeURIComponent(relation.resource.public_id)}/workbench`} className="min-w-0 break-words font-medium text-[var(--primary-text)] hover:underline">{relation.resource.title}</Link>
                 <span className="text-xs text-[var(--text-muted)]">{t(`resourceWorkbenchV2.community.relationDirections.${relation.relation_direction}`)} · {relationTypeLabel}{relation.relation_type === 'recommended_for' ? ` · ${t(`resourceWorkbenchV2.community.context.${relation.relation_context}`)}` : ''} · {relation.resource.resource_kind}{versionLabel ? ` · ${t('resourceWorkbenchV2.community.relatedVersion')}: ${versionLabel}` : ''}</span>
               </li>;
             })}</ul> : <EmptyState>{t('resourceWorkbenchV2.noRelations')}</EmptyState>}</FoldCard>

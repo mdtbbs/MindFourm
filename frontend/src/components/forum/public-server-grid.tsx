@@ -29,7 +29,7 @@ export default function PublicServerGrid() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
+        <Loader2 className="w-6 h-6 animate-spin text-[var(--primary-text)]" />
         <span className="ml-3 text-[var(--text-secondary)]">加载服务器...</span>
       </div>
     );
@@ -41,7 +41,7 @@ export default function PublicServerGrid() {
         <p className="text-[var(--error)] mb-3">加载失败</p>
         <button
           onClick={loadServers}
-          className="px-4 py-2 bg-[var(--primary)] text-white text-sm rounded-[var(--radius)]"
+          className="px-4 py-2 bg-[var(--primary-button)] text-white text-sm rounded-[var(--radius)]"
         >
           刷新
         </button>

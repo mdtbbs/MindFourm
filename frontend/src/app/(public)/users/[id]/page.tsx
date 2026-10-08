@@ -198,7 +198,7 @@ export default async function UserProfilePage({
 
       <section className="mb-5 overflow-hidden rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] shadow-[var(--shadow-sm)]">
         <div className="flex flex-col gap-5 px-5 py-5 sm:px-6 md:flex-row md:items-start">
-          <span className="flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-2xl font-semibold text-[var(--primary)] md:h-24 md:w-24">
+          <span className="flex h-[88px] w-[88px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--primary)]/10 text-2xl font-semibold text-[var(--primary-text)] md:h-24 md:w-24">
             {profile.avatar_url ? <img src={profile.avatar_url} alt={t('userProfile.avatarAlt', { name: displayName })} className="h-full w-full object-cover" /> : displayName.slice(0, 1).toUpperCase()}
           </span>
           <div className="min-w-0 flex-1">
@@ -239,7 +239,7 @@ export default async function UserProfilePage({
             href={`/users/${userId}?tab=posts`}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tabValue === 'posts'
-                ? 'border-[var(--primary)] text-[var(--primary)]'
+                ? 'border-[var(--primary)] text-[var(--primary-text)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
           >
@@ -249,7 +249,7 @@ export default async function UserProfilePage({
             href={`/users/${userId}?tab=replies`}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tabValue === 'replies'
-                ? 'border-[var(--primary)] text-[var(--primary)]'
+                ? 'border-[var(--primary)] text-[var(--primary-text)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
           >
@@ -259,7 +259,7 @@ export default async function UserProfilePage({
             href={`/users/${userId}?tab=resources`}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tabValue === 'resources'
-                ? 'border-[var(--primary)] text-[var(--primary)]'
+                ? 'border-[var(--primary)] text-[var(--primary-text)]'
                 : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
             }`}
           >
@@ -273,7 +273,7 @@ export default async function UserProfilePage({
                 href={`/users/${userId}?tab=bookmarks`}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   tabValue === 'bookmarks'
-                    ? 'border-[var(--primary)] text-[var(--primary)]'
+                    ? 'border-[var(--primary)] text-[var(--primary-text)]'
                     : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
                 }`}
               >
@@ -284,7 +284,7 @@ export default async function UserProfilePage({
                 href={`/users/${userId}?tab=likes`}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   tabValue === 'likes'
-                    ? 'border-[var(--primary)] text-[var(--primary)]'
+                    ? 'border-[var(--primary)] text-[var(--primary-text)]'
                     : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text)]'
                 }`}
               >
@@ -324,7 +324,7 @@ export default async function UserProfilePage({
               {repliesResult.data.map((reply) => (
                 <div key={reply.id} className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4">
                   <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)] mb-2">
-                    <Link href={`/posts/${reply.post_id}`} className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium">
+                    <Link href={`/posts/${reply.post_id}`} className="text-[var(--primary-text)] hover:text-[var(--primary-dark)] font-medium">
                       {reply.post_title || t('userProfile.post')}
                     </Link>
                     <span>·</span>
@@ -371,7 +371,7 @@ export default async function UserProfilePage({
               {bookmarksResult.data.map((bookmark) => (
                 <div key={bookmark.id} className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4">
                   <div className="flex items-center justify-between">
-                    <Link href={`/posts/${bookmark.post_id}`} className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium">
+                    <Link href={`/posts/${bookmark.post_id}`} className="text-[var(--primary-text)] hover:text-[var(--primary-dark)] font-medium">
                       {bookmark.title}
                     </Link>
                     <span className="text-sm text-[var(--text-secondary)]">
@@ -406,7 +406,7 @@ export default async function UserProfilePage({
               {likesResult.data.map((like) => (
                 <div key={like.id} className="bg-[var(--bg-card)] rounded-lg border border-[var(--border)] p-4">
                   <div className="flex items-center justify-between">
-                    <Link href={`/posts/${like.post_id}`} className="text-[var(--primary)] hover:text-[var(--primary-dark)] font-medium">
+                    <Link href={`/posts/${like.post_id}`} className="text-[var(--primary-text)] hover:text-[var(--primary-dark)] font-medium">
                       {like.title}
                     </Link>
                     <span className="text-sm text-[var(--text-secondary)]">

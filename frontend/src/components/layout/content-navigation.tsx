@@ -27,7 +27,7 @@ export default function ContentNavigation({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const builtSections = buildContentNavigation({ mode, settings, isAuthenticated, userId, forumCategories, resourceCategories, translate: t });
   const sections = contextOnly ? builtSections.filter((section) => section.id === 'context') : builtSections;
-  const linkClass = (active: boolean, indent?: boolean) => `relative flex min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-[var(--motion-fast)] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r before:bg-[var(--primary)] before:transition-opacity before:duration-[var(--motion-fast)] ${indent ? 'ml-3' : ''} ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`;
+  const linkClass = (active: boolean, indent?: boolean) => `relative flex min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-[var(--motion-fast)] before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r before:bg-[var(--primary)] before:transition-opacity before:duration-[var(--motion-fast)] ${indent ? 'ml-3' : ''} ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary-text)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`;
 
   return <>
     {sections.map((section) => {

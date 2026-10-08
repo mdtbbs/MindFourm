@@ -47,7 +47,7 @@ function MdtbbsTermsFallback() {
         <p className="mt-2">
           手机号安全验证使用中国大陆手机号 + 短信验证码完成。相关法规要求、验证目的和个人信息处理方式
           会在验证页面明确说明。具体个人信息处理规则请参阅
-          <Link href="/privacy" className="mx-1 text-[var(--primary)] underline underline-offset-2">
+          <Link href="/privacy" className="mx-1 text-[var(--primary-text)] underline underline-offset-2">
             《隐私政策》
           </Link>
           。

@@ -146,7 +146,7 @@ export default function GlobalSearchCommand({ open, onClose, onOpenChange }: { o
         <button type="button" onClick={close} className="min-h-11 min-w-11 text-xs text-[var(--text-muted)] hover:text-[var(--text)]">{t('common.close')}</button>
       </div>
       <div className="max-h-[min(65dvh,34rem)] overflow-y-auto p-2" aria-live="polite" aria-busy={loading}>
-        {failed && <div className="flex items-center justify-between gap-3 px-3 py-3 text-sm text-[var(--text-secondary)]"><span>{t('searchCommand.error')}</span><button type="button" onClick={() => { const current = query; setQuery(''); window.setTimeout(() => setQuery(current), 0); }} className="min-h-11 px-3 text-[var(--primary)]">{t('common.retry')}</button></div>}
+        {failed && <div className="flex items-center justify-between gap-3 px-3 py-3 text-sm text-[var(--text-secondary)]"><span>{t('searchCommand.error')}</span><button type="button" onClick={() => { const current = query; setQuery(''); window.setTimeout(() => setQuery(current), 0); }} className="min-h-11 px-3 text-[var(--primary-text)]">{t('common.retry')}</button></div>}
         {query.trim().length < 2 ? <p className="px-3 py-4 text-sm text-[var(--text-muted)]">{t('searchCommand.hint')}</p> : items.length ? <div id="global-search-results" role="listbox" aria-label={t('searchCommand.categoriesHint')}>
           {Array.from(grouped.entries()).map(([group, groupItems]) => <section key={group} role="group" aria-label={group} className="mb-2 last:mb-0">
             <h3 className="px-3 pb-1 pt-2 text-xs font-medium text-[var(--text-muted)]">{group}</h3>

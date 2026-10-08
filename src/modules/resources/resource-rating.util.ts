@@ -106,6 +106,7 @@ export function updateRatingAggregates(
 export const RESOURCE_SORT_ALLOWLIST = [
   'created_at',
   'updated_at',
+  'published_at',
   'download_count',
   'rating_average',
   'rating_count',

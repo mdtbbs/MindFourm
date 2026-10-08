@@ -144,7 +144,7 @@ export default function ServerApplyForm({ onSuccess }: ServerApplyFormProps) {
           <button
             type="submit"
             disabled={loading || !form.name || !form.version}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--primary)] text-white font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[var(--primary-button)] text-white font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />

@@ -27,7 +27,7 @@ export default function VersionSelector({
         onClick={() => onSelect(null)}
         className={`px-2.5 py-1 text-xs rounded-[var(--radius-sm)] transition-colors ${
           selectedVersionId === null
-            ? 'bg-[var(--primary)] text-white font-medium'
+            ? 'bg-[var(--primary-button)] text-white font-medium'
             : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)]'
         }`}
       >
@@ -40,7 +40,7 @@ export default function VersionSelector({
           onClick={() => onSelect(version.id)}
           className={`px-2.5 py-1 text-xs rounded-[var(--radius-sm)] transition-colors ${
             selectedVersionId === version.id
-              ? 'bg-[var(--primary)] text-white font-medium'
+              ? 'bg-[var(--primary-button)] text-white font-medium'
               : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:bg-[var(--bg-card)]'
           }`}
         >

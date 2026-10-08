@@ -213,7 +213,7 @@ export default async function PostDetailPage({
       <JsonLd data={jsonLd} />
       {/* Breadcrumb */}
       <nav className="mb-6 text-sm text-[var(--text-secondary)]">
-        <Link href="/" className="hover:text-[var(--primary)]">首页</Link>
+        <Link href="/" className="hover:text-[var(--primary-text)]">首页</Link>
         <span className="mx-2">/</span>
         {post.category_name ? (
           <>

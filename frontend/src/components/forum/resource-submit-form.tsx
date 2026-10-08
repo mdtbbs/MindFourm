@@ -334,7 +334,7 @@ export default function ResourceSubmitForm({
               className="sr-only"
             />
             <div className="flex items-start gap-3">
-              <Upload className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
+              <Upload className="mt-0.5 h-5 w-5 text-[var(--primary-text)]" />
               <div>
                 <div className="text-sm font-medium text-[var(--text)]">{t('resourceSubmit.file')}</div>
                 <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
@@ -361,7 +361,7 @@ export default function ResourceSubmitForm({
               className="sr-only"
             />
             <div className="flex items-start gap-3">
-              <ExternalLink className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
+              <ExternalLink className="mt-0.5 h-5 w-5 text-[var(--primary-text)]" />
               <div>
                 <div className="text-sm font-medium text-[var(--text)]">{t('resourceSubmit.external')}</div>
                 <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
@@ -378,7 +378,7 @@ export default function ResourceSubmitForm({
           className="rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4"
         >
           <div className="flex items-start gap-3">
-            <Map className="mt-0.5 h-5 w-5 text-[var(--primary)]" />
+            <Map className="mt-0.5 h-5 w-5 text-[var(--primary-text)]" />
             <div>
               <p className="text-sm font-semibold text-[var(--text)]">{isMap ? t('resourceSubmit.mapSubmit') : t('resourceSubmit.schematicSubmit')}</p>
               <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
@@ -393,7 +393,7 @@ export default function ResourceSubmitForm({
 
       {resourceKindIsLocked ? (
         <div data-testid="resource-kind-locked" className="flex items-start gap-3 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4">
-          <Puzzle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
+          <Puzzle className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary-text)]" />
           <div>
             <p className="text-sm font-semibold text-[var(--text)]">{t('resourceSubmit.kindRequired')}: {lockedKindLabel}</p>
             <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{t('resourceSubmit.modKindLocked')}</p>
@@ -542,7 +542,7 @@ export default function ResourceSubmitForm({
               onClick={() => { setSchematicSource('file'); setSchematicCode(''); }}
               className={`rounded-lg border px-3 py-3 text-left text-sm ${schematicSource === 'file' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}
             >
-              <Upload className="mb-1 h-4 w-4 text-[var(--primary)]" />
+              <Upload className="mb-1 h-4 w-4 text-[var(--primary-text)]" />
               {t('resourceSubmit.uploadSchematic')}
             </button>
             <button
@@ -551,7 +551,7 @@ export default function ResourceSubmitForm({
               onClick={() => { setSchematicSource('paste'); setFile(null); }}
               className={`rounded-lg border px-3 py-3 text-left text-sm ${schematicSource === 'paste' ? 'border-[var(--primary)] bg-[var(--primary)]/5' : 'border-[var(--border)]'}`}
             >
-              <ClipboardPaste className="mb-1 h-4 w-4 text-[var(--primary)]" />
+              <ClipboardPaste className="mb-1 h-4 w-4 text-[var(--primary-text)]" />
               {t('resourceSubmit.pasteSchematicLabel')}
             </button>
           </div>
@@ -618,7 +618,7 @@ export default function ResourceSubmitForm({
           data-testid="resource-submit-button"
           type="submit"
           disabled={isSubmitting || checkingFileDuplicates || Boolean(duplicateNotice?.exact)}
-          className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary)] px-4 py-2 text-sm text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex items-center gap-2 rounded-[var(--radius)] bg-[var(--primary-button)] px-4 py-2 text-sm text-white hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {resourceType === 'external' ? <ExternalLink className="h-4 w-4" /> : <Upload className="h-4 w-4" />}

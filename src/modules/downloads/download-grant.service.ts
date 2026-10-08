@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { DataSource } from 'typeorm';
 import { createHash } from 'crypto';
 import { DownloadEvent } from '@entities/download-event.entity';
-import { Resource } from '@entities/resource.entity';
+import { incrementResourceCounter } from '../resources/resource-counter.util';
 
 export type GrantRecord = {
   resourceId: number;
@@ -94,8 +94,9 @@ export class DownloadGrantService implements OnModuleInit, OnModuleDestroy {
         backend: record.backend || null, dedup_key: dedupKey, dedup_bucket: dedupBucket,
         created_at: record.grantedAt,
       });
-      const aggregate = await queryRunner.manager.increment(Resource, { id: record.resourceId }, 'download_count', 1);
-      if (aggregate.affected === 0) throw new Error('resource missing while recording download grant');
+      // Counting a download must not move resources.updated_at; see the helper.
+      const affected = await incrementResourceCounter(queryRunner.manager, record.resourceId, 'download_count');
+      if (affected === 0) throw new Error('resource missing while recording download grant');
       await queryRunner.commitTransaction();
       transactionStarted = false;
       this.logger.verbose(`Download granted: file=${record.fileId ?? 'legacy'} resource=${record.resourceId}`);

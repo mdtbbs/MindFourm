@@ -39,11 +39,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 function SectionUnavailable({ retryHref = '/' }: { retryHref?: string }) {
-  return <div className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">本区内容暂时不可用。<Link href={retryHref} className="ml-2 text-[var(--primary)] hover:underline">重新加载</Link></div>;
+  return <div className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">本区内容暂时不可用。<Link href={retryHref} className="ml-2 text-[var(--primary-text)] hover:underline">重新加载</Link></div>;
 }
 
 function SectionHeading({ title, href }: { title: string; href?: string }) {
-  return <div className="mb-3 flex items-center justify-between gap-4"><h2 className="text-lg font-semibold text-[var(--text)]">{title}</h2>{href && <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-sm text-[var(--primary)] hover:underline">查看全部 <ArrowRight className="h-4 w-4" /></Link>}</div>;
+  return <div className="mb-3 flex items-center justify-between gap-4"><h2 className="text-lg font-semibold text-[var(--text)]">{title}</h2>{href && <Link href={href} className="inline-flex shrink-0 items-center gap-1 text-sm text-[var(--primary-text)] hover:underline">查看全部 <ArrowRight className="h-4 w-4" /></Link>}</div>;
 }
 
 export default async function HomePage() {
@@ -69,22 +69,22 @@ export default async function HomePage() {
     const t = (key: string) => translate(locale, key);
     return <main className="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8">
       <section className="border-b border-[var(--border)] pb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{brand.siteName}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-text)]">{brand.siteName}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry Club</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{t('home.intro')}</p>
         <form action="/search" className="relative mt-5 max-w-2xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label={t('common.search')} placeholder={t('home.searchPlaceholder')} className="h-11 w-full rounded border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
         <nav aria-label={t('navigation.siteNavigation')} className="mt-5 flex flex-wrap gap-2">
           {siteProfile.navigation.filter((entry) => ['posts', 'resources', 'discover'].includes(entry.key))
             .filter((entry) => !entry.feature || siteProfile.features[entry.feature])
-            .map((entry) => <Link key={entry.key} href={entry.href} className="border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{t(`navigation.${entry.key}`)} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
-          <Link href="/tools" className="border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{t('navigation.tools')} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>
+            .map((entry) => <Link key={entry.key} href={entry.href} className="border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary-text)]">{t(`navigation.${entry.key}`)} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
+          <Link href="/tools" className="border border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary-text)]">{t('navigation.tools')} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>
         </nav>
         <nav aria-label={t('home.quickLinks')} className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
           {[
             { href: '/resources?resource_kind=mod', label: t('home.mods') },
             { href: '/resources?resource_kind=map', label: t('home.maps') },
             { href: '/resources?resource_kind=schematic', label: t('home.schematics') },
-          ].map((entry) => <Link key={entry.href} href={entry.href} className="text-[var(--primary)] hover:underline">{entry.label} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
+          ].map((entry) => <Link key={entry.href} href={entry.href} className="text-[var(--primary-text)] hover:underline">{entry.label} <ArrowRight aria-hidden className="inline h-3.5 w-3.5" /></Link>)}
         </nav>
       </section>
 
@@ -93,7 +93,7 @@ export default async function HomePage() {
         <section>
           <SectionHeading title={t('home.latestResources')} href="/resources" />
           {home.resources.state === 'unavailable'
-            ? <p className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">{t('home.unavailable')} <Link href="/resources" className="ml-2 text-[var(--primary)] hover:underline">{t('home.reload')}</Link></p>
+            ? <p className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">{t('home.unavailable')} <Link href="/resources" className="ml-2 text-[var(--primary-text)] hover:underline">{t('home.reload')}</Link></p>
             : home.resources.items.length
               ? <div className="divide-y divide-[var(--border)] border-y border-[var(--border)]">{home.resources.items.map((resource) => <CompactResourceCard key={resource.id} resource={resource} />)}</div>
               : <p className="border-y border-[var(--border)] py-5 text-sm text-[var(--text-muted)]">{t('home.noResources')}</p>}
@@ -101,7 +101,7 @@ export default async function HomePage() {
         <section>
           <SectionHeading title={t('home.latestDiscussions')} href="/threads" />
           {home.discussions.state === 'unavailable'
-            ? <p className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">{t('home.unavailable')} <Link href="/threads" className="ml-2 text-[var(--primary)] hover:underline">{t('home.reload')}</Link></p>
+            ? <p className="border border-dashed border-[var(--border)] px-4 py-5 text-sm text-[var(--text-muted)]">{t('home.unavailable')} <Link href="/threads" className="ml-2 text-[var(--primary-text)] hover:underline">{t('home.reload')}</Link></p>
             : home.discussions.items.length
               ? <ThreadList posts={home.discussions.items} />
               : <p className="border-y border-[var(--border)] py-5 text-sm text-[var(--text-muted)]">{t('home.noDiscussions')}</p>}
@@ -113,7 +113,7 @@ export default async function HomePage() {
   return (
     <main className="content-width-feed mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">
       <section className="mb-8 border-b border-[var(--border)] pb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">{brand.siteName}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-text)]">{brand.siteName}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry 中文玩家社区</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">找 Mod、地图、蓝图、服务器，或加入正在发生的讨论。</p>
         <form action="/search" className="relative mt-5 max-w-xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label={t('common.search')} placeholder={t('home.searchPlaceholder')} className="h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
@@ -124,7 +124,7 @@ export default async function HomePage() {
           { href: '/tools/blueprint-editor', label: t('tools.blueprintEditor') },
           { href: '/multiplayer', label: t('navigation.multiplayer') },
           { href: '/servers', label: t('navigation.servers') },
-        ].map((entry) => <Link key={entry.href} href={entry.href} className="inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{entry.label}</Link>)}</nav>
+        ].map((entry) => <Link key={entry.href} href={entry.href} className="inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{entry.label}</Link>)}</nav>
       </section>
 
       {staleSections > 0 && <p role="status" className="-mt-4 mb-5 text-xs text-[var(--text-muted)]">部分内容来自最近一次成功加载的缓存。</p>}
