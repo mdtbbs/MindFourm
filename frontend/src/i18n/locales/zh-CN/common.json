@@ -14,7 +14,14 @@
     "theme": "切换主题",
     "switchToLight": "切换到亮色模式",
     "switchToDark": "切换到暗色模式",
-    "retry": "重试"
+    "retry": "重试",
+    "reload": "重新加载",
+    "unavailable": "这部分内容暂时不可用。",
+    "previous": "上一页",
+    "next": "下一页",
+    "page": "页",
+    "dismiss": "不再提示",
+    "emptyTable": "暂无数据"
   },
   "home": {
     "intro": "由 Mindustry 玩家运营的社区。寻找 Mod、地图与蓝图，加入讨论。",
@@ -76,7 +83,18 @@
     "uploadResource": "上传资源",
     "lobby": "大厅",
     "breadcrumb": "页面位置",
-    "page": "页面"
+    "page": "页面",
+    "wiki": "知识库",
+    "lanlink": "联机",
+    "groups": "用户组",
+    "leaderboard": "积分排行",
+    "shop": "积分商店",
+    "about": "关于我们",
+    "links": "友情链接",
+    "help": "帮助中心",
+    "thanks": "鸣谢",
+    "quickActions": "快捷操作",
+    "sections": "板块"
   },
   "create": {
     "title": "创建",
@@ -473,5 +491,46 @@
         "body": "虚假或恶意举报可能被拒绝。请提供准确资料并诚信提交请求。"
       }
     }
+  },
+  "shell": {
+    "menu": "菜单",
+    "openMenu": "打开菜单",
+    "close": "关闭",
+    "theme": "切换主题",
+    "switchToLight": "切换到亮色主题",
+    "switchToDark": "切换到暗色主题",
+    "create": "发布",
+    "search": "搜索",
+    "searchCommunity": "搜索讨论、资源或用户…",
+    "servers": "服务器",
+    "serverCount": "服务器：{count}",
+    "profile": "个人主页",
+    "myContent": "我的内容",
+    "developerCenter": "开发者中心",
+    "admin": "管理后台",
+    "settings": "设置",
+    "logout": "退出登录",
+    "login": "登录",
+    "register": "注册",
+    "notifications": "通知",
+    "friends": "好友",
+    "messages": "私信",
+    "mobileNavigation": "移动端导航",
+    "skipToContent": "跳到主要内容",
+    "language": "语言",
+    "loading": "加载中…",
+    "accountMenu": "账号菜单",
+    "publishMenu": "发布菜单"
+  },
+  "featureGate": {
+    "disabledTitle": "{feature}暂不可用",
+    "disabledBody": "管理员已关闭此功能。如需开启，请联系管理员。"
+  },
+  "pagination": {
+    "previous": "上一页",
+    "next": "下一页",
+    "pageOf": "第 {page} 页，共 {total} 页",
+    "page": "第 {page} 页",
+    "label": "分页"
   }
 }

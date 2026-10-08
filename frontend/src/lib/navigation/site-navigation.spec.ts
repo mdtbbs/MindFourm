@@ -24,7 +24,7 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
 
   assertDeepEqual(
     model.primaryItems.map((item) => ({ label: item.label, href: item.href })),
-    [{ label: '首页', href: '/' }, { label: '资源中心', href: '/resources' }],
+    [{ label: 'navigation.home', href: '/' }, { label: 'navigation.resources', href: '/resources' }],
     'anonymous users should receive enabled top-level primary items only',
   );
 
@@ -34,11 +34,11 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
       items: group.items.map((item) => ({ label: item.label, href: item.href })),
     })),
     [{
-      label: '社区',
+      label: 'navigation.community',
       items: [
-        { label: '用户组', href: '/groups' },
-        { label: '积分排行', href: '/leaderboard' },
-        { label: '积分商店', href: '/shop' },
+        { label: 'navigation.groups', href: '/groups' },
+        { label: 'navigation.leaderboard', href: '/leaderboard' },
+        { label: 'navigation.shop', href: '/shop' },
       ],
     }],
     'anonymous users should keep configured groups with enabled child links',
@@ -48,8 +48,8 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
   assertDeepEqual(
     model.quickActions,
     [
-      { label: '登录', action: 'login', variant: 'primary' },
-      { label: '注册', action: 'register', variant: 'secondary' },
+      { label: 'navigation.login', action: 'login', variant: 'primary' },
+      { label: 'navigation.register', action: 'register', variant: 'secondary' },
     ],
     'anonymous users should receive login/register quick actions',
   );
@@ -75,7 +75,7 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
 
   assertDeepEqual(
     model.primaryItems,
-    [{ label: '首页', href: '/', icon: 'home' }],
+    [{ label: 'navigation.home', href: '/', icon: 'home' }],
     'anonymous users should not receive configured private top-level links',
   );
 
@@ -98,11 +98,11 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
   assertDeepEqual(
     model.personalItems,
     [
-      { label: '通知', href: '/notifications', icon: 'bell', requiresAuth: true },
-      { label: '消息', href: '/messages', icon: 'mail', requiresAuth: true },
-      { label: '好友', href: '/friends', icon: 'users', requiresAuth: true },
-      { label: '书签', href: '/bookmarks', icon: 'bookmark', requiresAuth: true },
-      { label: '设置', href: '/settings', icon: 'settings', requiresAuth: true },
+      { label: 'navigation.notifications', href: '/notifications', icon: 'bell', requiresAuth: true },
+      { label: 'navigation.messages', href: '/messages', icon: 'mail', requiresAuth: true },
+      { label: 'navigation.friends', href: '/friends', icon: 'users', requiresAuth: true },
+      { label: 'navigation.bookmarks', href: '/bookmarks', icon: 'bookmark', requiresAuth: true },
+      { label: 'navigation.settings', href: '/settings', icon: 'settings', requiresAuth: true },
     ],
     'authenticated users should receive fixed personal items with icons',
   );
@@ -110,8 +110,8 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
   assertDeepEqual(
     model.quickActions,
     [
-      { label: '发帖', href: '/posts/new', requiresAuth: true, variant: 'primary' },
-      { label: '提交资源', href: '/resources/submit', requiresAuth: true, variant: 'secondary' },
+      { label: 'navigation.publishDiscussion', href: '/posts/new', requiresAuth: true, variant: 'primary' },
+      { label: 'navigation.publishResource', href: '/resources/submit', requiresAuth: true, variant: 'secondary' },
     ],
     'authenticated users should receive post and resource quick actions',
   );
@@ -141,7 +141,7 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
 
   assertDeepEqual(
     model.primaryItems,
-    [{ label: '首页', href: '/', icon: 'home' }],
+    [{ label: 'navigation.home', href: '/', icon: 'home' }],
     'disabled feature descendants should be removed from primary items',
   );
 
@@ -156,7 +156,7 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
 
   assertDeepEqual(
     model.quickActions,
-    [{ label: '发帖', href: '/posts/new', requiresAuth: true, variant: 'primary' }],
+    [{ label: 'navigation.publishDiscussion', href: '/posts/new', requiresAuth: true, variant: 'primary' }],
     'resource quick action should disappear when the resources feature is disabled',
   );
 })();
@@ -190,4 +190,9 @@ function assertDeepEqual(actual: unknown, expected: unknown, message: string): v
   );
 })();
 
-assert(true, 'site navigation spec executed');
+// Jest only picks up suites that register a test; the IIFE blocks above keep the
+// assertions runnable as a plain script. Register a sentinel so CI actually
+// executes them.
+test('site navigation model assertions executed', () => {
+  assert(true, 'site navigation spec executed');
+});

@@ -33,7 +33,9 @@ test('desktop and mobile resource navigation expose only the shared resource_kin
     resourceCategories: [{ id: 8, name: '新手推荐', slug: 'starter', description: null, icon: null, sort_order: 1, is_active: true, created_at: '' }],
   });
   const items = resources.find((section) => section.id === 'context')?.items || [];
-  expect(items[0]).toMatchObject({ id: 'all-resources', label: '全部资源', href: '/resources' });
+  // Without a translator the model still carries locale keys rather than
+  // hard-coded copy, so no language leaks into the UI.
+  expect(items[0]).toMatchObject({ id: 'all-resources', label: 'navigation.allResources', href: '/resources' });
   expect(items.some((item) => item.href.includes('category_id'))).toBe(false);
   expect(items.map((item) => item.id)).toContain('resource-kind-map');
   expect(items.map((item) => item.id)).toContain('resource-kind-schematic');
@@ -69,8 +71,10 @@ test('Mindustry Club navigation follows its profile and omits unavailable legacy
   expect(club.find((section) => section.id === 'context')?.items[0]?.label).toBe('navigation.allDiscussions');
 });
 
-test('Mindustry Club publishing shortcuts use the selected locale', () => {
-  const translate = (key: string) => key;
-  expect(contentNavigationCta('forum', {}, translate, clubProfile)).toMatchObject({ label: 'navigation.publishDiscussion', href: '/posts/new' });
-  expect(contentNavigationCta('resources', {}, translate, clubProfile)).toMatchObject({ label: 'navigation.publishResource', href: '/resources/submit' });
+test('publishing shortcuts are resolved through the locale for every profile', () => {
+  expect(contentNavigationCta('forum')).toMatchObject({ label: 'navigation.publishDiscussion', href: '/posts/new' });
+  expect(contentNavigationCta('resources')).toMatchObject({ label: 'navigation.publishResource', href: '/resources/submit' });
+  const translate = (key: string) => `t:${key}`;
+  expect(contentNavigationCta('forum', {}, translate)?.label).toBe('t:navigation.publishDiscussion');
+  expect(contentNavigationCta('resources', {}, translate)?.label).toBe('t:navigation.publishResource');
 });

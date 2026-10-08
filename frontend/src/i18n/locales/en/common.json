@@ -14,7 +14,14 @@
     "theme": "Change theme",
     "switchToLight": "Switch to light theme",
     "switchToDark": "Switch to dark theme",
-    "retry": "Retry"
+    "retry": "Retry",
+    "reload": "Reload",
+    "unavailable": "This section is temporarily unavailable.",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page",
+    "dismiss": "Dismiss",
+    "emptyTable": "No data yet"
   },
   "home": {
     "intro": "A community built by Mindustry players. Find mods, maps and schematics, then join the discussion.",
@@ -76,7 +83,18 @@
     "uploadResource": "Upload resource",
     "lobby": "Lobby",
     "breadcrumb": "Breadcrumb",
-    "page": "Page"
+    "page": "Page",
+    "wiki": "Wiki",
+    "lanlink": "LanLink",
+    "groups": "Groups",
+    "leaderboard": "Leaderboard",
+    "shop": "Points shop",
+    "about": "About",
+    "links": "Links",
+    "help": "Help",
+    "thanks": "Credits",
+    "quickActions": "Quick actions",
+    "sections": "Sections"
   },
   "create": {
     "title": "Create",
@@ -473,5 +491,46 @@
         "body": "False or abusive reports may be rejected. Provide accurate information and only submit requests in good faith."
       }
     }
+  },
+  "shell": {
+    "menu": "Menu",
+    "openMenu": "Open menu",
+    "close": "Close",
+    "theme": "Change theme",
+    "switchToLight": "Switch to light theme",
+    "switchToDark": "Switch to dark theme",
+    "create": "Create",
+    "search": "Search",
+    "searchCommunity": "Search discussions, resources and members…",
+    "servers": "Servers",
+    "serverCount": "Servers: {count}",
+    "profile": "Profile",
+    "myContent": "My content",
+    "developerCenter": "Developer center",
+    "admin": "Administration",
+    "settings": "Settings",
+    "logout": "Sign out",
+    "login": "Sign in",
+    "register": "Create account",
+    "notifications": "Notifications",
+    "friends": "Friends",
+    "messages": "Messages",
+    "mobileNavigation": "Mobile navigation",
+    "skipToContent": "Skip to main content",
+    "language": "Language",
+    "loading": "Loading…",
+    "accountMenu": "Account menu",
+    "publishMenu": "Publishing menu"
+  },
+  "featureGate": {
+    "disabledTitle": "{feature} is unavailable",
+    "disabledBody": "An administrator has turned this feature off. Ask an administrator if you need it enabled."
+  },
+  "pagination": {
+    "previous": "Previous page",
+    "next": "Next page",
+    "pageOf": "Page {page} of {total}",
+    "page": "Page {page}",
+    "label": "Pagination"
   }
 }

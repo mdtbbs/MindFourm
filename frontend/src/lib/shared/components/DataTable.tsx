@@ -1,4 +1,5 @@
 import React from 'react';
+import { useI18n } from '@/i18n/provider';
 
 export interface TableColumn<T = Record<string, unknown>> {
   key: string;
@@ -8,23 +9,23 @@ export interface TableColumn<T = Record<string, unknown>> {
 }
 
 export interface DataTableProps<T = Record<string, unknown>> {
-  /** 列定义 */
+  /** Column definitions. */
   columns: TableColumn<T>[];
-  /** 数据行 */
+  /** Rows to render. */
   data: T[];
-  /** 行唯一标识字段 */
+  /** Row identity field. */
   rowKey?: string;
-  /** 是否显示边框 */
+  /** Draw the outer border. */
   bordered?: boolean;
-  /** 是否显示行悬停效果 */
+  /** Highlight rows on hover. */
   hoverable?: boolean;
-  /** 是否紧凑模式 */
+  /** Compact density. */
   compact?: boolean;
-  /** 空数据提示 */
+  /** Copy for the empty state. Falls back to the locale catalog. */
   emptyText?: string;
-  /** 行点击回调 */
+  /** Row click handler. */
   onRowClick?: (row: T, index: number) => void;
-  /** 自定义行样式 */
+  /** Per-row style resolver. */
   rowStyle?: (row: T, index: number) => React.CSSProperties;
 }
 
@@ -35,10 +36,11 @@ export function DataTable<T extends Record<string, unknown>>({
   bordered = true,
   hoverable = true,
   compact = false,
-  emptyText = '暂无数据',
+  emptyText,
   onRowClick,
   rowStyle,
 }: DataTableProps<T>) {
+  const { t } = useI18n();
   const padding = compact ? 8 : 12;
   const fontSize = compact ? 12 : 13;
 
@@ -85,7 +87,7 @@ export function DataTable<T extends Record<string, unknown>>({
             fontSize,
           }}
         >
-          {emptyText}
+          {emptyText ?? t('common.emptyTable')}
         </div>
       ) : (
         data.map((row, index) => {

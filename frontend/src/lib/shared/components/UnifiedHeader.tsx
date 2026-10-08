@@ -14,6 +14,7 @@ import {
   Users,
 } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
+import { useI18n } from "@/i18n/provider";
 import { User } from "../types";
 
 export interface UnifiedHeaderProps {
@@ -28,6 +29,11 @@ export interface UnifiedHeaderProps {
   siteName?: string;
   siteTagline?: string;
   logoUrl?: string;
+  /**
+   * Optional label overrides. Anything the caller leaves out falls back to the
+   * locale catalog, so a header without props still reads in the visitor's
+   * language instead of the repository's primary language.
+   */
   labels?: Partial<Record<'searchCommunity' | 'search' | 'searchShortcut' | 'create' | 'switchToLight' | 'switchToDark' | 'theme' | 'menu' | 'notifications' | 'messages' | 'friends' | 'servers' | 'createPost' | 'profile' | 'myContent' | 'developerCenter' | 'bookmarks' | 'admin' | 'settings' | 'logout' | 'register' | 'login', string>>;
 
   user?: User | null;
@@ -53,6 +59,30 @@ export interface UnifiedHeaderProps {
   utilitySlot?: React.ReactNode;
   mobileMenuSlot?: React.ReactNode;
 }
+
+const LABEL_KEYS = {
+  searchCommunity: 'shell.searchCommunity',
+  search: 'shell.search',
+  switchToLight: 'shell.switchToLight',
+  switchToDark: 'shell.switchToDark',
+  theme: 'shell.theme',
+  menu: 'shell.menu',
+  notifications: 'shell.notifications',
+  messages: 'shell.messages',
+  friends: 'shell.friends',
+  servers: 'shell.servers',
+  createPost: 'forum.createPost',
+  profile: 'shell.profile',
+  myContent: 'shell.myContent',
+  developerCenter: 'shell.developerCenter',
+  bookmarks: 'navigation.bookmarks',
+  admin: 'shell.admin',
+  settings: 'shell.settings',
+  logout: 'shell.logout',
+  register: 'shell.register',
+  login: 'shell.login',
+  create: 'shell.create',
+} as const;
 
 export function UnifiedHeader({
   showSearch = false,
@@ -87,6 +117,13 @@ export function UnifiedHeader({
   mobileMenuSlot,
 }: UnifiedHeaderProps) {
   const { theme, toggle: toggleTheme } = useTheme();
+  const { t } = useI18n();
+
+  // Every hard-coded fallback below used to be Simplified Chinese, which meant a
+  // Club header rendered Chinese whenever a caller passed no `labels`. Resolve
+  // through the catalog instead; `labels` still wins when supplied.
+  const label = <K extends keyof typeof LABEL_KEYS>(key: K): string =>
+    labels[key] ?? t(LABEL_KEYS[key]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && onSearch) {
@@ -113,11 +150,11 @@ export function UnifiedHeader({
                 <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]">
                   <Search className="h-4 w-4" />
                 </div>
-                <span className="min-w-0 flex-1 truncate pl-7">{labels.searchCommunity || "搜索帖子、资源、用户..."}</span>
+                <span className="min-w-0 flex-1 truncate pl-7">{label('searchCommunity')}</span>
                 <kbd className="ml-2 hidden shrink-0 items-center gap-1 border border-[var(--border)] bg-[var(--bg-card)] px-1.5 py-1 text-[10px] text-[var(--text-muted)] xl:inline-flex">{labels.searchShortcut || 'Ctrl K'}</kbd>
               </button> : <div className="relative">
                 <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"><Search className="h-4 w-4" /></div>
-                <input type="text" placeholder={labels.searchCommunity || "搜索帖子、资源、用户..."} aria-label={labels.search || "搜索"} className="w-full border-0 bg-[var(--bg-elevated)] py-2 pl-10 pr-4 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--primary)]" onKeyDown={handleSearchKeyDown} />
+                <input type="text" placeholder={label('searchCommunity')} aria-label={label('search')} className="w-full border-0 bg-[var(--bg-elevated)] py-2 pl-10 pr-4 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[var(--primary)]" onKeyDown={handleSearchKeyDown} />
               </div>}
             </div>
           )}
@@ -127,8 +164,8 @@ export function UnifiedHeader({
             <button
               onClick={toggleTheme}
               className="relative rounded-full p-2.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]"
-              title={theme === "dark" ? (labels.switchToLight || "切换到亮色模式") : (labels.switchToDark || "切换到暗色模式")}
-              aria-label={labels.theme || "切换主题"}
+              title={theme === "dark" ? label('switchToLight') : label('switchToDark')}
+              aria-label={label('theme')}
             >
               <div className="relative z-10">
                 {theme === "dark" ? (
@@ -144,13 +181,13 @@ export function UnifiedHeader({
                 onClick={onMobileMenuClick}
                 data-testid="mobile-menu-button"
                 className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] lg:hidden"
-                aria-label={labels.menu || "菜单"}
+                aria-label={label('menu')}
               >
                 <Menu className="h-6 w-6" />
               </button>
             )}
 
-            {showSearch && (onOpenSearch ? <button type="button" data-testid="global-search-trigger-mobile" onClick={onOpenSearch} aria-keyshortcuts="Control+K Meta+K" className="flex min-h-11 min-w-11 items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></button> : <Link href="/search" className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></Link>)}
+            {showSearch && (onOpenSearch ? <button type="button" data-testid="global-search-trigger-mobile" onClick={onOpenSearch} aria-keyshortcuts="Control+K Meta+K" className="flex min-h-11 min-w-11 items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] lg:hidden" aria-label={label('search')}><Search className="h-5 w-5" /></button> : <Link href="/search" className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] lg:hidden" aria-label={label('search')}><Search className="h-5 w-5" /></Link>)}
 
             {createMenuSlot && <div className="block">{createMenuSlot}</div>}
 
@@ -162,7 +199,7 @@ export function UnifiedHeader({
                       <Link
                         href="/notifications"
                         className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                        title={labels.notifications || "通知"}
+                        title={label('notifications')}
                       >
                         <span>
                           <Bell className="h-5 w-5" />
@@ -184,7 +221,7 @@ export function UnifiedHeader({
                     <Link
                       href="/messages"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                      title={labels.messages || "私信"}
+                      title={label('messages')}
                     >
                       <span>
                         <Mail className="h-5 w-5" />
@@ -203,7 +240,7 @@ export function UnifiedHeader({
                     <Link
                       href="/friends"
                       className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
-                      title={labels.friends || "好友"}
+                      title={label('friends')}
                     >
                       <span>
                         <Users className="h-5 w-5" />
@@ -221,7 +258,7 @@ export function UnifiedHeader({
 
                 {showServerCount && (
                   <div className="hidden text-sm text-[var(--text-muted)] md:block">
-                    {labels.servers || "服务器"}: <span>{serverCount}</span>
+                    {label('servers')}: <span>{serverCount}</span>
                   </div>
                 )}
 
@@ -235,7 +272,7 @@ export function UnifiedHeader({
                       <span>
                         <Plus className="h-4 w-4" />
                       </span>
-                      <span className="hidden sm:inline">{labels.createPost || "发帖"}</span>
+                      <span className="hidden sm:inline">{label('createPost')}</span>
                     </Link>
                   </div>
                 )}
@@ -253,7 +290,7 @@ export function UnifiedHeader({
                         onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}
                         className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                       >
-                        {labels.profile || "个人主页"}
+                        {label('profile')}
                       </Link>
                       <Link
                         href="/me"
@@ -261,10 +298,10 @@ export function UnifiedHeader({
                         onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}
                         className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                       >
-                        {labels.myContent || "我的内容"}
+                        {label('myContent')}
                       </Link>
-                      <Link href="/settings" role="menuitem" onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')} className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">{labels.settings || "设置"}</Link>
-                      <Link href="/developers" role="menuitem" onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')} className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">{labels.developerCenter || "开发者中心"}</Link>
+                      <Link href="/settings" role="menuitem" onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')} className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">{label('settings')}</Link>
+                      <Link href="/developers" role="menuitem" onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')} className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]">{label('developerCenter')}</Link>
                       {user.role === "admin" && (
                         <Link
                           href="/admin"
@@ -272,7 +309,7 @@ export function UnifiedHeader({
                           onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}
                           className="flex min-h-11 items-center px-3 py-2 text-sm hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                         >
-                          {labels.admin || "管理后台"}
+                          {label('admin')}
                         </Link>
                       )}
                       {userMenuSlot}
@@ -284,7 +321,7 @@ export function UnifiedHeader({
                           className="flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"
                         >
                           <LogOut className="h-4 w-4" />
-                          {labels.logout || "退出登录"}
+                          {label('logout')}
                         </button>
                       )}
                     </div>
@@ -302,7 +339,7 @@ export function UnifiedHeader({
                     }}
                     className="hidden bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] lg:inline-flex"
                   >
-                    {labels.register || "注册"}
+                    {label('register')}
                   </Link>
                 )}
                 {onLogin && (
@@ -314,7 +351,7 @@ export function UnifiedHeader({
                     }}
                     className="hidden text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)] lg:inline-flex"
                   >
-                    {labels.login || "登录"}
+                    {label('login')}
                   </Link>
                 )}
               </div>

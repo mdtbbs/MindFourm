@@ -66,22 +66,45 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
 (function testDefaultsWhenNoSetting() {
   const result = buildSidebarNavigation({ settings: {}, isAuthenticated: false });
 
-  assert(result.length === 4, 'default should have 4 items');
+  assert(result.length === 5, 'the shipped defaults are five items');
   assertDeepEqual(
     result.map((i) => ({ id: i.id, label: i.label, href: i.href })),
     [
-      { id: 'home', label: '首页', href: '/' },
-      { id: 'categories', label: '分类', href: '/categories' },
-      { id: 'tags', label: '标签', href: '/tags' },
-      { id: 'resources', label: '资源中心', href: '/resources' },
+      { id: 'home', label: 'navigation.home', href: '/' },
+      { id: 'categories', label: 'navigation.categories', href: '/categories' },
+      { id: 'tags', label: 'navigation.tags', href: '/tags' },
+      { id: 'resources', label: 'navigation.resources', href: '/resources' },
+      { id: 'notices', label: 'navigation.announcements', href: '/notices' },
     ],
-    'defaults should match the backend defaults',
+    'defaults should match the backend defaults, as locale keys',
   );
+  // The previous expectation asserted four items, which silently hid that the
+  // notices entry existed at all. Keep the count and the contents in step.
+})();
+
+// A default label is a locale key; an operator-authored label is displayed
+// verbatim. Without the distinction the English site renders Chinese.
+(function testDefaultLabelsResolveAndOperatorLabelsPassThrough() {
+  const defaults = buildSidebarNavigation({ settings: {}, isAuthenticated: true, translate: (key) => `t:${key}` });
+  assert(defaults.every((item) => item.label.startsWith('t:navigation.')), 'default labels should be resolved');
+
+  const configured = buildSidebarNavigation({
+    settings: {
+      sidebar_navigation_items: JSON.stringify([
+        { id: 'home', label: '首页', href: '/', icon: 'Home', enabled: true, requiresAuth: false },
+        { id: 'resources', label: 'navigation.resources', href: '/resources', icon: 'Book', enabled: true, requiresAuth: false },
+      ]),
+    },
+    isAuthenticated: true,
+    translate: (key) => `t:${key}`,
+  });
+  assert(configured.find((item) => item.id === 'home')?.label === '首页', 'operator labels should pass through');
+  assert(configured.find((item) => item.id === 'resources')?.label === 't:navigation.resources', 'untouched defaults should resolve');
 })();
 
 (function testDefaultsIncludeAllWhenAuthenticated() {
   const result = buildSidebarNavigation({ settings: {}, isAuthenticated: true });
-  assert(result.length === 4, 'authenticated users should see all 4 default items');
+  assert(result.length === 5, 'authenticated users should see all five default items');
 })();
 
 // ─── buildSidebarNavigation — enabled filter ────────────────────────────────
@@ -97,9 +120,10 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
     isAuthenticated: false,
   });
 
-  assertLength(result, 2, 'disabled items should be filtered out');
-  assert(result[0].id === 'a', 'first enabled item should remain');
-  assert(result[1].id === 'c', 'second enabled item should remain');
+  // `buildSidebarNavigation` always guarantees `home` first and `notices`
+  // right after it, so a configured list is padded rather than replaced.
+  assertLength(result, 4, 'disabled items should be filtered out');
+  assertDeepEqual(result.map((item) => item.id), ['home', 'notices', 'a', 'c'], 'disabled items should be filtered out');
 })();
 
 // ─── buildSidebarNavigation — requiresAuth filter ───────────────────────────
@@ -114,14 +138,13 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
     settings: { sidebar_navigation_items: JSON.stringify(items) },
     isAuthenticated: false,
   });
-  assertLength(anonResult, 1, 'anonymous users should not see requiresAuth items');
-  assert(anonResult[0].id === 'public', 'only public item should remain');
+  assertDeepEqual(anonResult.map((item) => item.id), ['home', 'notices', 'public'], 'anonymous users should not see requiresAuth items');
 
   const authResult = buildSidebarNavigation({
     settings: { sidebar_navigation_items: JSON.stringify(items) },
     isAuthenticated: true,
   });
-  assertLength(authResult, 2, 'authenticated users should see all enabled items');
+  assertDeepEqual(authResult.map((item) => item.id), ['home', 'notices', 'public', 'private'], 'authenticated users should see all enabled items');
 })();
 
 // ─── buildSidebarNavigation — anonymous href safety ─────────────────────────
@@ -139,9 +162,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
     isAuthenticated: false,
   });
 
-  assertLength(result, 2, 'anonymous users should not see auth-only prefix paths');
-  assert(result[0].id === 'public-page', 'public page should be visible');
-  assert(result[1].id === 'external', 'external links should be visible');
+  assertDeepEqual(result.map((item) => item.id), ['home', 'notices', 'public-page', 'external'], 'anonymous users should not see auth-only prefix paths');
 })();
 
 // ─── buildSidebarNavigation — featureKey filter ─────────────────────────────
@@ -162,8 +183,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
     isAuthenticated: false,
   });
 
-  assertLength(result, 1, 'disabled features should be filtered out');
-  assert(result[0].id === 'plain', 'only the item without featureKey should remain');
+  assertDeepEqual(result.map((item) => item.id), ['home', 'notices', 'plain'], 'disabled features should be filtered out');
 })();
 
 (function testFeatureKeyDefaultEnabledWhenMissing() {
@@ -176,7 +196,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
     isAuthenticated: false,
   });
 
-  assertLength(result, 1, 'missing featureKey setting should default to enabled');
+  assertDeepEqual(result.map((item) => item.id), ['home', 'notices', 'x'], 'missing featureKey setting should default to enabled');
 })();
 
 // ─── buildSidebarNavigation — combined filters ──────────────────────────────
@@ -197,8 +217,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
     isAuthenticated: false,
   });
 
-  assertLength(result, 1, 'all filters should combine correctly');
-  assert(result[0].id === 'visible', 'only the fully-visible item should remain');
+  assertDeepEqual(result.map((item) => item.id), ['home', 'notices', 'visible'], 'all filters should combine correctly');
 })();
 
 (function testFallbackWhenSettingIsEmptyArray() {
@@ -207,8 +226,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
     isAuthenticated: false,
   });
 
-  assert(result.length === 4, 'empty array should fall back to defaults');
-  assert(result[0].id === 'home', 'defaults should include home');
+  assertDeepEqual(result.map((item) => item.id), ['home', 'categories', 'tags', 'resources', 'notices'], 'empty array should fall back to defaults');
 })();
 
 // ─── validateSidebarNavigation ──────────────────────────────────────────────
@@ -229,7 +247,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
   ];
   const result = validateSidebarNavigation(items);
   assert(result.valid === false, 'empty label should fail validation');
-  assert(result.errors.some((e) => e.includes('标签不能为空')), 'error should mention empty label');
+  assert(result.errors.some((e) => e.includes('label must not be empty')), 'error should mention empty label');
 })();
 
 (function testValidateRejectsEmptyHref() {
@@ -238,7 +256,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
   ];
   const result = validateSidebarNavigation(items);
   assert(result.valid === false, 'empty href should fail validation');
-  assert(result.errors.some((e) => e.includes('链接不能为空')), 'error should mention empty href');
+  assert(result.errors.some((e) => e.includes('link must not be empty')), 'error should mention empty href');
 })();
 
 (function testValidateRejectsDuplicateIds() {
@@ -248,7 +266,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
   ];
   const result = validateSidebarNavigation(items);
   assert(result.valid === false, 'duplicate IDs should fail validation');
-  assert(result.errors.some((e) => e.includes('重复 ID')), 'error should mention duplicate ID');
+  assert(result.errors.some((e) => e.includes('Duplicate item id')), 'error should mention duplicate ID');
 })();
 
 (function testValidateRejectsInvalidIcon() {
@@ -257,7 +275,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
   ];
   const result = validateSidebarNavigation(items);
   assert(result.valid === false, 'invalid icon should fail validation');
-  assert(result.errors.some((e) => e.includes('无效图标')), 'error should mention invalid icon');
+  assert(result.errors.some((e) => e.includes('unsupported icon')), 'error should mention invalid icon');
 })();
 
 (function testValidateRejectsJavascriptHref() {
@@ -266,7 +284,7 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
   ];
   const result = validateSidebarNavigation(items);
   assert(result.valid === false, 'javascript: href should fail validation');
-  assert(result.errors.some((e) => e.includes('链接无效')), 'error should mention invalid href');
+  assert(result.errors.some((e) => e.includes('must start with / or https://')), 'error should mention invalid href');
 })();
 
 (function testValidateAcceptsHttpsHref() {
@@ -302,8 +320,12 @@ function assertLength(actual: unknown[], expected: number, message: string): voi
 // ─── DEFAULT_SIDEBAR_NAVIGATION ─────────────────────────────────────────────
 
 (function testDefaultsExported() {
-  assert(DEFAULT_SIDEBAR_NAVIGATION.length === 4, 'defaults should have 4 items');
+  assert(DEFAULT_SIDEBAR_NAVIGATION.length === 5, 'defaults should have 5 items');
   assert(DEFAULT_SIDEBAR_NAVIGATION[0].id === 'home', 'first default should be home');
 })();
 
-assert(true, 'sidebar navigation spec executed');
+// Jest only picks up suites that register a test; the IIFE blocks above remain
+// runnable as a plain script.
+test('sidebar navigation model assertions executed', () => {
+  assert(true, 'sidebar navigation spec executed');
+});
