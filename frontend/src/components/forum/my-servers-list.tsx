@@ -6,8 +6,10 @@ import { serverApi } from '@/lib/api/client';
 import { Server } from '@/types';
 import ServerStatusBadge from '@/components/ui/server-status-badge';
 import { Loader2, Server as ServerIcon, Plus } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 export default function MyServersList() {
+  const { t, locale } = useI18n();
   const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +36,7 @@ export default function MyServersList() {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
-        <span className="ml-3 text-[var(--text-secondary)]">加载中...</span>
+        <span className="ml-3 text-[var(--text-secondary)]">{t('servers.loadingShort')}</span>
       </div>
     );
   }
@@ -47,7 +49,7 @@ export default function MyServersList() {
           onClick={loadServers}
           className="px-4 py-2 bg-[var(--primary)] text-white text-sm rounded-[var(--radius)] hover:bg-[var(--primary-dark)]"
         >
-          重试
+          {t('servers.retry')}
         </button>
       </div>
     );
@@ -57,13 +59,13 @@ export default function MyServersList() {
     return (
       <div className="text-center py-12 bg-[var(--bg-card)] rounded-[var(--radius-card)] border border-[var(--border)]">
         <ServerIcon className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4" />
-        <p className="text-[var(--text-secondary)] mb-4">暂无服务器</p>
+        <p className="text-[var(--text-secondary)] mb-4">{t('servers.empty')}</p>
         <Link
           href="/servers?section=apply"
           className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
         >
           <Plus className="w-4 h-4" />
-          申请服务器
+          {t('servers.apply')}
         </Link>
       </div>
     );
@@ -74,11 +76,11 @@ export default function MyServersList() {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] bg-[var(--bg-elevated)]">
-            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">名称</th>
-            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">版本</th>
-            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">端口</th>
-            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">状态</th>
-            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">创建时间</th>
+            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">{t('servers.colName')}</th>
+            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">{t('servers.colVersion')}</th>
+            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">{t('servers.colPort')}</th>
+            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">{t('servers.colStatus')}</th>
+            <th className="text-left px-4 py-3 font-medium text-[var(--text-secondary)]">{t('servers.colCreated')}</th>
           </tr>
         </thead>
         <tbody>
@@ -93,7 +95,7 @@ export default function MyServersList() {
                 />
               </td>
               <td className="px-4 py-3 text-[var(--text-muted)]">
-                {new Date(server.created_at).toLocaleDateString('zh-CN')}
+                {new Date(server.created_at).toLocaleDateString(locale)}
               </td>
             </tr>
           ))}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSettings } from '@/lib/settings/context';
+import { useI18n } from '@/i18n/provider';
 
 const DISMISSED_KEY = 'announcement_dismissed_id';
 
@@ -23,6 +24,7 @@ function announcementId(content: string): string {
 
 export default function AnnouncementBanner() {
   const settings = useSettings();
+  const { t } = useI18n();
   const [dismissedId, setDismissedId] = useState<string | null>(null);
   // Avoids briefly showing an already-dismissed banner before localStorage is read.
   const [ready, setReady] = useState(false);
@@ -53,7 +55,7 @@ export default function AnnouncementBanner() {
         <button
           onClick={handleDismiss}
           className="text-amber-500 hover:text-amber-700 text-lg leading-none shrink-0"
-          aria-label="关闭公告"
+          aria-label={t('forum.closeAnnouncement')}
         >
           ×
         </button>

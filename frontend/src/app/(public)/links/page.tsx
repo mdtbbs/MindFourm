@@ -3,29 +3,31 @@ import type { Metadata } from 'next';
 import { ExternalLink, Globe2 } from 'lucide-react';
 import { isExternalHref } from '@/lib/footer/footer-settings';
 import { fetchNavigation } from '@/lib/navigation/server';
+import { getRequestLocale } from '@/i18n/server';
+import { translate } from '@/i18n';
 
 export const revalidate = 60;
 
-export const metadata: Metadata = {
-  title: '友情链接',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getRequestLocale();
+  return { title: translate(locale, 'links.metaTitle') };
+}
 
 export default async function LinksPage() {
-  const navigation = await fetchNavigation();
+  const [navigation, locale] = await Promise.all([fetchNavigation(), getRequestLocale()]);
+  const t = (key: string) => translate(locale, key);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8">
       <div className="mb-8 text-center">
-        <h1 className="mt-3 text-3xl font-bold text-[var(--text)]">友情链接</h1>
-        <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">
-          以下是我们推荐的友好站点，与 Mindustry、开源社区和论坛生态相关。
-        </p>
+        <h1 className="mt-3 text-3xl font-bold text-[var(--text)]">{t('links.title')}</h1>
+        <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{t('links.intro')}</p>
       </div>
 
       {navigation.links.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-card)] px-6 py-12 text-center">
-          <p className="text-sm text-[var(--text-secondary)]">暂无友情链接</p>
-          <p className="mt-2 text-xs text-[var(--text-muted)]">稍后再来看看吧。</p>
+          <p className="text-sm text-[var(--text-secondary)]">{t('links.empty')}</p>
+          <p className="mt-2 text-xs text-[var(--text-muted)]">{t('links.emptyHint')}</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

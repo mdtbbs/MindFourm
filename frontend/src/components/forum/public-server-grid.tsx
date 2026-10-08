@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { serverApi } from '@/lib/api/client';
 import { Server } from '@/types';
 import { Server as ServerIcon, Users, MapPin, Waves, Loader2 } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 export default function PublicServerGrid() {
+  const { t } = useI18n();
   const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,9 +20,9 @@ export default function PublicServerGrid() {
       .then(res => {
         setServers(res.servers || []);
       })
-      .catch(() => setError('暂时无法加载服务器列表'))
+      .catch(() => setError(t('servers.loadFailed')))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadServers();
@@ -30,7 +32,7 @@ export default function PublicServerGrid() {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
-        <span className="ml-3 text-[var(--text-secondary)]">加载服务器...</span>
+        <span className="ml-3 text-[var(--text-secondary)]">{t('servers.loading')}</span>
       </div>
     );
   }
@@ -38,12 +40,12 @@ export default function PublicServerGrid() {
   if (error) {
     return (
       <div className="text-center py-8">
-        <p className="text-[var(--error)] mb-3">加载失败</p>
+        <p className="text-[var(--error)] mb-3">{error}</p>
         <button
           onClick={loadServers}
           className="px-4 py-2 bg-[var(--primary)] text-white text-sm rounded-[var(--radius)]"
         >
-          刷新
+          {t('servers.refresh')}
         </button>
       </div>
     );
@@ -53,7 +55,7 @@ export default function PublicServerGrid() {
     return (
       <div className="text-center py-12 bg-[var(--bg-card)] rounded-[var(--radius-card)] border border-[var(--border)]">
         <ServerIcon className="w-12 h-12 mx-auto text-[var(--text-muted)] mb-4" />
-        <p className="text-[var(--text-muted)]">暂无在线服务器</p>
+        <p className="text-[var(--text-muted)]">{t('servers.empty')}</p>
       </div>
     );
   }
@@ -69,7 +71,7 @@ export default function PublicServerGrid() {
             <div className="server-card-header">
               <span className="server-name">{server.name}</span>
               <span className={`server-status server-status-${server.status}`}>
-                {server.status === 'running' ? '运行中' : server.status}
+                {server.status === 'running' ? t('servers.online') : server.status}
               </span>
             </div>
             {server.description && (
@@ -84,7 +86,7 @@ export default function PublicServerGrid() {
               </span>
               <span className="flex items-center gap-0.25">
                 <Users className="w-3 h-3" />
-                {server.players} 在线
+                {server.players} {t('servers.players')}
               </span>
               {server.mapName && server.mapName !== 'unknown' && (
                 <span className="flex items-center gap-0.25">
@@ -95,7 +97,7 @@ export default function PublicServerGrid() {
               {server.wave > 0 && (
                 <span className="flex items-center gap-0.25">
                   <Waves className="w-3 h-3" />
-                  波次 {server.wave}
+                  {t('servers.wave', { wave: server.wave })}
                 </span>
               )}
             </div>
@@ -117,10 +119,10 @@ export default function PublicServerGrid() {
       {/* Info section */}
       <div className="mt-8 bg-[var(--bg-elevated)] rounded-[var(--radius)] p-4 text-sm text-[var(--text-secondary)]">
         <p className="mb-2">
-          <strong className="text-[var(--text)]">连接方式:</strong> 在 Mindustry 游戏中使用 <code className="bg-[var(--bg)] px-1 rounded-[var(--radius-sm)]">IP:端口</code> 连接
+          <strong className="text-[var(--text)]">{t('servers.howToJoin')}:</strong> {t('servers.howToJoinBody')}
         </p>
         <p>
-          <strong className="text-[var(--text)]">申请服务器:</strong> 登录后可申请创建自己的游戏服务器，经管理员审批后即可使用
+          <strong className="text-[var(--text)]">{t('servers.applyHint')}:</strong> {t('servers.applyHintBody')}
         </p>
       </div>
     </div>

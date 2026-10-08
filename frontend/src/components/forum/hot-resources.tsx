@@ -3,19 +3,22 @@
 import Link from 'next/link';
 import { Resource } from '@/types';
 import { Download, Star } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 
 interface HotResourcesProps {
   resources: Resource[];
 }
 
 export default function HotResources({ resources }: HotResourcesProps) {
+  const { t } = useI18n();
+
   if (resources.length === 0) return null;
 
   return (
     <div className="rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--bg-card)] p-4">
       <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-[var(--text)]">
         <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-        热门资源
+        {t('forum.hotResources')}
       </h2>
       <ul className="space-y-2">
         {resources.map((resource, index) => (

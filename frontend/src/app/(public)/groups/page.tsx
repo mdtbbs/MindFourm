@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Users, Hash, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/context';
 import FeatureGate from '@/components/forum/feature-gate';
+import { useI18n } from '@/i18n/provider';
 
 interface Group {
   id: number;
@@ -21,6 +22,7 @@ interface Group {
 
 export default function GroupsPage() {
   const { user, isAuthenticated } = useAuth();
+  const { t } = useI18n();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [joining, setJoining] = useState<number | null>(null);
@@ -59,7 +61,7 @@ export default function GroupsPage() {
   };
 
   if (loading) return (
-    <FeatureGate settingKey="feature_groups_enabled" label="用户组">
+    <FeatureGate settingKey="feature_groups_enabled" label={t('groups.title')}>
     <div>
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -69,20 +71,20 @@ export default function GroupsPage() {
   );
 
   return (
-    <FeatureGate settingKey="feature_groups_enabled" label="用户组">
+    <FeatureGate settingKey="feature_groups_enabled" label={t('groups.title')}>
     <div>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
         <div className="mb-6">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link href="/" className="hover:text-primary">首页</Link>
+            <Link href="/" className="hover:text-primary">{t('navigation.home')}</Link>
             <span>/</span>
-            <span>用户组</span>
+            <span>{t('groups.title')}</span>
           </nav>
         </div>
 
-        <h1 className="text-2xl font-bold mb-2">用户组</h1>
-        <p className="text-muted-foreground mb-6">加入感兴趣的用户组，与其他成员交流互动</p>
+        <h1 className="text-2xl font-bold mb-2">{t('groups.title')}</h1>
+        <p className="text-muted-foreground mb-6">{t('groups.intro')}</p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {groups.map((group) => (
@@ -102,7 +104,7 @@ export default function GroupsPage() {
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold truncate">{group.name}</h3>
                     {group.is_system === 1 && (
-                      <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">官方</span>
+                      <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">{t('groups.system')}</span>
                     )}
                   </div>
                   {group.description && (
@@ -111,7 +113,7 @@ export default function GroupsPage() {
                   <div className="flex items-center gap-3 mt-3 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Users className="w-3 h-3" />
-                      {group.member_count || 0} 成员
+                      {t('groups.members', { count: group.member_count || 0 })}
                     </span>
                     <span className="flex items-center gap-1">
                       <Hash className="w-3 h-3" />
@@ -126,7 +128,7 @@ export default function GroupsPage() {
                   disabled={joining === group.id || memberIds.has(group.id)}
                   className="mt-4 w-full btn btn-primary text-sm"
                 >
-                  {joining === group.id ? '加入中...' : memberIds.has(group.id) ? '已加入' : '加入'}
+                  {joining === group.id ? t('groups.joining') : memberIds.has(group.id) ? t('groups.joined') : t('groups.join')}
                 </button>
               )}
             </div>
@@ -136,19 +138,19 @@ export default function GroupsPage() {
         {groups.length === 0 && (
           <div className="text-center py-16 text-muted-foreground">
             <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>暂无用户组</p>
+            <p>{t('groups.empty')}</p>
           </div>
         )}
 
         {!isAuthenticated && (
           <div className="mt-8 card p-6 text-center">
             <Lock className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-            <p className="text-muted-foreground mb-3">请先登录后加入用户组</p>
+            <p className="text-muted-foreground mb-3">{t('groups.loginToJoin')}</p>
             <a
               href={`/login?redirect=${encodeURIComponent('/api/groups')}`}
               className="btn btn-primary"
             >
-              登录
+              {t('servers.login')}
             </a>
           </div>
         )}

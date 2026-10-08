@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { Users, MapPin, Waves } from 'lucide-react';
 import { serverApi } from '@/lib/api/client';
 import type { Server } from '@/types';
+import { useI18n } from '@/i18n/provider';
 
 function ServerCard({ server }: { server: Server }) {
+  const { t } = useI18n();
   return (
     <div className="panel-surface p-4">
       <div className="mb-2 flex items-center justify-between gap-3">
@@ -18,7 +20,7 @@ function ServerCard({ server }: { server: Server }) {
               : 'border-[var(--border)] text-[var(--muted-foreground)]'
           }`}
         >
-          {server.status === 'running' ? '在线' : server.status === 'stopped' ? '离线' : '维护'}
+          {server.status === 'running' ? t('servers.online') : server.status === 'stopped' ? t('servers.offline') : t('servers.maintenance')}
         </span>
       </div>
       {server.description && (
@@ -64,6 +66,7 @@ function ServerCard({ server }: { server: Server }) {
 }
 
 export function ServerSection() {
+  const { t } = useI18n();
   const [servers, setServers] = useState<Server[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -89,7 +92,7 @@ export function ServerSection() {
   if (loading) {
     return (
       <section className="panel-surface p-4">
-        <h2 className="text-sm font-semibold text-[var(--foreground)]">正在加载服务器</h2>
+        <h2 className="text-sm font-semibold text-[var(--foreground)]">{t('servers.loadingSection')}</h2>
       </section>
     );
   }
@@ -103,10 +106,10 @@ export function ServerSection() {
     <section className="space-y-3">
       <div className="panel-surface flex items-center justify-between px-4 py-3">
         <h2 className="text-sm font-semibold text-[var(--foreground)]">
-          在线服务器 ({runningServers.length})
+          {t('servers.onlineCount', { count: runningServers.length })}
         </h2>
         <Link href="/servers" className="text-sm text-[var(--primary)] hover:text-[var(--primary-dark)]">
-          查看全部
+          {t('servers.viewAll')}
         </Link>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

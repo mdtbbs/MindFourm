@@ -5,6 +5,7 @@ import { api } from '@/lib/api/client';
 import Link from 'next/link';
 import { Trophy, Medal, Star } from 'lucide-react';
 import FeatureGate from '@/components/forum/feature-gate';
+import { useI18n } from '@/i18n/provider';
 
 interface LeaderboardUser {
   id: number;
@@ -16,6 +17,7 @@ interface LeaderboardUser {
 }
 
 export default function LeaderboardPage() {
+  const { t } = useI18n();
   const [users, setUsers] = useState<LeaderboardUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -55,31 +57,31 @@ export default function LeaderboardPage() {
       active_user: 'bg-green-100 text-green-700',
     };
     const labels: Record<string, string> = {
-      admin: '管理员',
-      moderator: '版主',
-      core_user: '核心用户',
-      active_user: '活跃用户',
+      admin: t('points.roleAdmin'),
+      moderator: t('points.roleModerator'),
+      core_user: t('points.roleCoreUser'),
+      active_user: t('points.roleActiveUser'),
     };
     if (!badges[role]) return null;
     return <span className={`text-xs px-2 py-0.5 rounded font-medium ${badges[role]}`}>{labels[role]}</span>;
   };
 
   return (
-    <FeatureGate settingKey="feature_leaderboard_enabled" label="积分排行">
+    <FeatureGate settingKey="feature_leaderboard_enabled" label={t('points.leaderboard')}>
     <div>
 
       <main className="max-w-3xl mx-auto px-4 py-8">
         <div className="mb-6">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Link href="/" className="hover:text-primary">首页</Link>
+            <Link href="/" className="hover:text-primary">{t('navigation.home')}</Link>
             <span>/</span>
-            <span>积分排行榜</span>
+            <span>{t('points.leaderboard')}</span>
           </nav>
         </div>
 
         <div className="flex items-center gap-3 mb-6">
           <Star className="w-7 h-7 text-primary" />
-          <h1 className="text-2xl font-bold">积分排行榜</h1>
+          <h1 className="text-2xl font-bold">{t('points.leaderboard')}</h1>
         </div>
 
         {/* Top 3 podium */}
@@ -150,7 +152,7 @@ export default function LeaderboardPage() {
                     onClick={() => setPage((p) => p + 1)}
                     className="btn btn-secondary text-sm"
                   >
-                    加载更多
+                    {t('points.loadMore')}
                   </button>
                 </div>
               )}
