@@ -46,9 +46,10 @@ test('context sections open by default so the sidebar shows where you can go', (
   const forum = buildContentNavigation({ ...base, mode: 'forum' });
   for (const sections of [resources, forum]) {
     const context = sections.find((section) => section.id === 'context')!;
-    // Still collapsible from its heading, just not collapsed on first paint.
+    // Still collapsible from its heading, just never pre-collapsed: a section
+    // that starts closed hides every board behind a click on first paint.
     expect(context.collapsible).toBe(true);
-    expect(context.defaultCollapsed).toBeUndefined();
+    expect(context).not.toHaveProperty('defaultCollapsed');
   }
 });
 
