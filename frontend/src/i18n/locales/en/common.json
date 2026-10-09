@@ -695,5 +695,24 @@
         "body": "False or abusive reports may be rejected. Provide accurate information and only submit requests in good faith."
       }
     }
+  },
+  "resourceDiscovery": {
+    "title": "Recommendations",
+    "forYou": "For you",
+    "forYouDescription": "Picked from your favorites and likes.",
+    "featured": "Editor’s picks",
+    "featuredDescription": "High-quality resources chosen by the team.",
+    "rising": "Rising",
+    "risingDescription": "Fastest growing views and downloads in 7 days.",
+    "trending": "Trending",
+    "trendingDescription": "Views, downloads, ratings and freshness combined.",
+    "topRated": "Top rated",
+    "topRatedDescription": "Ranked by smoothed user ratings.",
+    "newest": "Newest",
+    "newestDescription": "Recently published public resources.",
+    "browseAll": "Browse all resources",
+    "loading": "Loading recommendations…",
+    "failed": "Recommendations are unavailable right now. Please try again later.",
+    "empty": "No public resources to recommend yet."
   }
 }

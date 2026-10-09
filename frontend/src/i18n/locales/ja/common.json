@@ -695,5 +695,24 @@
         "body": "虚偽または悪意のある報告は却下されることがあります。正確な情報を記載し、誠実に申請してください。"
       }
     }
+  },
+  "resourceDiscovery": {
+    "title": "おすすめ",
+    "forYou": "あなたにおすすめ",
+    "forYouDescription": "お気に入りと「いいね」から選びました。",
+    "featured": "編集部のピックアップ",
+    "featuredDescription": "運営チームが選んだ高品質なリソース。",
+    "rising": "急上昇",
+    "risingDescription": "直近7日間で閲覧とダウンロードが伸びたもの。",
+    "trending": "人気",
+    "trendingDescription": "閲覧・ダウンロード・評価・新しさの総合。",
+    "topRated": "高評価",
+    "topRatedDescription": "平滑化したユーザー評価順。",
+    "newest": "新着",
+    "newestDescription": "最近公開された公開リソース。",
+    "browseAll": "すべてのリソースを見る",
+    "loading": "おすすめを読み込み中…",
+    "failed": "おすすめを読み込めませんでした。しばらくして再試行してください。",
+    "empty": "おすすめできる公開リソースはまだありません。"
   }
 }

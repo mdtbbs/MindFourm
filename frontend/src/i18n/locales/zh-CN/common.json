@@ -695,5 +695,24 @@
         "body": "虚假或恶意举报可能被拒绝。请提供准确资料并诚信提交请求。"
       }
     }
+  },
+  "resourceDiscovery": {
+    "title": "资源推荐",
+    "forYou": "猜你喜欢",
+    "forYouDescription": "根据你的收藏和点赞挑选。",
+    "featured": "编辑精选",
+    "featuredDescription": "社区运营挑选的高质量资源。",
+    "rising": "近期上升",
+    "risingDescription": "最近 7 天浏览与下载增长较快。",
+    "trending": "热门资源",
+    "trendingDescription": "综合浏览、下载、评分与更新。",
+    "topRated": "评分榜",
+    "topRatedDescription": "按平滑后的用户评分排序。",
+    "newest": "最新发布",
+    "newestDescription": "最近发布的公开资源。",
+    "browseAll": "浏览全部资源",
+    "loading": "正在加载资源推荐…",
+    "failed": "暂时无法加载资源推荐，请稍后重试。",
+    "empty": "目前还没有可推荐的公开资源。"
   }
 }

@@ -41,6 +41,17 @@ test('desktop and mobile resource navigation expose only the shared resource_kin
   expect(items.map((item) => item.label)).not.toContain('新手推荐');
 });
 
+test('context sections open by default so the sidebar shows where you can go', () => {
+  const resources = buildContentNavigation({ ...base, mode: 'resources' });
+  const forum = buildContentNavigation({ ...base, mode: 'forum' });
+  for (const sections of [resources, forum]) {
+    const context = sections.find((section) => section.id === 'context')!;
+    // Still collapsible from its heading, just not collapsed on first paint.
+    expect(context.collapsible).toBe(true);
+    expect(context.defaultCollapsed).toBeUndefined();
+  }
+});
+
 test('context CTA targets its product area and respects the resource feature flag', () => {
   expect(contentNavigationCta('resources')?.href).toBe('/resources/submit');
   expect(contentNavigationCta('forum')?.href).toBe('/posts/new');
