@@ -4,6 +4,18 @@ import * as os from 'os';
 import * as path from 'path';
 import { ResourcePreviewService } from './resource-preview.service';
 
+function waitFor(condition: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const started = Date.now();
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      if (condition()) return resolve();
+      if (Date.now() - started > timeoutMs) return reject(new Error('waitFor timed out'));
+      setTimeout(poll, 10);
+    };
+    poll();
+  });
+}
+
 describe('ResourcePreviewService', () => {
   const resClient = () => ({
     isAvailable: true,
@@ -35,6 +47,81 @@ describe('ResourcePreviewService', () => {
     expect(metadata.token).toBeUndefined();
     expect(metadata.tile_layers.terrain).toHaveLength(10000);
     expect(metadata.tile_layers_truncated).toBe(true);
+  });
+
+  it('persists the analysis projections the detail page, compatibility panel and duplicate check read', () => {
+    const service = new ResourcePreviewService({} as any);
+    const metadata = (service as any).safeMetadata({
+      width: 12, height: 8,
+      estimated_build_time_seconds: 187.4, estimated_build_time_method: 'sum_of_block_build_time_ticks_divided_by_60',
+      schematic_format_version: 1, save_format_version: 3,
+      map_build_metadata: { stored_game_build: 160, source: 'file_metadata' },
+      parser_runtime: { mindustry_build: 160.5, renderer_version: 'v160.5' },
+      compatibility: { minimum_supported_build: 151, confidence: 'high' },
+      unknown_content: ['example-mod-block'],
+      structure_hash: 'a'.repeat(64), normalized_structure_hash: 'b'.repeat(64),
+      production: { mode: 'theoretical', complete: true, available: true },
+      private_note: 'must not persist',
+    });
+
+    expect(metadata).toMatchObject({
+      estimated_build_time_seconds: 187.4,
+      estimated_build_time_method: 'sum_of_block_build_time_ticks_divided_by_60',
+      schematic_format_version: 1,
+      save_format_version: 3,
+      map_build_metadata: { stored_game_build: 160, source: 'file_metadata' },
+      parser_runtime: { mindustry_build: 160.5, renderer_version: 'v160.5' },
+      compatibility: { minimum_supported_build: 151, confidence: 'high' },
+      unknown_content: ['example-mod-block'],
+      structure_hash: 'a'.repeat(64),
+      normalized_structure_hash: 'b'.repeat(64),
+    });
+    expect(metadata.private_note).toBeUndefined();
+  });
+
+  it('re-parses a legacy map once and writes the analysis projections back', async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-backfill-'));
+    const source = path.join(root, 'map.msav');
+    const input = Buffer.from('legacy map payload');
+    const hash = crypto.createHash('sha256').update(input).digest('hex');
+    await fs.writeFile(source, input);
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    process.env.RESOURCE_PREVIEW_ROOT = root;
+    const update = jest.fn().mockResolvedValue(undefined);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        previewKey: `resources/map/${hash.slice(0, 2)}/${hash}/preview.png`,
+        parserVersion: 'renderer-2',
+        metadata: { name: 'Legacy', width: 32, height: 24, tile_layers: { resources: [{ x: 1, y: 1, name: 'copper' }] }, wave_groups: [{ begin: 1, end: 3, amount: 2 }] },
+      }),
+    }) as any;
+    const service = new ResourcePreviewService({ update } as any);
+    const legacy = { id: 9, resource_kind: 'map', file_path: source, file_name: 'map.msav', file_size: input.length, content_hash: hash, renderer_status: 'ready', renderer_metadata_json: { name: 'Legacy', width: 32, height: 24 } } as any;
+
+    service.ensureAnalysisMetadata(legacy);
+    // The guard makes the second call within the hour a no-op, so one public
+    // page render cannot cause a renderer stampede.
+    service.ensureAnalysisMetadata(legacy);
+    await waitFor(() => update.mock.calls.length > 0);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(9, expect.objectContaining({
+      renderer_metadata_json: expect.objectContaining({ tile_layers: { resources: [{ x: 1, y: 1, name: 'copper' }] } }),
+      renderer_parser_version: 'renderer-2',
+    }));
+    await fs.rm(root, { recursive: true, force: true });
+  });
+
+  it('does not re-parse metadata that already carries the analysis projections', () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    global.fetch = jest.fn() as any;
+    const service = new ResourcePreviewService({ update: jest.fn() } as any);
+
+    service.ensureAnalysisMetadata({ id: 10, resource_kind: 'map', renderer_status: 'ready', renderer_metadata_json: { tile_layers: {}, wave_groups: [] } } as any);
+    service.ensureAnalysisMetadata({ id: 11, resource_kind: 'schematic', renderer_status: 'ready', renderer_metadata_json: { production: { available: true }, estimated_build_time_seconds: 12 } } as any);
+    // Queueing is asynchronous; nothing should have been scheduled at all.
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('keeps version previews private until the resource and version are published and retains the PNG', async () => {
