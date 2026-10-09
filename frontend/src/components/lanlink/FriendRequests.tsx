@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { friendsApi, type FriendRequestItem } from '@/lib/api/client';
+import { useI18n } from '@/i18n/provider';
 
 export default function FriendRequests({ onChanged }: { onChanged?: () => void }) {
+  const { t } = useI18n();
   const [requests, setRequests] = useState<FriendRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<Set<number>>(new Set());
@@ -63,7 +65,7 @@ export default function FriendRequests({ onChanged }: { onChanged?: () => void }
   return (
     <div className="card p-4 border-yellow-200 dark:border-yellow-900">
       <h2 className="text-lg font-bold mb-3">
-        待处理好友请求
+        {t('lanlink.pendingRequests')}
         <span className="ml-2 text-sm font-normal text-muted-foreground">
           ({requests.length})
         </span>
@@ -91,14 +93,14 @@ export default function FriendRequests({ onChanged }: { onChanged?: () => void }
                 disabled={processing.has(req.requester.id)}
                 className="min-h-11 rounded bg-green-500/10 px-3 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50"
               >
-                接受
+                {t('lanlink.accept')}
               </button>
               <button
                 onClick={() => handleReject(req.requester.id)}
                 disabled={processing.has(req.requester.id)}
                 className="min-h-11 rounded bg-red-500/10 px-3 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50"
               >
-                拒绝
+                {t('lanlink.reject')}
               </button>
             </div>
           </div>

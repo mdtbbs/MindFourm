@@ -1,36 +1,38 @@
 import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import { RichCardNodeView } from '@/components/rich-content/rich-node-views';
+import { FONT_SIZES, FONT_STACKS, HIGHLIGHT_COLORS, cssStyle, textColorStyle, highlightStyle, fontSizeStyle, fontFamilyStyle } from './presentation';
 import { Plugin } from '@tiptap/pm/state';
 
-const HIGHLIGHTS = ['yellow', 'green', 'blue', 'pink', 'orange'] as const;
-const FONT_FAMILIES = ['default', 'serif-cn', 'sans-cn', 'kai', 'source-serif-cn', 'source-sans-cn', 'monospace'] as const;
-const FONT_SIZES = [12, 14, 16, 18, 20, 24, 28, 32];
+const HIGHLIGHTS = Object.keys(HIGHLIGHT_COLORS);
+const FONT_FAMILIES = Object.keys(FONT_STACKS);
 
 export const TextColor = Mark.create({
   name: 'textColor',
   addAttributes() { return { color: { default: '#000000' } }; },
   parseHTML() { return [{ tag: 'span[data-color]', getAttrs: (el) => ({ color: (el as HTMLElement).dataset.color }) }]; },
-  renderHTML({ HTMLAttributes }) { return ['span', { 'data-color': HTMLAttributes.color }, 0]; },
+  renderHTML({ HTMLAttributes }) { return ['span', { 'data-color': HTMLAttributes.color, style: cssStyle(textColorStyle(HTMLAttributes.color)) }, 0]; },
 });
 
 export const TextHighlight = Mark.create({
   name: 'highlight',
   addAttributes() { return { color: { default: 'yellow' } }; },
   parseHTML() { return [{ tag: 'span[data-highlight]', getAttrs: (el) => ({ color: (el as HTMLElement).dataset.highlight }) }]; },
-  renderHTML({ HTMLAttributes }) { return ['span', { 'data-highlight': HTMLAttributes.color }, 0]; },
+  renderHTML({ HTMLAttributes }) { return ['span', { 'data-highlight': HTMLAttributes.color, style: cssStyle(highlightStyle(HTMLAttributes.color)) }, 0]; },
 });
 
 export const FontSize = Mark.create({
   name: 'fontSize',
   addAttributes() { return { size: { default: '16px' } }; },
   parseHTML() { return [{ tag: 'span[data-font-size]', getAttrs: (el) => ({ size: (el as HTMLElement).dataset.fontSize }) }]; },
-  renderHTML({ HTMLAttributes }) { return ['span', { 'data-font-size': HTMLAttributes.size }, 0]; },
+  renderHTML({ HTMLAttributes }) { return ['span', { 'data-font-size': HTMLAttributes.size, style: cssStyle(fontSizeStyle(HTMLAttributes.size)) }, 0]; },
 });
 
 export const FontFamily = Mark.create({
   name: 'fontFamily',
   addAttributes() { return { family: { default: 'default' } }; },
   parseHTML() { return [{ tag: 'span[data-font-family]', getAttrs: (el) => ({ family: (el as HTMLElement).dataset.fontFamily }) }]; },
-  renderHTML({ HTMLAttributes }) { return ['span', { 'data-font-family': HTMLAttributes.family }, 0]; },
+  renderHTML({ HTMLAttributes }) { return ['span', { 'data-font-family': HTMLAttributes.family, style: cssStyle(fontFamilyStyle(HTMLAttributes.family)) }, 0]; },
 });
 
 export const Superscript = Mark.create({
@@ -125,7 +127,7 @@ export const Mention = Node.create({
   addAttributes() { return { userId: { default: null }, username: { default: '' } }; },
   parseHTML() { return [{ tag: 'a[data-mention-user-id]', getAttrs: (el) => ({ userId: Number((el as HTMLElement).dataset.mentionUserId), username: (el as HTMLElement).textContent?.replace(/^@/, '') || '' }) }]; },
   renderHTML({ node }) {
-    return ['a', { href: '/users/' + node.attrs.userId, 'data-mention-user-id': node.attrs.userId, contenteditable: 'false' }, ['span', { class: 'rich-mention' }, '@' + node.attrs.username]];
+    return ['a', { href: '/users/' + node.attrs.userId, 'data-mention-user-id': node.attrs.userId, class: 'rich-mention', contenteditable: 'false' }, '@' + node.attrs.username];
   },
 });
 
@@ -152,6 +154,7 @@ export const Video = Node.create({
   name: 'video',
   group: 'block',
   atom: true,
+  addNodeView() { return ReactNodeViewRenderer(RichCardNodeView); },
   addAttributes() { return { provider: { default: 'direct' }, videoId: { default: null }, src: { default: null }, title: { default: '' } }; },
   parseHTML() {
     return [{
@@ -180,6 +183,7 @@ export const AttachmentCard = Node.create({
   name: 'attachment',
   group: 'block',
   atom: true,
+  addNodeView() { return ReactNodeViewRenderer(RichCardNodeView); },
   addAttributes() { return { attachmentId: { default: null }, draftToken: { default: null } }; },
   parseHTML() { return [{ tag: '[data-rich-attachment]', getAttrs: (el) => ({ attachmentId: Number((el as HTMLElement).dataset.attachmentId) || null, draftToken: (el as HTMLElement).dataset.draftToken || null }) }]; },
   renderHTML({ node }) {
@@ -196,6 +200,7 @@ export const PostQuote = Node.create({
   name: 'postQuote',
   group: 'block',
   atom: true,
+  addNodeView() { return ReactNodeViewRenderer(RichCardNodeView); },
   addAttributes() { return { postId: { default: null } }; },
   parseHTML() { return [{ tag: 'aside[data-quote-type="post"]', getAttrs: (el) => ({ postId: Number((el as HTMLElement).querySelector('a')?.href.match(/\/posts\/(\d+)/)?.[1]) || null }) }]; },
   renderHTML({ node }) { return ['aside', { 'data-quote-type': 'post', 'data-post-id': node.attrs.postId, contenteditable: 'false' }, ['a', { href: '/posts/' + node.attrs.postId }, '引用帖子 #' + node.attrs.postId]]; },
@@ -205,6 +210,7 @@ export const ReplyQuote = Node.create({
   name: 'replyQuote',
   group: 'block',
   atom: true,
+  addNodeView() { return ReactNodeViewRenderer(RichCardNodeView); },
   addAttributes() { return { postId: { default: null }, replyId: { default: null } }; },
   parseHTML() {
     return [{

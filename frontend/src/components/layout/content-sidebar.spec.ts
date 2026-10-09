@@ -11,10 +11,14 @@ jest.mock('next/navigation', () => ({ usePathname: () => '/tools/map-editor' }))
 jest.mock('@/i18n/provider', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 
 describe('ContentSidebar layout', () => {
-  test('keeps the shell viewport bound and lets only the navigation region scroll', () => {
-    expect(SIDEBAR_LAYOUT_CLASSES.root).toContain('lg:h-[100dvh]');
+  test('fills the shell height instead of pinning a sticky viewport rail', () => {
+    // The shell owns the viewport height (`lg:h-dvh`); the rail follows it with
+    // `lg:h-full`. A sticky/100dvh rail would stay pinned on long pages and
+    // leave a dead column below short ones.
+    expect(SIDEBAR_LAYOUT_CLASSES.root).toContain('lg:h-full');
     expect(SIDEBAR_LAYOUT_CLASSES.root).toContain('lg:overflow-hidden');
-    expect(SIDEBAR_LAYOUT_CLASSES.root).not.toContain('lg:min-h-screen');
+    expect(SIDEBAR_LAYOUT_CLASSES.root).not.toContain('lg:sticky');
+    expect(SIDEBAR_LAYOUT_CLASSES.root).not.toContain('lg:h-[100dvh]');
     expect(SIDEBAR_LAYOUT_CLASSES.nav).toContain('overflow-y-auto');
     expect(SIDEBAR_LAYOUT_CLASSES.nav).toContain('min-h-0');
   });

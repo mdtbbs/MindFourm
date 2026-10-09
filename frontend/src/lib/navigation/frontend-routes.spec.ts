@@ -2,7 +2,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { requiresAuthentication } from '@/middleware';
 
-const app = join(process.cwd(), 'frontend', 'src', 'app');
+// `process.cwd()` is the repo root whenever the suite is run through either
+// jest config; use the config location instead so it cannot drift.
+const app = join(__dirname, '..', '..', 'app');
 
 describe('IA route files', () => {
   test.each([

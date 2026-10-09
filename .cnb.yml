@@ -10,10 +10,19 @@
   stages:
     - name: install backend dependencies
       script: npm ci
+    # Jest aliases the Tiptap/editor contract suites into frontend/src and
+    # frontend/node_modules, so the frontend tree has to be installed too.
+    # `npm run test:frontend-unit` also resolves its ts-jest binary from the
+    # root install, so the root dependencies must exist before it runs.
+    # Keep this in sync with .github/workflows/ci.yml.
+    - name: install frontend dependencies
+      script: cd frontend && npm ci
     - name: build backend
       script: npm run build:backend
     - name: test backend
       script: npm test -- --runInBand
+    - name: test frontend units
+      script: npm run test:frontend-unit
 
 .frontend: &frontend
   name: frontend-quality-gates
@@ -22,16 +31,30 @@
     volumes:
       - /root/.npm:copy-on-write
   stages:
+    # The frontend install is self-sufficient: `frontend/package.json` declares
+    # jest/ts-jest/jsdom, and `frontend/jest.config.js` points its transform at
+    # `frontend/node_modules` so nothing resolves out of the repo root. The
+    # root install below is only here because `frontend/jest.config.js` imports
+    # the tiptap contract suite under `src/`; drop it if that is ever untangled.
+    # Keep this in sync with .github/workflows/ci.yml.
     - name: install frontend dependencies
       script: cd frontend && npm ci
+    - name: install backend dependencies
+      script: npm ci
     - name: lint frontend
       script: cd frontend && npm run lint
     - name: typecheck frontend
       script: cd frontend && npm run typecheck
+    - name: test frontend units
+      script: cd frontend && npm run test:frontend-unit
     - name: build frontend
       env:
         NEXT_PUBLIC_SITE_URL: http://localhost:3000
       script: cd frontend && npm run build
+    # Fails when a route's initial JavaScript crosses its budget, so a library
+    # silently rejoining the first-load path is caught here and not in production.
+    - name: check frontend first-load budget
+      script: node scripts/check-frontend-budget.cjs
 
 master:
   push:

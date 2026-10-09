@@ -174,7 +174,11 @@ describe('AdminService', () => {
 
     expect(replyRepository.update).toHaveBeenCalledWith(9, { status: 'published' });
     expect(postActivityService.markPostActive).toHaveBeenCalledWith(88);
-    expect(redisService.del).toHaveBeenCalledWith('post:detail:v4:88');
+    // Regression: this used to assert the stale `post:detail:v4:` literal while the
+    // reader wrote v6, so the assertion passed while moderation invalidated nothing.
+    expect(redisService.del).toHaveBeenCalledWith('post:detail:v6:88');
+    expect(redisService.del).toHaveBeenCalledWith('post:88');
+    expect(redisService.del).not.toHaveBeenCalledWith('post_view:88');
     expect(pointsService.awardPoints).toHaveBeenCalledWith(7, 'create_reply', 'reply', 9);
     expect(userRepository.update).toHaveBeenCalledWith(5, {
       pending_avatar_url: null,

@@ -147,6 +147,7 @@ describe('SchematicLightEditor', () => {
   let root: Root | null = null;
   let createObjectUrl: jest.SpyInstance;
   let anchorClick: jest.SpyInstance;
+  let catalogFetch: jest.SpyInstance;
   const originalGlobals = new Map<string, PropertyDescriptor | undefined>();
   const globals = ['window', 'document', 'navigator', 'HTMLElement', 'Node', 'Event', 'MouseEvent', 'IS_REACT_ACT_ENVIRONMENT'];
 
@@ -166,6 +167,7 @@ describe('SchematicLightEditor', () => {
   });
 
   beforeEach(() => {
+    catalogFetch = jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ items: [{ type: 'item', name: 'copper', label: '铜', english: 'Copper', category: 'item', size: 1, icon: null }, { type: 'item', name: 'lead', label: '铅', english: 'Lead', category: 'item', size: 1, icon: null }] }) } as Response);
     mockFetchV1.mockReset().mockResolvedValue({
       version_public_id: VERSION_ID,
       schematic: { width: 3, height: 2 },
@@ -187,6 +189,7 @@ describe('SchematicLightEditor', () => {
     container.remove();
     createObjectUrl.mockRestore();
     anchorClick.mockRestore();
+    catalogFetch.mockRestore();
   });
 
   afterAll(() => {
@@ -211,6 +214,15 @@ describe('SchematicLightEditor', () => {
     await act(async () => { element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true })); });
   }
 
+  async function clickCell(x: number, y: number) {
+    const svg = container.querySelector('svg[role="grid"]') as SVGSVGElement;
+    const width = Number(svg.getAttribute('viewBox')!.split(' ')[2]); const height = Number(svg.getAttribute('viewBox')!.split(' ')[3]);
+    svg.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: width * 18, bottom: height * 18, width: width * 18, height: height * 18, toJSON: () => ({}) });
+    svg.setPointerCapture = () => undefined;
+    const event = { pointerId: 1, button: 0, clientX: (x+.5)*18, clientY: (height-y-.5)*18 };
+    await act(async () => { Simulate.pointerDown(svg, event); Simulate.pointerUp(svg, event); });
+  }
+
   it('transforms a published schematic, reanalyzes it, then downloads the official output', async () => {
     let resolveAnalysis!: (value: Awaited<ReturnType<typeof analyzeResourceWorkbenchVersionV2>>) => void;
     mockAnalyze.mockReturnValue(new Promise((resolve) => { resolveAnalysis = resolve; }));
@@ -219,14 +231,14 @@ describe('SchematicLightEditor', () => {
     expect(mockGetBlocks).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, { limit: 100, cursor: undefined });
     await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('整体左转')) || null);
     await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('水平镜像')) || null);
-    await click(container.querySelector('[data-cell="0:0"]'));
+    await clickCell(0, 0);
     await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('删除')) || null);
 
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) as HTMLButtonElement | undefined;
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) as HTMLButtonElement | undefined;
     expect(exportButton?.disabled).toBe(false);
     await click(exportButton || null);
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
-      rotation_quarters: 3,
+      rotation_quarters: 1,
       mirror_x: true,
       delete_positions: [{ x: 0, y: 0 }],
       move_positions: [],
@@ -250,8 +262,21 @@ describe('SchematicLightEditor', () => {
     });
     expect(anchorClick).toHaveBeenCalledTimes(1);
     expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
-    expect(container.textContent).toContain('重新分析完成');
+    expect(container.textContent).toContain('官方读写验证');
     expect(container.textContent).toContain('解析方块数：1');
+  });
+
+  it('exports a public visitor copy and restores its changes with undo and redo without publication rights', async () => {
+    root = createRoot(container);
+    await act(async () => { root?.render(createElement(SchematicLightEditor, { workbench: workbench(), version: version(), canEdit: true, canManage: false })); await flushEffects(); });
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '整体右转') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '撤销') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '重做') || null);
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '下载 .msch') || null);
+    expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, expect.objectContaining({ rotation_quarters: 3 }));
+    expect(mockAnalyze).not.toHaveBeenCalled();
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+    expect(container.textContent).not.toContain('保存为新版本');
   });
 
   it('disables export when the server returns incomplete block positions', async () => {
@@ -262,7 +287,7 @@ describe('SchematicLightEditor', () => {
     await mount();
 
     expect(container.textContent).toContain('Some positions are missing');
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) as HTMLButtonElement | undefined;
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) as HTMLButtonElement | undefined;
     expect(exportButton).toBeUndefined();
     expect(mockExport).not.toHaveBeenCalled();
   });
@@ -287,9 +312,9 @@ describe('SchematicLightEditor', () => {
     });
 
     await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === '移动') || null);
-    await click(container.querySelector('[data-cell="2:2"]'));
-    await click(container.querySelector('[data-cell="4:2"]'));
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) || null);
+    await clickCell(2, 2);
+    await clickCell(4, 2);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
       rotation_quarters: 0, mirror_x: false, delete_positions: [],
@@ -312,11 +337,12 @@ describe('SchematicLightEditor', () => {
     });
     await mount();
 
-    await click(container.querySelector('[data-cell="1:1"]'));
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '高级模式') || null);
+    await clickCell(1, 1);
     expect(container.textContent).toContain('core → 2,3');
     const source = container.querySelector('#schematic-logic-source') as HTMLTextAreaElement;
     await act(async () => Simulate.change(source, { target: { value: 'print("after")' } as EventTarget & { value: string } }));
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
       rotation_quarters: 0, mirror_x: false, delete_positions: [], move_positions: [], add_blocks: [],
@@ -341,12 +367,12 @@ describe('SchematicLightEditor', () => {
     });
     await mount();
 
-    await click(container.querySelector('[data-cell="2:3"]'));
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent === '高级模式') || null);
+    await clickCell(2, 3);
     expect(container.textContent).toContain('官方配置类型');
-    const itemInput = Array.from(container.querySelectorAll('input')).find((input) => input.getAttribute('list') === 'content-item') as HTMLInputElement | undefined;
-    expect(itemInput?.value).toBe('copper');
-    await act(async () => Simulate.change(itemInput!, { target: { value: 'lead' } as EventTarget & { value: string } }));
-    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) || null);
+    expect(container.textContent).toContain('铜');
+    await click(Array.from(container.querySelectorAll('button')).find(button => button.textContent?.includes('铅')) || null);
+    await click(Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) || null);
 
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, expect.objectContaining({
       config_edits: [{ x: 2, y: 3, config: { type: 'content', content_type: 'item', name: 'lead' } }],
@@ -359,7 +385,7 @@ describe('SchematicLightEditor', () => {
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain('Could not load block positions');
     expect(container.querySelector('[role="alert"]')?.textContent).not.toContain('positions unavailable');
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析')) as HTMLButtonElement | undefined;
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch')) as HTMLButtonElement | undefined;
     expect(exportButton).toBeUndefined();
   });
 
@@ -368,11 +394,11 @@ describe('SchematicLightEditor', () => {
     await mount();
     const rotateButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('整体右转'));
     await click(rotateButton || null);
-    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出并重新分析'));
+    const exportButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent?.includes('下载 .msch'));
     await click(exportButton || null);
 
     expect(anchorClick).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Could not safely transform this schematic');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('server parser unavailable');
   });
 
   it('keeps the editor unavailable to viewers and draft versions', async () => {

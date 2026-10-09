@@ -103,23 +103,25 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
     return sections;
   }
 
+  // An item belongs to exactly one section: the primary rail keeps the
+  // workspace-defining destinations, while taxonomy and browse entries are
+  // grouped under `discover` so the rail stays short and scannable.
+  const DISCOVER_ITEM_IDS = ['tags', 'notices', 'servers'];
   const configured = buildSidebarNavigation({ settings: context.settings, isAuthenticated: context.isAuthenticated });
   const byId = new Map(configured.map((item) => [item.id, item]));
-  const globalItems = configured
+  const enabledConfigured = configured
     .filter((item) => item.id !== 'resources' || featureEnabled(context.settings, 'feature_resources_enabled'))
     .filter((item) => item.id !== 'servers' || featureEnabled(context.settings, 'feature_servers_enabled'))
-    .map(configuredItem);
-  if (!byId.has('search')) globalItems.push({ id: 'search', label: '搜索', href: '/search', icon: ICONS.search });
-  if (featureEnabled(context.settings, 'feature_servers_enabled') && !byId.has('servers')) {
-    globalItems.push({ id: 'servers', label: '服务器', href: '/servers', icon: ICONS.servers });
-  }
+    .filter((item) => !DISCOVER_ITEM_IDS.includes(item.id));
+  const globalItems = enabledConfigured.map(configuredItem);
+  if (!byId.has('search')) globalItems.push({ id: 'search', label: translate('common.search'), href: '/search', icon: ICONS.search });
 
-  const sections: ContentNavigationSection[] = [{ id: 'global', label: 'MDTBBS', items: globalItems }];
+  const sections: ContentNavigationSection[] = [{ id: 'global', items: globalItems }];
   if (context.mode === 'resources' && featureEnabled(context.settings, 'feature_resources_enabled')) {
     sections.push({
-      id: 'context', label: '资源浏览', collapsible: true, defaultCollapsed: true,
+      id: 'context', label: translate('navigation.resourceBrowsing'), collapsible: true, defaultCollapsed: true,
       items: [
-        { id: 'all-resources', label: '全部资源', href: '/resources', icon: 'Package', activeMatch: '/resources' },
+        { id: 'all-resources', label: translate('navigation.allResources'), href: '/resources', icon: 'Package', activeMatch: '/resources' },
         ...resourceKinds.map((kind) => ({
           id: `resource-kind-${kind.value}`,
           label: kind.label,
@@ -130,30 +132,36 @@ export function buildContentNavigation(context: ContentNavigationContext): Conte
       ],
     });
   } else if (context.mode === 'forum') {
-    const boards: ContentNavigationItem[] = [{ id: 'all-discussions', label: '全部讨论', href: '/threads', icon: 'MessageSquare', activeMatch: '/threads' }];
+    const boards: ContentNavigationItem[] = [{ id: 'all-discussions', label: translate('navigation.allDiscussions'), href: '/threads', icon: 'MessageSquare', activeMatch: '/threads' }];
     for (const group of groupForumCategories(context.forumCategories)) {
       for (const { category, children } of group.boards) {
         boards.push({ id: `forum-category-${category.id}`, label: category.name, href: `/categories/${category.id}`, icon: category.icon || undefined, activeMatch: `/categories/${category.id}`, count: category.post_count, groupLabel: group.label });
         children.forEach((child) => boards.push({ id: `forum-category-${child.id}`, label: child.name, href: `/categories/${child.id}`, icon: child.icon || undefined, activeMatch: `/categories/${child.id}`, indent: true, count: child.post_count, groupLabel: group.label }));
       }
     }
-    sections.push({ id: 'context', label: '讨论板块', collapsible: true, defaultCollapsed: true, items: boards });
+    sections.push({ id: 'context', label: translate('navigation.discussionBoards'), collapsible: true, defaultCollapsed: true, items: boards });
   }
 
-  const discover = configured.filter((item) => ['tags', 'notices'].includes(item.id)).map(configuredItem);
-  if (!discover.some((item) => item.href === '/lanlink') && featureEnabled(context.settings, 'feature_lanlink_enabled')) {
-    discover.push({ id: 'lanlink', label: '联机', href: '/lanlink', icon: 'Radio' });
+  const discover = configured
+    .filter((item) => DISCOVER_ITEM_IDS.includes(item.id))
+    .filter((item) => item.id !== 'servers' || featureEnabled(context.settings, 'feature_servers_enabled'))
+    .map(configuredItem);
+  if (featureEnabled(context.settings, 'feature_servers_enabled') && !discover.some((item) => item.href === '/servers')) {
+    discover.push({ id: 'servers', label: translate('navigation.servers'), href: '/servers', icon: ICONS.servers });
   }
-  if (discover.length) sections.push({ id: 'discover', label: '发现', items: discover });
+  if (featureEnabled(context.settings, 'feature_lanlink_enabled') && !discover.some((item) => item.href === '/lanlink')) {
+    discover.push({ id: 'lanlink', label: translate('navigation.lanlink'), href: '/lanlink', icon: 'Radio' });
+  }
+  if (discover.length) sections.push({ id: 'discover', label: translate('navigation.discover'), items: discover });
 
   if (context.isAuthenticated) {
-    sections.push({ id: 'account', label: '我的', collapsible: true, items: [
-      ...(context.userId ? [{ id: 'my-posts', label: '我的帖子', href: `/users/${context.userId}`, icon: 'User' }] : []),
-      { id: 'bookmarks', label: '我的收藏', href: '/bookmarks', icon: 'Star' },
-      { id: 'messages', label: '私信', href: '/messages', icon: 'Mail' },
-      { id: 'notifications', label: '通知', href: '/notifications', icon: 'Bell' },
-      { id: 'friends', label: '好友', href: '/friends', icon: 'Users' },
-      { id: 'settings', label: '设置', href: '/settings', icon: 'Settings' },
+    sections.push({ id: 'account', label: translate('navigation.account'), collapsible: true, items: [
+      ...(context.userId ? [{ id: 'my-posts', label: translate('navigation.myPosts'), href: `/users/${context.userId}`, icon: 'User' }] : []),
+      { id: 'bookmarks', label: translate('navigation.bookmarks'), href: '/bookmarks', icon: 'Star' },
+      { id: 'messages', label: translate('navigation.messages'), href: '/messages', icon: 'Mail' },
+      { id: 'notifications', label: translate('navigation.notifications'), href: '/notifications', icon: 'Bell' },
+      { id: 'friends', label: translate('navigation.friends'), href: '/friends', icon: 'Users' },
+      { id: 'settings', label: translate('navigation.settings'), href: '/settings', icon: 'Settings' },
     ] });
   }
   return sections;
@@ -166,7 +174,7 @@ export function contentNavigationCta(mode: 'forum' | 'resources', settings: Reco
       ? { label: translate('navigation.publishResource'), href: '/resources/submit', icon: 'Plus' }
       : { label: translate('navigation.publishDiscussion'), href: '/posts/new', icon: 'Plus' };
   }
-  return mode === 'resources'
-    ? { label: '发布资源', href: '/resources/submit', icon: 'Plus' }
-    : { label: '发布主题', href: '/posts/new', icon: 'Plus' };
+  const label = mode === 'resources' ? 'navigation.publishResource' : 'navigation.publishDiscussion';
+  const href = mode === 'resources' ? '/resources/submit' : '/posts/new';
+  return { label: translate ? translate(label) : label, href, icon: 'Plus' };
 }

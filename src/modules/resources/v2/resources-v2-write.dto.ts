@@ -53,6 +53,14 @@ export class ResourceV2SchematicAddedBlockDto {
   @ApiPropertyOptional({ minimum: 0, maximum: 3, default: 0 })
   @IsOptional() @IsInt() @Min(0) @Max(3)
   rotation?: number;
+
+  @ApiPropertyOptional({ minimum: 0, maximum: 127, description: 'Copy config from this original source anchor; both coordinates required.' })
+  @IsOptional() @IsInt() @Min(0) @Max(127) copy_from_x?: number;
+  @ApiPropertyOptional({ minimum: 0, maximum: 127 })
+  @IsOptional() @IsInt() @Min(0) @Max(127) copy_from_y?: number;
+  @ApiPropertyOptional({ type: 'object', description: 'Same strict typed configuration shape as config_edits; verified by the official decoder.' })
+  @IsOptional() @IsObject() config?: Record<string, unknown>;
+  @ApiPropertyOptional({ maxLength: 32768 }) @IsOptional() @IsString() @MaxLength(32768) logic_source?: string;
 }
 
 export class ResourceV2SchematicLogicConfigDto {

@@ -86,7 +86,7 @@ export default function AttachmentList({ attachments }: AttachmentListProps) {
                   <span>{file.renderer_status === 'failed' ? t('uploads.previewFailed') : t('uploads.previewing')}</span>
                 </div>
               )}
-              <a href={attachmentApi.download(file.id)} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--primary)]">
+              <a href={attachmentApi.download(file.id)} className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--primary-text)]">
                 <Map className="h-3.5 w-3.5" /> {file.file_name}
               </a>
             </div>

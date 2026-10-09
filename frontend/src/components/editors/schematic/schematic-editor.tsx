@@ -56,7 +56,7 @@ function ConfigPanel({ placement, catalog, document, onChange, fullLogic }: {
   const update = (config: Record<string, unknown>) => onChange({ ...document, placements: document.placements.map((item) => item.id === placement.id ? { ...item, config } : item) });
   const contentEntries = (type: unknown): EditorContentEntry[] => type === 'item' ? catalog.items : type === 'liquid' ? catalog.liquids : type === 'unit' ? catalog.units : type === 'status' ? catalog.statuses : catalog.blocks;
   if (placement.logic_source_available && placement.logic_source !== undefined) return fullLogic
-    ? <label className="block space-y-2 text-sm"><span className="font-medium">逻辑处理器代码</span><textarea value={placement.logic_source} onChange={(event) => onChange({ ...document, placements: document.placements.map((item) => item.id === placement.id ? { ...item, logic_source: event.target.value } : item) })} maxLength={100_000} rows={12} className="min-h-56 w-full border border-[var(--border)] bg-[var(--bg-page)] p-3 font-mono text-xs" /><span className="block text-xs text-[var(--text-muted)]">保存时会由 Renderer 验证逻辑配置格式；未知或不可读取的逻辑配置保持只读。</span></label>
+    ? <label className="block space-y-2 text-sm"><span className="font-medium">逻辑处理器代码</span><textarea value={placement.logic_source} onChange={(event) => onChange({ ...document, placements: document.placements.map((item) => item.id === placement.id ? { ...item, logic_source: event.target.value } : item) })} maxLength={32_768} rows={12} className="min-h-56 w-full border border-[var(--border)] bg-[var(--bg-page)] p-3 font-mono text-xs" /><span className="block text-xs text-[var(--text-muted)]">最多 32,768 个字符；保存时会由 Renderer 验证逻辑配置格式。</span></label>
     : <p className="text-sm text-[var(--text-muted)]">Renderer 目前只开放安全读取；逻辑源码保持只读。</p>;
   if (!placement.config_editable) return <p className="text-sm text-[var(--text-muted)]">这个方块的配置无法安全读取，内容会保留原样。</p>;
   if (!descriptors.length) return <p className="text-sm text-[var(--text-muted)]">这个方块没有可编辑配置。</p>;
@@ -102,6 +102,8 @@ function contentTypeLabel(type: string): string {
 export function SchematicEditor({ analysis, catalog, document, onChange, fullLogic }: Props) {
   const metadata = analysis.renderer_metadata;
   const width = Number(metadata.width) || 1; const height = Number(metadata.height) || 1;
+  const truncated = metadata.block_positions_truncated === true;
+  const readOnlyMessage = '方块列表已截断，当前蓝图只读，不能安全修改可见部分。';
   const placeable = useMemo(() => catalog.blocks.filter((entry) => entry.placeable && !entry.floor && !entry.overlay), [catalog.blocks]);
   const [selectedBlock, setSelectedBlock] = useState('');
   const [selection, setSelection] = useState<Set<string>>(new Set());
@@ -131,6 +133,7 @@ export function SchematicEditor({ analysis, catalog, document, onChange, fullLog
     return point.x >= box.left && point.x < box.right && point.y >= box.bottom && point.y < box.top;
   });
   const placeAt = (point: CellPoint) => {
+    if (truncated) { setMessage(readOnlyMessage); return; }
     const entry = placeable.find((item) => item.internal_name === selectedBlock);
     if (!entry) { setMessage('先从方块库选择要放置的方块。'); return; }
     const next: SchematicPlacement = { id: `added:${crypto.randomUUID()}`, source_x: null, source_y: null, x: point.x, y: point.y, block: entry.internal_name, rotation: 0, original_rotation: 0, size: entry.size || 1, size_offset: entry.size_offset ?? -Math.floor(((entry.size || 1) - 1) / 2), config_types: entry.config_types || [], config_editable: false, deleted: false };
@@ -170,6 +173,7 @@ export function SchematicEditor({ analysis, catalog, document, onChange, fullLog
     setSelection(nextSelection);
     setMobilePropertiesOpen(true);
     if (!nextSelection.has(target.id)) return;
+    if (truncated) { setInteractionRevision((revision) => revision + 1); return; }
     const origins = new Map<string, CellPoint>();
     for (const item of visiblePlacements) if (nextSelection.has(item.id)) origins.set(item.id, { x: item.x, y: item.y });
     drag.current = { start: point, pointer: point, ids: [...nextSelection], origins };
@@ -186,6 +190,7 @@ export function SchematicEditor({ analysis, catalog, document, onChange, fullLog
   };
   const onPointerUp = (event: PointerEvent<SVGSVGElement>) => {
     if (longPress.current?.pointerId === event.pointerId) { clearTimeout(longPress.current.timer); longPress.current = null; }
+    if (truncated) drag.current = null;
     if (drag.current) {
       const currentDrag = drag.current; drag.current = null;
       const dx = currentDrag.pointer.x - currentDrag.start.x; const dy = currentDrag.pointer.y - currentDrag.start.y;
@@ -207,16 +212,24 @@ export function SchematicEditor({ analysis, catalog, document, onChange, fullLog
     }
     setInteractionRevision((revision) => revision + 1);
   };
-  const mutateSelection = (mutate: (placement: SchematicPlacement) => SchematicPlacement) => onChange({ ...document, placements: document.placements.map((item) => selection.has(item.id) ? mutate(item) : item) });
+  const mutateSelection = (mutate: (placement: SchematicPlacement) => SchematicPlacement) => {
+    if (truncated) { setMessage(readOnlyMessage); return; }
+    onChange({ ...document, placements: document.placements.map((item) => selection.has(item.id) ? mutate(item) : item) });
+  };
   const rotateSelected = () => {
+    if (truncated) { setMessage(readOnlyMessage); return; }
+    if (selectedPlacements.some((item) => entryFor(item.block)?.rotatable !== true)) {
+      setMessage('所选方块中包含不可旋转的方块。'); return;
+    }
     if (selectedPlacements.some((item) => item.config_types?.some((descriptor) => ['point', 'point_array', 'vec2', 'vec2_array'].includes(descriptor.type)))) {
       setMessage('所选方块包含坐标连接配置，暂不能安全旋转。'); return;
     }
     mutateSelection((item) => ({ ...item, rotation: (item.rotation + 1) & 3 })); setMessage('');
   };
-  const removeSelected = () => { mutateSelection((item) => ({ ...item, deleted: true })); setSelection(new Set()); setMobilePropertiesOpen(false); };
+  const removeSelected = () => { if (truncated) { setMessage(readOnlyMessage); return; } mutateSelection((item) => ({ ...item, deleted: true })); setSelection(new Set()); setMobilePropertiesOpen(false); };
   const copySelected = () => { clipboard.current = selectedPlacements.map(({ id, source_x, source_y, deleted, original_config, original_logic_source, ...item }) => item); setMessage(`已复制 ${clipboard.current.length} 个方块。`); };
   const pasteSelected = () => {
+    if (truncated) { setMessage(readOnlyMessage); return; }
     if (!clipboard.current.length) { setMessage('先选择方块并复制。'); return; }
     const added = clipboard.current.map((item, index) => ({ ...item, id: `added:paste:${crypto.randomUUID?.() || Date.now()}:${index}`, source_x: null, source_y: null, x: Math.min(width - 1, item.x + 1), y: Math.min(height - 1, item.y + 1), original_rotation: item.rotation, deleted: false }));
     const invalid = added.find((item) => collides(item, visiblePlacements.concat(added.filter((other) => other.id !== item.id)), width, height, new Set()));
@@ -225,8 +238,11 @@ export function SchematicEditor({ analysis, catalog, document, onChange, fullLog
   };
   const gridWidth = document.mirror_x ? width : width; const gridHeight = height;
   const unsupported = Array.isArray(metadata.unknown_content) ? metadata.unknown_content.filter((item): item is string => typeof item === 'string') : [];
-  const truncated = metadata.block_positions_truncated === true;
   const unsupportedConfigs = visiblePlacements.filter((item) => item.config !== null && !item.config_editable).length;
+  const changeProperties = (next: SchematicDocument) => {
+    if (truncated) { setMessage(readOnlyMessage); return; }
+    onChange(next);
+  };
   const preview = visiblePlacements.map((item) => drag.current?.ids.includes(item.id)
     ? { ...item, x: item.x + drag.current.pointer.x - drag.current.start.x, y: item.y + drag.current.pointer.y - drag.current.start.y } : item);
   const movingIds = new Set(drag.current?.ids || []);
@@ -241,11 +257,11 @@ export function SchematicEditor({ analysis, catalog, document, onChange, fullLog
       <div className="flex min-h-11 flex-wrap items-center gap-1 border-b border-[var(--border)] px-2 py-1">
         <button type="button" onClick={() => setTool('select')} aria-pressed={tool === 'select'} className={`min-h-9 px-3 text-sm ${tool === 'select' ? 'bg-[var(--primary-soft)] text-[var(--primary)]' : 'text-[var(--text-secondary)]'}`}><Move className="mr-1 inline h-4 w-4" />选择</button>
         <button type="button" onClick={() => setMultiSelect((value) => !value)} aria-pressed={multiSelect} className={`min-h-9 px-3 text-sm ${multiSelect ? 'bg-[var(--primary-soft)] text-[var(--primary)]' : 'text-[var(--text-secondary)]'}`}>多选</button>
-        <button type="button" disabled={!selectedPlacements.length} onClick={rotateSelected} className="min-h-9 px-3 text-sm disabled:opacity-40" title="R：旋转所选方块"><RotateCw className="mr-1 inline h-4 w-4" />旋转</button>
-        <button type="button" onClick={() => onChange({ ...document, mirror_x: !document.mirror_x })} className={`min-h-9 px-3 text-sm ${document.mirror_x ? 'bg-[var(--primary-soft)] text-[var(--primary)]' : ''}`}><FlipHorizontal className="mr-1 inline h-4 w-4" />镜像</button>
-        <button type="button" disabled={!selectedPlacements.length} onClick={copySelected} className="min-h-9 px-3 text-sm disabled:opacity-40"><Copy className="mr-1 inline h-4 w-4" />复制</button>
-        <button type="button" disabled={!clipboard.current.length} onClick={pasteSelected} className="min-h-9 px-3 text-sm disabled:opacity-40">粘贴</button>
-        <button type="button" disabled={!selectedPlacements.length} onClick={removeSelected} className="min-h-9 px-3 text-sm text-red-600 disabled:opacity-40"><Trash2 className="mr-1 inline h-4 w-4" />删除</button>
+        <button type="button" disabled={truncated || !selectedPlacements.length || selectedPlacements.some((item) => entryFor(item.block)?.rotatable !== true)} onClick={rotateSelected} className="min-h-9 px-3 text-sm disabled:opacity-40" title="R：旋转所选方块"><RotateCw className="mr-1 inline h-4 w-4" />旋转</button>
+        <button type="button" disabled={truncated} onClick={() => onChange({ ...document, mirror_x: !document.mirror_x })} className={`min-h-9 px-3 text-sm disabled:opacity-40 ${document.mirror_x ? 'bg-[var(--primary-soft)] text-[var(--primary)]' : ''}`}><FlipHorizontal className="mr-1 inline h-4 w-4" />镜像</button>
+        <button type="button" disabled={truncated || !selectedPlacements.length} onClick={copySelected} className="min-h-9 px-3 text-sm disabled:opacity-40"><Copy className="mr-1 inline h-4 w-4" />复制</button>
+        <button type="button" disabled={truncated || !clipboard.current.length} onClick={pasteSelected} className="min-h-9 px-3 text-sm disabled:opacity-40">粘贴</button>
+        <button type="button" disabled={truncated || !selectedPlacements.length} onClick={removeSelected} className="min-h-9 px-3 text-sm text-red-600 disabled:opacity-40"><Trash2 className="mr-1 inline h-4 w-4" />删除</button>
         <button type="button" onClick={() => { const first = selectedPlacements[0]; if (first) setSelection(new Set(visiblePlacements.filter((item) => item.block === first.block).map((item) => item.id))); }} disabled={!selected} className="min-h-9 px-3 text-sm disabled:opacity-40">选择同类</button>
         <span className="ml-auto text-xs text-[var(--text-muted)]">{width}×{height} · {visiblePlacements.length} 个方块</span>
       </div>
@@ -270,18 +286,18 @@ export function SchematicEditor({ analysis, catalog, document, onChange, fullLog
       {previewCollision || message ? <p role="status" className="border-t border-amber-500/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">{previewCollision ? '当前位置超出蓝图或与其他方块重叠。' : message}</p> : null}
       <p className="border-t border-[var(--border)] px-3 py-2 text-xs text-[var(--text-muted)]">点击选择，拖动移动；Shift / Ctrl 多选。触屏打开“多选”后点选，双指缩放和平移。</p>
     </section>
-    <details open={mobilePropertiesOpen} onToggle={(event) => setMobilePropertiesOpen(event.currentTarget.open)} className="border-t border-[var(--border)] lg:hidden"><summary className="min-h-11 cursor-pointer px-3 py-2 text-sm font-semibold">属性{selected ? ` · ${contentLabel(entryFor(selected.block) || { internal_name: selected.block, display_name: selected.block, icon: null })}` : ''}</summary><div className="max-h-[55vh] overflow-y-auto p-3"><Properties selected={selected} catalog={catalog} document={document} onChange={onChange} fullLogic={fullLogic} /></div></details>
-    <aside className="hidden min-h-0 overflow-y-auto border-l border-[var(--border)] p-3 lg:block"><div className="mb-3 border-b border-[var(--border)] pb-2 text-sm font-semibold">属性</div><Properties selected={selected} catalog={catalog} document={document} onChange={onChange} fullLogic={fullLogic} /></aside>
+    <details open={mobilePropertiesOpen} onToggle={(event) => setMobilePropertiesOpen(event.currentTarget.open)} className="border-t border-[var(--border)] lg:hidden"><summary className="min-h-11 cursor-pointer px-3 py-2 text-sm font-semibold">属性{selected ? ` · ${contentLabel(entryFor(selected.block) || { internal_name: selected.block, display_name: selected.block, icon: null })}` : ''}</summary><div className="max-h-[55vh] overflow-y-auto p-3"><Properties selected={selected} catalog={catalog} document={document} onChange={changeProperties} fullLogic={fullLogic} readOnly={truncated} /></div></details>
+    <aside className="hidden min-h-0 overflow-y-auto border-l border-[var(--border)] p-3 lg:block"><div className="mb-3 border-b border-[var(--border)] pb-2 text-sm font-semibold">属性</div><Properties selected={selected} catalog={catalog} document={document} onChange={changeProperties} fullLogic={fullLogic} readOnly={truncated} /></aside>
   </div>;
 }
 
-function Properties({ selected, catalog, document, onChange, fullLogic }: { selected: SchematicPlacement | null; catalog: EditorContentCatalog; document: SchematicDocument; onChange: (next: SchematicDocument) => void; fullLogic: boolean }) {
+function Properties({ selected, catalog, document, onChange, fullLogic, readOnly = false }: { selected: SchematicPlacement | null; catalog: EditorContentCatalog; document: SchematicDocument; onChange: (next: SchematicDocument) => void; fullLogic: boolean; readOnly?: boolean }) {
   if (!selected) return <p className="text-sm text-[var(--text-muted)]">选择画布上的方块以编辑属性。拖动可以移动，键盘 R 旋转、Delete 删除。</p>;
   const entry = catalog.blocks.find((item) => item.internal_name === selected.block);
-  return <div className="space-y-4">
+  return <fieldset disabled={readOnly} className="min-w-0 space-y-4 disabled:opacity-70">
     <div className="flex items-center gap-3"><ContentIcon entry={entry} size={40} /><div className="min-w-0"><p className="truncate text-sm font-semibold">{entry ? contentLabel(entry) : selected.block}</p><p className="truncate text-xs text-[var(--text-muted)]">{selected.block} · {selected.size}×{selected.size}</p></div></div>
     <dl className="grid grid-cols-2 gap-2 border-y border-[var(--border)] py-3 text-xs"><div><dt className="text-[var(--text-muted)]">位置</dt><dd>{selected.x}, {selected.y}</dd></div><div><dt className="text-[var(--text-muted)]">朝向</dt><dd>{selected.rotation * 90}°</dd></div><div><dt className="text-[var(--text-muted)]">类别</dt><dd>{entry?.category_name || '方块'}</dd></div><div><dt className="text-[var(--text-muted)]">配置</dt><dd>{entry?.has_config ? '可配置' : '无配置'}</dd></div></dl>
     {selected.source_x !== null && !selected.config_editable ? <p className="text-xs text-amber-700 dark:text-amber-200">该方块的原始配置不支持安全修改，保持只读。</p> : null}
     {selected.source_x !== null ? <ConfigPanel placement={selected} catalog={catalog} document={document} onChange={onChange} fullLogic={fullLogic} /> : <p className="text-sm text-[var(--text-muted)]">新放置方块会沿用游戏内默认配置。放置后可在 Mindustry 中设置。</p>}
-  </div>;
+  </fieldset>;
 }

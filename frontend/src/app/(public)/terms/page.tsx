@@ -4,6 +4,7 @@ import ConfiguredFooterPage from '@/components/forum/configured-footer-page';
 import ClubLegalDocument from '@/components/forum/club-legal-document';
 import { siteProfile } from '@/config/site-profile';
 import { getRequestLocale } from '@/i18n/server';
+import { getServerSiteName } from '@/lib/settings/server';
 import { translate } from '@/i18n';
 
 const DESCRIPTION = '使用本站时需遵守的服务条款与社区规则';
@@ -46,7 +47,7 @@ function MdtbbsTermsFallback() {
         <p className="mt-2">
           手机号安全验证使用中国大陆手机号 + 短信验证码完成。相关法规要求、验证目的和个人信息处理方式
           会在验证页面明确说明。具体个人信息处理规则请参阅
-          <Link href="/privacy" className="mx-1 text-[var(--primary)] underline underline-offset-2">
+          <Link href="/privacy" className="mx-1 text-[var(--primary-text)] underline underline-offset-2">
             《隐私政策》
           </Link>
           。
@@ -82,14 +83,15 @@ function MdtbbsTermsFallback() {
 
 export default async function TermsPage() {
   const locale = await getRequestLocale();
+  const siteName = getServerSiteName();
   const club = siteProfile.profile === 'mindustry-club';
   return (
     <ConfiguredFooterPage
-      eyebrow={club ? 'Mindustry Club' : 'Terms'}
+      eyebrow={club ? siteName : 'Terms'}
       title={club ? translate(locale, 'legal.terms.title') : '服务条款'}
       settingKey="footer_terms_content"
       preferFallback={club}
-      fallback={club ? <ClubLegalDocument document="terms" locale={locale} /> : <MdtbbsTermsFallback />}
+      fallback={club ? <ClubLegalDocument document="terms" locale={locale} siteName={siteName} /> : <MdtbbsTermsFallback />}
     />
   );
 }

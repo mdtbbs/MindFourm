@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { playerLabel } from './player-labels';
 import {
   getResourceWorkbenchV2KindTabData,
   type ResourceWorkbenchV2Kind,
@@ -24,7 +25,7 @@ function detailText(value: unknown, depth = 0): string {
   if (isRecord(value)) {
     return Object.entries(value).slice(0, 16).map(([key, item]) => {
       const rendered = detailText(item, depth + 1);
-      return rendered ? `${key.replaceAll('_', ' ')}: ${rendered}` : '';
+      return rendered ? `${playerLabel(key, 'zh-CN')}: ${rendered}` : '';
     }).filter(Boolean).join(' · ');
   }
   return '';
@@ -39,7 +40,7 @@ function DetailRows({ value }: { value: Record<string, unknown> | null }) {
   const rows = Object.entries(value).filter(([, item]) => detailText(item) !== '');
   if (!rows.length) return null;
   return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3">
-    <dt className="text-xs capitalize text-[var(--text-muted)]">{key.replaceAll('_', ' ')}</dt>
+    <dt className="text-xs capitalize text-[var(--text-muted)]">{playerLabel(key, 'zh-CN')}</dt>
     <dd className="mt-1 break-words text-sm text-[var(--text)]">{detailText(item)}</dd>
   </div>)}</dl>;
 }
@@ -155,7 +156,7 @@ export default function ResourceKindDataWorkspace({
       <p className="mt-1 text-sm text-[var(--text-muted)]">{labels.versionScopedData}</p>
     </div>
     <div role="tablist" aria-label={kind === 'map' ? labels.mapWorkspace : labels.schematicWorkspace} className="mb-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-      {tabs.map(({ key, label }) => <button key={key} type="button" role="tab" aria-selected={activeTab === key} onClick={() => setActiveTab(key)} className={`min-h-10 rounded-lg border px-3 text-left text-sm ${activeTab === key ? 'border-[var(--primary)] bg-[var(--primary-soft)] font-semibold text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}>{label}</button>)}
+      {tabs.map(({ key, label }) => <button key={key} type="button" role="tab" aria-selected={activeTab === key} onClick={() => setActiveTab(key)} className={`min-h-10 rounded-lg border px-3 text-left text-sm ${activeTab === key ? 'border-[var(--primary)] bg-[var(--primary-soft)] font-semibold text-[var(--primary-text)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}>{label}</button>)}
     </div>
     <div role="tabpanel" aria-label={activeLabel} className="space-y-4">
       {loading && <div role="status" className="rounded-lg bg-[var(--bg-elevated)] p-4 text-sm text-[var(--text-muted)]">{labels.loading}</div>}
@@ -167,7 +168,7 @@ export default function ResourceKindDataWorkspace({
           <DetailRows value={row} />
         </li>)}</ul> : !data.summary && <div className="rounded-lg border border-dashed border-[var(--border)] p-5 text-sm text-[var(--text-muted)]">{labels.empty}</div>}
         {!data.items.length && data.summary && !summaryHasDetails && <div className="rounded-lg border border-dashed border-[var(--border)] p-5 text-sm text-[var(--text-muted)]">{labels.empty}</div>}
-        {data.pagination.has_more && <button type="button" disabled={loadingMore} onClick={() => void loadMore()} className="min-h-10 rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--primary)] disabled:opacity-60">{loadingMore ? labels.loadingMore : labels.loadMore}</button>}
+        {data.pagination.has_more && <button type="button" disabled={loadingMore} onClick={() => void loadMore()} className="min-h-10 rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--primary-text)] disabled:opacity-60">{loadingMore ? labels.loadingMore : labels.loadMore}</button>}
       </>}
       {!versionPublicId && <div className="rounded-lg border border-dashed border-[var(--border)] p-5 text-sm text-[var(--text-muted)]">{labels.noVersion}</div>}
     </div>

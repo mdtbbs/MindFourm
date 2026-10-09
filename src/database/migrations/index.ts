@@ -79,6 +79,7 @@ import { ResourceDirectUploadSessions1720000300000 } from './1720000300000-Resou
 import { ResourceVersionStoragePreviews1720000310000 } from './1720000310000-ResourceVersionStoragePreviews';
 import { SearchIndexMaintenance1720000320000 } from './1720000320000-SearchIndexMaintenance';
 import { ResourceDirectUploadDrafts1720000340000 } from './1720000340000-ResourceDirectUploadDrafts';
+import { ResourcePublishedAt1720000350000 } from './1720000350000-ResourcePublishedAt';
 
 /**
  * Migrations in run order.
@@ -169,4 +170,5 @@ export const migrations = [
   ResourceVersionStoragePreviews1720000310000,
   SearchIndexMaintenance1720000320000,
   ResourceDirectUploadDrafts1720000340000,
+  ResourcePublishedAt1720000350000,
 ];

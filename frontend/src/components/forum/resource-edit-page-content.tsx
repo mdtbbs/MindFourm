@@ -11,7 +11,7 @@ export default function ResourceEditPageContent({ resource }: { resource: Resour
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       <nav className="mb-6">
-        <Link href={`/resources/${resource.id}`} className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--primary)]">
+        <Link href={`/resources/${resource.id}`} className="inline-flex items-center gap-1 text-sm text-[var(--text-muted)] hover:text-[var(--primary-text)]">
           <ArrowLeft className="h-4 w-4" />
           {t('resourceEdit.pageBack')}
         </Link>

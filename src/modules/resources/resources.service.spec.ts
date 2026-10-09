@@ -208,6 +208,17 @@ function createService(overrides: {
 }
 
 describe('ResourcesService', () => {
+  it('resolves detail UUIDs while rejecting malformed and missing identifiers', async () => {
+    const { service, resourceRepository } = createService();
+    await expect(service.resolveDetailId('27')).resolves.toBe(27);
+    expect(resourceRepository.findOne).not.toHaveBeenCalled();
+    resourceRepository.findOne.mockResolvedValueOnce({ id: 27 });
+    await expect(service.resolveDetailId('11111111-1111-4111-8111-111111111111')).resolves.toBe(27);
+    await expect(service.resolveDetailId('1-invalid')).rejects.toThrow('资源编号无效');
+    resourceRepository.findOne.mockResolvedValueOnce(null);
+    await expect(service.resolveDetailId('22222222-2222-4222-8222-222222222222')).rejects.toThrow('资源不存在');
+  });
+
   it('honors explicit private visibility before issuing a file URL', async () => {
     const { service } = createService();
     await expect(service.isResourcePubliclyAccessible({ status: 'approved', is_public: 1, visibility: 'private' })).resolves.toBe(false);
@@ -637,10 +648,12 @@ describe('ResourcesService', () => {
 
     await service.updateStatus(22, 'approved', { actorUsername: 'moderatorA' });
 
-    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 22, {
+    // First approval is also the publication event, so it stamps published_at.
+    expect(manager.update).toHaveBeenCalledWith(expect.anything(), 22, expect.objectContaining({
       status: 'approved',
       reject_reason: null,
-    });
+      published_at: expect.any(Date),
+    }));
     expect(adminNotificationsService.publishModerationResult).toHaveBeenCalledWith({
       item_type: 'resource',
       item_id: 22,
@@ -649,6 +662,34 @@ describe('ResourcesService', () => {
       subject: 'Useful Pack',
       action_url: '/admin/resources?status=approved',
     });
+  });
+
+  it('keeps the original publication date when an already-published resource is re-approved', async () => {
+    const original = new Date('2026-06-01T08:00:00.000Z');
+    const { service, manager } = createService({
+      resourceRepository: {
+        findOne: jest.fn()
+          .mockResolvedValueOnce({
+            id: 33, title: 'Old Pack', status: 'pending', is_public: 1, file_size: 64,
+            published_at: original,
+            created_at: new Date('2026-06-01T07:00:00.000Z'),
+            updated_at: new Date('2026-09-01T00:00:00.000Z'),
+            user: { username: 'bob' }, category: null,
+          })
+          .mockResolvedValueOnce({
+            id: 33, title: 'Old Pack', status: 'approved', is_public: 1, file_size: 64,
+            published_at: original,
+            created_at: new Date('2026-06-01T07:00:00.000Z'),
+            updated_at: new Date('2026-10-08T00:00:00.000Z'),
+            user: { username: 'bob' }, category: null,
+          }),
+      },
+    });
+
+    await service.updateStatus(33, 'approved', { actorUsername: 'moderatorA' });
+
+    const [, , updateData] = manager.update.mock.calls[0];
+    expect(updateData).not.toHaveProperty('published_at');
   });
 
   it('rejects a map declared as an external resource before it can enter moderation', async () => {

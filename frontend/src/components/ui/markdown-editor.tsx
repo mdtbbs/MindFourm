@@ -34,7 +34,7 @@ export default function MarkdownEditor({
           <button
             type="button"
             onClick={() => setPreview(!preview)}
-            className="text-xs text-[var(--primary)] hover:underline"
+            className="text-xs text-[var(--primary-text)] hover:underline"
           >
             {preview ? '编辑' : '预览'}
           </button>

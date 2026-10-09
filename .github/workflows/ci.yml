@@ -58,6 +58,15 @@ jobs:
       - name: Run backend tests
         run: npm test -- --runInBand
 
+      - name: Run player editor frontend regressions
+        run: >-
+          npx jest --runInBand --roots frontend/src --runTestsByPath
+          frontend/src/components/forum/resources/workbench/schematic-light-editor.spec.ts
+          frontend/src/components/forum/resources/workbench/map-light-editor.spec.ts
+          frontend/src/components/forum/resources/workbench/resource-workbench-v2.spec.ts
+          frontend/src/lib/api/v1/resource-workbench-client.spec.ts
+          frontend/src/lib/api/editor-tools.spec.ts
+
       - name: Check committed Public V1 OpenAPI contract
         run: npm run openapi:check
 
@@ -128,6 +137,9 @@ jobs:
       - name: Production build
         working-directory: frontend
         run: npm run build
+
+      - name: Check first-load JavaScript budget
+        run: node scripts/check-frontend-budget.cjs
 
   renderer:
     name: Mindustry renderer compile and fixture tests

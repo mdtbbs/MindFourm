@@ -7,6 +7,7 @@ import { ResourcePreviewService } from './resource-preview.service';
 describe('ResourcePreviewService', () => {
   const resClient = () => ({
     isAvailable: true,
+    isReachable: true,
     uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-preview' }),
     createBinding: jest.fn().mockResolvedValue({ id: 'binding-preview' }),
     deleteBinding: jest.fn().mockResolvedValue(undefined),
@@ -25,6 +26,16 @@ describe('ResourcePreviewService', () => {
     global.fetch = originalFetch;
   });
 
+
+  it('preserves nested official connection and logic metadata without exposing extra top-level fields', () => {
+    const service = new ResourcePreviewService({} as any);
+    const blocks = [{ positions: [{ config: { type: 'points', value: [{ x: 2, y: -1 }] }, logic_links: [{ x: 4, y: 3, name: 'switch1' }] }] }];
+    const metadata = (service as any).safeMetadata({ blocks, width: 6, token: 'private', tile_layers: { terrain: Array.from({ length: 10001 }, (_, x) => ({ x, y: 0, floor: 'stone', overlay: 'air' })) } });
+    expect(metadata.blocks).toEqual(blocks);
+    expect(metadata.token).toBeUndefined();
+    expect(metadata.tile_layers.terrain).toHaveLength(10000);
+    expect(metadata.tile_layers_truncated).toBe(true);
+  });
 
   it('keeps version previews private until the resource and version are published and retains the PNG', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'mindfourm-version-preview-'));
@@ -59,7 +70,7 @@ describe('ResourcePreviewService', () => {
 
   it('rejects newly rendered drafts when RES is unavailable', async () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
-    const service = new ResourcePreviewService({} as any, undefined, undefined, undefined, { isAvailable: false } as any);
+    const service = new ResourcePreviewService({} as any, undefined, undefined, undefined, { isAvailable: false, isReachable: false } as any);
     await expect(service.createDraft(17, 'map', { file_size: 10 } as any)).rejects.toThrow('资源存储服务暂不可用');
   });
 
@@ -107,6 +118,7 @@ describe('ResourcePreviewService', () => {
       const update = jest.fn().mockResolvedValue(undefined);
       const client = {
         isAvailable: true,
+        isReachable: true,
         uploadServerGeneratedObject: jest.fn().mockResolvedValue({ public_id: 'res-preview' }),
         createBinding: jest.fn().mockResolvedValue({ id: 'binding-preview' }),
         buildPublicDownloadUrl: jest.fn().mockReturnValue('https://res.example/o/res-preview/preview.png'),
@@ -254,7 +266,7 @@ describe('ResourcePreviewService', () => {
     }) as any;
     const service = new ResourcePreviewService({ update: jest.fn() } as any);
 
-    await expect(service.analyzeEditorFile('schematic', '../local.msch', source)).resolves.toMatchObject({
+    await expect(service.analyzeLocalEditorFile('schematic', '../local.msch', source)).resolves.toMatchObject({
       resource_kind: 'schematic', file_name: 'local.msch', parser_version: 'v160.5',
       sha256: crypto.createHash('sha256').update(source).digest('hex'),
       renderer_metadata: { name: 'Local schematic', width: 8, height: 8, unknown_content: ['mod-block'], block_positions: [{ x: 1, y: 2, block: 'router', rotation: 0 }] },

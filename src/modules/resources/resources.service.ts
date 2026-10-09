@@ -658,6 +658,9 @@ export class ResourcesService {
       category_id: categoryId,
       is_public: this.toTinyInt((dto as any).is_public, 1),
       status: provenance.directUploadDraft ? 'draft' : requiresModeration ? RESOURCE_STATUS_PENDING : RESOURCE_STATUS_APPROVED,
+      // A submission that skips moderation is published on the spot; a pending
+      // one is stamped later by updateStatus so the date matches the real one.
+      published_at: !provenance.directUploadDraft && !requiresModeration ? new Date() : null,
       ...(provenance.uploadSessionId ? { game_content_upload_session_id: provenance.uploadSessionId } : {}),
       ...(provenance.rendererDraft ? {
         renderer_status: 'ready' as const,
@@ -1454,7 +1457,7 @@ export class ResourcesService {
             if (!Number.isFinite(cursorScore) || !Number.isSafeInteger(idValue)) throw new Error('invalid cursor');
             qb.andWhere(`(${trendScore} < :cursorScore OR (${trendScore} = :cursorScore AND resource.id < :idValue))`, { cursorScore, idValue });
           } else {
-            const cursorValue = ['created_at', 'updated_at'].includes(sort) ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
+            const cursorValue = ['created_at', 'updated_at', 'published_at'].includes(sort) ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
             qb.andWhere(
               `(resource.${sort} ${direction === 'ASC' ? '>' : '<'} :cursorValue OR (resource.${sort} = :cursorValue AND resource.id ${direction === 'ASC' ? '>' : '<'} :idValue))`,
               { cursorValue, idValue },
@@ -1492,9 +1495,9 @@ export class ResourcesService {
         const lastResource = resources[resources.length - 1];
         const cursorValue = options.trendingOnly
           ? String((lastResource as Resource & { trending_score: number }).trending_score)
-          : ['created_at', 'updated_at'].includes(sort)
-            ? (lastResource[sort] as Date).getTime().toString()
-            : lastResource[sort].toString();
+          : ['created_at', 'updated_at', 'published_at'].includes(sort)
+            ? ((lastResource[sort] as Date | null)?.getTime().toString() ?? '')
+            : String(lastResource[sort] ?? '');
         nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
       }
 
@@ -1529,7 +1532,7 @@ export class ResourcesService {
       try {
         const decoded = decodeCursor(cursor);
         const cursorValue =
-          ['created_at', 'updated_at'].includes(sort) ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
+          ['created_at', 'updated_at', 'published_at'].includes(sort) ? new Date(parseInt(decoded[0])) : parseInt(decoded[0]);
         const idValue = parseInt(decoded[1]);
 
         cursorCondition = [
@@ -1562,9 +1565,9 @@ export class ResourcesService {
     if (hasMore && resources.length > 0) {
       const lastResource = resources[resources.length - 1];
       const cursorValue =
-        ['created_at', 'updated_at'].includes(sort)
-          ? (lastResource[sort] as Date).getTime().toString()
-          : lastResource[sort].toString();
+        ['created_at', 'updated_at', 'published_at'].includes(sort)
+          ? ((lastResource[sort] as Date | null)?.getTime().toString() ?? '')
+          : String(lastResource[sort] ?? '');
       nextCursor = encodeCursor(cursorValue, lastResource.id.toString());
     }
 
@@ -1693,6 +1696,14 @@ export class ResourcesService {
       }
     }
     return resource;
+  }
+
+  async resolveDetailId(identifier: string): Promise<number> {
+    if (/^[1-9]\d*$/.test(identifier) && Number.isSafeInteger(Number(identifier))) return Number(identifier);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(identifier)) throw new BadRequestException('资源编号无效');
+    const resource = await this.resourceRepository.findOne({ where: { public_id: identifier }, select: ['id'] });
+    if (!resource) throw new NotFoundException('资源不存在');
+    return resource.id;
   }
 
   async getById(id: number, viewer?: { id: number; role: string }): Promise<any> {
@@ -2610,6 +2621,12 @@ export class ResourcesService {
         updateData.reject_reason = options.rejectReason || null;
       } else if (status === RESOURCE_STATUS_APPROVED) {
         updateData.reject_reason = null;
+        // First approval is the publication moment. Re-approving after a
+        // moderation round-trip keeps the original date rather than quietly
+        // re-dating an old resource.
+        if (!existingResource.published_at && Number(existingResource.is_public) === 1) {
+          updateData.published_at = new Date();
+        }
       }
       if (status !== RESOURCE_STATUS_REJECTED && existingResource.content_hash) {
         const conflicting = await this.resourceRepository.createQueryBuilder('resource')

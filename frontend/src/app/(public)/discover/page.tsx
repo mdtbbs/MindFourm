@@ -24,7 +24,7 @@ export default async function DiscoverPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-8 border-b border-[var(--border)] pb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-text)]">
           {siteProfile.branding.siteName}
         </p>
         <h1 className="mt-2 text-3xl font-semibold text-[var(--text)]">{t('discoverPage.title')}</h1>
@@ -40,7 +40,7 @@ export default async function DiscoverPage() {
             className="group flex items-center justify-between border border-[var(--border)] bg-[var(--bg-card)] p-5 transition hover:border-[var(--primary)]"
           >
             <span className="flex items-center gap-4">
-              <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--primary)]/10 text-[var(--primary)]">
+              <span className="flex h-10 w-10 items-center justify-center rounded-md bg-[var(--primary)]/10 text-[var(--primary-text)]">
                 <Icon className="h-5 w-5" />
               </span>
               <span>
@@ -52,7 +52,7 @@ export default async function DiscoverPage() {
                 </span>
               </span>
             </span>
-            <ArrowRight className="h-4 w-4 text-[var(--text-muted)] transition group-hover:translate-x-1 group-hover:text-[var(--primary)]" />
+            <ArrowRight className="h-4 w-4 text-[var(--text-muted)] transition group-hover:translate-x-1 group-hover:text-[var(--primary-text)]" />
           </Link>
         ))}
       </div>

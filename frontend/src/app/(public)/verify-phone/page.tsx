@@ -77,10 +77,10 @@ function VerifyPhoneContent() {
             你的账号已经完成手机号安全验证，无需再次操作。
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm">
-            <Link href="/" className="font-medium text-[var(--primary)]">
+            <Link href="/" className="font-medium text-[var(--primary-text)]">
               返回首页
             </Link>
-            <Link href="/settings" className="font-medium text-[var(--primary)]">
+            <Link href="/settings" className="font-medium text-[var(--primary-text)]">
               账号设置
             </Link>
           </div>
@@ -92,7 +92,7 @@ function VerifyPhoneContent() {
   return (
     <main className="mx-auto max-w-5xl px-4 py-10 sm:py-14">
       <header className="max-w-3xl">
-        <p className="text-sm font-semibold text-[var(--primary)]">
+        <p className="text-sm font-semibold text-[var(--primary-text)]">
           MDTBBS · 账号安全
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight">
@@ -141,7 +141,7 @@ function VerifyPhoneContent() {
                 关于个人信息的保存、查询、更正、删除及账号注销等事项，请查看
                 <Link
                   href="/privacy"
-                  className="mx-1 font-medium text-[var(--primary)] underline underline-offset-2"
+                  className="mx-1 font-medium text-[var(--primary-text)] underline underline-offset-2"
                 >
                   《隐私政策》
                 </Link>
@@ -161,7 +161,7 @@ function VerifyPhoneContent() {
                     href={item.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sm font-semibold text-[var(--primary)] underline underline-offset-2"
+                    className="text-sm font-semibold text-[var(--primary-text)] underline underline-offset-2"
                   >
                     {item.title}
                   </a>

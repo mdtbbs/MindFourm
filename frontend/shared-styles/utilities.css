@@ -33,7 +33,7 @@
 .gap-4 { gap: 1rem; }
 
 /* ===== 文字 ===== */
-.text-primary { color: var(--primary); }
+.text-primary { color: var(--primary-text); }
 .text-secondary { color: var(--text-secondary); }
 .text-muted { color: var(--text-muted); }
 .text-success { color: var(--success); }

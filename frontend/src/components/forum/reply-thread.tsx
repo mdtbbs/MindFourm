@@ -132,7 +132,7 @@ function ReplyBranch({ node, postId, canAcceptAnswer, bestReplyId, postOwnerId, 
             bestReplyId={bestReplyId} postOwnerId={postOwnerId} depth={depth + 1} />
           {hasMore && (
             <button type="button" disabled={loading} onClick={loadMore}
-              className="mt-3 text-sm text-[var(--primary)] hover:underline disabled:opacity-50">
+              className="mt-3 text-sm text-[var(--primary-text)] hover:underline disabled:opacity-50">
               {loading ? t('common.loading') : t('replySection.expandChildren', { count: node.reply.child_count ?? 0 })}
             </button>
           )}

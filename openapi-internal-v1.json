@@ -705,8 +705,8 @@
       "put": {
         "operationId": "GameSavesController_uploadFile",
         "x-rate-limit": {
-          "limit": 20,
-          "window_seconds": 300,
+          "limit": 60,
+          "window_seconds": 600,
           "basis": "authenticated_user_or_session_or_ip"
         },
         "x-required-scopes": [
@@ -778,7 +778,7 @@
           {
             "name": "Idempotency-Key",
             "in": "header",
-            "description": "按账号重放同一提交操作，保留 24 小時。",
+            "description": "按账号重放同一提交操作，保留 24 小时。",
             "required": false,
             "schema": {
               "type": "string"
@@ -3541,6 +3541,37 @@
             "schema": {
               "format": "uuid",
               "example": "4ab5d671-8af6-4d16-8238-7b6fd4b0a240",
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque cursor returned by the previous page.",
+            "schema": {
+              "maxLength": 1024,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "version_public_id",
+            "required": false,
+            "in": "query",
+            "description": "Select a published version by its public UUID; omitted selects the recommended/latest published version.",
+            "schema": {
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -11528,11 +11559,11 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         },
-        "x-required-scopes": [
-          "resource.upload"
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
         ],
         "summary": "安全导出编辑后的蓝图副本",
-        "description": "需要 resource.upload，并由服务端限制为该资源 Owner/Maintainer。可对已发布蓝图执行旋转、水平镜像、删除、移动、放置方块，以及通过按 Mindustry v160.5 配置类型区分的安全配置编辑。只读取托管版本并返回新文件，不修改原版本；未知或不支持安全写回的配置/内容会拒绝导出。",
+        "description": "公开资源允许任何用户编辑和导出副本；私有资源仍需 Owner/Maintainer 权限。原资源发布权限保持不变。可对已发布蓝图执行旋转、水平镜像、删除、移动、放置方块，以及通过按 Mindustry v160.5 配置类型区分的安全配置编辑。只读取托管版本并返回新文件，不修改原版本；未知或不支持安全写回的配置/内容会拒绝导出。",
         "parameters": [
           {
             "name": "id",
@@ -11580,11 +11611,8 @@
           "400": {
             "description": "操作无效、文件无法解析或含有编辑器不支持安全保留的内容。"
           },
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
           "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           },
           "404": {
             "description": "资源或已发布版本不存在。"
@@ -11594,6 +11622,7 @@
           "v1-resources-v2-management"
         ],
         "security": [
+          {},
           {
             "MindAuthBearer": []
           }
@@ -11608,11 +11637,11 @@
           "window_seconds": 60,
           "basis": "authenticated_user_or_session_or_ip"
         },
-        "x-required-scopes": [
-          "resource.upload"
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
         ],
         "summary": "安全导出编辑后的地图副本",
-        "description": "需要 resource.upload，并由服务端限制为该资源 Owner/Maintainer。可编辑已发布地图的地形、类型化规则字段、波次组和核心/出生点/建筑对象（新增、删除、移动；核心/建筑可改队伍）。多格 footprint、边界、碰撞和对象内容由官方 MapIO 写入及重读验证；未知或不安全对象状态会拒绝导出。未知规则与波次字段保留。",
+        "description": "公开资源允许任何用户编辑和导出副本；私有资源仍需 Owner/Maintainer 权限。原资源发布权限保持不变。可编辑已发布地图的地形、类型化规则字段、波次组和核心/出生点/建筑对象（新增、删除、移动；核心/建筑可改队伍）。多格 footprint、边界、碰撞和对象内容由官方 MapIO 写入及重读验证；未知或不安全对象状态会拒绝导出。未知规则与波次字段保留。",
         "parameters": [
           {
             "name": "id",
@@ -11660,11 +11689,8 @@
           "400": {
             "description": "操作无效、文件无法解析或含有编辑器不支持安全保留的内容。"
           },
-          "401": {
-            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
-          },
           "403": {
-            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
           },
           "404": {
             "description": "资源或已发布版本不存在。"
@@ -11674,6 +11700,220 @@
           "v1-resources-v2-management"
         ],
         "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/{id}/versions/{versionId}/editor-data": {
+      "get": {
+        "operationId": "readResourceEditorData",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取已发布版本的官方编辑数据",
+        "description": "历史版本缺少结构化索引时，校验源文件并按官方 reader/writer 重新解析；不修改原资源或回填数据库。公开资源允许编辑副本。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "版本对应的官方元数据和有界方块列表。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true
+                    },
+                    "parser_version": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "blocks": {
+                      "type": "array",
+                      "maxItems": 10000,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "internal_name": {
+                            "type": "string"
+                          },
+                          "display_name": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer"
+                          },
+                          "positions": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "文件无法安全解析或资源类型不支持。"
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不可见或已发布版本不存在。"
+          },
+          "503": {
+            "description": "官方解析器或资源存储未就绪。"
+          }
+        },
+        "tags": [
+          "v1-resources-v2-management"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/resources/{id}/versions/{versionId}/map-editor/region": {
+      "get": {
+        "operationId": "readResourceMapEditRegion",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取已发布地图的有界编辑分区",
+        "description": "只读取 128×128 范围；公开资源可读，私有资源保留管理权限检查。源文件校验与官方 MapIO 加载不变。",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "versionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "x",
+            "required": true,
+            "in": "query",
+            "description": "分区左上角 X 坐标，非负整数。",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "y",
+            "required": true,
+            "in": "query",
+            "description": "分区左上角 Y 坐标，非负整数。",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "最多 128×128 的完整官方地图分区。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terrain": {
+                      "type": "array",
+                      "maxItems": 16384,
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "x": {
+                            "type": "integer"
+                          },
+                          "y": {
+                            "type": "integer"
+                          },
+                          "floor": {
+                            "type": "string"
+                          },
+                          "overlay": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "坐标越界或文件无法安全解析。"
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "404": {
+            "description": "资源不可见或已发布版本不存在。"
+          },
+          "503": {
+            "description": "官方解析器或资源存储未就绪。"
+          }
+        },
+        "tags": [
+          "v1-resources-v2-management"
+        ],
+        "security": [
+          {},
           {
             "MindAuthBearer": []
           }
@@ -24433,7 +24673,7 @@
   "info": {
     "title": "MDTBBS Internal V1 API",
     "description": "Internal development contract. This specification may contain privileged operations and must not be exposed from the public developer portal. Third-party clients use the separately filtered Public Client V1 contract. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.3.0",
+    "version": "1.5.0",
     "contact": {}
   },
   "tags": [],
@@ -27898,6 +28138,25 @@
             "minimum": 0,
             "maximum": 3,
             "default": 0
+          },
+          "copy_from_x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127,
+            "description": "Copy config from this original source anchor; both coordinates required."
+          },
+          "copy_from_y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "config": {
+            "type": "object",
+            "description": "Same strict typed configuration shape as config_edits; verified by the official decoder."
+          },
+          "logic_source": {
+            "type": "string",
+            "maxLength": 32768
           }
         },
         "required": [
@@ -29355,7 +29614,14 @@
           "updated_at": {
             "type": "string",
             "format": "date-time",
-            "nullable": true
+            "nullable": true,
+            "description": "Operational write timestamp; moved by unrelated writes such as view and download counting. Do not present this as the publication date."
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the resource first became publicly visible. This is the author-facing date."
           }
         },
         "required": [
@@ -29387,7 +29653,8 @@
           "preview_url",
           "user",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "published_at"
         ]
       },
       "ResourceDiscoveryItemDto": {

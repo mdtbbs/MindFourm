@@ -90,7 +90,7 @@ export class EditorToolsController {
       if (kindName !== kind) throw new BadRequestException('文件类型与当前编辑器不匹配');
       await this.assertEditorEnabled(kind);
       const bytes = await readFile(file.path);
-      return await this.previews.analyzeEditorFile(kind, file.originalname, bytes);
+      return await this.previews.analyzeLocalEditorFile(kind, file.originalname, bytes);
     } finally {
       await cleanupUploadedFile(file);
     }

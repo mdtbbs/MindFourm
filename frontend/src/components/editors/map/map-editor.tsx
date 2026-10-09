@@ -85,7 +85,7 @@ export function MapEditor({ analysis, catalog, document, onChange, mode }: Props
   const placeObject = (type: MapEditorObject['object_type'], x: number, y: number) => {
     if (objectsTruncated) { setError('对象目录被截断，当前地图不能安全新增建筑。'); return; }
     const block = catalog.blocks.find((item) => item.internal_name === blockName);
-    if (!block || (type === 'core' && !block.core) || (type === 'spawn' && !block.spawn) || (type === 'building' && !block.placeable)) { setError('请先从方块库选择对应内容。'); return; }
+    if (!block || (type === 'core' && !block.core) || (type === 'spawn' && !block.spawn) || (type === 'building' && (!block.placeable || block.core || block.spawn))) { setError('请先从方块库选择对应内容。'); return; }
     const candidate: MapEditorObject = { id: `added:${crypto.randomUUID()}`, object_type: type, original_x: null, original_y: null, x, y, name: block.internal_name, team: catalog.teams.find((entry) => entry.internal_name === 'sharded')?.internal_name || catalog.teams[0]?.internal_name || 'sharded', rotation: 0, size: block.size || 1, size_offset: block.size_offset ?? -Math.floor(((block.size || 1) - 1) / 2), added: true, editable: true, movable: true, deletable: true, team_editable: type !== 'spawn', rotatable: block.rotatable === true, reason: null };
     const reason = validateObjectPosition(candidate, width, height, liveObjects);
     if (reason) { setError(reason); return; }

@@ -8,6 +8,7 @@ import { ContentPicker } from '../shared/content-picker';
 import type { WaveGroup } from '@/lib/editors/editor-model';
 
 const newId = () => `wave:${crypto.randomUUID()}`;
+const MAX_WAVE_GROUPS = 1_000;
 const defaultGroup = (unit: string, team: number): WaveGroup => ({ __editor_id: newId(), type: unit, begin: 1, end: 1, spacing: 1, max: 0, scaling: 1, shields: 0, shieldScaling: 0, amount: 1, spawn: -1, effect: 'none', payloads: [], items: { item: 'copper', amount: 0 }, team });
 
 export function WaveGroupEditor({ groups, catalog, onChange }: { groups: WaveGroup[]; catalog: EditorContentCatalog; onChange: (next: WaveGroup[]) => void }) {
@@ -17,7 +18,7 @@ export function WaveGroupEditor({ groups, catalog, onChange }: { groups: WaveGro
   const [error, setError] = useState('');
   const update = (index: number, patch: Record<string, unknown>) => onChange(groups.map((group, item) => item === index ? { ...group, ...patch } as WaveGroup : group));
   const add = (group?: WaveGroup) => {
-    if (groups.length >= 5_000) { setError('波次组达到安全上限。'); return; }
+    if (groups.length >= MAX_WAVE_GROUPS) { setError(`波次组最多 ${MAX_WAVE_GROUPS} 组。`); return; }
     const next = group ? { ...structuredClone(group), __editor_id: newId() } : defaultGroup(unitToAdd || catalog.units[0]?.internal_name || 'dagger', catalog.teams.find((item) => item.internal_name === 'crux')?.id ?? catalog.teams[0]?.id ?? 0);
     onChange([...groups, next]); setError('');
   };
@@ -36,7 +37,7 @@ export function WaveGroupEditor({ groups, catalog, onChange }: { groups: WaveGro
   }} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base text-[var(--text)] sm:text-sm" /></label>;
 
   return <section className="space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3"><div><h3 className="text-sm font-semibold">敌人波次</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{groups.length} 个波次组。重复编辑会合并为最终差异。</p></div><div className="flex min-w-0 gap-2">{chooseFrom(unitEntries, unitToAdd, setUnitToAdd, '新增波次单位')}<button type="button" onClick={() => add()} className="inline-flex min-h-11 shrink-0 items-center gap-1 bg-[var(--primary)] px-3 text-sm text-white"><Plus className="h-4 w-4" />添加</button></div></div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3"><div><h3 className="text-sm font-semibold">敌人波次</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{groups.length} 个波次组。导出差异最多 1,000 项。</p></div><div className="flex min-w-0 gap-2">{chooseFrom(unitEntries, unitToAdd, setUnitToAdd, '新增波次单位')}<button type="button" disabled={groups.length >= MAX_WAVE_GROUPS} onClick={() => add()} className="inline-flex min-h-11 shrink-0 items-center gap-1 bg-[var(--primary)] px-3 text-sm text-white disabled:opacity-40"><Plus className="h-4 w-4" />添加</button></div></div>
     {!groups.length ? <div className="border border-dashed border-[var(--border)] p-6 text-center text-sm text-[var(--text-muted)]">此地图还没有敌人波次，可添加第一组。</div> : null}
     <div className="space-y-3">{groups.map((group, index) => {
       const unit = unitEntries.find((entry) => entry.internal_name === group.type);

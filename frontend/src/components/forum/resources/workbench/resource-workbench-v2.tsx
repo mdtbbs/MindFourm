@@ -24,16 +24,20 @@ import {
 } from '@/lib/api/v1/resources';
 import { V1ApiError } from '@/lib/api/v1/transport';
 import { useI18n } from '@/i18n/provider';
+import { playerLabel } from './player-labels';
 import ResourcePreviewViewer from './resource-preview-viewer';
 import ResourceProfileEditor from './resource-profile-editor';
 import ResourceReleaseForm from './resource-release-form';
 import ResourceCommunityInteractions from './resource-community-interactions';
 import ResourceKindDataWorkspace from './resource-kind-data-workspace';
+import SchematicLightEditor from './schematic-light-editor';
+import MapLightEditor from './map-light-editor';
 
-type SectionKey = 'overview' | 'publish' | 'compatibility' | 'analysis' | 'community' | 'settings';
+type SectionKey = 'editor' | 'overview' | 'publish' | 'compatibility' | 'analysis' | 'community' | 'settings';
 type VersionTab = 'summary' | 'files' | 'compatibility' | 'diff';
 
 const SECTION_ICONS = {
+  editor: Boxes,
   overview: Package,
   publish: FileArchive,
   compatibility: Shield,
@@ -74,7 +78,7 @@ function SummaryRows({ value }: { value: Record<string, unknown> | null }) {
   if (!value) return null;
   const rows = Object.entries(value).filter(([, item]) => displayDetailsValue(item) !== '');
   if (rows.length === 0) return null;
-  return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(item)}</dd></div>)}</dl>;
+  return <dl className="grid gap-2 sm:grid-cols-2">{rows.map(([key, item]) => <div key={key} className="min-w-0 rounded-lg bg-[var(--bg-elevated)] p-3"><dt className="text-xs text-[var(--text-muted)]">{({ width: '宽度', height: '高度', block_count: '方块数量', min_supported_build: '最低游戏版本', parser_version: '解析器版本', game_mode: '游戏模式', planet: '星球' } as Record<string, string>)[key] || key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(item)}</dd></div>)}</dl>;
 }
 
 function FoldCard({ title, children, open = false }: { title: string; children: React.ReactNode; open?: boolean }) {
@@ -104,22 +108,24 @@ function formatSize(value: number | null, fallback: string): string {
 }
 
 function FileRow({ file, labels }: { file: ResourceWorkbenchV2File; labels: Record<string, string> }) {
+  const { locale } = useI18n();
   const name = file.display_name || file.original_filename || file.public_id;
   return <li key={file.public_id} className="flex min-w-0 flex-col gap-3 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between">
     <div className="flex min-w-0 items-start gap-3">
-      <FileArchive className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary)]" />
+      <FileArchive className="mt-0.5 h-4 w-4 shrink-0 text-[var(--primary-text)]" />
       <div className="min-w-0">
         <p className="break-all text-sm font-medium text-[var(--text)]">{name}</p>
-        <p className="mt-1 break-words text-xs text-[var(--text-muted)]">{file.role} · {file.delivery_mode} · {formatSize(file.size_bytes, labels.unknown)} · {file.integrity_status}</p>
+        <p className="mt-1 break-words text-xs text-[var(--text-muted)]">{playerLabel(file.role, locale)} · {playerLabel(file.delivery_mode, locale)} · {formatSize(file.size_bytes, labels.unknown)} · {playerLabel(file.integrity_status, locale)}</p>
       </div>
     </div>
     {file.downloadable && file.download_url
-      ? <a href={file.download_url} className="inline-flex min-h-10 shrink-0 items-center justify-center rounded border border-[var(--border)] px-3 text-sm text-[var(--primary)] hover:bg-[var(--primary-soft)]">{labels.download}</a>
+      ? <a href={file.download_url} className="inline-flex min-h-10 shrink-0 items-center justify-center rounded border border-[var(--border)] px-3 text-sm text-[var(--primary-text)] hover:bg-[var(--primary-soft)]">{labels.download}</a>
       : <span className="inline-flex min-h-10 shrink-0 items-center justify-center rounded border border-[var(--border)] px-3 text-sm text-[var(--text-muted)]">{labels.unavailable}</span>}
   </li>;
 }
 
 function AnalysisPanel({ analysis, loading, error, labels }: { analysis: ResourceWorkbenchV2Analysis | null; loading: boolean; error: string; labels: Record<string, string> }) {
+  const { locale } = useI18n();
   if (loading) return <div role="status" className="rounded-lg bg-[var(--bg-elevated)] p-4 text-sm text-[var(--text-muted)]">{labels.analysisLoading}</div>;
   if (error) return <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 text-sm text-red-700 dark:text-red-300">{labels.analysisLoadFailed}: {error}</div>;
   if (!analysis) return <EmptyState>{labels.analysisEmpty}</EmptyState>;
@@ -130,8 +136,8 @@ function AnalysisPanel({ analysis, loading, error, labels }: { analysis: Resourc
   };
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{analysis.kind}</span>
-      <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{analysis.status}</span>
+      <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{playerLabel(analysis.kind, locale)}</span>
+      <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{playerLabel(analysis.status, locale)}</span>
       {analysis.parser_version && <span className="text-xs text-[var(--text-muted)]">{labels.parser}: {analysis.parser_version}</span>}
     </div>
     <SummaryRows value={analysis.summary} />
@@ -272,8 +278,8 @@ function ModDetails({ data, analysis, publicId, versionPublicId, parserVersion, 
         {indexLoading ? <div role="status" className="text-sm text-[var(--text-muted)]">{labels.indexLoading}</div>
           : indexError ? <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700 dark:text-red-300">{labels.indexLoadFailed}: {indexError}</div>
             : <>
-              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.indexedContentCount}</h5>{contents.length ? <ul className="mt-2 space-y-2">{contents.map((item) => <li key={item.public_id} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[var(--bg-card)] px-2 py-1 text-[11px]">{item.content_type}</span><span className="break-all text-sm font-medium text-[var(--text)]">{item.display_name || item.internal_name}</span>{item.display_name && item.display_name !== item.internal_name && <code className="break-all text-xs text-[var(--text-muted)]">{item.internal_name}</code>}</div>{item.description && <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--text-secondary)]">{item.description}</p>}</li>)}</ul> : <EmptyState>{labels.noIndexedContent}</EmptyState>}{contentPagination.has_more && <button type="button" disabled={loadingMore} onClick={() => void loadMoreContent()} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--primary)] disabled:opacity-60">{loadingMore ? labels.loadingMore : labels.loadMoreContent}</button>}</div>
-              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.localizationCoverage}</h5>{localizations.length ? <ul className="mt-2 grid gap-2 sm:grid-cols-2">{localizations.map((item) => <li key={item.locale} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm text-[var(--text)]">{item.locale}</span><span className="text-sm font-semibold tabular-nums text-[var(--text)]">{item.percentage}%</span></div><p className="mt-1 text-xs text-[var(--text-muted)]">{item.translated_count} / {item.total_count} {labels.translatedKeys}</p>{item.missing_keys.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-xs text-[var(--primary)]">{labels.missingKeys} ({item.missing_keys.length})</summary><ul className="mt-2 space-y-1">{item.missing_keys.slice(0, 12).map((key) => <li key={key} className="break-all font-mono text-[11px] text-[var(--text-muted)]">{key}</li>)}</ul></details>}</li>)}</ul> : <EmptyState>{labels.noLocalizationCoverage}</EmptyState>}</div>
+              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.indexedContentCount}</h5>{contents.length ? <ul className="mt-2 space-y-2">{contents.map((item) => <li key={item.public_id} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[var(--bg-card)] px-2 py-1 text-[11px]">{item.content_type}</span><span className="break-all text-sm font-medium text-[var(--text)]">{item.display_name || item.internal_name}</span>{item.display_name && item.display_name !== item.internal_name && <code className="break-all text-xs text-[var(--text-muted)]">{item.internal_name}</code>}</div>{item.description && <p className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--text-secondary)]">{item.description}</p>}</li>)}</ul> : <EmptyState>{labels.noIndexedContent}</EmptyState>}{contentPagination.has_more && <button type="button" disabled={loadingMore} onClick={() => void loadMoreContent()} className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-[var(--border)] px-3 text-sm text-[var(--primary-text)] disabled:opacity-60">{loadingMore ? labels.loadingMore : labels.loadMoreContent}</button>}</div>
+              <div><h5 className="text-xs font-semibold text-[var(--text-muted)]">{labels.localizationCoverage}</h5>{localizations.length ? <ul className="mt-2 grid gap-2 sm:grid-cols-2">{localizations.map((item) => <li key={item.locale} className="rounded-lg bg-[var(--bg-elevated)] p-3"><div className="flex items-center justify-between gap-2"><span className="font-mono text-sm text-[var(--text)]">{item.locale}</span><span className="text-sm font-semibold tabular-nums text-[var(--text)]">{item.percentage}%</span></div><p className="mt-1 text-xs text-[var(--text-muted)]">{item.translated_count} / {item.total_count} {labels.translatedKeys}</p>{item.missing_keys.length > 0 && <details className="mt-2"><summary className="cursor-pointer text-xs text-[var(--primary-text)]">{labels.missingKeys} ({item.missing_keys.length})</summary><ul className="mt-2 space-y-1">{item.missing_keys.slice(0, 12).map((key) => <li key={key} className="break-all font-mono text-[11px] text-[var(--text-muted)]">{key}</li>)}</ul></details>}</li>)}</ul> : <EmptyState>{labels.noLocalizationCoverage}</EmptyState>}</div>
             </>}
       </div>
     </div>}
@@ -282,7 +288,7 @@ function ModDetails({ data, analysis, publicId, versionPublicId, parserVersion, 
 
 function ResourceFacts({ workbench, analysis, versionPublicId, labels }: { workbench: ResourceWorkbenchV2Response; analysis: ResourceWorkbenchV2Analysis | null; versionPublicId: string | null; labels: Record<string, string> }) {
   const { resource } = workbench;
-  const metadata = (resource.renderer?.public_metadata ?? resource.metadata) as V1ResourceMetadata;
+  const metadata = resource.metadata;
   const map = metadata?.map;
   const schematic = metadata?.schematic;
   const mod = metadata?.mod;
@@ -296,7 +302,7 @@ function ResourceFacts({ workbench, analysis, versionPublicId, labels }: { workb
   return <FoldCard title={labels.parserDetails} open>
     <div className="space-y-4">
       {resource.renderer?.parser_version && <p className="text-xs text-[var(--text-muted)]">{labels.parser}: {resource.renderer.parser_version}</p>}
-      <dl className="grid gap-3 sm:grid-cols-2">{entries.map(([key, value]) => <div key={key}><dt className="text-xs text-[var(--text-muted)]">{key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(value)}</dd></div>)}</dl>
+      <dl className="grid gap-3 sm:grid-cols-2">{entries.map(([key, value]) => <div key={key}><dt className="text-xs text-[var(--text-muted)]">{({ width: '宽度', height: '高度', block_count: '方块数量', min_supported_build: '最低游戏版本', parser_version: '解析器版本', game_mode: '游戏模式', planet: '星球' } as Record<string, string>)[key] || key.replaceAll('_', ' ')}</dt><dd className="mt-1 break-words text-sm text-[var(--text)]">{displayDetailsValue(value)}</dd></div>)}</dl>
       {arrays.map(([key, value]) => <div key={key}><h4 className="text-xs font-semibold text-[var(--text-muted)]">{key}</h4><div className="mt-2 flex flex-wrap gap-1.5">{(value as unknown[]).map((item, index) => {
         const label = displayDetailsValue(item);
         return label ? <span key={`${label}:${index}`} className="rounded bg-[var(--bg-elevated)] px-2 py-1 text-xs">{label}</span> : null;
@@ -408,11 +414,11 @@ function VersionWorkspace({ version, locale, kind, publicId, versions, labels }:
   ];
   return <div className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h3 className="text-lg font-semibold text-[var(--text)]">{version.display_version || version.version}</h3><p className="mt-1 text-sm text-[var(--text-muted)]">{version.version_mode} · {version.release_channel} · {version.status}</p></div>
-      {version.recommended && <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary-soft)] px-2.5 py-1 text-xs font-medium text-[var(--primary)]"><Check className="h-3.5 w-3.5" />{labels.recommended}</span>}
+      <div><h3 className="text-lg font-semibold text-[var(--text)]">{version.display_version || version.version}</h3><p className="mt-1 text-sm text-[var(--text-muted)]">{playerLabel(version.version_mode, locale)} · {playerLabel(version.release_channel, locale)} · {playerLabel(version.status, locale)}</p></div>
+      {version.recommended && <span className="inline-flex items-center gap-1 rounded-full bg-[var(--primary-soft)] px-2.5 py-1 text-xs font-medium text-[var(--primary-text)]"><Check className="h-3.5 w-3.5" />{labels.recommended}</span>}
     </div>
     <div className="flex flex-wrap gap-2 border-b border-[var(--border)]" role="tablist" aria-label={labels.versionTabs}>
-      {tabs.map(({ key, label }) => <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`min-h-10 border-b-2 px-3 text-sm ${tab === key ? 'border-[var(--primary)] font-semibold text-[var(--primary)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{label}</button>)}
+      {tabs.map(({ key, label }) => <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)} className={`min-h-10 border-b-2 px-3 text-sm ${tab === key ? 'border-[var(--primary)] font-semibold text-[var(--primary-text)]' : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text)]'}`}>{label}</button>)}
     </div>
     {tab === 'summary' && <div className="grid gap-3 sm:grid-cols-2">
       <div className="rounded-lg bg-[var(--bg-elevated)] p-3"><p className="text-xs text-[var(--text-muted)]">{labels.revision}</p><p className="mt-1 text-sm text-[var(--text)]">{version.revision ?? labels.unknown}</p></div>
@@ -429,13 +435,13 @@ function VersionWorkspace({ version, locale, kind, publicId, versions, labels }:
 function CompatibilityPanel({ version, labels }: { version: ResourceWorkbenchV2Version; labels: Record<string, string> }) {
   return <div className="space-y-4">
     {version.compatibility.length ? <ul className="grid gap-2 sm:grid-cols-2">{version.compatibility.map((item, index) => <li key={`${item.runtime}:${item.game_version}:${index}`} className="rounded-lg border border-[var(--border)] p-3">
-      <p className="font-medium text-[var(--text)]">{item.runtime}{item.game_version ? ` · ${item.game_version}` : ''}{item.status ? ` · ${item.status}` : ''}</p>
+      <p className="font-medium text-[var(--text)]">{item.runtime}{item.game_version ? ` · ${item.game_version}` : ''}{item.status ? ` · ${({ verified: '已验证', working: '可用', partial: '部分可用', pending: '待审核', unknown: '未确认', cannot_start: '无法启动' } as Record<string, string>)[item.status] || item.status}` : ''}</p>
       <p className="mt-1 text-sm text-[var(--text-muted)]">{item.min_game_version || labels.unknown} – {item.max_game_version || labels.unknown}{item.channel ? ` · ${item.channel}` : ''}{item.platform ? ` · ${item.platform}` : ''}</p>
       {item.source && <p className="mt-1 text-xs text-[var(--text-muted)]">{labels.source}: {item.source}{item.confidence ? ` · ${item.confidence}` : ''}</p>}
       {item.notes && <p className="mt-1 text-xs text-[var(--text-muted)]">{item.notes}</p>}
     </li>)}</ul> : <EmptyState>{labels.noCompatibility}</EmptyState>}
     <div><h4 className="mb-2 text-sm font-semibold text-[var(--text)]">{labels.dependencies}</h4>{version.dependencies.length ? <ul className="space-y-2">{version.dependencies.map((item, index) => <li key={`${item.dependency_type}:${item.resource_public_id || item.external_identifier}:${index}`} className="rounded-lg border border-[var(--border)] p-3 text-sm">
-      <span className="font-medium text-[var(--text)]">{item.resource_public_id ? <Link className="text-[var(--primary)] hover:underline" href={`/resources/${encodeURIComponent(item.resource_public_id)}/workbench`}>{item.resource_public_id}</Link> : item.external_identifier || item.upstream_url || labels.unknown}</span>
+      <span className="font-medium text-[var(--text)]">{item.resource_public_id ? <Link className="text-[var(--primary-text)] hover:underline" href={`/resources/${encodeURIComponent(item.resource_public_id)}/workbench`}>{item.resource_public_id}</Link> : item.external_identifier || item.upstream_url || labels.unknown}</span>
       <span className="ml-2 text-[var(--text-muted)]">{item.dependency_type}{item.version_constraint ? ` · ${item.version_constraint}` : ''}{item.resolution_status ? ` · ${item.resolution_status}` : ''}</span>
     </li>)}</ul> : <EmptyState>{labels.noDependencies}</EmptyState>}</div>
   </div>;
@@ -526,11 +532,20 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
       .finally(() => { if (!controller.signal.aborted) setAnalysisLoading(false); });
     return () => controller.abort();
   }, [publicId, selectedVersion, t, workbench]);
+  useEffect(() => {
+    if (!selectedVersionId || !['map', 'schematic'].includes(workbench?.resource.resource_kind || '')) return;
+    const controller = new AbortController();
+    void getResourceWorkbenchV2(publicId, { signal: controller.signal }, selectedVersionId).then(value => {
+      if (!controller.signal.aborted) { setWorkbench(value); setSelectedAnalysis(value.analysis); }
+    }).catch(caught => { if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.loadFailed')); });
+    return () => controller.abort();
+  }, [publicId, selectedVersionId, t, workbench?.resource.resource_kind]);
   const canPublish = Boolean(workbench?.permissions.can_manage)
     && ['owner', 'maintainer', 'publisher'].includes(workbench?.permissions.role || '');
   const canEditProfile = Boolean(workbench?.permissions.can_manage)
     && ['owner', 'maintainer'].includes(workbench?.permissions.role || '');
   const sectionItems: Array<{ key: SectionKey; label: string }> = [
+    ...(workbench && ['map', 'schematic'].includes(workbench.resource.resource_kind) ? [{ key: 'editor' as const, label: '在线编辑' }] : []),
     { key: 'overview', label: t('resourceWorkbenchV2.overview') },
     { key: 'publish', label: t('resourceWorkbenchV2.publish') },
     { key: 'compatibility', label: t('resourceWorkbenchV2.compatibility') },
@@ -566,7 +581,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
   const metadata = resource?.renderer?.public_metadata ?? resource?.metadata;
   const mapMetadata = resource?.metadata.map;
   const schematicMetadata = resource?.metadata.schematic;
-  const analyzedWaveData = workbench?.analysis?.data?.waves;
+  const analyzedWaveData = selectedAnalysis?.data?.waves;
   const waveData = Array.isArray(analyzedWaveData) && analyzedWaveData.length > 0 ? analyzedWaveData : mapMetadata?.wave_groups;
   const dimensions = resource?.resource_kind === 'map' ? mapMetadata : resource?.resource_kind === 'schematic' ? schematicMetadata : undefined;
   const previewWidth = dimensions?.width ?? null;
@@ -577,39 +592,40 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
 
   return <div className="content-width-detail mx-auto min-w-0 px-3 py-5 sm:px-6 sm:py-8 lg:px-8">
     <div className="mb-4 flex items-center justify-between gap-3">
-      <Link href="/resources" className="text-sm text-[var(--text-muted)] hover:text-[var(--primary)]">← {t('resourceWorkbenchV2.backToResources')}</Link>
+      <Link href="/resources" className="text-sm text-[var(--text-muted)] hover:text-[var(--primary-text)]">← {t('resourceWorkbenchV2.backToResources')}</Link>
       <span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1 text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.v2Badge')}</span>
     </div>
 
     {loading && <div role="status" className="flex min-h-72 items-center justify-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] text-sm text-[var(--text-muted)]"><RefreshCw className="h-5 w-5 animate-spin" />{t('resourceWorkbenchV2.loading')}</div>}
-    {!loading && error && <div role="alert" className="mx-auto max-w-2xl rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center"><AlertCircle className="mx-auto h-8 w-8 text-red-500" /><h1 className="mt-3 text-xl font-semibold text-[var(--text)]">{t('resourceWorkbenchV2.loadFailed')}</h1><p className="mt-2 break-words text-sm text-[var(--text-muted)]">{error}</p><button type="button" onClick={() => void load()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary)] px-4 text-sm font-semibold text-white"><RefreshCw className="h-4 w-4" />{t('resourceWorkbenchV2.retry')}</button></div>}
+    {!loading && error && <div role="alert" className="mx-auto max-w-2xl rounded-2xl border border-red-500/30 bg-red-500/5 p-6 text-center"><AlertCircle className="mx-auto h-8 w-8 text-red-500" /><h1 className="mt-3 text-xl font-semibold text-[var(--text)]">{t('resourceWorkbenchV2.loadFailed')}</h1><p className="mt-2 break-words text-sm text-[var(--text-muted)]">{error}</p><button type="button" onClick={() => void load()} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-lg bg-[var(--primary-button)] px-4 text-sm font-semibold text-white"><RefreshCw className="h-4 w-4" />{t('resourceWorkbenchV2.retry')}</button></div>}
 
     {!loading && !error && workbench && resource && <>
       <header className="mb-5 rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-soft)] text-[var(--primary)]"><ResourceIcon className="h-5 w-5" /></span>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--primary-soft)] text-[var(--primary-text)]"><ResourceIcon className="h-5 w-5" /></span>
             <div className="min-w-0"><p className="text-xs uppercase tracking-wide text-[var(--text-muted)]">{resource.resource_kind}</p><h1 className="mt-1 break-words text-2xl font-bold text-[var(--text)] sm:text-3xl">{resource.title}</h1><p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--text-secondary)]">{resource.summary || resource.description || t('resourceWorkbenchV2.noDescription')}</p></div>
           </div>
-          <div className="flex shrink-0 flex-col gap-2 sm:items-end"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${workbench.permissions.can_manage ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}><Shield className="h-3.5 w-3.5" />{workbench.permissions.can_manage ? t('resourceWorkbenchV2.manager') : t('resourceWorkbenchV2.readOnly')}</span></div>
+          <div className="flex shrink-0 flex-col gap-2 sm:items-end"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${workbench.permissions.can_manage ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-[var(--bg-elevated)] text-[var(--text-muted)]'}`}><Shield className="h-3.5 w-3.5" />{workbench.permissions.can_manage ? t('resourceWorkbenchV2.manager') : '可编辑副本'}</span></div>
         </div>
         <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[[t('resourceWorkbenchV2.views'), workbench.stats.views], [t('resourceWorkbenchV2.downloads'), workbench.stats.downloads], [t('resourceWorkbenchV2.likes'), workbench.stats.likes], [t('resourceWorkbenchV2.favorites'), workbench.stats.favorites]].map(([label, value]) => <div key={String(label)} className="rounded-lg bg-[var(--bg-elevated)] p-3"><p className="text-xs text-[var(--text-muted)]">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums text-[var(--text)]">{Number(value).toLocaleString(locale)}</p></div>)}
         </div>
       </header>
 
+      {['schematic', 'map'].includes(resource.resource_kind) ? <div className="mb-4 flex flex-wrap gap-2"><button type="button" onClick={() => navigateTo('editor')} className="min-h-11 bg-[var(--primary-button)] px-4 text-sm font-semibold text-white">{resource.resource_kind === 'schematic' ? '打开蓝图编辑器' : '打开地图编辑器'}</button><p className="self-center text-sm text-[var(--text-muted)]">编辑副本可下载或发布为自己的资源，原作品保持不变。</p></div> : null}
       <div className="mb-4 lg:hidden">
         <button type="button" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((value) => !value)} className="flex min-h-11 w-full items-center justify-between rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-4 text-sm font-semibold text-[var(--text)]"><span>{t('resourceWorkbenchV2.sections')}: {sectionItems.find((item) => item.key === activeSection)?.label}</span><ChevronDown className={`h-4 w-4 transition-transform ${mobileNavOpen ? 'rotate-180' : ''}`} /></button>
         {mobileNavOpen && <nav aria-label={t('resourceWorkbenchV2.sections')} className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-2">{sectionItems.map(({ key, label }) => {
           const Icon = SECTION_ICONS[key];
-          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-left text-sm ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
+          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-left text-sm ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
         })}</nav>}
       </div>
 
       <div className="grid min-w-0 gap-5 lg:grid-cols-[14rem_minmax(0,1fr)]">
         <aside className="hidden lg:block"><nav aria-label={t('resourceWorkbenchV2.sections')} className="sticky top-5 rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-2">{sectionItems.map(({ key, label }) => {
           const Icon = SECTION_ICONS[key];
-          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`mb-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm last:mb-0 ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
+          return <button key={key} type="button" aria-current={activeSection === key ? 'page' : undefined} onClick={() => navigateTo(key)} className={`mb-1 flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-left text-sm last:mb-0 ${activeSection === key ? 'bg-[var(--primary-soft)] font-semibold text-[var(--primary-text)]' : 'text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)]'}`}><Icon className="h-4 w-4 shrink-0" />{label}</button>;
         })}</nav></aside>
 
         <main className="min-w-0 space-y-4">
@@ -618,7 +634,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
               title={t('resourceWorkbenchV2.preview')}
               kind={resource.resource_kind}
               imageUrl={resource.renderer?.preview_url || resource.metadata.preview.url}
-              status={rendererStatus}
+              status={playerLabel(rendererStatus, locale)}
               metadata={metadata}
               width={previewWidth}
               height={previewHeight}
@@ -670,7 +686,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
                 loading: t('resourceWorkbenchV2.kindDataLoading'), loadFailed: t('resourceWorkbenchV2.kindDataLoadFailed'), retry: t('resourceWorkbenchV2.retry'), empty: t('resourceWorkbenchV2.kindDataEmpty'), noVersion: t('resourceWorkbenchV2.kindDataNoVersion'), loadMore: t('resourceWorkbenchV2.kindDataLoadMore'), loadingMore: t('resourceWorkbenchV2.kindDataLoadingMore'),
               }}
             />}
-            <FoldCard title={t('resourceWorkbenchV2.about')} open><div className="space-y-3 text-sm leading-6 text-[var(--text-secondary)]">{resource.description ? <p className="whitespace-pre-wrap">{resource.description}</p> : resource.content_text ? <p className="whitespace-pre-wrap">{resource.content_text}</p> : <EmptyState>{t('resourceWorkbenchV2.noDescription')}</EmptyState>}<div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.visibility')}: {resource.visibility}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.renderer')}: {rendererStatus}</span></div></div></FoldCard>
+            <FoldCard title={t('resourceWorkbenchV2.about')} open><div className="space-y-3 text-sm leading-6 text-[var(--text-secondary)]">{resource.description ? <p className="whitespace-pre-wrap">{resource.description}</p> : resource.content_text ? <p className="whitespace-pre-wrap">{resource.content_text}</p> : <EmptyState>{t('resourceWorkbenchV2.noDescription')}</EmptyState>}<div className="flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.visibility')}: {playerLabel(resource.visibility, locale)}</span><span className="rounded-full bg-[var(--bg-elevated)] px-2.5 py-1">{t('resourceWorkbenchV2.renderer')}: {playerLabel(rendererStatus, locale)}</span></div></div></FoldCard>
             <FoldCard title={t('resourceWorkbenchV2.versionWorkspace')} open>
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><label htmlFor="workbench-version" className="text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbenchV2.selectVersion')}</label><select id="workbench-version" value={selectedVersion?.public_id || ''} onChange={(event) => setSelectedVersionId(event.target.value)} disabled={workbench.versions.length === 0} className="min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text)] sm:max-w-sm">{workbench.versions.length === 0 && <option value="">{t('resourceWorkbenchV2.noVersions')}</option>}{workbench.versions.map((version) => <option key={version.public_id} value={version.public_id}>{version.display_version || version.version}{version.recommended ? ` · ${t('resourceWorkbenchV2.recommended')}` : ''}</option>)}</select></div>
               <VersionWorkspace version={selectedVersion} locale={locale} kind={resource.resource_kind} publicId={resource.public_id} versions={workbench.versions} labels={{ ...sharedLabels, noVersions: t('resourceWorkbenchV2.noVersions') }} />
@@ -682,6 +698,25 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
             {resource.resource_kind === 'map' && selectedVersion && <FoldCard title={t('resourceWorkbenchV2.mapEditor.title')}>
               <p className="mb-3 text-sm text-[var(--text-secondary)]">地图与波次编辑已移至独立工作区，可直接编辑并导出；保存到此资源时仍会检查资源管理权限。</p>
               <div className="flex flex-wrap gap-2"><Link href={`/tools/map-editor?resource=${encodeURIComponent(resource.public_id)}&version=${encodeURIComponent(selectedVersion.public_id)}`} className="inline-flex min-h-11 items-center justify-center bg-[var(--primary)] px-4 text-sm font-medium text-white">在完整地图编辑器中打开</Link><Link href={`/tools/wave-editor?resource=${encodeURIComponent(resource.public_id)}&version=${encodeURIComponent(selectedVersion.public_id)}`} className="inline-flex min-h-11 items-center justify-center border border-[var(--border)] px-4 text-sm font-medium">在波次编辑器中打开</Link></div>
+          </>}
+
+          {activeSection === 'editor' && <>            {resource.resource_kind === 'schematic' && <FoldCard title={t('resourceWorkbenchV2.schematicEditor.title')} open>
+              <SchematicLightEditor
+                workbench={workbench}
+                version={selectedVersion}
+                canEdit={selectedVersion?.status === 'published'}
+                canManage={canEditProfile}
+                onSaved={async (versionPublicId) => { await refreshWorkbench(versionPublicId).catch((caught) => setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.loadFailed'))); }}
+              />
+            </FoldCard>}
+            {resource.resource_kind === 'map' && <FoldCard title={t('resourceWorkbenchV2.mapEditor.title')} open>
+              <MapLightEditor
+                workbench={workbench}
+                version={selectedVersion}
+                canEdit={selectedVersion?.status === 'published'}
+                canManage={canEditProfile}
+                onSaved={async (versionPublicId) => { await refreshWorkbench(versionPublicId).catch((caught) => setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.loadFailed'))); }}
+              />
             </FoldCard>}
           </>}
 
@@ -713,7 +748,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
                 : relation.relation_type;
               const versionLabel = relation.version || relation.version_public_id;
               return <li key={`${relation.relation_type}:${relation.resource.public_id}:${relation.version_public_id || ''}`} className="flex flex-col gap-1 rounded-lg border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between">
-                <Link href={`/resources/${encodeURIComponent(relation.resource.public_id)}/workbench`} className="min-w-0 break-words font-medium text-[var(--primary)] hover:underline">{relation.resource.title}</Link>
+                <Link href={`/resources/${encodeURIComponent(relation.resource.public_id)}/workbench`} className="min-w-0 break-words font-medium text-[var(--primary-text)] hover:underline">{relation.resource.title}</Link>
                 <span className="text-xs text-[var(--text-muted)]">{t(`resourceWorkbenchV2.community.relationDirections.${relation.relation_direction}`)} · {relationTypeLabel}{relation.relation_type === 'recommended_for' ? ` · ${t(`resourceWorkbenchV2.community.context.${relation.relation_context}`)}` : ''} · {relation.resource.resource_kind}{versionLabel ? ` · ${t('resourceWorkbenchV2.community.relatedVersion')}: ${versionLabel}` : ''}</span>
               </li>;
             })}</ul> : <EmptyState>{t('resourceWorkbenchV2.noRelations')}</EmptyState>}</FoldCard>
@@ -722,7 +757,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
 
           {activeSection === 'settings' && <div className="space-y-4">
             <FoldCard title={t('resourceWorkbenchV2.resourceSettings')} open>
-              <dl className="mb-5 grid gap-3 rounded-lg bg-[var(--bg-elevated)] p-4 sm:grid-cols-2"><div><dt className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.visibility')}</dt><dd className="mt-1 text-sm text-[var(--text)]">{resource.visibility}</dd></div><div><dt className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.role')}</dt><dd className="mt-1 text-sm text-[var(--text)]">{workbench.permissions.role || t('resourceWorkbenchV2.viewer')}</dd></div></dl>
+              <dl className="mb-5 grid gap-3 rounded-lg bg-[var(--bg-elevated)] p-4 sm:grid-cols-2"><div><dt className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.visibility')}</dt><dd className="mt-1 text-sm text-[var(--text)]">{playerLabel(resource.visibility, locale)}</dd></div><div><dt className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.role')}</dt><dd className="mt-1 text-sm text-[var(--text)]">{workbench.permissions.role || t('resourceWorkbenchV2.viewer')}</dd></div></dl>
               <ResourceProfileEditor workbench={workbench} canEdit={canEditProfile} onSaved={() => { void refreshWorkbench().catch((caught) => setError(caught instanceof Error ? caught.message : t('resourceWorkbenchV2.loadFailed'))); }} />
             </FoldCard>
           </div>}

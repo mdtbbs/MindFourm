@@ -17,11 +17,11 @@ The shell changes navigation and discovery. Existing content routes remain canon
 | Tools | `/tools` | Schematic, map, wave, and analysis workbench guides plus cloud saves |
 | My | `/me` | Notifications, messages, friends, bookmarks, posts, resource management, drafts, and settings |
 
-Primary navigation follows tasks rather than backend entities. Each space owns its own page-level navigation. The desktop sidebar has six stable links; My is visually separated at the bottom. Community and Resources pages also show a contextual list of discussion boards or resource kinds, collapsed by default and opened from its heading. Mobile uses five bottom tabs (Home, Community, Resources, Multiplayer, My), keeping the established five-item touch pattern. Tools remain reachable from the home shortcuts, My, feature search, resource details, and the desktop sidebar.
+Primary navigation follows tasks rather than backend entities. Each space owns its own page-level navigation. The desktop sidebar has six stable links; My is visually separated at the bottom and is the single personal entry point, because the contextual region is trimmed to the current workspace. Community and Resources pages also show a contextual list of discussion boards or resource kinds, collapsed by default and opened from its heading. Mobile uses five bottom tabs (Home, Community, Resources, Multiplayer, My), keeping the established five-item touch pattern. Tools remain reachable from the home shortcuts, My, feature search, resource details, and the desktop sidebar.
 
 ## Desktop shell
 
-`ContentShell` composes the fixed `ContentSidebar`, `ContentToolbar`, page body, footer, mobile bottom navigation, and the search dialog. The sidebar uses one icon family and marks the active workspace with both an accent bar and text styling. Its Community and Resources context lists start collapsed and expand when the user activates the section heading.
+`ContentShell` composes the `ContentSidebar`, `ContentToolbar`, page body, footer, mobile bottom navigation, and the search dialog. The shell owns the desktop viewport height (`lg:h-dvh`) and scrolls the page column, so the rail follows the content instead of pinning a sticky 100vh column. The sidebar uses one icon family and marks the active workspace with both an accent bar and text styling. Its Community and Resources context lists start collapsed and expand when the user activates the section heading. The sidebar scrolls independently only when its own navigation overflows.
 
 The top bar keeps global actions visible: workspace breadcrumb, global search, `+ Create`, notifications with the existing unread state, and the authenticated user menu. Developer Center is available to regular signed-in users from that menu. Admin appears only for `user.role === 'admin'`. The existing admin shell and admin route groups remain separate.
 
@@ -43,13 +43,13 @@ The registry is an index of existing destinations, not a replacement for API per
 
 The Resource Center keeps resource kind and its existing shareable query parameters. Search, supported game version, and sort remain visible in the primary filter row. Topic/category, platform, planet, and tag live in the advanced filter panel; mobile opens the same controls in a bottom sheet. Active query filters can be removed one at a time or cleared together. The UI only exposes filters supported by the current resource list contract.
 
-Resource details and the existing Resource Center V2 workbench remain the editing destination. Toolbox cards describe schematic, map, wave, and analysis entry guides, and route into that workbench with its existing ownership and renderer checks.
+Resource details open `/tools/blueprint-editor` or `/tools/map-editor` with the resource UUID and selected version. These tools reuse the existing editors and official renderer. Public resource copies can be edited/exported by visitors; original resource management keeps ownership checks.
 
 ## Route conventions
 
 - Primary spaces use stable roots: `/community`, `/resources`, `/multiplayer`, `/tools`, and `/me`; `/` remains Home.
 - Resource details, immutable versions, and workbenches stay under `/resources/[id]` to preserve Resource Center V2 contracts.
-- Tool landing pages use `/tools/*`. Guides route users into the existing resource workbench instead of inventing a parallel editor API.
+- Tool landing pages use `/tools/*`. Editor tools support local files and public versions. Temporary file processing does not create a parallel resource model; publication uses the existing RES direct-upload and review pipeline.
 - User cloud saves use `/tools/cloud-saves`; `/admin/settings/cloud-saves` remains an unrelated administrative configuration page.
 - `/developers`, `/api/v1/reference`, `/api/v1/docs/*`, and `/api/v1/debugger` remain discoverable from the user menu, Developer Center, or feature search, without occupying a primary space.
 - Authentication, redirects, legacy content URLs, and admin URLs remain in their existing route families. See the [route map](FRONTEND_IA_2_ROUTES.md) for entry and permission details.
@@ -60,7 +60,7 @@ Middleware protects `/me`, `/friends`, `/resources/my`, `/tools/cloud-saves`, no
 
 Admin stays role-gated. Developer Center is not gated by a developer role because regular users can discover and request client access. Site feature switches continue to govern LanLink and server routes. Where there is no user-facing API or page, the IA says so and does not manufacture data: following-feed and download-history lists remain unavailable. Draft recovery stays in the existing editors.
 
-Tool cards describe the current Resource Center V2 workbench honestly. Wave editing remains a tab in the map workbench; map and schematic editing remain subject to the selected resource, renderer, ownership, and supported operations.
+Tool cards lead to working schematic/map editors. The wave tool supports new/imported configurations and maps, reusing the map wave editor. Export checks pinned renderer capabilities; publishing and managing original resources retain their respective authorization.
 
 ## Design and extension rules
 

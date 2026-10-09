@@ -39,6 +39,17 @@ const mindAuthHttp = axios.create({ timeout: MINDAUTH_TIMEOUT_MS });
 const MINDAUTH_OAUTH_CACHE_TTL_SECONDS = 30;
 
 /**
+ * How long a forum user's MindAuth profile is trusted without re-reading `/userinfo`.
+ *
+ * The cooldown has to be enforced in the backend's own memory as well as Redis.
+ * When Redis goes down the old check-and-set pair degraded to a per-process store
+ * that was *cleared* on reconnect, so the cooldown vanished and every authenticated
+ * request synchronously fetched `/userinfo` and wrote the user row — turning a read
+ * surge into a MySQL write surge during exactly the outage it should have absorbed.
+ */
+const MINDAUTH_REFRESH_COOLDOWN_SECONDS = 60;
+
+/**
  * Claim or reuse the one pending refresh attempt for this forum session.
  * Keeping the old refresh token and key in the same Redis hash lets concurrent
  * API workers safely retry the exact request after a timeout.
@@ -735,11 +746,10 @@ export class AuthService {
 
   async refreshUserFromMindAuthWithToken(user: User, accessToken: string, refreshToken?: string, force = false, sessionKey?: string): Promise<User> {
     const cooldownKey = `mindauth:user-refresh:${user.id}`;
-    if (!force && (await this.redisService.get(cooldownKey))) {
+    const alreadyClaimed = !force && !(await this.redisService.acquireCooldown(cooldownKey, MINDAUTH_REFRESH_COOLDOWN_SECONDS, String(user.id)));
+    if (alreadyClaimed) {
       return user;
     }
-
-    await this.redisService.set(cooldownKey, '1', 60);
 
     try {
       const mindauthUser = await this.getUserInfo(accessToken);

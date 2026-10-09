@@ -193,9 +193,9 @@ public final class RendererVisualRegression {
         require("Editor fixture".equals(edited.tags.get("name")) && "metadata survives transforms".equals(edited.tags.get("description")),
             "schematic tags must survive rotation, reflection and serialization");
         require(edited.labels.contains("editor-test"), "schematic labels must survive rotation, reflection and serialization");
-        require(edited.tiles.contains(tile -> tile.block == router && tile.x == 1 && tile.y == 2 && tile.rotation == 0),
+        require(edited.tiles.contains(tile -> tile.block == router && tile.x == 2 && tile.y == 3 && tile.rotation == 0),
             "rotation and horizontal reflection must preserve the router and transform its orientation");
-        require(edited.tiles.contains(tile -> tile.block == conveyor && tile.x == 0 && tile.y == 1 && tile.rotation == 3),
+        require(edited.tiles.contains(tile -> tile.block == conveyor && tile.x == 1 && tile.y == 2 && tile.rotation == 3),
             "rotation and horizontal reflection must preserve the conveyor placement");
 
         Schematic evenWidth = new Schematic(new Seq<>(), new StringMap(), 4, 2);

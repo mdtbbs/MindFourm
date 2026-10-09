@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { ArrowLeft, Download, FilePlus2, FolderOpen, LoaderCircle, Redo2, Save, Search, Undo2, Upload } from 'lucide-react';
+import { useI18n } from '@/i18n/provider';
 import { SchematicEditor } from './schematic/schematic-editor';
 import { MapEditor } from './map/map-editor';
 import { analyzeEditorFile, createBlankEditorFile, exportEditorFile, getEditorContentCatalog, getEditorStatus, type EditorAnalysis, type EditorContentCatalog, type EditorKind, type EditorStatus } from '@/lib/editors/editor-api';
@@ -55,6 +56,7 @@ function downloadFile(file: Blob, name: string) {
 }
 
 export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
+  const { locale } = useI18n();
   const descriptor = LABELS[pageKind];
   const [status, setStatus] = useState<EditorStatus | null>(null);
   const [catalog, setCatalog] = useState<EditorContentCatalog | null>(null);
@@ -69,6 +71,7 @@ export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
   const [title, setTitle] = useState('');
   const [sourceInfo, setSourceInfo] = useState<SourceInfo>({ canManage: false });
   const [recoverableDraft, setRecoverableDraft] = useState<StoredEditorDraft | null>(null);
+  const [draftLookupPending, setDraftLookupPending] = useState(false);
   const [resourceQuery, setResourceQuery] = useState('');
   const [resourceChoices, setResourceChoices] = useState<ResourceChoice[]>([]);
   const [resourceMode, setResourceMode] = useState<'center' | 'mine'>('center');
@@ -103,7 +106,7 @@ export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
   }, [pageKind]);
 
   const activate = useCallback(async (file: File, nextAnalysis?: EditorAnalysis, info: SourceInfo = { canManage: false }) => {
-    setBusy(true); setError(''); setRecoverableDraft(null);
+    setBusy(true); setError(''); setRecoverableDraft(null); setDraftLookupPending(true);
     try {
       const result = nextAnalysis || await analyzeEditorFile(descriptor.kind, file);
       const digest = await hashEditorSource(file);
@@ -116,7 +119,7 @@ export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
       if (draft && draft.updated_at > Date.now() - 30 * 24 * 60 * 60 * 1000) setRecoverableDraft(draft);
       setShowPaste(false); setShowResourcePicker(false);
     } catch (cause) { setError(messageFor(cause)); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setDraftLookupPending(false); }
   }, [catalog?.blocks, descriptor.kind]);
 
   const loadResource = useCallback(async (resourceId: string, requestedVersion?: string) => {
@@ -185,7 +188,15 @@ export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
     finally { setBusy(false); }
   };
 
-  const changeDocument = (next: EditorDocument) => setHistory((current) => current ? pushEditorHistory(current, next) : current);
+  const changeDocument = (next: EditorDocument) => {
+    if (isMapDocument(next) && isMapDocument(baseDocument)
+      && buildWaveOperations(baseDocument.waves, next.waves).length > 1_000) {
+      setError('波次差异超过导出上限 1,000 项，请分批编辑后导出。');
+      return;
+    }
+    setError('');
+    setHistory((current) => current ? pushEditorHistory(current, next) : current);
+  };
   const undo = () => setHistory((current) => current ? undoEditorHistory(current) : current);
   const redo = () => setHistory((current) => current ? redoEditorHistory(current) : current);
   const operations = useMemo(() => {
@@ -224,10 +235,10 @@ export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
     } catch (cause) { if (!quiet) setError(messageFor(cause)); }
   }, [analysis, descriptor.kind, documentState, sourceFile, sourceHash, sourceInfo.resourceId, sourceInfo.versionId, title]);
   useEffect(() => {
-    if (!analysis || !sourceFile || !documentState || !sourceHash) return;
+    if (!analysis || !sourceFile || !documentState || !sourceHash || draftLookupPending || recoverableDraft) return;
     const timer = window.setTimeout(() => { void saveLocalDraft(true); }, 700);
     return () => window.clearTimeout(timer);
-  }, [analysis, documentState, saveLocalDraft, sourceFile, sourceHash]);
+  }, [analysis, documentState, draftLookupPending, recoverableDraft, saveLocalDraft, sourceFile, sourceHash]);
   const restoreDraft = () => {
     if (!recoverableDraft || !analysis) return;
     setHistory(createEditorHistory(recoverableDraft.operations as EditorDocument)); setTitle(recoverableDraft.title); setRecoverableDraft(null);
@@ -247,7 +258,7 @@ export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
         setSaveDialog(false); setError('资源新版本已上传，等待资源审核。');
       } else {
         const draft = await createResourceDirectUploadDraft({ title: saveTitle.trim() || title, resource_type: 'upload', resource_kind: descriptor.kind,
-          content_language: 'zh-CN', version: saveVersion.trim(), release_channel: saveChannel, is_public: 0 }, crypto.randomUUID());
+          content_language: locale, version: saveVersion.trim(), release_channel: saveChannel, is_public: 0 }, crypto.randomUUID());
         if (draft.draft_status === 'open') await uploadResourceDirectDraft(draft.version_public_id, output);
         if (draft.resource_id) window.location.assign(`/resources/${draft.resource_id}`);
         else { setSaveDialog(false); setError('新资源文件已上传，资源中心正在处理。'); }
@@ -262,7 +273,7 @@ export function EditorWorkspace({ pageKind }: { pageKind: PageKind }) {
     try {
       const parsed: unknown = JSON.parse(await file.text());
       const groups = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed.spawns) ? parsed.spawns : null;
-      if (!groups || groups.length > 5_000 || groups.some((item) => !isRecord(item) || typeof item.type !== 'string')) throw new Error('波次 JSON 应为波次组数组，且最多包含 5,000 组。');
+      if (!groups || groups.length > 1_000 || groups.some((item) => !isRecord(item) || typeof item.type !== 'string')) throw new Error('波次 JSON 最多包含 1,000 组。');
       const map = history.present;
       changeDocument({ ...map, waves: groups.map((item, index) => ({ ...item, type: String(item.type), begin: Number(item.begin) || 1, end: Number(item.end) || 1, amount: Number(item.amount) || 1, __editor_id: `import:${Date.now()}:${index}` })) });
       setError('');

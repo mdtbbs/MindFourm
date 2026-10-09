@@ -50,7 +50,7 @@ export default async function NotFound() {
         />
         <button
           type="submit"
-          className="rounded bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+          className="rounded bg-[var(--primary-button)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
         >
           {t('common.search')}
         </button>
@@ -73,7 +73,7 @@ export default async function NotFound() {
         </div>
       )}
 
-      <Link href="/" className="text-sm text-[var(--primary)] hover:underline">
+      <Link href="/" className="text-sm text-[var(--primary-text)] hover:underline">
         ← {t('common.home')}
       </Link>
     </div>

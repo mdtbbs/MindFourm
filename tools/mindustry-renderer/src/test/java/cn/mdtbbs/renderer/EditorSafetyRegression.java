@@ -39,6 +39,7 @@ public final class EditorSafetyRegression {
                     MapRenderer.initializeForFixture(root);
                     verifyParserDimensionLimits();
                     verifyMultiblockEdits(root);
+                    verifyClipboardRoundTrip(root);
                     verifyOfficialSchematicConfigRoundTrip(root);
                     verifyOfficialMapObjectRoundTrip(root);
                     verifyOfficialBlankFiles(root);
@@ -54,6 +55,27 @@ public final class EditorSafetyRegression {
         require(completed.await(60, TimeUnit.SECONDS), "editor safety regression timed out");
         if (failure.get() != null) throw new AssertionError("editor safety regression failed", failure.get());
         System.out.println("editor safety fixtures passed");
+    }
+
+    private static void verifyClipboardRoundTrip(Path root) throws Exception {
+        Block message = Vars.content.block("message");
+        Block bridge = Vars.content.block("bridge-conveyor");
+        Schematic original = new Schematic(new Seq<>(), new StringMap(), 16, 16);
+        original.tags.put("name", "复制保留配置");
+        original.tiles.add(new Schematic.Stile(message, 1, 1, "保留文本", (byte)0));
+        original.tiles.add(new Schematic.Stile(bridge, 2, 2, new Point2(2, 0), (byte)0));
+        original.tiles.add(new Schematic.Stile(bridge, 4, 2, null, (byte)0));
+        Path source = root.resolve("clipboard.msch"); Schematics.write(original, new Fi(source.toFile()));
+        byte[] bytes = MapRenderer.transformSchematicBytes(source, 0, false, List.of(), List.of(), List.of(
+            new MapRenderer.AddedBlock(1, 8, "message", 0, 1, 1),
+            new MapRenderer.AddedBlock(2, 8, "bridge-conveyor", 0, 2, 2),
+            new MapRenderer.AddedBlock(4, 8, "bridge-conveyor", 0, 4, 2)
+        ), List.of());
+        Schematic copy = Schematics.read(new ByteArrayInputStream(bytes));
+        require(copy.tiles.size == 6, "copying must keep original tiles and add all selected blocks");
+        require(copy.tiles.contains(tile -> tile.x == 1 && tile.y == 8 && "保留文本".equals(tile.config)), "copied text must survive official serialization");
+        require(copy.tiles.contains(tile -> tile.x == 2 && tile.y == 8 && tile.config instanceof Point2 p && p.x == 2 && p.y == 0), "links inside a copied group must point to the copied peer");
+        require("复制保留配置".equals(copy.tags.get("name")), "copying must preserve source tags");
     }
 
     private static void verifyMultiblockEdits(Path root) throws Exception {
@@ -177,7 +199,8 @@ public final class EditorSafetyRegression {
             new MapRenderer.MapObjectOperation("move", "spawn", -1, -1, spawnAt.x, spawnAt.y, spawnTo.x, spawnTo.y, "", "", 0),
             new MapRenderer.MapObjectOperation("move", "building", -1, -1, buildingAt.x, buildingAt.y, buildingTo.x, buildingTo.y, "", "", 0),
             new MapRenderer.MapObjectOperation("team", "core", coreAt.x, coreAt.y, -1, -1, -1, -1, "", "crux", 0),
-            new MapRenderer.MapObjectOperation("team", "building", buildingAt.x, buildingAt.y, -1, -1, -1, -1, "", "crux", 0)
+            new MapRenderer.MapObjectOperation("team", "building", buildingAt.x, buildingAt.y, -1, -1, -1, -1, "", "crux", 0),
+            new MapRenderer.MapObjectOperation("rotate", "building", buildingAt.x, buildingAt.y, -1, -1, -1, -1, "", "", 3)
         ));
         JsonValue afterMove = readOfficialMap(moved);
         require(hasObject(afterMove.get("cores"), coreTo.x, coreTo.y, "core-shard"), "a moved core must preserve its block and official coordinates");
@@ -185,6 +208,7 @@ public final class EditorSafetyRegression {
         require(hasObject(afterMove.get("tile_layers").get("enemy_spawns"), spawnTo.x, spawnTo.y, "spawn"), "a moved spawn must round-trip through official MapIO");
         require(hasObject(afterMove.get("tile_layers").get("buildings"), buildingTo.x, buildingTo.y, "router"), "a moved building must round-trip through official MapIO");
         require("crux".equals(findTeam(afterMove.get("cores"), coreTo.x, coreTo.y)), "core team edits must round-trip through official MapIO");
+        require(Vars.world.tile(buildingTo.x, buildingTo.y).build.rotation == 3, "rotation must survive move and team changes through the official writer and reader");
         require("crux".equals(findTeam(afterMove.get("tile_layers").get("buildings"), buildingTo.x, buildingTo.y)), "building team edits must round-trip through official MapIO");
 
         expectMapInvalid(() -> MapRenderer.transformMapBytes(moved, root.resolve("invalid-map-object.msav"), List.of(),
@@ -265,6 +289,13 @@ public final class EditorSafetyRegression {
         require(sourcePower != null && sourcePower.config instanceof Point2[] points && points.length == 2,
             "the genuine official fixture must contain a typed power-link Point2[] config");
         Point2[] originalPowerLinks = (Point2[])sourcePower.config;
+        for (int turn = 0; turn < 4; turn++) {
+            for (boolean mirror : new boolean[]{false, true}) {
+                Schematic transformed = Schematics.read(new ByteArrayInputStream(MapRenderer.transformSchematicBytes(sourceFile, turn, mirror, List.of(), List.of(), List.of(), List.of())));
+                require(transformed.tiles.size == source.tiles.size, "all rotations and mirrors must preserve the genuine fixture's edge tiles");
+                require(transformed.tiles.contains(tile -> tile.block == itemSource && tile.config instanceof mindustry.type.Item item && item.name.equals("coal")), "rotations must preserve item configuration");
+            }
+        }
 
         JsonValue itemConfig = new arc.util.serialization.JsonReader().parse("{\"type\":\"content\",\"content_type\":\"item\",\"name\":\"lead\"}");
         StringBuilder powerPoints = new StringBuilder("[");

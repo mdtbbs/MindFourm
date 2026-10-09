@@ -64,6 +64,32 @@ describe('ResourcesV2WriteService schematic export storage', () => {
     return { service, provider, storage, previews, bytes };
   }
 
+  it('allows an anonymous visitor to export a public approved copy without a management role', async () => {
+    const { service, previews } = setup(null);
+    (service as any).getResource.mockResolvedValue({ id: 1, resource_kind: 'schematic', is_public: 1, status: 'approved', deleted_at: null });
+    (service as any).assertRole.mockRejectedValue(new Error('not owner'));
+    await service.exportSchematic(publicId, versionId, operations);
+    expect((service as any).assertRole).not.toHaveBeenCalled();
+    expect(previews.transformSchematic).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an anonymous export of private or unreviewed source bytes before reading storage', async () => {
+    const { service, storage, previews } = setup(null);
+    for (const resource of [{ id: 1, resource_kind: 'schematic', is_public: 0, status: 'approved' }, { id: 1, resource_kind: 'schematic', is_public: 1, status: 'pending' }, { id: 1, resource_kind: 'schematic', is_public: 1, visibility: 'private', status: 'approved' }, { id: 1, resource_kind: 'schematic', is_public: 1, category_id: 7, status: 'approved' }]) {
+      (service as any).getResource.mockResolvedValue(resource);
+      await expect(service.exportSchematic(publicId, versionId, operations)).rejects.toThrow();
+    }
+    expect(storage.readManagedFile).not.toHaveBeenCalled();
+    expect(previews.transformSchematic).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when historical editor reads have no readiness verifier', async () => {
+    const { service, storage, previews } = setup(null);
+    await expect(service.editorData(publicId, versionId, 5)).rejects.toThrow('编辑器暂不可用');
+    expect(storage.readManagedFile).not.toHaveBeenCalled();
+    expect(previews.transformSchematic).not.toHaveBeenCalled();
+  });
+
   it('reads an RES primary file through the authenticated provider and never needs a local path', async () => {
     const primary = { id: 9, storage_backend: 'res', provider_object_id: 'res-public', original_filename: 'original.msch', content_hash: null };
     const { service, provider, storage, previews, bytes } = setup(primary);

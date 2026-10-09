@@ -113,5 +113,12 @@
       "copyright": "Copyright infringement",
       "other": "Other"
     }
+  },
+  "richPresentation": {
+    "mode": "Content view",
+    "edit": "Edit",
+    "preview": "Preview",
+    "untitled": "Untitled post",
+    "saveLocal": "Save locally"
   }
 }

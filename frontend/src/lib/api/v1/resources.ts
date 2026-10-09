@@ -352,7 +352,7 @@ export type ResourceV2SchematicTransformInput = {
   mirror_x: boolean;
   delete_positions: Array<{ x: number; y: number }>;
   move_positions?: Array<{ from_x: number; from_y: number; to_x: number; to_y: number }>;
-  add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number }>;
+  add_blocks?: Array<{ x: number; y: number; block: string; rotation?: number; copy_from_x?: number; copy_from_y?: number; config?: Record<string, unknown>; logic_source?: string }>;
   logic_configs?: Array<{ x: number; y: number; source: string }>;
   config_edits?: Array<{ x: number; y: number; config: ResourceV2SchematicConfigValue }>;
 };
@@ -594,9 +594,10 @@ export async function getResourceV1(
 export async function getResourceWorkbenchV2(
   publicId: string,
   options?: FetchV1Options,
+  versionPublicId?: string,
 ): Promise<ResourceWorkbenchV2Response> {
   return fetchV1<ResourceWorkbenchV2Response>(
-    `/resources/${encodeURIComponent(publicId)}/workbench`,
+    `/resources/${encodeURIComponent(publicId)}/workbench${versionPublicId ? `?version_public_id=${encodeURIComponent(versionPublicId)}` : ''}`,
     options,
   );
 }
@@ -704,6 +705,7 @@ export async function getResourceWorkbenchV2KindTabData(
         width: typeof response.width === 'number' ? response.width : null,
         height: typeof response.height === 'number' ? response.height : null,
         tile_layers: asRecord(response.tile_layers),
+        cores: Array.isArray(response.cores) ? response.cores : [],
         tile_layers_truncated: response.tile_layers_truncated === true,
       },
       items: [],

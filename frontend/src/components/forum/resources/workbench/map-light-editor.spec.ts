@@ -145,7 +145,7 @@ describe('MapLightEditor object operations', () => {
     if (!coordinates[0] || !team || !apply) throw new Error('Core edit controls were not rendered');
 
     await act(async () => {
-      Simulate.change(coordinates[0], { target: { value: '0' } as unknown as EventTarget });
+      Simulate.change(coordinates[0], { target: { value: '2' } as unknown as EventTarget });
       Simulate.change(team, { target: { value: 'crux' } as unknown as EventTarget });
     });
     await act(async () => { apply.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })); });
@@ -161,7 +161,7 @@ describe('MapLightEditor object operations', () => {
     expect(mockExport).toHaveBeenCalledWith(RESOURCE_ID, VERSION_ID, {
       terrain_changes: [], rule_changes: {}, wave_operations: [],
       object_operations: [
-        { action: 'move', object_type: 'core', from_x: 1, from_y: 1, to_x: 0, to_y: 1 },
+        { action: 'move', object_type: 'core', from_x: 1, from_y: 1, to_x: 2, to_y: 1 },
         { action: 'team', object_type: 'core', x: 1, y: 1, team: 'crux' },
       ],
     });

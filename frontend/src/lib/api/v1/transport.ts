@@ -12,6 +12,7 @@
  */
 
 import { buildPublicApiUrl } from '../client';
+import { normalizeLocale, translateApiError } from '@/i18n';
 
 /**
  * Browser calls intentionally stay on the public API base so Next rewrites and
@@ -74,6 +75,40 @@ export class V1ApiError extends Error {
   }
 }
 
+/**
+ * Translate a V1 error into user-facing copy when the code has a registered
+ * translation, keeping the server message as the fallback.
+ *
+ * Multiplayer/social codes (`SESSION_FULL`, `PRIVACY_DENIED`, ...) are published
+ * with Chinese and English messages, but consumers render the frontend locale.
+ */
+export function localizeV1Error(error: unknown, fallback: string): string {
+  if (!(error instanceof V1ApiError)) {
+    return error instanceof Error ? error.message : fallback;
+  }
+  const locale = typeof document === 'undefined' ? undefined : document.documentElement.lang;
+  const translated = translateApiError(error.code, normalizeLocale(locale, ['zh-CN', 'en', 'ru', 'ja']));
+  if (translated) return translated;
+  // Client mismatches are the single join failure the code alone cannot explain.
+  return error.code === 'JOIN_INTENT_CLIENT_MISMATCH'
+    ? '这个加入凭证是发给另一个联机客户端的，请在对应客户端里使用。'
+    : error.message || fallback;
+}
+
+/**
+ * Handle a `401` from a V1 call in the browser.
+ *
+ * The session lives in an HttpOnly cookie, so the only meaningful reaction is to
+ * re-check the session (which clears the local user and, for pages behind the
+ * auth layout, sends the visitor to sign in). Returns true when the error was
+ * an authentication failure that has been handed off.
+ */
+export function handleV1Unauthorized(error: unknown, onUnauthorized?: () => void): boolean {
+  if (!(error instanceof V1ApiError) || error.status !== 401) return false;
+  onUnauthorized?.();
+  return true;
+}
+
 export interface FetchV1Options {
   /** AbortSignal for cancellation (e.g. React Suspense / route change). */
   signal?: AbortSignal;
@@ -104,6 +139,24 @@ export async function fetchV1<T>(
   };
   if (options?.cookies) {
     headers['Cookie'] = options.cookies;
+  }
+  // Server Components are not end-user traffic: they resolve one page request into
+  // several API reads from the same Node address. Without this key the backend can
+  // only see a private-network IP, so every SSR read lands in one shared rate-limit
+  // bucket and the whole site starts returning 429 from an otherwise idle origin.
+  const internalKey = process.env.FORUM_INTERNAL_API_KEY;
+  if (internalKey && typeof window === 'undefined') {
+    headers['X-Forum-Internal-Key'] = internalKey;
+  }
+
+  // Server Components are not end users: without this key their calls arrive as
+  // an ordinary IP request and consume the visitor-facing rate-limit bucket by
+  // the container address (which is not loopback under Docker, where API_URL is
+  // http://backend:4000). server-fetch.ts already sends this key; V1 SSR
+  // requests went straight to the limiter because this path never did.
+  if (typeof window === 'undefined') {
+    const internalKey = process.env.FORUM_INTERNAL_API_KEY;
+    if (internalKey) headers['X-Forum-Internal-Key'] = internalKey;
   }
 
   // V1 is read-only for now; credentials are forwarded for future auth'd
@@ -154,7 +207,7 @@ export async function fetchV1<T>(
 }
 
 /** V1 mutation helper. Browser callers send cookies and the CSRF token already issued by the forum. */
-export async function requestV1<T>(path: string, init: RequestInit): Promise<T> {
+export async function requestV1<T>(path: string, init: RequestInit, options?: { signal?: AbortSignal }): Promise<T> {
   let csrf = typeof document === 'undefined'
     ? undefined
     : document.cookie.split('; ').find((item) => item.startsWith('csrf_token='))?.slice('csrf_token='.length);
@@ -167,6 +220,7 @@ export async function requestV1<T>(path: string, init: RequestInit): Promise<T> 
   }
   const isMultipart = typeof FormData !== 'undefined' && init.body instanceof FormData;
   return fetchV1<T>(path, {
+    signal: options?.signal,
     init: {
       ...init,
       headers: {

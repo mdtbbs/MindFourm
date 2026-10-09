@@ -48,6 +48,8 @@ export const PUBLIC_V1_OPERATION_ALLOWLIST: readonly string[] = [
   'GET /v1/resources/{id}/relations',
   'GET /v1/resources/{id}/stats',
   'GET /v1/resources/{id}/workbench',
+  'GET /v1/resources/{id}/versions/{versionId}/editor-data',
+  'GET /v1/resources/{id}/versions/{versionId}/map-editor/region',
   'POST /v1/resources/{id}/versions/analyze',
   'POST /v1/resources/{id}/versions',
   'POST /v1/resources/{id}/versions/{versionId}/review',
