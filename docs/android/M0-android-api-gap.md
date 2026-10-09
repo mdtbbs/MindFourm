@@ -2,7 +2,7 @@
 
 **状态：** Accepted（契约目标仍有效）；**范围：** Android 一期（Reader + Community Client）。
 
-> 阅读提示：本文件的「当前实现」列描述的是 **M0 规划时** 的后端状态。其中多数「新增 V1」项目此后已经落地，当前后端契约、客户端实际接入程度和阻塞项以 [`ANDROID-CLIENT-STATUS.md`](./ANDROID-CLIENT-STATUS.md) 为准，接口有无以 `openapi-public-v1.json` 和 `src/openapi/public-v1-operation-allowlist.ts` 为准。
+> 阅读提示：本文件的「当前实现」列描述的是 **M0 规划时** 的后端状态。其中多数「新增 V1」项目此后已经落地，当前后端契约、客户端实际接入程度和阻塞项以 [`ANDROID-CLIENT-STATUS.md`](./ANDROID-CLIENT-STATUS.md) 为准，改造顺序见 [`ANDROID-DEVELOPMENT-PLAN.md`](./ANDROID-DEVELOPMENT-PLAN.md)，接口有无以 `src/openapi/public-v1-operation-allowlist.ts` 为准（仓库内 OpenAPI JSON 是快照，可能落后于白名单）。
 
 ## 结论
 

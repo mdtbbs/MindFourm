@@ -4,10 +4,11 @@
 
 ## Android 客户端现状说明
 
-- 仓库内的 Android 客户端（`android/`）仍处于一期开发状态，标题所说的「手机端体验」目前指的是网页移动布局。
-- 该客户端尚未覆盖私信、好友与关注、屏蔽、多人联机、云存档、资源中心与资源编辑器，正文也只支持 Markdown 投影，无法完整呈现站点正在使用的富文本格式。
-- 它的登录授权仍使用自定义 scheme，尚未按既定方案改到 HTTPS App Link；在完成该改造前不对外发布安装包。
-- 逐功能对照、阻塞项与改造优先级见 [`ANDROID-CLIENT-STATUS.md`](../android/ANDROID-CLIENT-STATUS.md)。
+- 仓库内的 Android 客户端（`android/`）仍处于开发阶段，本页此前条目里说的「手机端体验」指的是网页移动布局，不是这个客户端。
+- 该客户端尚未覆盖私信、好友与关注、屏蔽、在线状态、多人联机、云存档、资源发现与资源编辑器；正文只支持 Markdown 投影，无法完整呈现站点正在使用的富文本格式。
+- 它的登录授权仍使用自定义 scheme，且当前并存三套登录实现，尚未按既定方案收敛到 HTTPS App Link；在完成该改造前不对外发布安装包。
+- 编译门禁已有（GitHub Actions 会构建 debug APK），但还没有 release 变体与签名，因此暂无可分发的安装包。
+- 逐功能对照与阻塞项见 [`ANDROID-CLIENT-STATUS.md`](../android/ANDROID-CLIENT-STATUS.md)，改造顺序见 [`ANDROID-DEVELOPMENT-PLAN.md`](../android/ANDROID-DEVELOPMENT-PLAN.md)。
 
 ## 2.7.12 — 中文文案与编辑器限流修复
 

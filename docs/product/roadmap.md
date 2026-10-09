@@ -8,7 +8,7 @@
 
 - 继续完善蓝图和地图编辑的对象、配置覆盖范围，减少需要回到离线工具的场景。
 - 改善资源中心及编辑流程的手机端使用体验。
-- 把 Android 客户端补齐到与当前平台能力一致：先解决授权链路和富文本正文，再补首页聚合、回复分页与子回复、私信、资源中心与多人联机。当前实现状态和优先级见 [`ANDROID-CLIENT-STATUS.md`](../android/ANDROID-CLIENT-STATUS.md)。
+- 把 Android 客户端补齐到与当前平台能力一致：先做发布闭环（release 变体与签名），再解决授权链路和富文本正文，之后补首页聚合、回复分页与子回复、私信、资源中心与多人联机。当前状态见 [`ANDROID-CLIENT-STATUS.md`](../android/ANDROID-CLIENT-STATUS.md)，阶段划分与出口条件见 [`ANDROID-DEVELOPMENT-PLAN.md`](../android/ANDROID-DEVELOPMENT-PLAN.md)。
 - 改进资源发现和推荐。
 
 这些内容处于研发与评审过程中，范围和时间都可能调整。正式发布后会在[产品更新日志](/api/v1/docs/product-changelog)中确认实际交付内容。
