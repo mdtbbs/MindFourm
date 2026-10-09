@@ -45,183 +45,185 @@ const brandInfo: BrandInfo = {
 // ────────────────────────────────────────────────────────────────────────────
 // Test: child metadata must stay bare so the root title template adds the suffix once
 // ────────────────────────────────────────────────────────────────────────────
-(function testTitleWithSiteNameSuffix() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo,
+describe('page metadata', () => {
+  it('testTitleWithSiteNameSuffix', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo,
+    });
+
+    assertEqual(metadata.title, 'Home', 'title should stay bare for the root title template');
   });
 
-  assertEqual(metadata.title, 'Home', 'title should stay bare for the root title template');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should use provided description over default
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testProvidedDescriptionOverridesDefault', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      description: 'Custom description',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should use provided description over default
-// ────────────────────────────────────────────────────────────────────────────
-(function testProvidedDescriptionOverridesDefault() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    description: 'Custom description',
-    brandInfo,
+    assertEqual(metadata.description, 'Custom description', 'provided description should override brand default');
   });
 
-  assertEqual(metadata.description, 'Custom description', 'provided description should override brand default');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should fallback to brand description when none provided
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFallbackToBrandDescription', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should fallback to brand description when none provided
-// ────────────────────────────────────────────────────────────────────────────
-(function testFallbackToBrandDescription() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo,
+    assertEqual(metadata.description, 'A test forum', 'should fallback to brand description');
   });
 
-  assertEqual(metadata.description, 'A test forum', 'should fallback to brand description');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should fallback to empty string when no description available
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFallbackToEmptyDescription', () => {
+    const noDescBrand: BrandInfo = { ...brandInfo, description: '' };
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo: noDescBrand,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should fallback to empty string when no description available
-// ────────────────────────────────────────────────────────────────────────────
-(function testFallbackToEmptyDescription() {
-  const noDescBrand: BrandInfo = { ...brandInfo, description: '' };
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo: noDescBrand,
+    assertEqual(metadata.description, '', 'should fallback to empty string when no description available');
   });
 
-  assertEqual(metadata.description, '', 'should fallback to empty string when no description available');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should include Open Graph tags
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testOpenGraphTags', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should include Open Graph tags
-// ────────────────────────────────────────────────────────────────────────────
-(function testOpenGraphTags() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo,
+    assert(metadata.openGraph !== undefined, 'openGraph should be defined');
+    assertEqual(metadata.openGraph!.title, 'Home | Test Forum', 'OG title should match full title');
+    assertEqual(metadata.openGraph!.description, 'A test forum', 'OG description should match brand description');
+    assertDeepEqual(metadata.openGraph!.images, ['https://example.com/logo.png'], 'OG images should include logo');
   });
 
-  assert(metadata.openGraph !== undefined, 'openGraph should be defined');
-  assertEqual(metadata.openGraph!.title, 'Home | Test Forum', 'OG title should match full title');
-  assertEqual(metadata.openGraph!.description, 'A test forum', 'OG description should match brand description');
-  assertDeepEqual(metadata.openGraph!.images, ['https://example.com/logo.png'], 'OG images should include logo');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: an admin-configured social image should override the logo on all cards
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testConfiguredSocialImageOverridesLogo', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo,
+      openGraphImage: 'https://example.com/social-card.png',
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: an admin-configured social image should override the logo on all cards
-// ────────────────────────────────────────────────────────────────────────────
-(function testConfiguredSocialImageOverridesLogo() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo,
-    openGraphImage: 'https://example.com/social-card.png',
+    assertDeepEqual(metadata.openGraph!.images, ['https://example.com/social-card.png'], 'OG should prefer the configured social image');
   });
 
-  assertDeepEqual(metadata.openGraph!.images, ['https://example.com/social-card.png'], 'OG should prefer the configured social image');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should include favicon in icons
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFaviconInIcons', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should include favicon in icons
-// ────────────────────────────────────────────────────────────────────────────
-(function testFaviconInIcons() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo,
+    assert(metadata.icons !== undefined, 'icons should be defined');
+    const icons = metadata.icons as Record<string, unknown>;
+    assertEqual(icons.icon, 'https://example.com/favicon.ico', 'icon should use brand faviconUrl');
+    assertEqual(icons.shortcut, 'https://example.com/favicon.ico', 'shortcut should use brand faviconUrl');
+    assertEqual(icons.apple, 'https://example.com/favicon.ico', 'apple icon should use brand faviconUrl');
   });
 
-  assert(metadata.icons !== undefined, 'icons should be defined');
-  const icons = metadata.icons as Record<string, unknown>;
-  assertEqual(icons.icon, 'https://example.com/favicon.ico', 'icon should use brand faviconUrl');
-  assertEqual(icons.shortcut, 'https://example.com/favicon.ico', 'shortcut should use brand faviconUrl');
-  assertEqual(icons.apple, 'https://example.com/favicon.ico', 'apple icon should use brand faviconUrl');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should fallback to /favicon.ico when no faviconUrl
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testFaviconFallback', () => {
+    const noFaviconBrand: BrandInfo = { ...brandInfo, faviconUrl: '' };
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo: noFaviconBrand,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should fallback to /favicon.ico when no faviconUrl
-// ────────────────────────────────────────────────────────────────────────────
-(function testFaviconFallback() {
-  const noFaviconBrand: BrandInfo = { ...brandInfo, faviconUrl: '' };
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo: noFaviconBrand,
+    const icons = metadata.icons as Record<string, unknown>;
+    assertEqual(icons.icon, '/favicon.ico', 'icon should fallback to /favicon.ico');
+    assertEqual(icons.shortcut, '/favicon.ico', 'shortcut should fallback to /favicon.ico');
+    assertEqual(icons.apple, '/favicon.ico', 'apple icon should fallback to /favicon.ico');
   });
 
-  const icons = metadata.icons as Record<string, unknown>;
-  assertEqual(icons.icon, '/favicon.ico', 'icon should fallback to /favicon.ico');
-  assertEqual(icons.shortcut, '/favicon.ico', 'shortcut should fallback to /favicon.ico');
-  assertEqual(icons.apple, '/favicon.ico', 'apple icon should fallback to /favicon.ico');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should use path in Open Graph url
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testOpenGraphUrl', () => {
+    const metadata = generatePageMetadata({
+      title: 'Resources',
+      path: '/resources',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should use path in Open Graph url
-// ────────────────────────────────────────────────────────────────────────────
-(function testOpenGraphUrl() {
-  const metadata = generatePageMetadata({
-    title: 'Resources',
-    path: '/resources',
-    brandInfo,
+    assertEqual(metadata.openGraph!.url, '/resources', 'OG url should use provided path');
   });
 
-  assertEqual(metadata.openGraph!.url, '/resources', 'OG url should use provided path');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should default path to /
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testDefaultPath', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should default path to /
-// ────────────────────────────────────────────────────────────────────────────
-(function testDefaultPath() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo,
+    assertEqual(metadata.openGraph!.url, '/', 'OG url should default to /');
   });
 
-  assertEqual(metadata.openGraph!.url, '/', 'OG url should default to /');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should handle empty logoUrl gracefully (no images in OG)
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testEmptyLogoUrl', () => {
+    const noLogoBrand: BrandInfo = { ...brandInfo, logoUrl: '' };
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo: noLogoBrand,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should handle empty logoUrl gracefully (no images in OG)
-// ────────────────────────────────────────────────────────────────────────────
-(function testEmptyLogoUrl() {
-  const noLogoBrand: BrandInfo = { ...brandInfo, logoUrl: '' };
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo: noLogoBrand,
+    assertDeepEqual(metadata.openGraph!.images, [], 'OG images should be empty when no logoUrl');
   });
 
-  assertDeepEqual(metadata.openGraph!.images, [], 'OG images should be empty when no logoUrl');
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should include alternates.canonical from provided path
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testAlternatesCanonical', () => {
+    const metadata = generatePageMetadata({
+      title: 'Resources',
+      path: '/resources',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should include alternates.canonical from provided path
-// ────────────────────────────────────────────────────────────────────────────
-(function testAlternatesCanonical() {
-  const metadata = generatePageMetadata({
-    title: 'Resources',
-    path: '/resources',
-    brandInfo,
+    assert(metadata.alternates !== undefined, 'alternates should be defined');
+    assertEqual(
+      (metadata.alternates as { canonical?: string }).canonical,
+      '/resources',
+      'alternates.canonical should equal provided path',
+    );
   });
 
-  assert(metadata.alternates !== undefined, 'alternates should be defined');
-  assertEqual(
-    (metadata.alternates as { canonical?: string }).canonical,
-    '/resources',
-    'alternates.canonical should equal provided path',
-  );
-})();
+  // ────────────────────────────────────────────────────────────────────────────
+  // Test: should default alternates.canonical to /
+  // ────────────────────────────────────────────────────────────────────────────
+  it('testAlternatesCanonicalDefault', () => {
+    const metadata = generatePageMetadata({
+      title: 'Home',
+      brandInfo,
+    });
 
-// ────────────────────────────────────────────────────────────────────────────
-// Test: should default alternates.canonical to /
-// ────────────────────────────────────────────────────────────────────────────
-(function testAlternatesCanonicalDefault() {
-  const metadata = generatePageMetadata({
-    title: 'Home',
-    brandInfo,
+    assertEqual(
+      (metadata.alternates as { canonical?: string }).canonical,
+      '/',
+      'alternates.canonical should default to /',
+    );
   });
 
-  assertEqual(
-    (metadata.alternates as { canonical?: string }).canonical,
-    '/',
-    'alternates.canonical should default to /',
-  );
-})();
 
-assert(true, 'metadata spec executed');
+});

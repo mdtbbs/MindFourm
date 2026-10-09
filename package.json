@@ -44,7 +44,8 @@
     "benchmark:search": "npm run build:backend && node dist/scripts/chinese-search-benchmark.js",
     "version:major": "node scripts/bump-version.cjs major",
     "version:minor": "node scripts/bump-version.cjs minor",
-    "version:patch": "node scripts/bump-version.cjs patch"
+    "version:patch": "node scripts/bump-version.cjs patch",
+    "test:frontend-unit": "jest --config frontend/jest.config.js"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",

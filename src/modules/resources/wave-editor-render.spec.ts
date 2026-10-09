@@ -49,8 +49,8 @@ describe('WaveEditor contract', () => {
 
   it('keeps all renderer-supported advanced wave fields in the editor contract', () => {
     const source = readFileSync(join(
-      process.cwd(),
-      'frontend/src/components/forum/resources/workbench/wave-editor.tsx',
+      __dirname,
+      '../../../frontend/src/components/forum/resources/workbench/wave-editor.tsx',
     ), 'utf8');
 
     for (const field of ['shieldScaling', 'spawn', 'team', 'effect', 'payloads', 'items']) {
