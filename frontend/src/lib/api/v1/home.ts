@@ -7,6 +7,10 @@ export type HomeResource = { id: number; title: string; slug: string | null; res
 export type HomeNotice = { id: number; public_id: string; title: string; excerpt: string | null; published_at: string | null };
 export type HomeNews = { id: number; title: string; slug: string | null; category: string | null };
 export type HomeDeveloperEntry = { id: number; category_id: number | null; external_id: string; title: string; state: string; url: string; repository: string; updated_at: string };
+/** One board in the homepage directory; `depth` marks a sub-board of the previous level-0 entry. */
+export type HomeBoard = { id: number; name: string; slug: string | null; icon: string | null; color: string | null; description: string | null; group: string | null; post_count: number; depth: 0 | 1 };
+export type HomeResourceKind = { kind: string; label: string; count: number };
+export type HomeStats = { posts: number; replies: number; members: number; resources: number; today_posts: number };
 
 export type HomeData = {
   discussions: HomeSection<PostSummary>;
@@ -14,6 +18,9 @@ export type HomeData = {
   news: HomeSection<HomeNews>;
   notices: HomeSection<HomeNotice>;
   development: { issues: HomeSection<HomeDeveloperEntry>; pull_requests: HomeSection<HomeDeveloperEntry> };
+  boards: HomeBoard[];
+  resource_kinds: HomeResourceKind[];
+  stats: HomeStats | null;
   generated_at: string;
 };
 
