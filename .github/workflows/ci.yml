@@ -138,6 +138,9 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+      - name: Check first-load JavaScript budget
+        run: node scripts/check-frontend-budget.cjs
+
   renderer:
     name: Mindustry renderer compile and fixture tests
     runs-on: ubuntu-24.04

@@ -230,7 +230,7 @@ export function LoginLayout({
                 href={footerLink.href}
                 whileHover={{ scale: 1.05 }}
                 style={{
-                  color: 'var(--primary)',
+                  color: 'var(--primary-text)',
                   textDecoration: 'none',
                   fontWeight: 500,
                 }}
@@ -242,7 +242,7 @@ export function LoginLayout({
                   onClick={footerLink.onClick}
                   whileHover={{ scale: 1.05 }}
                   style={{
-                    color: 'var(--primary)',
+                    color: 'var(--primary-text)',
                     cursor: 'pointer',
                     fontWeight: 500,
                   }}

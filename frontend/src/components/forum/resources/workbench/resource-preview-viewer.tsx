@@ -238,8 +238,8 @@ export default function ResourcePreviewViewer({
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border)] p-3 text-xs text-[var(--text-muted)]">
             <p className="inline-flex items-center gap-1"><Crosshair className="h-3.5 w-3.5" />{labels.coordinates}: {width && height ? `${width} × ${height} · ${labels.approximate}` : labels.noMarkers}</p>
             <div className="flex flex-wrap gap-2">
-              <button type="button" aria-pressed={gridVisible} onClick={() => setGridVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary)]"><Grid2X2 className="h-3.5 w-3.5" />{labels.grid}</button>
-              <button type="button" aria-pressed={markersVisible} disabled={markers.length === 0} onClick={() => setMarkersVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary)] disabled:opacity-40"><Crosshair className="h-3.5 w-3.5" />{labels.markers}{markers.length === 0 ? ` · ${labels.noMarkers}` : ` · ${markers.length}`}</button>
+              <button type="button" aria-pressed={gridVisible} onClick={() => setGridVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary-text)]"><Grid2X2 className="h-3.5 w-3.5" />{labels.grid}</button>
+              <button type="button" aria-pressed={markersVisible} disabled={markers.length === 0} onClick={() => setMarkersVisible((value) => !value)} className="inline-flex min-h-9 items-center gap-1 rounded border border-[var(--border)] px-2 hover:text-[var(--primary-text)] disabled:opacity-40"><Crosshair className="h-3.5 w-3.5" />{labels.markers}{markers.length === 0 ? ` · ${labels.noMarkers}` : ` · ${markers.length}`}</button>
             </div>
           </div>
           {(kind === 'schematic' || kind === 'map') && <fieldset className="border-t border-[var(--border)] p-3">

@@ -223,6 +223,20 @@ async function bootstrap() {
   await app.listen(port);
   app.enableShutdownHooks();
   console.log(`MindFourm NestJS running on http://localhost:${port}`);
+
+  // Register the crash safety net only after the server is listening. A process
+  // running alone under PM2 (see ecosystem.config.js) with no handler exits the
+  // instant it sees an uncaught exception, which turns any single misbehaving
+  // request into a full-site 502/503 until PM2 finishes restarting it. Logging
+  // the rejection keeps the process alive for the recoverable cases; a genuine
+  // uncaught exception is still fatal, but it is now recorded with a stack
+  // instead of vanishing into the PM2 log with no attribution.
+  process.on('unhandledRejection', (reason) => {
+    console.error('[unhandledRejection]', reason instanceof Error ? reason.stack : reason);
+  });
+  process.on('uncaughtException', (error) => {
+    console.error('[uncaughtException]', error?.stack || error);
+  });
 }
 
 bootstrap();

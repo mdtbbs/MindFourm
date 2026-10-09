@@ -15,7 +15,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function CategoriesPage() {
   const locale = await getRequestLocale();
-  const t = (key: string) => translate(locale, key);
+  // `values` must be forwarded: CategoryLink calls this with { count }, and a
+  // one-argument wrapper silently drops it, rendering the literal "{count} 个主题".
+  // `values` must be forwarded: CategoryLink calls this with { count }, and a
+  // one-argument wrapper silently drops it, rendering the literal "{count} 个主题".
+  const t = (key: string, values?: Record<string, string | number>) => translate(locale, key, values);
   const categories = await getCategories({ init: { cache: 'no-store' } }).catch(() => [] as Category[]);
 
   const groups = groupForumCategories(categories);

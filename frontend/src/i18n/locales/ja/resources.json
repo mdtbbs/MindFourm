@@ -56,6 +56,7 @@
     "emptyDescription": "概要はまだありません。詳しい説明は下をご覧ください。",
     "unknownAuthor": "作者不明",
     "updated": "更新",
+    "published": "公開日",
     "downloads": "ダウンロード {count} 回",
     "views": "閲覧 {count} 回",
     "rendererProcessing": "Mindustry 公式プレビューを生成中…",

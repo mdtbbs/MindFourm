@@ -2,7 +2,8 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { DataSource } from 'typeorm';
 import { createHash, randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
-import { Resource } from '@entities/resource.entity';
+import type { Resource } from '@entities/resource.entity';
+import { incrementResourceCounter } from './resource-counter.util';
 import { getClientIp } from '@common/utils/client-context.util';
 import { PUBLIC_RESOURCE_STATUSES } from '@common/utils/constants';
 import { ResourceViewEvent } from '@entities/resource-view-event.entity';
@@ -174,8 +175,9 @@ export class ResourceViewsService implements OnModuleInit, OnModuleDestroy {
         referrer_category: input.referrerCategory,
         created_at: input.viewedAt,
       });
-      const aggregate = await queryRunner.manager.increment(Resource, { id: input.resourceId }, 'view_count', 1);
-      if (aggregate.affected === 0) throw new Error('resource missing while recording view');
+      // A read is not an edit: never let it move resources.updated_at.
+      const affected = await incrementResourceCounter(queryRunner.manager, input.resourceId, 'view_count');
+      if (affected === 0) throw new Error('resource missing while recording view');
       await queryRunner.commitTransaction();
       transactionStarted = false;
       return true;

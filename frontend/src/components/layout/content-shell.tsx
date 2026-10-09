@@ -52,7 +52,7 @@ export default function ContentShell({
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] lg:flex lg:h-dvh lg:min-h-0 lg:overflow-hidden">
       <a
         href="#main-content"
-        className="fixed left-4 top-4 z-[100] -translate-y-16 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--primary)]"
+        className="fixed left-4 top-4 z-[100] -translate-y-16 rounded-md bg-[var(--primary-button)] px-4 py-2 text-sm font-semibold text-white shadow-lg transition-transform focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--primary)]"
       >
         {t('common.skipToContent')}
       </a>

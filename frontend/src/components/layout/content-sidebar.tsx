@@ -24,7 +24,7 @@ export const SIDEBAR_LAYOUT_CLASSES = {
 function SidebarBrand({ siteName, logoUrl, sidebarLogoUrl }: { siteName: string; logoUrl?: string; sidebarLogoUrl?: string }) {
   const displayLogoUrl = sidebarLogoUrl || logoUrl;
   return <div data-testid="sidebar-brand" className={SIDEBAR_LAYOUT_CLASSES.brand}><Link href="/" className="flex w-full items-center gap-3 hover:opacity-80">
-    {displayLogoUrl ? <img src={displayLogoUrl} alt={siteName} className="h-8 w-auto max-w-full object-contain" /> : <><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[var(--primary)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div></div></>}
+    {displayLogoUrl ? <img src={displayLogoUrl} alt={siteName} className="h-8 w-auto max-w-full object-contain" /> : <><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[var(--primary-button)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div></div></>}
   </Link></div>;
 }
 
@@ -41,10 +41,11 @@ export default function ContentSidebar({
   const workspace = resolveWorkspace(pathname, userId);
   const contextMode = workspace === 'resources' ? 'resources' : workspace === 'community' ? 'forum' : null;
   const icons = { home: Home, community: MessageCircle, resources: Package, multiplayer: Radio, tools: Wrench, me: UserRound } as const;
+  // `me` is rendered separately at the foot of the nav column so the short/tall
+  // page behaviour stays identical in both branches of the merge.
   const personalSpace = WORKSPACE_SPACES.find((space) => space.id === 'me')!;
   const personalActive = isWorkspaceActive(pathname, personalSpace.href, userId);
   const PersonalIcon = icons.me;
-
   return <aside data-testid="content-sidebar" className={SIDEBAR_LAYOUT_CLASSES.root}>
     <SidebarBrand siteName={siteName} logoUrl={logoUrl} sidebarLogoUrl={sidebarLogoUrl} />
     <nav data-testid="sidebar-nav" aria-label={t('navigation.siteNavigation')} className={`${SIDEBAR_LAYOUT_CLASSES.nav} gap-1`}>

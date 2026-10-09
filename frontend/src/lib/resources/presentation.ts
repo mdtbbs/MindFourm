@@ -1,6 +1,18 @@
 import type { Resource } from '@/types';
 import { resourceKindLabel } from '@/lib/display-labels';
 
+/**
+ * The date a resource card and detail header should show.
+ *
+ * `updated_at` is TypeORM's automatic write timestamp, so ordinary traffic — a
+ * page view, a download — used to move it and the "date" became the last time
+ * someone touched the resource. `published_at` is stamped once when the resource
+ * becomes publicly visible; fall back to `created_at` for rows that predate it.
+ */
+export function resourcePublicationDate(resource: Pick<Resource, 'published_at' | 'created_at'>): string {
+  return resource.published_at || resource.created_at;
+}
+
 export function resourceFilename(resource: Pick<Resource, 'file_name' | 'versions'>): string | null {
   return resource.versions?.[0]?.file_name || resource.file_name || null;
 }

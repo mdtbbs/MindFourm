@@ -48,10 +48,10 @@ export default function ResourceCardActions({
       <button type="button" disabled={busy} onClick={toggleLike} className={`inline-flex items-center gap-1 rounded-md px-2 py-1.5 transition ${liked ? 'bg-rose-500/10 text-rose-500' : 'text-[var(--text-muted)] hover:bg-rose-500/10 hover:text-rose-500'}`} aria-label={liked ? '取消点赞' : '点赞'}>
         <Heart className={`h-3.5 w-3.5 ${liked ? 'fill-current' : ''}`} />{likeCount}
       </button>
-      <Link href={`${resourceHref}#reviews`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]" aria-label="查看评论">
+      <Link href={`${resourceHref}#reviews`} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--primary-text)]" aria-label="查看评论">
         <MessageCircle className="h-3.5 w-3.5" />{commentCount}
       </Link>
-      <a href={resourceApi.download(resourceId)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]" aria-label="下载资源">
+      <a href={resourceApi.download(resourceId)} className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[var(--text-muted)] transition hover:bg-[var(--bg-elevated)] hover:text-[var(--primary-text)]" aria-label="下载资源">
         <Download className="h-3.5 w-3.5" />下载
       </a>
     </div>

@@ -189,7 +189,7 @@ export default function BlockUserButton({
         data-testid={`block-user-trigger-${userId}`}
         className={`inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] rounded ${
           blocked
-            ? 'text-[var(--text-secondary)] hover:text-[var(--primary)]'
+            ? 'text-[var(--text-secondary)] hover:text-[var(--primary-text)]'
             : 'text-[var(--text-secondary)] hover:text-[var(--error)]'
         } ${className}`}
       >

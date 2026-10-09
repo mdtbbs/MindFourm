@@ -71,7 +71,8 @@ export class ResourceDiscoveryResourceCardDto {
   @ApiProperty({ nullable: true, type: String }) preview_url!: string | null;
   @ApiProperty({ nullable: true, type: ResourceDiscoveryUserDto }) user!: ResourceDiscoveryUserDto | null;
   @ApiProperty({ format: 'date-time', nullable: true, type: String }) created_at!: Date | string | null;
-  @ApiProperty({ format: 'date-time', nullable: true, type: String }) updated_at!: Date | string | null;
+  @ApiProperty({ format: 'date-time', nullable: true, type: String, description: 'Operational write timestamp; moved by unrelated writes such as view and download counting. Do not present this as the publication date.' }) updated_at!: Date | string | null;
+  @ApiProperty({ format: 'date-time', nullable: true, type: String, description: 'When the resource first became publicly visible. This is the author-facing date.' }) published_at!: Date | string | null;
 }
 
 export class ResourceDiscoveryQueryDto {

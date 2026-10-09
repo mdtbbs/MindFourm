@@ -54,6 +54,22 @@ const catalogs: Record<Locale, Record<string, unknown>> = {
   'zh-CN': mergeCatalogs(zhCommon, zhWorkflows, zhDiscussion, zhResources, zhActivity, zhAccount, zhDiscovery, zhChallenge),
 };
 
+describe('cloud save copy', () => {
+  it.each(locales)('%s localizes the cloud-save restore button and leaves the site name to the profile', (locale) => {
+    expect(translate(locale, 'cloudSaves.restoreConfirmLabel')).not.toBe('cloudSaves.restoreConfirmLabel');
+    // `empty` is rendered with the active site profile's brand name, so a
+    // hard-coded brand here would show MDTBBS on the mindustry-club deployment.
+    const empty = translate(locale, 'cloudSaves.empty');
+    expect(empty).toContain('{site}');
+    expect(empty).not.toContain('MDTBBS');
+  });
+
+  it('uses the button label from the catalog rather than a hard-coded string', () => {
+    expect(translate('zh-CN', 'cloudSaves.restoreConfirmLabel')).toBe('恢复');
+    expect(translate('en', 'cloudSaves.restoreConfirmLabel')).toBe('Restore');
+  });
+});
+
 describe('community composition and resource-list translations', () => {
   function messageKeys(value: Record<string, unknown>, prefix = ''): string[] {
     return Object.entries(value).flatMap(([key, child]) => {

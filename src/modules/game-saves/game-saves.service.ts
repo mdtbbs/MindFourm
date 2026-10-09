@@ -43,7 +43,7 @@ export class GameSavesService {
         snapshots = Number(updated?.affectedRows || 0);
         await manager.query(`UPDATE game_save_slots SET current_snapshot_id=NULL,deleted_at=NOW(),updated_at=NOW() WHERE id IN (${marks})`, slotIds);
       }
-      const cancelled = await manager.query("UPDATE game_save_upload_sessions SET status='cancelled' WHERE user_id=? AND status IN ('pending','uploaded')", [userId]);
+      const cancelled = await manager.query('UPDATE game_save_upload_sessions SET status=? WHERE user_id=? AND status IN (?,?)', ['cancelled', userId, 'pending', 'uploaded']);
       const uploads = Number(cancelled?.affectedRows || 0);
       if (slotIds.length || uploads) {
         await this.audit(manager, userId, 'cloud_save.account_delete', { slots: slotIds.length, snapshots, uploads }, {});
@@ -166,10 +166,28 @@ export class GameSavesService {
       }
       const currentRows = slot.current_snapshot_id ? await manager.query('SELECT id, sha256 FROM game_save_snapshots WHERE id = ? AND deleted_at IS NULL LIMIT 1', [slot.current_snapshot_id]) : [];
       const current = currentRows[0] || null;
-      if (current && current.sha256 === sha256) return { no_upload_required: true, snapshot_id: current.id };
+      // Head already holds these bytes. Return the upload-session shape anyway,
+      // marked committed, so a client that always PUTs what it is given keeps
+      // working; `no_upload_required` remains for compatibility with clients
+      // that check it first.
+      if (current && current.sha256 === sha256) {
+        const uploadId = randomUUID();
+        await manager.query(`INSERT INTO game_save_upload_sessions
+          (id,user_id,slot_id,expected_sha256,expected_size_bytes,game_version,game_build,map_name,wave,playtime_seconds,
+           mods_manifest_json,mods_manifest_hash,base_snapshot_id,reason,conflict_resolution,confirm_current_snapshot_id,
+           object_key,storage_provider,status,created_by_client_id,device_id,expires_at,committed_at,committed_snapshot_id)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'committed',?,?,NOW(),NOW(),?)`, [
+          uploadId, userId, slotId, sha256, String(size), metadata.game_version, metadata.game_build, metadata.map_name,
+          metadata.wave, metadata.playtime_seconds, metadata.mods_manifest_json ? JSON.stringify(metadata.mods_manifest_json) : null,
+          metadata.mods_manifest_hash, baseId, reason, resolution, confirmedCurrentId,
+          `cloud-saves/${userId}/${randomUUID()}`, this.storage.provider,
+          actor.clientId || null, deviceId, current.id,
+        ]);
+        return { upload_id: uploadId, no_upload_required: true, snapshot_id: current.id };
+      }
       if (!current && base) this.fail('SAVE_BASE_SNAPSHOT_INVALID', HttpStatus.CONFLICT, '云存档当前没有基准快照。');
       if (current && (!base || base.id !== current.id)) {
-        if (resolution === 'normal') this.conflict(base?.id || null, current.id);
+        if (resolution === 'normal') this.conflict(base?.id || null, current.id, true);
         if (resolution === 'force_replace_head' && confirmedCurrentId !== current.id) this.conflict(base?.id || null, current.id);
       }
       if (resolution === 'force_replace_head' && (!current || confirmedCurrentId !== current.id)) this.conflict(base?.id || null, current?.id || null);
@@ -202,16 +220,18 @@ export class GameSavesService {
       await this.audit(manager, userId, 'cloud_save.upload.create', { slot_id: slotId, upload_id: uploadId, sha256, size_bytes: size, reason }, actor);
       return { upload_id: uploadId, expires_at: expiresAt.toISOString() };
     });
-    if ((created as any).no_upload_required) return created;
+    const commit = (snapshotId: string) => ((created as any).no_upload_required
+      ? { no_upload_required: true, snapshot_id: snapshotId } : { upload_id: (created as any).upload_id, snapshot_id: snapshotId });
+    if ((created as any).no_upload_required && !(created as any).upload_id) return created;
     const sessions = await this.dataSource.query('SELECT object_key, expected_sha256, expires_at, status, committed_snapshot_id FROM game_save_upload_sessions WHERE id = ? AND user_id = ? LIMIT 1', [(created as any).upload_id, userId]);
     if (!sessions.length) this.notFound('SAVE_UPLOAD_NOT_FOUND', '上传会话不存在。');
     if (sessions[0].status === 'committed' && sessions[0].committed_snapshot_id) {
-      return { no_upload_required: true, snapshot_id: sessions[0].committed_snapshot_id };
+      return commit(sessions[0].committed_snapshot_id);
     }
     if (!['pending', 'uploaded'].includes(sessions[0].status)) this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上传会话已过期或已取消。');
     if (new Date(sessions[0].expires_at).getTime() <= Date.now()) this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上传会话已过期。');
     const uploadId = (created as any).upload_id;
-    return {
+    const response: Record<string, unknown> = {
       upload_id: uploadId,
       upload: {
         method: 'PUT',
@@ -220,6 +240,8 @@ export class GameSavesService {
         expires_at: new Date(sessions[0].expires_at).toISOString(),
       },
     };
+    if ((created as any).no_upload_required) response.no_upload_required = true;
+    return response;
   }
 
   async receiveUpload(userId: number, uploadId: string, source: NodeJS.ReadableStream, actor: CloudSaveActor) {
@@ -249,8 +271,8 @@ export class GameSavesService {
       this.fail('SAVE_STORAGE_UNAVAILABLE', HttpStatus.SERVICE_UNAVAILABLE, '无法写入论坛本地存档目录。', true);
     }
     const update = await this.dataSource.query(
-      "UPDATE game_save_upload_sessions SET status='uploaded' WHERE id=? AND user_id=? AND status IN ('pending','uploaded') AND expires_at>NOW()",
-      [uploadId, userId],
+      'UPDATE game_save_upload_sessions SET status=? WHERE id=? AND user_id=? AND status IN (?,?) AND expires_at>NOW()',
+      ['uploaded', uploadId, userId, 'pending', 'uploaded'],
     );
     if (!update.affectedRows) {
       await this.storage.deleteObject(session.object_key).catch(() => undefined);
@@ -269,8 +291,8 @@ export class GameSavesService {
     const session = existing[0];
     if (session.status === 'committed' && session.committed_snapshot_id) return this.getSnapshotForUser(userId, session.committed_snapshot_id);
     if (new Date(session.expires_at).getTime() <= Date.now()) {
-      await this.dataSource.query("UPDATE game_save_upload_sessions SET status = 'expired' WHERE id = ? AND status IN ('pending','uploaded')", [uploadId]);
-      this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上傳会话已过期。');
+      await this.dataSource.query('UPDATE game_save_upload_sessions SET status=? WHERE id=? AND status IN (?,?)', ['expired', uploadId, 'pending', 'uploaded']);
+      this.fail('SAVE_UPLOAD_EXPIRED', HttpStatus.GONE, '上传会话已过期。');
     }
     const expectedSize = Number(session.expected_size_bytes);
     let valid = false;
@@ -300,7 +322,7 @@ export class GameSavesService {
         return await this.getSnapshotWith(manager, current.id);
       }
       let destination = slot;
-      if (locked.conflict_resolution === 'normal' && hasConflict) this.conflict(locked.base_snapshot_id || null, current?.id || null);
+      if (locked.conflict_resolution === 'normal' && hasConflict) this.conflict(locked.base_snapshot_id || null, current?.id || null, true);
       if (locked.conflict_resolution === 'force_replace_head' && (locked.confirm_current_snapshot_id || null) !== (current?.id || null)) {
         this.conflict(locked.base_snapshot_id || null, current?.id || null);
       }
@@ -326,9 +348,13 @@ export class GameSavesService {
             AND b.size_bytes=s.expected_size_bytes AND b.ref_count>0)
       ) pending_saves`, [userId]);
       if (Number(used_bytes) + Number(reserved_bytes) > this.number('maxBytesPerUser', 524288000)) {
+        // Quota may have been lowered after the session was created. Fail the
+        // session and drop the object now; leaving it pending would keep the
+        // reservation alive and block every later commit.
+        await this.discardUpload(manager, locked);
         this.fail('SAVE_QUOTA_EXCEEDED', HttpStatus.CONFLICT, '云存档空间不足。');
       }
-      const blobId = await this.addBlobReference(manager, userId, locked, actor);
+      const blobId = await this.addBlobReference(manager, userId, locked);
       const snapshotSource = createConflictCopy ? { ...locked, reason: 'conflict' } : locked;
       const snapshot = await this.insertSnapshot(manager, destination, snapshotSource, blobId, actor);
       await manager.query('UPDATE game_save_slots SET current_snapshot_id=?, updated_at=NOW() WHERE id=?', [snapshot.id, destination.id]);
@@ -368,6 +394,10 @@ export class GameSavesService {
         size: Number(row.size_bytes),
         sha256: row.sha256,
         file_name: fileName,
+        // The URL is not signed and not one-time: it stays valid for as long as
+        // the snapshot is downloadable, so clients may reuse it.
+        expires_at: null,
+        reusable: true,
       },
     };
   }
@@ -387,7 +417,7 @@ export class GameSavesService {
     await this.audit(this.dataSource.manager, userId, 'cloud_save.download', {
       slot_id: slotId, snapshot_id: snapshotId, size_bytes: Number(row.size_bytes),
     }, actor);
-    return { ...file, file_name: fileName, sha256: row.sha256 };
+    return { stream: file.stream, size: file.size, file_name: fileName, sha256: row.sha256, last_modified: file.last_modified };
   }
 
   async restore(userId: number, slotId: string, snapshotId: string, body: any, actor: CloudSaveActor, key?: string) {
@@ -440,7 +470,7 @@ export class GameSavesService {
       const rows = await manager.query('SELECT id,slot_id,status FROM game_save_upload_sessions WHERE id=? AND user_id=? FOR UPDATE', [uploadId, userId]);
       if (!rows.length) this.notFound('SAVE_UPLOAD_NOT_FOUND', '上传会话不存在。');
       if (rows[0].status === 'committed') this.fail('SAVE_UPLOAD_ALREADY_COMMITTED', HttpStatus.CONFLICT, '上传会话已经提交。');
-      await manager.query("UPDATE game_save_upload_sessions SET status='cancelled' WHERE id=? AND user_id=? AND status IN ('pending','uploaded')", [uploadId, userId]);
+      await manager.query('UPDATE game_save_upload_sessions SET status=? WHERE id=? AND user_id=? AND status IN (?,?)', ['cancelled', uploadId, userId, 'pending', 'uploaded']);
       await this.audit(manager, userId, 'cloud_save.upload.cancel', { slot_id: rows[0].slot_id, upload_id: uploadId }, actor);
       return { id: uploadId, cancelled: true };
     });
@@ -452,14 +482,16 @@ export class GameSavesService {
     return this.shapeSnapshot(row, row.slot_id);
   }
 
-  async runMaintenance(): Promise<{ expiredUploads: number; orphanObjects: number; deletedBlobs: number; deletedSnapshots: number }> {
-    if (!this.isStorageReady()) return { expiredUploads: 0, orphanObjects: 0, deletedBlobs: 0, deletedSnapshots: 0 };
+  async runMaintenance(): Promise<{ expiredUploads: number; orphanObjects: number; deletedBlobs: number; deletedSnapshots: number; expiredIdempotencyKeys: number }> {
+    if (!this.isStorageReady()) return { expiredUploads: 0, orphanObjects: 0, deletedBlobs: 0, deletedSnapshots: 0, expiredIdempotencyKeys: 0 };
     const expired = await this.dataSource.query(`SELECT id,object_key,status FROM game_save_upload_sessions
       WHERE object_deleted_at IS NULL AND ((status IN ('pending','uploaded') AND expires_at < NOW())
         OR (status IN ('cancelled','expired','failed') AND created_at < DATE_SUB(NOW(), INTERVAL 1 HOUR))) LIMIT 100`);
     let expiredUploads = 0;
     for (const item of expired) {
-      if (item.status === 'pending' || item.status === 'uploaded') await this.dataSource.query("UPDATE game_save_upload_sessions SET status='expired' WHERE id=? AND status IN ('pending','uploaded')", [item.id]);
+      if (item.status === 'pending' || item.status === 'uploaded') {
+        await this.dataSource.query('UPDATE game_save_upload_sessions SET status=? WHERE id=? AND status IN (?,?)', ['expired', item.id, 'pending', 'uploaded']);
+      }
       try {
         await this.storage.deleteObject(item.object_key);
         await this.dataSource.query('UPDATE game_save_upload_sessions SET object_deleted_at=NOW() WHERE id=?', [item.id]);
@@ -499,15 +531,33 @@ export class GameSavesService {
       }
     }
     const deletedSnapshots = await this.applyRetention();
-    return { expiredUploads, orphanObjects, deletedBlobs, deletedSnapshots };
+    // Idempotency rows only disappear when the exact same key is replayed, so a
+    // busy account would otherwise accumulate response_json payloads forever.
+    const purged = await this.dataSource.query(
+      'DELETE FROM game_save_idempotency WHERE expires_at < NOW() LIMIT 1000',
+    );
+    const expiredIdempotencyKeys = Number(purged?.affectedRows || 0);
+    return { expiredUploads, orphanObjects, deletedBlobs, deletedSnapshots, expiredIdempotencyKeys };
   }
 
+  /**
+   * Sweep slots in id order so every slot is eventually visited. Ordering by
+   * `updated_at` starved anything past the first page: dormant slots keep their
+   * old timestamp and permanently occupy the front of the queue.
+   */
   private async applyRetention(): Promise<number> {
-    const slots = await this.dataSource.query('SELECT id,user_id,current_snapshot_id FROM game_save_slots WHERE deleted_at IS NULL ORDER BY updated_at ASC LIMIT 200');
+    const [{ last_id }] = await this.dataSource.query(`SELECT CAST(COALESCE((
+        SELECT value FROM settings WHERE \`key\` = 'cloud_saves_retention_cursor'
+      ), '0') AS CHAR) AS last_id`);
+    const page = await this.dataSource.query(`SELECT id FROM game_save_slots
+      WHERE deleted_at IS NULL AND id > ? ORDER BY id ASC LIMIT 200`, [String(last_id)]);
+    const rows = page.length
+      ? page
+      : await this.dataSource.query('SELECT id FROM game_save_slots WHERE deleted_at IS NULL ORDER BY id ASC LIMIT 200');
     let removed = 0;
     const maxHistory = this.number('maxHistoryPerSlot', 20);
     const cutoff = new Date(Date.now() - this.number('retentionDays', 90) * 86_400_000);
-    for (const candidate of slots) {
+    for (const candidate of rows) {
       removed += await this.dataSource.transaction(async manager => {
         const slotRows = await manager.query('SELECT id,user_id,current_snapshot_id FROM game_save_slots WHERE id=? AND deleted_at IS NULL FOR UPDATE', [candidate.id]);
         if (!slotRows.length) return 0;
@@ -526,10 +576,25 @@ export class GameSavesService {
         return count;
       });
     }
+    if (rows.length) await this.saveRetentionCursor(String(rows[rows.length - 1].id));
     return removed;
   }
 
-  private async addBlobReference(manager: EntityManager, userId: number, session: any, _actor: CloudSaveActor): Promise<string> {
+  /** Advance the round-robin cursor; a missing settings row must not fail the sweep. */
+  private async saveRetentionCursor(value: string): Promise<void> {
+    try {
+      await this.dataSource.query(`INSERT INTO settings (\`key\`, value, category, description, updated_at)
+        VALUES ('cloud_saves_retention_cursor', ?, 'cloud-saves', 'Internal: cloud save retention sweep cursor', NOW())
+        ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()`, [value]);
+    } catch { /* The next pass re-reads the previous cursor and retries. */ }
+  }
+
+  /** Mark a session failed so the next maintenance pass deletes its staged object. */
+  private async discardUpload(manager: EntityManager, session: any): Promise<void> {
+    await manager.query('UPDATE game_save_upload_sessions SET status=? WHERE id=? AND status IN (?,?)', ['failed', session.id, 'pending', 'uploaded']);
+  }
+
+  private async addBlobReference(manager: EntityManager, userId: number, session: any): Promise<string> {
     const rows = await manager.query('SELECT * FROM game_save_blobs WHERE user_id=? AND sha256=? AND size_bytes=? FOR UPDATE', [userId, session.expected_sha256, String(session.expected_size_bytes)]);
     if (rows.length) {
       const blob = rows[0];
@@ -606,7 +671,8 @@ export class GameSavesService {
   }
 
   private async getSnapshotWith(manager: EntityManager, snapshotId: string) {
-    const rows = await manager.query('SELECT * FROM game_save_snapshots WHERE id=? AND deleted_at IS NULL LIMIT 1', [snapshotId]);
+    const rows = await manager.query(`SELECT sn.* FROM game_save_snapshots sn JOIN game_save_slots s ON s.id=sn.slot_id
+      WHERE sn.id=? AND s.deleted_at IS NULL AND sn.deleted_at IS NULL LIMIT 1`, [snapshotId]);
     if (!rows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
     return this.shapeSnapshot(rows[0], rows[0].slot_id);
   }
@@ -636,13 +702,6 @@ export class GameSavesService {
       game: { version: row.game_version ?? null, build: row.game_build ?? null },
       save: { map_name: row.map_name ?? null, wave: row.wave ?? null, playtime_seconds: row.playtime_seconds == null ? null : Number(row.playtime_seconds) },
       reason: row.reason, created_at: row.created_at };
-  }
-
-  private async shapeSnapshotById(manager: EntityManager, userId: number, snapshotId: string) {
-    const rows = await manager.query(`SELECT sn.* FROM game_save_snapshots sn JOIN game_save_slots s ON s.id=sn.slot_id
-      WHERE sn.id=? AND s.user_id=? AND s.deleted_at IS NULL AND sn.deleted_at IS NULL LIMIT 1`, [snapshotId,userId]);
-    if (!rows.length) this.notFound('SAVE_SNAPSHOT_NOT_FOUND', '快照不存在。');
-    return this.shapeSnapshot(rows[0], rows[0].slot_id);
   }
 
   private async audit(manager: EntityManager, userId: number, action: string, details: Record<string, unknown>, actor: CloudSaveActor): Promise<void> {
@@ -675,8 +734,12 @@ export class GameSavesService {
     }
   }
 
-  private conflict(base: string | null, current: string | null): never {
-    throw new ApiV1Exception('SAVE_CONFLICT', HttpStatus.CONFLICT, '云存档自上次同步后已有更新。', false, [{ base_snapshot_id: base, current_snapshot_id: current }]);
+  private conflict(base: string | null, current: string | null, suggestConflictCopy = false): never {
+    const details: Record<string, unknown> = { base_snapshot_id: base, current_snapshot_id: current };
+    // Without this hint a client only learns the head moved after it has already
+    // uploaded the whole file; the retry has to re-upload with a new session.
+    if (suggestConflictCopy) details.suggested_resolution = 'create_conflict_copy';
+    throw new ApiV1Exception('SAVE_CONFLICT', HttpStatus.CONFLICT, '云存档自上次同步后已有更新。', false, [details]);
   }
   private assertEnabled(): void {
     if (this.settings.getCached('cloud_saves_enabled') !== 'true') this.fail('CLOUD_SAVES_DISABLED', HttpStatus.FORBIDDEN, '云存档功能尚未启用。');

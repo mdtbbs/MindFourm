@@ -82,6 +82,10 @@ services:
       # Integrations. Previously absent entirely, so MindFileList uploads and the
       # service API silently no-opped inside Docker.
       FORUM_API_KEY: ${FORUM_API_KEY:-}
+      # Shared with the frontend service below. SSR reads are internal traffic and
+      # must be recognisable as such, otherwise all server-side rendering collapses
+      # into one rate-limit bucket (see RateLimitGuard.isTrustedInternalRequest).
+      FORUM_INTERNAL_API_KEY: ${FORUM_INTERNAL_API_KEY:?FORUM_INTERNAL_API_KEY is required}
       MFL_BASE_URL: ${MFL_BASE_URL:-}
       MFL_API_KEY: ${MFL_API_KEY:-}
       EASYMANAGER_ENABLED: ${EASYMANAGER_ENABLED:-false}
@@ -119,6 +123,9 @@ services:
       NEXT_PUBLIC_MINDAUTH_URL: ${MINDAUTH_URL}
       NEXT_PUBLIC_MINDAUTH_CLIENT_ID: forum
       NEXT_PUBLIC_SITE_URL: ${FRONTEND_URL}
+      # Must equal the backend value above, or the backend rejects the header and
+      # SSR traffic is rate-limited as visitor traffic.
+      FORUM_INTERNAL_API_KEY: ${FORUM_INTERNAL_API_KEY:?FORUM_INTERNAL_API_KEY is required}
     depends_on:
       backend:
         condition: service_healthy

@@ -284,8 +284,9 @@ export class SearchService {
         .addOrderBy('search_title_match', 'DESC').addOrderBy('p.created_at', 'DESC');
     } else qb.orderBy('p.created_at', direction);
     qb.addOrderBy('p.id', direction).skip((page - 1) * limit).take(limit);
-    const cards = await qb.getRawAndEntities();
-    const total = await qb.getCount();
+    // Parallel with the count: search already runs a bounded 2.5s execution limit,
+    // and serialising the count burned into that budget on every request.
+    const [cards, total] = await Promise.all([qb.getRawAndEntities(), qb.getCount()]);
     const posts = hydratePostCardExcerpts(cards, 'p');
     const data = await this.postSummaryService.toSummaryList(posts);
     return { data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } };

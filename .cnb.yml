@@ -51,6 +51,10 @@
       env:
         NEXT_PUBLIC_SITE_URL: http://localhost:3000
       script: cd frontend && npm run build
+    # Fails when a route's initial JavaScript crosses its budget, so a library
+    # silently rejoining the first-load path is caught here and not in production.
+    - name: check frontend first-load budget
+      script: node scripts/check-frontend-budget.cjs
 
 master:
   push:

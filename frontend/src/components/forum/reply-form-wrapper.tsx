@@ -50,7 +50,7 @@ export default function ReplyFormWrapper({
         <div className="flex items-center justify-center gap-3 flex-wrap">
           <Link
             href={`/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname : '/')}`}
-            className="inline-flex items-center px-5 py-2.5 rounded-lg bg-[var(--primary)] text-white font-medium hover:opacity-90 transition-opacity"
+            className="inline-flex items-center px-5 py-2.5 rounded-lg bg-[var(--primary-button)] text-white font-medium hover:opacity-90 transition-opacity"
           >
             {t('replyForm.signIn')}
           </Link>

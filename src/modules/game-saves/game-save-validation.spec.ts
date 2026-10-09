@@ -34,4 +34,12 @@ describe('cloud save validation', () => {
     expect(decodeSaveCursor(cursor)).toEqual({ updated_at: '2026-10-01T12:30:00.000Z', id: 'f85bde9d-4e6f-4cd9-a3ed-aac9d841d8b1' });
     expect(() => decodeSaveCursor('not-a-cursor')).toThrow();
   });
+
+  it('rejects cursors whose id is not a UUID', () => {
+    const encode = (id: string, updatedAt = '2026-10-01T12:30:00.000Z') =>
+      Buffer.from(JSON.stringify({ updated_at: updatedAt, id }), 'utf8').toString('base64url');
+    expect(() => decodeSaveCursor(encode('-'.repeat(36)))).toThrow();
+    expect(() => decodeSaveCursor(encode('f85bde9d-4e6f-1cd9-a3ed-aac9d841d8b1'))).toThrow();
+    expect(() => decodeSaveCursor(encode('f85bde9d-4e6f-4cd9-03ed-aac9d841d8b1'))).toThrow();
+  });
 });

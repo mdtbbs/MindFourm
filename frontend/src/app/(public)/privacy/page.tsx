@@ -91,7 +91,7 @@ function MdtbbsPrivacyFallback() {
         <h2 className="text-lg font-semibold">相关规则</h2>
         <p className="mt-2">
           使用 MDTBBS 时还应阅读
-          <Link href="/terms" className="mx-1 text-[var(--primary)] underline underline-offset-2">
+          <Link href="/terms" className="mx-1 text-[var(--primary-text)] underline underline-offset-2">
             《服务条款》
           </Link>
           。手机号安全验证页面会以更直观的方式说明验证目的和相关法规依据。

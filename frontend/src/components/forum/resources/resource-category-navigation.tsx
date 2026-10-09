@@ -29,11 +29,11 @@ export default function ResourceCategoryNavigation({
             aria-current={selected ? 'page' : undefined}
             data-resource-kind={kind}
             className={`flex min-h-20 items-center gap-3 rounded-xl border p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${selected
-              ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]'
-              : 'border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-[var(--primary)]/60 hover:text-[var(--primary)]'
+              ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary-text)]'
+              : 'border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:border-[var(--primary)]/60 hover:text-[var(--primary-text)]'
             }`}
           >
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary)]">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-[var(--primary-text)]">
               <Icon aria-hidden="true" className="h-5 w-5" />
             </span>
             <span className="font-semibold">{labels[kind]}</span>
