@@ -698,6 +698,7 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
             {resource.resource_kind === 'map' && selectedVersion && <FoldCard title={t('resourceWorkbenchV2.mapEditor.title')}>
               <p className="mb-3 text-sm text-[var(--text-secondary)]">地图与波次编辑已移至独立工作区，可直接编辑并导出；保存到此资源时仍会检查资源管理权限。</p>
               <div className="flex flex-wrap gap-2"><Link href={`/tools/map-editor?resource=${encodeURIComponent(resource.public_id)}&version=${encodeURIComponent(selectedVersion.public_id)}`} className="inline-flex min-h-11 items-center justify-center bg-[var(--primary)] px-4 text-sm font-medium text-white">在完整地图编辑器中打开</Link><Link href={`/tools/wave-editor?resource=${encodeURIComponent(resource.public_id)}&version=${encodeURIComponent(selectedVersion.public_id)}`} className="inline-flex min-h-11 items-center justify-center border border-[var(--border)] px-4 text-sm font-medium">在波次编辑器中打开</Link></div>
+            </FoldCard>}
           </>}
 
           {activeSection === 'editor' && <>            {resource.resource_kind === 'schematic' && <FoldCard title={t('resourceWorkbenchV2.schematicEditor.title')} open>

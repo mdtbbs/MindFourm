@@ -796,18 +796,6 @@ public final class MapRenderer {
                     }
                     operation = new MapObjectOperation(action, type, x, y, -1, -1, -1, -1, "", team, 0);
                 }
-                case "rotate" -> {
-                    if (type.equals("spawn") || !hasOnlyKeys(item, new String[]{"action", "object_type", "x", "y", "rotation"})) {
-                        throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
-                    }
-                    int x = item.getInt("x", Integer.MIN_VALUE), y = item.getInt("y", Integer.MIN_VALUE);
-                    int rotation = item.getInt("rotation", -1);
-                    if (x < 0 || y < 0 || x >= 32_768 || y >= 32_768 || rotation < 0 || rotation > 3
-                        || !unique.add(type + ":" + positionKey(x, y) + ":rotation")) {
-                        throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
-                    }
-                    operation = new MapObjectOperation(action, type, x, y, -1, -1, -1, -1, "", "", rotation);
-                }
                 default -> throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
             }
             result.add(operation);
@@ -1184,7 +1172,6 @@ public final class MapRenderer {
         private mindustry.game.Team team;
         private boolean deleted;
         private boolean positionChanged;
-        Integer rotation;
     }
     private record PlannedMapObject(MapObject source, int x, int y, mindustry.game.Team team, int rotation,
         boolean addition, boolean deleted) {}
