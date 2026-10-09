@@ -238,22 +238,46 @@ function isWriteMethod(method: string): boolean {
 
 const RETRYABLE_STATUSES = new Set([502, 503, 504]);
 
+/** Cancellable wait: an aborted request must not sit out the remaining backoff. */
+function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+      return;
+    }
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort);
+  });
+}
+
 async function fetchWithReadRetry(url: string, options: RequestInit, method: string): Promise<Response> {
   // Never transparently repeat a mutation: an interrupted upload/post may already
-  // have reached the origin. Idempotent reads get two backoff retries.
+  // have reached the origin. Idempotent reads get two cancellable retries.
   const attempts = isWriteMethod(method) ? 1 : 3;
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const response = await fetch(url, options);
-      if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) return response;
+      if (!RETRYABLE_STATUSES.has(response.status) || attempt === attempts - 1) {
+        // A 429 is not retried automatically — the caller decides what a
+        // rate limit means — but the wait the server asked for is exposed so
+        // the UI can tell the user when to try again.
+        return response;
+      }
       // Retrying an overloaded origin is what turns its 503 into a sustained
       // outage, so honour the server's own delay before adding another request.
-      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt, readRetryAfterSeconds(response))));
+      await sleep(backoffDelayMs(attempt, readRetryAfterSeconds(response)), options.signal);
     } catch (error) {
       lastError = error;
       if (attempt === attempts - 1 || (error instanceof Error && error.name === 'AbortError')) throw error;
-      await new Promise((resolve) => setTimeout(resolve, backoffDelayMs(attempt)));
+      await sleep(backoffDelayMs(attempt), options.signal);
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Network error');

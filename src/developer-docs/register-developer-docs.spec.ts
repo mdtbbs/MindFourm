@@ -5,8 +5,10 @@ function requestDocumentationRoute(route: string, document: any = {}) {
   const registered = new Map<string, (request: any, response: any) => void>();
   registerDeveloperDocs({
     getHttpAdapter: () => ({
-      get: (registeredRoute: string, callback: (request: any, response: any) => void) => {
-        registered.set(registeredRoute, callback);
+      // Routes register as `get(path, rateLimiter, handler)`. Keep the trailing
+      // handler so the page-rendering assertions are unaffected by the limiter.
+      get: (registeredRoute: string, ...chain: Array<(request: any, response: any) => void>) => {
+        registered.set(registeredRoute, chain[chain.length - 1]);
       },
     }),
   } as any, document, '2.6.1');
@@ -207,8 +209,8 @@ describe('developer docs routes', () => {
       let handler: ((request: any, response: any) => void) | undefined;
       registerDeveloperDocs({
         getHttpAdapter: () => ({
-          get: (registeredRoute: string, callback: (request: any, response: any) => void) => {
-            if (registeredRoute === route) handler = callback;
+          get: (registeredRoute: string, ...chain: Array<(request: any, response: any) => void>) => {
+            if (registeredRoute === route) handler = chain[chain.length - 1];
           },
         }),
       } as any, {} as any, '2.6.2');

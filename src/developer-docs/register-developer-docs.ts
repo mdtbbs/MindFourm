@@ -7,6 +7,7 @@ import { API_V1_BASE_PATH, API_V1_VERSION } from '../openapi/api-version';
 import { parseMarkdown } from '../common/utils/markdown.util';
 import { getAllV1ErrorCodes } from '../common/contracts/v1-error-codes';
 import { apiV1Error, v1ErrorCodeAnchor, v1ErrorDocumentationUrl } from '../common/contracts/api-v1.contract';
+import { createRateLimitMiddleware } from '../common/rate-limit/simple-rate-limiter';
 import { AdapterRouteGuard } from '../common/utils/adapter-route-guard.util';
 import { SharedBudget } from '../common/utils/shared-budget.util';
 import { getInternalApiKey } from '../config/app.config';
@@ -2248,16 +2249,27 @@ export function registerDeveloperDocs(
   document: OpenAPIObject,
   forumVersion: string,
 ): void {
-  const adapter = app.getHttpAdapter();
+  // `getHttpAdapter()` narrows `get` to the single-handler overload Nest declares,
+  // but the underlying Express app accepts a middleware chain. Cast to the shape
+  // we actually use rather than loosening every route signature.
+  const adapter = app.getHttpAdapter() as unknown as {
+    get(path: string, ...handlers: Array<(req: any, res: any, next?: any) => void>): unknown;
+  };
   const guard = new AdapterRouteGuard(new SharedBudget(), () => getInternalApiKey());
 
   /**
-   * These pages are rendered from the ~1MB OpenAPI document on every hit and are
-   * registered directly on the adapter, so the Nest guard chain never applies. The
-   * budget caps a crawler; the caches make a repeat hit free. Rendering happens
-   * once per distinct page because the content only depends on the document, which
-   * is fixed for the process lifetime.
+   * Everything below is mounted directly on the Express adapter, so the Nest guard
+   * chain never applies. Two independent shields cover that gap:
+   *
+   * - `docsLimiter` is a cheap in-process fixed window that stops a crawler before
+   *   it reaches the renderer at all.
+   * - `guard` is the shared cross-process budget (the same one adapter JSON routes
+   *   use) and stays authoritative; it also exempts internal SSR traffic.
+   *
+   * Caching is what makes the route affordable: each page depends only on the
+   * document, which is fixed for the process lifetime, so it is rendered once.
    */
+  const docsLimiter = createRateLimitMiddleware({ max: 120, windowMs: 60_000 });
   const renderedPages = new Map<string, string>();
   const renderOnce = (key: string, render: () => string): string => {
     const cached = renderedPages.get(key);
@@ -2273,6 +2285,11 @@ export function registerDeveloperDocs(
     render: () => string,
     options: { noStore?: boolean; status?: number } = {},
   ): void => {
+    // `docsLimiter` writes its own 429 and never calls `next` when over budget, so
+    // a sent response is the signal to stop. `guard` is then the authoritative,
+    // cross-process check that also exempts internal SSR callers.
+    docsLimiter(request, res, () => {});
+    if (res.headersSent || res.writableEnded) return;
     if (!guard.check(request, res)) return;
     const html = render();
     setHtmlHeaders(res, html, { noStore: options.noStore });
@@ -2283,20 +2300,22 @@ export function registerDeveloperDocs(
   // useful by redirecting browser users to the fully localized API reference.
   const redirectToChineseReference = (_req: any, res: any) =>
     res.redirect(302, '/api/v1/reference');
-  adapter.get('/api/docs/v1', redirectToChineseReference);
-  adapter.get('/api/docs/v1/', redirectToChineseReference);
+  adapter.get('/api/docs/v1', docsLimiter, redirectToChineseReference);
+  adapter.get('/api/docs/v1/', docsLimiter, redirectToChineseReference);
 
+  // The landing page is only localised copy, not document-dependent, so it is
+  // rendered once and served from memory to every visitor.
   const homePage = () => renderOnce('home', () => renderHome(forumVersion));
 
-  adapter.get('/developers', (req: any, res: any) => {
+  adapter.get('/developers', docsLimiter, (req: any, res: any) => {
     sendGuarded(req, res, homePage);
   });
 
-  adapter.get('/api/v1', (req: any, res: any) => {
+  adapter.get('/api/v1', docsLimiter, (req: any, res: any) => {
     sendGuarded(req, res, homePage);
   });
 
-  adapter.get('/api/v1/docs/:slug', (req: any, res: any) => {
+  adapter.get('/api/v1/docs/:slug', docsLimiter, (req: any, res: any) => {
     const slug = String(req.params?.slug || '');
     if (slug === 'errors') {
       sendGuarded(req, res, () => renderOnce('errors', () => renderErrorReference(forumVersion)));
@@ -2320,11 +2339,14 @@ export function registerDeveloperDocs(
     })));
   });
 
-  adapter.get('/api/v1/reference', (req: any, res: any) => {
+  // The reference page is the expensive one: it walks the whole ~1MB document and
+  // emits thousands of lines of HTML. `renderOnce` turns every hit after the first
+  // into a string copy.
+  adapter.get('/api/v1/reference', docsLimiter, (req: any, res: any) => {
     sendGuarded(req, res, () => renderOnce('reference', () => renderReference(document, forumVersion)));
   });
 
-  adapter.get('/api/v1/debugger', (req: any, res: any) => {
+  adapter.get('/api/v1/debugger', docsLimiter, (req: any, res: any) => {
     const method = String(req.query?.method || '').toLowerCase();
     const path = String(req.query?.path || '');
     // Query-dependent and intentionally uncached: the debugger renders a request
@@ -2332,7 +2354,7 @@ export function registerDeveloperDocs(
     sendGuarded(req, res, () => renderDebugger(forumVersion, method, path), { noStore: true });
   });
 
-  adapter.get('/api/v1/debug/callback', (req: any, res: any) => {
+  adapter.get('/api/v1/debug/callback', docsLimiter, (req: any, res: any) => {
     sendGuarded(req, res, () => renderOAuthCallback(forumVersion), { noStore: true });
   });
 }

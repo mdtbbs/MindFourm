@@ -19,6 +19,7 @@ import { CustomEmojisService } from '../custom-emojis/custom-emojis.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { PostsService } from '../posts/posts.service';
 import { PostViewer } from '@common/utils/post-visibility.util';
+import { postDetailCacheKey } from '@common/utils/post-cache.util';
 import { EventsService } from '../events/events.service';
 
 type PublicReply = Omit<Reply, 'ip_address' | 'user'> & {
@@ -372,9 +373,10 @@ export class RepliesService {
   }
 
   private async invalidatePostCache(postId: number): Promise<void> {
+    // `post:view:` is the view-count throttle, not derived data — keeping it out
+    // of invalidation is what makes the 60-second window mean anything.
     await this.redisService.del(`post:${postId}`);
-    await this.redisService.del(`post:detail:v6:${postId}`);
-    await this.redisService.del(`post_view:${postId}`);
+    await this.redisService.del(postDetailCacheKey(postId));
   }
 
   private async saveReplyWithAttachments(reply: Reply, document: Record<string, any>, userId: number, enqueuePublished = false, mentionUserIds?: number[] | null): Promise<Reply> {

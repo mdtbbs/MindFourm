@@ -48,7 +48,7 @@ export default async function PostRevisionsPage({
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Link
         href={`/posts/${postId}`}
-        className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--primary)] mb-6"
+        className="inline-flex items-center gap-2 text-sm text-[var(--text-secondary)] hover:text-[var(--primary-text)] mb-6"
       >
         <ArrowLeft className="w-4 h-4" />
         返回帖子
@@ -79,7 +79,7 @@ export default async function PostRevisionsPage({
                 </time>
                 <Link
                   href={`/posts/${postId}/revisions/${revision.id}`}
-                  className="text-[var(--primary)] hover:underline"
+                  className="text-[var(--primary-text)] hover:underline"
                 >
                   查看这一版
                 </Link>
@@ -94,7 +94,7 @@ export default async function PostRevisionsPage({
           {page > 1 && (
             <Link
               href={`/posts/${postId}/revisions?page=${page - 1}`}
-              className="text-[var(--primary)] hover:underline"
+              className="text-[var(--primary-text)] hover:underline"
             >
               上一页
             </Link>
@@ -105,7 +105,7 @@ export default async function PostRevisionsPage({
           {page < revisions.pagination.totalPages && (
             <Link
               href={`/posts/${postId}/revisions?page=${page + 1}`}
-              className="text-[var(--primary)] hover:underline"
+              className="text-[var(--primary-text)] hover:underline"
             >
               下一页
             </Link>

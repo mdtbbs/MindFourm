@@ -194,7 +194,7 @@ export default function PostForm() {
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <Link
               href={`/login?redirect=${encodeURIComponent(pathname || '/posts/new')}`}
-              className="inline-flex items-center px-6 py-3 rounded-lg bg-[var(--primary)] text-white font-medium hover:opacity-90 transition-opacity"
+              className="inline-flex items-center px-6 py-3 rounded-lg bg-[var(--primary-button)] text-white font-medium hover:opacity-90 transition-opacity"
             >
               {t('postForm.login')}
             </Link>

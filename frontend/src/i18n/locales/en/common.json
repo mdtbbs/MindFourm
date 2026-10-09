@@ -14,7 +14,9 @@
     "theme": "Change theme",
     "switchToLight": "Switch to light theme",
     "switchToDark": "Switch to dark theme",
-    "retry": "Retry"
+    "retry": "Retry",
+    "sessionExpired": "Your session expired. Please sign in again.",
+    "listSeparator": ", "
   },
   "home": {
     "intro": "A community built by Mindustry players. Find mods, maps and schematics, then join the discussion.",
@@ -409,7 +411,13 @@
     "errorApprove": "Could not approve the join request. It or the session may have changed.",
     "errorReject": "Could not reject the join request. Try again.",
     "errorDefaultClient": "Could not save the default multiplayer client.",
-    "errorHandoff": "Could not open the multiplayer client. The join intent was not consumed and can be retried."
+    "errorHandoff": "Could not open the multiplayer client. The join intent was not consumed and can be retried.",
+    "dismiss": "Handle later",
+    "errorPreferences": "Could not load the multiplayer client settings.",
+    "errorFriendRequests": "Could not load friend requests.",
+    "errorInvites": "Could not load multiplayer invites.",
+    "errorJoinRequests": "Could not load join requests.",
+    "errorPartialLoad": "{sections} could not be loaded, so the lists below may be incomplete. Try again shortly."
   },
   "lanlink": {
     "roomMotd": "Room message",
@@ -505,7 +513,7 @@
     "inviteMultiplayer": "Invite to multiplayer"
   },
   "errors": {
-    "RATE_LIMITED": "Too many requests. Please wait a moment and try again.",
+    "RATE_LIMITED": "Too many requests. Try again shortly.",
     "EMAIL_VERIFICATION_REQUIRED": "Verify your email address before continuing.",
     "PHONE_NOT_VERIFIED": "Verify your phone number before continuing.",
     "phoneRetry": "Verify your phone number to continue this action. It will resume automatically when verification is complete.",
@@ -522,8 +530,7 @@
     "loadError": "The page could not be loaded. Try again.",
     "globalTitle": "This page is temporarily unavailable",
     "globalDescription": "Please try again later. Internal error details are hidden.",
-    "AUTH_REQUIRED": "Please sign in.",
-    "TOKEN_EXPIRED": "Your session expired. Please sign in again.",
+    "TOKEN_INVALID": "Your sign-in is no longer valid. Please sign in again.",
     "SCOPE_REQUIRED": "The app lacks the required permission.",
     "INSUFFICIENT_SCOPE": "The app lacks the required permission.",
     "USER_BLOCKED": "A block between you prevents this.",
@@ -556,7 +563,9 @@
     "JOIN_INTENT_RECOVERY_UNAVAILABLE": "The join intent cannot be recovered right now.",
     "RELAY_UNAVAILABLE": "The relay is unavailable.",
     "RELAY_LIMIT_REACHED": "The relay limit has been reached.",
-    "RATE_LIMITED": "Too many requests. Try again shortly."
+    "PRESENCE_UNAVAILABLE": "The presence service is unavailable right now.",
+    "AUTH_REQUIRED": "Please sign in.",
+    "TOKEN_EXPIRED": "Your session expired. Please sign in again."
   },
   "recommendation": {
     "title": "Looking for the Chinese community?",

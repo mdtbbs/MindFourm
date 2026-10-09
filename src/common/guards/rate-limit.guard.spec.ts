@@ -3,9 +3,12 @@ import { Reflector } from '@nestjs/core';
 import { RateLimitGuard } from './rate-limit.guard';
 
 /**
- * The guard had no tests, which is why a bucket key built from `req.route.path`
- * alone could silently make every `@Get(':id')` route share one budget.
+ * The guard had no tests, which is how its `routeKey` design was repeatedly
+ * misreported as an ID-collision bug and how a bucket key built from
+ * `req.route.path` alone could silently share one budget across controllers.
+ * The suites below pin both behaviours.
  */
+
 function createGuard(options: {
   explicit?: { max: number; window: number } | null;
   internalApiKey?: string;
@@ -70,6 +73,86 @@ function createContext(params: {
       switchToHttp: () => ({ getRequest: () => request, getResponse: () => params.response ?? { setHeader: jest.fn() } }),
     } as any,
   };
+}
+
+describe('RateLimitGuard', () => {
+  it('keys buckets by the full Nest route path so different controllers never collide', async () => {
+    const { guard, keys } = createGuard();
+
+    // Nest puts the complete controller+handler path (including the global
+    // prefix) on `req.route.path` — not the bare relative handler segment.
+    const threads = createContext({
+      method: 'GET', baseUrl: '', routePath: '/api/v1/threads/:id',
+      className: 'ThreadsV1Controller', handlerName: 'getThread',
+    });
+    await guard.canActivate(threads.context);
+    const threadsKey = keys[0];
+
+    const posts = createContext({
+      method: 'GET', baseUrl: '', routePath: '/api/posts/:id',
+      className: 'PostsController', handlerName: 'getPost',
+    });
+    await guard.canActivate(posts.context);
+    const postsKey = keys[1];
+
+    expect(threadsKey).toContain('/api/v1/threads/:id');
+    expect(postsKey).toContain('/api/posts/:id');
+    expect(threadsKey).not.toEqual(postsKey);
+  });
+
+  it('falls back to controller.handler when no route path is resolved', async () => {
+    const { guard, keys } = createGuard();
+    const { context } = createContext({
+      method: 'GET', baseUrl: '', routePath: '', className: 'TestController', handlerName: 'handler',
+    });
+    await guard.canActivate(context);
+    expect(keys[0]).toContain('TestController.handler');
+  });
+
+  it('throws a RATE_LIMITED HttpException with code on both V1 and legacy paths', async () => {
+    // The default read ceiling is 1200/min for an IP identity, so 1 is enough here.
+    const { guard, telemetry } = createGuard({ explicit: { max: 0, window: 60 } });
+
+    for (const baseUrl of ['/api/v1/threads', '/api/posts']) {
+      const { context, headers } = createGuardResponseContext(baseUrl);
+      await expect(guard.canActivate(context)).rejects.toMatchObject({
+        status: 429,
+        response: { code: 'RATE_LIMITED' },
+      });
+      expect(headers['Retry-After']).toBeDefined();
+    }
+    expect(telemetry.recordBlocked).toHaveBeenCalledTimes(2);
+  });
+
+  it('trusts requests bearing the internal key without touching Redis', async () => {
+    const { guard, redis } = createGuard({ internalApiKey: 'internal-secret' });
+    const { context } = createContext({
+      method: 'GET', baseUrl: '/api/v1/threads', routePath: '/',
+      request: { headers: { 'x-forum-internal-key': 'internal-secret' } },
+    });
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(redis.incrementFixedWindow).not.toHaveBeenCalled();
+  });
+
+  it('fails open when Redis throws, so an outage cannot take the site down', async () => {
+    const guard = new RateLimitGuard(
+      { incrementFixedWindow: jest.fn(async () => { throw new Error('redis down'); }) } as any,
+      { getAllAndOverride: jest.fn().mockReturnValue(undefined) } as any,
+      { get: jest.fn() } as any,
+      { recordBlocked: jest.fn() } as any,
+    );
+    const { context } = createContext({ method: 'GET', baseUrl: '/api/v1/threads', routePath: '/' });
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+  });
+});
+
+/** A context whose response records headers, so `Retry-After` can be asserted. */
+function createGuardResponseContext(baseUrl: string) {
+  const headers: Record<string, string> = {};
+  const response = { setHeader: (name: string, value: string) => { headers[name] = value; } };
+  const { context } = createContext({ method: 'GET', baseUrl, routePath: '/', response });
+  return { context, headers };
 }
 
 describe('RateLimitGuard bucket keys', () => {
@@ -138,13 +221,18 @@ describe('RateLimitGuard limits and responses', () => {
     void headers;
   });
 
-  it('keeps the legacy plain-string message for non-Versioned routes', async () => {
+  it('carries the stable code on legacy routes too, so the frontend can localize', async () => {
     const { guard } = createGuard({ explicit: { max: 1, window: 60 } });
     const first = createContext({ method: 'GET', baseUrl: '/api/resources', routePath: '/' });
     await guard.canActivate(first.context);
     const second = createContext({ method: 'GET', baseUrl: '/api/resources', routePath: '/' });
     const failure = await guard.canActivate(second.context).catch((error: unknown) => error);
-    expect((failure as HttpException).getResponse()).toBe('请求过于频繁，请稍后再试');
+    // The legacy error filter forwards `code`, so this stays backward compatible
+    // while giving non-V1 clients a machine-readable reason instead of a bare string.
+    expect((failure as HttpException).getResponse()).toMatchObject({
+      code: 'RATE_LIMITED',
+      message: '请求过于频繁，请稍后再试',
+    });
   });
 
   it('exempts requests carrying the shared internal key without touching the counter', async () => {

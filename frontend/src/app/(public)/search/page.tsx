@@ -159,7 +159,7 @@ export default async function SearchPage({
         </h1>
         <nav aria-label={t('searchPage.filterType')} className="mt-4 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
           {tabs.map((tab) => <Link key={tab.key} aria-current={selectedType === tab.key ? 'page' : undefined}
-            href={tabHref(tab.key)} className={`min-h-11 shrink-0 rounded-lg border px-3 py-2 text-sm ${selectedType === tab.key ? 'border-[var(--primary)] bg-[var(--primary)]/10 font-semibold text-[var(--primary)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--primary)]'}`}>
+            href={tabHref(tab.key)} className={`min-h-11 shrink-0 rounded-lg border px-3 py-2 text-sm ${selectedType === tab.key ? 'border-[var(--primary)] bg-[var(--primary)]/10 font-semibold text-[var(--primary-text)]' : 'border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--primary)]'}`}>
             {tab.label}{tab.count !== undefined && <span className="ml-1 text-xs opacity-70">{new Intl.NumberFormat(locale).format(tab.count)}</span>}
           </Link>)}
         </nav>
@@ -196,7 +196,7 @@ export default async function SearchPage({
               {siteProfile.contentLanguages.map((language) => <option key={language} value={language}>{t(`contentLanguage.languages.${language}`)}</option>)}
             </select>
           </div>}
-          <button type="submit" className="min-h-11 border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary)]">{t('common.search')}</button>
+          <button type="submit" className="min-h-11 border border-[var(--border)] px-4 py-2 text-sm font-medium text-[var(--text)] hover:border-[var(--primary)] hover:text-[var(--primary-text)]">{t('common.search')}</button>
         </form>
         {totalResults > 0 && (
           <p className="mt-1 text-sm text-[var(--text-secondary)]">

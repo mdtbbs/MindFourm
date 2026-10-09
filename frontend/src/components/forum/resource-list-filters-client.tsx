@@ -85,7 +85,7 @@ export default function ResourceFilters({
 
   const activeFilters = [selectedCategory, urlSearch, tag, supportedVersion, compatibility, resourceKind, planet].filter(Boolean).length;
   const hasFilters = activeFilters > 0 || sort !== 'created_at';
-  const chipClass = (active: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? 'bg-[var(--primary)] text-white' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text)]'}`;
+  const chipClass = (active: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? 'bg-[var(--primary-button)] text-white' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text)]'}`;
   const inputClass = 'min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]';
 
   const sortLabels: Record<string, string> = {
@@ -112,9 +112,9 @@ export default function ResourceFilters({
         <label className="sr-only" htmlFor="resource-sort">{t('resourceList.sort')}</label><select id="resource-sort" value={sort} onChange={(event) => updateFilters({ sort: event.target.value || null })} className={inputClass}>
           <option value="created_at">{t('resourceList.latest')}</option><option value="updated_at">{t('resourceList.recentlyUpdated')}</option><option value="download_count">{t('resourceList.mostDownloaded')}</option><option value="rating_average">{t('resourceList.highestRated')}</option><option value="rating_count">{t('resourceList.mostRated')}</option>
         </select>
-        <button ref={filterTrigger} type="button" className={`${inputClass} inline-flex min-h-11 items-center gap-2 sm:hidden`} onClick={() => setMobileFiltersOpen(true)} aria-haspopup="dialog" aria-controls="resource-mobile-filters"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary)]">{activeFilters}</span>}</button>
+        <button ref={filterTrigger} type="button" className={`${inputClass} inline-flex min-h-11 items-center gap-2 sm:hidden`} onClick={() => setMobileFiltersOpen(true)} aria-haspopup="dialog" aria-controls="resource-mobile-filters"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</button>
         <details className="relative hidden sm:block">
-          <summary className="flex h-full cursor-pointer list-none items-center gap-2 rounded-md border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="rounded-full bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary)]">{activeFilters}</span>}</summary>
+          <summary className="flex h-full cursor-pointer list-none items-center gap-2 rounded-md border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="rounded-full bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</summary>
           <div className="absolute right-0 z-20 mt-2 grid w-[min(90vw,34rem)] gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 shadow-md sm:grid-cols-2">
             <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.topic')}<select value={selectedCategory} onChange={(event) => updateFilters({ category_id: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allTopics')}</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.platform')}<select value={compatibility} onChange={(event) => updateFilters({ compatibility: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlatforms')}</option>{compatibilityOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
@@ -135,7 +135,7 @@ export default function ResourceFilters({
           <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.planet')}<select value={planet} onChange={(event) => updateFilters({ planet: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlanets')}</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
           <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.tag')}<input value={localTag} onChange={(event) => setLocalTag(event.target.value)} onBlur={() => { if (localTag !== tag) updateFilters({ tag: localTag || null }); }} onKeyDown={(event) => { if (event.key === 'Enter' && localTag !== tag) updateFilters({ tag: localTag || null }); }} placeholder={t('resourceList.enterTag')} className={inputClass} /></label>
         </div>
-        <div className="sticky bottom-0 mt-4 flex gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] py-3"><button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); closeMobileFilters(); }} className="min-h-11 flex-1 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)]">{t('resourceList.clear')}</button><button type="button" onClick={closeMobileFilters} className="min-h-11 flex-1 rounded-[var(--radius)] bg-[var(--primary)] px-4 text-sm font-semibold text-white">{t('resourceList.apply')}</button></div>
+        <div className="sticky bottom-0 mt-4 flex gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] py-3"><button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); closeMobileFilters(); }} className="min-h-11 flex-1 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)]">{t('resourceList.clear')}</button><button type="button" onClick={closeMobileFilters} className="min-h-11 flex-1 rounded-[var(--radius)] bg-[var(--primary-button)] px-4 text-sm font-semibold text-white">{t('resourceList.apply')}</button></div>
       </motion.section>
     </motion.div>}
     </AnimatePresence>
@@ -153,7 +153,7 @@ export default function ResourceFilters({
       {compatibility && removableChip('compatibility', t('resourceList.platformChip', { value: compatibility }))}
       {planet && removableChip('planet', t('resourceList.planetChip', { value: planet }))}
       {sort !== 'created_at' && removableChip('sort', t('resourceList.sortChip', { value: sortLabel }))}
-      <button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); }} className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 hover:text-[var(--primary)]"><X className="h-3.5 w-3.5" />{t('resourceList.clear')}</button>
+      <button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); }} className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 hover:text-[var(--primary-text)]"><X className="h-3.5 w-3.5" />{t('resourceList.clear')}</button>
     </div>}
   </section>;
 }

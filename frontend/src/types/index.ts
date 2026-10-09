@@ -537,7 +537,10 @@ export interface Resource {
   username: string;
   avatar_url: string | null;
   created_at: string;
+  /** Operational write timestamp; moves on unrelated writes. Not a publication date. */
   updated_at: string;
+  /** When the resource first became publicly visible. Prefer this for display. */
+  published_at?: string | null;
   metadata?: ResourceDetailMetadata;
   renderer_status?: 'processing' | 'ready' | 'failed' | 'unavailable' | null;
   renderer_error_code?: string | null;

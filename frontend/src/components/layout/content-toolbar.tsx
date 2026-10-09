@@ -20,7 +20,7 @@ function UserMobileIdentity({
   return (
     <div className="flex min-w-0 items-center">
       <Link href="/" className="flex shrink-0 items-center gap-2 font-semibold text-[var(--text)] lg:hidden">
-        {logoUrl ? <img src={logoUrl} alt="" className="h-7 w-7 rounded object-cover" /> : <span className="flex h-7 w-7 items-center justify-center rounded bg-[var(--primary)] text-xs font-bold text-white">M</span>}
+        {logoUrl ? <img src={logoUrl} alt="" className="h-7 w-7 rounded object-cover" /> : <span className="flex h-7 w-7 items-center justify-center rounded bg-[var(--primary-button)] text-xs font-bold text-white">M</span>}
         <span className="max-w-28 truncate text-sm">{siteName}</span>
       </Link>
     </div>

@@ -106,7 +106,7 @@ export function LocaleSwitcher({
             }}
           >
             <span>{localeNames[item]}</span>
-            {locale === item ? <Check className="h-4 w-4 text-[var(--primary)]" aria-hidden /> : null}
+            {locale === item ? <Check className="h-4 w-4 text-[var(--primary-text)]" aria-hidden /> : null}
           </button>
         ))}
       </div>

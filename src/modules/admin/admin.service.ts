@@ -14,6 +14,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EventsService } from '../events/events.service';
 import { PostActivityService } from '../posts/post-activity.service';
+import { postDetailCacheKey } from '@common/utils/post-cache.util';
 
 @Injectable()
 export class AdminService {
@@ -528,10 +529,18 @@ export class AdminService {
     return this.rejectPost(id, reason);
   }
 
+  /**
+   * Drop the post's derived cache after a moderation decision.
+   *
+   * This used to delete a hard-coded `post:detail:v4:` key while the reader had
+   * moved on to v6, so approving or rejecting a post — the exact case where the
+   * cached payload becomes wrong — left the stale copy serving for its full TTL.
+   * The key now comes from `post-cache.util.ts` so a version bump cannot strand it
+   * again, and `post:view:` (a throttle, not derived data) is no longer cleared.
+   */
   private async invalidatePostCache(postId: number): Promise<void> {
     await this.redisService.del(`post:${postId}`);
-    await this.redisService.del(`post:detail:v4:${postId}`);
-    await this.redisService.del(`post_view:${postId}`);
+    await this.redisService.del(postDetailCacheKey(postId));
   }
 
   private normalizePinnedValue(value: number | boolean | null | undefined): 0 | 1 {

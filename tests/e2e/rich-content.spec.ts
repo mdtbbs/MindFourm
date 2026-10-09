@@ -145,6 +145,18 @@ authTest.describe('Rich Content Schema v2 E2E', () => {
     await expect(post.getByText('ordered item', { exact: true })).toBeVisible();
   });
 
+  // The highlighter is loaded on first use (`import()`), not at module scope, so
+  // this asserts the deferred path still ends up colouring real published content
+  // rather than only that the text survives. See rich-code-block.tsx.
+  authTest('2b. code block renders its source and gains syntax tokens', async ({ authenticatedPage }) => {
+    await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const code = visiblePostContent(authenticatedPage).locator('pre code');
+    await expect(code).toHaveText('const schemaVersion = 2;');
+    // highlight.js wraps keywords and identifiers in spans. Their absence would
+    // mean the deferred import never resolved for a reader.
+    await expect(code.locator('span').first()).toBeVisible();
+  });
+
   authTest('3. task-list checkboxes are visible and read-only', async ({ authenticatedPage }) => {
     await authenticatedPage.goto(`/posts/${richPostId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     const checkboxes = visiblePostContent(authenticatedPage).getByTestId('rich-task-checkbox');

@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { lanlinkApi } from '@/lib/api/client';
+import { siteProfile } from '@/config/site-profile';
+import { isHrefEnabled } from '@/lib/navigation/top-navigation';
+import { useSettings } from '@/store/settings-store';
 import type { QuickCodeStatus as QuickCodeStatusType } from '@/types/lanlink';
 import { QuickCodeStatus } from '@/components/lanlink/QuickCodeStatus';
 import QuickCodeDisplay from '@/components/lanlink/QuickCodeDisplay';
@@ -9,7 +12,6 @@ import { QuickCodeGenerator } from '@/components/lanlink/QuickCodeGenerator';
 import { QuickCodeInstructions } from '@/components/lanlink/QuickCodeInstructions';
 import LoadingSpinner from '@/components/ui/loading-spinner';
 import { useI18n } from '@/i18n/provider';
-import { isSiteFeatureEnabled } from '@/config/site-profile';
 
 export default function QuickCodePage() {
   const { t } = useI18n();
@@ -18,10 +20,14 @@ export default function QuickCodePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // The site profile is the authoritative switch (the layout and middleware use
-  // the same one). NEXT_PUBLIC_LANLINK_ENABLED is not set by every deployment,
-  // so it must not gate this page on its own.
-  const isLanLinkEnabled = isSiteFeatureEnabled('lanlink');
+  // LanLink has three historical truth sources: the site profile, the runtime
+  // `feature_lanlink_enabled` setting, and NEXT_PUBLIC_LANLINK_ENABLED. The env
+  // var is absent from the standard frontend env files, so the old check made
+  // the page report "LanLink 功能未启用" on a deployment where LanLink works.
+  // The middleware/layout guard and the navigation both use profile + settings.
+  const settings = useSettings();
+  const isLanLinkEnabled = siteProfile.features.lanlink !== false
+    && isHrefEnabled('/lanlink', settings);
 
   const loadStatus = useCallback(async () => {
     try {

@@ -150,7 +150,7 @@ export default async function ResourcesPage({
   return <div className="content-width-resources mx-auto min-w-0 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
     <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0"><h1 className="text-2xl font-bold text-[var(--text)]">{t('title')}</h1><p className="mt-1 text-sm text-[var(--text-muted)]">{t('description')}</p></div>
-      {selectedKindSubmitHref && selectedKindSubmitLabel ? <Link href={selectedKindSubmitHref} className="inline-flex min-h-11 shrink-0 items-center justify-center bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]">{selectedKindSubmitLabel}</Link> : null}
+      {selectedKindSubmitHref && selectedKindSubmitLabel ? <Link href={selectedKindSubmitHref} className="inline-flex min-h-11 shrink-0 items-center justify-center bg-[var(--primary-button)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]">{selectedKindSubmitLabel}</Link> : null}
     </div>
 
     <ResourceCategoryNavigation
@@ -180,7 +180,7 @@ export default async function ResourcesPage({
         {resources.length === 0 ? <div className="border border-[var(--border)] bg-[var(--bg-card)] py-12 text-center">
           <FileText className="mx-auto mb-4 h-12 w-12 text-[var(--text-muted)]" />
           <p className="mb-4 text-[var(--text-muted)]">{t('empty')}</p>
-          <Link href={selectedKindSubmitHref || '/resources/submit'} className="inline-flex min-h-11 items-center bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]">{selectedKindSubmitLabel || t('submitFirst')}</Link>
+          <Link href={selectedKindSubmitHref || '/resources/submit'} className="inline-flex min-h-11 items-center bg-[var(--primary-button)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]">{selectedKindSubmitLabel || t('submitFirst')}</Link>
         </div> : <ResourceLoadMore
           key={JSON.stringify(params)}
           initialResources={resources}

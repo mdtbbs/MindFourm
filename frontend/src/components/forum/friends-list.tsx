@@ -5,10 +5,16 @@ import Link from 'next/link';
 import { friendsApi, multiplayerApi, socialPresenceApi, userBlocksApi, type IncomingJoinRequest, type SocialFriendPresenceItem } from '@/lib/api/client';
 import FriendRequests from '@/components/lanlink/FriendRequests';
 import { confirmDialog } from '@/store/interaction-dialog-store';
-import { ackForumRealtimeEvent, subscribeForumRealtimeSessions, type ForumRealtimeMessage } from '@/hooks/use-forum-realtime';
+import {
+  ackForumRealtimeEvent,
+  readApprovalIntentId,
+  subscribeForumRealtimeSession,
+  type ForumRealtimeMessage,
+} from '@/hooks/use-forum-realtime';
 import { useAuth } from '@/lib/auth/context';
 import { useI18n } from '@/i18n/provider';
-import { V1ApiError } from '@/lib/api/v1/transport';
+import { V1ApiError, handleV1Unauthorized } from '@/lib/api/v1/transport';
+import { useUserStore } from '@/store/user-store';
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
 
@@ -47,6 +53,7 @@ function activityDuration(t: Translate, startedAt?: number) {
 export default function FriendsList() {
   const { user } = useAuth();
   const { t } = useI18n();
+  const refreshAuth = useUserStore((state) => state.refreshAuth);
   const [tab, setTab] = useState<Tab>('all');
   const [friends, setFriends] = useState<SocialFriendPresenceItem[]>([]);
   const [blocked, setBlocked] = useState<Array<{ id: number; user: { id: number; username: string; avatar_url: string | null } }>>([]);
@@ -59,37 +66,50 @@ export default function FriendsList() {
   const [invites, setInvites] = useState<Array<{ invite_id: string; session_id: string; sender_user_id: number; expires_at: string; session: { game_id: string; game_version?: string | null; activity_name?: string | null } | null }>>([]);
   const [joinRequests, setJoinRequests] = useState<IncomingJoinRequest[]>([]);
   const [approvals, setApprovals] = useState<Array<{ id: string; requestId: string; intentId: string; sessionId?: string }>>([]);
+  const [joinRequestErrors, setJoinRequestErrors] = useState<Record<string, string>>({});
   const [busyActions, setBusyActions] = useState<Set<string>>(new Set());
   const [launcher, setLauncher] = useState<{ default_client_id: string | null; clients: Array<{ client_id: string; name: string; launch_uri_template: string | null }> }>({ default_client_id: null, clients: [] });
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError('');
-    const [presenceResult, blocksResult, preferencesResult, friendRequestsResult, invitesResult, joinRequestsResult] = await Promise.allSettled([
+    // Silently returning on a failed request made an empty "0 条邀请" list look
+    // identical to a successful one. Collect every failure and report it.
+    const failures: string[] = [];
+    const settled = await Promise.allSettled([
       socialPresenceApi.getFriends(1, 50), userBlocksApi.list(1, 50), multiplayerApi.getPreferences(),
       friendsApi.getRequests(1, 50), multiplayerApi.listInvites(), multiplayerApi.listJoinRequests(),
     ]);
+    const [presenceResult, blocksResult, preferencesResult, friendRequestsResult, invitesResult, joinRequestsResult] = settled;
+    for (const result of settled) {
+      if (result.status === 'rejected' && handleV1Unauthorized(result.reason, () => void refreshAuth())) {
+        setError(t('common.sessionExpired'));
+        setLoading(false);
+        return;
+      }
+    }
     if (presenceResult.status === 'fulfilled') {
       const items = presenceResult.value.data || [];
       setFriends(items);
       // The viewer's own sessions surface as `invite_session_id`; subscribe so
       // session-scoped events (peer/candidate/relay/session.closed) reach the UI.
-      const sessionIds = new Set<string>();
-      for (const item of items) if (item.actions.invite_session_id) sessionIds.add(item.actions.invite_session_id);
-      if (user?.id && sessionIds.size > 0) subscribeForumRealtimeSessions(user.id, [...sessionIds]);
-    } else setError(resolveMultiplayerError(presenceResult.reason, t, 'friends.errorPresence'));
+      for (const item of items) {
+        if (item.actions.invite_session_id) subscribeForumRealtimeSession(user?.id ?? 0, item.actions.invite_session_id);
+      }
+    } else failures.push(t('friends.errorPresence'));
     if (blocksResult.status === 'fulfilled') setBlocked(blocksResult.value.data || []);
-    else if (blocksResult.status === 'rejected') setError(resolveMultiplayerError(blocksResult.reason, t, 'friends.errorBlocks'));
+    else failures.push(t('friends.errorBlocks'));
     if (preferencesResult.status === 'fulfilled') setLauncher(preferencesResult.value);
+    else failures.push(t('friends.errorPreferences'));
     if (friendRequestsResult.status === 'fulfilled') setFriendRequestCount(friendRequestsResult.value.total || 0);
     // Pending counts drive the tab badge; a silent failure would read as zero pending.
-    if (friendRequestsResult.status === 'rejected' || invitesResult.status === 'rejected' || joinRequestsResult.status === 'rejected') {
-      setError((current) => current || t('errors.loadError'));
-    }
+    else failures.push(t('friends.errorFriendRequests'));
     if (invitesResult.status === 'fulfilled') setInvites(invitesResult.value);
+    else failures.push(t('friends.errorInvites'));
     if (joinRequestsResult.status === 'fulfilled') setJoinRequests(joinRequestsResult.value.data || []);
+    else failures.push(t('friends.errorJoinRequests'));
+    setError(failures.length ? t('friends.errorPartialLoad', { sections: failures.join(t('common.listSeparator')) }) : '');
     setLoading(false);
-  }, [user?.id, t]);
+  }, [user?.id, refreshAuth, t]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -97,22 +117,38 @@ export default function FriendsList() {
     const handleRealtime = (event: Event) => {
       const message = (event as CustomEvent<ForumRealtimeMessage>).detail;
       if (!message) return;
-      if (message.type === 'resume_failed' || message.event?.startsWith('friend.') || message.event?.startsWith('presence.')
-        || message.event?.startsWith('activity.') || message.event?.startsWith('multiplayer.')) void load();
-      if (message.event !== 'multiplayer.join_request.approved' || !message.id) return;
+      const isApproval = message.event === 'multiplayer.join_request.approved';
+      // The approval event is a durable outbox row that is replayed with a new
+      // id every 5 seconds until the client ACKs it. Refreshing six endpoints on
+      // every replay turned that into a permanent request storm, and the old
+      // `message.id` dedupe missed every replay because the id changes. The
+      // intent (not the event id) is what must be shown once per request.
+      if (message.type === 'resume_failed' || (!isApproval && message.event?.startsWith('multiplayer.'))
+        || message.event?.startsWith('friend.') || message.event?.startsWith('presence.')
+        || message.event?.startsWith('activity.')) void load();
+      if (!isApproval) return;
       const requestId = typeof message.data?.join_request_id === 'string' ? message.data.join_request_id : '';
-      const intentId = typeof message.data?.intent_id === 'string' ? message.data.intent_id : '';
+      const intentId = readApprovalIntentId(message.data);
       if (!requestId || !intentId) return;
       // The server replays this approval under a fresh event id every few seconds
       // until it is acknowledged, so dedup on the stable requestId, not the id.
       setApprovals((current) => current.some((item) => item.requestId === requestId) ? current : [...current, {
-        id: message.id!, requestId, intentId,
+        id: message.id ?? requestId, requestId, intentId,
         sessionId: typeof message.data?.session_id === 'string' ? message.data.session_id : undefined,
       }]);
     };
     window.addEventListener('forum:realtime', handleRealtime);
     return () => window.removeEventListener('forum:realtime', handleRealtime);
   }, [load]);
+
+  // `session:*` events are only pushed to sockets that subscribed to the
+  // session, and an approved request means the user is about to join it.
+  useEffect(() => {
+    if (!user) return;
+    for (const approval of approvals) {
+      if (approval.sessionId) subscribeForumRealtimeSession(user.id, approval.sessionId);
+    }
+  }, [approvals, user]);
 
   const markBusy = (id: number, value: boolean) => setBusy((current) => {
     const next = new Set(current);
@@ -124,14 +160,14 @@ export default function FriendsList() {
     if (!await confirmDialog({ message: t('friends.removeFriendConfirm'), destructive: true })) return;
     markBusy(userId, true);
     try { await friendsApi.removeFriend(userId); setFriends((items) => items.filter((item) => item.user.id !== userId)); }
-    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorRemoveFriend')); }
+    catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorRemoveFriend')); }
     finally { markBusy(userId, false); }
   };
 
   const unblock = async (userId: number) => {
     markBusy(userId, true);
     try { await userBlocksApi.unblock(userId); setBlocked((items) => items.filter((item) => item.user.id !== userId)); }
-    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorUnblock')); }
+    catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorUnblock')); }
     finally { markBusy(userId, false); }
   };
 
@@ -150,7 +186,7 @@ export default function FriendsList() {
         setNotice(t('friends.noticeIntentCopied', { intent: intent.intent_id, seconds: intent.expires_in }));
       }
       try { await navigator.clipboard.writeText(intent.intent_id); } catch { /* Clipboard may be unavailable. */ }
-    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorJoin')); }
+    } catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorJoin')); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -159,7 +195,7 @@ export default function FriendsList() {
     if (!sessionId) return;
     markBusy(item.user.id, true);
     try { await multiplayerApi.requestJoin(sessionId); setNotice(t('friends.noticeInviteSent', { name: item.user.username })); }
-    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorRequestJoin')); }
+    catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorRequestJoin')); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -168,7 +204,7 @@ export default function FriendsList() {
     if (!sessionId) return;
     markBusy(item.user.id, true);
     try { await multiplayerApi.invite(sessionId, item.user.id); setNotice(t('friends.noticeInvited', { name: item.user.username })); }
-    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorInvite')); }
+    catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorInvite')); }
     finally { markBusy(item.user.id, false); }
   };
 
@@ -195,31 +231,48 @@ export default function FriendsList() {
       const accepted = await multiplayerApi.acceptInvite(inviteId);
       await launchIntent(accepted.join_intent, t('friends.labelInvite'));
       await load();
-    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorAcceptInvite')); }
+    } catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorAcceptInvite')); }
     finally { markActionBusy(inviteId, false); }
   };
 
   const declineInvite = async (inviteId: string) => {
     markActionBusy(inviteId, true);
     try { await multiplayerApi.declineInvite(inviteId); await load(); }
-    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorDeclineInvite')); }
+    catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorDeclineInvite')); }
     finally { markActionBusy(inviteId, false); }
   };
 
   const approveJoinRequest = async (requestId: string) => {
     markActionBusy(requestId, true);
+    setJoinRequestErrors((current) => {
+      if (!(requestId in current)) return current;
+      const next = { ...current };
+      delete next[requestId];
+      return next;
+    });
     try {
       const approved = await multiplayerApi.approveJoinRequest(requestId);
       setNotice(t('friends.noticeApproved', { seconds: approved.join_intent.expires_in }));
+      // The approved session is where this user's own session events will land.
+      const approvedSessionId = joinRequests.find((item) => item.id === requestId)?.session_id;
+      if (user && approvedSessionId) subscribeForumRealtimeSession(user.id, approvedSessionId);
       await load();
-    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorApprove')); }
+    } catch (reason) {
+      // Keep the failure attached to the row: a shared string slot let one
+      // failing approval overwrite an unrelated notice.
+      if (handleV1Unauthorized(reason, () => void refreshAuth())) {
+        setError(t('common.sessionExpired'));
+      } else {
+        setJoinRequestErrors((current) => ({ ...current, [requestId]: resolveMultiplayerError(reason, t, 'friends.errorApprove') }));
+      }
+    }
     finally { markActionBusy(requestId, false); }
   };
 
   const rejectJoinRequest = async (requestId: string) => {
     markActionBusy(requestId, true);
     try { await multiplayerApi.rejectJoinRequest(requestId); await load(); }
-    catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorReject')); }
+    catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorReject')); }
     finally { markActionBusy(requestId, false); }
   };
 
@@ -243,8 +296,12 @@ export default function FriendsList() {
       setNotice(acknowledged
         ? t('friends.noticeHandoffDone', { client: selected.name })
         : t('friends.noticeHandoffUnacked', { client: selected.name }));
-    } catch (err) { setError(resolveMultiplayerError(err, t, 'friends.errorHandoff')); }
+    } catch (reason) { setError(resolveMultiplayerError(reason, t, 'friends.errorHandoff')); }
     finally { markActionBusy(approval.requestId, false); }
+  };
+
+  const dismissApproval = (approval: { requestId: string }) => {
+    setApprovals((current) => current.filter((item) => item.requestId !== approval.requestId));
   };
 
   const onlineCount = friends.filter((item) => item.presence.status !== 'offline').length;
@@ -306,21 +363,25 @@ export default function FriendsList() {
         <section aria-labelledby="incoming-join-requests-title">
           <h3 id="incoming-join-requests-title" className="mb-2 text-sm font-semibold">{t('friends.joinRequestsTitle', { count: joinRequests.length })}</h3>
           {joinRequests.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">{t('friends.noJoinRequests')}</p> : <ul className="space-y-2">
-            {joinRequests.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
-              {item.requester ? <Link href={`/users/${item.requester.id}`} className="flex min-w-0 flex-1 items-center gap-3">
-                {item.requester.avatar_url ? <img src={item.requester.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted font-semibold">{item.requester.username.slice(0, 1).toUpperCase()}</span>}
-                <span className="truncate text-sm">{t('friends.requestedToJoin', { name: item.requester.username, session: item.session?.activity_name || item.session?.game_id || t('friends.yourRoom') })}</span>
-              </Link> : <span className="min-w-0 flex-1 text-sm">{t('friends.requestedToJoin', { name: t('friends.unknownUser'), session: item.session?.activity_name || item.session?.game_id || t('friends.yourRoom') })}</span>}
-              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void approveJoinRequest(item.id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">{t('friends.approve')}</button>
-              <button type="button" disabled={busyActions.has(item.id)} onClick={() => void rejectJoinRequest(item.id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">{t('friends.reject')}</button>
+            {joinRequests.map((item) => <li key={item.id} className="rounded-lg border border-border p-3">
+              <div className="flex flex-wrap items-center gap-3">
+                {item.requester ? <Link href={`/users/${item.requester.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                  {item.requester.avatar_url ? <img src={item.requester.avatar_url} alt="" className="h-10 w-10 rounded-full object-cover" /> : <span className="flex h-10 w-10 items-center justify-center rounded-full bg-muted font-semibold">{item.requester.username.slice(0, 1).toUpperCase()}</span>}
+                  <span className="truncate text-sm">{t('friends.requestedToJoin', { name: item.requester.username, session: item.session?.activity_name || item.session?.game_id || t('friends.yourRoom') })}</span>
+                </Link> : <span className="min-w-0 flex-1 text-sm">{t('friends.requestedToJoin', { name: t('friends.unknownUser'), session: item.session?.activity_name || item.session?.game_id || t('friends.yourRoom') })}</span>}
+                <button type="button" disabled={busyActions.has(item.id)} onClick={() => void approveJoinRequest(item.id)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">{t('friends.approve')}</button>
+                <button type="button" disabled={busyActions.has(item.id)} onClick={() => void rejectJoinRequest(item.id)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">{t('friends.reject')}</button>
+              </div>
+              {joinRequestErrors[item.id] && <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-300">{joinRequestErrors[item.id]}</p>}
             </li>)}
           </ul>}
         </section>
         {approvals.length > 0 && <section aria-labelledby="approved-join-requests-title">
           <h3 id="approved-join-requests-title" className="mb-2 text-sm font-semibold">{t('friends.approvedTitle')}</h3>
-          <ul className="space-y-2">{approvals.map((item) => <li key={item.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <ul className="space-y-2">{approvals.map((item) => <li key={item.requestId} className="flex flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
             <span className="min-w-0 flex-1 text-sm">{t('friends.yourRequestApproved')}{item.sessionId ? `（${item.sessionId}）` : ''}</span>
             <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => void handoffApproval(item)} className="min-h-11 rounded bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50">{t('friends.continueJoining')}</button>
+            <button type="button" disabled={busyActions.has(item.requestId)} onClick={() => dismissApproval(item)} className="min-h-11 rounded border border-border px-3 text-sm disabled:opacity-50">{t('friends.dismiss')}</button>
           </li>)}</ul>
         </section>}
       </div>}

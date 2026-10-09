@@ -22,7 +22,9 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/src', '<rootDir>/tests'],
-  testMatch: ['**/*.spec.ts'],
+  // `.tsx` as well: shared React components are covered from the root suite, which
+  // already maps `@/` to frontend/src and transpiles with the React JSX runtime.
+  testMatch: ['**/*.spec.ts', '**/*.spec.tsx'],
   testPathIgnorePatterns: [
     '/node_modules/',
     '<rootDir>/tests/e2e/',

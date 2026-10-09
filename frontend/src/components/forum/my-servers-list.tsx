@@ -33,7 +33,7 @@ export default function MyServersList() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-[var(--primary)]" />
+        <Loader2 className="w-6 h-6 animate-spin text-[var(--primary-text)]" />
         <span className="ml-3 text-[var(--text-secondary)]">加载中...</span>
       </div>
     );
@@ -45,7 +45,7 @@ export default function MyServersList() {
         <p className="text-[var(--error)] mb-3">{error}</p>
         <button
           onClick={loadServers}
-          className="px-4 py-2 bg-[var(--primary)] text-white text-sm rounded-[var(--radius)] hover:bg-[var(--primary-dark)]"
+          className="px-4 py-2 bg-[var(--primary-button)] text-white text-sm rounded-[var(--radius)] hover:bg-[var(--primary-dark)]"
         >
           重试
         </button>
@@ -60,7 +60,7 @@ export default function MyServersList() {
         <p className="text-[var(--text-secondary)] mb-4">暂无服务器</p>
         <Link
           href="/servers?section=apply"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--primary-button)] text-white text-sm font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
         >
           <Plus className="w-4 h-4" />
           申请服务器

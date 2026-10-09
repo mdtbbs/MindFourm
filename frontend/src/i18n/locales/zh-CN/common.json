@@ -14,7 +14,9 @@
     "theme": "切换主题",
     "switchToLight": "切换到亮色模式",
     "switchToDark": "切换到暗色模式",
-    "retry": "重试"
+    "retry": "重试",
+    "sessionExpired": "登录状态已失效，请重新登录。",
+    "listSeparator": "、"
   },
   "home": {
     "intro": "由 Mindustry 玩家运营的社区。寻找 Mod、地图与蓝图，加入讨论。",
@@ -409,7 +411,13 @@
     "errorApprove": "批准加入请求失败，请求或房间状态可能已变化。",
     "errorReject": "拒绝加入请求失败，请重试。",
     "errorDefaultClient": "保存默认联机客户端失败。",
-    "errorHandoff": "无法打开联机客户端；加入凭证尚未被网页消费，可以重试。"
+    "errorHandoff": "无法打开联机客户端；加入凭证尚未被网页消费，可以重试。",
+    "dismiss": "稍后处理",
+    "errorPreferences": "联机客户端设置暂时无法加载。",
+    "errorFriendRequests": "好友请求暂时无法加载。",
+    "errorInvites": "联机邀请暂时无法加载。",
+    "errorJoinRequests": "加入请求暂时无法加载。",
+    "errorPartialLoad": "{sections}暂时无法加载，列表可能不完整，请稍后重试。"
   },
   "lanlink": {
     "roomMotd": "房间公告",
@@ -505,7 +513,7 @@
     "inviteMultiplayer": "邀请联机"
   },
   "errors": {
-    "RATE_LIMITED": "请求过于频繁，请稍后再试。",
+    "RATE_LIMITED": "操作过于频繁，请稍后再试。",
     "EMAIL_VERIFICATION_REQUIRED": "请先验证邮箱。",
     "PHONE_NOT_VERIFIED": "请先完成手机号安全验证。",
     "phoneRetry": "此操作需要完成手机号安全验证，验证后可继续操作。",
@@ -522,8 +530,7 @@
     "loadError": "内容加载失败，请重试。",
     "globalTitle": "页面暂时不可用",
     "globalDescription": "请稍后重试。内部错误详情不会显示。",
-    "AUTH_REQUIRED": "请先登录。",
-    "TOKEN_EXPIRED": "登录状态已过期，请重新登录。",
+    "TOKEN_INVALID": "登录状态无效，请重新登录。",
     "SCOPE_REQUIRED": "应用权限不足，无法完成此操作。",
     "INSUFFICIENT_SCOPE": "应用权限不足，无法完成此操作。",
     "USER_BLOCKED": "你们之间存在屏蔽关系，无法联机。",
@@ -556,7 +563,9 @@
     "JOIN_INTENT_RECOVERY_UNAVAILABLE": "暂时无法恢复该加入凭证。",
     "RELAY_UNAVAILABLE": "中继服务暂时不可用。",
     "RELAY_LIMIT_REACHED": "中继使用量已达上限。",
-    "RATE_LIMITED": "操作过于频繁，请稍后再试。"
+    "PRESENCE_UNAVAILABLE": "在线状态服务暂不可用。",
+    "AUTH_REQUIRED": "请先登录。",
+    "TOKEN_EXPIRED": "登录状态已过期，请重新登录。"
   },
   "recommendation": {
     "title": "正在寻找中文社区？",

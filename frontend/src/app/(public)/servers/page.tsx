@@ -23,7 +23,7 @@ function AuthRequiredSection() {
       <p className="text-[var(--text-secondary)] mb-4">请先登录后查看此内容</p>
       <a
         href={`/login?redirect=${encodeURIComponent(currentPath)}`}
-        className="inline-flex items-center px-4 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
+        className="inline-flex items-center px-4 py-2 bg-[var(--primary-button)] text-white text-sm font-medium rounded-[var(--radius)] hover:bg-[var(--primary-dark)] transition-colors"
       >
         登录
       </a>
