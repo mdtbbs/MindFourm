@@ -9,6 +9,8 @@ Schema v2 的 `content_json` 仍是新内容的规范数据源。`content` 是�
 - `presentation.ts` 为编辑器和 reader 提供相同的有界文字样式；`syntax-highlight.ts` 提供相同的 lowlight 实例。新增 mark 必须同步现有 Schema allowlist，而非直接开放任意 CSS。
 - `RichVideoCard`、`RichAttachmentCard`、`RichQuoteCard` 由 Tiptap React NodeView 和正式 `RichContentRenderer` 共用。NodeView 不改变 `renderHTML` 序列化契约。Task item / spoiler / table 使用相同的结构属性与横向滚动包装；列宽、单元格对齐和有序列表 marker 同样在两种 DOM 中保留。
 - `PostComposerPresentation` 在新建和编辑页以单栏 tabs 切换；预览直接读取当前 JSON 并使用正式 renderer。编辑面板只是隐藏，没有卸载，没有将预览结果序列化回写。
+- 编辑器 schema 不得比后端 `childAllowed()` 更宽。`schema-content.ts` 持有前端侧的父子契约，`editor-extensions.ts` / `rich-content-extensions.ts` 用它收紧 `listItem` / `taskItem` / `blockquote` / 表格单元格 / `spoiler` 的 `content`。范围一旦放宽，工具栏就能造出后端 `INVALID_CONTENT_JSON` 拒收的文档（列表项或表格单元格里的剧透、引用块里的视频/附件/引用帖），用户只会在发布失败时才发现。`tiptap-content.contract.spec.ts` 会把编辑器 schema 的每一对父子组合与后端校验对撞。
+- 表格列宽由 `richTableLayout`（`table-presentation.ts`）唯一计算，编辑器 `PresentedTableView`（`table-view.ts`）与 reader `RichContentRenderer` 共用。不要再用 Tiptap 自带的 `TableView`：它会写入 `min-width: 50px` / `25px`，与样式表的 `min-width: 30rem` 打架，同一张表在编辑态和发布态宽度不同。
 
 编辑态仍允许光标、选区、placeholder、节点选中、表格选区、移动键盘工具栏；阅读态任务复选框不可写。视频只在读者操作后加载 allowlisted iframe，编辑态不加载播放器。引用只持有 ID，阅读时仍重新检查可见性；附件下载仍依赖权限接口。附件草稿的文件名/MIME/大小仅保存在本地 display metadata，不写入 JSON schema；草稿恢复时没有 metadata 仍可显示通用占位，不影响发布绑定。
 
