@@ -24,7 +24,7 @@
 1. `android/app/build.gradle.kts` 增加 `internal` / `release` 变体，`release` 打开 `isMinifyEnabled` + R8 规则，关闭 debug 签名回退。
 2. 版本号（`versionCode` / `versionName`）改为由 CI 注入的 Gradle property，本地默认保留当前值；`applicationIdSuffix` 只用于 internal。
 3. 签名走 CI secret（`ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PASSWORD` / `ANDROID_KEY_ALIAS` / `ANDROID_KEY_PASSWORD`），密钥不入库。
-4. GitHub `android` job 增加 `:app:assembleRelease` 并把 APK 作为 artifact 上传；`.cnb.yml` 补一条同等语义的 Android 流水线，与 GitHub 侧保持同步。
+4. GitHub `android` job 增加 `:app:assembleRelease` 并把 APK 作为 artifact 上传；若仓库的构建基线是 CNB，则同时在 `.cnb.yml` 补一条同等语义的 Android 流水线，避免两侧判定标准漂移。
 5. 清理 `android/gradle.properties` 的 `android.enableJetifier=true`（当前依赖集不需要）。
 6. 给 `mdtbbs*` 那一批 Gradle property 补部署文档：目前 `mdtbbsApiBaseUrl` / `mdtbbsMindAuthBaseUrl` / `mdtbbsOauthClientId` / `mdtbbsNativeAuthBaseUrl` / `mdtbbsNativeAuthClientId` / `mdtbbsOauthScopes` 在生产没有任何说明，配错就是连不上。
 
