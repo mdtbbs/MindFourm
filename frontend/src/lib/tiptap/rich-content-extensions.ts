@@ -2,6 +2,7 @@ import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { RichCardNodeView } from '@/components/rich-content/rich-node-views';
 import { FONT_SIZES, FONT_STACKS, HIGHLIGHT_COLORS, cssStyle, textColorStyle, highlightStyle, fontSizeStyle, fontFamilyStyle } from './presentation';
+import { CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
 import { Plugin } from '@tiptap/pm/state';
 
 const HIGHLIGHTS = Object.keys(HIGHLIGHT_COLORS);
@@ -59,7 +60,7 @@ export const TaskList = Node.create({
 
 export const TaskItem = Node.create({
   name: 'taskItem',
-  content: 'paragraph block*',
+  content: 'paragraph ' + blockContent(CONTAINER_BLOCKS) + '*',
   defining: true,
   addAttributes() { return { checked: { default: false } }; },
   parseHTML() {
@@ -100,7 +101,8 @@ export const TaskItem = Node.create({
 export const Spoiler = Node.create({
   name: 'spoiler',
   group: 'block',
-  content: 'block+',
+  // No nested spoiler: the API rejects it, and the editor should not build it.
+  content: positiveBlockContent(CONTAINER_BLOCKS),
   defining: true,
   addAttributes() { return { title: { default: '剧透内容' }, open: { default: false } }; },
   parseHTML() {

@@ -1,5 +1,6 @@
 import { mergeAttributes } from '@tiptap/core';
 import { richTableLayout } from './table-presentation';
+import { PresentedTableView } from './table-view';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import ImageExt from '@tiptap/extension-image';
@@ -13,10 +14,13 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import BulletListExt from '@tiptap/extension-bullet-list';
 import OrderedListExt from '@tiptap/extension-ordered-list';
+import ListItemExt from '@tiptap/extension-list-item';
+import BlockquoteExt from '@tiptap/extension-blockquote';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { richContentLowlight } from './syntax-highlight';
 import { RICH_CONTENT_EXTENSIONS } from './rich-content-extensions';
 import { normalizeEditorLink } from './editor-link';
+import { BLOCKQUOTE_BLOCKS, CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
 
 const TightBulletList = BulletListExt.extend({
   addAttributes() {
@@ -37,7 +41,21 @@ const TightOrderedList = OrderedListExt.extend({
   },
 });
 
+/**
+ * Keep the editor no wider than the schema the API validates.
+ *
+ * Tiptap's stock `listItem` / `blockquote` / table cells accept a whole `block+`,
+ * so the toolbar can produce documents `normalizeTiptapDocument` rejects — see
+ * `schema-content.ts`. Narrowing the content expressions here is what stops the
+ * editor from *creating* them, rather than failing the publish afterwards.
+ */
+const TightListItem = ListItemExt.extend({ content: 'paragraph ' + blockContent(CONTAINER_BLOCKS) + '*' });
+const TightBlockquote = BlockquoteExt.extend({ content: positiveBlockContent(BLOCKQUOTE_BLOCKS) });
+
 const PresentedTable = TableExtension.extend({
+  addNodeView() {
+    return ({ node, HTMLAttributes }) => new PresentedTableView(node, HTMLAttributes) as never;
+  },
   renderHTML({ node, HTMLAttributes }) {
     const layout = richTableLayout(node.toJSON());
     return ['div', { class: 'tableWrapper' }, ['table', mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, layout.width ? { style: `width: ${layout.width}` } : {}),
@@ -46,6 +64,7 @@ const PresentedTable = TableExtension.extend({
 });
 
 const AlignedTableCell = TableCell.extend({
+  content: positiveBlockContent(CONTAINER_BLOCKS),
   addAttributes() {
     return { ...this.parent?.(), align: { default: null,
       parseHTML: (element) => ['left', 'center', 'right'].includes(element.style.textAlign) ? element.style.textAlign : null,
@@ -54,6 +73,7 @@ const AlignedTableCell = TableCell.extend({
   },
 });
 const AlignedTableHeader = TableHeader.extend({
+  content: positiveBlockContent(CONTAINER_BLOCKS),
   addAttributes() {
     return { ...this.parent?.(), align: { default: null,
       parseHTML: (element) => ['left', 'center', 'right'].includes(element.style.textAlign) ? element.style.textAlign : null,
@@ -74,9 +94,11 @@ const SizedImage = ImageExt.extend({
 /** The single extension set used by the production editor and the schema contract test. */
 export function createTiptapEditorExtensions(placeholder = '') {
   return [
-    StarterKit.configure({ codeBlock: false, link: false, bulletList: false, orderedList: false, underline: false }),
+    StarterKit.configure({ codeBlock: false, link: false, bulletList: false, orderedList: false, underline: false, listItem: false, blockquote: false }),
     TightBulletList,
     TightOrderedList,
+    TightListItem,
+    TightBlockquote,
     Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: true }),
     SizedImage.configure({ inline: true, allowBase64: false }),
     Placeholder.configure({ placeholder }),
