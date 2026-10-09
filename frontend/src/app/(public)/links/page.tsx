@@ -36,7 +36,7 @@ export default async function LinksPage() {
             const content = (
               <div className="h-full rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-5 transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:shadow-sm">
                 <div className="flex items-start justify-between gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary)]"><Globe2 className="h-5 w-5" /></span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-[var(--primary-text)]"><Globe2 className="h-5 w-5" /></span>
                   {external && <ExternalLink className="h-4 w-4 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />}
                 </div>
                 <h2 className="mt-4 truncate text-base font-semibold text-[var(--text)]">{link.label}</h2>

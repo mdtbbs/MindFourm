@@ -7,7 +7,7 @@ const PUBLIC_FIELDS = [
   'version', 'content_language', 'status', 'summary', 'description', 'file_name', 'file_size', 'mime_type',
   'content_hash', 'external_url', 'homepage_url', 'source_url', 'license', 'origin_site', 'origin_resource_id',
   'origin_url', 'latest_published_version_id', 'discussion_thread_id', 'download_count', 'is_featured',
-  'view_count', 'rating_count', 'rating_sum', 'rating_average', 'created_at', 'updated_at', 'visibility',
+  'view_count', 'rating_count', 'rating_sum', 'rating_average', 'created_at', 'updated_at', 'published_at', 'visibility',
   'renderer_status', 'renderer_error_code', 'renderer_parser_version', 'favorite_count', 'like_count',
   'is_favorited', 'is_liked', 'is_subscribed', 'trending_score',
 ] as const;

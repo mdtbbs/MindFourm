@@ -56,6 +56,7 @@
     "emptyDescription": "暂无简短介绍，查看下方完整资源说明。",
     "unknownAuthor": "未知作者",
     "updated": "更新",
+    "published": "发布于",
     "downloads": "{count} 次下载",
     "views": "{count} 次浏览",
     "rendererProcessing": "正在生成官方 Mindustry 预览图…",

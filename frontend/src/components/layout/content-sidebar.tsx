@@ -20,7 +20,7 @@ export const SIDEBAR_LAYOUT_CLASSES = {
 function SidebarBrand({ siteName, logoUrl, sidebarLogoUrl }: { siteName: string; logoUrl?: string; sidebarLogoUrl?: string }) {
   const displayLogoUrl = sidebarLogoUrl || logoUrl;
   return <div data-testid="sidebar-brand" className={SIDEBAR_LAYOUT_CLASSES.brand}><Link href="/" className="flex w-full items-center gap-3 hover:opacity-80">
-    {displayLogoUrl ? <img src={displayLogoUrl} alt={siteName} className="h-8 w-auto max-w-full object-contain" /> : <><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[var(--primary)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div></div></>}
+    {displayLogoUrl ? <img src={displayLogoUrl} alt={siteName} className="h-8 w-auto max-w-full object-contain" /> : <><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-[var(--primary-button)] text-sm font-bold text-white">{siteName.slice(0, 1)}</div><div className="min-w-0"><div className="truncate text-sm font-semibold text-[var(--text)]">{siteName}</div></div></>}
   </Link></div>;
 }
 
@@ -42,7 +42,7 @@ export default function ContentSidebar({
     const active = isWorkspaceActive(pathname, space.href, userId);
     return <div key={space.id} className={space.id === 'me' ? 'mt-auto border-t border-[var(--border)] pt-3' : ''}>
       {space.id === 'me' && <div className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{t('navigation.personal')}</div>}
-      <Link href={space.href} aria-current={active ? 'page' : undefined} className={`relative flex min-h-11 items-center gap-3 px-3 text-sm transition-colors before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-[var(--primary)] ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`}>
+      <Link href={space.href} aria-current={active ? 'page' : undefined} className={`relative flex min-h-11 items-center gap-3 px-3 text-sm transition-colors before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-[var(--primary)] ${active ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary-text)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`}>
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{t(space.labelKey)}</span>
       </Link>
     </div>;

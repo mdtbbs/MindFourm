@@ -56,6 +56,7 @@
     "emptyDescription": "No short description yet. Read the full details below.",
     "unknownAuthor": "Unknown author",
     "updated": "Updated",
+    "published": "Published",
     "downloads": "{count} downloads",
     "views": "{count} views",
     "rendererProcessing": "Generating the official Mindustry preview…",

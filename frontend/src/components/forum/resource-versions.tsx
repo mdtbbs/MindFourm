@@ -39,7 +39,7 @@ export default function ResourceVersions({ resource }: ResourceVersionsProps) {
                     {version.version}
                   </h3>
                   {index === 0 && (
-                    <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--primary-soft)] text-[var(--primary)]">
+                    <span className="px-2 py-0.5 text-xs rounded-full bg-[var(--primary-soft)] text-[var(--primary-text)]">
                       {t('resourceVersions.latest')}
                     </span>
                   )}
@@ -57,7 +57,7 @@ export default function ResourceVersions({ resource }: ResourceVersionsProps) {
                   )}
                 </div>
               </div>
-              <button className="px-4 py-2 bg-[var(--primary)] hover:bg-[var(--primary-dark)] text-white rounded-lg font-medium flex items-center gap-2 transition-colors">
+              <button className="px-4 py-2 bg-[var(--primary-button)] hover:bg-[var(--primary-dark)] text-white rounded-lg font-medium flex items-center gap-2 transition-colors">
                 <Download className="w-4 h-4" />
                 {t('resourceVersions.download')}
               </button>

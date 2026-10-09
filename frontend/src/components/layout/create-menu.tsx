@@ -56,7 +56,7 @@ export default function CreateMenu({ isAuthenticated }: { isAuthenticated: boole
   }, [closeMenu, open]);
 
   return <div className="relative" ref={root}>
-    <button ref={trigger} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls="global-create-menu" aria-label={t('create.title')} onClick={() => setOpen((value) => !value)} className="inline-flex min-h-11 items-center gap-2 bg-[var(--primary)] px-3 text-sm font-semibold text-white hover:bg-[var(--primary-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2">
+    <button ref={trigger} type="button" aria-haspopup="dialog" aria-expanded={open} aria-controls="global-create-menu" aria-label={t('create.title')} onClick={() => setOpen((value) => !value)} className="inline-flex min-h-11 items-center gap-2 bg-[var(--primary-button)] px-3 text-sm font-semibold text-white hover:bg-[var(--primary-dark)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2">
       <Plus className="h-4 w-4" aria-hidden="true" /><span>{t('create.title')}</span><ChevronDown className="hidden h-3.5 w-3.5 sm:block" aria-hidden="true" />
     </button>
     {open && <>
@@ -66,8 +66,8 @@ export default function CreateMenu({ isAuthenticated }: { isAuthenticated: boole
           <div><h2 id="create-menu-title" className="text-sm font-semibold text-[var(--text)]">{t('create.title')}</h2><p className="mt-0.5 text-xs text-[var(--text-muted)]">{t('create.description')}</p></div>
           <button type="button" onClick={() => closeMenu()} className="min-h-11 min-w-11 text-sm text-[var(--text-secondary)] hover:text-[var(--text)] lg:hidden">{t('common.close')}</button>
         </div>
-        {isAuthenticated ? <div className="grid gap-1">{entries.map(({ href, label, description, icon: Icon }) => <Link key={href} href={href} onClick={() => closeMenu(false)} className="flex min-h-14 items-center gap-3 px-3 py-2 hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"><Icon className="h-4 w-4 shrink-0 text-[var(--primary)]" aria-hidden="true" /><span className="min-w-0"><span className="block text-sm font-medium text-[var(--text)]">{label}</span><span className="block truncate text-xs text-[var(--text-muted)]">{description}</span></span></Link>)}</div>
-          : <div className="border-t border-[var(--border)] px-3 py-4 text-sm text-[var(--text-secondary)]"><p>{t('create.loginRequired')}</p><Link href="/login?redirect=%2Fposts%2Fnew" onClick={() => closeMenu(false)} className="mt-3 inline-flex min-h-11 items-center bg-[var(--primary)] px-4 font-medium text-white hover:bg-[var(--primary-dark)]">{t('navigation.login')}</Link></div>}
+        {isAuthenticated ? <div className="grid gap-1">{entries.map(({ href, label, description, icon: Icon }) => <Link key={href} href={href} onClick={() => closeMenu(false)} className="flex min-h-14 items-center gap-3 px-3 py-2 hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--primary)]"><Icon className="h-4 w-4 shrink-0 text-[var(--primary-text)]" aria-hidden="true" /><span className="min-w-0"><span className="block text-sm font-medium text-[var(--text)]">{label}</span><span className="block truncate text-xs text-[var(--text-muted)]">{description}</span></span></Link>)}</div>
+          : <div className="border-t border-[var(--border)] px-3 py-4 text-sm text-[var(--text-secondary)]"><p>{t('create.loginRequired')}</p><Link href="/login?redirect=%2Fposts%2Fnew" onClick={() => closeMenu(false)} className="mt-3 inline-flex min-h-11 items-center bg-[var(--primary-button)] px-4 font-medium text-white hover:bg-[var(--primary-dark)]">{t('navigation.login')}</Link></div>}
       </section>
     </>}
   </div>;

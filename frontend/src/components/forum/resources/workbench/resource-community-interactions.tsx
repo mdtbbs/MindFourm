@@ -61,7 +61,7 @@ function inputClass(): string {
 }
 
 function ActionButton({ children, disabled }: { children: React.ReactNode; disabled?: boolean }) {
-  return <button type="submit" disabled={disabled} className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--primary)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{children}</button>;
+  return <button type="submit" disabled={disabled} className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-[var(--primary-button)] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{children}</button>;
 }
 
 function PrivacyReminder({ t }: { t: Translator }) {
@@ -174,7 +174,7 @@ function UploadedReportAttachments({
     <ul className="space-y-1">{attachments.map((attachment) => <li key={attachment.public_id} className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
       <span className="break-all text-[var(--text-secondary)]">{attachment.name} · {(attachment.size_bytes / 1024).toLocaleString(undefined, { maximumFractionDigits: 0 })} KiB</span>
       <span className="flex shrink-0 gap-2">
-        <button type="button" disabled={downloading !== null || deleting !== null} onClick={() => void download(attachment)} className="min-h-9 rounded border border-[var(--border)] px-3 text-[var(--primary)] disabled:opacity-50">{downloading === attachment.public_id ? t('resourceWorkbenchV2.community.downloadingAttachment') : t('resourceWorkbenchV2.community.downloadAttachment')}</button>
+        <button type="button" disabled={downloading !== null || deleting !== null} onClick={() => void download(attachment)} className="min-h-9 rounded border border-[var(--border)] px-3 text-[var(--primary-text)] disabled:opacity-50">{downloading === attachment.public_id ? t('resourceWorkbenchV2.community.downloadingAttachment') : t('resourceWorkbenchV2.community.downloadAttachment')}</button>
         {attachment.can_delete && <button type="button" disabled={downloading !== null || deleting !== null} onClick={() => void remove(attachment)} className="min-h-9 rounded border border-red-500/30 px-3 text-red-700 disabled:opacity-50 dark:text-red-300">{deleting === attachment.public_id ? t('resourceWorkbenchV2.community.deletingAttachment') : t('resourceWorkbenchV2.community.deleteAttachment')}</button>}
       </span>
     </li>)}</ul>
@@ -209,7 +209,7 @@ function ExistingReportAttachments({
   };
 
   return <div className="mt-2 space-y-2">
-    <button type="button" disabled={loading} onClick={() => void load()} className="min-h-9 rounded border border-[var(--border)] px-3 text-xs text-[var(--primary)] disabled:opacity-50">
+    <button type="button" disabled={loading} onClick={() => void load()} className="min-h-9 rounded border border-[var(--border)] px-3 text-xs text-[var(--primary-text)] disabled:opacity-50">
       {loading ? t('resourceWorkbenchV2.community.loading') : t('resourceWorkbenchV2.community.viewAttachments')}
     </button>
     {attachments?.length === 0 && <p className="text-xs text-[var(--text-muted)]">{t('resourceWorkbenchV2.community.noReportAttachments')}</p>}
@@ -518,7 +518,7 @@ function ModCommunity({
             <ExistingReportAttachments kind="issue" reportPublicId={report.public_id} initialAttachments={issueAttachments[report.public_id]} t={t} />
           </li>;
         })}</ul>}
-        {issuePagination.has_more && <button type="button" disabled={issueLoadingMore} onClick={() => void loadMoreIssueReports()} className="min-h-11 w-full rounded-lg border border-[var(--border)] px-4 text-sm font-medium text-[var(--primary)] disabled:opacity-50 sm:w-auto">{issueLoadingMore ? t('resourceWorkbenchV2.community.submitting') : t('resourceWorkbenchV2.community.loadMoreIssues')}</button>}
+        {issuePagination.has_more && <button type="button" disabled={issueLoadingMore} onClick={() => void loadMoreIssueReports()} className="min-h-11 w-full rounded-lg border border-[var(--border)] px-4 text-sm font-medium text-[var(--primary-text)] disabled:opacity-50 sm:w-auto">{issueLoadingMore ? t('resourceWorkbenchV2.community.submitting') : t('resourceWorkbenchV2.community.loadMoreIssues')}</button>}
         <form onSubmit={submitIssue} className="space-y-3">
           {issuePendingReportId && <Notice>{issuePendingVersionId === version.public_id ? t('resourceWorkbenchV2.community.attachmentRetryNotice') : t('resourceWorkbenchV2.community.pendingAttachmentVersionChanged')}</Notice>}
           {!issuePendingReportId && <>
@@ -552,7 +552,7 @@ function ModCommunity({
             <Field label={t('resourceWorkbenchV2.community.versionConstraint')}><input className={inputClass()} maxLength={255} value={member.version_constraint} onChange={(event) => setOtherMembers((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, version_constraint: event.target.value } : row))} /></Field>
             {otherMembers.length > 1 && <button type="button" onClick={() => setOtherMembers((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="min-h-10 text-sm text-red-600">{t('resourceWorkbenchV2.community.removeMember')}</button>}
           </div>)}
-          <button type="button" disabled={otherMembers.length >= 9} onClick={() => setOtherMembers((rows) => [...rows, { resource_public_id: '', version_public_id: '', version_constraint: '' }])} className="min-h-10 rounded border border-[var(--border)] px-3 text-sm text-[var(--primary)] disabled:opacity-50">{t('resourceWorkbenchV2.community.addMember')}</button>
+          <button type="button" disabled={otherMembers.length >= 9} onClick={() => setOtherMembers((rows) => [...rows, { resource_public_id: '', version_public_id: '', version_constraint: '' }])} className="min-h-10 rounded border border-[var(--border)] px-3 text-sm text-[var(--primary-text)] disabled:opacity-50">{t('resourceWorkbenchV2.community.addMember')}</button>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={t('resourceWorkbenchV2.community.issueTitle')}><input className={inputClass()} maxLength={255} value={conflictTitle} onChange={(event) => setConflictTitle(event.target.value)} /></Field>
             <Field label={t('resourceWorkbenchV2.community.gameVersionMin')}><input className={inputClass()} maxLength={80} value={gameVersionMin} onChange={(event) => setGameVersionMin(event.target.value)} /></Field>

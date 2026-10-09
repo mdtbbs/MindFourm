@@ -1,6 +1,6 @@
 import { DownloadGrantService } from './download-grant.service';
 import { DownloadEvent } from '@entities/download-event.entity';
-import { Resource } from '@entities/resource.entity';
+
 
 describe('DownloadGrantService persistence and deduplication', () => {
   function setup() {
@@ -9,19 +9,30 @@ describe('DownloadGrantService persistence and deduplication', () => {
     const grants = new Set<string>();
     const counts = new Map<number, number>();
     let transactionTail = Promise.resolve();
-    const manager = {
-      insert: jest.fn(async (_entity: any, value: any) => {
-        if (value.event_type === 'granted') {
-          const key = `${value.dedup_key}:${value.dedup_bucket}`;
-          if (grants.has(key)) {
-            const error: any = new Error('duplicate key'); error.code = 'ER_DUP_ENTRY'; throw error;
-          }
-          grants.add(key);
+    const insert = jest.fn(async (_entity: any, value: any) => {
+      if (value.event_type === 'granted') {
+        const key = `${value.dedup_key}:${value.dedup_bucket}`;
+        if (grants.has(key)) {
+          const error: any = new Error('duplicate key'); error.code = 'ER_DUP_ENTRY'; throw error;
         }
-        events.push(value);
-        return { identifiers: [] };
+        grants.add(key);
+      }
+      events.push(value);
+      return { identifiers: [] };
+    });
+    // The counter is written with raw SQL on purpose: manager.increment() would
+    // append `updated_at = CURRENT_TIMESTAMP` and move the resource's date.
+    const manager = {
+      insert,
+      query: jest.fn(async (sql: string, params: any[]) => {
+        const counterMatch = /UPDATE `resources` SET `(\w+)` = `\w+` \+ \? WHERE `id` = \?/.exec(sql);
+        if (counterMatch) {
+          const id = Number(params[1]);
+          counts.set(id, (counts.get(id) || 0) + Number(params[0]));
+          return { affectedRows: 1 };
+        }
+        return { affectedRows: 0 };
       }),
-      increment: jest.fn(async (_entity: any, where: { id: number }) => counts.set(where.id, (counts.get(where.id) || 0) + 1)),
     };
     const dataSource = {
       createQueryRunner: jest.fn(() => {
@@ -69,7 +80,12 @@ describe('DownloadGrantService persistence and deduplication', () => {
     const { service, manager, events, counts } = setup();
     await expect(service.recordGrant(record(3), 'user:3')).resolves.toBe(true);
     expect(events.map((event) => event.event_type)).toEqual(['requested', 'granted']);
-    expect(manager.increment).toHaveBeenCalledWith(Resource, { id: 7 }, 'download_count', 1);
+    const counterCalls = manager.query.mock.calls.filter(([sql]) => String(sql).startsWith('UPDATE `resources` SET `download_count`'));
+    expect(counterCalls).toHaveLength(1);
+    expect(counterCalls[0][1]).toEqual([1, 7]);
+    // TypeORM's manager.increment() would append `updated_at = CURRENT_TIMESTAMP`
+    // and the download would re-date the resource; counting must not touch it.
+    expect(manager.query.mock.calls.some(([sql]) => String(sql).includes('updated_at'))).toBe(false);
     expect(counts.get(7)).toBe(1);
     expect(events[1].dedup_key).toMatch(/^[a-f0-9]{64}$/);
     expect(events[1].dedup_key).not.toContain('user:3');

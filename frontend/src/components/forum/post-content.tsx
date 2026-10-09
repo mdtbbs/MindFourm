@@ -127,7 +127,7 @@ export default function PostContent({
             )}
             <div className="min-w-0 flex-1">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">{t('postDetail.resourceHeader')}</div>
-              <Link href={post.resource_header.resource_url} className="text-lg font-semibold text-[var(--text)] hover:text-[var(--primary)]">
+              <Link href={post.resource_header.resource_url} className="text-lg font-semibold text-[var(--text)] hover:text-[var(--primary-text)]">
                 {post.resource_header.title}
               </Link>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--text-secondary)]">
@@ -139,7 +139,7 @@ export default function PostContent({
                 <Link href={post.resource_header.resource_url} className="inline-flex min-h-9 items-center border border-[var(--border)] px-3 text-sm text-[var(--text)] hover:bg-[var(--bg-hover)]">
                   {t('postDetail.viewResource')}
                 </Link>
-                <a href={post.resource_header.download_url} className="inline-flex min-h-9 items-center bg-[var(--primary)] px-3 text-sm text-white hover:opacity-90">
+                <a href={post.resource_header.download_url} className="inline-flex min-h-9 items-center bg-[var(--primary-button)] px-3 text-sm text-white hover:opacity-90">
                   {t('postDetail.downloadResource')}
                 </a>
               </div>
@@ -177,7 +177,7 @@ export default function PostContent({
               {canEdit && postId ? (
                 <Link
                   href={`/posts/${postId}/revisions`}
-                  className="text-[var(--text-secondary)] hover:text-[var(--primary)]"
+                  className="text-[var(--text-secondary)] hover:text-[var(--primary-text)]"
                 >
                   {t('postDetail.edited')} <time dateTime={post.edited_at} title={new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(post.edited_at))}>{formatTime(post.edited_at, locale)}</time>
                 </Link>
@@ -250,7 +250,7 @@ export default function PostContent({
           <Link
             href={`/posts/${postId}/edit`}
             data-testid="post-edit-link"
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--primary)] transition-colors"
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--primary-text)] transition-colors"
           >
             <Pencil className="w-4 h-4" />
             {t('postDetail.edit')}

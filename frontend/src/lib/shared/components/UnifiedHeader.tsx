@@ -126,7 +126,7 @@ export function UnifiedHeader({
             {utilitySlot}
             <button
               onClick={toggleTheme}
-              className="relative rounded-full p-2.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)]"
+              className="relative rounded-full p-2.5 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary-text)]"
               title={theme === "dark" ? (labels.switchToLight || "切换到亮色模式") : (labels.switchToDark || "切换到暗色模式")}
               aria-label={labels.theme || "切换主题"}
             >
@@ -150,7 +150,7 @@ export function UnifiedHeader({
               </button>
             )}
 
-            {showSearch && (onOpenSearch ? <button type="button" data-testid="global-search-trigger-mobile" onClick={onOpenSearch} aria-keyshortcuts="Control+K Meta+K" className="flex min-h-11 min-w-11 items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></button> : <Link href="/search" className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></Link>)}
+            {showSearch && (onOpenSearch ? <button type="button" data-testid="global-search-trigger-mobile" onClick={onOpenSearch} aria-keyshortcuts="Control+K Meta+K" className="flex min-h-11 min-w-11 items-center justify-center text-[var(--text-secondary)] hover:bg-[var(--bg-elevated)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></button> : <Link href="/search" className="rounded-lg p-2 text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--primary-text)] lg:hidden" aria-label={labels.search || "搜索"}><Search className="h-5 w-5" /></Link>)}
 
             {createMenuSlot && <div className="block">{createMenuSlot}</div>}
 
@@ -161,7 +161,7 @@ export function UnifiedHeader({
                     {notificationDropdownSlot || (
                       <Link
                         href="/notifications"
-                        className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
+                        className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary-text)]"
                         title={labels.notifications || "通知"}
                       >
                         <span>
@@ -183,7 +183,7 @@ export function UnifiedHeader({
                   <div className="hidden lg:block">
                     <Link
                       href="/messages"
-                      className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
+                      className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary-text)]"
                       title={labels.messages || "私信"}
                     >
                       <span>
@@ -202,7 +202,7 @@ export function UnifiedHeader({
                   <div className="hidden lg:block">
                     <Link
                       href="/friends"
-                      className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)]"
+                      className="relative p-2 text-[var(--text-secondary)] transition-colors hover:text-[var(--primary-text)]"
                       title={labels.friends || "好友"}
                     >
                       <span>
@@ -230,7 +230,7 @@ export function UnifiedHeader({
                     <Link
                       href="/posts/new"
                       onClick={onPostCreate}
-                      className="inline-flex items-center gap-1 bg-[var(--primary)] px-2.5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] sm:px-4"
+                      className="inline-flex items-center gap-1 bg-[var(--primary-button)] px-2.5 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] sm:px-4"
                     >
                       <span>
                         <Plus className="h-4 w-4" />
@@ -242,7 +242,7 @@ export function UnifiedHeader({
 
                 <div className="hidden lg:block">
                   <details className="group relative">
-                    <summary aria-haspopup="menu" className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
+                    <summary aria-haspopup="menu" className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">
                       {user.avatar_url ? <img src={user.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" /> : <UserIcon className="h-5 w-5" />}
                       <span className="hidden sm:inline">{user.username}</span>
                     </summary>
@@ -300,7 +300,7 @@ export function UnifiedHeader({
                       event.preventDefault();
                       onRegister();
                     }}
-                    className="hidden bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] lg:inline-flex"
+                    className="hidden bg-[var(--primary-button)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-dark)] lg:inline-flex"
                   >
                     {labels.register || "注册"}
                   </Link>
@@ -312,7 +312,7 @@ export function UnifiedHeader({
                       event.preventDefault();
                       onLogin();
                     }}
-                    className="hidden text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary)] lg:inline-flex"
+                    className="hidden text-sm text-[var(--text-secondary)] transition-colors hover:text-[var(--primary-text)] lg:inline-flex"
                   >
                     {labels.login || "登录"}
                   </Link>

@@ -185,7 +185,7 @@ export default function FeaturesSettingsPage() {
                 <div
                   className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border ${
                     isEnabled
-                      ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
+                      ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary-text)]'
                       : 'border-surface-200 bg-surface-100 text-surface-400'
                   }`}
                 >

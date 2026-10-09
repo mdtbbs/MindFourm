@@ -15,17 +15,17 @@ export default async function ResourceSubmitPage() {
       </p>
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <Link href="/resources/submit/mod" className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)]/60">
-          <Puzzle className="mb-2 h-5 w-5 text-[var(--primary)]" />
+          <Puzzle className="mb-2 h-5 w-5 text-[var(--primary-text)]" />
           <p className="font-medium text-[var(--text)]">{t('modSubmit')}</p>
           <p className="mt-1 text-xs text-[var(--text-muted)]">{t('modCardDescription')}</p>
         </Link>
         <Link href="/resources/submit/map" className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)]/60">
-          <Map className="mb-2 h-5 w-5 text-[var(--primary)]" />
+          <Map className="mb-2 h-5 w-5 text-[var(--primary-text)]" />
           <p className="font-medium text-[var(--text)]">{t('mapSubmit')}</p>
           <p className="mt-1 text-xs text-[var(--text-muted)]">{t('mapPageDescription')}</p>
         </Link>
         <Link href="/resources/submit/schematic" className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)]/60">
-          <ClipboardPaste className="mb-2 h-5 w-5 text-[var(--primary)]" />
+          <ClipboardPaste className="mb-2 h-5 w-5 text-[var(--primary-text)]" />
           <p className="font-medium text-[var(--text)]">{t('schematicSubmit')}</p>
           <p className="mt-1 text-xs text-[var(--text-muted)]">{t('schematicPageDescription')}</p>
         </Link>

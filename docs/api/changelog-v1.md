@@ -4,6 +4,21 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.4.1
+
+本次为资源发现卡片补充一个真实可用的发布时间字段。既有字段、路由和必填参数不变；新增字段为兼容性新增。
+
+### Added
+
+- `GET /api/v1/resources/discovery/home`、`/discovery/hot`、`/discovery/for-you` 和 `/discovery/related/{id}` 的公开资源卡片新增 `published_at`：资源首次对外可见的时间。此前的 `updated_at` 是通用写入时间戳，浏览和下载计数也会推进它，客户端无法据此得到发布日期；`published_at` 只在资源通过审核时写入一次，后续编辑不改变它。历史资源回填为 `created_at`。
+- `GET /api/resources`（论坛内部列表接口）同步新增 `published_at`，并允许以 `published_at` 作为排序键。
+
+### Changed
+
+- `updated_at` 不再被浏览/下载计数推进，仅反映真实的编辑写入。依赖“任何活动都会更新 `updated_at`”的客户端应改用 `published_at`（发布日期）或 `updated_at`（最后编辑时间），二者语义现已分离。
+
+Ref: #14
+
 ## Public API 1.4.0
 
 本次修订把云存档上传、冲突、下载和配额在实际运行中的行为写回契约，并补上客户端做分支判断需要的字段。所有既有操作、必填参数和响应字段保持不变；新增字段为兼容性新增，旧客户端可忽略。

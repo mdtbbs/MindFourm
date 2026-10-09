@@ -33,11 +33,11 @@ export default function WaveTimeline({ groups, disabled, name, onLocate, onUpdat
           <button type="button" onClick={() => onLocate(index)} className="min-h-11 truncate px-2 text-left text-xs">#{index+1} {name(group.type)}</button>
           <div className="relative min-h-11">
             <button type="button" aria-label={`平移波次组 ${index+1}`} disabled={disabled} onPointerDown={event => start(event,index,'move')} onPointerUp={finish} onPointerCancel={() => { drag.current=null; }} className="absolute top-0 min-h-11 min-w-11 touch-none border border-[var(--primary)] bg-[var(--primary-soft)]" style={{ left: `${Math.min(88,begin)}%`, width: `${Math.max(1,end-begin)}%`, maxWidth: `${100-Math.min(88,begin)}%` }} />
-            {(['begin','end'] as const).map(edge => <button key={edge} type="button" aria-label={`拖动波次组 ${index+1} ${edge==='begin'?'开始':'结束'}`} disabled={disabled} onPointerDown={event => start(event,index,edge)} onPointerUp={finish} onPointerCancel={() => { drag.current=null; }} className="absolute top-0 z-10 min-h-11 w-11 -translate-x-1/2 touch-none border border-[var(--primary)] bg-[var(--bg-card)] text-xs text-[var(--primary)]" style={{ left: `clamp(22px, ${edge==='begin'?begin:end}%, calc(100% - 22px))` }}>{edge==='begin'?'起':'止'}</button>)}
+            {(['begin','end'] as const).map(edge => <button key={edge} type="button" aria-label={`拖动波次组 ${index+1} ${edge==='begin'?'开始':'结束'}`} disabled={disabled} onPointerDown={event => start(event,index,edge)} onPointerUp={finish} onPointerCancel={() => { drag.current=null; }} className="absolute top-0 z-10 min-h-11 w-11 -translate-x-1/2 touch-none border border-[var(--primary)] bg-[var(--bg-card)] text-xs text-[var(--primary-text)]" style={{ left: `clamp(22px, ${edge==='begin'?begin:end}%, calc(100% - 22px))` }}>{edge==='begin'?'起':'止'}</button>)}
           </div>
         </div>;
       })}
     </div></div>
-    {groups.length>shown ? <button type="button" onClick={() => setShown(value=>value+200)} className="min-h-11 px-3 text-sm text-[var(--primary)]">显示更多波次组</button> : null}
+    {groups.length>shown ? <button type="button" onClick={() => setShown(value=>value+200)} className="min-h-11 px-3 text-sm text-[var(--primary-text)]">显示更多波次组</button> : null}
   </section>;
 }

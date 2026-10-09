@@ -68,8 +68,10 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
     name: resource.title,
     url: absoluteUrl(resourcePath),
     description: toMetaDescription(resource.description || resource.content),
-    datePublished: resource.created_at,
-    dateModified: resource.updated_at || resource.created_at,
+    // datePublished is the resource's real publication moment; dateModified may
+    // legitimately move, so it keeps using the generic write timestamp.
+    datePublished: resource.published_at || resource.created_at,
+    dateModified: resource.updated_at || resource.published_at || resource.created_at,
     author: { '@type': 'Person', name: resource.username || `用户 #${resource.user_id}`, url: absoluteUrl(`/users/${resource.user_id}`) },
     ...(resource.metadata?.cover_image_url ? { image: absoluteUrl(resource.metadata.cover_image_url) } : {}),
     ...(resource.resource_kind ? { genre: resourceKindLabel(resource.resource_kind) } : {}),
@@ -88,7 +90,7 @@ export default async function ResourceDetailPage({ params }: { params: Promise<{
   return <div className="content-width-detail mx-auto min-w-0 px-4 py-8 sm:px-6 lg:px-8">
     <JsonLd data={[resourceJsonLd, breadcrumbJsonLd]} />
     <nav className="mb-6 flex items-center gap-2 text-sm text-[var(--text-muted)]">
-      <Link href="/resources" className="inline-flex items-center gap-1 transition-colors hover:text-[var(--primary)]"><ArrowLeft className="h-4 w-4" />资源中心</Link>
+      <Link href="/resources" className="inline-flex items-center gap-1 transition-colors hover:text-[var(--primary-text)]"><ArrowLeft className="h-4 w-4" />资源中心</Link>
       <span>/</span>
       <span className="text-[var(--text)]">{resource.title}</span>
     </nav>

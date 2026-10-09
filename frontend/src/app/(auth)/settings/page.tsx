@@ -213,7 +213,7 @@ export default function SettingsPage() {
               ) : (
                 <Link
                   href="/verify-phone?redirect=%2Fsettings"
-                  className="border border-[var(--primary)] px-3 py-1.5 text-sm font-medium text-[var(--primary)] hover:bg-[var(--primary)]/5"
+                  className="border border-[var(--primary)] px-3 py-1.5 text-sm font-medium text-[var(--primary-text)] hover:bg-[var(--primary)]/5"
                 >
                   去验证
                 </Link>
@@ -249,7 +249,7 @@ export default function SettingsPage() {
         {/* The block list had no entry point at all and was reachable only by typing the
             URL, which for a privacy control is the same as not shipping it. */}
         <nav className="mb-6 flex flex-wrap gap-2">
-          <span className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm text-white">
+          <span className="rounded-lg bg-[var(--primary-button)] px-3 py-1.5 text-sm text-white">
             {t('emailSettings.notifications')}
           </span>
           <Link
