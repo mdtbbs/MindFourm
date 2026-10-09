@@ -68,7 +68,7 @@ export default function ContentSidebar({
       {/* Pushed to the bottom of the nav column: on short pages it parks the
           personal entry at the rail's foot without leaving a dead gap, and on
           tall pages it sits directly under the workspace list. */}
-      <div className="mt-auto pt-3">
+      <div className="mt-auto border-t border-[var(--border)] pt-3">
         <div className="px-3 pb-2 text-[11px] font-medium tracking-wider text-[var(--text-muted)]">{t('navigation.personal')}</div>
         <Link href={personalSpace.href} aria-current={personalActive ? 'page' : undefined} className={`relative flex min-h-11 items-center gap-3 px-3 text-sm transition-colors before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:bg-[var(--primary)] ${personalActive ? 'bg-[var(--primary-soft)] font-medium text-[var(--primary)] before:opacity-100' : 'text-[var(--text-secondary)] before:opacity-0 hover:bg-[var(--bg-elevated)] hover:text-[var(--text)]'}`}>
           <PersonalIcon className="h-4 w-4 shrink-0" aria-hidden="true" /><span className="truncate">{t(personalSpace.labelKey)}</span>

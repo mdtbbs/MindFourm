@@ -162,7 +162,7 @@ export default async function ResourcesPage({
     <main className="min-w-0 space-y-7">
       {discoveryMode ? <ResourceDiscoveryShelves kind={params.resource_kind} /> : null}
 
-      <section className="space-y-4" aria-label="资源浏览">
+      <section id="resource-browse" className="space-y-4 scroll-mt-4" aria-label="资源浏览">
         <ResourceFilters
           categories={resourceCategories}
           initialCategory={params.category_id}
