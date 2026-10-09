@@ -149,6 +149,16 @@ export async function fetchV1<T>(
     headers['X-Forum-Internal-Key'] = internalKey;
   }
 
+  // Server Components are not end users: without this key their calls arrive as
+  // an ordinary IP request and consume the visitor-facing rate-limit bucket by
+  // the container address (which is not loopback under Docker, where API_URL is
+  // http://backend:4000). server-fetch.ts already sends this key; V1 SSR
+  // requests went straight to the limiter because this path never did.
+  if (typeof window === 'undefined') {
+    const internalKey = process.env.FORUM_INTERNAL_API_KEY;
+    if (internalKey) headers['X-Forum-Internal-Key'] = internalKey;
+  }
+
   // V1 is read-only for now; credentials are forwarded for future auth'd
   // endpoints, but no CSRF/phone-verification retry is wired up because
   // none of the current V1 endpoints require it.

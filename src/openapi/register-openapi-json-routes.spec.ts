@@ -15,10 +15,14 @@ function createResponse() {
 }
 
 function register(document: any) {
+  // Routes are registered as `get(path, rateLimiter, handler)`; capture the final
+  // handler so the served body can be asserted directly.
   const handlers = new Map<string, (request: any, response: any) => unknown>();
   registerOpenApiJsonRoutes({
     getHttpAdapter: () => ({
-      get: (route: string, handler: (request: any, response: any) => unknown) => handlers.set(route, handler),
+      get: (route: string, ...chain: Array<(request: any, response: any) => unknown>) => {
+        handlers.set(route, chain[chain.length - 1]);
+      },
     }) as any,
   }, document);
   return handlers;

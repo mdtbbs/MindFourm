@@ -87,9 +87,12 @@ export class RateLimitGuard implements CanActivate {
         remaining: 0,
         ipSource: req.clientIpSource || 'connection',
       });
-      const isVersionedApi = String(req.originalUrl || req.url || '').startsWith('/api/v1/');
+      // Always carry the stable code, on legacy and V1 paths alike. The frontend
+      // localizes by `code`; a bare Chinese string here meant every non-V1 429
+      // reached the user untranslated. The legacy filter already forwards `code`,
+      // so this stays backward compatible with existing clients.
       throw new HttpException(
-        isVersionedApi ? { code: 'RATE_LIMITED', message: 'RATE_LIMITED' } : '请求过于频繁，请稍后再试',
+        { code: 'RATE_LIMITED', message: '请求过于频繁，请稍后再试' },
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }

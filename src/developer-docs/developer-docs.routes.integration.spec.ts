@@ -100,7 +100,7 @@ describe('developer docs route protection', () => {
         const response = await fetch(`${baseUrl}/api/v1/docs/changelog`);
         if (response.status === 429) {
           expect(response.headers.get('retry-after')).toBeTruthy();
-          await expect(response.json()).resolves.toMatchObject({ code: 'RATE_LIMITED' });
+          await expect(response.json()).resolves.toMatchObject({ error: { code: 'RATE_LIMITED' } });
           sawRateLimit = true;
           break;
         }
