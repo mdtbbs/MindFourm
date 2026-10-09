@@ -4,6 +4,7 @@ import { requestPhoneVerification } from '@/lib/phone-verification/coordinator';
 import { useToastStore } from '@/store/toast-store';
 import { isSiteFeatureEnabled } from '@/config/site-profile';
 import { normalizeLocale, translateApiError, translate } from '@/i18n';
+import { requestV1 } from '@/lib/api/v1/transport';
 
 function normalizePublicApiBase(value: string | undefined): string {
   if (!value) return '';
@@ -1599,48 +1600,55 @@ export interface SocialFriendPresenceItem {
 }
 
 export const socialPresenceApi = {
+  // Presence is time-sensitive: requestV1 bypasses the legacy 30s read cache
+  // and surfaces stable V1 error codes via V1ApiError.
   getFriends: (page = 1, limit = 50) =>
-    request<{ data: SocialFriendPresenceItem[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(
-      `/api/v1/social/friends/presence?page=${page}&limit=${limit}`
+    requestV1<{ data: SocialFriendPresenceItem[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(
+      `/social/friends/presence?page=${page}&limit=${limit}`, { method: 'GET' }
     ),
 };
 
 export const userBlocksApi = {
-  list: (page = 1, limit = 50) => request<{ data: Array<{ id: number; user: FriendSearchResult; reason: string | null; created_at: string }>; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/api/v1/blocks?page=${page}&limit=${limit}`),
-  unblock: (userId: number) => request<{ message?: string }>(`/api/v1/users/${userId}/block`, { method: 'DELETE' }),
+  list: (page = 1, limit = 50) => requestV1<{ data: Array<{ id: number; user: FriendSearchResult; reason: string | null; created_at: string }>; pagination: { page: number; limit: number; total: number; totalPages: number } }>(`/blocks?page=${page}&limit=${limit}`, { method: 'GET' }),
+  unblock: (userId: number) => requestV1<{ message?: string }>(`/users/${userId}/block`, { method: 'DELETE' }),
 };
 
 export const multiplayerApi = {
-  getPreferences: () => request<{ default_client_id: string | null; clients: Array<{ client_id: string; name: string; launch_uri_template: string | null; application_icon_url: string | null }> }>('/api/v1/multiplayer/preferences'),
-  setDefaultClient: (clientId: string | null) => request<{ default_client_id: string | null }>('/api/v1/multiplayer/preferences', {
-    method: 'PATCH', body: JSON.stringify({ client_id: clientId || '' }),
+  // All multiplayer calls go through requestV1: they get a stable error.code
+  // (typed as V1ApiError) and skip the legacy 30s read cache, which would
+  // otherwise make presence, invites and join state stale on arrival.
+  getPreferences: () => requestV1<{ default_client_id: string | null; clients: Array<{ client_id: string; name: string; launch_uri_template: string | null; application_icon_url: string | null }> }>('/multiplayer/preferences', { method: 'GET' }),
+  // `client_id: null` clears the preference per the V1 contract; omit/empty
+  // string is not the documented way to express "no default client".
+  setDefaultClient: (clientId: string | null) => requestV1<{ default_client_id: string | null }>('/multiplayer/preferences', {
+    method: 'PATCH', body: JSON.stringify({ client_id: clientId ?? null }),
   }),
-  createJoinIntent: (sessionId: string, joinCode?: string) => request<{ intent_id: string; expires_in: number }>(
-    `/api/v1/multiplayer/sessions/${encodeURIComponent(sessionId)}/join-intents`,
+  createJoinIntent: (sessionId: string, joinCode?: string) => requestV1<{ intent_id: string; expires_in: number }>(
+    `/multiplayer/sessions/${encodeURIComponent(sessionId)}/join-intents`,
     { method: 'POST', body: JSON.stringify(joinCode ? { join_code: joinCode } : {}) },
   ),
-  requestJoin: (sessionId: string) => request<{ join_request_id: string; status: string }>(
-    `/api/v1/multiplayer/sessions/${encodeURIComponent(sessionId)}/join-requests`, { method: 'POST' },
+  requestJoin: (sessionId: string) => requestV1<{ join_request_id: string; status: string }>(
+    `/multiplayer/sessions/${encodeURIComponent(sessionId)}/join-requests`, { method: 'POST' },
   ),
-  invite: (sessionId: string, targetUserId: number) => request<{ id: string; status: string }>(
-    '/api/v1/multiplayer/invites', { method: 'POST', body: JSON.stringify({ session_id: sessionId, target_user_id: targetUserId }) },
+  invite: (sessionId: string, targetUserId: number) => requestV1<{ id: string; status: string }>(
+    '/multiplayer/invites', { method: 'POST', body: JSON.stringify({ session_id: sessionId, target_user_id: targetUserId }) },
   ),
-  listInvites: () => request<Array<{ invite_id: string; session_id: string; sender_user_id: number; status: string; expires_at: string; session: { game_id: string; game_version?: string | null; activity_name?: string | null } | null }>>('/api/v1/multiplayer/invites'),
-  acceptInvite: (inviteId: string) => request<{ invite_id: string; status: string; join_intent: { intent_id: string; expires_in: number } }>(
-    `/api/v1/multiplayer/invites/${encodeURIComponent(inviteId)}/accept`, { method: 'POST' },
+  listInvites: () => requestV1<Array<{ invite_id: string; session_id: string; sender_user_id: number; status: string; expires_at: string; session: { game_id: string; game_version?: string | null; activity_name?: string | null } | null }>>('/multiplayer/invites', { method: 'GET' }),
+  acceptInvite: (inviteId: string) => requestV1<{ invite_id: string; status: string; join_intent: { intent_id: string; expires_in: number } }>(
+    `/multiplayer/invites/${encodeURIComponent(inviteId)}/accept`, { method: 'POST' },
   ),
-  declineInvite: (inviteId: string) => request<{ status: string }>(
-    `/api/v1/multiplayer/invites/${encodeURIComponent(inviteId)}/decline`, { method: 'POST' },
+  declineInvite: (inviteId: string) => requestV1<{ status: string }>(
+    `/multiplayer/invites/${encodeURIComponent(inviteId)}/decline`, { method: 'POST' },
   ),
-  listJoinRequests: () => request<{ data: IncomingJoinRequest[]; total: number }>('/api/v1/multiplayer/join-requests'),
-  approveJoinRequest: (requestId: string) => request<{ status: string; join_intent: { intent_id: string; expires_in: number } }>(
-    `/api/v1/multiplayer/join-requests/${encodeURIComponent(requestId)}/approve`, { method: 'POST' },
+  listJoinRequests: () => requestV1<{ data: IncomingJoinRequest[]; total: number }>('/multiplayer/join-requests', { method: 'GET' }),
+  approveJoinRequest: (requestId: string) => requestV1<{ status: string; join_intent: { intent_id: string; expires_in: number } }>(
+    `/multiplayer/join-requests/${encodeURIComponent(requestId)}/approve`, { method: 'POST' },
   ),
-  rejectJoinRequest: (requestId: string) => request<{ status: string }>(
-    `/api/v1/multiplayer/join-requests/${encodeURIComponent(requestId)}/reject`, { method: 'POST' },
+  rejectJoinRequest: (requestId: string) => requestV1<{ status: string }>(
+    `/multiplayer/join-requests/${encodeURIComponent(requestId)}/reject`, { method: 'POST' },
   ),
-  consumeJoinIntent: (intentId: string) => request<unknown>(
-    `/api/v1/multiplayer/join-intents/${encodeURIComponent(intentId)}/consume`, { method: 'POST', body: JSON.stringify({}) },
+  consumeJoinIntent: (intentId: string) => requestV1<unknown>(
+    `/multiplayer/join-intents/${encodeURIComponent(intentId)}/consume`, { method: 'POST', body: JSON.stringify({}) },
   ),
 };
 

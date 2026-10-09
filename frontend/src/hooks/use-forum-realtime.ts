@@ -100,6 +100,22 @@ export function ackForumRealtimeEvent(userId: number, id: string): boolean {
   return true;
 }
 
+/**
+ * Ask the gateway to stream session-scoped events (`peer.*`, `candidate.*`,
+ * `relay.*`, `session.closed`, ...) for the given sessions. Session events are
+ * only delivered after an explicit subscribe; they carry a `session_id` and are
+ * never part of the user stream.
+ */
+export function subscribeForumRealtimeSessions(userId: number, sessionIds: readonly string[]): boolean {
+  const entry = activeSockets.get(userId);
+  if (!entry || entry.socket.readyState !== WebSocket.OPEN) return false;
+  const valid = sessionIds.filter((id) => /^ses_[A-Za-z0-9_-]{16,32}$/.test(id) && !entry.subscribedSessions.has(id));
+  if (valid.length === 0) return false;
+  for (const id of valid) entry.subscribedSessions.add(id);
+  entry.socket.send(JSON.stringify({ type: 'subscribe', sessions: valid }));
+  return true;
+}
+
 export function useForumRealtime(userId: number | undefined, enabled: boolean): void {
   useEffect(() => {
     if (!enabled || !userId || typeof window === 'undefined' || typeof WebSocket === 'undefined') return;
@@ -168,13 +184,14 @@ export function useForumRealtime(userId: number | undefined, enabled: boolean): 
             heartbeatTimer = setInterval(() => {
               if (next.readyState === WebSocket.OPEN) next.send(JSON.stringify({ type: 'heartbeat' }));
             }, 25_000);
-            // A reconnected socket carries no subscriptions; re-announce the
-            // sessions the user joined before the drop.
-            const sessions = [...(activeSockets.get(userId)?.subscribedSessions ?? [])];
-            if (sessions.length) next.send(JSON.stringify({ type: 'subscribe', sessions }));
             let lastEventId: string | null = null;
             try { lastEventId = window.sessionStorage.getItem(storageKey); } catch { /* Storage may be unavailable. */ }
             next.send(JSON.stringify({ type: 'resume', last_event_id: lastEventId }));
+            // A reconnected socket carries no subscriptions: the gateway keeps
+            // them per-connection and drops them when the socket closes, so
+            // re-announce the sessions the user subscribed to before the drop.
+            const sessions = [...(activeSockets.get(userId)?.subscribedSessions ?? [])];
+            if (sessions.length) next.send(JSON.stringify({ type: 'subscribe', sessions }));
             return;
           }
           if (value.type === 'event' && value.id) {

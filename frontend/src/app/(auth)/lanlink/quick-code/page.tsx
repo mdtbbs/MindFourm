@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { lanlinkApi } from '@/lib/api/client';
 import { siteProfile } from '@/config/site-profile';
 import { isHrefEnabled } from '@/lib/navigation/top-navigation';
@@ -11,8 +11,10 @@ import QuickCodeDisplay from '@/components/lanlink/QuickCodeDisplay';
 import { QuickCodeGenerator } from '@/components/lanlink/QuickCodeGenerator';
 import { QuickCodeInstructions } from '@/components/lanlink/QuickCodeInstructions';
 import LoadingSpinner from '@/components/ui/loading-spinner';
+import { useI18n } from '@/i18n/provider';
 
 export default function QuickCodePage() {
+  const { t } = useI18n();
   const [status, setStatus] = useState<QuickCodeStatusType | null>(null);
   const [newCode, setNewCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,32 +29,31 @@ export default function QuickCodePage() {
   const isLanLinkEnabled = siteProfile.features.lanlink !== false
     && isHrefEnabled('/lanlink', settings);
 
-  useEffect(() => {
-    if (isLanLinkEnabled) {
-      loadStatus();
-    } else {
-      setLoading(false);
-      setError('LanLink 功能未启用');
-    }
-  }, [isLanLinkEnabled]);
-
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     try {
       setLoading(true);
       const response = await lanlinkApi.getQuickCodeStatus();
       setStatus(response);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载状态失败');
+      setError(err instanceof Error ? err.message : t('lanlink.statusLoadFailed'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    if (isLanLinkEnabled) {
+      void loadStatus();
+    } else {
+      setLoading(false);
+      setError(t('lanlink.featureDisabled'));
+    }
+  }, [isLanLinkEnabled, loadStatus, t]);
 
   const handleCodeGenerated = (code: string) => {
     setNewCode(code);
-    // 重新加载状态
-    loadStatus();
+    void loadStatus();
   };
 
   if (loading) {
@@ -70,7 +71,7 @@ export default function QuickCodePage() {
           <div className="text-center">
             <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
             <button onClick={loadStatus} className="btn btn-primary">
-              重试
+              {t('common.retry')}
             </button>
           </div>
         </div>
@@ -81,9 +82,9 @@ export default function QuickCodePage() {
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold mb-2">LanLink 快速码</h1>
+        <h1 className="text-3xl font-bold mb-2">{t('lanlink.quickCodeTitle')}</h1>
         <p className="text-muted-foreground">
-          管理你的快速码，用于在 Mindustry 游戏中连接到论坛服务器。
+          {t('lanlink.quickCodeDescription')}
         </p>
       </div>
 

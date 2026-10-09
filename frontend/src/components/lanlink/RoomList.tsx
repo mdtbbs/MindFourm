@@ -3,50 +3,54 @@
 import { useCallback, useEffect, useState } from "react";
 import { lanlinkClient, type PublicRoom } from "@/lib/api/lanlinkClient";
 import Badge from "@/components/ui/badge";
+import { useI18n } from "@/i18n/provider";
 
 const POLL_INTERVAL = 15_000;
 
-function present(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === "") return "未提供";
+function present(value: string | number | null | undefined, fallback: string): string {
+  if (value === null || value === undefined || value === "") return fallback;
   return String(value);
 }
 
-function forumUserId(room: PublicRoom): string {
-  return present(room.owner.forum_user_id ?? room.owner.id);
+function forumUserId(room: PublicRoom, fallback: string): string {
+  return present(room.owner.forum_user_id ?? room.owner.id, fallback);
 }
 
-function forumUserName(room: PublicRoom): string {
+function forumUserName(room: PublicRoom, fallback: string): string {
   return present(
     room.owner.forum_display_name ??
       room.owner.display_name ??
       room.owner.forum_username ??
       room.owner.username,
+    fallback,
   );
 }
 
-function gamePlayerId(room: PublicRoom): string {
+function gamePlayerId(room: PublicRoom, fallback: string): string {
   return present(
     room.owner.game_player_id ??
       room.owner.player_id ??
       room.game_player_id ??
       room.player_id,
+    fallback,
   );
 }
 
-function gamePlayerName(room: PublicRoom): string {
-  return present(room.owner.game_name ?? room.game_name);
+function gamePlayerName(room: PublicRoom, fallback: string): string {
+  return present(room.owner.game_name ?? room.game_name, fallback);
 }
 
-function formatUpdatedAt(value: PublicRoom["updated_at"]): string | null {
+function formatUpdatedAt(value: PublicRoom["updated_at"], locale: string): string | null {
   if (value === null || value === undefined || value === "") return null;
   const normalized =
     typeof value === "number" && value < 10_000_000_000 ? value * 1000 : value;
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleString("zh-CN", { hour12: false });
+  return date.toLocaleString(locale, { hour12: false });
 }
 
 export default function RoomList() {
+  const { locale, t } = useI18n();
   const [rooms, setRooms] = useState<PublicRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,12 +71,12 @@ export default function RoomList() {
       );
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "房间列表加载失败");
+      setError(err instanceof Error ? err.message : t("lanlink.roomListFailed"));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let timer: number | undefined;
@@ -102,14 +106,14 @@ export default function RoomList() {
       setCopiedCode(code);
       window.setTimeout(() => setCopiedCode(null), 2_000);
     } catch {
-      setError("无法访问剪贴板，请手动复制房间码");
+      setError(t("lanlink.clipboardFailed"));
     }
   };
 
   if (loading) {
     return (
       <div className="card py-12 text-center text-muted-foreground">
-        正在加载在线房间…
+        {t("lanlink.loadingRooms")}
       </div>
     );
   }
@@ -123,13 +127,13 @@ export default function RoomList() {
             aria-hidden="true"
           />
           <h2 id="online-rooms-title" className="text-xl font-bold">
-            公开房间
+            {t("lanlink.publicRooms")}
           </h2>
-          <Badge variant="success">{rooms.length} 个在线</Badge>
+          <Badge variant="success">{t("lanlink.onlineCount", { count: rooms.length })}</Badge>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            页面可见时每 15 秒自动刷新
+            {t("lanlink.autoRefreshNote")}
           </span>
           <button
             type="button"
@@ -137,7 +141,7 @@ export default function RoomList() {
             disabled={refreshing}
             className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
           >
-            {refreshing ? "刷新中…" : "立即刷新"}
+            {refreshing ? t("lanlink.refreshing") : t("lanlink.refreshNow")}
           </button>
         </div>
       </div>
@@ -153,15 +157,15 @@ export default function RoomList() {
 
       {rooms.length === 0 ? (
         <div className="card py-12 text-center">
-          <p className="font-medium">暂无在线公开房间</p>
+          <p className="font-medium">{t("lanlink.noRooms")}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            房间上线后会在此处自动显示。
+            {t("lanlink.noRoomsHint")}
           </p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {rooms.map((room) => {
-            const lastUpdated = formatUpdatedAt(room.updated_at);
+            const lastUpdated = formatUpdatedAt(room.updated_at, locale);
             const nodeName = room.node_name ?? room.node?.name ?? room.node?.id;
             const hasPlayerCount = typeof room.players === "number";
 
@@ -173,13 +177,13 @@ export default function RoomList() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <h3 className="truncate text-lg font-bold">
-                      {room.name || room.display_name || "未命名房间"}
+                      {room.name || room.display_name || t("lanlink.unnamedRoom")}
                     </h3>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                      {nodeName && <span>节点：{nodeName}</span>}
+                      {nodeName && <span>{t("lanlink.node", { name: nodeName })}</span>}
                       {hasPlayerCount && (
                         <span>
-                          在线：{room.players}
+                          {t("lanlink.playersOnline", { count: room.players ?? 0 })}
                           {typeof room.max_players === "number"
                             ? ` / ${room.max_players}`
                             : ""}
@@ -187,40 +191,40 @@ export default function RoomList() {
                       )}
                     </div>
                   </div>
-                  <Badge variant="success">在线</Badge>
+                  <Badge variant="success">{t("lanlink.online")}</Badge>
                 </div>
 
                 <div className="rounded-lg bg-muted/60 p-3">
                   <p className="mb-1 text-xs font-medium text-muted-foreground">
-                    房间公告
+                    {t("lanlink.roomMotd")}
                   </p>
                   <p className="max-h-24 overflow-auto whitespace-pre-wrap break-words text-sm">
-                    {room.motd || room.display_name || "房主未填写房间公告"}
+                    {room.motd || room.display_name || t("lanlink.roomMotdEmpty")}
                   </p>
                 </div>
 
                 <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm">
-                  <dt className="text-muted-foreground">论坛用户</dt>
+                  <dt className="text-muted-foreground">{t("lanlink.forumUser")}</dt>
                   <dd className="min-w-0 break-all font-medium">
-                    {forumUserName(room)}
+                    {forumUserName(room, t("lanlink.notProvided"))}
                   </dd>
-                  <dt className="text-muted-foreground">论坛 ID</dt>
+                  <dt className="text-muted-foreground">{t("lanlink.forumId")}</dt>
                   <dd className="min-w-0 break-all font-mono">
-                    {forumUserId(room)}
+                    {forumUserId(room, t("lanlink.notProvided"))}
                   </dd>
-                  <dt className="text-muted-foreground">游戏名称</dt>
+                  <dt className="text-muted-foreground">{t("lanlink.gameName")}</dt>
                   <dd className="min-w-0 break-all font-medium">
-                    {gamePlayerName(room)}
+                    {gamePlayerName(room, t("lanlink.notProvided"))}
                   </dd>
-                  <dt className="text-muted-foreground">游戏玩家 ID</dt>
+                  <dt className="text-muted-foreground">{t("lanlink.gamePlayerId")}</dt>
                   <dd className="min-w-0 break-all font-mono text-xs">
-                    {gamePlayerId(room)}
+                    {gamePlayerId(room, t("lanlink.notProvided"))}
                   </dd>
                 </dl>
 
                 <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
                   <div>
-                    <p className="text-xs text-muted-foreground">房间码</p>
+                    <p className="text-xs text-muted-foreground">{t("lanlink.roomCode")}</p>
                     <code className="font-bold text-primary">{room.code}</code>
                   </div>
                   <button
@@ -228,11 +232,11 @@ export default function RoomList() {
                     onClick={() => void copyRoomCode(room.code)}
                     className="rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
                   >
-                    {copiedCode === room.code ? "已复制 ✓" : "复制房间码"}
+                    {copiedCode === room.code ? t("lanlink.copied") : t("lanlink.copyCode")}
                   </button>
                   {lastUpdated && (
                     <p className="w-full text-right text-[11px] text-muted-foreground">
-                      最后更新：{lastUpdated}
+                      {t("lanlink.lastUpdated", { time: lastUpdated })}
                     </p>
                   )}
                 </div>
