@@ -7,6 +7,7 @@ import { Reflector } from '@nestjs/core';
 import { PhoneWriteGuard } from './phone-write.guard';
 import type { AuthService } from '../../modules/auth/auth.service';
 import { SiteConfigService } from '../../config/site-profile';
+import { ALLOW_ANONYMOUS_WRITE_KEY } from '../decorators/allow-anonymous-write.decorator';
 
 function createContext(method: string, sessionToken?: string) {
   const request: any = {
@@ -28,13 +29,13 @@ function createContext(method: string, sessionToken?: string) {
 }
 
 describe('PhoneWriteGuard', () => {
-  function createGuard(user: any, skipPhoneVerification = false, profile = 'mdtbbs') {
+  function createGuard(user: any, skipPhoneVerification = false, profile = 'mdtbbs', allowAnonymousWrite = false) {
     const authService = {
       verifySession: jest.fn().mockResolvedValue(user),
       resolveRequestUser: jest.fn().mockResolvedValue(user),
     } as unknown as jest.Mocked<AuthService>;
     const reflector = {
-      getAllAndOverride: jest.fn().mockReturnValue(skipPhoneVerification),
+      getAllAndOverride: jest.fn((key: string) => key === ALLOW_ANONYMOUS_WRITE_KEY ? allowAnonymousWrite : skipPhoneVerification),
     } as unknown as jest.Mocked<Reflector>;
     const bansService = {
       assertUserNotBanned: jest.fn().mockResolvedValue(undefined),
@@ -68,6 +69,24 @@ describe('PhoneWriteGuard', () => {
     const { context } = createContext('POST');
 
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('allows unauthenticated ephemeral writes only when explicitly marked', async () => {
+    const { guard, authService } = createGuard(null, false, 'mdtbbs', true);
+    const { context } = createContext('POST');
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(authService.resolveRequestUser).not.toHaveBeenCalled();
+  });
+
+  it('keeps ban checks for authenticated ephemeral writes and skips only phone verification', async () => {
+    const user = { id: 7, role: 'user', phone_verified: false, email_verified: false };
+    const { guard, bansService } = createGuard(user, false, 'mdtbbs', true);
+    const { context, request } = createContext('POST', 'session-token');
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(bansService.assertUserNotBanned).toHaveBeenCalledWith(user.id);
+    expect(request.user).toEqual(user);
   });
 
   it('rejects write requests for users without verified phone', async () => {

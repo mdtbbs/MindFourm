@@ -8,6 +8,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import { Response } from 'express';
 import { ApiV1, RawHttpResponse } from '@common/decorators/api-v1.decorator';
+import { AllowAnonymousWrite } from '@common/decorators/allow-anonymous-write.decorator';
 import { OAuthOptionalProtected } from '@common/decorators/oauth-protected.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 import { attachmentContentDisposition } from '@common/utils/content-disposition.util';
@@ -42,6 +43,7 @@ export class EditorToolsController {
 
   @Post(':kind/create')
   @RawHttpResponse()
+  @AllowAnonymousWrite()
   @OAuthOptionalProtected('resource.read')
   @RateLimit({ max: 20, window: 60 })
   @ApiParam({ name: 'kind', enum: ['schematic', 'map'] })
@@ -73,6 +75,7 @@ export class EditorToolsController {
   }
 
   @Post(':kind/analyze')
+  @AllowAnonymousWrite()
   @OAuthOptionalProtected('resource.read')
   @UseInterceptors(resourceUploadInterceptor)
   @RateLimit({ max: 20, window: 60 })
@@ -98,6 +101,7 @@ export class EditorToolsController {
 
   @Post('schematic/export')
   @RawHttpResponse()
+  @AllowAnonymousWrite()
   @OAuthOptionalProtected('resource.read')
   @UseInterceptors(resourceUploadInterceptor)
   @RateLimit({ max: 20, window: 60 })
@@ -129,6 +133,7 @@ export class EditorToolsController {
 
   @Post('map/export')
   @RawHttpResponse()
+  @AllowAnonymousWrite()
   @OAuthOptionalProtected('resource.read')
   @UseInterceptors(resourceUploadInterceptor)
   @RateLimit({ max: 20, window: 60 })

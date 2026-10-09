@@ -9,6 +9,7 @@ import { Reflector } from '@nestjs/core';
 import { AuthService } from '../../modules/auth/auth.service';
 import { BansService } from '../../modules/bans/bans.service';
 import { SKIP_PHONE_VERIFICATION_KEY } from '../decorators/skip-phone-verification.decorator';
+import { ALLOW_ANONYMOUS_WRITE_KEY } from '../decorators/allow-anonymous-write.decorator';
 import { SiteConfigService } from '../../config/site-profile';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -27,14 +28,26 @@ export class PhoneWriteGuard implements CanActivate {
       SKIP_PHONE_VERIFICATION_KEY,
       [context.getHandler(), context.getClass()],
     );
-
-    if (skipPhoneVerification) {
-      return true;
-    }
+    const allowAnonymousWrite = this.reflector.getAllAndOverride<boolean>(
+      ALLOW_ANONYMOUS_WRITE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     const request = context.switchToHttp().getRequest();
     const method = String(request.method || '').toUpperCase();
     if (!WRITE_METHODS.has(method)) {
+      return true;
+    }
+
+    if (skipPhoneVerification) return true;
+
+    if (allowAnonymousWrite) {
+      const hasCredentials = Boolean(request.cookies?.forum_session || request.headers.authorization);
+      if (!request.user && !hasCredentials) return true;
+      const user = request.user ?? await this.authService.resolveRequestUser(request);
+      if (!user) return true;
+      await this.bansService.assertUserNotBanned(user.id);
+      request.user = user;
       return true;
     }
 
