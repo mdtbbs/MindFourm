@@ -74,7 +74,7 @@ type EditorReadiness = {
 const REQUIRED_MINDUSTRY_SERVER_SHA256 = '0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0';
 const READINESS_CACHE_MS = 10_000;
 const READINESS_FAILURE_CACHE_MS = 2_000;
-const READINESS_TIMEOUT_MS = 1_000;
+const READINESS_TIMEOUT_MS = 10_000;
 
 @Injectable()
 export class CapabilitiesService {
