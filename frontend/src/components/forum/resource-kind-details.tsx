@@ -69,24 +69,33 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
   const production = metadata.production && typeof metadata.production === 'object' ? metadata.production as Record<string, any> : null;
   const productionItems = (production?.items || {}) as ProductionFlow;
   const productionLiquids = (production?.liquids || {}) as ProductionFlow;
+  const mapWaves = kind === 'map' ? normalizeMapWaves(metadata.wave_groups) : [];
+  const mapResources = kind === 'map' ? summarizeMapTileResources(metadata.tile_layers) : [];
   const itemIds = [...new Set(requirements.map((item) => item.item).filter((id): id is string => typeof id === 'string' && id.length > 0))];
   const blockIds = [...new Set(blockTypes.map((item) => item.name).filter((id): id is string => typeof id === 'string' && id.length > 0))];
   const productionItemIds = [...new Set(['inputs', 'outputs', 'internal'].flatMap((part) => productionItems[part as keyof ProductionFlow] || []).map((entry) => entry.id))];
   const productionLiquidIds = [...new Set(['inputs', 'outputs', 'internal'].flatMap((part) => productionLiquids[part as keyof ProductionFlow] || []).map((entry) => entry.id))];
   const productionWarningBlockIds = Array.isArray(production?.warnings) ? production.warnings.map((warning: { blockId?: unknown }) => warning.blockId).filter((id: unknown): id is string => typeof id === 'string') : [];
-  const allItemIds = [...new Set([...itemIds, ...productionItemIds])];
-  const allBlockIds = [...new Set([...blockIds, ...productionWarningBlockIds])];
+  // Item deposits resolve as items, wall-ore deposits as blocks, and liquids
+  // through the liquid catalog, so each map deposit entry gets a real name and
+  // icon instead of its internal id.
+  const mapDepositItemIds = mapResources.filter((item) => item.resource_type === 'item').map((item) => item.internal_name);
+  const mapDepositBlockIds = mapResources.filter((item) => item.resource_type === 'ore').map((item) => item.internal_name);
+  const mapDepositLiquidIds = mapResources.filter((item) => item.resource_type === 'liquid').map((item) => item.internal_name);
+  const allItemIds = [...new Set([...itemIds, ...productionItemIds, ...mapDepositItemIds])];
+  const allBlockIds = [...new Set([...blockIds, ...productionWarningBlockIds, ...mapDepositBlockIds])];
+  const allLiquidIds = [...new Set([...productionLiquidIds, ...mapDepositLiquidIds])];
   const [contentMetadata, setContentMetadata] = useState<{ items: Record<string, ContentEntry>; blocks: Record<string, ContentEntry>; liquids: Record<string, ContentEntry> }>({ items: {}, blocks: {}, liquids: {} });
   useEffect(() => {
-    if (!allItemIds.length && !allBlockIds.length && !productionLiquidIds.length) { setContentMetadata({ items: {}, blocks: {}, liquids: {} }); return; }
+    if (!allItemIds.length && !allBlockIds.length && !allLiquidIds.length) { setContentMetadata({ items: {}, blocks: {}, liquids: {} }); return; }
     let active = true;
-    resourceApi.getMindustryContentMetadata(allItemIds, allBlockIds, productionLiquidIds)
+    resourceApi.getMindustryContentMetadata(allItemIds, allBlockIds, allLiquidIds)
       .then((result) => { if (active) setContentMetadata(result); })
       .catch(() => { if (active) setContentMetadata({ items: {}, blocks: {}, liquids: {} }); });
     return () => { active = false; };
   // The IDs form a stable content identity for each schematic metadata payload.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allItemIds.join(','), allBlockIds.join(','), productionLiquidIds.join(',')]);
+  }, [allItemIds.join(','), allBlockIds.join(','), allLiquidIds.join(',')]);
   const sortedRequirements = [...requirements].sort((left, right) => (right.amount || 0) - (left.amount || 0));
   const sortedBlockTypes = [...blockTypes].sort((left, right) => (right.count || 0) - (left.count || 0));
   const extendedMapData = ([
@@ -94,8 +103,6 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
     [t('resourceKindDetails.bannedUnits'), Array.isArray(metadata.banned_units) ? metadata.banned_units.join('、') : ''],
     [t('resourceKindDetails.bannedBlocks'), Array.isArray(metadata.banned_blocks) ? metadata.banned_blocks.join('、') : ''],
   ] as Array<[string, string]>).filter(([, value]) => value.length > 0);
-  const mapWaves = kind === 'map' ? normalizeMapWaves(metadata.wave_groups) : [];
-  const mapResources = kind === 'map' ? summarizeMapTileResources(metadata.tile_layers) : [];
   const mapBuild = metadata.map_build_metadata && typeof metadata.map_build_metadata === 'object'
     ? metadata.map_build_metadata as { stored_game_build?: unknown; save_format_version?: unknown }
     : null;
@@ -146,7 +153,9 @@ export default function ResourceKindDetails({ resource, selectedVersionPublicId 
         {mapResources.length > 0 && <section className="min-w-0">
           <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1"><h3 className="text-base font-semibold text-[var(--text)]">{t('resourceKindDetails.mapResources')}</h3><span className="text-xs text-[var(--text-muted)]">{t('resourceKindDetails.mapResourcesNote')}</span></div>
           <ul className="space-y-1.5">{mapResources.map((item) => {
-            const content = contentMetadata.items[item.internal_name] || contentMetadata.blocks[item.internal_name];
+            const content = item.resource_type === 'liquid'
+              ? contentMetadata.liquids[item.internal_name]
+              : contentMetadata.items[item.internal_name] || contentMetadata.blocks[item.internal_name];
             const resourceTypeLabel = item.resource_type === 'liquid'
               ? t('resourceKindDetails.resourceTypeLiquid')
               : item.resource_type === 'ore' ? t('resourceKindDetails.resourceTypeOre') : t('resourceKindDetails.resourceTypeItem');

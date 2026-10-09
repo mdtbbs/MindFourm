@@ -846,8 +846,12 @@ export class ResourcePreviewService {
     const layers = result.tile_layers as Record<string, unknown> | undefined;
     const originalLayers = (value as Record<string, unknown>).tile_layers as Record<string, unknown> | undefined;
     if (layers && originalLayers) {
-      if (Array.isArray(originalLayers.terrain) && originalLayers.terrain.length > 10000) result.tile_layers_truncated = true;
-      if (['buildings', 'enemy_spawns'].some(key => Array.isArray(originalLayers[key]) && (originalLayers[key] as unknown[]).length > 10000)) layers.objects_truncated = true;
+      // `sanitizeMetadataValue` caps every array at 10k entries. A map larger
+      // than that loses deposits silently, and the reader needs to know the
+      // counts it sees are a lower bound.
+      const oversize = (key: string) => Array.isArray(originalLayers[key]) && (originalLayers[key] as unknown[]).length > 10000;
+      if (oversize('terrain') || ['resources', 'ores', 'liquid'].some(oversize)) result.tile_layers_truncated = true;
+      if (['buildings', 'enemy_spawns'].some(oversize)) layers.objects_truncated = true;
     }
     return result;
   }
