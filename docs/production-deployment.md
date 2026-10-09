@@ -166,11 +166,31 @@ Nginx 至少需要：
 - 云存档二进制上传 `/api/v1/game-saves/uploads/{uploadId}/file` 应由公网入口直接流式转发到后端；若入口流量经过 Next.js，则由专用 Route Handler 流式转发，不能落入通用 `/api/:path*` rewrite。
 - 云存档上传 location 将请求体直接流向 NestJS，并将 `client_max_body_size` 设为后端单文件限制（默认 50 MiB）。
 - 前端页面和静态资源转发到 Next.js。
+- 头像、公共图片与已上传文件由后端 NestJS 提供（`@nestjs/serve-static`，见 `src/app.module.ts`）。`/uploads/` 必须直接代理到后端，并且要放在通用 `location /` 之前；若落到 Next.js，只会命中 `/uploads/:path*` 这条 `fallback` rewrite，Next.js 没有对应路由，最终返回后端的 500 错误信封 `{"success":false,"message":"服务器内部错误"}`。
 - SSE `/api/notifications/events` 保持长连接，不缓冲。
 - `X-Forwarded-For`、`X-Forwarded-Proto` 正确传递。
 - HTTPS 终止在 Nginx，并将 HTTP 重定向到 HTTPS。
 
 `nginx/conf.d/default.conf` 已包含云存档上传专用 location。实际部署若使用宝塔 vhost 或其他反向代理，可在接收 ESA/公网流量的那一层添加等价规则；该规则必须透传 `Authorization` 和 `X-Request-ID`，并设置 `proxy_request_buffering off`。当前应用也包含 `frontend/src/app/api/v1/game-saves/uploads/[uploadId]/file/route.ts`，在公网入口仍经过 Next.js 时直接以流方式转发请求体，不读取整段文件到内存。`frontend/next.config.js` 将通用 `/api/:path*` rewrite 配置为 `fallback`，在动态路由之后执行，确保专用 Route Handler 先接管该 PUT。
+
+头像与公共图片对应的代理规则：
+
+```nginx
+location ^~ /uploads/ {
+    proxy_pass http://mindforum_backend;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    expires 7d;
+    add_header Cache-Control "public, max-age=604800";
+}
+```
+
+`add_header` 会替换继承自 server 层的同名安全头，所以该 location 若要加 `Cache-Control`，必须一并重复 `X-Content-Type-Options` 等头部。
+
+生产环境的 `uploads/` 必须是持久化卷（容器部署见 `docker-compose.prod.yml` 的 `uploads_data:/app/uploads`），否则容器重建后数据库里的头像 URL 仍在，文件已经不存在。
 
 ```nginx
 location ^~ /api/v1/game-saves/uploads/ {
@@ -215,6 +235,13 @@ curl -fsS https://forum.example.com/api/version
 浏览器检查：
 
 - 首页和帖子列表可加载。
+- 头像与公共图片直接可访问，且**不返回 500**：
+
+```bash
+curl -o /dev/null -s -w '%{http_code}\n' https://forum.example.com/uploads/avatars/<任意文件>
+```
+
+  该请求应返回 `200`；文件不存在应返回 `404` 或 `301`，出现 `500` 或 `{"success":false,"message":"服务器内部错误"}` 说明 `/uploads/` 没有被后端接管（见「反向代理要求」）。
 - 使用真实测试账号上传一个大于 10 MiB 的云存档并完成提交；同一 `X-Request-ID` 应出现在后端请求日志中，Next.js 日志不应再出现该 PUT 的 10 MiB 请求体警告。
 - 登录、OAuth callback、条款接受流程可完成。
 - 桌面端出现左侧主导航，顶部只显示工具栏。
