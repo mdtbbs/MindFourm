@@ -43,6 +43,7 @@
 - [资源中心 API V1](./resources-v1-contract.md)：包含公开发现榜单、推荐算法版本、计分公式、候选窗口与隐私边界；在线地址为 `/api/v1/docs/resources`。
 - [多人联机 API V1](./multiplayer-v1.md)
 - [云存档 API V1](./cloud-saves-v1.md)
+- [通用 Blob 存储 V1](./blobs-v1.md)
 - [公开 V1 错误代码](./errors-v1.md)
 - [公开 API 更新记录](./changelog-v1.md)
 - [公开 API 生命周期](./lifecycle-v1.md)

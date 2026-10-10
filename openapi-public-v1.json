@@ -15960,6 +15960,744 @@
         }
       }
     },
+    "/v1/blobs/quota": {
+      "get": {
+        "operationId": "BlobsController_quota",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.read"
+        ],
+        "summary": "查看 blob 空间用量",
+        "description": "返回当前所有者已用字节数、配额、单对象上限与有效 blob 数量；进行中的上传会预占额度。",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlobUsageDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/blobs": {
+      "get": {
+        "operationId": "BlobsController_list",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.read"
+        ],
+        "summary": "列出我的 blob",
+        "description": "只返回当前所有者的有效 blob；下一页游标位于 meta.next_cursor。",
+        "parameters": [
+          {
+            "name": "namespace",
+            "required": false,
+            "in": "query",
+            "description": "按 namespace 过滤。",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref_type",
+            "required": false,
+            "in": "query",
+            "description": "按业务引用类型过滤。",
+            "schema": {
+              "maxLength": 32,
+              "type": "string"
+            }
+          },
+          {
+            "name": "ref_id",
+            "required": false,
+            "in": "query",
+            "description": "按业务引用 ID 过滤。",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "上一页 meta.next_cursor 返回的不透明游标。",
+            "schema": {
+              "maxLength": 300
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "当前页的 blob 列表；下一页游标位于 meta.next_cursor。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BlobDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "BlobsController_create",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.write"
+        ],
+        "summary": "创建 blob 上传",
+        "description": "登记目标 key 与内容指纹。若相同内容已存在则 deduplicated=true，无需再上传；否则返回 upload.url，PUT 成功后调用 commit。",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "按所有者重放同一创建请求，保留 24 小时。",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBlobDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlobCreatedDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/blobs/uploads/{uploadId}/content": {
+      "put": {
+        "operationId": "BlobsController_upload",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.write"
+        ],
+        "summary": "上传 blob 内容",
+        "description": "将原始字节 PUT 到该地址。服务端会校验声明的大小与 SHA-256，任何不一致都会拒绝并丢弃数据。",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "description": "上传会话 UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "content-type",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Content-Type",
+            "in": "header",
+            "description": "必须是 application/octet-stream。",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "字节已被接收并通过大小与 SHA-256 校验。"
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "415": {
+            "description": "请求体不是 application/octet-stream。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/blobs/uploads/{uploadId}/commit": {
+      "post": {
+        "operationId": "BlobsController_commit",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.write"
+        ],
+        "summary": "提交 blob",
+        "description": "服务端复核存储对象的大小与 SHA-256 后创建可读写 blob；同 key 的旧 blob 会被替换并进入延迟回收。",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "description": "上传会话 UUID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "按所有者重放同一提交请求，保留 24 小时。",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlobCommitResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/blobs/uploads/{uploadId}": {
+      "delete": {
+        "operationId": "BlobsController_cancel",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 600,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.write"
+        ],
+        "summary": "取消上传",
+        "description": "放弃上传会话；已写入的临时对象由维护任务清理。",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "description": "上传会话 UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会话已取消；重复取消返回 404。"
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/blobs/{blobId}": {
+      "get": {
+        "operationId": "BlobsController_get",
+        "x-rate-limit": {
+          "limit": 300,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "blob.read"
+        ],
+        "summary": "查看 blob 详情",
+        "description": "无需登录即可读取 public blob；私有 blob 仅所有者可见，不可见时与不存在返回相同的 404。",
+        "parameters": [
+          {
+            "name": "blobId",
+            "required": true,
+            "in": "path",
+            "description": "blob UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlobDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：blob.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "BlobsController_update",
+        "x-rate-limit": {
+          "limit": 120,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.write"
+        ],
+        "summary": "更新 blob 元数据",
+        "description": "修改 key、文件名、可见性、元数据、标签与业务引用；内容本身不可变。",
+        "parameters": [
+          {
+            "name": "blobId",
+            "required": true,
+            "in": "path",
+            "description": "blob UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBlobDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlobDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "BlobsController_remove",
+        "x-rate-limit": {
+          "limit": 60,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-required-scopes": [
+          "blob.delete"
+        ],
+        "summary": "删除 blob",
+        "description": "软删除绑定；对象在引用数归零并经过宽限期后被回收。重复删除返回 404。",
+        "parameters": [
+          {
+            "name": "blobId",
+            "required": true,
+            "in": "path",
+            "description": "blob UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlobDeletedDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
+          },
+          "403": {
+            "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/blobs/{blobId}/content": {
+      "get": {
+        "operationId": "BlobsController_content",
+        "x-rate-limit": {
+          "limit": 300,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "blob.read"
+        ],
+        "summary": "下载 blob 内容",
+        "description": "public blob 无需登录即可下载，私有 blob 需所有者身份。只有白名单内的媒体类型会内联渲染，其余一律以附件下载，避免上传者声明的类型变成可执行内容。",
+        "parameters": [
+          {
+            "name": "blobId",
+            "required": true,
+            "in": "path",
+            "description": "blob UUID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "原始字节。白名单内的媒体类型按存储的 MIME 返回，其余一律 application/octet-stream 附件。",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "内容摘要标记，形如 \"sha256-<摘要>\"。",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "本地对象最后修改时间。",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：blob.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "公共 V1 / Blob 存储"
+        ],
+        "security": [
+          {
+            "MindAuthBearer": []
+          },
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/me": {
       "get": {
         "operationId": "UsersV1Controller_getMe",
@@ -25168,7 +25906,7 @@
   "info": {
     "title": "MDTBBS Public Client API",
     "description": "Stable V1 contract for MindAuth public clients. Use /api/v1/capabilities for feature discovery. Server-side integrations use a separate authorization boundary and are not part of this specification. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.4.1",
+    "version": "1.5.0",
     "contact": {}
   },
   "tags": [],
@@ -30145,6 +30883,343 @@
         "required": [
           "data",
           "meta"
+        ]
+      },
+      "BlobUsageDto": {
+        "type": "object",
+        "properties": {
+          "used_bytes": {
+            "type": "number",
+            "description": "Bytes held by live blobs, including bytes still referenced by pending uploads."
+          },
+          "limit_bytes": {
+            "type": "number"
+          },
+          "max_object_bytes": {
+            "type": "number"
+          },
+          "blob_count": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "used_bytes",
+          "limit_bytes",
+          "max_object_bytes",
+          "blob_count"
+        ]
+      },
+      "BlobDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "Logical name chosen by the owner."
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "number",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "description": "Caller-supplied JSON metadata."
+          },
+          "tags": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ref_type": {
+            "type": "object",
+            "nullable": true
+          },
+          "ref_id": {
+            "type": "object",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "object",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Expiry for temporary blobs; null for durable blobs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "content_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Stable authenticated URL that returns the bytes."
+          }
+        },
+        "required": [
+          "id",
+          "namespace",
+          "key",
+          "visibility",
+          "file_name",
+          "mime_type",
+          "size_bytes",
+          "sha256",
+          "metadata",
+          "tags",
+          "ref_type",
+          "ref_id",
+          "expires_at",
+          "created_at",
+          "updated_at",
+          "content_url"
+        ]
+      },
+      "CreateBlobDto": {
+        "type": "object",
+        "properties": {
+          "namespace": {
+            "type": "string",
+            "maxLength": 64,
+            "default": "default",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,63}$",
+            "description": "Storage namespace (\"bucket\"). Namespaces isolate key names and listing; they are not a security boundary inside one owner."
+          },
+          "key": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "cover/v2.png",
+            "description": "Logical name, unique among the live blobs of one owner in a namespace. Reusing it replaces the previous blob."
+          },
+          "file_name": {
+            "type": "string",
+            "maxLength": 255,
+            "example": "theme.png"
+          },
+          "size_bytes": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 536870912,
+            "example": 20480
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$",
+            "description": "Required SHA-256 of the exact bytes. It binds the upload session to the content the caller claims to hold."
+          },
+          "mime_type": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "image/png"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ],
+            "default": "private",
+            "description": "Private blobs are readable only by their owner; public blobs are readable by anyone holding the blob ID."
+          },
+          "metadata": {
+            "type": "object",
+            "description": "Free-form JSON metadata. Business data lives with the owning service, not here."
+          },
+          "tags": {
+            "maxItems": 32,
+            "example": [
+              "post-attachment"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ref_type": {
+            "type": "string",
+            "maxLength": 32,
+            "description": "Optional opaque correlation to the business object this blob belongs to."
+          },
+          "ref_id": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "expires_in_seconds": {
+            "type": "number",
+            "minimum": 60,
+            "maximum": 2592000,
+            "description": "Lifetime in seconds. Temporary blobs are deleted by maintenance once expired; omit for a durable blob."
+          }
+        },
+        "required": [
+          "key",
+          "file_name",
+          "size_bytes",
+          "sha256",
+          "mime_type"
+        ]
+      },
+      "BlobUploadTargetDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Absolute URL to PUT the raw bytes to."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "url",
+          "expires_at"
+        ]
+      },
+      "BlobCreatedDto": {
+        "type": "object",
+        "properties": {
+          "blob_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deduplicated": {
+            "type": "boolean",
+            "description": "True when identical bytes already exist for this owner, so no PUT is required before commit."
+          },
+          "commit_required": {
+            "type": "number",
+            "enum": [
+              true
+            ]
+          },
+          "upload_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Upload session ID. Present whenever bytes still have to be transferred."
+          },
+          "upload": {
+            "description": "Present when the caller must PUT the bytes before committing.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BlobUploadTargetDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "blob_id",
+          "deduplicated",
+          "commit_required"
+        ]
+      },
+      "BlobCommitResponseDto": {
+        "type": "object",
+        "properties": {
+          "blob": {
+            "$ref": "#/components/schemas/BlobDto"
+          },
+          "committed": {
+            "type": "number",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "blob",
+          "committed"
+        ]
+      },
+      "UpdateBlobDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "新的逻辑名。重命名到已被占用的 key 会返回 BLOB_KEY_CONFLICT；要替换某个 key 的内容，请用该 key 重新上传。"
+          },
+          "file_name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true
+          },
+          "tags": {
+            "nullable": true,
+            "maxItems": 32,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ref_type": {
+            "type": "object",
+            "maxLength": 32,
+            "nullable": true
+          },
+          "ref_id": {
+            "type": "object",
+            "maxLength": 64,
+            "nullable": true
+          }
+        }
+      },
+      "BlobDeletedDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "deleted": {
+            "type": "number",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "deleted"
         ]
       },
       "UpdateProfileDto": {

@@ -4,6 +4,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { LegalAcceptance, OperationLog, SessionAudit, ExternalApiAuditLog, UserDataDeletionRequest } from '@entities/index';
 import { LogsService } from '../logs/logs.service';
 import { GameSavesService } from '../game-saves/game-saves.service';
+import { BlobsService } from '../blobs/blobs.service';
 
 const OPEN_STATUSES = ['pending', 'in_review'];
 const REVIEW_STATUSES = ['in_review', 'completed', 'rejected'];
@@ -15,6 +16,7 @@ export class PrivacyService {
     private readonly dataSource: DataSource,
     private readonly logs: LogsService,
     private readonly gameSaves: GameSavesService,
+    private readonly blobs: BlobsService,
   ) {}
 
   async createRequest(userId: number, reason: string | undefined, context: { ip?: string; userAgent?: string }) {
@@ -56,7 +58,10 @@ export class PrivacyService {
     if (hold && Number.isNaN(hold.getTime())) throw new BadRequestException('法律留存截止时间无效');
     // Completing a deletion request also tombstones private save metadata and
     // releases blob references before the request is marked complete.
-    if (input.status === 'completed') await this.gameSaves.markUserDataDeleted(request.user_id);
+    if (input.status === 'completed') {
+      await this.gameSaves.markUserDataDeleted(request.user_id);
+      await this.blobs.markUserDataDeleted(request.user_id);
+    }
     request.status = input.status as UserDataDeletionRequest['status'];
     request.resolution = this.cleanText(input.resolution, 4000);
     request.legal_hold_until = hold;

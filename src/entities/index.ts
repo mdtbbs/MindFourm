@@ -155,6 +155,10 @@ import { GameSaveSnapshot } from './game-save-snapshot.entity';
 import { GameSaveBlob } from './game-save-blob.entity';
 import { GameSaveUploadSession } from './game-save-upload-session.entity';
 import { GameSaveIdempotency } from './game-save-idempotency.entity';
+import { BlobObject } from './blob-object.entity';
+import { BlobRecord } from './blob-record.entity';
+import { BlobUploadSession } from './blob-upload-session.entity';
+import { BlobIdempotency } from './blob-idempotency.entity';
 
 /** Base forum, content and shared platform entities. */
 export const coreEntities = [
@@ -305,6 +309,10 @@ export const coreEntities = [
   MultiplayerJoinRequest,
   MultiplayerRelayAllocation,
   MultiplayerAuditLog,
+  BlobObject,
+  BlobRecord,
+  BlobUploadSession,
+  BlobIdempotency,
 ];
 
 /** Entities that belong to Mindustry/MDTBBS integrations rather than Community. */
@@ -327,6 +335,7 @@ export const entities = [...coreEntities, ...mdtbbsEntities];
 
 export {
   GameSaveSlot, GameSaveSnapshot, GameSaveBlob, GameSaveUploadSession, GameSaveIdempotency,
+  BlobObject, BlobRecord, BlobUploadSession, BlobIdempotency,
   User, Post, Reply, Category, Tag, PostTag, Bookmark, Notification,
   SocialPrivacySetting, UserPresencePreference, MultiplayerSession, MultiplayerPeer,
   MultiplayerPeerResumeToken, MultiplayerInvite, MultiplayerJoinIntent, MultiplayerJoinRequest,

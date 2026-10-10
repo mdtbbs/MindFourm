@@ -4,6 +4,41 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.5.0
+
+本次新增面向任意业务的通用 Blob 存储接口 `/api/v1/blobs`，契约版本从 `1.4.1` 更新为 `1.5.0`。既有操作、路由、必填参数和响应字段均未改动，纯新增，旧客户端不受影响。
+
+此前论坛只有三条各自封闭的上传通道：公开图片、资源文件、游戏云存档。每一条都把自己的业务规则（图片格式校验、资源审核、存档 Slot）写死在接口里，新功能要存文件就得再造一张表和一套下载接口。`/api/v1/blobs` 把「存字节」这件事单独抽出来：业务方自己决定 namespace、key、元数据和引用，存储层统一负责内容去重、引用计数、延迟回收和所有者绑定。
+
+### Added
+
+- `GET /api/v1/blobs/quota`：查询当前所有者的已用字节、配额、单对象上限与有效 blob 数量；进行中的上传会预占额度。
+- `GET /api/v1/blobs`：列出当前所有者的有效 blob，支持 `namespace`、`ref_type`、`ref_id` 过滤与游标分页。
+- `POST /api/v1/blobs`：登记目标 key、文件名、大小、`sha256`、MIME 与可见性，返回上传会话。相同内容已存在时返回 `deduplicated: true` 且无需上传，但**仍需调用 commit**，客户端只需实现一条流程。
+- `PUT /api/v1/blobs/uploads/{uploadId}/content`：上传原始字节，必须使用 `application/octet-stream`。服务端边写边校验声明的大小与 SHA-256，不一致即拒绝并丢弃数据。
+- `POST /api/v1/blobs/uploads/{uploadId}/commit`：复核存储对象后创建可读写 blob。
+- `DELETE /api/v1/blobs/uploads/{uploadId}`：放弃上传会话。
+- `GET /api/v1/blobs/{blobId}`：读取 blob 元数据。`public` blob 无需登录；其他账号的 `private` blob 与不存在的 blob 返回相同的 404。
+- `GET /api/v1/blobs/{blobId}/content`：下载原始字节，携带 `ETag`（`sha256-<摘要>`）、`Last-Modified` 与 `X-Content-Type-Options: nosniff`。
+- `PATCH /api/v1/blobs/{blobId}`：更新 key、文件名、可见性、元数据、标签与业务引用；内容本身不可变。
+- `DELETE /api/v1/blobs/{blobId}`：软删除绑定，对象在引用数归零并经过宽限期后被回收。
+
+### Security
+
+- 存储的 MIME 类型来自上传者，无法被内容嗅探证伪，因此只在白名单内（PNG/JPEG/GIF/WebP/AVIF、常见音视频、PDF、纯文本）内联渲染，其余一律以 `application/octet-stream` + `attachment` 返回。这样上传者无法把一个声明为 `text/html` 或 `image/svg+xml` 的文件变成可执行内容。
+- 服务端从不信任客户端提交的大小与哈希：落盘后重新读取并校验通过，才写入可读行。
+- 对象 key 由服务端生成并严格匹配 `blobs/<namespace>/<owner 摘要>/<uuid>`，路径解析前重新校验，目录穿越与篡改行都读不到存储目录之外。
+
+### Notes
+
+- 内容去重按 `(namespace, owner_type, owner_id, sha256, size)` 唯一，不做全局共享：全局 CAS 会让「删除我自己的文件」与「他人的同一份文件」产生歧义。
+- 新增 OAuth scope：`blob.read`、`blob.write`、`blob.delete`。
+- 新增错误码前缀 `BLOB_*`（含 `BLOBS_DISABLED`、`BLOB_NOT_FOUND`、`BLOB_KEY_CONFLICT`、`BLOB_QUOTA_EXCEEDED`、`BLOB_FILE_TOO_LARGE`、`BLOB_UPLOAD_*`、`BLOB_STORAGE_UNAVAILABLE`）。
+- 功能开关：`blobs_enabled`（默认关闭）。`GET /api/v1/capabilities` 新增 `blobs_v1` 字段，表示功能已开启且存储目录可用。
+- 账号删除会连带清理该账号的 blob 绑定与上传会话。
+
+Ref: #38
+
 ## Public API 1.4.1
 
 本次将资源发现响应中已提供的 `published_at` 明确纳入公开 OpenAPI 契约，契约版本从 `1.4.0` 更新为 `1.4.1`。既有字段、路由和必填参数不变；新增字段为兼容性新增。

@@ -20,9 +20,19 @@ MindFourm 是 Mindustry 社区论坛和资源中心，使用 NestJS、Next.js、
 - 投票。
 - 完整群聊用户体验。
 - 插件前端主题/模板注入与无需重启的热加载。
-- 面向任意业务的通用 blob API；ResourceStorage 已提供资源文件的 CAS 去重、binding 和显式 GC/对账流程。
 
 不要将以上列表扩展成未经代码核实的功能状态；模块、实体和开关以仓库源代码为准。
+
+## 通用 blob 存储
+
+`/api/v1/blobs` 提供与业务无关的 blob 存储：调用方自定义 namespace、key、元数据与业务引用，存储层统一负责内容去重、引用计数、所有者绑定与延迟回收。与资源文件不同，它不关心文件类型语义，也不参与审核流程。
+
+上传分三步：登记会话（声明大小与 SHA-256）→ PUT 原始字节 → commit。服务端只在重新读取并校验落盘对象后才写入可读行，客户端声明的大小与哈希从不被直接信任。相同内容在**同一 namespace 内的同一所有者**下只保留一份，但去重不跨所有者：全局共享会让「删除我的文件」与「他人的同一份内容」产生歧义。
+
+- 开关：`blobs_enabled`（默认关闭）；存储目录 `blobs_storage_path`，配额 `blobs_owner_quota_bytes`，单对象上限 `blobs_max_object_bytes`。
+- 存储后端：当前仅本地磁盘（`storage_provider=local`）。对象行记录了 provider，后续可增加其他后端而不必改写已有数据。
+- 能力发现：`GET /api/v1/capabilities` 的 `blobs_v1` 表示功能已开启且存储目录可用。
+- 账号删除会一并清理该账号的 blob 绑定与上传会话。
 
 ## 站点配置
 

@@ -15,6 +15,7 @@
 - [`api/public-client-v1.md`](api/public-client-v1.md)、[`api/authentication.md`](api/authentication.md)：客户端接入、OAuth/PKCE。
 - [`api/first-party-v1.md`](api/first-party-v1.md)、[`api/game-content-v1.md`](api/game-content-v1.md)、[`api/resources-v1-contract.md`](api/resources-v1-contract.md)：讨论、游戏内容与资源 API；资源契约也记录公开推荐算法及其分页、信号与隐私边界。
 - [`api/multiplayer-v1.md`](api/multiplayer-v1.md)、[`api/cloud-saves-v1.md`](api/cloud-saves-v1.md)：联机与云存档。
+- [`api/blobs-v1.md`](api/blobs-v1.md)：通用 blob 存储（`/api/v1/blobs`）——内容寻址、所有者绑定、去重与延迟回收。
 - [`api/rich-content-schema-v2.md`](api/rich-content-schema-v2.md)：Tiptap 正文 Schema。
 - [`api/errors-v1.md`](api/errors-v1.md)、[`api/changelog-v1.md`](api/changelog-v1.md)、[`api/lifecycle-v1.md`](api/lifecycle-v1.md)：错误码、已发布 API 更新与生命周期。
 

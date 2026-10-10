@@ -56,6 +56,7 @@ const NAV_GROUPS = [
       { href: '/api/v1/docs/resources', label: '资源中心 API' },
       { href: '/api/v1/docs/multiplayer', label: '多人联机 API' },
       { href: '/api/v1/docs/cloud-saves', label: '云存档 API' },
+      { href: '/api/v1/docs/blobs', label: 'Blob 存储 API' },
     ],
   },
   {
@@ -81,6 +82,7 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   resources: 'resources-v1-contract.md',
   multiplayer: 'multiplayer-v1.md',
   'cloud-saves': 'cloud-saves-v1.md',
+  blobs: 'blobs-v1.md',
   changelog: 'changelog-v1.md',
   lifecycle: 'lifecycle-v1.md',
 };
@@ -122,6 +124,7 @@ const API_TAG_LABELS: Record<string, string> = {
   'v1-game-versions': '游戏版本',
   'v1-packs': '资源包',
   'v1-resource-pack-items': '资源包成员',
+  'v1-blobs': 'Blob 存储',
 };
 
 function escapeHtml(value: unknown): string {
@@ -640,6 +643,9 @@ Content-Type: application/json
       [inlineCode('game_content.saves.read'), '读取游戏云存档'],
       [inlineCode('game_content.saves.write'), '创建或更新游戏云存档'],
       [inlineCode('game_content.saves.delete'), '删除游戏云存档'],
+      [inlineCode('blob.read'), '读取当前账号的 blob 元数据与内容'],
+      [inlineCode('blob.write'), '上传、提交或更新当前账号的 blob'],
+      [inlineCode('blob.delete'), '删除当前账号的 blob'],
     ]), 'scopes')}
     ${callout('info', '权限按操作类别申请', '权限范围表示客户端可以请求哪类操作，不会为每条 API 路径单独创建一项。例如蓝图和地图共用 <code>resource.read</code> 或 <code>resource.upload</code>；部分公开读取接口无需登录。在线状态和多人联机还需要在应用表单申请相应能力并通过审核。服务端集成凭证不属于公开客户端 OAuth。')}
     ${section('论坛还会检查用户和站点权限', '<p>OAuth 权限范围说明客户端可以请求哪类操作。论坛执行请求时还会检查用户封禁、手机号验证、社区条款、版块权限、审核策略、站点开关和资源策略。</p><p>客户端启动后先请求 <code>GET /api/v1/capabilities</code>。登录后也可以读取 <code>GET /api/v1/me</code> 中的 <code>permissions</code>，决定是否展示操作入口。每个接口仍会独立校验权限；<code>permissions</code> 只是界面提示，不能代替授权。</p>', 'policy')}

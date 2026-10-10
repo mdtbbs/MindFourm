@@ -80,6 +80,7 @@ import { ResourceVersionStoragePreviews1720000310000 } from './1720000310000-Res
 import { SearchIndexMaintenance1720000320000 } from './1720000320000-SearchIndexMaintenance';
 import { ResourceDirectUploadDrafts1720000340000 } from './1720000340000-ResourceDirectUploadDrafts';
 import { ResourcePublishedAt1720000350000 } from './1720000350000-ResourcePublishedAt';
+import { GenericBlobApi1720000360000 } from './1720000360000-GenericBlobApi';
 
 /**
  * Migrations in run order.
@@ -171,4 +172,5 @@ export const migrations = [
   SearchIndexMaintenance1720000320000,
   ResourceDirectUploadDrafts1720000340000,
   ResourcePublishedAt1720000350000,
+  GenericBlobApi1720000360000,
 ];
