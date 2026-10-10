@@ -38,11 +38,11 @@ if (( ${#main_sources[@]} == 0 || ${#test_sources[@]} == 0 )); then
 fi
 
 classpath="$server_jar:$desktop_jar"
-javac --release 17 -cp "$classpath" -d "$main_classes" "${main_sources[@]}"
+javac --release 17 -encoding UTF-8 -cp "$classpath" -d "$main_classes" "${main_sources[@]}"
 if [[ -d "$renderer_dir/src/main/resources" ]]; then
   cp -R "$renderer_dir/src/main/resources/." "$main_classes/"
 fi
-javac --release 17 -cp "$classpath:$main_classes" -d "$test_classes" "${test_sources[@]}"
+javac --release 17 -encoding UTF-8 -cp "$classpath:$main_classes" -d "$test_classes" "${test_sources[@]}"
 if [[ -d "$renderer_dir/src/test/resources" ]]; then
   cp -R "$renderer_dir/src/test/resources/." "$test_classes/"
 fi

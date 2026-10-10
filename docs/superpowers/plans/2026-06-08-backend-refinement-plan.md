@@ -4,6 +4,9 @@
 
 **Goal:** Implement 4 backend refinements: post @mentions, search history/popular, BullMQ email queue, and Docker deployment.
 
+> **2026-10 更新**：Docker 部署方案（Phase 4 及相关文件）已从仓库移除，本项目使用 PM2 + Nginx 裸机部署。
+> 下方 Docker 内容仅作历史记录，不要照做；当前步骤见 [`docs/bare-metal-deployment.md`](../../bare-metal-deployment.md)。
+
 **Architecture:** Incremental feature additions to existing NestJS codebase. Each sub-project is independent — no shared code between tasks. Follow existing patterns (TypeORM entities, NestJS modules, SQL migrations).
 
 **Tech Stack:** NestJS v10, TypeORM 0.3, MySQL 8, ioredis 5.4, nodemailer 8, BullMQ 5, Docker.

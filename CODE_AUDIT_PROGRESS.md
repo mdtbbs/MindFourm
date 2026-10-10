@@ -71,7 +71,7 @@
 
 ### 配置与部署
 - [x] 环境变量 - .env.example 完整
-- [x] Docker 配置 - 生产配置合理
+- [x] Docker 配置 - 已移除；本项目走 PM2 + Nginx 裸机部署（见 `docs/bare-metal-deployment.md`）
 - [x] 生产环境配置
 
 ## 审查日志

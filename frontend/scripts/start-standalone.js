@@ -9,9 +9,9 @@
  *   .next/standalone/.next/static   ← hashed CSS / JS chunks
  *   .next/standalone/public         ← favicon, robots.txt, etc.
  *
- * The Dockerfile copies these in at image build time. For bare-metal / PM2 /
- * BT Panel (宝塔) deployments we replicate the same copy step here so
- * `npm run start` works without a separate setup script.
+ * `next build` does not populate them itself, so this script mirrors them into
+ * the standalone tree before launch. Without the copy, hashed CSS and JS chunks
+ * 404 as `text/plain` after a deploy and browsers refuse to apply them.
  */
 
 const fs = require('fs');
@@ -77,7 +77,7 @@ if (fs.existsSync(dotenvPath)) {
 }
 
 // Hand off to the Next.js standalone server. Spawn rather than `require` so
-// signals (SIGTERM from PM2 / 宝塔 / docker stop) reach the real process and
+// signals (SIGTERM from PM2 / 宝塔 / a supervisor) reach the real process and
 // exit codes propagate correctly.
 const child = spawn(process.execPath, [SERVER_JS], {
   stdio: 'inherit',

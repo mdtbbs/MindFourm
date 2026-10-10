@@ -1,5 +1,9 @@
 # CNB quality gates. CNB is the source-of-truth build platform for this repo.
-# The backend and frontend pipelines run independently for faster feedback.
+# The pipelines run independently so a failure names the surface that broke.
+#
+# Keep the stage lists in sync with .github/workflows/ci.yml and e2e.yml: the two
+# platforms have to agree on what "tested" means, even though the runner images
+# differ (CNB uses plain docker images, GitHub uses its hosted runners).
 
 .backend: &backend
   name: backend-quality-gates
@@ -14,7 +18,6 @@
     # frontend/node_modules, so the frontend tree has to be installed too.
     # `npm run test:frontend-unit` also resolves its ts-jest binary from the
     # root install, so the root dependencies must exist before it runs.
-    # Keep this in sync with .github/workflows/ci.yml.
     - name: install frontend dependencies
       script: cd frontend && npm ci
     - name: build backend
@@ -23,6 +26,10 @@
       script: npm test -- --runInBand
     - name: test frontend units
       script: npm run test:frontend-unit
+    - name: check committed Public V1 OpenAPI contract
+      script: npm run openapi:check
+    - name: test Public V1 changelog guard
+      script: npm run test:api-changelog
 
 .frontend: &frontend
   name: frontend-quality-gates
@@ -36,7 +43,6 @@
     # `frontend/node_modules` so nothing resolves out of the repo root. The
     # root install below is only here because `frontend/jest.config.js` imports
     # the tiptap contract suite under `src/`; drop it if that is ever untangled.
-    # Keep this in sync with .github/workflows/ci.yml.
     - name: install frontend dependencies
       script: cd frontend && npm ci
     - name: install backend dependencies
@@ -56,10 +62,246 @@
     - name: check frontend first-load budget
       script: node scripts/check-frontend-budget.cjs
 
+# The renderer compiles against the pinned Mindustry runtime and runs its own
+# fixture regressions. Unlike the hosted GitHub runner the CNB image has no
+# unzip, so the archive tool is installed before the fixture script runs.
+.renderer: &renderer
+  name: renderer-quality-gates
+  runner:
+    cpus: 4
+  docker:
+    image: eclipse-temurin:17-jdk
+  stages:
+    - name: install unzip
+      script: apt-get update -qq && apt-get install -y -qq unzip
+    - name: download pinned Mindustry artifacts
+      script: |
+        mkdir -p tools/mindustry-renderer/build/deps
+        curl --fail --location --retry 3 \
+          https://github.com/Anuken/Mindustry/releases/download/v160.5/server-release.jar \
+          --output tools/mindustry-renderer/build/deps/server-release-v160.5.jar
+        curl --fail --location --retry 3 \
+          https://github.com/Anuken/Mindustry/releases/download/v160.5/Mindustry.jar \
+          --output tools/mindustry-renderer/build/deps/Mindustry-v160.5.jar
+    - name: compile renderer and run safe fixture tests
+      script: bash tools/mindustry-renderer/test-renderer.sh
+
+# The Android image ships the SDK command line tools but no platform or build
+# tools; they are installed explicitly so `compileSdk = 35` resolves. Gradle
+# itself comes from the checked-in wrapper.
+.android: &android
+  name: android-quality-gates
+  runner:
+    cpus: 4
+  docker:
+    image: ghcr.io/cirruslabs/android-sdk:35
+    # Gradle keeps the wrapper distribution (gradle-8.10-bin.zip is 136.7 MB)
+    # and the whole plugin graph under /root/.gradle. Without a cache every
+    # build re-downloads both, and that cold download is what dropped its TLS
+    # connection mid-transfer in the PR build. `retry` below stays as the
+    # safety net for a genuinely cold node.
+    volumes:
+      - /root/.gradle:copy-on-write
+  stages:
+    - name: install Android API 35 and build tools
+      script: |
+        # The CNB stage shell is `sh`, so process substitution is unavailable.
+        yes | sdkmanager --licenses
+        sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+        test -d "${ANDROID_SDK_ROOT}/platforms/android-35"
+        test -x "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt"
+    - name: configure Gradle mirrors
+      script: |
+        # Maven Central answers 429 to the shared build-node egress; the project
+        # only declares google()/mavenCentral()/gradlePluginPortal(). An init
+        # script prepends mirrors for this build without changing the repository
+        # configuration developers use locally.
+        mkdir -p "$HOME/.gradle/init.d"
+        cat > "$HOME/.gradle/init.d/ci-mirrors.gradle" <<'INIT'
+        // Mirrors come first, the declared repositories stay as fallback. The
+        // lists are cleared rather than appended so the mirror is actually
+        // consulted first; appending would leave mavenCentral() ahead of it and
+        // its 429 would still fail the build.
+        settingsEvaluated { settings ->
+            def pluginRepos = settings.pluginManagement.repositories
+            pluginRepos.clear()
+            pluginRepos.maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+            pluginRepos.maven { url = 'https://maven.aliyun.com/repository/public' }
+            pluginRepos.maven { url = 'https://maven.aliyun.com/repository/google' }
+            pluginRepos.gradlePluginPortal()
+            pluginRepos.google()
+            pluginRepos.mavenCentral()
+
+            def dependencyRepos = settings.dependencyResolutionManagement.repositories
+            dependencyRepos.clear()
+            dependencyRepos.maven { url = 'https://maven.aliyun.com/repository/public' }
+            dependencyRepos.maven { url = 'https://maven.aliyun.com/repository/google' }
+            dependencyRepos.google()
+            dependencyRepos.mavenCentral()
+        }
+        INIT
+    # Gradle downloads its own distribution plus the plugin/dependency graph on
+    # a cold cache; the build-node egress occasionally drops the TLS connection
+    # mid-transfer ("SSL peer shut down incorrectly"), which is transient.
+    - name: run Android unit tests and assemble debug
+      retry: 2
+      script: |
+        cd android
+        ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+
+# Product E2E. Runs the same browser suites GitHub runs, with MySQL and Redis
+# started as Docker-in-Docker services because CNB has no `services:` container
+# catalogue. `npx playwright install` re-downloads Chromium on every build, so
+# its browser cache is kept between builds on the same node.
+.e2e: &e2e
+  name: e2e-product-smoke
+  runner:
+    cpus: 4
+  docker:
+    image: node:20
+    volumes:
+      - /root/.cache/ms-playwright:copy-on-write
+  services:
+    - docker
+  env:
+    # The node image sets no locale, which makes several tools emit mojibake and
+    # makes `docker` noisy in the stage logs. javac is pinned with `-encoding
+    # UTF-8` in the renderer scripts themselves, so it does not depend on this.
+    LANG: C.UTF-8
+    LC_ALL: C.UTF-8
+    NODE_ENV: test
+    ENABLE_TEST_AUTH: 'true'
+    MYSQL_HOST: 127.0.0.1
+    MYSQL_PORT: '3306'
+    MYSQL_USER: root
+    MYSQL_PASSWORD: mindfourm_ci
+    MYSQL_DATABASE: mindfourm_ci
+    REDIS_HOST: 127.0.0.1
+    REDIS_PORT: '6379'
+    REDIS_DB: '1'
+    PORT: '4000'
+    API_URL: http://127.0.0.1:4000
+    FRONTEND_URL: http://127.0.0.1:3000
+    NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+    NEXT_PUBLIC_API_URL: http://127.0.0.1:4000
+    NEXT_PUBLIC_MINDAUTH_URL: http://127.0.0.1:4001
+    FORUM_INTERNAL_API_KEY: e2e-internal-key
+    MOBILE_AUTH_JWT_SECRET: e2e-mobile-jwt-secret
+    MOBILE_AUTH_REFRESH_HMAC_SECRET: e2e-mobile-refresh-secret
+    CLOUD_SAVES_STORAGE_PATH: /tmp/mindfourm-cloud-saves
+    RES_ENABLED: 'true'
+    RES_BASE_URL: http://127.0.0.1:4100
+    RES_API_KEY: e2e-res-key
+    RESOURCE_RENDERER_URL: http://127.0.0.1:6100
+    RESOURCE_RENDERER_TOKEN: e2e-renderer-key
+  stages:
+    - name: start MySQL and Redis
+      script: |
+        docker run -d --name e2e-mysql \
+          -e MYSQL_ROOT_PASSWORD="$MYSQL_PASSWORD" \
+          -e MYSQL_DATABASE="$MYSQL_DATABASE" \
+          -p 3306:3306 mysql:8.4
+        docker run -d --name e2e-redis -p 6379:6379 redis:7-alpine
+        for attempt in $(seq 1 60); do
+          if docker exec e2e-mysql mysqladmin ping -h127.0.0.1 -p"$MYSQL_PASSWORD" --silent 2>/dev/null; then
+            echo "MySQL ready after $attempt attempt(s)"; break
+          fi
+          sleep 2
+        done
+        docker exec e2e-mysql mysqladmin ping -h127.0.0.1 -p"$MYSQL_PASSWORD" --silent
+        docker exec e2e-redis redis-cli ping
+    - name: install dependencies
+      script: |
+        npm ci
+        cd frontend && npm ci
+    - name: build backend
+      script: npm run build:backend
+    - name: verify release migrations up, down and up on MySQL
+      script: |
+        node scripts/prepare-e2e-database.cjs
+        npx typeorm migration:run -d dist/database/data-source.js
+        npx typeorm migration:revert -d dist/database/data-source.js
+        npx typeorm migration:revert -d dist/database/data-source.js
+        npx typeorm migration:revert -d dist/database/data-source.js
+        npx typeorm migration:run -d dist/database/data-source.js
+    - name: build frontend
+      script: cd frontend && npm run build
+    - name: install Java and unzip for the official editor worker
+      script: apt-get update -qq && apt-get install -y -qq openjdk-17-jdk-headless unzip
+    - name: verify and compile the pinned official editor runtime
+      script: |
+        mkdir -p tools/mindustry-renderer/build/deps
+        curl --fail --location --retry 3 https://github.com/Anuken/Mindustry/releases/download/v160.5/server-release.jar --output tools/mindustry-renderer/build/deps/server-release-v160.5.jar
+        curl --fail --location --retry 3 https://github.com/Anuken/Mindustry/releases/download/v160.5/Mindustry.jar --output tools/mindustry-renderer/build/deps/Mindustry-v160.5.jar
+        bash tools/mindustry-renderer/test-renderer.sh
+    - name: install Chromium
+      script: npx playwright install --with-deps chromium
+    - name: start ResourceStorage, API and web app
+      script: |
+        mkdir -p "$CLOUD_SAVES_STORAGE_PATH"
+        STORAGE_ROOT="$PWD/uploads/previews" ASSETS_ROOT="$PWD/tools/mindustry-renderer/build/pr-verification/assets" WORKER_TOKEN="$RESOURCE_RENDERER_TOKEN" WORKER_PORT=6100 nohup java -Djava.awt.headless=true -cp "tools/mindustry-renderer/build/deps/server-release-v160.5.jar:tools/mindustry-renderer/build/deps/Mindustry-v160.5.jar:tools/mindustry-renderer/build/pr-verification/classes/main" cn.mdtbbs.renderer.MapRenderer > "/tmp/mindfourm-renderer.log" 2>&1 &
+        echo $! > "/tmp/mindfourm-renderer.pid"
+        nohup node scripts/e2e-resource-storage.cjs > "/tmp/mindfourm-res.log" 2>&1 &
+        echo $! > "/tmp/mindfourm-res.pid"
+        nohup npm run start:prod > "/tmp/mindfourm-api.log" 2>&1 &
+        echo $! > "/tmp/mindfourm-api.pid"
+        (
+          cd frontend
+          HOSTNAME=127.0.0.1 PORT=3000 nohup npm run start > "/tmp/mindfourm-web.log" 2>&1 &
+          echo $! > "/tmp/mindfourm-web.pid"
+        )
+        for attempt in $(seq 1 90); do
+          if curl --silent --fail http://127.0.0.1:6100/health >/dev/null \
+            && curl --silent --fail http://127.0.0.1:4100/health >/dev/null \
+            && curl --silent --fail http://127.0.0.1:4000/api/health >/dev/null \
+            && curl --silent --fail http://127.0.0.1:3000/ >/dev/null; then
+            exit 0
+          fi
+          sleep 2
+        done
+        cat "/tmp/mindfourm-renderer.log" "/tmp/mindfourm-res.log" "/tmp/mindfourm-api.log" "/tmp/mindfourm-web.log"
+        exit 1
+    # One stage for both modes so the nightly keeps the identical MySQL, build,
+    # migration and server-startup path the PR smoke uses. `CNB_EVENT` starts
+    # with `crontab` for the scheduled build.
+    - name: run browser suites
+      script: |
+        case "$CNB_EVENT" in
+          crontab*)
+            npm run test:e2e -- --project=chromium --grep-invert 'MFL Integration'
+            ;;
+          *)
+            npm run test:e2e -- --project=chromium \
+              tests/e2e/auth.spec.ts \
+              tests/e2e/post.spec.ts \
+              tests/e2e/rich-content.spec.ts \
+              tests/e2e/resource.spec.ts \
+              tests/e2e/resource-v2-review.spec.ts \
+              tests/e2e/player-resource-editors.spec.ts \
+              tests/e2e/admin.spec.ts \
+              tests/e2e/product-smoke.spec.ts
+            npm run test:e2e -- --project=mobile-chrome \
+              tests/e2e/mobile-shell.spec.ts \
+              tests/e2e/mobile-search.spec.ts \
+              tests/e2e/mobile-friends.spec.ts
+            ;;
+        esac
+
+
 master:
   push:
     - <<: *backend
     - <<: *frontend
+    - <<: *renderer
+    - <<: *android
   pull_request:
     - <<: *backend
     - <<: *frontend
+    - <<: *renderer
+    - <<: *android
+    - <<: *e2e
+  # Nightly full browser suite. Same pipeline as the PR smoke; the browser stage
+  # above switches to the full suite when the event is a crontab build.
+  'crontab: 17 3 * * *':
+    - <<: *e2e
+      name: e2e-nightly-full

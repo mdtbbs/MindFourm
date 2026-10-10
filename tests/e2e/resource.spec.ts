@@ -11,9 +11,21 @@ function unwrap(value: any): any {
 }
 
 async function waitForResourceFormReady(page: import('@playwright/test').Page): Promise<void> {
-  // The rich-text editor is client-only.  Waiting for it ensures React has
-  // hydrated the form before changing the hidden resource-type radio.
-  await page.getByTestId('resource-description-input').waitFor({ state: 'visible' });
+  // The rich-text editor is client-only, so it only exists once React has
+  // hydrated the form. The description field is server-rendered and resolves
+  // before hydration, which let a radio click land too early and get lost.
+  await page.getByTestId('resource-content-input').waitFor({ state: 'visible' });
+}
+
+async function openCommentsTab(page: import('@playwright/test').Page): Promise<void> {
+  const tab = page.getByRole('tab', { name: /评论|Comments/ });
+  // The tab strip is server-rendered, so a click that lands before React
+  // attaches its handlers is dropped and the list never renders. Click until
+  // the tab reports itself selected, which can only happen once the handler ran.
+  await expect(async () => {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
 }
 
 test.describe('Resource Public Routes', () => {
@@ -51,7 +63,11 @@ authTest.describe('Resource Submission Flow', () => {
     await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await waitForResourceFormReady(authenticatedPage);
 
-    await authenticatedPage.getByTestId('resource-type-external').locator('input').check({ force: true });
+    // Click the label the way the sibling test does; checking the hidden radio
+    // directly races React hydration and times out under load.
+    await authenticatedPage.getByTestId('resource-type-external').click();
+    await authExpect(authenticatedPage.getByTestId('resource-type-external').locator('input')).toBeChecked();
+    await authenticatedPage.getByTestId('resource-external-url-input').waitFor({ state: 'visible' });
     await authenticatedPage.getByTestId('resource-title-input').fill(title);
     await authenticatedPage.getByTestId('resource-version-input').fill('1.0.0');
     await authenticatedPage.getByTestId('resource-description-input').fill('External resource submitted by Playwright.');
@@ -76,9 +92,10 @@ authTest.describe('Resource Submission Flow', () => {
     const createResource = await request.post(`${API_URL}/api/resources`, {
       multipart: {
         title,
+        // The canonical-thread round-trip is kind-agnostic and Mods now require a
+        // .jar upload, so use a kind that still accepts an external URL.
         resource_type: 'external',
-        resource_kind: 'mod',
-        mod_id: `e2e-resource-discussion-${stamp}`,
+        resource_kind: 'other',
         version: '1.0.0',
         is_public: '1',
         external_url: `https://example.com/e2e/resource-discussion/${stamp}`,
@@ -113,7 +130,7 @@ authTest.describe('Resource Submission Flow', () => {
     if (!Number.isSafeInteger(threadId) || threadId < 1) throw new Error('Resource discussion response carried no canonical thread id');
 
     await authenticatedPage.goto(`/resources/${resourceId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await authenticatedPage.getByRole('tab', { name: /评论|Comments/ }).click();
+    await openCommentsTab(authenticatedPage);
     const hostCard = authenticatedPage.locator('div.card').filter({ hasText: hostText }).last();
     await authExpect(hostCard).toBeVisible();
     await hostCard.getByRole('button', { name: /引用|Quote/i }).click();
@@ -139,7 +156,7 @@ authTest.describe('Resource Submission Flow', () => {
     await approveAsAdmin(request, 'reply', resourceReplyId);
 
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
-    await authenticatedPage.getByRole('tab', { name: /评论|Comments/ }).click();
+    await openCommentsTab(authenticatedPage);
     await authExpect(authenticatedPage.getByText(resourceReplyText, { exact: false })).toBeVisible();
     await authExpect(authenticatedPage.getByText('查看完整讨论', { exact: true })).toBeVisible();
     await authenticatedPage.getByRole('link', { name: /查看完整讨论|Full discussion/i }).click();
@@ -167,7 +184,7 @@ authTest.describe('Resource Submission Flow', () => {
     expect(forumRows.filter((row: any) => row.id === threadReplyId)).toHaveLength(1);
 
     await authenticatedPage.goto(`/resources/${resourceId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await authenticatedPage.getByRole('tab', { name: /评论|Comments/ }).click();
+    await openCommentsTab(authenticatedPage);
     await authExpect(authenticatedPage.getByText(threadReplyText, { exact: false })).toBeVisible();
   });
 
@@ -209,5 +226,43 @@ authTest.describe('Resource Submission Flow', () => {
       downloadedContent += chunk.toString();
     }
     expect(downloadedContent).toBe('resource upload fixture created by Playwright');
+  });
+
+  authTest('rejects an external Mod and a non-jar Mod upload', async ({ request }) => {
+    const stamp = Date.now();
+    const user = await testLogin(request, 'user');
+    const userHeaders = { Cookie: user.cookieHeader, 'X-CSRF-Token': user.csrfToken };
+
+    const externalMod = await request.post(`${API_URL}/api/resources`, {
+      multipart: {
+        title: `E2E External Mod ${stamp}`,
+        resource_type: 'external',
+        resource_kind: 'mod',
+        mod_id: `e2e-external-mod-${stamp}`,
+        version: '1.0.0',
+        is_public: '1',
+        external_url: `https://example.com/e2e/external-mod/${stamp}`,
+        content: 'External Mod rejection fixture.',
+      },
+      headers: { ...userHeaders, 'Idempotency-Key': `e2e-external-mod-${stamp}` },
+    });
+    expect(externalMod.status()).toBe(400);
+    expect(await externalMod.text()).toContain('.jar');
+
+    const nonJarMod = await request.post(`${API_URL}/api/resources`, {
+      multipart: {
+        title: `E2E Non-jar Mod ${stamp}`,
+        resource_type: 'upload',
+        resource_kind: 'mod',
+        mod_id: `e2e-non-jar-mod-${stamp}`,
+        version: '1.0.0',
+        is_public: '1',
+        content: 'Non-jar Mod rejection fixture.',
+        file: { name: 'fixture.txt', mimeType: 'text/plain', buffer: Buffer.from('not a mod archive') },
+      },
+      headers: { ...userHeaders, 'Idempotency-Key': `e2e-non-jar-mod-${stamp}` },
+    });
+    expect(nonJarMod.status()).toBe(400);
+    expect(await nonJarMod.text()).toContain('.jar');
   });
 });
