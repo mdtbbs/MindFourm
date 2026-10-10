@@ -31166,7 +31166,7 @@
           "key": {
             "type": "string",
             "maxLength": 255,
-            "description": "New logical name. Renaming onto a live key replaces that blob."
+            "description": "新的逻辑名。重命名到已被占用的 key 会返回 BLOB_KEY_CONFLICT；要替换某个 key 的内容，请用该 key 重新上传。"
           },
           "file_name": {
             "type": "string",

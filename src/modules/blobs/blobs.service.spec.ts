@@ -358,6 +358,33 @@ describe('BlobsService commit', () => {
     expect(calls.some(([sql]) => sql.includes('INSERT INTO blob_objects'))).toBe(false);
   });
 
+  it('increments the reference count when binding to an object that is already live', async () => {
+    // Two bindings may share one object (same content, same owner). The count has
+    // to match the number of live bindings, otherwise deleting one of them drops
+    // the object to zero references and the bytes are reclaimed under the other.
+    const { dataSource, calls } = fakeSource((sql, parameters) => {
+      if (sql.includes('FROM blob_upload_sessions')) return [session];
+      if (sql.includes('FROM blob_records') && sql.includes('FOR UPDATE')) return [];
+      if (sql.includes('SELECT * FROM blob_objects')) {
+        return [{ id: 'object-live', ref_count: 1, gc_in_progress: 0, object_key: session.object_key }];
+      }
+      if (sql.includes('SELECT r.*,o.object_key FROM blob_records r JOIN blob_objects o')) {
+        return [{ id: 'blob-new', namespace: 'default', blob_key: 'cover.png', owner_type: 'user', owner_id: '17',
+          file_name: 'cover.png', mime_type: 'image/png', size_bytes: '4', sha256: hashOf('data'), visibility: 'private',
+          metadata_json: null, tags_json: null, ref_type: null, ref_id: null, expires_at: null,
+          created_at: new Date(), updated_at: new Date(), object_key: session.object_key }];
+      }
+      return { affectedRows: 1 };
+    });
+    const { instance } = service(dataSource);
+
+    await instance.commitUpload(owner, 'upload-1', {});
+
+    const increment = calls.find(([sql]) => sql.includes('ref_count=ref_count+1'));
+    expect(increment?.[1]).toContain('object-live');
+    expect(calls.some(([sql]) => sql.includes('INSERT INTO blob_objects'))).toBe(false);
+  });
+
   it('refuses to revive an object a maintenance sweep already claimed', async () => {
     const { dataSource } = fakeSource((sql) => {
       if (sql.includes('FROM blob_upload_sessions')) return [session];

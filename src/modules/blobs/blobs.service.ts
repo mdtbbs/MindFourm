@@ -666,7 +666,17 @@ export class BlobsService {
 
     if (existing.length) {
       const current = existing[0];
-      if (Number(current.ref_count) > 0) return current;
+      if (Number(current.ref_count) > 0) {
+        // The object already holds live bytes; this binding adds one more
+        // reference. Without the increment two bindings would share a count of
+        // one, and deleting either would schedule the bytes for reclamation
+        // while the other binding still points at them.
+        await manager.query(
+          'UPDATE blob_objects SET ref_count=ref_count+1,last_referenced_at=NOW() WHERE id=?',
+          [current.id],
+        );
+        return { ...current, ref_count: Number(current.ref_count) + 1 };
+      }
       // The bytes are still on disk but nothing referenced them. A maintenance
       // sweep may have claimed this row for deletion already, in which case the
       // file is not ours to revive and the caller has to upload again.

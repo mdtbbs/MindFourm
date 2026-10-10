@@ -63,7 +63,7 @@
 | DELETE | `/blobs/uploads/{uploadId}` | `blob.write` | 放弃上传会话 |
 | GET | `/blobs/{blobId}` | 读取 | 查看元数据；`public` 无需登录 |
 | GET | `/blobs/{blobId}/content` | 读取 | 下载原始字节；`public` 无需登录 |
-| PATCH | `/blobs/{blobId}` | `blob.write` | 更新 key、文件名、可见性、元数据、标签与业务引用 |
+| PATCH | `/blobs/{blobId}` | `blob.write` | 更新 key、文件名、可见性、元数据、标签与业务引用；重命名到已占用的 key 返回 `BLOB_KEY_CONFLICT` |
 | DELETE | `/blobs/{blobId}` | `blob.delete` | 删除绑定 |
 
 ## 字段说明
