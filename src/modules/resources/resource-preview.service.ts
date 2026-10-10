@@ -60,8 +60,8 @@ export type ConsumedResourcePreviewDraft = {
 export class ResourcePreviewService {
   private readonly logger = new Logger(ResourcePreviewService.name);
   private readonly drafts = new Map<string, PreviewDraft>();
-  private readonly productionBackfills = new Set<number>();
-  private readonly productionBackfillAttempts = new Map<number, number>();
+  private readonly analysisBackfills = new Set<number>();
+  private readonly analysisBackfillAttempts = new Map<number, number>();
 
   constructor(
     @InjectRepository(Resource) private readonly resources: Repository<Resource>,
@@ -725,32 +725,55 @@ export class ResourcePreviewService {
     } catch { await this.fail(resource.id, 'RENDER_FAILED'); }
   }
 
-  /** Rebuilds legacy schematic metadata at most once per resource per process. */
-  ensureProduction(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash' | 'renderer_status' | 'renderer_metadata_json'>): void {
-    if (resource.resource_kind !== 'schematic' || resource.renderer_status !== 'ready' || !this.isConfigured()) return;
+  /**
+   * Re-parses a legacy map or schematic when the metadata persisted for it
+   * predates the analysis projections the reader now depends on (production
+   * rates, build-time estimate, tile layers, wave groups). Guards keep a busy
+   * public detail page from stampeding the renderer: at most one attempt per
+   * resource per hour per process, and at most 24 in flight. A healed resource
+   * no longer matches the predicate, so this converges to a no-op.
+   */
+  ensureAnalysisMetadata(resource: Pick<Resource, 'id' | 'resource_kind' | 'file_path' | 'file_name' | 'file_size' | 'content_hash' | 'renderer_status' | 'renderer_metadata_json'>): void {
+    const kind = resource.resource_kind;
+    if ((kind !== 'schematic' && kind !== 'map') || resource.renderer_status !== 'ready' || !this.isConfigured()) return;
+    const metadata = this.parseMetadataRecord(resource.renderer_metadata_json);
+    // The renderer always emits these keys for the kind, so an absent key — not
+    // a null value — is what marks metadata written by an older revision.
+    const outdated = kind === 'schematic'
+      ? !('production' in metadata) || !('estimated_build_time_seconds' in metadata)
+      : !('tile_layers' in metadata) || !('wave_groups' in metadata);
+    if (!outdated) return;
+
     const now = Date.now();
-    for (const [id, attemptedAt] of this.productionBackfillAttempts) if (now - attemptedAt > 60 * 60 * 1000) this.productionBackfillAttempts.delete(id);
-    const existingProduction = resource.renderer_metadata_json?.production;
-    if ((existingProduction && typeof existingProduction === 'object' && !Array.isArray(existingProduction)) || this.productionBackfills.has(resource.id)
-      || (this.productionBackfillAttempts.get(resource.id) && now - this.productionBackfillAttempts.get(resource.id)! < 60 * 60 * 1000)
-      || this.productionBackfills.size >= 24) return;
-    if (this.productionBackfillAttempts.size >= 500) this.productionBackfillAttempts.delete(this.productionBackfillAttempts.keys().next().value!);
-    this.productionBackfillAttempts.set(resource.id, now);
-    this.productionBackfills.add(resource.id);
+    for (const [id, attemptedAt] of this.analysisBackfillAttempts) if (now - attemptedAt > 60 * 60 * 1000) this.analysisBackfillAttempts.delete(id);
+    if (this.analysisBackfills.has(resource.id)
+      || (this.analysisBackfillAttempts.get(resource.id) && now - this.analysisBackfillAttempts.get(resource.id)! < 60 * 60 * 1000)
+      || this.analysisBackfills.size >= 24) return;
+    if (this.analysisBackfillAttempts.size >= 500) this.analysisBackfillAttempts.delete(this.analysisBackfillAttempts.keys().next().value!);
+    this.analysisBackfillAttempts.set(resource.id, now);
+    this.analysisBackfills.add(resource.id);
     void (async () => {
       try {
         const rendered = await this.render(resource);
-        if (!rendered.preview?.metadata?.production || typeof rendered.preview.metadata.production !== 'object') return;
+        const healed = this.safeMetadata(rendered.preview?.metadata);
+        if (!healed) return;
         await this.resources.update(resource.id, {
-          renderer_metadata_json: this.safeMetadata(rendered.preview.metadata) as any,
-          renderer_parser_version: typeof rendered.preview.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
+          renderer_metadata_json: healed as any,
+          renderer_parser_version: typeof rendered.preview?.parserVersion === 'string' ? rendered.preview.parserVersion.slice(0, 100) : null,
         });
       } catch (error) {
-        this.logger.warn(`Mindustry production metadata backfill failed for resource ${resource.id}: ${(error as Error).message}`);
+        this.logger.warn(`Mindustry analysis metadata backfill failed for resource ${resource.id}: ${(error as Error).message}`);
       } finally {
-        this.productionBackfills.delete(resource.id);
+        this.analysisBackfills.delete(resource.id);
       }
     })();
+  }
+
+  private parseMetadataRecord(value: unknown): Record<string, unknown> {
+    if (typeof value === 'string') {
+      try { value = JSON.parse(value); } catch { return {}; }
+    }
+    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
   }
 
   async readPreview(resource: Pick<Resource, 'renderer_status' | 'renderer_preview_key'>): Promise<Buffer | null> {
@@ -805,6 +828,11 @@ export class ResourcePreviewService {
       'banned_blocks', 'banned_units', 'rules', 'core_count', 'cores', 'core_teams', 'tile_layers', 'tile_layers_truncated', 'blocks', 'block_count', 'block_types',
       'block_positions', 'block_positions_truncated', 'requirements', 'power_production',
       'power_consumption', 'net_power', 'labels', 'production',
+      // Analysis projections the renderer already emits and the detail page,
+      // build-compatibility panel, and duplicate detection read back.
+      'estimated_build_time_seconds', 'estimated_build_time_method',
+      'schematic_format_version', 'save_format_version', 'map_build_metadata', 'parser_runtime',
+      'compatibility', 'unknown_content', 'structure_hash', 'normalized_structure_hash',
     ]);
     const result: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) {
@@ -818,8 +846,12 @@ export class ResourcePreviewService {
     const layers = result.tile_layers as Record<string, unknown> | undefined;
     const originalLayers = (value as Record<string, unknown>).tile_layers as Record<string, unknown> | undefined;
     if (layers && originalLayers) {
-      if (Array.isArray(originalLayers.terrain) && originalLayers.terrain.length > 10000) result.tile_layers_truncated = true;
-      if (['buildings', 'enemy_spawns'].some(key => Array.isArray(originalLayers[key]) && (originalLayers[key] as unknown[]).length > 10000)) layers.objects_truncated = true;
+      // `sanitizeMetadataValue` caps every array at 10k entries. A map larger
+      // than that loses deposits silently, and the reader needs to know the
+      // counts it sees are a lower bound.
+      const oversize = (key: string) => Array.isArray(originalLayers[key]) && (originalLayers[key] as unknown[]).length > 10000;
+      if (oversize('terrain') || ['resources', 'ores', 'liquid'].some(oversize)) result.tile_layers_truncated = true;
+      if (['buildings', 'enemy_spawns'].some(oversize)) layers.objects_truncated = true;
     }
     return result;
   }

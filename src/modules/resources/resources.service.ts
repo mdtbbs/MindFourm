@@ -1841,6 +1841,12 @@ export class ResourcesService {
 
     await this.assertResourceVisible(resource, viewer);
 
+    // A public detail request is the first place a reader notices that a map or
+    // blueprint still carries pre-analysis renderer metadata. Kick off the
+    // one-shot re-parse here; the self-healing guard keeps it off the hot path
+    // once the resource has healed, and the request never waits for it.
+    this.resourcePreviewService?.ensureAnalysisMetadata(resource);
+
     const canViewUnpublished = await this.canViewUnpublishedVersions(resource, viewer);
     const versions = await this.versionRepository.find({
       where: { resource_id: id },

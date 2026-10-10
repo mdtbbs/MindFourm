@@ -152,7 +152,10 @@ export class GameContentService {
     await this.domain.getById(resource.id, viewer || undefined);
     const unreviewedQuarantinedBinary = this.isQuarantinedPath(resource.file_path);
     const renderer = unreviewedQuarantinedBinary ? {} : this.parseObject(resource.renderer_metadata_json);
-    if (!unreviewedQuarantinedBinary && type === 'blueprint' && (!renderer.production || typeof renderer.production !== 'object')) this.previews.ensureProduction(resource);
+    // Older revisions persisted renderer metadata before production rates,
+    // build-time estimates and tile layers existed. Re-parse those once so the
+    // public detail projection stops reporting them as unavailable.
+    if (!unreviewedQuarantinedBinary) this.previews.ensureAnalysisMetadata(resource);
     const resPreviewUrl = unreviewedQuarantinedBinary ? null : await this.previews.getResPreviewUrl?.(resource) || null;
     const metadata = this.parseObject(resource.metadata_json);
     const [likeCount, favoriteCount, viewerLike, viewerFavorite] = await Promise.all([
