@@ -11,9 +11,10 @@ function unwrap(value: any): any {
 }
 
 async function waitForResourceFormReady(page: import('@playwright/test').Page): Promise<void> {
-  // The rich-text editor is client-only.  Waiting for it ensures React has
-  // hydrated the form before changing the hidden resource-type radio.
-  await page.getByTestId('resource-description-input').waitFor({ state: 'visible' });
+  // The rich-text editor is client-only, so it only exists once React has
+  // hydrated the form. The description field is server-rendered and resolves
+  // before hydration, which let a radio click land too early and get lost.
+  await page.getByTestId('resource-content-input').waitFor({ state: 'visible' });
 }
 
 test.describe('Resource Public Routes', () => {
