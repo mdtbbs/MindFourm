@@ -83,6 +83,10 @@ async function assertRequiredTables(dataSource: DataSource): Promise<void> {
     'legal_acceptances',
     'user_data_deletion_requests',
     'security_access_logs',
+    'blob_objects',
+    'blob_records',
+    'blob_upload_sessions',
+    'blob_idempotency',
   ];
   const missing: string[] = [];
   for (const table of requiredTables) {

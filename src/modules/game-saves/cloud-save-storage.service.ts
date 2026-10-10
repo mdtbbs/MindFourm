@@ -7,7 +7,7 @@ import { pipeline } from 'node:stream/promises';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '../settings/settings.service';
-import { isCloudSaveStorageConfigured } from './cloud-save-storage-config';
+import { isAbsoluteStoragePath } from '@common/utils/storage-path.util';
 
 export type CloudSaveObjectInfo = { exists: boolean; size_bytes?: number; checksum_sha256?: string };
 
@@ -29,7 +29,7 @@ export class CloudSaveStorageService {
 
   isConfigured(): boolean {
     try {
-      return isCloudSaveStorageConfigured(this.getStoragePath());
+      return isAbsoluteStoragePath(this.getStoragePath());
     } catch {
       return false;
     }

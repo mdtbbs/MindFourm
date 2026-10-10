@@ -453,6 +453,12 @@ export class SettingsService implements OnModuleInit {
       'cloud_saves_user_quota_bytes',
       'cloud_saves_max_file_bytes',
     ]),
+    blobs: new Set([
+      'blobs_enabled',
+      'blobs_storage_path',
+      'blobs_owner_quota_bytes',
+      'blobs_max_object_bytes',
+    ]),
     terms: new Set([
       'terms_required',
       'terms_updated_at',
@@ -614,6 +620,10 @@ export class SettingsService implements OnModuleInit {
       { key: 'cloud_saves_storage_path', value: process.env.CLOUD_SAVES_STORAGE_PATH || resolve(process.cwd(), 'storage', 'cloud-saves'), category: 'cloud-saves', description: 'Persistent local directory for private save files' },
       { key: 'cloud_saves_user_quota_bytes', value: process.env.CLOUD_SAVES_MAX_BYTES_PER_USER || '524288000', category: 'cloud-saves', description: 'Cloud save quota per user in bytes' },
       { key: 'cloud_saves_max_file_bytes', value: process.env.CLOUD_SAVES_MAX_FILE_BYTES || '52428800', category: 'cloud-saves', description: 'Maximum size of one cloud save file in bytes' },
+      { key: 'blobs_enabled', value: 'false', category: 'blobs', description: 'Enable the generic Blob API for forum features and OAuth clients' },
+      { key: 'blobs_storage_path', value: process.env.BLOBS_STORAGE_PATH || resolve(process.cwd(), 'storage', 'blobs'), category: 'blobs', description: 'Persistent local directory for generic blob objects' },
+      { key: 'blobs_owner_quota_bytes', value: process.env.BLOBS_MAX_BYTES_PER_OWNER || '536870912', category: 'blobs', description: 'Generic blob quota per owner in bytes' },
+      { key: 'blobs_max_object_bytes', value: process.env.BLOBS_MAX_OBJECT_BYTES || '67108864', category: 'blobs', description: 'Maximum size of one generic blob object in bytes' },
       // Terms & Conditions enforcement
       { key: 'terms_required', value: 'false', category: 'terms', description: 'Require users to accept Terms & Privacy before forum access' },
       { key: 'terms_updated_at', value: new Date().toISOString(), category: 'terms', description: 'Bump to force all users to re-accept terms' },
@@ -854,6 +864,7 @@ export class SettingsService implements OnModuleInit {
     const normalizedPairs = this.normalizeBatch(keyValuePairs);
 
     if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
+    if (category === 'blobs') await this.validateBlobsSettings(normalizedPairs);
     if (category === 'email') await this.validateEmailSettings(normalizedPairs);
 
     for (const [key, value] of normalizedPairs.entries()) {
@@ -882,6 +893,7 @@ export class SettingsService implements OnModuleInit {
 
     const normalizedPairs = this.normalizeBatch(replacementValues);
     if (category === 'cloud-saves') await this.validateCloudSavesSettings(normalizedPairs);
+    if (category === 'blobs') await this.validateBlobsSettings(normalizedPairs);
     if (category === 'email') await this.validateEmailSettings(normalizedPairs);
 
     const updated = await this.settingRepository.manager.transaction(async (manager) => {
@@ -1037,6 +1049,67 @@ export class SettingsService implements OnModuleInit {
     await probe.close();
     await unlink(probePath);
     values.set('cloud_saves_storage_path', normalizedPath);
+  }
+
+  /**
+   * Blob storage shares the cloud-save storage rules: an absolute, non-root path
+   * the process can actually write to, and no silent move while objects exist.
+   * The write probe is what turns "the path looks fine" into "the path works".
+   */
+  private async validateBlobsSettings(values: Map<string, string>): Promise<void> {
+    const allowed = new Set([
+      'blobs_enabled',
+      'blobs_storage_path',
+      'blobs_owner_quota_bytes',
+      'blobs_max_object_bytes',
+    ]);
+    for (const key of values.keys()) {
+      if (!allowed.has(key)) throw new BadRequestException(`Unsupported blob setting: ${key}`);
+    }
+
+    const enabled = values.get('blobs_enabled') ?? await this.get('blobs_enabled') ?? 'false';
+    if (!['true', 'false'].includes(enabled)) throw new BadRequestException('blob 存储开关必须为 true 或 false。');
+
+    const currentQuota = await this.getNumber('blobs_owner_quota_bytes') || 536870912;
+    const currentMaxObject = await this.getNumber('blobs_max_object_bytes') || 67108864;
+    const quota = values.has('blobs_owner_quota_bytes')
+      ? Number(values.get('blobs_owner_quota_bytes')) : currentQuota;
+    const maxObject = values.has('blobs_max_object_bytes')
+      ? Number(values.get('blobs_max_object_bytes')) : currentMaxObject;
+    if (!Number.isSafeInteger(quota) || quota < 1) throw new BadRequestException('每所有者 blob 额度必须是正整数（字节）。');
+    if (!Number.isSafeInteger(maxObject) || maxObject < 1 || maxObject > quota) {
+      throw new BadRequestException('单个 blob 对象上限必须为正整数，且不能超过每所有者额度。');
+    }
+
+    const storagePath = values.get('blobs_storage_path');
+    if (storagePath === undefined) return;
+    const normalizedPath = resolve(storagePath);
+    if (!storagePath || !isAbsolute(storagePath) || normalizedPath !== storagePath || parse(normalizedPath).root === normalizedPath) {
+      throw new BadRequestException('blob 存储目录必须是绝对路径，且不能是文件系统根目录。');
+    }
+    const currentPath = await this.get('blobs_storage_path');
+    if (currentPath && resolve(currentPath) !== normalizedPath) {
+      try {
+        const [objects, uploads] = await Promise.all([
+          this.settingRepository.query("SELECT COUNT(*) AS count FROM blob_objects WHERE storage_provider='local'"),
+          this.settingRepository.query("SELECT COUNT(*) AS count FROM blob_upload_sessions WHERE status IN ('pending','uploaded')"),
+        ]);
+        if (Number(objects[0]?.count || 0) > 0 || Number(uploads[0]?.count || 0) > 0) {
+          throw new ConflictException('已有 blob 对象或上传会话时不能直接更改存储目录；先停用功能并迁移文件。');
+        }
+      } catch (error: any) {
+        if (error instanceof ConflictException) throw error;
+        const code = error?.code || error?.driverError?.code;
+        if (code !== 'ER_NO_SUCH_TABLE') throw error;
+      }
+    }
+
+    await mkdir(normalizedPath, { recursive: true, mode: 0o700 });
+    const probePath = resolve(normalizedPath, `.write-check-${randomUUID()}`);
+    const probe = await open(probePath, 'wx', 0o600);
+    await probe.close();
+    await unlink(probePath);
+    values.set('blobs_storage_path', normalizedPath);
   }
 
   private async invalidateNavigationIfNeeded(keys: Iterable<string>): Promise<void> {

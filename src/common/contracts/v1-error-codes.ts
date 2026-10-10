@@ -352,6 +352,36 @@ for (const [code, httpStatus, retryable, defaultMessage, description] of CLOUD_S
 }
 
 /**
+ * Generic Blob API (`/api/v1/blobs`).
+ *
+ * Codes follow the `BLOB_*` prefix so a client can branch on the prefix; the
+ * `upload` family mirrors the cloud-save upload state machine, which is
+ * intentional — the two endpoints expose the same declare/upload/commit steps.
+ */
+const BLOB_ERRORS: ReadonlyArray<readonly [string, number, boolean, string, string]> = [
+  ['BLOBS_DISABLED', 403, false, 'blob 存储功能尚未启用', 'Generic blob storage is disabled for this deployment.'],
+  ['BLOB_NOT_FOUND', 404, false, 'blob 不存在', 'The blob is absent, deleted, expired, or not visible to the caller.'],
+  ['BLOB_KEY_INVALID', 400, false, 'blob key 或 namespace 无效', 'The namespace or logical key is malformed or reserved.'],
+  ['BLOB_KEY_CONFLICT', 409, false, 'blob key 已被占用', 'Another live blob already uses this key in the namespace.'],
+  ['BLOB_METADATA_INVALID', 400, false, 'blob 元数据无效', 'Filename, MIME type, metadata, tags, reference or expiry failed validation.'],
+  ['BLOB_INVALID_HASH', 400, false, 'SHA-256 格式无效', 'The sha256 field is not 64 hexadecimal characters.'],
+  ['BLOB_FILE_TOO_LARGE', 413, false, '文件超过单对象大小限制', 'The declared or received size exceeds the per-object limit.'],
+  ['BLOB_QUOTA_EXCEEDED', 409, false, 'blob 存储空间不足', 'The per-owner byte quota, including reserved uploads, would be exceeded.'],
+  ['BLOB_UPLOAD_NOT_FOUND', 404, false, '上传会话不存在', 'The upload session is absent or belongs to another owner.'],
+  ['BLOB_UPLOAD_EXPIRED', 410, false, '上传会话已过期', 'The upload session expired, was cancelled, or is no longer committable.'],
+  ['BLOB_UPLOAD_ALREADY_COMMITTED', 409, false, '上传会话已经提交', 'The upload session has already been committed.'],
+  ['BLOB_UPLOAD_OBJECT_MISSING', 409, false, '上传对象尚未到达存储服务', 'No object exists at the key bound to this upload session.'],
+  ['BLOB_UPLOAD_SIZE_MISMATCH', 409, false, '上传对象大小不匹配', 'The stored object size differs from the declared size.'],
+  ['BLOB_UPLOAD_CHECKSUM_MISMATCH', 409, false, '上传对象校验失败', 'The stored object SHA-256 differs from the declared checksum.'],
+  ['BLOB_UPLOAD_LIMIT_REACHED', 429, true, '未完成的上传会话过多', 'The account has too many open upload sessions; commit or cancel some first.'],
+  ['BLOB_STORAGE_UNAVAILABLE', 503, true, 'blob 存储暂不可用', 'The blob storage backend is unavailable or misconfigured.'],
+];
+
+for (const [code, httpStatus, retryable, defaultMessage, description] of BLOB_ERRORS) {
+  V1_ERROR_CODES[code] = { code, httpStatus, retryable, defaultMessage, description };
+}
+
+/**
  * Look up an error code definition. Returns null for unknown codes.
  */
 export function lookupV1ErrorCode(code: string): V1ErrorCodeDefinition | null {
