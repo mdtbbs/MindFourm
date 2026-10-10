@@ -42,6 +42,7 @@ public final class EditorSafetyRegression {
                     verifyClipboardRoundTrip(root);
                     verifyOfficialSchematicConfigRoundTrip(root);
                     verifyOfficialMapObjectRoundTrip(root);
+                    verifyOfficialBlankFiles(root);
                 } catch (Throwable error) {
                     failure.set(error);
                 } finally {
@@ -80,23 +81,26 @@ public final class EditorSafetyRegression {
     private static void verifyMultiblockEdits(Path root) throws Exception {
         var coreShard = Vars.content.block("core-shard");
         var router = Vars.content.block("router");
+        var duo = Vars.content.block("duo");
         require(coreShard != null && coreShard.size > 1, "core-shard must be a registered multiblock");
         require(router != null && router.size == 1, "router fixture must be registered");
+        require(duo != null && duo.rotate, "duo fixture must support official rotation");
 
         Schematic source = new Schematic(new Seq<>(), new StringMap(), 8, 8);
         source.tags.put("name", "Multiblock editor safety");
         source.tiles.add(new Schematic.Stile(coreShard, 2, 2, null, (byte)0));
+        source.tiles.add(new Schematic.Stile(duo, 5, 2, null, (byte)0));
         source.tiles.add(new Schematic.Stile(router, 6, 6, null, (byte)0));
         Path file = root.resolve("multiblock-editor-source.msch");
         Schematics.write(source, new Fi(file.toFile()));
 
         byte[] addedBytes = MapRenderer.transformSchematicBytes(
             file, 0, false, List.of(), List.of(),
-            List.of(new MapRenderer.AddedBlock(5, 2, "core-shard", 0)), List.of());
+            List.of(new MapRenderer.AddedBlock(4, 5, "core-shard", 0)), List.of());
         Schematic added = Schematics.read(new ByteArrayInputStream(addedBytes));
         require(added.tiles.count(tile -> tile.block == coreShard) == 2,
             "the editor must serialize a valid added multiblock with its official block size");
-        require(added.tiles.contains(tile -> tile.block == coreShard && tile.x == 5 && tile.y == 2),
+        require(added.tiles.contains(tile -> tile.block == coreShard && tile.x == 4 && tile.y == 5),
             "the added multiblock anchor must round-trip through official .msch serialization");
 
         byte[] movedBytes = MapRenderer.transformSchematicBytes(
@@ -107,6 +111,12 @@ public final class EditorSafetyRegression {
             "a valid multiblock move must preserve the block and its new anchor");
         require(!moved.tiles.contains(tile -> tile.block == coreShard && tile.x == 2 && tile.y == 2),
             "a moved multiblock must not leave its old anchor behind");
+
+        byte[] rotatedBytes = MapRenderer.transformSchematicBytes(
+            file, 0, false, List.of(), List.of(), List.of(new MapRenderer.RotatePosition(5, 2, 1)), List.of(), List.of(), List.of());
+        Schematic rotated = Schematics.read(new ByteArrayInputStream(rotatedBytes));
+        require(rotated.tiles.contains(tile -> tile.block == duo && tile.x == 5 && tile.y == 2 && tile.rotation == 1),
+            "a rotated blueprint block must preserve its official orientation after round-trip");
 
         expectInvalid(() -> MapRenderer.transformSchematicBytes(
             file, 0, false, List.of(),
@@ -146,6 +156,9 @@ public final class EditorSafetyRegression {
         expectMapInvalid(() -> MapRenderer.readMapObjectOperations(new arc.util.serialization.JsonReader().parse(
             "[{\"action\":\"add\",\"object_type\":\"spawn\",\"x\":1,\"y\":1,\"name\":\"spawn\",\"rotation\":1}]"
         )), "spawn points must reject unsupported orientation values");
+        require(MapRenderer.readMapObjectOperations(new arc.util.serialization.JsonReader().parse(
+            "[{\"action\":\"rotate\",\"object_type\":\"building\",\"x\":1,\"y\":1,\"rotation\":2}]"
+        )).size() == 1, "the HTTP map editor contract must accept a typed building rotation operation");
         Path source = root.resolve("official-debris-field.msav");
         try (var input = EditorSafetyRegression.class.getClassLoader().getResourceAsStream("maps/default/debrisField.msav")) {
             require(input != null, "the official v160.5 runtime must include the debrisField .msav fixture");
@@ -222,6 +235,41 @@ public final class EditorSafetyRegression {
         require(!hasObject(afterDelete.get("cores"), coreTo.x, coreTo.y, "core-shard"), "a deleted core must be absent after official reread");
         require(!hasObject(afterDelete.get("tile_layers").get("enemy_spawns"), spawnTo.x, spawnTo.y, "spawn"), "a deleted spawn must be absent after official reread");
         require(!hasObject(afterDelete.get("tile_layers").get("buildings"), buildingTo.x, buildingTo.y, "router"), "a deleted building must be absent after official reread");
+
+        Block duo = Vars.content.block("duo");
+        require(duo != null && duo.rotate && duo.newBuilding() != null, "the map rotation fixture must be a rotatable vanilla building");
+        Point2 rotationAt = findEmptyFootprint(duo, reserved, sourceMap.width, sourceMap.height);
+        Path rotationSource = root.resolve("official-map-rotation-source.msav");
+        MapRenderer.transformMapBytes(moved, rotationSource, List.of(), new arc.util.serialization.JsonReader().parse("{}"), List.of(), List.of(
+            add("building", rotationAt, "duo", "sharded")
+        ));
+        Path rotationResult = root.resolve("official-map-rotation-result.msav");
+        MapRenderer.transformMapBytes(rotationSource, rotationResult, List.of(), new arc.util.serialization.JsonReader().parse("{}"), List.of(), List.of(
+            new MapRenderer.MapObjectOperation("rotate", "building", rotationAt.x, rotationAt.y, -1, -1, -1, -1, "", "", 2)
+        ));
+        JsonValue afterRotation = readOfficialMap(rotationResult);
+        require(findRotation(afterRotation.get("tile_layers").get("buildings"), rotationAt.x, rotationAt.y) == 2,
+            "a map building rotation must round-trip through official MapIO");
+    }
+
+    private static void verifyOfficialBlankFiles(Path root) throws Exception {
+        Schematic blankSchematic = Schematics.read(new ByteArrayInputStream(MapRenderer.createBlankSchematicBytes(12, 7, "empty-online-editor")));
+        require(blankSchematic.width == 12 && blankSchematic.height == 7 && blankSchematic.tiles.isEmpty(),
+            "a blank schematic must be created and reread through official Schematics APIs");
+        require("empty-online-editor".equals(blankSchematic.tags.get("name")), "a blank schematic must preserve its title");
+
+        for (String template : List.of("survival", "sandbox", "attack", "pvp", "custom")) {
+            Path file = root.resolve("blank-" + template + ".msav");
+            MapRenderer.createBlankMapBytes(file, 20, 12, "blank-" + template, "stone", template);
+            Map map = MapIO.createMap(new Fi(file.toFile()), true);
+            MapIO.loadMap(map);
+            require(map.width == 20 && map.height == 12, "a blank map must preserve dimensions through official MapIO: " + template);
+            require(("blank-" + template).equals(map.tags.get("name", "")), "a blank map must preserve its title: " + template);
+            require(Vars.world.tile(0, 0).floor() == Vars.content.block("stone"), "a blank map must use the requested vanilla floor");
+            if (template.equals("sandbox")) require(Vars.state.rules.infiniteResources && !Vars.state.rules.waves, "sandbox template rules must round-trip");
+            if (template.equals("attack")) require(Vars.state.rules.attackMode && Vars.state.rules.waves, "attack template rules must round-trip");
+            if (template.equals("pvp")) require(Vars.state.rules.pvp && !Vars.state.rules.waves, "PvP template rules must round-trip");
+        }
     }
 
     private static void verifyOfficialSchematicConfigRoundTrip(Path root) throws Exception {
@@ -327,6 +375,14 @@ public final class EditorSafetyRegression {
             if (row.getInt("x", -1) == x && row.getInt("y", -1) == y) return row.getString("team", null);
         }
         return null;
+    }
+
+    private static int findRotation(JsonValue rows, int x, int y) {
+        if (rows == null || !rows.isArray()) return -1;
+        for (JsonValue row = rows.child; row != null; row = row.next) {
+            if (row.getInt("x", -1) == x && row.getInt("y", -1) == y) return row.getInt("rotation", -1);
+        }
+        return -1;
     }
 
     private static void expectMapInvalid(CheckedOperation operation, String message) throws Exception {

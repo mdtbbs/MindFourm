@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Blocks, Cloud, Map as MapIcon, ScanSearch, Waves } from 'lucide-react';
 import { useI18n } from '@/i18n/provider';
+import { getEditorStatus, type EditorStatus } from '@/lib/editors/editor-api';
 
 const TOOLS = [
   { id: 'blueprint-editor', href: '/tools/blueprint-editor', titleKey: 'tools.blueprintEditor', descriptionKey: 'tools.blueprintEditorDescription', icon: Blocks },
@@ -26,7 +27,9 @@ function readRecentTools(): RecentTool[] {
 export default function ToolCenter() {
   const { t } = useI18n();
   const [recentTools, setRecentTools] = useState<RecentTool[]>([]);
+  const [editorStatus, setEditorStatus] = useState<EditorStatus | null>(null);
   useEffect(() => { setRecentTools(readRecentTools()); }, []);
+  useEffect(() => { void getEditorStatus().then(setEditorStatus).catch(() => setEditorStatus(null)); }, []);
   const recordUse = (id: string) => {
     const next = [{ id, usedAt: Date.now() }, ...readRecentTools().filter((item) => item.id !== id)].slice(0, 4);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* Browsing still works when storage is unavailable. */ }
@@ -35,7 +38,7 @@ export default function ToolCenter() {
     <header className="border-b border-[var(--border)] pb-5"><p className="text-xs font-medium uppercase tracking-[0.14em] text-[var(--primary-text)]">{t('navigation.tools')}</p><h1 className="mt-2 text-3xl font-semibold text-[var(--text)]">{t('tools.title')}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">{t('tools.description')}</p></header>
 
     <section className="mt-7" aria-labelledby="tool-list-title"><h2 id="tool-list-title" className="mb-3 text-lg font-semibold text-[var(--text)]">{t('tools.available')}</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {TOOLS.map((tool) => { const Icon = tool.icon; return <Link key={tool.id} href={tool.href} onClick={() => recordUse(tool.id)} className="flex min-h-36 items-start gap-4 border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[var(--primary-soft)] text-[var(--primary-text)]"><Icon className="h-5 w-5" aria-hidden="true" /></span><span className="min-w-0"><span className="block font-semibold text-[var(--text)]">{t(tool.titleKey)}</span><span className="mt-1 block text-sm leading-5 text-[var(--text-secondary)]">{t(tool.descriptionKey)}</span></span></Link>; })}
+      {TOOLS.map((tool) => { const Icon = tool.icon; const capability = tool.id === 'blueprint-editor' ? editorStatus?.schematic : tool.id === 'map-editor' ? editorStatus?.map : tool.id === 'wave-editor' ? editorStatus?.wave : null; const unavailable = capability?.enabled === false; const card = <><span className="flex h-10 w-10 shrink-0 items-center justify-center bg-[var(--primary-soft)] text-[var(--primary-text)]"><Icon className="h-5 w-5" aria-hidden="true" /></span><span className="min-w-0"><span className="block font-semibold text-[var(--text)]">{t(tool.titleKey)}</span><span className="mt-1 block text-sm leading-5 text-[var(--text-secondary)]">{t(tool.descriptionKey)}</span>{unavailable ? <span className="mt-2 block text-xs text-amber-700 dark:text-amber-200">暂时不可用：{capability.reason === 'renderer_unavailable' ? 'Mindustry Renderer 尚未就绪' : capability.reason === 'resource_center_unavailable' ? '资源存储服务暂不可用' : '站点暂未开放在线编辑'}</span> : null}</span></>; return unavailable ? <div key={tool.id} aria-disabled="true" className="flex min-h-36 cursor-not-allowed items-start gap-4 border border-[var(--border)] bg-[var(--bg-card)] p-4 opacity-70">{card}</div> : <Link key={tool.id} href={tool.href} onClick={() => recordUse(tool.id)} className="flex min-h-36 items-start gap-4 border border-[var(--border)] bg-[var(--bg-card)] p-4 transition-colors hover:border-[var(--primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{card}</Link>; })}
     </div></section>
 
     <section className="mt-8 border-t border-[var(--border)] pt-5" aria-labelledby="recent-tools-title"><h2 id="recent-tools-title" className="text-lg font-semibold text-[var(--text)]">{t('tools.recent')}</h2>{recentTools.length ? <ul className="mt-3 divide-y divide-[var(--border)] border-y border-[var(--border)]">{recentTools.map((item) => { const tool = TOOLS.find((entry) => entry.id === item.id); if (!tool) return null; return <li key={item.id}><Link href={tool.href} onClick={() => recordUse(tool.id)} className="flex min-h-12 items-center justify-between gap-3 px-3 text-sm hover:bg-[var(--bg-hover)]"><span className="text-[var(--text)]">{t(tool.titleKey)}</span><span className="text-xs text-[var(--text-muted)]">{t('tools.open')}</span></Link></li>; })}</ul> : <p className="mt-2 max-w-2xl text-sm text-[var(--text-muted)]">{t('tools.recentEmpty')}</p>}</section>

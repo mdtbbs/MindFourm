@@ -56,6 +56,12 @@ export type ClientCapabilities = {
   wave_editor: boolean;
 };
 
+export type EditorToolStatus = {
+  schematic: { enabled: boolean; reason: string | null; full_logic: boolean };
+  map: { enabled: boolean; reason: string | null };
+  wave: { enabled: boolean; reason: string | null };
+};
+
 type RendererHealth = {
   status?: unknown;
   protocolVersion?: unknown;
@@ -176,6 +182,25 @@ export class CapabilitiesService {
       schematic_full_editor: schematicFullEditor,
       map_editor: mapEditor,
       wave_editor: waveEditor,
+    };
+  }
+
+  /** First-party tool-center status with a short reason suitable for a disabled editor card. */
+  async getEditorToolStatus(): Promise<EditorToolStatus> {
+    const readiness = await this.getEditorReadiness();
+    // Local-file analysis, editing, and export do not write to Resource Center or RES.
+    // Keep their readiness independent from publishing and workbench permissions.
+    const schematicOperations = ['content.catalog', 'schematic.create', 'schematic.read', 'schematic.write', 'schematic.config.read', 'schematic.config.write'];
+    const mapOperations = ['content.catalog', 'map.create', 'map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.objects.read', 'map.objects.write'];
+    const schematicEnabled = this.hasRendererOperations(readiness, schematicOperations);
+    const mapEnabled = this.hasRendererOperations(readiness, mapOperations);
+    const waveEnabled = mapEnabled && this.hasRendererOperations(readiness, ['map.waves.read', 'map.waves.write']);
+    const reason = !readiness.rendererOperations.size ? 'renderer_unavailable' : 'editor_operation_unavailable';
+    return {
+      schematic: { enabled: schematicEnabled, reason: schematicEnabled ? null : reason,
+        full_logic: schematicEnabled && this.hasRendererOperations(readiness, ['schematic.logic.read', 'schematic.logic.text.write']) },
+      map: { enabled: mapEnabled, reason: mapEnabled ? null : reason },
+      wave: { enabled: waveEnabled, reason: waveEnabled ? null : reason },
     };
   }
 

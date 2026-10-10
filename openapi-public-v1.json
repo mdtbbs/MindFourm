@@ -12769,6 +12769,424 @@
         ]
       }
     },
+    "/v1/editor-tools/status": {
+      "get": {
+        "operationId": "getEditorToolStatus",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取在线地图与蓝图编辑器的实际可用状态",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Renderer runtime, editor operations and ResourceStorage readiness for the tool center."
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-editor-tools"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 1200,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      }
+    },
+    "/v1/editor-tools/content-catalog": {
+      "get": {
+        "operationId": "getMindustryEditorContentCatalog",
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "读取固定 Mindustry 运行时生成的可编辑内容目录",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Vanilla blocks, floors, items, liquids, units, status effects and teams with localized names and available icons."
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-editor-tools"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ],
+        "x-rate-limit": {
+          "limit": 1200,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        }
+      }
+    },
+    "/v1/editor-tools/{kind}/create": {
+      "post": {
+        "operationId": "createStandaloneMindustryEditorFile",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "通过官方 Mindustry 写入器创建空白蓝图或地图",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "schematic",
+                "map"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "width",
+                  "height",
+                  "name"
+                ],
+                "properties": {
+                  "width": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2000
+                  },
+                  "height": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 2000
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "floor": {
+                    "type": "string",
+                    "maxLength": 191,
+                    "description": "Renderer-validated vanilla floor internal name."
+                  },
+                  "template": {
+                    "type": "string",
+                    "enum": [
+                      "survival",
+                      "sandbox",
+                      "attack",
+                      "pvp",
+                      "custom"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Official Mindustry .msch or .msav bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-editor-tools"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/editor-tools/{kind}/analyze": {
+      "post": {
+        "operationId": "analyzeEditorSourceFile",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "安全分析普通在线编辑器上传的本地地图或蓝图文件",
+        "description": "不创建 Resource、版本或 RES binding。文件只交给固定 Mindustry Renderer 读取。",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "enum": [
+                "schematic",
+                "map"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bounded official renderer metadata used to populate the standalone editor."
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-editor-tools"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/editor-tools/schematic/export": {
+      "post": {
+        "operationId": "exportStandaloneSchematicEdit",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "通过官方 Schematics 读写导出本地蓝图编辑结果",
+        "description": "不要求 Resource 管理权限；未知内容、Mod 内容和不安全配置仍失败关闭。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "operations"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "operations": {
+                    "type": "string",
+                    "description": "ResourceV2ExportSchematicDto JSON"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Official Mindustry .msch bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-editor-tools"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/editor-tools/map/export": {
+      "post": {
+        "operationId": "exportStandaloneMapEdit",
+        "x-rate-limit": {
+          "limit": 20,
+          "window_seconds": 60,
+          "basis": "authenticated_user_or_session_or_ip"
+        },
+        "x-oauth-scopes-if-bearer": [
+          "resource.read"
+        ],
+        "summary": "通过官方 MapIO 读写导出本地地图编辑结果",
+        "description": "不要求 Resource 管理权限；地图内容、对象、规则和波次继续经过 Renderer 安全校验。",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "operations"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "operations": {
+                    "type": "string",
+                    "description": "ResourceV2ExportMapDto JSON"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Official Mindustry .msav bytes.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "携带 MindAuth Bearer 时需要 scope：resource.read"
+          },
+          "default": {
+            "description": "Public V1 error envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicV1ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "v1-editor-tools"
+        ],
+        "security": [
+          {},
+          {
+            "MindAuthBearer": []
+          }
+        ]
+      }
+    },
     "/v1/resources/maps/{id}/versions/{versionId}/feedback": {
       "get": {
         "operationId": "getMapFeedbackAggregateV2",
@@ -25168,7 +25586,7 @@
   "info": {
     "title": "MDTBBS Public Client API",
     "description": "Stable V1 contract for MindAuth public clients. Use /api/v1/capabilities for feature discovery. Server-side integrations use a separate authorization boundary and are not part of this specification. JSON V1 endpoints return the { data, meta } / { error, meta } envelope unless explicitly documented as a raw file or image response.",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "contact": {}
   },
   "tags": [],
@@ -28380,6 +28798,32 @@
           "to_y"
         ]
       },
+      "ResourceV2SchematicRotateDto": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 127
+          },
+          "rotation_quarters": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 3,
+            "description": "Clockwise quarter turns applied to one block."
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "rotation_quarters"
+        ]
+      },
       "ResourceV2SchematicAddedBlockDto": {
         "type": "object",
         "properties": {
@@ -28480,6 +28924,14 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ResourceV2SchematicMoveDto"
+            }
+          },
+          "rotate_positions": {
+            "maxItems": 5000,
+            "description": "Rotate individual blocks whose configs do not contain coordinate links.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResourceV2SchematicRotateDto"
             }
           },
           "add_blocks": {
@@ -29532,7 +29984,14 @@
           "updated_at": {
             "type": "string",
             "format": "date-time",
-            "nullable": true
+            "nullable": true,
+            "description": "Operational write timestamp; moved by unrelated writes such as view and download counting. Do not present this as the publication date."
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the resource first became publicly visible. This is the author-facing date."
           }
         },
         "required": [
@@ -29564,7 +30023,8 @@
           "preview_url",
           "user",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "published_at"
         ]
       },
       "ResourceDiscoveryItemDto": {

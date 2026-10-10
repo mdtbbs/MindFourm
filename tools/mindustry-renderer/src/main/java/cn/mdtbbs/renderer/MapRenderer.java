@@ -18,7 +18,10 @@ import mindustry.Vars;
 import mindustry.core.Logic;
 import mindustry.core.Platform;
 import mindustry.core.Version;
+import mindustry.editor.EditorTile;
 import mindustry.ctype.ContentType;
+import mindustry.ctype.Content;
+import mindustry.ctype.UnlockableContent;
 import mindustry.entities.units.BuildPlan;
 import mindustry.game.Schematic;
 import mindustry.game.Schematics;
@@ -29,6 +32,8 @@ import mindustry.io.SaveVersion;
 import mindustry.maps.Map;
 import mindustry.net.Net;
 import mindustry.world.Block;
+import mindustry.world.blocks.environment.Floor;
+import mindustry.world.blocks.environment.OverlayFloor;
 import mindustry.world.blocks.logic.LogicBlock;
 import arc.math.geom.Point2;
 import arc.struct.Seq;
@@ -76,7 +81,7 @@ public final class MapRenderer {
     private static final long MAX_INFLATED_MAP_BYTES = 128L * 1024 * 1024;
     private static final long MAX_INFLATED_SCHEMATIC_BYTES = 16L * 1024 * 1024;
     private static final int PROTOCOL_VERSION = 2;
-    private static final String VERSION = "v160.5-preview-8-full-editors";
+    private static final String VERSION = "v160.5-preview-9-standalone-editors";
     private static final String MINDUSTRY_SERVER_SHA256 = "0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0";
     private static final JsonReader JSON = new JsonReader();
     private static Path storageRoot;
@@ -138,6 +143,10 @@ public final class MapRenderer {
         server.createContext("/v2/transform-schematic", MapRenderer::transformSchematic);
         server.createContext("/v2/transform-map", MapRenderer::transformMap);
         server.createContext("/v1/content-metadata", MapRenderer::contentMetadata);
+        server.createContext("/v1/content-catalog", MapRenderer::contentCatalog);
+        server.createContext("/v1/create-schematic", MapRenderer::createSchematic);
+        server.createContext("/v1/create-map", MapRenderer::createMap);
+
         server.createContext("/v2/editor-catalog", MapRenderer::editorCatalog);
         server.createContext("/v2/map-region", MapRenderer::mapRegion);
         server.setExecutor(Executors.newSingleThreadExecutor());
@@ -156,7 +165,7 @@ public final class MapRenderer {
             + ",\"buildDigest\":" + quote(rendererBuildDigest())
             + ",\"runtime\":{\"name\":\"Mindustry\",\"version\":\"v160.5\",\"build\":" + Version.build
             + ",\"artifactSha256\":" + quote(MINDUSTRY_SERVER_SHA256) + "}"
-            + ",\"supportedOperations\":[\"editor.catalog\",\"schematic.copy.write\",\"map.region.read\",\"map.objects.rotate\",\"schematic.read\",\"schematic.write\",\"schematic.config.read\",\"schematic.config.write\",\"schematic.logic.read\",\"schematic.logic.text.write\",\"map.read\",\"map.write\",\"map.rules.read\",\"map.rules.write\",\"map.objects.read\",\"map.objects.write\",\"map.waves.read\",\"map.waves.write\"]"
+            + ",\"supportedOperations\":[\"content.catalog\",\"schematic.create\",\"schematic.read\",\"schematic.write\",\"schematic.config.read\",\"schematic.config.write\",\"schematic.logic.read\",\"schematic.logic.text.write\",\"map.create\",\"map.read\",\"map.write\",\"map.rules.read\",\"map.rules.write\",\"map.objects.read\",\"map.objects.write\",\"map.waves.read\",\"map.waves.write\",\"editor.catalog\",\"schematic.copy.write\",\"map.region.read\",\"map.objects.rotate\"]"
             + ",\"textureAssets\":" + (spriteAtlas != null) + "}";
     }
 
@@ -183,6 +192,238 @@ public final class MapRenderer {
         } catch (IllegalArgumentException exception) {
             send(exchange, 400, error("INVALID_CONTENT_QUERY"));
         }
+    }
+
+    /** Complete pinned vanilla catalog; clients can build palettes without maintaining a content list. */
+    private static void contentCatalog(HttpExchange exchange) throws IOException {
+        if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        try {
+            StringBuilder result = new StringBuilder("{\"blocks\":");
+            result.append(contentCatalogEntries(ContentType.block));
+            result.append(",\"items\":").append(contentCatalogEntries(ContentType.item));
+            result.append(",\"liquids\":").append(contentCatalogEntries(ContentType.liquid));
+            result.append(",\"units\":").append(contentCatalogEntries(ContentType.unit));
+            result.append(",\"statuses\":").append(contentCatalogEntries(ContentType.status));
+            result.append(",\"teams\":").append(teamCatalogEntries());
+            result.append(",\"rule_defaults\":").append(ruleDefaultsJson()).append('}');
+            send(exchange, 200, result.toString());
+        } catch (Exception exception) {
+            send(exchange, 503, error("CONTENT_CATALOG_UNAVAILABLE"));
+        }
+    }
+
+    private static String ruleDefaultsJson() {
+        JsonValue source = JSON.parse(mindustry.io.JsonIO.write(new mindustry.game.Rules()));
+        String[] keys = {"allowEditRules", "infiniteResources", "coreBuildAndConfig", "waveTimer", "waveSending", "waves", "airUseSpawns", "wavesSpawnAtCores", "pvp", "pvpAutoPause", "pauseDisabled", "waitEnemies", "attackMode", "editor", "derelictRepair", "canGameOver", "coreCapture", "reactorExplosions", "possessionAllowed", "schematicsAllowed", "damageExplosions", "fire", "randomWaveAI", "unitPayloadUpdate", "unitPayloadsExplode", "unitCapVariable", "hideSpawns", "ghostBlocks", "showOtherTeamPings", "logicUnitControl", "logicUnitBuild", "logicUnitDeconstruct", "worldProcessorPlayerLink", "allowEditWorldProcessors", "disableWorldProcessors", "polygonCoreProtection", "placeRangeCheck", "cleanupDeadTeams", "onlyDepositCore", "allowCoreUnloaders", "coreDestroyClear", "hideBannedBlocks", "allowEnvironmentDeconstruct", "instantBuild", "blockWhitelist", "unitWhitelist", "disableUnitCap", "lighting", "unitCap", "winWave", "environment", "solarMultiplier", "unitBuildSpeedMultiplier", "unitCostMultiplier", "unitDamageMultiplier", "unitHealthMultiplier", "unitCrashDamageMultiplier", "unitMineSpeedMultiplier", "unitFactoryActivationDelay", "blockHealthMultiplier", "blockDamageMultiplier", "buildCostMultiplier", "buildSpeedMultiplier", "deconstructRefundMultiplier", "enemyCoreBuildRadius", "dropZoneRadius", "waveSpacing", "initialWaveSpacing", "itemDepositCooldown", "modeName", "bannedBlocks", "bannedUnits"};
+        StringBuilder result = new StringBuilder("{");
+        boolean first = true;
+        for (String key : keys) {
+            JsonValue value = source.get(key);
+            if (value == null) continue;
+            if (!first) result.append(',');
+            first = false;
+            result.append(quote(key)).append(':').append(value.toString());
+        }
+        return result.append('}').toString();
+    }
+
+    private static String contentCatalogEntries(ContentType type) throws IOException {
+        StringBuilder result = new StringBuilder("[");
+        boolean first = true;
+        for (Content content : Vars.content.getBy(type)) {
+            if (!(content instanceof UnlockableContent unlockable) || unlockable.name == null) continue;
+            if (type == ContentType.block && (isA(content, "LegacyBlock") || "air".equals(unlockable.name))) continue;
+            if (!first) result.append(',');
+            first = false;
+            String id = unlockable.name;
+            BufferedImage icon = contentIcon(type, id);
+            String iconData = "null";
+            if (icon != null) {
+                ByteArrayOutputStream png = new ByteArrayOutputStream();
+                ImageIO.write(icon, "png", png);
+                iconData = quote("data:image/png;base64," + Base64.getEncoder().encodeToString(png.toByteArray()));
+            }
+            String displayName = localized(unlockable, id);
+            result.append("{\"internal_name\":").append(quote(id))
+                .append(",\"display_name\":").append(quote(displayName))
+                .append(",\"icon\":").append(iconData);
+            if (content instanceof Block block) {
+                Floor floor = block instanceof Floor value ? value : null;
+                String category = block.category == null ? "other" : block.category.name();
+                result.append(",\"size\":").append(Math.max(1, block.size))
+                    .append(",\"size_offset\":").append(block.sizeOffset)
+                    .append(",\"category\":").append(quote(category))
+                    .append(",\"category_name\":").append(quote(localizedCategory(category)))
+                    .append(",\"placeable\":").append(!block.isFloor() && block.newBuilding() != null)
+                    .append(",\"has_config\":").append(block.configurations != null && block.configurations.size > 0)
+                    .append(",\"logic\":").append(block instanceof LogicBlock)
+                    .append(",\"core\":").append(block instanceof mindustry.world.blocks.storage.CoreBlock)
+                    .append(",\"spawn\":").append(isA(block, "SpawnBlock"))
+                    .append(",\"floor\":").append(block.isFloor())
+                    .append(",\"overlay\":").append(block instanceof OverlayFloor)
+                    .append(",\"rotatable\":").append(block.rotate)
+                    .append(",\"ore\":").append(floor != null && floor.wallOre && floor.itemDrop != null)
+                    .append(",\"liquid_floor\":").append(floor != null && floor.liquidDrop != null);
+                if (block.configurations != null && block.configurations.size > 0) {
+                    result.append(",\"config_types\":").append(schematicConfigTypesJson(block));
+                }
+            }
+            result.append('}');
+        }
+        return result.append(']').toString();
+    }
+
+    private static void createSchematic(HttpExchange exchange) throws IOException {
+        createBlankEditorFile(exchange, "schematic");
+    }
+
+    private static void createMap(HttpExchange exchange) throws IOException {
+        createBlankEditorFile(exchange, "map");
+    }
+
+    private static void createBlankEditorFile(HttpExchange exchange, String kind) throws IOException {
+        if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) { send(exchange, 405, error("INVALID_REQUEST")); return; }
+        if (!authorized(exchange)) { send(exchange, 401, error("UNAUTHORIZED")); return; }
+        Path output = null;
+        try {
+            JsonValue request = JSON.parse(new String(readLimited(exchange, 8 * 1024), StandardCharsets.UTF_8));
+            JsonValue widthValue = request.get("width"), heightValue = request.get("height"), nameValue = request.get("name");
+            if (widthValue == null || !widthValue.isNumber() || widthValue.asDouble() != widthValue.asInt()
+                || heightValue == null || !heightValue.isNumber() || heightValue.asDouble() != heightValue.asInt()
+                || nameValue == null || !nameValue.isString()) {
+                send(exchange, 400, error("INVALID_EDITOR_FILE")); return;
+            }
+            int width = widthValue.asInt(), height = heightValue.asInt();
+            String name = nameValue.asString().trim();
+            String floorName = request.getString("floor", "stone");
+            String template = request.getString("template", "survival");
+            if (name.isEmpty() || name.length() > 120 || name.chars().anyMatch(Character::isISOControl)
+                || ("schematic".equals(kind) && (width < 1 || height < 1 || width > 128 || height > 128 || (long)width * height > MAX_SCHEMATIC_TILES))
+                || ("map".equals(kind) && (!isSafeMapSize(width, height)
+                    || floorName == null || !floorName.matches("[a-zA-Z0-9_.:-]{1,191}")
+                    || !java.util.Set.of("survival", "sandbox", "attack", "pvp", "custom").contains(template)))) {
+                send(exchange, 400, error("INVALID_EDITOR_FILE")); return;
+            }
+            Path inputs = storageRoot.resolve("worker-input").normalize();
+            Files.createDirectories(inputs);
+            output = Files.createTempFile(inputs, "blank-" + kind + "-", "schematic".equals(kind) ? ".msch" : ".msav");
+            byte[] bytes = "schematic".equals(kind)
+                ? createBlankSchematicBytes(width, height, name)
+                : createBlankMapBytes(output, width, height, name, floorName, template);
+            if (bytes.length == 0 || bytes.length > MAX_BYTES) throw new IOException("generated file exceeds the size limit");
+            send(exchange, 200, "{\"dataBase64\":" + quote(Base64.getEncoder().encodeToString(bytes))
+                + ",\"sha256\":" + quote(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))) + "}");
+        } catch (Exception exception) {
+            send(exchange, 422, error("INVALID_EDITOR_FILE"));
+        } finally {
+            if (output != null) Files.deleteIfExists(output);
+        }
+    }
+
+    static byte[] createBlankSchematicBytes(int width, int height, String name) throws IOException, SchematicTransformException {
+        if (width < 1 || height < 1 || width > 128 || height > 128 || (long)width * height > MAX_SCHEMATIC_TILES
+            || name == null || name.isBlank() || name.length() > 120) throw new SchematicTransformException("INVALID_SCHEMATIC_SIZE");
+        StringMap tags = new StringMap();
+        tags.put("name", name);
+        Schematic schematic = new Schematic(new Seq<>(), tags, width, height);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        Schematics.write(schematic, output);
+        byte[] bytes = output.toByteArray();
+        Schematic roundTrip = Schematics.read(new ByteArrayInputStream(bytes));
+        validateSchematicSize(roundTrip);
+        if (roundTrip.width != width || roundTrip.height != height || roundTrip.tiles.size != 0) throw new IOException("schematic round-trip failed");
+        return bytes;
+    }
+
+    static byte[] createBlankMapBytes(Path output, int width, int height, String name) throws Exception {
+        return createBlankMapBytes(output, width, height, name, "stone", "survival");
+    }
+
+    static byte[] createBlankMapBytes(Path output, int width, int height, String name, String floorName, String template) throws Exception {
+        if (!isSafeMapSize(width, height) || name == null || name.isBlank() || name.length() > 120) throw new IOException("invalid map dimensions or name");
+        Block floorBlock = Vars.content.getByName(ContentType.block, floorName);
+        if (!(floorBlock instanceof Floor floor) || isA(floorBlock, "LegacyBlock")
+            || !java.util.Set.of("survival", "sandbox", "attack", "pvp", "custom").contains(template)) throw new IOException("invalid map template or floor");
+        var tiles = Vars.world.resize(width, height);
+        for (int x = 0; x < width; x++) for (int y = 0; y < height; y++) {
+            tiles.set(x, y, new mindustry.world.Tile(x, y, floor.id, 0, 0));
+        }
+        mindustry.game.Rules rules = new mindustry.game.Rules();
+        switch (template) {
+            case "sandbox" -> { rules.infiniteResources = true; rules.waves = false; rules.waveTimer = false; }
+            case "attack" -> { rules.attackMode = true; rules.waves = true; }
+            case "pvp" -> { rules.pvp = true; rules.waves = false; rules.waveTimer = false; }
+            case "survival", "custom" -> { }
+            default -> throw new IOException("invalid map template");
+        }
+        Vars.state.rules = rules;
+        StringMap tags = new StringMap();
+        tags.put("name", name);
+        tags.put("build", Integer.toString(Version.build));
+        tags.put("rules", mindustry.io.JsonIO.write(Vars.state.rules));
+        Map map = new Map(new Fi(output.toFile()), width, height, tags, true);
+        Vars.state.map = map;
+        MapIO.writeMap(new Fi(output.toFile()), map, false);
+        Map roundTrip = MapIO.createMap(new Fi(output.toFile()), true);
+        if (roundTrip.width != width || roundTrip.height != height || !name.equals(roundTrip.tags.get("name", ""))) {
+            throw new IOException("map dimensions or metadata did not round-trip");
+        }
+        MapIO.loadMap(roundTrip);
+        if (Vars.world == null || Vars.world.tiles == null || Vars.world.tiles.width != width || Vars.world.tiles.height != height) {
+            throw new IOException("map world did not round-trip");
+        }
+        return Files.readAllBytes(output);
+    }
+
+    private static String teamCatalogEntries() {
+        StringBuilder result = new StringBuilder("[");
+        java.util.ArrayList<mindustry.game.Team> teams = new java.util.ArrayList<>();
+        for (mindustry.game.Team team : mindustry.game.Team.all) if (team != null) teams.add(team);
+        teams.sort(java.util.Comparator.comparingInt(team -> team.id));
+        boolean first = true;
+        for (mindustry.game.Team team : teams) {
+            if (!first) result.append(',');
+            first = false;
+            String key = "team." + team.name + ".name";
+            String name = chineseBundle == null ? null : chineseBundle.getProperty(key);
+            int rgba = (Math.round(team.color.r * 255f) << 24) | (Math.round(team.color.g * 255f) << 16)
+                | (Math.round(team.color.b * 255f) << 8) | Math.round(team.color.a * 255f);
+            result.append("{\"internal_name\":").append(quote(team.name))
+                .append(",\"display_name\":").append(quote(name == null || name.isBlank() ? team.name : name))
+                .append(",\"id\":").append(team.id)
+                .append(",\"color\":").append(quote(String.format(java.util.Locale.ROOT, "#%08x", Integer.toUnsignedLong(rgba))))
+                .append('}');
+        }
+        return result.append(']').toString();
+    }
+
+    private static BufferedImage contentIcon(ContentType type, String id) {
+        if (spriteAtlas == null) return null;
+        return switch (type) {
+            case block -> spriteAtlas.findBlock(id);
+            case item -> spriteAtlas.findItem(id);
+            case liquid -> spriteAtlas.findLiquid(id);
+            case unit -> spriteAtlas.findUnit(id);
+            case status -> spriteAtlas.findStatus(id);
+            default -> null;
+        };
+    }
+
+    private static String localizedCategory(String category) {
+        return switch (category) {
+            case "distribution" -> "物流";
+            case "liquid" -> "液体";
+            case "production" -> "生产";
+            case "power" -> "电力";
+            case "effect" -> "效果";
+            case "defense" -> "防御";
+            case "crafting" -> "加工";
+            case "units" -> "单位";
+            case "logic" -> "逻辑";
+            case "turrets" -> "炮塔";
+            default -> "其他";
+        };
     }
 
     private static void editorCatalog(HttpExchange exchange) throws IOException {
@@ -343,6 +584,7 @@ public final class MapRenderer {
             boolean mirrorX = request.getBoolean("mirror_x", false);
             JsonValue rawDeletes = request.get("delete_positions");
             JsonValue rawMoves = request.get("move_positions");
+            JsonValue rawRotations = request.get("rotate_positions");
             JsonValue rawAdds = request.get("add_blocks");
             JsonValue rawLogicConfigs = request.get("logic_configs");
             JsonValue rawConfigEdits = request.get("config_edits");
@@ -350,6 +592,7 @@ public final class MapRenderer {
                 || !sourceHash.matches("[a-f0-9]{64}") || encoded.isEmpty()
                 || rotation < 0 || rotation > 3 || (rawDeletes != null && !rawDeletes.isArray())
                 || (rawMoves != null && !rawMoves.isArray()) || (rawAdds != null && !rawAdds.isArray())
+                || (rawRotations != null && !rawRotations.isArray())
                 || (rawLogicConfigs != null && !rawLogicConfigs.isArray())
                 || (rawConfigEdits != null && !rawConfigEdits.isArray())) {
                 send(exchange, 422, error("INVALID_SCHEMATIC_OPERATION")); return;
@@ -361,6 +604,7 @@ public final class MapRenderer {
             }
             List<Point2> deletePositions = readDeletePositions(rawDeletes);
             List<MovePosition> movePositions = readMovePositions(rawMoves);
+            List<RotatePosition> rotatePositions = readRotatePositions(rawRotations);
             List<AddedBlock> addedBlocks = readAddedBlocks(rawAdds);
             List<LogicConfigEdit> logicConfigs = readLogicConfigEdits(rawLogicConfigs);
             List<SchematicConfigEdit> configEdits = readSchematicConfigEdits(rawConfigEdits);
@@ -368,7 +612,7 @@ public final class MapRenderer {
             Files.createDirectories(inputs);
             input = Files.createTempFile(inputs, "schematic-edit-", ".msch");
             Files.write(input, source);
-            byte[] output = transformSchematicBytes(input, rotation, mirrorX, deletePositions, movePositions, addedBlocks, logicConfigs, configEdits);
+            byte[] output = transformSchematicBytes(input, rotation, mirrorX, deletePositions, movePositions, rotatePositions, addedBlocks, logicConfigs, configEdits);
             String outputHash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(output));
             String result = "{\"dataBase64\":" + quote(Base64.getEncoder().encodeToString(output))
                 + ",\"sha256\":" + quote(outputHash) + "}";
@@ -924,10 +1168,10 @@ public final class MapRenderer {
     private static final class MapObjectChange {
         private Integer x;
         private Integer y;
+        private Integer rotation;
         private mindustry.game.Team team;
         private boolean deleted;
         private boolean positionChanged;
-        Integer rotation;
     }
     private record PlannedMapObject(MapObject source, int x, int y, mindustry.game.Team team, int rotation,
         boolean addition, boolean deleted) {}
@@ -999,6 +1243,11 @@ public final class MapRenderer {
                 mindustry.game.Team team = resolveMapTeam(operation.team());
                 if (team == null) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
                 edit.team = team;
+            } else if (operation.action().equals("rotate")) {
+                if (edit.rotation != null || !source.block().rotate) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
+                Object config = source.building() == null ? null : source.building().config();
+                if (config != null && hasMapCoordinateConfig(config)) throw new MapTransformException("UNSUPPORTED_MAP_OBJECT");
+                edit.rotation = operation.rotation();
             }
         }
 
@@ -1045,11 +1294,12 @@ public final class MapRenderer {
             }
             int x = edit == null || edit.x == null ? source.x() : edit.x;
             int y = edit == null || edit.y == null ? source.y() : edit.y;
+            int rotation = edit == null || edit.rotation == null ? source.rotation() : edit.rotation;
             mindustry.game.Team team = edit == null || edit.team == null ? source.team() : edit.team;
             if (team == null || !reserveMapFootprint(occupied, source.block(), x, y, width, height)) {
                 throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
             }
-            planned.add(new PlannedMapObject(source, x, y, team, edit == null || edit.rotation == null ? source.rotation() : edit.rotation, false, false));
+            planned.add(new PlannedMapObject(source, x, y, team, rotation, false, false));
         }
         for (PlannedMapObject addition : additions) {
             if (!reserveMapFootprint(occupied, addition.source().block(), addition.x(), addition.y(), width, height)) {
@@ -1077,7 +1327,7 @@ public final class MapRenderer {
 
         for (PlannedMapObject change : planned) {
             if (change.addition()) continue;
-            boolean moved = change.x() != change.source().x() || change.y() != change.source().y();
+            boolean moved = change.x() != change.source().x() || change.y() != change.source().y() || change.rotation() != change.source().rotation();
             if (change.deleted() || moved) {
                 mindustry.world.Tile sourceTile = Vars.world.tile(change.source().x(), change.source().y());
                 if (sourceTile == null) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
@@ -1086,7 +1336,8 @@ public final class MapRenderer {
         }
         for (PlannedMapObject change : planned) {
             if (change.deleted()) continue;
-            if (change.addition() || change.x() != change.source().x() || change.y() != change.source().y()) {
+            if (change.addition() || change.x() != change.source().x() || change.y() != change.source().y()
+                || change.rotation() != change.source().rotation()) {
                 mindustry.world.Tile destination = Vars.world.tile(change.x(), change.y());
                 if (destination == null) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
                 destination.setBlock(change.source().block(), change.team(), change.rotation());
@@ -1099,7 +1350,8 @@ public final class MapRenderer {
                         throw new MapTransformException("UNSUPPORTED_MAP_OBJECT");
                     }
                 }
-            } else {
+                if (destination.build != null) destination.build.rotation = change.rotation();
+            } else if (change.team() != change.source().team()) {
                 mindustry.world.Tile existing = Vars.world.tile(change.source().x(), change.source().y());
                 if (existing != null && existing.build != null) { existing.build.rotation = change.rotation(); if (change.team() != change.source().team()) existing.setTeam(change.team()); }
             }
@@ -1235,6 +1487,23 @@ public final class MapRenderer {
         return result;
     }
 
+    private static List<RotatePosition> readRotatePositions(JsonValue raw) throws SchematicTransformException {
+        java.util.ArrayList<RotatePosition> result = new java.util.ArrayList<>();
+        if (raw == null) return result;
+        java.util.HashSet<Long> unique = new java.util.HashSet<>();
+        for (JsonValue item = raw.child; item != null; item = item.next) {
+            if (result.size() >= 5_000 || !item.isObject()) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            int x = item.getInt("x", Integer.MIN_VALUE);
+            int y = item.getInt("y", Integer.MIN_VALUE);
+            int quarters = item.getInt("rotation_quarters", 0);
+            if (!validSchematicCoordinate(x, y) || quarters < 1 || quarters > 3 || !unique.add(positionKey(x, y))) {
+                throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
+            }
+            result.add(new RotatePosition(x, y, quarters));
+        }
+        return result;
+    }
+
     private static List<AddedBlock> readAddedBlocks(JsonValue raw) throws SchematicTransformException {
         java.util.ArrayList<AddedBlock> result = new java.util.ArrayList<>();
         if (raw == null) return result;
@@ -1304,6 +1573,7 @@ public final class MapRenderer {
     }
 
     record MovePosition(int fromX, int fromY, int toX, int toY) {}
+    record RotatePosition(int x, int y, int quarters) {}
     record AddedBlock(int x, int y, String block, int rotation, Integer copyX, Integer copyY, JsonValue config, String logicSource) {
         AddedBlock(int x, int y, String block, int rotation, Integer copyX, Integer copyY) { this(x, y, block, rotation, copyX, copyY, null, null); }
         AddedBlock(int x, int y, String block, int rotation) { this(x, y, block, rotation, null, null, null, null); }
@@ -1690,6 +1960,14 @@ public final class MapRenderer {
         List<Point2> deletePositions, List<MovePosition> movePositions, List<AddedBlock> addedBlocks,
         List<LogicConfigEdit> logicConfigs, List<SchematicConfigEdit> configEdits)
         throws IOException, SchematicTransformException {
+        return transformSchematicBytes(input, rotationQuarterTurns, mirrorX, deletePositions, movePositions,
+            List.of(), addedBlocks, logicConfigs, configEdits);
+    }
+
+    static byte[] transformSchematicBytes(Path input, int rotationQuarterTurns, boolean mirrorX,
+        List<Point2> deletePositions, List<MovePosition> movePositions, List<RotatePosition> rotatePositions,
+        List<AddedBlock> addedBlocks, List<LogicConfigEdit> logicConfigs, List<SchematicConfigEdit> configEdits)
+        throws IOException, SchematicTransformException {
         if (rotationQuarterTurns < 0 || rotationQuarterTurns > 3) throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
         validateInflated(input, MAX_INFLATED_SCHEMATIC_BYTES, 5);
         List<String> unknown = unknownSchematicEditContent(input);
@@ -1704,8 +1982,8 @@ public final class MapRenderer {
                 throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
             }
         }
-        if (deletePositions.size() > 10_000 || movePositions.size() > 5_000 || addedBlocks.size() > 5_000 || logicConfigs.size() > 1_000 || configEdits.size() > 5_000
-            || deletePositions.size() + movePositions.size() + addedBlocks.size() + logicConfigs.size() + configEdits.size() > 10_000) {
+        if (deletePositions.size() > 10_000 || movePositions.size() > 5_000 || rotatePositions.size() > 5_000 || addedBlocks.size() > 5_000 || logicConfigs.size() > 1_000 || configEdits.size() > 5_000
+            || deletePositions.size() + movePositions.size() + rotatePositions.size() + addedBlocks.size() + logicConfigs.size() + configEdits.size() > 10_000) {
             throw new SchematicTransformException("INVALID_SCHEMATIC_OPERATION");
         }
         java.util.HashMap<Long, Schematic.Stile> sourceTiles = new java.util.HashMap<>();
@@ -1717,6 +1995,17 @@ public final class MapRenderer {
             if (!isSafeSchematicConfig(tile.config, tile.block, tile.x, tile.y, source.width, source.height)) {
                 throw new SchematicTransformException("UNSUPPORTED_SCHEMATIC_CONFIG");
             }
+        }
+        java.util.HashSet<Long> rotatedPositions = new java.util.HashSet<>();
+        for (RotatePosition edit : rotatePositions) {
+            long key = positionKey(edit.x(), edit.y());
+            Schematic.Stile tile = sourceTiles.get(key);
+            if (tile == null || requested.contains(key) || !rotatedPositions.add(key) || !tile.block.rotate
+                || !isSafeSchematicRotationConfig(tile.config)) {
+                throw new SchematicTransformException(tile == null || !tile.block.rotate
+                    ? "INVALID_SCHEMATIC_OPERATION" : "UNSUPPORTED_SCHEMATIC_CONFIG");
+            }
+            tile.rotation = (byte)((tile.rotation + edit.quarters()) & 3);
         }
         for (LogicConfigEdit edit : logicConfigs) {
             Schematic.Stile tile = sourceTiles.get(positionKey(edit.x(), edit.y()));
@@ -1864,6 +2153,11 @@ public final class MapRenderer {
             throw new SchematicTransformException("INVALID_SCHEMATIC");
         }
         return bytes;
+    }
+
+    private static boolean isSafeSchematicRotationConfig(Object config) {
+        return config == null || config instanceof Number || config instanceof Boolean || config instanceof String
+            || config instanceof mindustry.ctype.MappableContent;
     }
 
     /** Reserve the exact tile footprint used by Mindustry for a BuildPlan. */
@@ -2192,19 +2486,32 @@ public final class MapRenderer {
             }
             if (isA(tile.block(), "SpawnBlock")) {
                 enemySpawns.add("{" + position + ",\"name\":" + quote(tile.block().name)
-                    + ",\"size\":" + tile.block().size + "}");
+                    + ",\"size\":" + tile.block().size + ",\"size_offset\":" + tile.block().sizeOffset + ",\"editable\":true,\"movable\":true,\"deletable\":true,\"team_editable\":false}");
             }
             if (tile.isCenter() && tile.build != null) {
                 mindustry.game.Team team = tile.team();
                 String teamName = team == null ? "" : team.name;
                 if (tile.build instanceof mindustry.world.blocks.storage.CoreBlock.CoreBuild) {
                     cores.add("{" + position + ",\"name\":" + quote(tile.block().name) + ",\"team\":" + quote(teamName)
-                        + ",\"rotation\":" + tile.build.rotation + ",\"size\":" + tile.block().size + "}");
+                        + ",\"rotation\":" + tile.build.rotation + ",\"size\":" + tile.block().size
+                        + ",\"size_offset\":" + tile.block().sizeOffset
+                        + ",\"editable\":true,\"movable\":true,\"deletable\":true,\"team_editable\":true,\"rotatable\":" + tile.block().rotate + "}");
                     coreTeams.add(teamName);
                     count++;
                 } else {
+                    Object config = tile.build.config();
+                    boolean configSafe = isSafeMapConfig(config, tile.block(), map.width, map.height);
+                    boolean hasCoordinateLinks = config != null && hasMapCoordinateConfig(config);
+                    boolean movable = configSafe && !hasCoordinateLinks && !isA(tile.block(), "LegacyBlock");
+                    String reason = !configSafe ? "该建筑含有当前编辑器无法安全处理的配置。"
+                        : hasCoordinateLinks ? "该建筑存在坐标连接，暂不能安全移动或删除。"
+                            : isA(tile.block(), "LegacyBlock") ? "这是旧版或未知方块，在线编辑器不会修改它。" : "";
                     buildings.add("{" + position + ",\"name\":" + quote(tile.block().name) + ",\"team\":" + quote(teamName)
-                        + ",\"rotation\":" + tile.build.rotation + ",\"size\":" + tile.block().size + "}");
+                        + ",\"rotation\":" + tile.build.rotation + ",\"size\":" + tile.block().size
+                        + ",\"size_offset\":" + tile.block().sizeOffset
+                        + ",\"editable\":" + configSafe + ",\"movable\":" + movable + ",\"deletable\":" + movable
+                        + ",\"team_editable\":" + configSafe + ",\"rotatable\":" + (movable && tile.block().rotate)
+                        + ",\"reason\":" + quote(reason) + "}");
                 }
             }
         }
@@ -2317,7 +2624,8 @@ public final class MapRenderer {
                 .append(",\"x\":").append(tile.x)
                 .append(",\"y\":").append(tile.y)
                 .append(",\"rotation\":").append(tile.rotation & 3)
-                .append(",\"size\":").append(tile.block == null ? 1 : tile.block.size);
+                .append(",\"size\":").append(tile.block == null ? 1 : tile.block.size)
+                .append(",\"size_offset\":").append(tile.block == null ? 0 : tile.block.sizeOffset);
             if (tile.block instanceof LogicBlock) {
                 LogicConfigMetadata logic = logicConfigMetadata(tile.config, logicSourceCharBudget, logicLinkBudget);
                 positions.append(",\"logic_source_available\":").append(logic.available())
@@ -3037,6 +3345,18 @@ public final class MapRenderer {
         BufferedImage findLiquid(String name) {
             BufferedImage sprite = regions.get("liquid-" + name + "-ui");
             return sprite == null ? regions.get("liquid-" + name) : sprite;
+        }
+
+        BufferedImage findUnit(String name) {
+            BufferedImage sprite = regions.get("unit-" + name + "-ui");
+            if (sprite == null) sprite = regions.get("unit-" + name);
+            return sprite == null ? find(name) : sprite;
+        }
+
+        BufferedImage findStatus(String name) {
+            BufferedImage sprite = regions.get("status-" + name + "-ui");
+            if (sprite == null) sprite = regions.get("status-" + name);
+            return sprite == null ? find(name) : sprite;
         }
 
         BufferedImage findBlock(String name) {

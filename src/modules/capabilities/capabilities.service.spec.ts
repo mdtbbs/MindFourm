@@ -139,4 +139,29 @@ describe('CapabilitiesService', () => {
     });
     expect(global.fetch).not.toHaveBeenCalled();
   });
+
+  it('keeps standalone editors available when Resource Center publishing or RES is unavailable', async () => {
+    process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
+    delete process.env.RES_ENABLED;
+    delete process.env.RES_BASE_URL;
+    delete process.env.RES_API_KEY;
+    const operations = [
+      'content.catalog', 'schematic.create', 'schematic.read', 'schematic.write', 'schematic.config.read', 'schematic.config.write',
+      'map.create', 'map.read', 'map.write', 'map.rules.read', 'map.rules.write', 'map.objects.read', 'map.objects.write', 'map.waves.read', 'map.waves.write',
+    ];
+    global.fetch = jest.fn(async () => new Response(JSON.stringify({
+      status: 'ok', protocolVersion: 2, buildDigest: 'a'.repeat(64),
+      runtime: { artifactSha256: '0bd327c6c3d551e7e8fdab7b695517f809baacca3b1f5cb1c1a8dd74836620e0' },
+      supportedOperations: operations,
+    }), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+    const settings = { get: jest.fn(async () => null), getBoolean: jest.fn(async (_key: string, fallback: boolean) => fallback) } as any;
+    const service = new CapabilitiesService(settings, new SiteConfigService({ get: jest.fn().mockReturnValue(undefined) } as any));
+
+    await expect(service.getEditorToolStatus()).resolves.toEqual({
+      schematic: { enabled: true, reason: null, full_logic: false },
+      map: { enabled: true, reason: null },
+      wave: { enabled: true, reason: null },
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
 });

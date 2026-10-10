@@ -29,9 +29,9 @@ import ResourcePreviewViewer from './resource-preview-viewer';
 import ResourceProfileEditor from './resource-profile-editor';
 import ResourceReleaseForm from './resource-release-form';
 import ResourceCommunityInteractions from './resource-community-interactions';
+import ResourceKindDataWorkspace from './resource-kind-data-workspace';
 import SchematicLightEditor from './schematic-light-editor';
 import MapLightEditor from './map-light-editor';
-import ResourceKindDataWorkspace from './resource-kind-data-workspace';
 
 type SectionKey = 'editor' | 'overview' | 'publish' | 'compatibility' | 'analysis' | 'community' | 'settings';
 type VersionTab = 'summary' | 'files' | 'compatibility' | 'diff';
@@ -691,6 +691,14 @@ export default function ResourceWorkbenchV2({ publicId }: { publicId: string }) 
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><label htmlFor="workbench-version" className="text-sm font-medium text-[var(--text-secondary)]">{t('resourceWorkbenchV2.selectVersion')}</label><select id="workbench-version" value={selectedVersion?.public_id || ''} onChange={(event) => setSelectedVersionId(event.target.value)} disabled={workbench.versions.length === 0} className="min-h-11 w-full rounded-lg border border-[var(--border)] bg-[var(--bg-card)] px-3 text-sm text-[var(--text)] sm:max-w-sm">{workbench.versions.length === 0 && <option value="">{t('resourceWorkbenchV2.noVersions')}</option>}{workbench.versions.map((version) => <option key={version.public_id} value={version.public_id}>{version.display_version || version.version}{version.recommended ? ` · ${t('resourceWorkbenchV2.recommended')}` : ''}</option>)}</select></div>
               <VersionWorkspace version={selectedVersion} locale={locale} kind={resource.resource_kind} publicId={resource.public_id} versions={workbench.versions} labels={{ ...sharedLabels, noVersions: t('resourceWorkbenchV2.noVersions') }} />
             </FoldCard>
+            {resource.resource_kind === 'schematic' && selectedVersion && <FoldCard title={t('resourceWorkbenchV2.schematicEditor.title')}>
+              <p className="mb-3 text-sm text-[var(--text-secondary)]">蓝图编辑已移至独立工作区，可直接编辑并导出；保存到此资源时仍会检查资源管理权限。</p>
+              <Link href={`/tools/blueprint-editor?resource=${encodeURIComponent(resource.public_id)}&version=${encodeURIComponent(selectedVersion.public_id)}`} className="inline-flex min-h-11 items-center justify-center bg-[var(--primary)] px-4 text-sm font-medium text-white">在完整蓝图编辑器中打开</Link>
+            </FoldCard>}
+            {resource.resource_kind === 'map' && selectedVersion && <FoldCard title={t('resourceWorkbenchV2.mapEditor.title')}>
+              <p className="mb-3 text-sm text-[var(--text-secondary)]">地图与波次编辑已移至独立工作区，可直接编辑并导出；保存到此资源时仍会检查资源管理权限。</p>
+              <div className="flex flex-wrap gap-2"><Link href={`/tools/map-editor?resource=${encodeURIComponent(resource.public_id)}&version=${encodeURIComponent(selectedVersion.public_id)}`} className="inline-flex min-h-11 items-center justify-center bg-[var(--primary)] px-4 text-sm font-medium text-white">在完整地图编辑器中打开</Link><Link href={`/tools/wave-editor?resource=${encodeURIComponent(resource.public_id)}&version=${encodeURIComponent(selectedVersion.public_id)}`} className="inline-flex min-h-11 items-center justify-center border border-[var(--border)] px-4 text-sm font-medium">在波次编辑器中打开</Link></div>
+            </FoldCard>}
           </>}
 
           {activeSection === 'editor' && <>            {resource.resource_kind === 'schematic' && <FoldCard title={t('resourceWorkbenchV2.schematicEditor.title')} open>
