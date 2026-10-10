@@ -51,7 +51,11 @@ authTest.describe('Resource Submission Flow', () => {
     await authenticatedPage.goto('/resources/submit', { waitUntil: 'domcontentloaded', timeout: 60000 });
     await waitForResourceFormReady(authenticatedPage);
 
-    await authenticatedPage.getByTestId('resource-type-external').locator('input').check({ force: true });
+    // Click the label the way the sibling test does; checking the hidden radio
+    // directly races React hydration and times out under load.
+    await authenticatedPage.getByTestId('resource-type-external').click();
+    await authExpect(authenticatedPage.getByTestId('resource-type-external').locator('input')).toBeChecked();
+    await authenticatedPage.getByTestId('resource-external-url-input').waitFor({ state: 'visible' });
     await authenticatedPage.getByTestId('resource-title-input').fill(title);
     await authenticatedPage.getByTestId('resource-version-input').fill('1.0.0');
     await authenticatedPage.getByTestId('resource-description-input').fill('External resource submitted by Playwright.');
@@ -76,9 +80,10 @@ authTest.describe('Resource Submission Flow', () => {
     const createResource = await request.post(`${API_URL}/api/resources`, {
       multipart: {
         title,
+        // The canonical-thread round-trip is kind-agnostic and Mods now require a
+        // .jar upload, so use a kind that still accepts an external URL.
         resource_type: 'external',
-        resource_kind: 'mod',
-        mod_id: `e2e-resource-discussion-${stamp}`,
+        resource_kind: 'other',
         version: '1.0.0',
         is_public: '1',
         external_url: `https://example.com/e2e/resource-discussion/${stamp}`,
@@ -209,5 +214,43 @@ authTest.describe('Resource Submission Flow', () => {
       downloadedContent += chunk.toString();
     }
     expect(downloadedContent).toBe('resource upload fixture created by Playwright');
+  });
+
+  authTest('rejects an external Mod and a non-jar Mod upload', async ({ request }) => {
+    const stamp = Date.now();
+    const user = await testLogin(request, 'user');
+    const userHeaders = { Cookie: user.cookieHeader, 'X-CSRF-Token': user.csrfToken };
+
+    const externalMod = await request.post(`${API_URL}/api/resources`, {
+      multipart: {
+        title: `E2E External Mod ${stamp}`,
+        resource_type: 'external',
+        resource_kind: 'mod',
+        mod_id: `e2e-external-mod-${stamp}`,
+        version: '1.0.0',
+        is_public: '1',
+        external_url: `https://example.com/e2e/external-mod/${stamp}`,
+        content: 'External Mod rejection fixture.',
+      },
+      headers: { ...userHeaders, 'Idempotency-Key': `e2e-external-mod-${stamp}` },
+    });
+    expect(externalMod.status()).toBe(400);
+    expect(await externalMod.text()).toContain('.jar');
+
+    const nonJarMod = await request.post(`${API_URL}/api/resources`, {
+      multipart: {
+        title: `E2E Non-jar Mod ${stamp}`,
+        resource_type: 'upload',
+        resource_kind: 'mod',
+        mod_id: `e2e-non-jar-mod-${stamp}`,
+        version: '1.0.0',
+        is_public: '1',
+        content: 'Non-jar Mod rejection fixture.',
+        file: { name: 'fixture.txt', mimeType: 'text/plain', buffer: Buffer.from('not a mod archive') },
+      },
+      headers: { ...userHeaders, 'Idempotency-Key': `e2e-non-jar-mod-${stamp}` },
+    });
+    expect(nonJarMod.status()).toBe(400);
+    expect(await nonJarMod.text()).toContain('.jar');
   });
 });
