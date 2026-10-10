@@ -95,6 +95,12 @@
     cpus: 4
   docker:
     image: ghcr.io/cirruslabs/android-sdk:35
+    # Gradle keeps the 136 MiB wrapper distribution and the whole plugin graph
+    # under /root/.gradle. Without a cache every build re-downloads both from
+    # the public internet, which is the cold path whose TLS connection dropped
+    # mid-transfer in the PR build. `retry` below stays as the safety net.
+    volumes:
+      - /root/.gradle:copy-on-write
   stages:
     - name: install Android API 35 and build tools
       script: |
@@ -144,13 +150,16 @@
 
 # Product E2E. Runs the same browser suites GitHub runs, with MySQL and Redis
 # started as Docker-in-Docker services because CNB has no `services:` container
-# catalogue. The Playwright browser install is cached in the workspace volume.
+# catalogue. `npx playwright install` pulls ~150 MiB of browsers, so the browser
+# cache is kept between builds on the same node.
 .e2e: &e2e
   name: e2e-product-smoke
   runner:
     cpus: 4
   docker:
     image: node:20
+    volumes:
+      - /root/.cache/ms-playwright:copy-on-write
   services:
     - docker
   env:
