@@ -130,7 +130,7 @@ export default async function HomePage() {
           </div>
           <nav aria-label={t('home.quickLinks')} className="flex flex-wrap gap-2">{[
             { href: '/posts/new', label: t('create.post') },
-            { href: '/resources/submit', label: t('create.mod') },
+            { href: '/resources/submit/mod', label: t('create.mod') },
             { href: '/multiplayer', label: t('navigation.multiplayer') },
           ].map((entry) => <Link key={entry.href} href={entry.href} className="inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{entry.label}</Link>)}</nav>
         </div>

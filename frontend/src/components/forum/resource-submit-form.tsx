@@ -17,6 +17,8 @@ import { createResourceDirectUploadDraft, uploadResourceDirectDraft } from '@/li
 
 type ResourceType = 'upload' | 'external';
 type SchematicSource = 'file' | 'paste';
+const MOD_PURPOSE_KEYS = ['gameplay', 'tools', 'server', 'content', 'interface', 'balance', 'other'] as const;
+type ModPurpose = (typeof MOD_PURPOSE_KEYS)[number];
 
 const TiptapEditor = dynamic(() => import('@/components/ui/tiptap-editor'), {
   ssr: false,
@@ -34,13 +36,14 @@ export default function ResourceSubmitForm({
   const router = useRouter();
   const showSuccess = useToastStore((state) => state.showSuccess);
   const [categories, setCategories] = useState<ResourceCategory[]>([]);
-  const [resourceType, setResourceType] = useState<ResourceType | null>(null);
+  const [resourceType, setResourceType] = useState<ResourceType | null>(initialResourceKind === 'mod' ? 'upload' : null);
   const [resourceKind, setResourceKind] = useState(initialResourceKind);
   const [title, setTitle] = useState('');
   const [version, setVersion] = useState('');
   const [description, setDescription] = useState('');
   const [contentLanguage, setContentLanguage] = useState('');
   const [categoryId, setCategoryId] = useState<number | null>(null);
+  const [modPurpose, setModPurpose] = useState<ModPurpose | ''>('');
   const [isPublic, setIsPublic] = useState(true);
   const [content, setContent] = useState('');
   const [contentJson, setContentJson] = useState<Record<string, unknown> | null>(null);
@@ -61,10 +64,10 @@ export default function ResourceSubmitForm({
   const draft = useDraft(resourceKindIsLocked ? `resource-${initialResourceKind}` : 'resource');
   const saveDraft = draft.save;
   const draftValues = useMemo(
-    () => ({ resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, modId, schematicSource, schematicCode }),
-    [resourceType, resourceKind, title, version, description, contentLanguage, categoryId, isPublic, content, contentJson, externalUrl, modId, schematicSource, schematicCode],
+    () => ({ resourceType, resourceKind, title, version, description, contentLanguage, categoryId, modPurpose, isPublic, content, contentJson, externalUrl, modId, schematicSource, schematicCode }),
+    [resourceType, resourceKind, title, version, description, contentLanguage, categoryId, modPurpose, isPublic, content, contentJson, externalUrl, modId, schematicSource, schematicCode],
   );
-  const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl || modId || schematicCode);
+  const hasDraftContent = Boolean(resourceType || title || version || description || content || externalUrl || modId || schematicCode || modPurpose);
   useDraftAutoSave(draftValues, draft.save, hasDraftContent && !isSubmitting);
 
   useEffect(() => {
@@ -80,13 +83,16 @@ export default function ResourceSubmitForm({
   const restoreDraft = () => {
     const saved = recoverableDraft?.values;
     if (!saved) return;
-    if (saved.resourceType === 'upload' || saved.resourceType === 'external') setResourceType(saved.resourceType);
+    if (saved.resourceType === 'upload' || saved.resourceType === 'external') {
+      setResourceType(saved.resourceKind === 'mod' ? 'upload' : saved.resourceType);
+    }
     if (!resourceKindIsLocked && typeof saved.resourceKind === 'string') setResourceKind(saved.resourceKind);
     if (typeof saved.title === 'string') setTitle(saved.title);
     if (typeof saved.version === 'string') setVersion(saved.version);
     if (typeof saved.description === 'string') setDescription(saved.description);
     if (typeof saved.contentLanguage === 'string') setContentLanguage(saved.contentLanguage);
     if (typeof saved.categoryId === 'number') setCategoryId(saved.categoryId);
+    if (typeof saved.modPurpose === 'string' && MOD_PURPOSE_KEYS.includes(saved.modPurpose as ModPurpose)) setModPurpose(saved.modPurpose as ModPurpose);
     if (typeof saved.isPublic === 'boolean') setIsPublic(saved.isPublic);
     if (typeof saved.content === 'string') setContent(saved.content);
     if (saved.contentJson && typeof saved.contentJson === 'object') setContentJson(saved.contentJson as Record<string, unknown>);
@@ -128,8 +134,8 @@ export default function ResourceSubmitForm({
     : translatedKindLabel;
 
   useEffect(() => {
-    if (isForumManagedKind && resourceType !== 'upload') setResourceType('upload');
-  }, [isForumManagedKind, resourceType]);
+    if ((isForumManagedKind || isMod) && resourceType !== 'upload') setResourceType('upload');
+  }, [isForumManagedKind, isMod, resourceType]);
 
   const checkSelectedFile = async (selectedFile: File | null) => {
     const sequence = ++duplicateCheckSequence.current;
@@ -165,6 +171,11 @@ export default function ResourceSubmitForm({
       return;
     }
 
+    if (isMod && resourceType !== 'upload') {
+      setError(t('resourceSubmit.modFileOnly'));
+      return;
+    }
+
     if (!title.trim()) {
       setError(t('resourceSubmit.enterTitle'));
       return;
@@ -182,6 +193,11 @@ export default function ResourceSubmitForm({
 
     if (resourceType === 'upload' && (!file && !(isSchematic && schematicSource === 'paste'))) {
       setError(t('resourceSubmit.chooseFile'));
+      return;
+    }
+
+    if (isMod && file && !file.name.toLowerCase().endsWith('.jar')) {
+      setError(t('resourceSubmit.modJarOnly'));
       return;
     }
 
@@ -208,7 +224,7 @@ export default function ResourceSubmitForm({
 
       formData.append('version', version.trim());
       if (description.trim()) formData.append('description', description.trim());
-      if (categoryId) formData.append('category_id', String(categoryId));
+      if (categoryId && !isMod) formData.append('category_id', String(categoryId));
       formData.append('is_public', isPublic ? '1' : '0');
       if (content.trim()) formData.append('content', content.trim());
       if (contentJson) {
@@ -243,7 +259,8 @@ export default function ResourceSubmitForm({
         setError(t('resourceSubmit.duplicateDetected'));
         return;
       }
-      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, modId: isMod && resourceType === 'external' ? modId.trim().toLowerCase() : null, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), content, contentJson, contentLanguage, categoryId, isPublic, schematicCode: isSchematic && schematicSource === 'paste' ? schematicCode.trim() : null });
+      const modPurposeTag = isMod && modPurpose ? t(`resourceSubmit.modPurpose${modPurpose[0].toUpperCase()}${modPurpose.slice(1)}`) : '';
+      const fingerprint = JSON.stringify({ contentHash, resourceKind, resourceType, modId: isMod && resourceType === 'external' ? modId.trim().toLowerCase() : null, title: title.trim(), version: version.trim(), externalUrl: externalUrl.trim(), description: description.trim(), content, contentJson, contentLanguage, categoryId: isMod ? null : categoryId, modPurpose, isPublic, schematicCode: isSchematic && schematicSource === 'paste' ? schematicCode.trim() : null });
       if (!submissionKey.current || submissionKey.current.fingerprint !== fingerprint) {
         submissionKey.current = { fingerprint, key: crypto.randomUUID() };
       }
@@ -256,10 +273,11 @@ export default function ResourceSubmitForm({
           content_language: contentLanguage || 'unknown',
           version: version.trim(),
           ...(description.trim() ? { description: description.trim() } : {}),
-          ...(categoryId ? { category_id: categoryId } : {}),
+          ...(!isMod && categoryId ? { category_id: categoryId } : {}),
           is_public: isPublic ? 1 : 0,
           ...(content.trim() ? { content: content.trim() } : {}),
           ...(contentJson ? { content_json: contentJson, content_schema_version: 2 } : {}),
+          ...(modPurposeTag ? { metadata: { tags: [modPurposeTag] } } : {}),
         }, submissionKey.current.key);
         if (directDraft.draft_status === 'open') {
           await uploadResourceDirectDraft(directDraft.version_public_id, file, contentHash);
@@ -313,7 +331,7 @@ export default function ResourceSubmitForm({
         <ul className="mt-2 space-y-1">{[...duplicateNotice.existing_resources, ...(duplicateNotice.similar_resources || [])].map((item) => <li key={`${item.id}-${item.title}`}><a className="underline underline-offset-2" href={item.url || `/resources/${item.id}`} target="_blank" rel="noreferrer">{item.title} · #{item.id}</a></li>)}</ul>
       </div>}
 
-      {!isForumManagedKind ? (
+      {!isForumManagedKind && !isMod ? (
         <div className="space-y-2">
           <p className="text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.typeRequired')}</p>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -372,6 +390,16 @@ export default function ResourceSubmitForm({
           </label>
           </div>
         </div>
+      ) : isMod ? (
+        <div data-testid="resource-mod-upload-only" className="rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/5 p-4">
+          <div className="flex items-start gap-3">
+            <Upload className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary-text)]" />
+            <div>
+              <p className="text-sm font-semibold text-[var(--text)]">{t('resourceSubmit.modFileOnlyTitle')}</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--text-muted)]">{t('resourceSubmit.modFileOnlyDescription')}</p>
+            </div>
+          </div>
+        </div>
       ) : (
         <div
           data-testid="resource-managed-kind-notice"
@@ -411,7 +439,10 @@ export default function ResourceSubmitForm({
                 return;
               }
               setResourceKind(nextKind);
+              if (nextKind === 'mod') setResourceType('upload');
               setFile(null);
+              setCategoryId(null);
+              setModPurpose('');
               setSchematicCode('');
               setSchematicSource('file');
               if (nextKind === 'map' || nextKind === 'schematic') setResourceType('upload');
@@ -466,23 +497,22 @@ export default function ResourceSubmitForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{t('resourceSubmit.topic')}</label>
+        <label className="mb-1 block text-sm font-medium text-[var(--text-secondary)]">{isMod ? t('resourceSubmit.modPurposeLabel') : t('resourceSubmit.topic')}</label>
         <select
-          data-testid="resource-category-select"
-          value={categoryId ?? ''}
-          onChange={(e) => setCategoryId(e.target.value ? parseInt(e.target.value, 10) : null)}
+          data-testid={isMod ? 'resource-mod-purpose-select' : 'resource-category-select'}
+          value={isMod ? modPurpose : categoryId ?? ''}
+          onChange={(e) => {
+            if (isMod) setModPurpose(e.target.value as ModPurpose | '');
+            else setCategoryId(e.target.value ? parseInt(e.target.value, 10) : null);
+          }}
           className="w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] px-4 py-2 text-[var(--text)]"
         >
           <option value="">{t('resourceSubmit.none')}</option>
-          {categories
-            .filter((category) => category.is_active)
-            .map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
+          {isMod
+            ? MOD_PURPOSE_KEYS.map((purpose) => <option key={purpose} value={purpose}>{t(`resourceSubmit.modPurpose${purpose[0].toUpperCase()}${purpose.slice(1)}`)}</option>)
+            : categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
         </select>
-        <p className="mt-1 text-xs text-[var(--text-muted)]">{t('resourceSubmit.topicHelp')}</p>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">{t(isMod ? 'resourceSubmit.modPurposeHelp' : 'resourceSubmit.topicHelp')}</p>
       </div>
 
       <div className="space-y-2">
@@ -582,8 +612,19 @@ export default function ResourceSubmitForm({
             <input
               data-testid="resource-file-input"
               type="file"
-              accept={resourceKind === 'map' ? '.msav' : resourceKind === 'schematic' ? '.msch' : isMod ? '.jar,.zip' : '.zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif'}
-              onChange={(e) => { const selectedFile = e.target.files?.[0] || null; setFile(selectedFile); void checkSelectedFile(selectedFile); }}
+              accept={resourceKind === 'map' ? '.msav' : resourceKind === 'schematic' ? '.msch' : isMod ? '.jar' : '.zip,.rar,.7z,.tar,.gz,.jar,.msav,.msch,.json,.hjson,.txt,.md,.pdf,.png,.jpg,.jpeg,.webp,.gif'}
+              onChange={(e) => {
+                const selectedFile = e.target.files?.[0] || null;
+                if (isMod && selectedFile && !selectedFile.name.toLowerCase().endsWith('.jar')) {
+                  e.currentTarget.value = '';
+                  setFile(null);
+                  void checkSelectedFile(null);
+                  setError(t('resourceSubmit.modJarOnly'));
+                  return;
+                }
+                setFile(selectedFile);
+                void checkSelectedFile(selectedFile);
+              }}
               className="hidden"
             />
           </label>

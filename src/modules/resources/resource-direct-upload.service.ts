@@ -205,13 +205,14 @@ export class ResourceDirectUploadService {
     ] });
   }
 
-  private validateFile(filename: string, size: number, mime: string, kind: string): void {
+  private validateFile(filename: string, size: number, mime: string, kind: string, requireModJar = false): void {
     const extension = extname(filename).toLowerCase();
     if (!filename || filename.length > 500 || /[\\/\x00-\x1f]/.test(filename) || !ALLOWED_EXTENSIONS.has(extension)) {
       throw new BadRequestException('资源文件扩展名无效');
     }
     if (kind === 'map' && extension !== '.msav') throw new BadRequestException('地图仅支持 .msav 文件');
     if (kind === 'schematic' && extension !== '.msch') throw new BadRequestException('蓝图仅支持 .msch 文件');
+    if (kind === 'mod' && requireModJar && extension !== '.jar') throw new BadRequestException('新 Mod 提交仅支持 .jar 文件');
     if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_RESOURCE_SIZE) throw new BadRequestException('上传文件大小无效');
     if (!mime || mime.length > 100 || !/^[\w.+-]+\/[\w.+-]+$/.test(mime)) throw new BadRequestException('文件 MIME 类型无效');
     if (['.msav', '.msch', '.zip', '.jar', '.rar', '.7z', '.tar', '.gz'].includes(extension)
@@ -240,7 +241,7 @@ export class ResourceDirectUploadService {
     const { version, resource } = await this.writableVersion(input.version_public_id, actor);
     const role = input.role || 'primary';
     if (!ALLOWED_ROLES.has(role)) throw new BadRequestException('无效的文件角色');
-    this.validateFile(input.filename, input.size_bytes, input.mime_type, resource.resource_kind || 'other');
+    this.validateFile(input.filename, input.size_bytes, input.mime_type, resource.resource_kind || 'other', resource.resource_kind === 'mod' && version.revision === 1);
     if (!input.sha256 || !/^[a-f0-9]{64}$/i.test(input.sha256)) throw new BadRequestException('必须提供有效的 SHA-256');
     if (role !== 'primary') throw new BadRequestException('此草稿仅支持上传主文件');
     if (await this.files.exist({ where: { resource_version_id: version.id, role: 'primary' } })) {
@@ -286,7 +287,7 @@ export class ResourceDirectUploadService {
     }
     // CAS dedup retains the first uploader's filename/MIME. Use the authorized
     // filename for display and validate the authoritative bytes' type/size/hash.
-    this.validateFile(session.filename, object.size_bytes, object.mime_type, resource.resource_kind || 'other');
+    this.validateFile(session.filename, object.size_bytes, object.mime_type, resource.resource_kind || 'other', resource.resource_kind === 'mod' && version.revision === 1);
     if (object.size_bytes !== Number(session.size_bytes) || object.sha256.toLowerCase() !== session.sha256) {
       throw new BadRequestException('资源存储对象与上传会话不匹配');
     }

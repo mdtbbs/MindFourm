@@ -588,6 +588,15 @@ export class ResourcesService {
       throw new BadRequestException('无效的资源类型');
     }
 
+    if (resourceKind === 'mod' && !provenance.origin) {
+      if (resourceType !== 'upload') {
+        throw new BadRequestException('Mod 仅支持上传 .jar 文件，不支持外链提交');
+      }
+      if (file && !file.file_name.toLowerCase().endsWith('.jar')) {
+        throw new BadRequestException('Mod 仅支持上传 .jar 文件');
+      }
+    }
+
     if (resourceType === 'upload' && !file && !provenance.directUploadDraft) {
       throw new BadRequestException('文件类资源必须上传文件');
     }
