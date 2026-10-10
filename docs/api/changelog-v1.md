@@ -6,11 +6,11 @@
 
 ## Public API 1.4.1
 
-本次为资源发现卡片补充一个真实可用的发布时间字段。既有字段、路由和必填参数不变；新增字段为兼容性新增。
+本次将资源发现响应中已提供的 `published_at` 明确纳入公开 OpenAPI 契约，契约版本从 `1.4.0` 更新为 `1.4.1`。既有字段、路由和必填参数不变；新增字段为兼容性新增。
 
 ### Added
 
-- `GET /api/v1/resources/discovery/home`、`/discovery/hot`、`/discovery/for-you` 和 `/discovery/related/{id}` 的公开资源卡片新增 `published_at`：资源首次对外可见的时间。此前的 `updated_at` 是通用写入时间戳，浏览和下载计数也会推进它，客户端无法据此得到发布日期；`published_at` 只在资源通过审核时写入一次，后续编辑不改变它。历史资源回填为 `created_at`。
+- `GET /api/v1/resources/discovery/home`、`/discovery/hot`、`/discovery/for-you` 和 `/discovery/related/{id}` 的公开资源卡片将已提供的 `published_at` 纳入 OpenAPI schema：该字段表示资源首次对外可见的时间。此前的 `updated_at` 是通用写入时间戳，浏览和下载计数也会推进它，客户端无法据此得到发布日期；`published_at` 只在资源通过审核时写入一次，后续编辑不改变它。历史资源回填为 `created_at`。
 - `GET /api/resources`（论坛内部列表接口）同步新增 `published_at`，并允许以 `published_at` 作为排序键。
 
 ### Changed
