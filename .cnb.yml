@@ -103,6 +103,36 @@
         sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
         test -d "${ANDROID_SDK_ROOT}/platforms/android-35"
         test -x "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt"
+    - name: configure Gradle mirrors
+      script: |
+        # Maven Central answers 429 to the shared build-node egress; the project
+        # only declares google()/mavenCentral()/gradlePluginPortal(). An init
+        # script prepends mirrors for this build without changing the repository
+        # configuration developers use locally.
+        mkdir -p "$HOME/.gradle/init.d"
+        cat > "$HOME/.gradle/init.d/ci-mirrors.gradle" <<'INIT'
+        // Mirrors come first, the declared repositories stay as fallback. The
+        // lists are cleared rather than appended so the mirror is actually
+        // consulted first; appending would leave mavenCentral() ahead of it and
+        // its 429 would still fail the build.
+        settingsEvaluated { settings ->
+            def pluginRepos = settings.pluginManagement.repositories
+            pluginRepos.clear()
+            pluginRepos.maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+            pluginRepos.maven { url = 'https://maven.aliyun.com/repository/public' }
+            pluginRepos.maven { url = 'https://maven.aliyun.com/repository/google' }
+            pluginRepos.gradlePluginPortal()
+            pluginRepos.google()
+            pluginRepos.mavenCentral()
+
+            def dependencyRepos = settings.dependencyResolutionManagement.repositories
+            dependencyRepos.clear()
+            dependencyRepos.maven { url = 'https://maven.aliyun.com/repository/public' }
+            dependencyRepos.maven { url = 'https://maven.aliyun.com/repository/google' }
+            dependencyRepos.google()
+            dependencyRepos.mavenCentral()
+        }
+        INIT
     - name: run Android unit tests and assemble debug
       script: |
         cd android
@@ -120,6 +150,12 @@
   services:
     - docker
   env:
+    # The node image has no locale set, so javac in the renderer compile step
+    # reads the Chinese comments in MapRenderer.java as US-ASCII and refuses
+    # them ("unmappable character for encoding US-ASCII"). Docker logs in
+    # earlier too when LANG is empty.
+    LANG: C.UTF-8
+    LC_ALL: C.UTF-8
     NODE_ENV: test
     ENABLE_TEST_AUTH: 'true'
     MYSQL_HOST: 127.0.0.1
