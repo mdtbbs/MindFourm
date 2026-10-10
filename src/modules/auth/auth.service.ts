@@ -169,27 +169,10 @@ export class AuthService {
   ) {}
 
   /**
-   * Check if an avatar_url is a MindAuth-synced avatar (prefixed with "oa_").
-   * Locally uploaded avatars use a different naming pattern (timestamp-random).
-   */
-  private isMindAuthSyncedAvatar(avatarUrl?: string | null): boolean {
-    if (!avatarUrl) return false;
-    const filename = path.basename(avatarUrl);
-    return filename.startsWith('oa_');
-  }
-
-  /**
-   * Delete a locally stored avatar file. Only deletes files under /uploads/avatars/
-   * to prevent path traversal.
-   */
-  private async deleteLocalAvatar(avatarUrl?: string | null): Promise<void> {
-    if (!avatarUrl?.startsWith('/uploads/avatars/')) return;
-    const filePath = path.resolve(`.${avatarUrl}`);
-    await fs.unlink(filePath).catch(() => undefined);
-  }
-
-  /**
    * Download an avatar from MindAuth and save it locally.
+   * Content-addressed names keep the URL stable when MindAuth returns the same
+   * image, while changed images get a new immutable URL. Old files are retained
+   * because open pages and cached profiles may continue using their URLs.
    * Returns the local avatar_url path, or null if download failed.
    */
   private async downloadAvatarToLocal(
@@ -200,13 +183,11 @@ export class AuthService {
 
     const mindauthUrl = this.configService.get<string>('MINDAUTH_URL');
     const fullUrl = `${mindauthUrl}${mindauthAvatarUrl}`;
-    const ext = extname(mindauthAvatarUrl).toLowerCase() || '.png';
-    const filename = `oa_${mindauthId}_${Date.now()}${ext}`;
+    const sourcePath = mindauthAvatarUrl.split(/[?#]/, 1)[0];
+    const ext = extname(sourcePath).toLowerCase() || '.png';
 
     mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
-
-    const localPath = path.join(AVATAR_UPLOAD_DIR, filename);
-    const publicUrl = `/uploads/avatars/${filename}`;
+    let temporaryPath: string | undefined;
 
     try {
       const response = await mindAuthHttp.get(fullUrl, {
@@ -214,37 +195,43 @@ export class AuthService {
         timeout: 10000,
       });
 
-      await fs.writeFile(localPath, Buffer.from(response.data));
+      const image = Buffer.from(response.data);
+      const digest = crypto.createHash('sha256').update(image).digest('hex');
+      const filename = `oa_${mindauthId}_${digest}${ext}`;
+      const localPath = path.join(AVATAR_UPLOAD_DIR, filename);
+      const publicUrl = `/uploads/avatars/${filename}`;
+
+      try {
+        const existingImage = await fs.readFile(localPath);
+        if (existingImage.equals(image)) return publicUrl;
+      } catch {
+        // The file may not exist yet, or an earlier write may have been partial.
+      }
+
+      temporaryPath = `${localPath}.${crypto.randomUUID()}.tmp`;
+      await fs.writeFile(temporaryPath, image, { flag: 'wx' });
+      await fs.rename(temporaryPath, localPath);
+      temporaryPath = undefined;
       return publicUrl;
     } catch (err) {
       this.logger.warn(
         `Failed to download avatar from MindAuth (${fullUrl}): ${(err as Error).message}`,
       );
-      // Clean up partial file
-      await fs.unlink(localPath).catch(() => undefined);
+      if (temporaryPath) await fs.unlink(temporaryPath).catch(() => undefined);
       return null;
     }
   }
 
   /**
-   * Sync an avatar from MindAuth: download the file locally, delete old synced avatar.
-   * Returns the new local avatar_url, or the original remote path if download failed.
+   * Sync an avatar from MindAuth without invalidating URLs already issued to clients.
+   * Returns the local avatar_url, or the original remote path if download failed.
    */
   private async syncAvatarFromMindAuth(
     mindauthAvatarUrl: string,
     mindauthId: number,
-    currentAvatarUrl?: string | null,
   ): Promise<string> {
-    // Download new avatar to local disk
     const localUrl = await this.downloadAvatarToLocal(mindauthAvatarUrl, mindauthId);
-
-    if (localUrl) {
-      // Delete old synced avatar file (only if it was a MindAuth-synced one)
-      if (this.isMindAuthSyncedAvatar(currentAvatarUrl)) {
-        await this.deleteLocalAvatar(currentAvatarUrl);
-      }
-      return localUrl;
-    }
+    if (localUrl) return localUrl;
 
     // Download failed — fall back to the remote path so the DB at least has something
     return mindauthAvatarUrl;
@@ -605,7 +592,7 @@ export class AuthService {
     if (!user) {
       // Download avatar from MindAuth to local disk for new users
       const localAvatarUrl = mindauthUser.avatar_url
-        ? await this.syncAvatarFromMindAuth(mindauthUser.avatar_url, mindauthUser.id, null)
+        ? await this.syncAvatarFromMindAuth(mindauthUser.avatar_url, mindauthUser.id)
         : undefined;
 
       user = this.usersRepository.create({
@@ -630,11 +617,10 @@ export class AuthService {
       if (normalizedEmailVerified !== undefined) user.email_verified = normalizedEmailVerified;
       if (mindauthUser.preferred_locale) user.preferred_locale = mindauthUser.preferred_locale;
       if (mindauthUser.avatar_url) {
-        // Download avatar locally when it changes from MindAuth
+        // Content-addressed storage reuses the URL when the image is unchanged.
         user.avatar_url = await this.syncAvatarFromMindAuth(
           mindauthUser.avatar_url,
           mindauthUser.id,
-          user.avatar_url,
         );
       }
       if (normalizedPhoneVerified !== undefined) {
@@ -729,7 +715,6 @@ export class AuthService {
       user.avatar_url = await this.syncAvatarFromMindAuth(
         mindauthUser.avatar_url,
         mindauthId,
-        user.avatar_url,
       );
     }
     if (typeof mindauthUser.phone_verified === 'boolean') {
