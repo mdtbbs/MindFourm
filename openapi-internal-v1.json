@@ -15061,6 +15061,19 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "当前页的 blob 列表；下一页游标位于 meta.next_cursor。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BlobDto"
+                  }
+                }
+              }
+            }
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
@@ -15194,11 +15207,17 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "字节已被接收并通过大小与 SHA-256 校验。"
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
           "403": {
             "description": "访问令牌缺少该接口要求的 OAuth scope，或当前账号/站点策略不允许此操作。"
+          },
+          "415": {
+            "description": "请求体不是 application/octet-stream。"
           }
         },
         "tags": [
@@ -15311,6 +15330,9 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "会话已取消；重复取消返回 404。"
+          },
           "401": {
             "description": "需要有效的 MindAuth access token 或 MDTBBS 登录会话。"
           },
@@ -15525,6 +15547,31 @@
           }
         ],
         "responses": {
+          "200": {
+            "description": "原始字节。白名单内的媒体类型按存储的 MIME 返回，其余一律 application/octet-stream 附件。",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "description": "内容摘要标记，形如 \"sha256-<摘要>\"。",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Last-Modified": {
+                "description": "本地对象最后修改时间。",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "403": {
             "description": "携带 MindAuth Bearer 时需要 scope：blob.read"
           }
@@ -30452,6 +30499,100 @@
           "blob_count"
         ]
       },
+      "BlobDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "description": "Logical name chosen by the owner."
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "private",
+              "public"
+            ]
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "number",
+            "minimum": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "description": "Caller-supplied JSON metadata."
+          },
+          "tags": {
+            "nullable": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ref_type": {
+            "type": "object",
+            "nullable": true
+          },
+          "ref_id": {
+            "type": "object",
+            "nullable": true
+          },
+          "expires_at": {
+            "type": "object",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Expiry for temporary blobs; null for durable blobs."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "content_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Stable authenticated URL that returns the bytes."
+          }
+        },
+        "required": [
+          "id",
+          "namespace",
+          "key",
+          "visibility",
+          "file_name",
+          "mime_type",
+          "size_bytes",
+          "sha256",
+          "metadata",
+          "tags",
+          "ref_type",
+          "ref_id",
+          "expires_at",
+          "created_at",
+          "updated_at",
+          "content_url"
+        ]
+      },
       "CreateBlobDto": {
         "type": "object",
         "properties": {
@@ -30589,100 +30730,6 @@
           "blob_id",
           "deduplicated",
           "commit_required"
-        ]
-      },
-      "BlobDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "namespace": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string",
-            "description": "Logical name chosen by the owner."
-          },
-          "visibility": {
-            "type": "string",
-            "enum": [
-              "private",
-              "public"
-            ]
-          },
-          "file_name": {
-            "type": "string"
-          },
-          "mime_type": {
-            "type": "string"
-          },
-          "size_bytes": {
-            "type": "number",
-            "minimum": 1
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^[a-f0-9]{64}$"
-          },
-          "metadata": {
-            "type": "object",
-            "nullable": true,
-            "description": "Caller-supplied JSON metadata."
-          },
-          "tags": {
-            "nullable": true,
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "ref_type": {
-            "type": "object",
-            "nullable": true
-          },
-          "ref_id": {
-            "type": "object",
-            "nullable": true
-          },
-          "expires_at": {
-            "type": "object",
-            "format": "date-time",
-            "nullable": true,
-            "description": "Expiry for temporary blobs; null for durable blobs."
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "content_url": {
-            "type": "string",
-            "format": "uri",
-            "description": "Stable authenticated URL that returns the bytes."
-          }
-        },
-        "required": [
-          "id",
-          "namespace",
-          "key",
-          "visibility",
-          "file_name",
-          "mime_type",
-          "size_bytes",
-          "sha256",
-          "metadata",
-          "tags",
-          "ref_type",
-          "ref_id",
-          "expires_at",
-          "created_at",
-          "updated_at",
-          "content_url"
         ]
       },
       "BlobCommitResponseDto": {

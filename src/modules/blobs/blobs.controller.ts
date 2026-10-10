@@ -52,6 +52,7 @@ export class BlobsController {
   @ApiQuery({ name: 'cursor', required: false, type: String, schema: { maxLength: 300 }, description: '上一页 meta.next_cursor 返回的不透明游标。' })
   @ApiQuery({ name: 'limit', required: false, type: Number, schema: { minimum: 1, maximum: 100 }, example: 30 })
   @ApiOperation({ summary: '列出我的 blob', description: '只返回当前所有者的有效 blob；下一页游标位于 meta.next_cursor。' })
+  @ApiResponse({ status: 200, type: [BlobDto], description: '当前页的 blob 列表；下一页游标位于 meta.next_cursor。' })
   list(@Req() req: any, @Query() query: ListBlobsQueryDto) {
     return this.blobs.listBlobs(BlobsService.userOwner(req.user.id), query);
   }
@@ -78,6 +79,8 @@ export class BlobsController {
   @ApiParam({ name: 'uploadId', description: '上传会话 UUID' })
   @ApiHeader({ name: 'Content-Type', required: false, description: '必须是 application/octet-stream。' })
   @ApiOperation({ summary: '上传 blob 内容', description: '将原始字节 PUT 到该地址。服务端会校验声明的大小与 SHA-256，任何不一致都会拒绝并丢弃数据。' })
+  @ApiResponse({ status: 200, description: '字节已被接收并通过大小与 SHA-256 校验。' })
+  @ApiResponse({ status: 415, description: '请求体不是 application/octet-stream。' })
   async upload(
     @Req() req: any,
     @Res() res: any,
@@ -117,6 +120,7 @@ export class BlobsController {
   @RateLimit({ max: 60, window: 600 })
   @ApiParam({ name: 'uploadId', description: '上传会话 UUID' })
   @ApiOperation({ summary: '取消上传', description: '放弃上传会话；已写入的临时对象由维护任务清理。' })
+  @ApiResponse({ status: 200, description: '会话已取消；重复取消返回 404。' })
   cancel(@Req() req: any, @Param('uploadId') uploadId: string) {
     return this.blobs.cancelUpload(BlobsService.userOwner(req.user.id), uploadId, this.actor(req));
   }
@@ -137,6 +141,15 @@ export class BlobsController {
   @ApiProduces('application/octet-stream')
   @ApiParam({ name: 'blobId', description: 'blob UUID' })
   @ApiOperation({ summary: '下载 blob 内容', description: 'public blob 无需登录即可下载，私有 blob 需所有者身份。只有白名单内的媒体类型会内联渲染，其余一律以附件下载，避免上传者声明的类型变成可执行内容。' })
+  @ApiResponse({
+    status: 200,
+    description: '原始字节。白名单内的媒体类型按存储的 MIME 返回，其余一律 application/octet-stream 附件。',
+    content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } },
+    headers: {
+      ETag: { description: '内容摘要标记，形如 "sha256-<摘要>"。', schema: { type: 'string' } },
+      'Last-Modified': { description: '本地对象最后修改时间。', schema: { type: 'string' } },
+    },
+  })
   async content(@Req() req: any, @Res() res: any, @Param('blobId') blobId: string) {
     const file = await this.blobs.openBlobContent(this.viewer(req), blobId);
     const name = String(file.row.file_name || 'blob');

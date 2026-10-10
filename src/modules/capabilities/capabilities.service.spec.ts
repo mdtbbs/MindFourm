@@ -64,6 +64,23 @@ describe('CapabilitiesService', () => {
     expect(settings.getBoolean).toHaveBeenCalledWith('feature_resources_v1_read_enabled', true);
   });
 
+  it('advertises blob storage only when the switch is on and the path is usable', async () => {
+    const build = (enabled: boolean, path: string | null) => new CapabilitiesService(
+      {
+        get: jest.fn(async (key: string) => key === 'blobs_storage_path' ? path : null),
+        getBoolean: jest.fn(async (key: string, fallback: boolean) => key === 'blobs_enabled' ? enabled : fallback),
+      } as any,
+      new SiteConfigService({ get: jest.fn().mockReturnValue(undefined) } as any),
+    );
+
+    await expect(build(true, '/srv/blobs').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: true }));
+    // Enabled but the path is unusable: the endpoint would answer 503, so the
+    // client must not be told the feature is available.
+    await expect(build(true, 'relative/blobs').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: false }));
+    await expect(build(true, '/').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: false }));
+    await expect(build(false, '/srv/blobs').getCapabilities()).resolves.toEqual(expect.objectContaining({ blobs_v1: false }));
+  });
+
   it('advertises previews only when the forum-owned renderer is configured', async () => {
     process.env.RESOURCE_RENDERER_URL = 'http://127.0.0.1:6100';
     const service = new CapabilitiesService({ getBoolean: jest.fn().mockResolvedValue(false), get: jest.fn() } as any, new SiteConfigService({ get: jest.fn().mockReturnValue(undefined) } as any));
