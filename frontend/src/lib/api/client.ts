@@ -1443,6 +1443,25 @@ export const resourceCategoryApi = {
 };
 
 // Resource Admin APIs
+export interface AdminModAnalysis {
+  version: { public_id: string | null; version: string; status: string } | null;
+  status: string;
+  analysis_run_status: string | null;
+  parser_version: string | null;
+  runtime_type: string | null;
+  manifest: Record<string, unknown> | null;
+  author_overrides: Record<string, unknown> | null;
+  summary: {
+    status: string;
+    runtime_type: string | null;
+    content_count: number | null;
+    localization_count: number | null;
+    java: Record<string, unknown> | null;
+    external_source: boolean;
+  } | null;
+  findings: Array<{ code: string; severity: 'ERROR' | 'WARNING' | 'INFO'; message: string }>;
+}
+
 export const resourceAdminApi = {
   list: (params?: { cursor?: string; limit?: number; status?: string; category_id?: number; search?: string; sort?: string }) =>
     request<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(
@@ -1462,6 +1481,8 @@ export const resourceAdminApi = {
       body: JSON.stringify({ featured }),
     });
   },
+  getModAnalysis: (id: number) =>
+    request<AdminModAnalysis>(`/api/resources/admin/${id}/mod-analysis`, { skipCache: true }),
   delete: (id: number) => {
     clearCache();
     return request<void>(`/api/resources/${id}/admin`, { method: 'DELETE' });
