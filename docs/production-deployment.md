@@ -190,7 +190,7 @@ location ^~ /uploads/ {
 
 `add_header` 会替换继承自 server 层的同名安全头，所以该 location 若要加 `Cache-Control`，必须一并重复 `X-Content-Type-Options` 等头部。
 
-生产环境的 `uploads/` 必须是持久化卷（容器部署见 `docker-compose.prod.yml` 的 `uploads_data:/app/uploads`），否则容器重建后数据库里的头像 URL 仍在，文件已经不存在。
+生产环境的 `uploads/` 必须放在持久化磁盘上（不要指向 `/tmp` 或随发布重建的目录），并在备份策略里包含它，否则文件丢失后数据库里的头像 URL 仍然存在、文件已经不存在。
 
 ```nginx
 location ^~ /api/v1/game-saves/uploads/ {
