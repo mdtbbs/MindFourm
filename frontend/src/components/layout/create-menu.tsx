@@ -12,7 +12,7 @@ export default function CreateMenu({ isAuthenticated }: { isAuthenticated: boole
   const trigger = useRef<HTMLButtonElement>(null);
   const entries = [
     { href: '/posts/new', label: t('create.post'), description: t('create.postDescription'), icon: FilePlus2 },
-    { href: '/resources/submit?resource_kind=mod', label: t('create.mod'), description: t('create.modDescription'), icon: PackagePlus },
+    { href: '/resources/submit/mod', label: t('create.mod'), description: t('create.modDescription'), icon: PackagePlus },
     { href: '/resources/submit/map', label: t('create.map'), description: t('create.mapDescription'), icon: Map },
     { href: '/resources/submit/schematic', label: t('create.schematic'), description: t('create.schematicDescription'), icon: Shapes },
     { href: '/resources/submit', label: t('create.otherResource'), description: t('create.otherResourceDescription'), icon: Box },
