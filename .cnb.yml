@@ -95,10 +95,11 @@
     cpus: 4
   docker:
     image: ghcr.io/cirruslabs/android-sdk:35
-    # Gradle keeps the 136 MiB wrapper distribution and the whole plugin graph
-    # under /root/.gradle. Without a cache every build re-downloads both from
-    # the public internet, which is the cold path whose TLS connection dropped
-    # mid-transfer in the PR build. `retry` below stays as the safety net.
+    # Gradle keeps the wrapper distribution (gradle-8.10-bin.zip is 136.7 MB)
+    # and the whole plugin graph under /root/.gradle. Without a cache every
+    # build re-downloads both, and that cold download is what dropped its TLS
+    # connection mid-transfer in the PR build. `retry` below stays as the
+    # safety net for a genuinely cold node.
     volumes:
       - /root/.gradle:copy-on-write
   stages:
@@ -150,8 +151,8 @@
 
 # Product E2E. Runs the same browser suites GitHub runs, with MySQL and Redis
 # started as Docker-in-Docker services because CNB has no `services:` container
-# catalogue. `npx playwright install` pulls ~150 MiB of browsers, so the browser
-# cache is kept between builds on the same node.
+# catalogue. `npx playwright install` re-downloads Chromium on every build, so
+# its browser cache is kept between builds on the same node.
 .e2e: &e2e
   name: e2e-product-smoke
   runner:
