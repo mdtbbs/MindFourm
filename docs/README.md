@@ -18,6 +18,14 @@
 - [`api/rich-content-schema-v2.md`](api/rich-content-schema-v2.md)：Tiptap 正文 Schema。
 - [`api/errors-v1.md`](api/errors-v1.md)、[`api/changelog-v1.md`](api/changelog-v1.md)、[`api/lifecycle-v1.md`](api/lifecycle-v1.md)：错误码、已发布 API 更新与生命周期。
 
+## 移动客户端（Android）
+
+- [`android/ANDROID-CLIENT-STATUS.md`](android/ANDROID-CLIENT-STATUS.md)：客户端逐功能审计——与当前 V1 契约的差距、四个阻塞项、按阶段排序的改造建议，并记录上一版审计的更正。
+- [`android/ANDROID-DEVELOPMENT-PLAN.md`](android/ANDROID-DEVELOPMENT-PLAN.md)：阶段化开发计划（发布闭环 → 数据与授权风险 → 能力缺口 → 工程完备性）与各阶段出口条件。
+- [`android/M0-android-api-gap.md`](android/M0-android-api-gap.md)、[`android/M0-android-engineering-architecture.md`](android/M0-android-engineering-architecture.md)、[`android/M0-mobile-auth-rfc.md`](android/M0-mobile-auth-rfc.md)：一期 API 缺口、工程约定与移动认证 RFC；已接受但部分内容早于当前实现，读前先看审计文件。
+
+移动端相关服务端开关（`GET /api/v1/client/config` 的强制更新、维护模式、功能开关）与 Android 构建参数（`mdtbbs*` Gradle property）目前没有独立文档页，取值来源见审计文件与计划文件的阶段 0。
+
 ## 当前系统与运维
 
 - [`frontend/FRONTEND_IA_2.md`](frontend/FRONTEND_IA_2.md)、[`frontend/FRONTEND_IA_2_ROUTES.md`](frontend/FRONTEND_IA_2_ROUTES.md)、[`frontend/FRONTEND_IA_2_AUDIT.md`](frontend/FRONTEND_IA_2_AUDIT.md)：前台信息架构、route map 与现状审计。

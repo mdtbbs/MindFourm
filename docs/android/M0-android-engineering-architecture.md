@@ -33,6 +33,9 @@ app/src/main/java/cn/mdtbbs/android/
 
 底部导航固定为：首页、分类、发布、通知、我的。资源、私信、好友、关注不建立一期入口或假功能。
 
+> 范围提示：这是 M0 的工程约定，仍然有效的是一期范围裁剪。**当前实现已经超出该范围**（底部导航为首页/分类/搜索/我的，已接入资源、公告、LanLink 房间、收藏与反馈），且站点前台自 2.7.5–2.7.6 起改为首页、社区、资源、联机、工具、我的。以 [`ANDROID-CLIENT-STATUS.md`](./ANDROID-CLIENT-STATUS.md) 为准，导航形态调整见 [`ANDROID-DEVELOPMENT-PLAN.md`](./ANDROID-DEVELOPMENT-PLAN.md) 阶段 3。
+> 同样过期的还有下面「Markdown 第一期为源文本输入 + 编辑/预览切换」——站点规范正文已经是 Tiptap/ProseMirror 的 `tiptap_json`（Schema v2），一期以 Markdown 单轨的约定不再作为上线形态。
+
 ## 数据与状态规则
 
 - 网络 DTO 只在 `core.network`；Repository 将其转换为领域模型，UI 不读取 DTO。
