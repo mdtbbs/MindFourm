@@ -154,10 +154,9 @@
   services:
     - docker
   env:
-    # The node image has no locale set, so javac in the renderer compile step
-    # reads the Chinese comments in MapRenderer.java as US-ASCII and refuses
-    # them ("unmappable character for encoding US-ASCII"). Docker logs in
-    # earlier too when LANG is empty.
+    # The node image sets no locale, which makes several tools emit mojibake and
+    # makes `docker` noisy in the stage logs. javac is pinned with `-encoding
+    # UTF-8` in the renderer scripts themselves, so it does not depend on this.
     LANG: C.UTF-8
     LC_ALL: C.UTF-8
     NODE_ENV: test

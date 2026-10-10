@@ -151,9 +151,9 @@ export async function fetchV1<T>(
 
   // Server Components are not end users: without this key their calls arrive as
   // an ordinary IP request and consume the visitor-facing rate-limit bucket by
-  // the container address (which is not loopback under Docker, where API_URL is
-  // http://backend:4000). server-fetch.ts already sends this key; V1 SSR
-  // requests went straight to the limiter because this path never did.
+  // whatever address the server happens to egress from, which is not a browser
+  // client the limit was meant to shape. server-fetch.ts already sends this key;
+  // V1 SSR requests went straight to the limiter because this path never did.
   if (typeof window === 'undefined') {
     const internalKey = process.env.FORUM_INTERNAL_API_KEY;
     if (internalKey) headers['X-Forum-Internal-Key'] = internalKey;
