@@ -17,6 +17,17 @@ async function waitForResourceFormReady(page: import('@playwright/test').Page): 
   await page.getByTestId('resource-content-input').waitFor({ state: 'visible' });
 }
 
+async function openCommentsTab(page: import('@playwright/test').Page): Promise<void> {
+  const tab = page.getByRole('tab', { name: /评论|Comments/ });
+  // The tab strip is server-rendered, so a click that lands before React
+  // attaches its handlers is dropped and the list never renders. Click until
+  // the tab reports itself selected, which can only happen once the handler ran.
+  await expect(async () => {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true', { timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+}
+
 test.describe('Resource Public Routes', () => {
   test('should redirect legacy upload route to unified submit page', async ({ page }) => {
     await page.goto('/resources/upload', { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -119,7 +130,7 @@ authTest.describe('Resource Submission Flow', () => {
     if (!Number.isSafeInteger(threadId) || threadId < 1) throw new Error('Resource discussion response carried no canonical thread id');
 
     await authenticatedPage.goto(`/resources/${resourceId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await authenticatedPage.getByRole('tab', { name: /评论|Comments/ }).click();
+    await openCommentsTab(authenticatedPage);
     const hostCard = authenticatedPage.locator('div.card').filter({ hasText: hostText }).last();
     await authExpect(hostCard).toBeVisible();
     await hostCard.getByRole('button', { name: /引用|Quote/i }).click();
@@ -145,7 +156,7 @@ authTest.describe('Resource Submission Flow', () => {
     await approveAsAdmin(request, 'reply', resourceReplyId);
 
     await authenticatedPage.reload({ waitUntil: 'domcontentloaded' });
-    await authenticatedPage.getByRole('tab', { name: /评论|Comments/ }).click();
+    await openCommentsTab(authenticatedPage);
     await authExpect(authenticatedPage.getByText(resourceReplyText, { exact: false })).toBeVisible();
     await authExpect(authenticatedPage.getByText('查看完整讨论', { exact: true })).toBeVisible();
     await authenticatedPage.getByRole('link', { name: /查看完整讨论|Full discussion/i }).click();
@@ -173,7 +184,7 @@ authTest.describe('Resource Submission Flow', () => {
     expect(forumRows.filter((row: any) => row.id === threadReplyId)).toHaveLength(1);
 
     await authenticatedPage.goto(`/resources/${resourceId}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await authenticatedPage.getByRole('tab', { name: /评论|Comments/ }).click();
+    await openCommentsTab(authenticatedPage);
     await authExpect(authenticatedPage.getByText(threadReplyText, { exact: false })).toBeVisible();
   });
 
