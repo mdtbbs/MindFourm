@@ -98,7 +98,8 @@
   stages:
     - name: install Android API 35 and build tools
       script: |
-        sdkmanager --licenses < <(yes)
+        # The CNB stage shell is `sh`, so process substitution is unavailable.
+        yes | sdkmanager --licenses
         sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
         test -d "${ANDROID_SDK_ROOT}/platforms/android-35"
         test -x "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt"
