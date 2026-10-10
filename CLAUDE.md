@@ -87,7 +87,7 @@ Runtime settings and feature flags can further disable functionality. Check `src
 - Polls are not implemented.
 - Group chat has no complete user-facing chat experience.
 - Plugin frontend theme/template injection and hot reload are not implemented.
-- A general-purpose blob API outside the ResourceStorage resource-file CAS is not implemented; resource uploads use the ResourceStorage CAS, binding, GC, and reconciliation contracts documented above.
+- A general-purpose blob API exists at `/api/v1/blobs` (`src/modules/blobs`, off by default behind `blobs_enabled`). It is a separate store from ResourceStorage: callers supply namespace/key/metadata, and it owns content dedup, ref counting, owner binding and delayed reclamation. Resource uploads still use the ResourceStorage CAS, binding, GC, and reconciliation contracts documented above. Do not route resource binaries through `/v1/blobs` — resources need versions, moderation and download grants that blobs deliberately do not implement.
 
 Do not report implemented dashboard download analytics, IPv6 CIDR, Resource public UUIDs, or Tiptap storage as outstanding work.
 

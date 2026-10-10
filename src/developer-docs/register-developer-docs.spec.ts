@@ -172,6 +172,7 @@ describe('developer docs routes', () => {
   it.each([
     ['/api/v1/docs/changelog', '公开 API 更新记录'],
     ['/api/v1/docs/lifecycle', '公开 V1 API 生命周期'],
+    ['/api/v1/docs/blobs', '通用 Blob 存储 V1'],
   ])('renders the Markdown guide %s with its title and navigation', (route, title) => {
     const response = requestDocumentationRoute(route);
 
@@ -179,6 +180,14 @@ describe('developer docs routes', () => {
     expect(response.body).toContain(`<h1>${title}</h1>`);
     expect(response.body).toContain('href="/api/v1/docs/changelog"');
     expect(response.body).toContain('href="/api/v1/docs/lifecycle"');
+  });
+
+  it('publishes the blob guide with its served-type rule', () => {
+    const html = renderDocumentationRoute('/api/v1/docs/blobs');
+
+    expect(html).toContain('href="/api/v1/docs/blobs"');
+    expect(html).toContain('application/octet-stream');
+    expect(html).toContain('blob.read');
   });
 
   it.each([

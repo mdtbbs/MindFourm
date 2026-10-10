@@ -56,6 +56,7 @@ const NAV_GROUPS = [
       { href: '/api/v1/docs/resources', label: '资源中心 API' },
       { href: '/api/v1/docs/multiplayer', label: '多人联机 API' },
       { href: '/api/v1/docs/cloud-saves', label: '云存档 API' },
+      { href: '/api/v1/docs/blobs', label: 'Blob 存储 API' },
     ],
   },
   {
@@ -81,6 +82,7 @@ const MARKDOWN_GUIDES: Record<string, string> = {
   resources: 'resources-v1-contract.md',
   multiplayer: 'multiplayer-v1.md',
   'cloud-saves': 'cloud-saves-v1.md',
+  blobs: 'blobs-v1.md',
   changelog: 'changelog-v1.md',
   lifecycle: 'lifecycle-v1.md',
 };
@@ -122,6 +124,7 @@ const API_TAG_LABELS: Record<string, string> = {
   'v1-game-versions': '游戏版本',
   'v1-packs': '资源包',
   'v1-resource-pack-items': '资源包成员',
+  'v1-blobs': 'Blob 存储',
 };
 
 function escapeHtml(value: unknown): string {
