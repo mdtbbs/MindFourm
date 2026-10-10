@@ -1578,6 +1578,114 @@ export class ResourcesService {
     };
   }
 
+  /** Admin-only, version-scoped Mod analysis for the moderation review panel. */
+  async getAdminModAnalysis(resourceId: number): Promise<{
+    version: { public_id: string | null; version: string; status: string } | null;
+    status: string;
+    analysis_run_status: string | null;
+    parser_version: string | null;
+    runtime_type: string | null;
+    manifest: Record<string, unknown> | null;
+    author_overrides: Record<string, unknown> | null;
+    summary: Record<string, unknown> | null;
+    findings: Array<{ code: string; severity: 'ERROR' | 'WARNING' | 'INFO'; message: string }>;
+  }> {
+    const resource = await this.resourceRepository.findOne({
+      where: { id: resourceId },
+      select: ['id', 'resource_kind'],
+    });
+    if (!resource) throw new NotFoundException('资源不存在');
+    if (resource.resource_kind !== 'mod') throw new BadRequestException('该资源不是 Mod');
+
+    const rows = await this.dataSource.query(
+      `SELECT rv.public_id AS version_public_id, rv.version AS version_label,
+              rv.status AS version_status, mod_metadata.parser_version AS metadata_parser_version,
+              mod_metadata.runtime_type, mod_metadata.parsed_manifest_json, mod_metadata.author_overrides_json,
+              analysis_run.status AS analysis_run_status, analysis_run.parser_version AS analysis_parser_version,
+              analysis_run.summary_json, analysis_run.findings_json
+       FROM resource_versions rv
+       LEFT JOIN mod_version_metadata mod_metadata ON mod_metadata.resource_version_id = rv.id
+       LEFT JOIN resource_analysis_runs analysis_run ON analysis_run.id = (
+         SELECT latest.id FROM resource_analysis_runs latest
+         WHERE latest.resource_id = rv.resource_id
+           AND latest.resource_version_id = rv.id
+           AND latest.analyzer = 'mod-static-analysis'
+         ORDER BY latest.created_at DESC, latest.id DESC LIMIT 1
+       )
+       WHERE rv.resource_id = ?
+       ORDER BY CASE
+         WHEN rv.status = 'pending_review' THEN 0
+         WHEN rv.status = 'upload_pending' THEN 1
+         WHEN rv.status = 'published' THEN 2
+         ELSE 3 END,
+         rv.created_at DESC, rv.revision DESC, rv.id DESC
+       LIMIT 1`,
+      [resourceId],
+    ) as Array<Record<string, unknown>>;
+    const row = rows[0];
+    const decodeJson = (value: unknown): unknown => {
+      if (typeof value !== 'string') return value;
+      try { return JSON.parse(value); } catch { return null; }
+    };
+    const asObject = (value: unknown): Record<string, unknown> | null => {
+      const decoded = decodeJson(value);
+      return decoded && typeof decoded === 'object' && !Array.isArray(decoded)
+        ? decoded as Record<string, unknown>
+        : null;
+    };
+    const summary = asObject(row?.summary_json);
+    const rawFindings = decodeJson(row?.findings_json);
+    const findings = (Array.isArray(rawFindings) ? rawFindings : []).slice(0, 200).flatMap((item) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+      const finding = item as Record<string, unknown>;
+      const severity = String(finding.severity || '').toUpperCase();
+      return [{
+        code: String(finding.code || finding.key || 'unknown').slice(0, 128),
+        severity: (severity === 'ERROR' || severity === 'WARNING' ? severity : 'INFO') as 'ERROR' | 'WARNING' | 'INFO',
+        message: String(finding.message || finding.description || finding.code || 'Mod 分析发现').slice(0, 2000),
+      }];
+    });
+    const analysisRunStatus = row?.analysis_run_status == null ? null : String(row.analysis_run_status);
+    const declaredParserStatus = typeof summary?.status === 'string' ? summary.status : null;
+    const status = declaredParserStatus
+      || (analysisRunStatus === 'completed'
+        ? 'complete'
+        : analysisRunStatus || (row?.metadata_parser_version || row?.analysis_parser_version ? 'complete' : 'not_run'));
+    const numericSummaryValue = (key: string): number | null => {
+      if (summary?.[key] == null) return null;
+      const value = Number(summary?.[key]);
+      return Number.isFinite(value) ? value : null;
+    };
+    const runtimeType = row?.runtime_type == null
+      ? (typeof summary?.runtime_type === 'string' ? summary.runtime_type : null)
+      : String(row.runtime_type);
+
+    return {
+      version: row ? {
+        public_id: row.version_public_id == null ? null : String(row.version_public_id),
+        version: String(row.version_label || ''),
+        status: String(row.version_status || ''),
+      } : null,
+      status,
+      analysis_run_status: analysisRunStatus,
+      parser_version: row?.metadata_parser_version == null
+        ? (row?.analysis_parser_version == null ? null : String(row.analysis_parser_version))
+        : String(row.metadata_parser_version),
+      runtime_type: runtimeType,
+      manifest: asObject(row?.parsed_manifest_json),
+      author_overrides: asObject(row?.author_overrides_json),
+      summary: summary ? {
+        status,
+        runtime_type: runtimeType,
+        content_count: numericSummaryValue('content_count'),
+        localization_count: numericSummaryValue('localization_count'),
+        java: asObject(summary.java),
+        external_source: summary.external_source === true,
+      } : null,
+      findings,
+    };
+  }
+
   async getFilterOptions(): Promise<{ supported_versions: string[]; compatibility: string[]; planets: string[] }> {
     const rows = await this.resourceRepository
       .createQueryBuilder('resource')
@@ -1732,6 +1840,12 @@ export class ResourcesService {
     }
 
     await this.assertResourceVisible(resource, viewer);
+
+    // A public detail request is the first place a reader notices that a map or
+    // blueprint still carries pre-analysis renderer metadata. Kick off the
+    // one-shot re-parse here; the self-healing guard keeps it off the hot path
+    // once the resource has healed, and the request never waits for it.
+    this.resourcePreviewService?.ensureAnalysisMetadata(resource);
 
     const canViewUnpublished = await this.canViewUnpublishedVersions(resource, viewer);
     const versions = await this.versionRepository.find({

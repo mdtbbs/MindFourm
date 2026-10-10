@@ -113,6 +113,49 @@ describe('schematic and map metadata analyzers', () => {
     ]));
   });
 
+  it('derives map resource deposits from the renderer tile layers a real map file contains', () => {
+    const result = analyzeMapMetadata({
+      width: 32,
+      height: 24,
+      tile_layers: {
+        resources: [
+          { x: 1, y: 1, name: 'copper' },
+          { x: 2, y: 1, name: 'copper' },
+          { x: 3, y: 1, name: 'lead' },
+        ],
+        ores: [{ x: 4, y: 4, name: 'thorium' }],
+        liquid: [{ x: 5, y: 5, name: 'water' }],
+        terrain: [{ x: 0, y: 0, name: 'sand' }],
+        enemy_spawns: [{ x: 9, y: 9, name: 'spawn' }],
+      },
+    });
+
+    expect(result.resources).toEqual([
+      { resource_type: 'item', internal_name: 'copper', amount: null, distribution_json: { estimated: true, tile_count: 2, source: 'tile_layer', sample_count: 1 } },
+      { resource_type: 'item', internal_name: 'lead', amount: null, distribution_json: { estimated: true, tile_count: 1, source: 'tile_layer', sample_count: 1 } },
+      { resource_type: 'liquid', internal_name: 'water', amount: null, distribution_json: { estimated: true, tile_count: 1, source: 'tile_layer', sample_count: 1 } },
+      { resource_type: 'ore', internal_name: 'thorium', amount: null, distribution_json: { estimated: true, tile_count: 1, source: 'tile_layer', sample_count: 1 } },
+    ]);
+    expect(result.analysis.resource_balance_json).toMatchObject({ available: true, resource_entry_count: 4 });
+    expect(result.analysis.warnings_json).not.toContainEqual(expect.objectContaining({ code: 'MAP_RESOURCES_UNAVAILABLE' }));
+  });
+
+  it('reads enemy spawn coordinates from tile layers when the header has no spawn list', () => {
+    const result = analyzeMapMetadata({
+      spawns: 2,
+      tile_layers: { enemy_spawns: [{ x: 4, y: 6, name: 'spawn' }, { x: 5, y: 6, name: 'spawn' }] },
+      cores: [{ x: 1, y: 1, name: 'core-nucleus', team: 'sharded' }],
+    });
+
+    expect(result.spawns).toEqual([
+      { spawn_type: 'enemy', team: null, x: 4, y: 6, wave: null },
+      { spawn_type: 'enemy', team: null, x: 5, y: 6, wave: null },
+    ]);
+    expect(result.cores).toEqual([{ core_type: 'core-nucleus', team: 'sharded', x: 1, y: 1 }]);
+    expect(result.analysis.path_analysis_json).toMatchObject({ available: true });
+    expect(result.analysis.warnings_json).not.toContainEqual(expect.objectContaining({ code: 'MAP_SPAWN_POSITIONS_UNAVAILABLE' }));
+  });
+
   it('estimates wave health and air ratio from official unit metadata and flags strength spikes heuristically', () => {
     const result = analyzeMapMetadata({
       wave_groups: [

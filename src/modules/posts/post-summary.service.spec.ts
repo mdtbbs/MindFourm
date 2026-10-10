@@ -131,7 +131,8 @@ describe('PostSummaryService', () => {
       title: 'Alpha',
       content_language: 'ja',
       slug: 'alpha-post',
-      excerpt: 'Alpha This is content with link',
+      // The fixture body repeats its own title, so the excerpt drops the echo.
+      excerpt: 'This is content with link',
       is_pinned: true,
       reply_count: 2,
       last_activity_at: new Date('2026-07-10T08:00:00.000Z'),
@@ -168,5 +169,18 @@ describe('PostSummaryService', () => {
   it('decodes legacy escaped HTML and JSON newlines before building an excerpt', () => {
     const { service } = createService();
     expect(service.buildExcerpt('&lt;p&gt;第一行\\n第二行&lt;/p&gt;')).toBe('第一行 第二行');
+  });
+
+  it('strips a body that only restates the title', () => {
+    const { service } = createService();
+
+    // The most common shape: title repeated as the opening line, then the body.
+    expect(service.buildExcerpt('我的第一个 Mod\\n\\n这里是一些说明文字', 120, '我的第一个 Mod')).toBe('这里是一些说明文字');
+    // Punctuation and list markers between title and body must not leak through.
+    expect(service.buildExcerpt('更新公告：新版本已上线', 120, '更新公告')).toBe('新版本已上线');
+    // A body that never repeats the title is untouched.
+    expect(service.buildExcerpt('正文与标题无关', 120, '更新公告')).toBe('正文与标题无关');
+    // A title-only body must not collapse to an empty excerpt.
+    expect(service.buildExcerpt('更新公告', 120, '更新公告')).toBe('更新公告');
   });
 });

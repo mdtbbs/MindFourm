@@ -31,7 +31,7 @@ describe('GameContentService', () => {
     const resourcesDomain = { getList: jest.fn().mockResolvedValue({ data: [resource], next_cursor: 'cursor-2', has_more: true }), getById: jest.fn().mockResolvedValue(resource), isResourcePubliclyAccessible: jest.fn().mockResolvedValue(true), create: jest.fn() };
     const likeService = { add: jest.fn().mockResolvedValue({ is_liked: true }) };
     const favoriteService = { add: jest.fn().mockResolvedValue({ is_favorited: true }) };
-    const previewService = { resolveContentMetadata: jest.fn().mockResolvedValue({ items: { copper: { name: '铜', icon: 'data:image/png;base64,AA==' } }, blocks: { 'copper-wall': { name: '铜墙', icon: null } }, liquids: {} }), ensureProduction: jest.fn(), readPreview: jest.fn().mockResolvedValue(Buffer.from('preview')) };
+    const previewService = { resolveContentMetadata: jest.fn().mockResolvedValue({ items: { copper: { name: '铜', icon: 'data:image/png;base64,AA==' } }, blocks: { 'copper-wall': { name: '铜墙', icon: null } }, liquids: {} }), ensureAnalysisMetadata: jest.fn(), readPreview: jest.fn().mockResolvedValue(Buffer.from('preview')) };
     const storage = { removeManaged: jest.fn().mockResolvedValue(true), readManagedFile: jest.fn().mockResolvedValue(Buffer.from('mschpayload')), statManagedFile: jest.fn().mockResolvedValue({ path: '/uploads/resources/map.msav', size: 12 }) };
     const versions = { findOne: jest.fn().mockResolvedValue(null) };
     const files = {};
@@ -93,7 +93,7 @@ describe('GameContentService', () => {
     const detail = await service.detail('map', `map_${resource.public_id}`, null) as any;
     expect(detail.preview).toEqual({ image: null, width: null, height: null });
     expect(detail.map).toEqual({ mode: null, players: null, planet: null, resources: null, cores: null, waves: null });
-    expect(previewService.ensureProduction).not.toHaveBeenCalled();
+    expect(previewService.ensureAnalysisMetadata).not.toHaveBeenCalled();
   });
 
   it('keeps quarantined blueprint bytes and map previews/downloads out of Game Content', async () => {

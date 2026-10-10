@@ -95,7 +95,7 @@ export class ResourceStorageClientService {
   constructor(
     configService: ConfigService,
     @Optional() private readonly dataSource?: DataSource,
-    clock: { now?: () => number } = {},
+    @Optional() clock: { now?: () => number } = {},
   ) {
     this.baseUrl = (configService.get<string>('res.baseUrl') || '').replace(/\/+$/, '');
     this.apiKey = configService.get<string>('res.apiKey') || '';

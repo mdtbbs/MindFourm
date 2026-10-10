@@ -289,6 +289,13 @@ export class ResourcesController {
     return this.resourcesService.getList(query, { scope: 'admin' });
   }
 
+  @Get('admin/:id/mod-analysis')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'moderator')
+  async getAdminModAnalysis(@Param('id', ParseIntPipe) id: number) {
+    return this.resourcesService.getAdminModAnalysis(id);
+  }
+
   @Get('admin/analytics')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'moderator')

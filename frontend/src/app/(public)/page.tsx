@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ArrowRight, Search } from 'lucide-react';
+import HomeBoardGrid from '@/components/portal/home-board-grid';
+import HomeStatsStrip from '@/components/portal/home-stats-strip';
+import HomeResourceKinds from '@/components/portal/home-resource-kinds';
+import HomeSearchLauncher from '@/components/portal/home-search-launcher';
 import ThreadList from '@/components/forum/thread-list';
 import CompactResourceCard from '@/components/forum/compact-resource-card';
 import { getHomeData, type HomeData } from '@/lib/api/v1/home';
@@ -12,6 +16,7 @@ import { getRequestLocale } from '@/i18n/server';
 import { translate } from '@/i18n';
 import { getRequestContentLanguage } from '@/i18n/server';
 import { prioritizeContentLanguage } from '@/lib/content-language';
+import { formatTime } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +24,7 @@ const UNAVAILABLE_HOME: HomeData = {
   discussions: { state: 'unavailable', items: [] }, resources: { state: 'unavailable', items: [] },
   news: { state: 'unavailable', items: [] }, notices: { state: 'unavailable', items: [] },
   development: { issues: { state: 'unavailable', items: [] }, pull_requests: { state: 'unavailable', items: [] } },
+  boards: [], resource_kinds: [], stats: null,
   generated_at: new Date(0).toISOString(),
 };
 
@@ -110,33 +116,67 @@ export default async function HomePage() {
     </main>;
   }
 
+  // Two columns, no redesign of the shell: the rail stays exactly where it was,
+  // and the reading column finally uses the width it already had. The secondary
+  // rail only appears on 2xl, where the previous single column wasted ~200px.
   return (
-    <main className="content-width-feed mx-auto w-full px-4 py-8 sm:px-6 lg:px-8">
-      <section className="mb-8 border-b border-[var(--border)] pb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-text)]">{brand.siteName}</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry 中文玩家社区</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">找 Mod、地图、蓝图、服务器，或加入正在发生的讨论。</p>
-        <form action="/search" className="relative mt-5 max-w-xl"><Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input name="q" aria-label={t('common.search')} placeholder={t('home.searchPlaceholder')} className="h-11 w-full rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-card)] pl-10 pr-3 text-sm text-[var(--text)] outline-none transition-[border-color,box-shadow] duration-[var(--motion-fast)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[color-mix(in_srgb,var(--primary)_14%,transparent)]" /></form>
-        <nav aria-label={t('home.quickLinks')} className="mt-4 flex flex-wrap gap-2">{[
-          { href: '/community', label: t('navigation.community') },
-          { href: '/posts/new', label: t('create.post') },
-          { href: '/resources/submit', label: t('create.mod') },
-          { href: '/tools/blueprint-editor', label: t('tools.blueprintEditor') },
-          { href: '/multiplayer', label: t('navigation.multiplayer') },
-          { href: '/servers', label: t('navigation.servers') },
-        ].map((entry) => <Link key={entry.href} href={entry.href} className="inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{entry.label}</Link>)}</nav>
+    <main className="mx-auto w-full max-w-[96rem] px-4 py-8 sm:px-6 lg:px-8">
+      <section className="border-b border-[var(--border)] pb-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--primary-text)]">{brand.siteName}</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-[var(--text)]">Mindustry 中文玩家社区</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-secondary)]">找 Mod、地图、蓝图、服务器，或加入正在发生的讨论。</p>
+          </div>
+          <nav aria-label={t('home.quickLinks')} className="flex flex-wrap gap-2">{[
+            { href: '/posts/new', label: t('create.post') },
+            { href: '/resources/submit', label: t('create.mod') },
+            { href: '/multiplayer', label: t('navigation.multiplayer') },
+          ].map((entry) => <Link key={entry.href} href={entry.href} className="inline-flex min-h-11 items-center border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] transition-colors hover:border-[var(--primary)] hover:bg-[color-mix(in_srgb,var(--primary)_5%,transparent)] hover:text-[var(--primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]">{entry.label}</Link>)}</nav>
+        </div>
+        {/* The homepage search posts to the in-app command palette when the tour
+            engine is available and to `/search` otherwise, so a guest can never
+            land on a page that answers 401 (see `isDesktopLauncherEnabled`). */}
+        <HomeSearchLauncher placeholder={t('home.searchPlaceholder')} label={t('common.search')} shortcutLabel="Ctrl K" />
       </section>
 
-      {staleSections > 0 && <p role="status" className="-mt-4 mb-5 text-xs text-[var(--text-muted)]">部分内容来自最近一次成功加载的缓存。</p>}
+      {staleSections > 0 && <p role="status" className="mt-4 text-xs text-[var(--text-muted)]">部分内容来自最近一次成功加载的缓存。</p>}
 
-      <section><SectionHeading title="正在讨论" href="/threads" />{home.discussions.state === 'unavailable' ? <SectionUnavailable /> : home.discussions.items.length ? <ThreadList posts={home.discussions.items} /> : <p className="border border-[var(--border)] p-6 text-center text-sm text-[var(--text-muted)]">暂时没有社区讨论</p>}</section>
+      <div className="mt-6">
+        <HomeStatsStrip stats={home.stats} labels={{ posts: '主题', replies: '回复', members: '成员', resources: '资源', today: '今日新帖' }} />
+      </div>
 
-      <section className="mt-8"><SectionHeading title="最新资源" href="/resources" />{home.resources.state === 'unavailable' ? <SectionUnavailable /> : home.resources.items.length ? <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">{home.resources.items.map((resource) => <CompactResourceCard key={resource.id} resource={resource} />)}</div> : <p className="border border-[var(--border)] p-5 text-sm text-[var(--text-muted)]">暂时没有公开资源</p>}</section>
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_20rem] 2xl:grid-cols-[minmax(0,1fr)_20rem_17rem]">
+        <div className="min-w-0 space-y-9">
+          <HomeBoardGrid boards={home.boards} title="社区版块" />
+          <HomeResourceKinds kinds={home.resource_kinds} title="资源分类" />
 
-      <section className="mt-8"><SectionHeading title="像素快报" />{home.news.state === 'unavailable' ? <SectionUnavailable /> : home.news.items.length ? <div className="grid gap-3 sm:grid-cols-2">{home.news.items.map((news) => <Link key={news.id} href={`/search?q=${encodeURIComponent(news.title)}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{news.title}</h3>{news.category && <p className="mt-1 text-xs text-[var(--text-muted)]">{news.category}</p>}</Link>)}</div> : null}</section>
+          <section><SectionHeading title="正在讨论" href="/threads" />{home.discussions.state === 'unavailable' ? <SectionUnavailable /> : home.discussions.items.length ? <ThreadList posts={home.discussions.items} /> : <p className="border border-[var(--border)] bg-[var(--bg-card)] p-6 text-center text-sm text-[var(--text-muted)]">暂时没有社区讨论</p>}</section>
 
-      <section className="mt-8"><SectionHeading title="社区公告" href="/notices" />{home.notices.state === 'unavailable' ? <SectionUnavailable /> : home.notices.items.length ? <div className="grid gap-3">{home.notices.items.map((notice) => <Link key={notice.id} href={`/notices/${notice.public_id}`} className="border border-[var(--border)] bg-[var(--bg-card)] p-4 hover:border-[var(--primary)]"><h3 className="font-medium text-[var(--text)]">{notice.title}</h3>{notice.excerpt && <p className="mt-1 line-clamp-2 text-sm text-[var(--text-secondary)]">{notice.excerpt}</p>}</Link>)}</div> : null}</section>
+          <section><SectionHeading title="最新资源" href="/resources" />{home.resources.state === 'unavailable' ? <SectionUnavailable /> : home.resources.items.length ? <div className="overflow-hidden border border-[var(--border)] bg-[var(--bg-card)]">{home.resources.items.map((resource) => <CompactResourceCard key={resource.id} resource={resource} />)}</div> : <p className="border border-[var(--border)] bg-[var(--bg-card)] p-5 text-sm text-[var(--text-muted)]">暂时没有公开资源</p>}</section>
+        </div>
 
+        <div className="min-w-0 space-y-9 border-t border-[var(--border)] pt-7 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-1">
+          <section><SectionHeading title="社区公告" href="/notices" />{home.notices.state === 'unavailable' ? <SectionUnavailable /> : home.notices.items.length ? <ul className="border border-[var(--border)] bg-[var(--bg-card)]">{home.notices.items.map((notice) => <li key={notice.id} className="border-b border-[var(--border)] p-3 last:border-b-0"><Link href={`/notices/${notice.public_id}`} className="block hover:text-[var(--primary-text)]"><span className="line-clamp-2 text-sm font-medium text-[var(--text)]">{notice.title}</span>{notice.published_at && <span className="mt-1 block text-xs text-[var(--text-muted)]">{formatTime(notice.published_at)}</span>}</Link></li>)}</ul> : <p className="border border-[var(--border)] bg-[var(--bg-card)] p-4 text-sm text-[var(--text-muted)]">暂无社区公告</p>}</section>
+
+          {/* Rendered only when the server actually has news. An empty section used
+              to leave a bare heading floating above nothing. */}
+          {home.news.state !== 'unavailable' && home.news.items.length > 0 && <section><SectionHeading title="像素快报" />{<ul className="border border-[var(--border)] bg-[var(--bg-card)]">{home.news.items.map((news) => <li key={news.id} className="border-b border-[var(--border)] p-3 last:border-b-0"><Link href={`/search?q=${encodeURIComponent(news.title)}`} className="block hover:text-[var(--primary-text)]"><span className="line-clamp-2 text-sm font-medium text-[var(--text)]">{news.title}</span>{news.category && <span className="mt-1 block text-xs text-[var(--text-muted)]">{news.category}</span>}</Link></li>)}</ul>}</section>}
+
+          <nav aria-label={t('navigation.siteNavigation')} className="hidden 2xl:block">
+            <h2 className="mb-3 text-lg font-semibold text-[var(--text)]">快捷入口</h2>
+            <ul className="space-y-1 text-sm">
+              {[
+                { href: '/categories', label: t('navigation.categories') },
+                { href: '/tags', label: t('navigation.tags') },
+                { href: '/servers', label: t('navigation.servers') },
+                { href: '/leaderboard', label: '积分排行榜' },
+                { href: '/tools/blueprint-editor', label: t('tools.blueprintEditor') },
+              ].map((entry) => <li key={entry.href}><Link href={entry.href} className="flex min-h-9 items-center border border-transparent px-2 text-[var(--text-secondary)] hover:border-[var(--border)] hover:text-[var(--primary-text)]">{entry.label}</Link></li>)}
+            </ul>
+          </nav>
+        </div>
+      </div>
     </main>
   );
 }
