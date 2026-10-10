@@ -133,7 +133,11 @@
             dependencyRepos.mavenCentral()
         }
         INIT
+    # Gradle downloads its own distribution plus the plugin/dependency graph on
+    # a cold cache; the build-node egress occasionally drops the TLS connection
+    # mid-transfer ("SSL peer shut down incorrectly"), which is transient.
     - name: run Android unit tests and assemble debug
+      retry: 2
       script: |
         cd android
         ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
