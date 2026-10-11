@@ -3,7 +3,7 @@
 import { Fragment } from 'react';
 import Link from 'next/link';
 import MarkdownRenderer from '@/components/ui/markdown-renderer';
-import { textColorStyle, highlightStyle, fontSizeStyle, fontFamilyStyle } from '@/lib/tiptap/presentation';
+import { textColorStyle, highlightStyle, fontSizeStyle, fontFamilyStyle, blockAlignStyle } from '@/lib/tiptap/presentation';
 import { richTableLayout } from '@/lib/tiptap/table-presentation';
 import { safeUrl } from '@/lib/tiptap/presentation-url';
 import { RichVideoCard } from '@/components/rich-content/rich-video-card';
@@ -66,11 +66,11 @@ function RichNodeView({ node, readonly = true }: { node: RichNode; readonly?: bo
   switch (node.type) {
     case 'doc': return <>{children}</>;
     case 'text': return <InlineMarks marks={node.marks}>{node.text}</InlineMarks>;
-    case 'paragraph': return <p>{children.length ? children : <br />}</p>;
+    case 'paragraph': return <p style={blockAlignStyle(node.attrs?.align)}>{children.length ? children : <br />}</p>;
     case 'heading': {
       const level = Math.min(6, Math.max(1, Number(node.attrs?.level) || 1));
       const Tag = ('h' + level) as keyof JSX.IntrinsicElements;
-      return <Tag>{children}</Tag>;
+      return <Tag style={blockAlignStyle(node.attrs?.align)}>{children}</Tag>;
     }
     case 'hardBreak': return <br />;
     case 'blockquote': return <blockquote>{children}</blockquote>;

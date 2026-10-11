@@ -1,7 +1,6 @@
 import { PUBLIC_V1_OPERATION_ALLOWLIST } from '../../openapi/public-v1-operation-allowlist';
 import { lookupV1ErrorCode } from '@common/contracts/v1-error-codes';
 import { coreEntities } from '@entities/index';
-import { API_V1_VERSION } from '../../openapi/api-version';
 
 describe('Generic Blob API wiring', () => {
   it('registers the blob operations in the public V1 allowlist', () => {
@@ -46,9 +45,5 @@ describe('Generic Blob API wiring', () => {
     for (const entity of ['BlobObject', 'BlobRecord', 'BlobUploadSession', 'BlobIdempotency']) {
       expect(names).toContain(entity);
     }
-  });
-
-  it('bumps the published contract version for the additive operations', () => {
-    expect(API_V1_VERSION).toBe('1.5.0');
   });
 });

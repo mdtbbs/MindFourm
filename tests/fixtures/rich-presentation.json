@@ -4,7 +4,8 @@
     {
       "type": "heading",
       "attrs": {
-        "level": 1
+        "level": 1,
+        "align": "center"
       },
       "content": [
         {
@@ -125,7 +126,10 @@
             }
           ]
         }
-      ]
+      ],
+      "attrs": {
+        "align": "center"
+      }
     },
     {
       "type": "paragraph",
@@ -134,7 +138,10 @@
           "type": "text",
           "text": "Second paragraph verifies block spacing."
         }
-      ]
+      ],
+      "attrs": {
+        "align": "justify"
+      }
     },
     {
       "type": "paragraph",

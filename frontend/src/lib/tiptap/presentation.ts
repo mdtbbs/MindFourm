@@ -1,4 +1,11 @@
 /** Presentation values for the existing Schema v2 marks; never accept arbitrary CSS. */
+
+/** Block alignment values the schema accepts; `left` and `null` mean "no attribute". */
+export const BLOCK_ALIGNMENTS = ['left', 'center', 'right', 'justify'] as const;
+export function blockAlignStyle(align: unknown): Record<string, string> {
+  return typeof align === 'string' && (BLOCK_ALIGNMENTS as readonly string[]).includes(align) ? { textAlign: align } : {};
+}
+
 export const FONT_STACKS: Record<string, string> = {
   default: 'inherit',
   'serif-cn': '"Songti SC", SimSun, serif',

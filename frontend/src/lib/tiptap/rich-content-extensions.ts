@@ -1,9 +1,10 @@
 import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
 import { RichCardNodeView } from '@/components/rich-content/rich-node-views';
-import { FONT_SIZES, FONT_STACKS, HIGHLIGHT_COLORS, cssStyle, textColorStyle, highlightStyle, fontSizeStyle, fontFamilyStyle } from './presentation';
+import { BLOCK_ALIGNMENTS, FONT_SIZES, FONT_STACKS, HIGHLIGHT_COLORS, blockAlignStyle, cssStyle, textColorStyle, highlightStyle, fontSizeStyle, fontFamilyStyle } from './presentation';
 import { CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
 import { Plugin } from '@tiptap/pm/state';
+import { normalizePastedRichHtml } from './paste-normalization';
 
 const HIGHLIGHTS = Object.keys(HIGHLIGHT_COLORS);
 const FONT_FAMILIES = Object.keys(FONT_STACKS);
@@ -227,6 +228,50 @@ export const ReplyQuote = Node.create({
   },
 });
 
+/**
+ * Block alignment for `paragraph` and `heading`, mirroring the `align` attribute
+ * table cells already carry. `data-align` is the canonical marker on both ends;
+ * the API rejects any value outside `BLOCK_ALIGNMENTS`.
+ */
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    blockAlign: {
+      /** Sets (or with `null` clears) the alignment of the current text block. */
+      setBlockAlign: (align: string | null) => ReturnType;
+    };
+  }
+}
+
+export const BlockAlign = Extension.create({
+  name: 'blockAlign',
+  addGlobalAttributes() {
+    return [{
+      types: ['paragraph', 'heading'],
+      attributes: {
+        align: {
+          default: null,
+          parseHTML: (element) => {
+            const direct = (element.getAttribute('data-align') || '').toLowerCase();
+            const style = (element.style?.textAlign || '').toLowerCase();
+            return (BLOCK_ALIGNMENTS as readonly string[]).includes(direct) ? direct
+              : (BLOCK_ALIGNMENTS as readonly string[]).includes(style) ? style : null;
+          },
+          renderHTML: (attributes) => (BLOCK_ALIGNMENTS as readonly string[]).includes(attributes.align)
+            ? { 'data-align': attributes.align, style: cssStyle(blockAlignStyle(attributes.align)) }
+            : {},
+        },
+      },
+    }];
+  },
+  addCommands() {
+    // Only one of the two types is present at the cursor, so the first match wins.
+    return {
+      setBlockAlign: (align) => ({ commands }) => commands.updateAttributes('paragraph', { align })
+        || commands.updateAttributes('heading', { align }),
+    };
+  },
+});
+
 export const RichPasteSanitizer = Extension.create({
   name: 'richPasteSanitizer',
   addProseMirrorPlugins() {
@@ -234,46 +279,7 @@ export const RichPasteSanitizer = Extension.create({
       props: {
         transformPastedHTML(html) {
           if (typeof DOMParser === 'undefined') return '';
-          const document = new DOMParser().parseFromString(html, 'text/html');
-          document.querySelectorAll('script,style,iframe,object,embed,form,svg,math').forEach((element) => element.remove());
-          const colors = new Map([['#fff2cc', 'yellow'], ['#d9ead3', 'green'], ['#cfe2f3', 'blue'], ['#f4cccc', 'pink'], ['#fce5cd', 'orange']]);
-          for (const element of Array.from(document.body.querySelectorAll('*'))) {
-            for (const attribute of Array.from(element.attributes)) {
-              if (attribute.name.toLowerCase().startsWith('on') || ['id', 'class'].includes(attribute.name.toLowerCase())) element.removeAttribute(attribute.name);
-            }
-            const style = element.getAttribute('style');
-            if (!style) continue;
-            let color: string | null = null;
-            let highlight: string | null = null;
-            let fontSize: string | null = null;
-            for (const declaration of style.split(';')) {
-              const separator = declaration.indexOf(':');
-              if (separator < 0) continue;
-              const property = declaration.slice(0, separator).trim().toLowerCase();
-              const value = declaration.slice(separator + 1).trim().toLowerCase();
-              if (property === 'color') {
-                const hex = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value) ? value.toUpperCase() : null;
-                const rgb = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/.exec(value);
-                color = hex || (rgb && rgb.slice(1).every((part) => Number(part) <= 255) ? '#' + rgb.slice(1).map((part) => Number(part).toString(16).padStart(2, '0')).join('').toUpperCase() : null);
-              }
-              if (property === 'background-color') {
-                const background = value.replace(/\s/g, '');
-                highlight = colors.get(background) || colors.get(background.toLowerCase()) || null;
-              }
-              if (property === 'font-size') {
-                const match = /^(\d+(?:\.\d+)?)(px|pt)$/.exec(value);
-                if (match) {
-                  const px = Math.round(Number(match[1]) * (match[2] === 'pt' ? 4 / 3 : 1));
-                  if (FONT_SIZES.includes(px)) fontSize = px + 'px';
-                }
-              }
-            }
-            element.removeAttribute('style');
-            if (color && element.tagName.toLowerCase() === 'span') element.setAttribute('data-color', color);
-            if (highlight && element.tagName.toLowerCase() === 'span') element.setAttribute('data-highlight', highlight);
-            if (fontSize && element.tagName.toLowerCase() === 'span') element.setAttribute('data-font-size', fontSize);
-          }
-          return document.body.innerHTML;
+          return normalizePastedRichHtml(html);
         },
       },
     })];
@@ -281,6 +287,7 @@ export const RichPasteSanitizer = Extension.create({
 });
 
 export const RICH_CONTENT_EXTENSIONS = [
+  BlockAlign,
   TextColor,
   TextHighlight,
   FontSize,

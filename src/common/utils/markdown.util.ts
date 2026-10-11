@@ -18,6 +18,15 @@ const ALLOWED_TAGS = [
 ];
 
 /**
+ * Block alignment: the rich-text renderer emits `data-align` on paragraphs and
+ * headings, and the sanitize pass has to keep it (with `allowedStyles` bounding
+ * the value). The same attributes drive table-cell alignment today.
+ */
+const BLOCK_ALIGNMENTS = ['left', 'center', 'right', 'justify'];
+const ALIGNED_BLOCKS = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+const ALIGNED_BLOCK_ATTRIBUTES = Object.fromEntries(ALIGNED_BLOCKS.map((tag) => [tag, ['data-align', 'style']]));
+
+/**
  * `marked` emits `class` on fenced code blocks (`language-*`) and on GFM task
  * list items, so `class` is allowed on the elements that carry it rather than
  * globally.
@@ -25,6 +34,7 @@ const ALLOWED_TAGS = [
 const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedTags: ALLOWED_TAGS,
   allowedAttributes: {
+    ...ALIGNED_BLOCK_ATTRIBUTES,
     // `target`/`rel` are injected by transformTags below, and attribute
     // filtering runs afterwards — so they have to be allowed here too.
     a: ['href', 'title', 'target', 'rel', 'data-mention-user-id', 'data-rich-video-provider', 'data-rich-video-id', 'data-attachment-id'],
@@ -41,6 +51,11 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
     aside: ['data-quote-type', 'data-post-id', 'data-reply-id'],
     ul: ['data-task-list'],
   },
+  // Only the alignment declaration survives on a block element; `allowedStyles`
+  // matches a bare value, so `text-align: expression(...)` and friends are dropped.
+  allowedStyles: {
+    '*': { 'text-align': [/^(?:left|center|right|justify)$/] },
+  },
   // Blocks `javascript:`, `data:` and encoded variants such as `&#106;avascript:`
   // — entity decoding happens before the scheme check.
   allowedSchemes: ['http', 'https', 'mailto'],
@@ -50,6 +65,12 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   // treats them as non-text tags); everything else keeps its text.
   disallowedTagsMode: 'discard',
   transformTags: {
+    // Alignment is the only style allowed on a block, and only when the value is
+    // on the list — raw user HTML never gets to pass an arbitrary declaration.
+    ...Object.fromEntries(ALIGNED_BLOCKS.map((tag) => [tag, (tagName: string, attribs: Record<string, string>) => ({ tagName, attribs: {
+      ...(BLOCK_ALIGNMENTS.includes(attribs['data-align']) ? { 'data-align': attribs['data-align'] } : {}),
+      ...(attribs.style ? { style: attribs.style } : {}),
+    } })])),
     th: (tagName, attribs) => ({ tagName, attribs: {
       ...(attribs.scope === 'col' ? { scope: 'col' } : {}),
       ...(attribs['data-align'] && ['left', 'center', 'right'].includes(attribs['data-align']) ? { 'data-align': attribs['data-align'] } : {}),

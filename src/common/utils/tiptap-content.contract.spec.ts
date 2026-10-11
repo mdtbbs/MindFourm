@@ -27,6 +27,7 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
     const paragraph = (text: string, marks?: Record<string, unknown>[]) => ({
       type: 'paragraph', content: [{ type: 'text', text, ...(marks ? { marks } : {}) }],
     });
+    const aligned = (align: string) => ({ type: 'paragraph', attrs: { align }, content: [{ type: 'text', text: align }] });
     const input = {
       type: 'doc',
       content: [
@@ -50,6 +51,9 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
         { type: 'spoiler', attrs: { title: '答案', open: false }, content: [paragraph('hidden'), { type: 'video', attrs: { provider: 'bilibili', videoId: 'BV1xx411c7mD', title: '' } }, { type: 'attachment', attrs: { draftToken: 'A'.repeat(43) } }] },
         { type: 'postQuote', attrs: { postId: 13 } },
         { type: 'replyQuote', attrs: { postId: 13, replyId: 14 } },
+        // Block alignment: the editor's BlockAlign extension and the API validator
+        // both have to accept the same set.
+        ...['center', 'right', 'justify'].map(aligned),
       ],
     };
     const dom = new JSDOM('<!doctype html><html><body><div id="editor"></div></body></html>', { pretendToBeVisual: true });
@@ -109,7 +113,9 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
     expect(canonical.content.find((node) => node.type === 'table')?.content?.[0]).toMatchObject({
       type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'paragraph' }] }, { type: 'tableCell', content: [{ type: 'paragraph' }] }],
     });
-    expect(renderTiptapDocument(canonical, { schemaVersion: 2, allowDraftAttachments: true })).toContain('<details');
+    const rendered = renderTiptapDocument(canonical, { schemaVersion: 2, allowDraftAttachments: true });
+    expect(rendered).toContain('<details');
+    expect(rendered).toContain('<p data-align="center" style="text-align:center">');
   });
 
   it('round-trips Markdown task lists and tables through block-shaped table cells', () => {

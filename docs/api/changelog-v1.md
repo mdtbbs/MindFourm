@@ -4,6 +4,21 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.6.0
+
+本次为富文本正文增加块级对齐，契约版本从 `1.5.0` 更新为 `1.6.0`。既有路由、必填参数和响应字段不变；新增属性为兼容性新增，旧客户端可忽略（忽略时正文仍按左对齐显示）。
+
+### Added
+
+- Rich Content Schema v2 的 `paragraph` 和 `heading` 节点新增可选属性 `align`，取值为 `left`、`center`、`right`、`justify` 或 `null`。`left` 与 `null` 等价，均为默认左对齐。此前只有表格单元格支持对齐，正文段落和标题没有对应的表达能力。约束见[富文本格式 V2](./rich-content-schema-v2.md)。
+- 讨论、回复、资源说明等所有接受 `content_json` 的写入操作同步接受该属性；`content_html` 渲染为 `data-align` 属性并附带 `text-align` 声明，Markdown 投影和 `content_text` 不受影响。
+
+### Security
+
+- 允许的样式仍然只有对齐一种：`align` 只接受上述四个固定值，`content_html` 白名单只放行 `data-align` 与它派生的 `text-align` 声明，其他 `style` 属性、任意 CSS 值和事件属性继续被丢弃。用户 HTML 输入面不因此扩大。
+
+Ref: #41
+
 ## Public API 1.5.0
 
 本次新增面向任意业务的通用 Blob 存储接口 `/api/v1/blobs`，契约版本从 `1.4.1` 更新为 `1.5.0`。既有操作、路由、必填参数和响应字段均未改动，纯新增，旧客户端不受影响。

@@ -22,6 +22,7 @@ const MAX_TEXT_LENGTH = 500_000;
 const FONT_SIZES = new Set([12, 14, 16, 18, 20, 24, 28, 32]);
 const FONT_FAMILIES = new Set(['default', 'serif-cn', 'sans-cn', 'kai', 'source-serif-cn', 'source-sans-cn', 'monospace']);
 const HIGHLIGHTS = new Set(['yellow', 'green', 'blue', 'pink', 'orange']);
+const BLOCK_ALIGNMENTS = new Set(['left', 'center', 'right', 'justify']);
 const USERNAME_RE = /^[\p{L}\p{N}_-]{1,64}$/u;
 const SHORTCODE_RE = /^[a-z0-9_+-]{1,48}$/;
 
@@ -96,11 +97,21 @@ function normalizeAttrs(type: string, attrs: unknown, path: string, version: num
     if (typeof value !== 'boolean') invalid(path + '.' + key, type, key, version);
     result[key] = value;
   };
+  const alignAttr = () => {
+    if (source.align === undefined || source.align === null) return;
+    if (!BLOCK_ALIGNMENTS.has(String(source.align))) invalid(path + '.align', type, 'align', version);
+    result.align = source.align;
+  };
 
   switch (type) {
     case 'heading':
-      strictKeys(source, ['level'], path, type, version);
+      strictKeys(source, ['level', 'align'], path, type, version);
       intAttr('level', 1, 6);
+      alignAttr();
+      break;
+    case 'paragraph':
+      strictKeys(source, ['align'], path, type, version);
+      alignAttr();
       break;
     case 'bulletList':
       strictKeys(source, ['tight'], path, type, version);
@@ -414,13 +425,22 @@ function renderInlineMarks(text: string, marks: Array<Record<string, any>> = [])
   return output;
 }
 
+/**
+ * Block alignment is emitted twice on purpose: `data-align` is the canonical,
+ * machine-readable marker (the same one table cells use), and the inline style
+ * keeps `content_html` looking right in clients that render it directly.
+ */
+function alignAttributes(align: unknown): string {
+  return typeof align === 'string' && BLOCK_ALIGNMENTS.has(align) ? ' data-align="' + align + '" style="text-align: ' + align + '"' : '';
+}
+
 function renderNode(raw: Record<string, any>): string {
   const children = (raw.content || []).map(renderNode).join('');
   switch (raw.type) {
     case 'doc': return children;
     case 'text': return renderInlineMarks(raw.text, raw.marks);
-    case 'paragraph': return '<p>' + children + '</p>';
-    case 'heading': return '<h' + raw.attrs.level + '>' + children + '</h' + raw.attrs.level + '>';
+    case 'paragraph': return '<p' + alignAttributes(raw.attrs?.align) + '>' + children + '</p>';
+    case 'heading': return '<h' + raw.attrs.level + alignAttributes(raw.attrs?.align) + '>' + children + '</h' + raw.attrs.level + '>';
     case 'blockquote': return '<blockquote>' + children + '</blockquote>';
     case 'bulletList': return '<ul>' + children + '</ul>';
     case 'orderedList': return '<ol' + (raw.attrs?.start && raw.attrs.start !== 1 ? ' start="' + raw.attrs.start + '"' : '') + (raw.attrs?.type ? ' type="' + raw.attrs.type + '"' : '') + '>' + children + '</ol>';

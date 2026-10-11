@@ -68,6 +68,32 @@ describe('Tiptap rich-text source', () => {
     expect(() => normalizeTiptapDocument({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'x', marks: [{ type: 'textColor', attrs: { color: 'rgb(1,2,3)' } }] }] }] }, { schemaVersion: 2 })).toThrow();
   });
 
+  it('keeps block alignment on paragraphs and headings within the allowed values', () => {
+    const document = normalizeTiptapDocument({ type: 'doc', content: [
+      { type: 'paragraph', attrs: { align: 'center' }, content: [{ type: 'text', text: '居中' }] },
+      { type: 'heading', attrs: { level: 2, align: 'justify' }, content: [{ type: 'text', text: '两端对齐' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: '默认' }] },
+    ] }, { schemaVersion: 2 });
+    expect(document.content[0].attrs).toEqual({ align: 'center' });
+    expect(document.content[1].attrs).toEqual({ level: 2, align: 'justify' });
+    expect(document.content[2].attrs).toBeUndefined();
+    const html = renderTiptapDocument(document, { schemaVersion: 2 });
+    expect(html).toContain('<p data-align="center" style="text-align:center">');
+    expect(html).toContain('<h2 data-align="justify" style="text-align:justify">');
+    expect(html).toContain('<p>默认</p>');
+    // Same shape the editor emits when the user clears the alignment.
+    const cleared = normalizeTiptapDocument({ type: 'doc', content: [{ type: 'paragraph', attrs: { align: null }, content: [] }] }, { schemaVersion: 2 });
+    expect(cleared.content[0].attrs).toBeUndefined();
+  });
+
+  it('rejects block alignment values and attributes the schema does not define', () => {
+    for (const attrs of [{ align: 'middle' }, { align: 'CENTER' }, { align: 3 }, { align: 'center', onclick: 'alert(1)' }]) {
+      expect(() => normalizeTiptapDocument({ type: 'doc', content: [{ type: 'paragraph', attrs, content: [] }] }, { schemaVersion: 2 })).toThrow();
+    }
+    // `justify` is a block value; cells keep their narrower set.
+    expect(() => normalizeTiptapDocument({ type: 'doc', content: [{ type: 'table', content: [{ type: 'tableRow', content: [{ type: 'tableCell', attrs: { align: 'justify' }, content: [{ type: 'paragraph' }] }] }] }] }, { schemaVersion: 2 })).toThrow();
+  });
+
   it('caps unique mentions and reports canonical mention identities', () => {
     const content = Array.from({ length: 21 }, (_, userId) => ({ type: 'paragraph', content: [{ type: 'mention', attrs: { userId: userId + 1, username: `member_${userId + 1}` } }] }));
     expect(() => normalizeTiptapDocument({ type: 'doc', content }, { schemaVersion: 2 })).toThrow();

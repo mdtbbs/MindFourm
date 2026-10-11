@@ -22,6 +22,8 @@
 
 文本样式（marks）包括 `bold`、`italic`、`strike`、`underline`、`code`、`link`、`textColor`、`highlight`、`fontSize`、`fontFamily`、`superscript` 和 `subscript`。颜色只接受 HEX，并规范为大写 `#RRGGBB` 或 `#RRGGBBAA`；高亮、字号和字体只能使用预设值。
 
+`paragraph` 和 `heading` 支持块级对齐：可选属性 `align`，取值为 `left`、`center`、`right`、`justify` 或 `null`。`left` 与 `null` 等价（默认左对齐即不写属性）。表格单元格的 `align` 只接受 `left`、`center`、`right`。两种对齐都只影响文本水平位置，服务端渲染为 `data-align` 属性并在 `content_html` 中同时给出 `text-align` 声明；不接受其他 CSS 属性或任意样式值。
+
 ## 校验与安全规则
 
 每种节点和样式只允许指定属性。未知节点、样式或属性，无效 URL、不支持的站点视频来源以及超出范围的值都会被拒绝。错误详情会指出 JSON 路径、节点或样式、属性和数据结构版本，不会包含内部堆栈。
