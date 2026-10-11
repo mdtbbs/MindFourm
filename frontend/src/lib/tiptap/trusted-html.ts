@@ -93,6 +93,34 @@ const VOID_TAGS = new Set(['br', 'hr', 'img', 'col', 'input', 'wbr']);
 /** Their content is markup, not prose — dropping the tag must drop the text too. */
 const NON_TEXT_TAGS = new Set(['script', 'style', 'textarea', 'option', 'noscript', 'iframe', 'object', 'embed', 'template', 'title']);
 const VOID_UNSAFE = /(?:url\s*\(|expression\s*\(|javascript:|@import|\\|\/\*|<\/?)/i;
+/**
+ * URL policy, mirroring the server's `allowedSchemes` plus
+ * `allowProtocolRelative: false`.
+ *
+ * Checked here as well as at render time (`safeUrl`), for the same reason the
+ * server checks twice: the editor stores what this pass returns, so a value that
+ * only one side refuses would make the author's preview disagree with the saved
+ * block — and an entity-encoded `javascript:` is exactly the case where a
+ * plausible-looking string is not what the browser will see.
+ */
+const ALLOWED_SCHEMES = new Set(['http:', 'https:', 'mailto:']);
+const CONTROL_OR_BACKSLASH = /[\u0000-\u001f\u007f\\]/;
+
+function safeUrlValue(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || CONTROL_OR_BACKSLASH.test(trimmed)) return null;
+  // Protocol-relative URLs inherit the page's scheme and can point anywhere.
+  if (trimmed.startsWith('//')) return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    try {
+      return ALLOWED_SCHEMES.has(new URL(trimmed).protocol) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+  // A relative reference: same-origin by construction.
+  return value;
+}
 const MAX_DEPTH = 48;
 const MAX_NODES = 6000;
 
@@ -182,9 +210,8 @@ function safeHtmlAttributes(tag: string, attributes: Array<[string, string]>): R
       continue;
     }
     if (['href', 'src'].includes(name)) {
-      // Re-checked at render time by `safeUrl`; keeping it here would only move
-      // the check, and both are cheap.
-      kept[name] = value;
+      const url = safeUrlValue(value);
+      if (url !== null) kept[name] = url;
       continue;
     }
     kept[name] = value;

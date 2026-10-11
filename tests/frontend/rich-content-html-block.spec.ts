@@ -96,6 +96,38 @@ describe('trusted HTML block — client parser', () => {
     expect(plainTextOf(parseTrustedHtml('<p>&#xD800; ok</p>'))).toContain('\ufffd');
   });
 
+  it('refuses URL forms the server refuses, so preview matches what is stored', () => {
+    // Each of these is a URL the browser would read differently than a naive
+    // `startsWith('javascript:')` check would — control characters are stripped,
+    // entities are decoded, and a protocol-relative host borrows the page's scheme.
+    const refused = [
+      'javascript:alert(1)',
+      'jav\tascript:alert(1)',
+      'java\u0000script:alert(1)',
+      '&#106;avascript:alert(1)',
+      'data:image/svg+xml;base64,PHN2Zz4=',
+      '//evil.example/x.png',
+      'ftp://evil.example/x',
+    ];
+    for (const url of refused) {
+      const markup = sanitizeTrustedHtmlClient(`<p><a href="${url}">x</a><img src="${url}"></p>`);
+      expect([url, markup]).toEqual([url, expect.not.stringContaining('href=')]);
+      expect([url, markup]).toEqual([url, expect.not.stringContaining('src=')]);
+    }
+    // Relative references and the allowed schemes still survive.
+    expect(sanitizeTrustedHtmlClient('<a href="/posts/1">x</a>')).toContain('href="/posts/1"');
+    expect(sanitizeTrustedHtmlClient('<a href="https://example.com">x</a>')).toContain('href="https://example.com"');
+    expect(sanitizeTrustedHtmlClient('<a href="mailto:a@example.com">x</a>')).toContain('href="mailto:a@example.com"');
+  });
+
+  it('leaves escaped markup inert rather than reviving it', () => {
+    // `<scr<script>ipt>` is not a script element; the parser must not re-assemble it
+    // into one, and the stray `>` has to stay escaped text.
+    const result = sanitizeTrustedHtmlClient('<div><scr<script>ipt>alert(1)</script></div>');
+    expect(result).not.toContain('<script');
+    expect(result).toContain('&gt;');
+  });
+
   it('bounds runaway nesting', () => {
     const deep = '<div>'.repeat(200) + 'x' + '</div>'.repeat(200);
     expect(() => parseTrustedHtml(deep)).not.toThrow();
