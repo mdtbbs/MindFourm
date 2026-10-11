@@ -1,6 +1,6 @@
 import { Extension, Mark, Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import { RichCardNodeView } from '@/components/rich-content/rich-node-views';
+import { RichCardNodeView, RichHtmlBlockNodeView } from '@/components/rich-content/rich-node-views';
 import { BLOCK_ALIGNMENTS, FONT_SIZES, FONT_STACKS, HIGHLIGHT_COLORS, blockAlignStyle, cssStyle, textColorStyle, highlightStyle, fontSizeStyle, fontFamilyStyle } from './presentation';
 import { CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
 import { Plugin } from '@tiptap/pm/state';
@@ -286,6 +286,40 @@ export const RichPasteSanitizer = Extension.create({
   },
 });
 
+/**
+ * A staff-authored HTML block.
+ *
+ * The node is an atom: it holds a sanitized fragment as an attribute rather than
+ * as edited content, so ProseMirror never has to understand the markup inside it
+ * and the fragment cannot be partially edited into an invalid shape. `addNodeView`
+ * shows the rendered result, exactly as a reader sees it, which is the only
+ * honest preview for markup the editor does not model.
+ *
+ * Whether the node may be *used* is a service-side decision (`assertHtmlBlockPermission`);
+ * the schema keeps it available so a staff member's document round-trips through
+ * an editor session without the block being dropped on load.
+ */
+export const HtmlBlock = Node.create({
+  name: 'htmlBlock',
+  group: 'block',
+  atom: true,
+  addNodeView() { return ReactNodeViewRenderer(RichHtmlBlockNodeView); },
+  addAttributes() {
+    return { html: { default: '' } };
+  },
+  parseHTML() {
+    return [{
+      tag: 'div[data-rich-html-block]',
+      getAttrs: (element) => ({ html: (element as HTMLElement).getAttribute('data-html') || '' }),
+    }];
+  },
+  renderHTML({ node }) {
+    // The stored form keeps the fragment in an attribute: it is data, not the
+    // node's content, so nothing downstream reads it as markup.
+    return ['div', { 'data-rich-html-block': 'true', 'data-html': node.attrs.html, contenteditable: 'false' }];
+  },
+});
+
 export const RICH_CONTENT_EXTENSIONS = [
   BlockAlign,
   TextColor,
@@ -303,6 +337,7 @@ export const RICH_CONTENT_EXTENSIONS = [
   AttachmentCard,
   PostQuote,
   ReplyQuote,
+  HtmlBlock,
   RichPasteSanitizer,
 ];
 

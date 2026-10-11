@@ -86,7 +86,12 @@ export function normalizePastedRichHtml(html: string): string {
   const alignments = new Map<Element, string>();
   for (const element of Array.from(document.body.querySelectorAll<HTMLElement>('*'))) {
     for (const attribute of Array.from(element.attributes)) {
-      if (attribute.name.toLowerCase().startsWith('on') || ['id', 'class'].includes(attribute.name.toLowerCase())) element.removeAttribute(attribute.name);
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith('on') || ['id', 'class'].includes(name)) { element.removeAttribute(attribute.name); continue; }
+      // An HTML block is a staff-only node and the toolbar is its only entry point;
+      // pasted markup must not be able to fabricate one (the server would refuse the
+      // publish, turning a paste into a confusing failure).
+      if (name === 'data-rich-html-block' || name === 'data-html') element.removeAttribute(attribute.name);
     }
     const alignment = declaredAlignment(element);
     if (alignment) alignments.set(element, alignment);

@@ -1,3 +1,5 @@
+import { trustedHtmlText } from './trusted-html';
+
 type NodeJson = Record<string, any>;
 
 function inline(nodes: NodeJson[] = []): string {
@@ -45,6 +47,9 @@ function blocks(nodes: NodeJson[] = [], depth = 0): string {
         const cells = (row.content || []).map((cell: NodeJson) => (cell.content || []).map((part: NodeJson) => part.type === 'paragraph' ? inline(part.content || []) : blocks([part]).trim()).join(' '));
         return `| ${cells.join(' | ')} |\n${rowIndex === 0 ? `| ${cells.map(() => '---').join(' | ')} |\n` : ''}`;
       }).join('') + '\n';
+      // Markdown has no equivalent for an HTML block; the API projects the block's
+      // plain text the same way, so the two projections stay comparable.
+      case 'htmlBlock': return (node.attrs?.text || trustedHtmlText(String(node.attrs?.html || ''))) + '\n\n';
       case 'spoiler': return `> [!SPOILER] ${node.attrs?.title || '剧透内容'}\n${content.trim().split('\n').map((line) => `> ${line}`).join('\n')}\n\n`;
       case 'video': return (node.attrs?.src || `[${node.attrs?.provider || 'video'} video ${node.attrs?.videoId || ''}]`) + '\n\n';
       case 'attachment': return `[Attachment #${node.attrs?.attachmentId || 'draft'}]\n\n`;

@@ -10,6 +10,7 @@ import { RichVideoCard } from '@/components/rich-content/rich-video-card';
 import { RichAttachmentCard } from '@/components/rich-content/rich-attachment-card';
 import { RichQuoteCard } from '@/components/rich-content/rich-quote-card';
 import { RichCodeBlock } from '@/components/rich-content/rich-code-block';
+import { RichHtmlBlock } from '@/components/rich-content/rich-html-block';
 
 type RichNode = Record<string, any>;
 type RichMark = Record<string, any>;
@@ -18,6 +19,7 @@ const RENDERABLE_NODES = new Set([
   'doc', 'paragraph', 'heading', 'text', 'hardBreak', 'blockquote', 'bulletList', 'orderedList',
   'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'image', 'table', 'tableRow',
   'tableHeader', 'tableCell', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote',
+  'htmlBlock',
 ]);
 const RENDERABLE_MARKS = new Set([
   'bold', 'italic', 'strike', 'underline', 'code', 'link', 'textColor', 'highlight', 'fontSize', 'fontFamily', 'superscript', 'subscript',
@@ -81,6 +83,8 @@ function RichNodeView({ node, readonly = true }: { node: RichNode; readonly?: bo
     case 'taskItem': return <li data-task-item="true" data-checked={String(Boolean(node.attrs?.checked))}><input data-task-checkbox="true" data-testid="rich-task-checkbox" type="checkbox" checked={Boolean(node.attrs?.checked)} disabled={readonly} readOnly aria-label={node.attrs?.checked ? '已完成' : '未完成'} /><div data-task-content="true">{children}</div></li>;
     case 'codeBlock': return <RichCodeBlock language={node.attrs?.language} text={(node.content || []).map((part: RichNode) => part.text || '').join('')} />;
     case 'horizontalRule': return <hr />;
+    // Rendered from the parsed node tree, never from raw markup — see `rich-html-block.tsx`.
+    case 'htmlBlock': return typeof node.attrs?.html === 'string' && node.attrs.html ? <RichHtmlBlock html={node.attrs.html} /> : null;
     case 'image': {
       const src = safeUrl(node.attrs?.src, true);
       return src ? <img className="rich-content-image" src={src} alt={node.attrs?.alt || ''} title={node.attrs?.title || undefined} width={Number.isSafeInteger(node.attrs?.width) && node.attrs.width <= 4096 ? node.attrs.width : undefined} height={Number.isSafeInteger(node.attrs?.height) && node.attrs.height <= 4096 ? node.attrs.height : undefined} loading="lazy" decoding="async" /> : null;

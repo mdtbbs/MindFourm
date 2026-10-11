@@ -25271,13 +25271,14 @@
               "video",
               "attachment",
               "postQuote",
-              "replyQuote"
+              "replyQuote",
+              "htmlBlock"
             ]
           },
           "attrs": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Only attributes defined by the named node type are accepted. v2 includes bounded image dimensions, list tight flags, task state, safe block and table alignment, spoiler state, mention IDs, emoji IDs, configured videos, attachment references, and quote IDs."
+            "description": "Only attributes defined by the named node type are accepted. v2 includes bounded image dimensions, list tight flags, task state, safe block and table alignment, spoiler state, mention IDs, emoji IDs, configured videos, attachment references, quote IDs, and staff-only sanitized HTML fragments."
           },
           "text": {
             "type": "string",

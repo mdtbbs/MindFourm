@@ -15,6 +15,9 @@ import { rememberAttachmentDraft } from "@/lib/tiptap/attachment-drafts";
 import { parseRichEmbed } from "@/lib/tiptap/rich-embed";
 import { normalizeEditorLink } from "@/lib/tiptap/editor-link";
 import { confirmDialog, promptDialog } from "@/store/interaction-dialog-store";
+import { useAuth } from "@/store/user-store";
+import HtmlBlockDialog from "@/components/rich-content/html-block-dialog";
+import { roleAllowsHtmlBlocks } from "@/lib/tiptap/roles";
 import {
   Bold,
   Italic,
@@ -44,6 +47,7 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
+  CodeXml,
 } from "lucide-react";
 
 /* ─── Block alignment ────────────────────────────────────── */
@@ -122,6 +126,11 @@ export default function TiptapEditor({
   const [mentionUsers, setMentionUsers] = useState<MentionUser[]>([]);
   const [mentionLoading, setMentionLoading] = useState(false);
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+  const [htmlBlockOpen, setHtmlBlockOpen] = useState(false);
+  // The server decides who may *write* a block; this only keeps the button out of
+  // a non-staff toolbar. A hidden button is not a permission check.
+  const { user } = useAuth();
+  const canUseHtmlBlocks = roleAllowsHtmlBlocks(user?.role);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const attachmentInputRef = useRef<HTMLInputElement>(null);
   const showError = useToastStore((s) => s.showError);
@@ -243,6 +252,23 @@ export default function TiptapEditor({
       }
     }
   }, [value, jsonValue, editor, onChange]);
+
+  /* ── HTML block ──────────────────────────────────────── */
+
+  const [htmlBlockEditing, setHtmlBlockEditing] = useState(false);
+
+  const insertHtmlBlock = useCallback((html: string) => {
+    if (!editor) return;
+    // The cursor decides: inside a block the panel edits it, anywhere else it inserts.
+    const chain = editor.chain().focus();
+    if (htmlBlockEditing) chain.updateAttributes("htmlBlock", { html }).run();
+    else chain.insertContent({ type: "htmlBlock", attrs: { html } }).run();
+  }, [editor, htmlBlockEditing]);
+
+  const openHtmlBlockPanel = useCallback(() => {
+    setHtmlBlockEditing(Boolean(editor?.isActive("htmlBlock")));
+    setHtmlBlockOpen(true);
+  }, [editor]);
 
   /* ── Image upload ────────────────────────────────────── */
 
@@ -571,6 +597,15 @@ export default function TiptapEditor({
         onInsertVideo={insertVideo}
         onInsertQuote={insertQuote}
         onOpenLinkDialog={openLinkDialog}
+        canUseHtmlBlocks={canUseHtmlBlocks}
+        onInsertHtmlBlock={openHtmlBlockPanel}
+      />
+
+      <HtmlBlockDialog
+        open={htmlBlockOpen}
+        onOpenChange={setHtmlBlockOpen}
+        initialHtml={htmlBlockEditing && editor ? String(editor.getAttributes("htmlBlock").html || "") : ""}
+        onSubmit={insertHtmlBlock}
       />
 
       {/* ── Editor area ─────────────────────────────────── */}
@@ -694,6 +729,8 @@ interface ToolbarProps {
   onOpenLinkDialog: () => void;
   onInsertVideo: () => void;
   onInsertQuote: () => void;
+  canUseHtmlBlocks: boolean;
+  onInsertHtmlBlock: () => void;
 }
 
 function EditorToolbar({
@@ -707,6 +744,8 @@ function EditorToolbar({
   onOpenLinkDialog,
   onInsertVideo,
   onInsertQuote,
+  canUseHtmlBlocks,
+  onInsertHtmlBlock,
 }: ToolbarProps) {
   const moreMenuRef = useRef<HTMLDetailsElement>(null);
   const activeAlignment = editor.getAttributes("paragraph").align ?? editor.getAttributes("heading").align ?? null;
@@ -757,6 +796,13 @@ function EditorToolbar({
           {menuButton(<UnderlineIcon className="w-4 h-4" />, "下划线", () => editor.chain().focus().toggleUnderline().run(), editor.isActive("underline"))}
           {menuButton(<Code className="w-4 h-4" />, "行内代码", () => editor.chain().focus().toggleCode().run(), editor.isActive("code"))}
           {menuButton(<Quote className="w-4 h-4" />, "引用", () => editor.chain().focus().toggleBlockquote().run(), editor.isActive("blockquote"))}
+          {canUseHtmlBlocks && menuButton(
+            <CodeXml className="w-4 h-4" />,
+            editor.isActive("htmlBlock") ? "编辑 HTML 区块" : "HTML 区块",
+            onInsertHtmlBlock,
+            editor.isActive("htmlBlock"),
+            "rich-html-block",
+          )}
           {menuButton(<ListTodo className="w-4 h-4" />, "任务列表", () => editor.chain().focus().insertContent({ type: 'taskList', content: [{ type: 'taskItem', attrs: { checked: false }, content: [{ type: 'paragraph' }] }] }).run(), editor.isActive("taskList"), "rich-task-list")}
           {menuButton(<span>剧透</span>, "插入剧透折叠", () => editor.chain().focus().insertContent({ type: 'spoiler', attrs: { title: '剧透内容', open: false }, content: [{ type: 'paragraph' }] }).run(), editor.isActive("spoiler"), "rich-spoiler")}
           {menuButton(<span>x²</span>, "上标", () => editor.chain().focus().toggleMark('superscript').run(), editor.isActive("superscript"))}

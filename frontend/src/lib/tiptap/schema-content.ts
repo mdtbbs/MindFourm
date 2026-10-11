@@ -17,6 +17,7 @@
 export const CONTAINER_BLOCKS = [
   'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList',
   'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote',
+  'htmlBlock',
 ] as const;
 
 /** `doc` and `blockquote` accept everything above plus a spoiler. */
@@ -25,7 +26,7 @@ export const DOC_BLOCKS = [...CONTAINER_BLOCKS, 'spoiler'] as const;
 /** A blockquote carries no video / attachment / quote cards — the API rejects them there. */
 export const BLOCKQUOTE_BLOCKS = [
   'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList',
-  'codeBlock', 'horizontalRule', 'table', 'spoiler',
+  'codeBlock', 'horizontalRule', 'table', 'spoiler', 'htmlBlock',
 ] as const;
 
 export const blockContent = (blocks: readonly string[]) => '(' + blocks.join(' | ') + ')';

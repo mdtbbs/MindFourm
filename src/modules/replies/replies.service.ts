@@ -9,6 +9,7 @@ import { AdminNotificationsService } from '../admin-notifications/admin-notifica
 import { EventBusService } from '../plugins/event-bus.service';
 import { CreateReplyDto } from './dto/create-reply.dto';
 import { collectDraftAttachmentTokens, collectTiptapMentionIds, replaceDraftAttachmentTokens, resolveContentSource } from '../../common/utils/tiptap-content.util';
+import { assertHtmlBlockPermission, documentContainsHtmlBlocks } from '../../common/utils/trusted-html.util';
 import { PointsService } from '../points/points.service';
 import { SettingsService } from '../settings/settings.service';
 import { RedisService } from '../../database/redis.service';
@@ -97,6 +98,9 @@ export class RepliesService {
       ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, false, true)
       : dto.content_json;
     await this.canonicalizeMentionSnapshots(canonicalJson);
+    if (documentContainsHtmlBlocks(dto.content_json)) {
+      assertHtmlBlockPermission(dto.content_json, (await this.userRepository.findOne({ where: { id: userId }, select: { role: true } }))?.role);
+    }
     const contentSource = resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true });
     const content = contentSource.content;
     dto.content = content;
@@ -314,6 +318,7 @@ export class RepliesService {
       : contentJson;
     await this.canonicalizeMentionSnapshots(canonicalJson);
     const previousMentionIds = reply.content_json ? collectTiptapMentionIds(reply.content_json) : [];
+    if (documentContainsHtmlBlocks(contentJson)) assertHtmlBlockPermission(contentJson, userRole);
     const contentSource = resolveContentSource(content, canonicalJson, schemaVersion, { allowDraftAttachments: true });
     if (richJsonWrite) await this.postsService?.assertDocumentQuoteVisibility(contentSource.content_json, { id: userId, role: userRole || 'user' });
     reply.content = contentSource.content;
