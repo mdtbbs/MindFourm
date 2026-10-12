@@ -250,6 +250,18 @@ public final class EditorSafetyRegression {
         JsonValue afterRotation = readOfficialMap(rotationResult);
         require(findRotation(afterRotation.get("tile_layers").get("buildings"), rotationAt.x, rotationAt.y) == 2,
             "a map building rotation must round-trip through official MapIO");
+
+        Block router = Vars.content.block("router");
+        require(router != null && !router.rotate, "the map rotation safety fixture must be non-rotatable");
+        Point2 fixedAt = findEmptyFootprint(router, reserved, sourceMap.width, sourceMap.height);
+        Path fixedSource = root.resolve("official-map-nonrotatable-source.msav");
+        MapRenderer.transformMapBytes(moved, fixedSource, List.of(), new arc.util.serialization.JsonReader().parse("{}"), List.of(), List.of(
+            add("building", fixedAt, "router", "sharded")
+        ));
+        expectMapInvalid(() -> MapRenderer.transformMapBytes(fixedSource, root.resolve("official-map-nonrotatable-result.msav"),
+            List.of(), new arc.util.serialization.JsonReader().parse("{}"), List.of(), List.of(
+                new MapRenderer.MapObjectOperation("rotate", "building", fixedAt.x, fixedAt.y, -1, -1, -1, -1, "", "", 1)
+            )), "a non-rotatable map building must reject rotate operations");
     }
 
     private static void verifyOfficialBlankFiles(Path root) throws Exception {

@@ -1235,9 +1235,6 @@ public final class MapRenderer {
                     throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
                 }
                 edit.x = operation.toX(); edit.y = operation.toY(); edit.positionChanged = true;
-            } else if (operation.action().equals("rotate")) {
-                if (edit.rotation != null) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
-                edit.rotation = operation.rotation();
             } else if (operation.action().equals("team")) {
                 if (edit.team != null) throw new MapTransformException("INVALID_MAP_OBJECT_OPERATION");
                 mindustry.game.Team team = resolveMapTeam(operation.team());
