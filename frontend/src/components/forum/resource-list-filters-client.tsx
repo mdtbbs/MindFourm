@@ -7,18 +7,43 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import type { ResourceCategory } from '@/types';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { RESOURCE_KINDS } from '@/lib/display-labels';
-import { mergeResourceQuery } from '@/lib/resources/query';
+import {
+  MAP_FILTER_KEYS,
+  MAX_BLOCK_LENGTH,
+  MAX_MAP_DIMENSION,
+  MIN_MAP_DIMENSION,
+  blockInvalid,
+  isBlockFilterKind,
+  isMapFilterKind,
+  mapDimensionInvalid,
+  mapFilterKeys,
+  mapTextFilterKeys,
+  mergeResourceQuery,
+  normalizeResourceFilterParams,
+} from '@/lib/resources/query';
 import { useI18n } from '@/i18n/provider';
 
 interface ResourceFiltersProps {
   categories: ResourceCategory[]; initialCategory?: string; initialSearch?: string; initialSort?: string;
   initialTag?: string; initialSupportedVersion?: string; initialCompatibility?: string; initialResourceKind?: string;
+  initialPlanet?: string; initialBlock?: string; initialWidth?: string; initialHeight?: string;
   supportedVersions: string[]; compatibilityOptions: string[]; planets: string[];
 }
 
+/** Text conditions kept local while typing; the URL only ever holds committed values. */
+const ALL_MAP_TEXT_KEYS = ['block', 'width', 'height'] as const;
+type MapTextKey = (typeof ALL_MAP_TEXT_KEYS)[number];
+
+/** Every URL condition this component owns; Clear removes exactly these. */
+const OWNED_FILTER_KEYS = [
+  'category_id', 'search', 'sort', 'tag', 'supported_version', 'compatibility', 'resource_kind',
+  ...MAP_FILTER_KEYS,
+] as const;
+
 export default function ResourceFilters({
   categories, initialCategory, initialSearch, initialSort, initialTag, initialSupportedVersion,
-  initialCompatibility, initialResourceKind, supportedVersions, compatibilityOptions, planets,
+  initialCompatibility, initialResourceKind, initialPlanet, initialBlock, initialWidth, initialHeight,
+  supportedVersions, compatibilityOptions, planets,
 }: ResourceFiltersProps) {
   const { t } = useI18n();
   const router = useRouter();
@@ -30,9 +55,23 @@ export default function ResourceFilters({
   const supportedVersion = searchParams.get('supported_version') || initialSupportedVersion || '';
   const compatibility = searchParams.get('compatibility') || initialCompatibility || '';
   const resourceKind = searchParams.get('resource_kind') || initialResourceKind || '';
-  const planet = searchParams.get('planet') || '';
+  // Each kind renders exactly the conditions it can answer: a map gets
+  // planet/width/height, a blueprint gets block/width/height. The URL is
+  // canonicalised on the server, so anything hidden here is already gone.
+  const showMapFilters = isMapFilterKind(resourceKind);
+  const showBlockFilter = isBlockFilterKind(resourceKind);
+  const showPlanetFilter = mapFilterKeys(resourceKind).includes('planet');
+  const planet = showPlanetFilter ? searchParams.get('planet') || initialPlanet || '' : '';
+  const urlBlock = showBlockFilter ? searchParams.get('block') || initialBlock || '' : '';
+  const urlWidth = showMapFilters ? searchParams.get('width') || initialWidth || '' : '';
+  const urlHeight = showMapFilters ? searchParams.get('height') || initialHeight || '' : '';
+  // The submit path reads the same rule as the render path (`mapTextFilterKeys`
+  // is `mapFilterKeys` filtered to text values), so a kind that stops rendering
+  // a field also stops committing it.
+  const mapTextKeys = mapTextFilterKeys(resourceKind);
   const [localSearch, setLocalSearch] = useState(urlSearch);
   const [localTag, setLocalTag] = useState(tag);
+  const [localMapValues, setLocalMapValues] = useState<Record<MapTextKey, string>>({ block: urlBlock, width: urlWidth, height: urlHeight });
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filterTrigger = useRef<HTMLButtonElement>(null);
   const mobilePanel = useRef<HTMLElement>(null);
@@ -66,6 +105,11 @@ export default function ResourceFilters({
 
   useEffect(() => setLocalSearch(urlSearch), [urlSearch]);
   useEffect(() => setLocalTag(tag), [tag]);
+  // Each field syncs only from its own URL value, so committing one condition
+  // never discards text still being typed in another.
+  useEffect(() => setLocalMapValues((current) => ({ ...current, block: urlBlock })), [urlBlock]);
+  useEffect(() => setLocalMapValues((current) => ({ ...current, width: urlWidth })), [urlWidth]);
+  useEffect(() => setLocalMapValues((current) => ({ ...current, height: urlHeight })), [urlHeight]);
 
   const updateFilters = useCallback((updates: Record<string, string | null>) => {
     const query = mergeResourceQuery(searchParams.toString(), updates);
@@ -75,6 +119,7 @@ export default function ResourceFilters({
   const removeFilter = (key: string) => {
     if (key === 'search') setLocalSearch('');
     if (key === 'tag') setLocalTag('');
+    if ((ALL_MAP_TEXT_KEYS as readonly string[]).includes(key)) setLocalMapValues((current) => ({ ...current, [key]: '' }));
     updateFilters({ [key]: null });
   };
 
@@ -83,10 +128,72 @@ export default function ResourceFilters({
     return () => clearTimeout(timer);
   }, [localSearch, urlSearch, updateFilters]);
 
-  const activeFilters = [selectedCategory, urlSearch, tag, supportedVersion, compatibility, resourceKind, planet].filter(Boolean).length;
+  /**
+   * Map text fields commit on blur, on Enter or when the mobile sheet applies.
+   * A rejected value stays in its field with the message; committing several
+   * fields goes out as one navigation so Apply cannot drop a sibling condition.
+   */
+  const commitMapFields = (keys: readonly MapTextKey[]) => {
+    const updates: Record<string, string | null> = {};
+    for (const key of keys) {
+      const value = localMapValues[key].trim();
+      if (key !== 'block' && mapDimensionInvalid(value)) continue;
+      if (key === 'block' && blockInvalid(value)) continue;
+      const committed = key === 'block' ? urlBlock : key === 'width' ? urlWidth : urlHeight;
+      if (value !== committed) updates[key] = value || null;
+    }
+    if (!Object.keys(updates).length) return;
+    updateFilters(updates);
+  };
+
+  /**
+   * A rejected value stays visible while the user is in the field (so the
+   * message explains itself), but must not survive as a value the URL never
+   * accepted. Returning to the field — or reopening the sheet — restores the
+   * committed URL value.
+   */
+  const resyncRejectedFields = () => {
+    setLocalMapValues((current) => {
+      const next = { ...current };
+      for (const key of ALL_MAP_TEXT_KEYS) {
+        const invalid = key === 'block' ? blockInvalid(current[key]) : mapDimensionInvalid(current[key]);
+        if (invalid) next[key] = key === 'block' ? urlBlock : key === 'width' ? urlWidth : urlHeight;
+      }
+      return next;
+    });
+  };
+
+  const openMobileFilters = () => {
+    // Reopening the sheet starts from the URL, never from a rejected draft.
+    setLocalMapValues({ block: urlBlock, width: urlWidth, height: urlHeight });
+    setMobileFiltersOpen(true);
+  };
+
+  const clearAll = () => {
+    setLocalSearch('');
+    setLocalTag('');
+    setLocalMapValues({ block: '', width: '', height: '' });
+    // Same outlet as every other navigation: strip this component's own keys,
+    // then canonicalise, so a stale map condition cannot survive Clear.
+    const params = new URLSearchParams(searchParams.toString());
+    for (const key of OWNED_FILTER_KEYS) params.delete(key);
+    const query = normalizeResourceFilterParams(params).toString();
+    router.push(query ? `/resources?${query}` : '/resources');
+  };
+
+  const applyMobileFilters = () => {
+    if (showMapFilters) commitMapFields(mapTextKeys);
+    closeMobileFilters();
+  };
+
+  const activeFilters = [
+    selectedCategory, urlSearch, tag, supportedVersion, compatibility, resourceKind,
+    planet, urlBlock, urlWidth, urlHeight,
+  ].filter(Boolean).length;
   const hasFilters = activeFilters > 0 || sort !== 'created_at';
   const chipClass = (active: boolean) => `shrink-0 rounded-full px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? 'bg-[var(--primary-button)] text-white' : 'bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:text-[var(--text)]'}`;
   const inputClass = 'min-w-0 rounded-md border border-[var(--border)] bg-[var(--bg-elevated)] px-3 py-2 text-sm text-[var(--text)]';
+  const dimensionHint = t('resourceList.dimensionHint', { min: MIN_MAP_DIMENSION, max: MAX_MAP_DIMENSION });
 
   const sortLabels: Record<string, string> = {
     created_at: t('resourceList.latest'),
@@ -102,6 +209,67 @@ export default function ResourceFilters({
   };
   const removableChip = (key: string, label: string) => <button key={key} type="button" onClick={() => removeFilter(key)} aria-label={t('resourceList.removeFilter', { filter: label })} className="inline-flex min-h-9 max-w-full items-center gap-1.5 border border-[var(--border)] bg-[var(--bg-elevated)] px-2 text-xs text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"><span className="truncate">{label}</span><X className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></button>;
 
+  const fieldId = (scope: string, key: string) => `resource-${scope}-map-${key}`;
+
+  /** Shared by the desktop menu and the mobile sheet, so both expose the same controls. */
+  const mapFilterFields = (scope: string) => <div role="group" aria-label={t('resourceList.mapFilters')} className="grid gap-3 sm:col-span-2 sm:grid-cols-2">
+    {showPlanetFilter && <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'planet')}>{t('resourceList.planet')}
+      <select id={fieldId(scope, 'planet')} value={planet} onChange={(event) => updateFilters({ planet: event.target.value || null })} className={inputClass}>
+        <option value="">{t('resourceList.allPlanets')}</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}
+      </select>
+    </label>}
+    {showBlockFilter && (() => {
+      const invalid = blockInvalid(localMapValues.block);
+      const errorId = `${fieldId(scope, 'block')}-message`;
+      return <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'block')}>{t('resourceList.block')}
+      <input
+        id={fieldId(scope, 'block')}
+        value={localMapValues.block}
+        autoComplete="off"
+        aria-invalid={invalid || undefined}
+        aria-describedby={errorId}
+        onChange={(event) => setLocalMapValues((current) => ({ ...current, block: event.target.value }))}
+        onFocus={resyncRejectedFields}
+        onBlur={() => commitMapFields(['block'])}
+        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitMapFields(['block']); } }}
+        placeholder={t('resourceList.blockPlaceholder')}
+        className={`${inputClass} ${invalid ? 'input-error' : ''}`}
+      />
+      <span id={errorId} role={invalid ? 'alert' : undefined} className={`text-[11px] ${invalid ? 'input-error-message' : 'text-[var(--text-muted)]'}`}>
+        {invalid ? t('resourceList.blockTooLong', { max: MAX_BLOCK_LENGTH }) : t('resourceList.blockHint', { max: MAX_BLOCK_LENGTH })}
+      </span>
+    </label>;
+    })()}
+    {(['width', 'height'] as const).map((key) => {
+      const invalid = mapDimensionInvalid(localMapValues[key]);
+      const errorId = `${fieldId(scope, key)}-message`;
+      return <label key={key} className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, key)}>
+        {key === 'width' ? t('resourceList.width') : t('resourceList.height')}
+        <input
+          id={fieldId(scope, key)}
+          value={localMapValues[key]}
+          inputMode="numeric"
+          autoComplete="off"
+          aria-invalid={invalid || undefined}
+          aria-describedby={errorId}
+          onChange={(event) => setLocalMapValues((current) => ({ ...current, [key]: event.target.value }))}
+          onFocus={resyncRejectedFields}
+          onBlur={() => commitMapFields([key])}
+          onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitMapFields([key]); } }}
+          placeholder={t('resourceList.dimensionPlaceholder')}
+          className={`${inputClass} ${invalid ? 'input-error' : ''}`}
+        />
+        <span id={errorId} role={invalid ? 'alert' : undefined} className={`text-[11px] ${invalid ? 'input-error-message' : 'text-[var(--text-muted)]'}`}>
+          {invalid ? t('resourceList.dimensionInvalid', { min: MIN_MAP_DIMENSION, max: MAX_MAP_DIMENSION }) : dimensionHint}
+        </span>
+      </label>;
+    })}
+  </div>;
+
+  const topicField = (scope: string) => <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'topic')}>{t('resourceList.topic')}<select id={fieldId(scope, 'topic')} value={selectedCategory} onChange={(event) => updateFilters({ category_id: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allTopics')}</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>;
+  const platformField = (scope: string) => <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'platform')}>{t('resourceList.platform')}<select id={fieldId(scope, 'platform')} value={compatibility} onChange={(event) => updateFilters({ compatibility: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlatforms')}</option>{compatibilityOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>;
+  const tagField = (scope: string) => <label className="grid gap-1 text-xs text-[var(--text-muted)] sm:col-span-2" htmlFor={fieldId(scope, 'tag')}>{t('resourceList.tag')}<input id={fieldId(scope, 'tag')} value={localTag} onChange={(event) => setLocalTag(event.target.value)} onBlur={() => { if (localTag !== tag) updateFilters({ tag: localTag || null }); }} onKeyDown={(event) => { if (event.key === 'Enter' && localTag !== tag) updateFilters({ tag: localTag || null }); }} placeholder={t('resourceList.enterTag')} className={inputClass} /></label>;
+
   return <section aria-label={t('resourceList.filters')} className="mb-5 space-y-3">
     <div className="flex min-w-0 flex-col gap-3 sm:flex-row">
       <label className="relative min-w-0 flex-1"><span className="sr-only">{t('resourceList.search')}</span><Search aria-hidden className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]" /><input type="search" value={localSearch} onChange={(event) => setLocalSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && localSearch !== urlSearch) updateFilters({ search: localSearch || null }); }} placeholder={t('resourceList.search')} className={`${inputClass} w-full pl-10`} /></label>
@@ -112,14 +280,14 @@ export default function ResourceFilters({
         <label className="sr-only" htmlFor="resource-sort">{t('resourceList.sort')}</label><select id="resource-sort" value={sort} onChange={(event) => updateFilters({ sort: event.target.value || null })} className={inputClass}>
           <option value="created_at">{t('resourceList.latest')}</option><option value="updated_at">{t('resourceList.recentlyUpdated')}</option><option value="download_count">{t('resourceList.mostDownloaded')}</option><option value="rating_average">{t('resourceList.highestRated')}</option><option value="rating_count">{t('resourceList.mostRated')}</option>
         </select>
-        <button ref={filterTrigger} type="button" className={`${inputClass} inline-flex min-h-11 items-center gap-2 sm:hidden`} onClick={() => setMobileFiltersOpen(true)} aria-haspopup="dialog" aria-controls="resource-mobile-filters"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</button>
+        <button ref={filterTrigger} type="button" className={`${inputClass} inline-flex min-h-11 items-center gap-2 sm:hidden`} onClick={openMobileFilters} aria-haspopup="dialog" aria-controls="resource-mobile-filters"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</button>
         <details className="relative hidden sm:block">
           <summary className="flex h-full cursor-pointer list-none items-center gap-2 rounded-md border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="rounded-full bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</summary>
           <div className="absolute right-0 z-20 mt-2 grid w-[min(90vw,34rem)] gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 shadow-md sm:grid-cols-2">
-            <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.topic')}<select value={selectedCategory} onChange={(event) => updateFilters({ category_id: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allTopics')}</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-            <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.platform')}<select value={compatibility} onChange={(event) => updateFilters({ compatibility: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlatforms')}</option>{compatibilityOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.planet')}<select value={planet} onChange={(event) => updateFilters({ planet: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlanets')}</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-            <label className="grid gap-1 text-xs text-[var(--text-muted)] sm:col-span-2">{t('resourceList.tag')}<input value={localTag} onChange={(event) => setLocalTag(event.target.value)} onBlur={() => { if (localTag !== tag) updateFilters({ tag: localTag || null }); }} onKeyDown={(event) => { if (event.key === 'Enter' && localTag !== tag) updateFilters({ tag: localTag || null }); }} placeholder={t('resourceList.enterTag')} className={inputClass} /></label>
+            {topicField('desktop')}
+            {platformField('desktop')}
+            {showMapFilters ? mapFilterFields('desktop') : null}
+            {tagField('desktop')}
           </div>
         </details>
       </div>
@@ -130,12 +298,12 @@ export default function ResourceFilters({
       <motion.section ref={mobilePanel} className="relative max-h-[88dvh] w-full overflow-y-auto rounded-t-[var(--radius-card)] border-t border-[var(--border)] bg-[var(--bg-card)] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4" initial={reduceMotion ? false : { opacity: 0.9, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }} transition={{ duration: reduceMotion ? 0 : motionTokens.panel, ease: motionTokens.easing }}>
         <div className="mb-4 flex items-center justify-between"><h2 id="resource-filter-title" className="text-base font-semibold text-[var(--text)]">{t('resourceList.filterResources')}</h2><button type="button" aria-label={t('resourceList.closeFilters')} onClick={closeMobileFilters} className="flex h-11 w-11 items-center justify-center rounded-[var(--radius)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)]"><X className="h-5 w-5" /></button></div>
         <div className="grid gap-3">
-          <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.topic')}<select value={selectedCategory} onChange={(event) => updateFilters({ category_id: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allTopics')}</option>{categories.filter((category) => category.is_active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-          <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.platform')}<select value={compatibility} onChange={(event) => updateFilters({ compatibility: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlatforms')}</option>{compatibilityOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.planet')}<select value={planet} onChange={(event) => updateFilters({ planet: event.target.value || null })} className={inputClass}><option value="">{t('resourceList.allPlanets')}</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-          <label className="grid gap-1 text-xs text-[var(--text-muted)]">{t('resourceList.tag')}<input value={localTag} onChange={(event) => setLocalTag(event.target.value)} onBlur={() => { if (localTag !== tag) updateFilters({ tag: localTag || null }); }} onKeyDown={(event) => { if (event.key === 'Enter' && localTag !== tag) updateFilters({ tag: localTag || null }); }} placeholder={t('resourceList.enterTag')} className={inputClass} /></label>
+          {topicField('mobile')}
+          {platformField('mobile')}
+          {showMapFilters ? mapFilterFields('mobile') : null}
+          {tagField('mobile')}
         </div>
-        <div className="sticky bottom-0 mt-4 flex gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] py-3"><button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); closeMobileFilters(); }} className="min-h-11 flex-1 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)]">{t('resourceList.clear')}</button><button type="button" onClick={closeMobileFilters} className="min-h-11 flex-1 rounded-[var(--radius)] bg-[var(--primary-button)] px-4 text-sm font-semibold text-white">{t('resourceList.apply')}</button></div>
+        <div className="sticky bottom-0 mt-4 flex gap-3 border-t border-[var(--border)] bg-[var(--bg-card)] py-3"><button type="button" onClick={() => { clearAll(); closeMobileFilters(); }} className="min-h-11 flex-1 rounded-[var(--radius)] border border-[var(--border)] px-4 text-sm text-[var(--text-secondary)]">{t('resourceList.clear')}</button><button type="button" onClick={applyMobileFilters} className="min-h-11 flex-1 rounded-[var(--radius)] bg-[var(--primary-button)] px-4 text-sm font-semibold text-white">{t('resourceList.apply')}</button></div>
       </motion.section>
     </motion.div>}
     </AnimatePresence>
@@ -151,9 +319,12 @@ export default function ResourceFilters({
       {tag && removableChip('tag', t('resourceList.tagChip', { value: tag }))}
       {supportedVersion && removableChip('supported_version', t('resourceList.versionChip', { value: supportedVersion }))}
       {compatibility && removableChip('compatibility', t('resourceList.platformChip', { value: compatibility }))}
-      {planet && removableChip('planet', t('resourceList.planetChip', { value: planet }))}
+      {showPlanetFilter && planet && removableChip('planet', t('resourceList.planetChip', { value: planet }))}
+      {showBlockFilter && urlBlock && removableChip('block', t('resourceList.blockChip', { value: urlBlock }))}
+      {showMapFilters && urlWidth && removableChip('width', t('resourceList.widthChip', { value: urlWidth }))}
+      {showMapFilters && urlHeight && removableChip('height', t('resourceList.heightChip', { value: urlHeight }))}
       {sort !== 'created_at' && removableChip('sort', t('resourceList.sortChip', { value: sortLabel }))}
-      <button type="button" onClick={() => { setLocalSearch(''); setLocalTag(''); router.push('/resources'); }} className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 hover:text-[var(--primary-text)]"><X className="h-3.5 w-3.5" />{t('resourceList.clear')}</button>
+      <button type="button" onClick={clearAll} className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 hover:text-[var(--primary-text)]"><X className="h-3.5 w-3.5" />{t('resourceList.clear')}</button>
     </div>}
   </section>;
 }

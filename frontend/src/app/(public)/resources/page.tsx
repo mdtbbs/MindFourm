@@ -14,6 +14,7 @@ import { generatePageMetadata } from "@/lib/metadata";
 import { Resource, ResourceCategory } from "@/types";
 import { getRequestLocale } from "@/i18n/server";
 import { translate } from "@/i18n";
+import { MAP_FILTER_KEYS, normalizeResourceFilterParams, parseMapFilters, resourceListQuery } from "@/lib/resources/query";
 
 export const revalidate = 60;
 
@@ -23,10 +24,22 @@ type ResourceFilterOptions = {
   planets: string[];
 };
 
+type ResourcesSearchParams = Record<string, string | string[] | undefined>;
+
+/** Flat, decoded query used for the canonical URL and for every downstream reader. */
+function toSearchParams(raw: ResourcesSearchParams): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (typeof first === "string" && first !== "") params.set(key, first);
+  }
+  return params;
+}
+
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | undefined>>;
+  searchParams: Promise<ResourcesSearchParams>;
 }): Promise<Metadata> {
   const settings = await fetchPublicSettings();
   const brandInfo = resolveBrand(settings);
@@ -45,26 +58,12 @@ export async function generateMetadata({
   return hasFilter ? { ...metadata, robots: { index: false, follow: true } } : metadata;
 }
 
-async function fetchData(params: {
-  category_id?: string;
-  search?: string;
-  sort?: string;
-  tag?: string;
-  supported_version?: string;
-  compatibility?: string;
-  resource_kind?: string;
-  planet?: string;
-}) {
-  const qs = new URLSearchParams();
+async function fetchData(params: URLSearchParams) {
+  // The list API validates with `whitelist + forbidNonWhitelisted`, so a share
+  // link carrying `utm_source` (or any typo) must not reach it: forward only the
+  // keys the DTO accepts, exactly once, from the whitelist in `lib/resources/query`.
+  const qs = resourceListQuery(params);
   qs.set("limit", "30");
-  if (params.category_id) qs.set("category_id", params.category_id);
-  if (params.search) qs.set("search", params.search);
-  if (params.sort) qs.set("sort", params.sort);
-  if (params.tag) qs.set("tag", params.tag);
-  if (params.supported_version) qs.set("supported_version", params.supported_version);
-  if (params.compatibility) qs.set("compatibility", params.compatibility);
-  if (params.resource_kind) qs.set("resource_kind", params.resource_kind);
-  if (params.planet) qs.set("planet", params.planet);
 
   const [resourcesResult, resourceCategories, filterOptions] = await Promise.all([
     fetchApiData<{ data: Resource[]; next_cursor: string | null; has_more: boolean }>(`/api/resources?${qs.toString()}`, {
@@ -87,21 +86,23 @@ async function fetchData(params: {
   };
 }
 
+function canonicalResourcesHref(params: URLSearchParams): string {
+  const query = params.toString();
+  return query ? `/resources?${query}` : '/resources';
+}
+
 export default async function ResourcesPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    category_id?: string;
-    search?: string;
-    sort?: string;
-    tag?: string;
-    supported_version?: string;
-    compatibility?: string;
-    resource_kind?: string;
-    planet?: string;
-  }>;
+  searchParams: Promise<ResourcesSearchParams>;
 }) {
-  const params = await searchParams;
+  const requested = toSearchParams(await searchParams);
+  // Map/blueprint conditions are meaningful only while the list is filtered to
+  // map or schematic: a kind switch, a hand-edited URL or an out-of-range
+  // dimension is corrected here once, before anything reads the conditions.
+  const params = normalizeResourceFilterParams(requested);
+  if (params.toString() !== requested.toString()) redirect(canonicalResourcesHref(params));
+
   const [settings, locale] = await Promise.all([fetchPublicSettings(), getRequestLocale()]);
   const t = (key: string) => translate(locale, `resourceList.${key}`);
   const resourcesEnabled = settings.feature_resources_enabled !== "false";
@@ -125,25 +126,42 @@ export default async function ResourcesPage({
 
   const { resources, nextCursor, hasMore, resourceCategories, filterOptions } = data;
 
-  if (params.category_id && !resourceCategories.some((category) => String(category.id) === params.category_id)) {
-    const canonical = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => { if (key !== 'category_id' && value) canonical.set(key, value); });
-    redirect(canonical.size ? `/resources?${canonical.toString()}` : '/resources');
+  const categoryId = params.get('category_id') || undefined;
+  if (categoryId && !resourceCategories.some((category) => String(category.id) === categoryId)) {
+    params.delete('category_id');
+    redirect(canonicalResourcesHref(params));
   }
 
-  const discoveryMode = !params.search && !params.category_id && !params.tag && !params.supported_version
-    && !params.compatibility && !params.planet && !params.sort;
+  const resourceKind = params.get('resource_kind') || undefined;
+  // One rule, one reader: a kind only carries the conditions its own renderer
+  // metadata can answer (see `lib/resources/query.ts`), so a condition with no
+  // source for this kind is removed instead of being queried.
+  const mapFilters = parseMapFilters(resourceKind, {
+    planet: params.get('planet'),
+    block: params.get('block'),
+    width: params.get('width'),
+    height: params.get('height'),
+  });
+  const { planet, block, width, height } = mapFilters;
+  const supportedVersion = params.get('supported_version') || undefined;
+  const compatibility = params.get('compatibility') || undefined;
+  const tag = params.get('tag') || undefined;
+  const search = params.get('search') || undefined;
+  const sort = params.get('sort') || undefined;
+
+  const discoveryMode = !search && !categoryId && !tag && !supportedVersion
+    && !compatibility && !sort && MAP_FILTER_KEYS.every((key) => !params.get(key));
   const submitHrefByKind: Record<string, string> = {
     mod: '/resources/submit/mod',
     map: '/resources/submit/map',
     schematic: '/resources/submit/schematic',
   };
-  const selectedKindSubmitHref = params.resource_kind ? submitHrefByKind[params.resource_kind] : undefined;
-  const selectedKindSubmitLabel = params.resource_kind === 'mod'
+  const selectedKindSubmitHref = resourceKind ? submitHrefByKind[resourceKind] : undefined;
+  const selectedKindSubmitLabel = resourceKind === 'mod'
     ? translate(locale, 'resourceSubmit.modSubmit')
-    : params.resource_kind === 'map'
+    : resourceKind === 'map'
       ? translate(locale, 'resourceSubmit.mapSubmit')
-      : params.resource_kind === 'schematic'
+      : resourceKind === 'schematic'
         ? translate(locale, 'resourceSubmit.schematicSubmit')
         : undefined;
 
@@ -155,23 +173,27 @@ export default async function ResourcesPage({
 
     <ResourceCategoryNavigation
       ariaLabel={t('resourceType')}
-      selectedKind={params.resource_kind}
+      selectedKind={resourceKind}
       labels={{ mod: t('resourceKind.mod'), schematic: t('resourceKind.schematic'), map: t('resourceKind.map'), pack: t('resourceKind.pack') }}
     />
 
     <main className="min-w-0 space-y-7">
-      {discoveryMode ? <ResourceDiscoveryShelves kind={params.resource_kind} /> : null}
+      {discoveryMode ? <ResourceDiscoveryShelves kind={resourceKind} /> : null}
 
       <section id="resource-browse" className="space-y-4 scroll-mt-4" aria-label="资源浏览">
         <ResourceFilters
           categories={resourceCategories}
-          initialCategory={params.category_id}
-          initialSearch={params.search}
-          initialSort={params.sort}
-          initialTag={params.tag}
-          initialSupportedVersion={params.supported_version}
-          initialCompatibility={params.compatibility}
-          initialResourceKind={params.resource_kind}
+          initialCategory={categoryId}
+          initialSearch={search}
+          initialSort={sort}
+          initialTag={tag}
+          initialSupportedVersion={supportedVersion}
+          initialCompatibility={compatibility}
+          initialResourceKind={resourceKind}
+          initialPlanet={planet}
+          initialBlock={block}
+          initialWidth={width ? String(width) : undefined}
+          initialHeight={height ? String(height) : undefined}
           supportedVersions={filterOptions.supported_versions}
           compatibilityOptions={filterOptions.compatibility}
           planets={filterOptions.planets}
@@ -182,18 +204,18 @@ export default async function ResourcesPage({
           <p className="mb-4 text-[var(--text-muted)]">{t('empty')}</p>
           <Link href={selectedKindSubmitHref || '/resources/submit'} className="inline-flex min-h-11 items-center bg-[var(--primary-button)] px-4 py-2 text-sm font-medium text-white hover:bg-[var(--primary-dark)]">{selectedKindSubmitLabel || t('submitFirst')}</Link>
         </div> : <ResourceLoadMore
-          key={JSON.stringify(params)}
+          key={params.toString()}
           initialResources={resources}
           initialCursor={nextCursor}
           hasMore={hasMore}
-          categoryId={params.category_id ? parseInt(params.category_id) : undefined}
-          search={params.search}
-          sort={params.sort}
-          tag={params.tag}
-          supportedVersion={params.supported_version}
-          compatibility={params.compatibility}
-          resourceKind={params.resource_kind}
-          planet={params.planet}
+          categoryId={categoryId ? parseInt(categoryId) : undefined}
+          search={search}
+          sort={sort}
+          tag={tag}
+          supportedVersion={supportedVersion}
+          compatibility={compatibility}
+          resourceKind={resourceKind}
+          mapFilters={mapFilters}
         />}
       </section>
     </main>

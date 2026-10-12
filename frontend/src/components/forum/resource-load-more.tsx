@@ -6,6 +6,7 @@ import ResourceRow from "./resource-row";
 import { resourceApi } from "@/lib/api/client";
 import ErrorState from "@/components/ui/error-state";
 import InlineLoading from "@/components/ui/inline-loading";
+import type { MapFilterValues } from "@/lib/resources/query";
 
 interface ResourceLoadMoreProps {
   initialResources: Resource[];
@@ -18,7 +19,8 @@ interface ResourceLoadMoreProps {
   supportedVersion?: string;
   compatibility?: string;
   resourceKind?: string;
-  planet?: string;
+  /** Validated map/blueprint conditions; absent for every other resource kind. */
+  mapFilters?: MapFilterValues;
 }
 
 export default function ResourceLoadMore({
@@ -32,7 +34,7 @@ export default function ResourceLoadMore({
   supportedVersion,
   compatibility,
   resourceKind,
-  planet,
+  mapFilters,
 }: ResourceLoadMoreProps) {
   const [resources, setResources] = useState<Resource[]>(initialResources);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
@@ -44,6 +46,9 @@ export default function ResourceLoadMore({
     if (!cursor || loading) return;
     setLoading(true);
     setError(false);
+    // The page already validated these conditions, so they are forwarded as-is:
+    // a continuation that dropped them would silently widen the result set.
+    const structured = mapFilters || {};
     try {
       const result = await resourceApi.list({
         cursor,
@@ -55,7 +60,10 @@ export default function ResourceLoadMore({
         supported_version: supportedVersion,
         compatibility,
         resource_kind: resourceKind,
-        planet,
+        planet: structured.planet,
+        block: structured.block,
+        width: structured.width,
+        height: structured.height,
       });
       setResources((prev) => [...prev, ...result.data]);
       setCursor(result.next_cursor);
