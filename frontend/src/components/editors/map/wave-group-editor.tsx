@@ -9,7 +9,7 @@ import type { WaveGroup } from '@/lib/editors/editor-model';
 
 const newId = () => `wave:${crypto.randomUUID()}`;
 const MAX_WAVE_GROUPS = 1_000;
-const defaultGroup = (unit: string, team: number): WaveGroup => ({ __editor_id: newId(), type: unit, begin: 1, end: 1, spacing: 1, max: 0, scaling: 1, shields: 0, shieldScaling: 0, amount: 1, spawn: -1, effect: 'none', payloads: [], items: { item: 'copper', amount: 0 }, team });
+const defaultGroup = (unit: string, team: number): WaveGroup => ({ __editor_id: newId(), type: unit, begin: 0, end: 0, spacing: 1, max: 0, scaling: 1, shields: 0, shieldScaling: 0, amount: 1, spawn: -1, effect: 'none', payloads: [], items: { item: 'copper', amount: 0 }, team });
 
 export function WaveGroupEditor({ groups, catalog, onChange }: { groups: WaveGroup[]; catalog: EditorContentCatalog; onChange: (next: WaveGroup[]) => void }) {
   const unitEntries = catalog.units;
@@ -30,11 +30,15 @@ export function WaveGroupEditor({ groups, catalog, onChange }: { groups: WaveGro
     <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 border border-[var(--border)] bg-[var(--bg-card)] px-2 text-left text-sm"><ContentIcon entry={entries.find((entry) => entry.internal_name === value)} size={26} /><span className="min-w-0 flex-1 truncate">{entries.find((entry) => entry.internal_name === value)?.display_name || '选择'}</span><span className="text-xs text-[var(--text-muted)]">选择</span></summary>
     <div className="absolute left-0 top-full z-30 mt-1 h-64 w-[min(20rem,80vw)] border border-[var(--border)] bg-[var(--bg-card)] p-2 shadow-xl"><ContentPicker entries={entries} value={value} onChange={(entry) => callback(entry.internal_name)} label={label} /></div>
   </details>;
-  const numberField = (index: number, group: WaveGroup, key: string, label: string, min: number, step: number | 'any' = 1, max?: number) => <label key={key} className="block min-w-0 space-y-1 text-xs text-[var(--text-muted)]"><span>{label}</span><input type="number" min={min} max={max} step={step} value={typeof group[key] === 'number' ? Number(group[key]) : min} onChange={(event) => {
-    const value = event.target.value === '' ? Number.NaN : Number(event.target.value);
-    if (!Number.isFinite(value) || value < min || (max !== undefined && value > max) || (step === 1 && !Number.isInteger(value))) { setError(`${label}需要是${step === 1 ? '有效整数' : '有效数值'}。`); return; }
-    update(index, { [key]: value }); setError('');
-  }} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base text-[var(--text)] sm:text-sm" /></label>;
+  const numberField = (index: number, group: WaveGroup, key: string, label: string, min: number, step: number | 'any' = 1, max?: number) => {
+    const waveIndexField = key === 'begin' || key === 'end';
+    const storedValue = typeof group[key] === 'number' ? Number(group[key]) : min - (waveIndexField ? 1 : 0);
+    return <label key={key} className="block min-w-0 space-y-1 text-xs text-[var(--text-muted)]"><span>{label}</span><input type="number" min={min} max={max} step={step} value={storedValue + (waveIndexField ? 1 : 0)} onChange={(event) => {
+      const value = event.target.value === '' ? Number.NaN : Number(event.target.value);
+      if (!Number.isFinite(value) || value < min || (max !== undefined && value > max) || (step === 1 && !Number.isInteger(value))) { setError(`${label}需要是${step === 1 ? '有效整数' : '有效数值'}。`); return; }
+      update(index, { [key]: value - (waveIndexField ? 1 : 0) }); setError('');
+    }} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3 text-base text-[var(--text)] sm:text-sm" /></label>;
+  };
 
   return <section className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--border)] pb-3"><div><h3 className="text-sm font-semibold">敌人波次</h3><p className="mt-1 text-xs text-[var(--text-muted)]">{groups.length} 个波次组。导出差异最多 1,000 项。</p></div><div className="flex min-w-0 gap-2">{chooseFrom(unitEntries, unitToAdd, setUnitToAdd, '新增波次单位')}<button type="button" disabled={groups.length >= MAX_WAVE_GROUPS} onClick={() => add()} className="inline-flex min-h-11 shrink-0 items-center gap-1 bg-[var(--primary)] px-3 text-sm text-white disabled:opacity-40"><Plus className="h-4 w-4" />添加</button></div></div>
@@ -95,9 +99,18 @@ function ItemCarryEditor({ itemValue, catalog, onChange }: { itemValue: Record<s
 function PayloadEditor({ payloads, catalog, onChange }: { payloads: unknown[]; catalog: EditorContentCatalog; onChange: (value: string[]) => void }) {
   const [selectedUnit, setSelectedUnit] = useState(catalog.units[0]?.internal_name || 'dagger');
   const [amount, setAmount] = useState(1);
+  const [error, setError] = useState('');
   const counts = new Map<string, number>();
   for (const item of payloads) if (typeof item === 'string') counts.set(item, (counts.get(item) || 0) + 1);
-  const update = (name: string, count: number) => { const next: string[] = []; for (const [unit, total] of counts) if (unit !== name) next.push(...Array.from({ length: Math.min(total, 100) }, () => unit)); next.push(...Array.from({ length: Math.max(0, Math.min(100, count)) }, () => name)); onChange(next); };
+  const update = (name: string, count: number) => {
+    const otherTotal = [...counts].reduce((total, [unit, amount]) => total + (unit === name ? 0 : amount), 0);
+    const allowed = Math.max(0, Math.min(count, 100 - otherTotal));
+    const next: string[] = [];
+    for (const [unit, total] of counts) if (unit !== name) next.push(...Array.from({ length: total }, () => unit));
+    next.push(...Array.from({ length: allowed }, () => name));
+    onChange(next);
+    setError(allowed < count ? '每组波次的单位载荷总数最多为 100。' : '');
+  };
   return <section className="space-y-2 border border-[var(--border)] p-2"><h4 className="text-xs font-medium">单位载荷</h4>{[...counts].map(([name, count]) => <div key={name} className="flex items-center gap-2"><ContentIcon entry={catalog.units.find((entry) => entry.internal_name === name)} size={24} /><span className="min-w-0 flex-1 truncate text-xs">{catalog.units.find((entry) => entry.internal_name === name)?.display_name || name}</span><input aria-label="单位载荷数量" type="number" min={0} max={100} value={count} onChange={(event) => update(name, Number(event.target.value) || 0)} className="h-9 w-20 border border-[var(--border)] bg-[var(--bg-card)] px-2 text-sm" /><button type="button" onClick={() => update(name, 0)} className="px-2 text-xs text-red-600">移除</button></div>)}<div className="flex min-w-0 gap-2">{contentMenu(catalog.units, selectedUnit, setSelectedUnit, '选择载荷单位')}<input aria-label="单位载荷数量" type="number" min={1} max={100} value={amount} onChange={(event) => setAmount(Math.max(1, Math.min(100, Number(event.target.value) || 1)))} className="h-11 w-20 border border-[var(--border)] bg-[var(--bg-card)] px-2 text-sm" /><button type="button" onClick={() => update(selectedUnit, (counts.get(selectedUnit) || 0) + amount)} className="min-h-11 shrink-0 border border-[var(--border)] px-2 text-xs">设置数量</button></div></section>;
 }
 
@@ -106,7 +119,8 @@ function contentMenu(entries: EditorContentEntry[], value: string, onChange: (na
 }
 
 function RawGroupEditor({ group, onChange }: { group: WaveGroup; onChange: (next: Record<string, unknown>) => void }) {
-  const [value, setValue] = useState(JSON.stringify(group, null, 2));
+  const editableGroup = Object.fromEntries(Object.entries(group).filter(([key]) => key !== '__editor_id'));
+  const [value, setValue] = useState(JSON.stringify(editableGroup, null, 2));
   const [error, setError] = useState('');
-  return <div className="mt-2 space-y-2"><textarea value={value} onChange={(event) => { setValue(event.target.value); try { const parsed = JSON.parse(event.target.value) as unknown; if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(); onChange(parsed as Record<string, unknown>); setError(''); } catch { setError('JSON 尚未完整解析；上一次有效值会保留。'); } }} rows={10} className="w-full border border-[var(--border)] bg-[var(--bg-page)] p-3 font-mono text-xs" />{error ? <p role="alert" className="text-xs text-amber-700">{error}</p> : null}</div>;
+  return <div className="mt-2 space-y-2"><textarea value={value} onChange={(event) => { setValue(event.target.value); try { const parsed = JSON.parse(event.target.value) as unknown; if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error(); const safe = { ...(parsed as Record<string, unknown>) }; delete safe.__editor_id; onChange({ ...safe, __editor_id: group.__editor_id }); setError(''); } catch { setError('JSON 尚未完整解析；上一次有效值会保留。'); } }} rows={10} className="w-full border border-[var(--border)] bg-[var(--bg-page)] p-3 font-mono text-xs" />{error ? <p role="alert" className="text-xs text-amber-700">{error}</p> : null}</div>;
 }

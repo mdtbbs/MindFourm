@@ -54,7 +54,7 @@ function ConfigPanel({ placement, catalog, document, onChange, fullLogic }: {
   const descriptors = placement.config_types?.length ? placement.config_types : entry?.config_types || [];
   const current = placement.config || null;
   const update = (config: Record<string, unknown>) => onChange({ ...document, placements: document.placements.map((item) => item.id === placement.id ? { ...item, config } : item) });
-  const contentEntries = (type: unknown): EditorContentEntry[] => type === 'item' ? catalog.items : type === 'liquid' ? catalog.liquids : type === 'unit' ? catalog.units : type === 'status' ? catalog.statuses : catalog.blocks;
+  const contentEntries = (type: unknown): EditorContentEntry[] => type === 'item' ? catalog.items : type === 'liquid' ? catalog.liquids : type === 'unit' ? catalog.units : type === 'status' ? catalog.statuses : type === 'planet' || type === 'weather' || type === 'unitCommand' ? [] : catalog.blocks;
   if (placement.logic_source_available && placement.logic_source !== undefined) return fullLogic
     ? <label className="block space-y-2 text-sm"><span className="font-medium">逻辑处理器代码</span><textarea value={placement.logic_source} onChange={(event) => onChange({ ...document, placements: document.placements.map((item) => item.id === placement.id ? { ...item, logic_source: event.target.value } : item) })} maxLength={32_768} rows={12} className="min-h-56 w-full border border-[var(--border)] bg-[var(--bg-page)] p-3 font-mono text-xs" /><span className="block text-xs text-[var(--text-muted)]">最多 32,768 个字符；保存时会由 Renderer 验证逻辑配置格式。</span></label>
     : <p className="text-sm text-[var(--text-muted)]">Renderer 目前只开放安全读取；逻辑源码保持只读。</p>;
@@ -73,15 +73,15 @@ function ConfigPanel({ placement, catalog, document, onChange, fullLogic }: {
           : nextDescriptor.type === 'boolean' ? { type: 'boolean', value: false }
             : nextDescriptor.type === 'text' ? { type: 'text', value: '' }
               : nextDescriptor.type === 'color' ? { type: 'color', value: '#ffffffff' }
-                : nextDescriptor.type === 'integer' || nextDescriptor.type === 'long' || nextDescriptor.type === 'float' || nextDescriptor.type === 'double' ? { type: nextDescriptor.type, value: 0 }
+                : nextDescriptor.type === 'integer' || nextDescriptor.type === 'long' || nextDescriptor.type === 'float' || nextDescriptor.type === 'double' ? { type: nextDescriptor.type, value: nextDescriptor.type === 'long' ? '0' : 0 }
                   : nextDescriptor.type === 'none' ? { type: 'none' } : { type: nextDescriptor.type };
       update(value);
     }} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3">
       <option value="">选择配置</option>{descriptors.map((item, index) => <option key={`${item.type}:${item.content_type}:${index}`} value={item.type}>{configTypeLabel(item.type)}{item.content_type ? ` · ${contentTypeLabel(item.content_type)}` : ''}</option>)}
     </select></label>
     {current && ['content', 'tech_node'].includes(type) ? <>
-      {type === 'tech_node' ? <label className="block space-y-1 text-sm"><span>内容类别</span><select value={contentType} onChange={(event) => update({ ...current, content_type: event.target.value, name: '' })} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3">{['item', 'block', 'unit', 'liquid', 'status', 'planet'].map((item) => <option key={item} value={item}>{contentTypeLabel(item)}</option>)}</select></label> : null}
-      <ContentPicker entries={contentEntries(contentType)} value={typeof current.name === 'string' ? current.name : ''} onChange={(item) => update({ ...current, name: item.internal_name })} label="配置内容" className="h-56" />
+      {type === 'tech_node' ? <label className="block space-y-1 text-sm"><span>内容类别</span><select value={contentType} onChange={(event) => update({ ...current, content_type: event.target.value, name: '' })} className="min-h-11 w-full border border-[var(--border)] bg-[var(--bg-card)] px-3">{['item', 'block', 'unit', 'liquid', 'status'].map((item) => <option key={item} value={item}>{contentTypeLabel(item)}</option>)}</select></label> : null}
+      {contentEntries(contentType).length ? <ContentPicker entries={contentEntries(contentType)} value={typeof current.name === 'string' ? current.name : ''} onChange={(item) => update({ ...current, name: item.internal_name })} label="配置内容" className="h-56" /> : <p className="border border-[var(--border)] p-3 text-sm text-[var(--text-muted)]">此内容目录暂不可用，已读取的原配置保持只读：{typeof current.name === 'string' ? current.name : '未设置'}</p>}
     </> : null}
     {current?.type === 'boolean' ? <label className="flex min-h-11 items-center gap-3 text-sm"><input type="checkbox" checked={current.value === true} onChange={(event) => update({ ...current, value: event.target.checked })} className="h-5 w-5" />启用</label> : null}
     {current?.type === 'text' ? <label className="block space-y-1 text-sm"><span>文本</span><textarea value={typeof current.value === 'string' ? current.value : ''} maxLength={1200} onChange={(event) => update({ ...current, value: event.target.value })} rows={5} className="w-full border border-[var(--border)] bg-[var(--bg-card)] p-3" /></label> : null}

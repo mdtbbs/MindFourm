@@ -202,7 +202,7 @@ export const EDITOR_RULE_SCHEMA: RuleField[] = [
 EDITOR_RULE_SCHEMA.push(
   { key: 'unitCap', label: '单位上限', description: '每个队伍允许拥有的单位数量。', type: 'integer', default: 0, min: 0, max: 1_000_000 },
   { key: 'winWave', label: '胜利波次', description: '到达指定波次后判定胜利。', type: 'integer', default: 0, min: 0, max: 1_000_000 },
-  { key: 'environment', label: '环境标记', description: 'Mindustry 环境位标记，通常由地图自动设置。', type: 'integer', default: 0, min: 0, max: 2_147_483_647, advanced: true },
+  { key: 'env', label: '环境标记', description: 'Mindustry 环境位标记，通常由地图自动设置。', type: 'integer', default: 0, min: 0, max: 2_147_483_647, advanced: true },
   ...(['solarMultiplier', 'unitBuildSpeedMultiplier', 'unitCostMultiplier', 'unitDamageMultiplier', 'unitHealthMultiplier', 'unitCrashDamageMultiplier', 'unitMineSpeedMultiplier', 'unitFactoryActivationDelay', 'blockHealthMultiplier', 'blockDamageMultiplier', 'buildCostMultiplier', 'buildSpeedMultiplier', 'deconstructRefundMultiplier', 'enemyCoreBuildRadius', 'dropZoneRadius', 'waveSpacing', 'initialWaveSpacing', 'itemDepositCooldown'] as const).map((key) => {
     const defaults: Record<(typeof key), number> = {
       solarMultiplier: 1, unitBuildSpeedMultiplier: 1, unitCostMultiplier: 1, unitDamageMultiplier: 1, unitHealthMultiplier: 1,
@@ -243,8 +243,18 @@ export function buildWaveOperations(original: WaveGroup[], edited: WaveGroup[]) 
   const result: Operation[] = [];
   const id = (group: WaveGroup, index: number, prefix: string) => group.__editor_id || `${prefix}:${index}`;
   const originalIds = original.map((group, index) => id(group, index, 'source-wave'));
-  const editedIds = edited.map((group, index) => group.__editor_id || originalIds[index] || `new-wave:${index}`);
   const originalById = new Map(original.map((group, index) => [originalIds[index], group]));
+  const editedIds: string[] = [];
+  const usedEditedIds = new Set<string>();
+  edited.forEach((group, index) => {
+    let candidate = group.__editor_id || originalIds[index] || `new-wave:${index}`;
+    if (usedEditedIds.has(candidate)) {
+      candidate = `new-wave:${index}`;
+      while (usedEditedIds.has(candidate) || originalById.has(candidate)) candidate = `new-wave:${index}:${usedEditedIds.size}`;
+    }
+    usedEditedIds.add(candidate);
+    editedIds.push(candidate);
+  });
   const liveIds = new Set(editedIds);
   const working = originalIds.map((value) => value);
   for (let index = working.length - 1; index >= 0; index--) {
@@ -287,7 +297,11 @@ export function schematicOperations(document: SchematicDocument) {
     delete_positions: deleted.map((item) => ({ x: item.source_x as number, y: item.source_y as number })),
     move_positions: original.flatMap((item) => !item.deleted && (item.x !== item.source_x || item.y !== item.source_y)
       ? [{ from_x: item.source_x as number, from_y: item.source_y as number, to_x: item.x, to_y: item.y }] : []),
-    add_blocks: additions.filter((item) => !item.deleted).map((item) => ({ x: item.x, y: item.y, block: item.block, rotation: item.rotation })),
+    add_blocks: additions.filter((item) => !item.deleted).map((item) => ({
+      x: item.x, y: item.y, block: item.block, rotation: item.rotation,
+      ...(item.config && item.config_editable ? { config: item.config } : {}),
+      ...(item.logic_source_available && item.logic_source !== undefined ? { logic_source: item.logic_source } : {}),
+    })),
     rotate_positions: original.flatMap((item) => !item.deleted && item.rotation !== item.original_rotation
       ? [{ x: item.source_x as number, y: item.source_y as number, rotation_quarters: (item.rotation - item.original_rotation + 4) & 3 }] : []),
     logic_configs: original.flatMap((item) => !item.deleted && item.logic_source_available && item.logic_source !== undefined

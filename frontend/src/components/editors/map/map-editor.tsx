@@ -26,7 +26,7 @@ export function MapEditor({ analysis, catalog, document, onChange, mode }: Props
   }, [metadata.tile_layers]);
   const width = Number.isInteger(metadata.width) ? Number(metadata.width) : 1;
   const height = Number.isInteger(metadata.height) ? Number(metadata.height) : 1;
-  const floors = useMemo(() => catalog.blocks.filter((item) => item.floor), [catalog.blocks]);
+  const floors = useMemo(() => catalog.blocks.filter((item) => item.floor && !item.overlay), [catalog.blocks]);
   const overlays = useMemo(() => catalog.blocks.filter((item) => item.overlay), [catalog.blocks]);
   const buildings = useMemo(() => catalog.blocks.filter((item) => item.placeable && !item.floor && !item.overlay && !item.spawn && !item.core), [catalog.blocks]);
   const cores = useMemo(() => catalog.blocks.filter((item) => item.core && item.placeable), [catalog.blocks]);
@@ -53,7 +53,7 @@ export function MapEditor({ analysis, catalog, document, onChange, mode }: Props
       return cell ? [{ ...cell, baseFloor: baseCell?.floor || 'stone', baseOverlay: baseCell?.overlay || 'air' }] : [];
     });
   }, [baseTerrain, document.terrain_edits]);
-  const floorsByName = useMemo(() => new Map(catalog.blocks.filter((item) => item.floor).map((item) => [item.internal_name, item])), [catalog.blocks]);
+  const floorsByName = useMemo(() => new Map(catalog.blocks.filter((item) => item.floor && !item.overlay).map((item) => [item.internal_name, item])), [catalog.blocks]);
   const overlaysByName = useMemo(() => new Map(catalog.blocks.filter((item) => item.overlay).map((item) => [item.internal_name, item])), [catalog.blocks]);
   const blocksByName = useMemo(() => new Map(catalog.blocks.map((item) => [item.internal_name, item])), [catalog.blocks]);
   const baseCells = useMemo(() => new Map(baseTerrain.flatMap((row) => Number.isInteger(row.x) && Number.isInteger(row.y) && typeof row.name === 'string'
@@ -79,7 +79,14 @@ export function MapEditor({ analysis, catalog, document, onChange, mode }: Props
     if (!base) return;
     const value = { x, y, floor: nextFloor, overlay: nextOverlay };
     const terrain_edits = { ...document.terrain_edits };
-    if (value.floor === base.floor && value.overlay === base.overlay) delete terrain_edits[key]; else terrain_edits[key] = value;
+    if (value.floor === base.floor && value.overlay === base.overlay) delete terrain_edits[key];
+    else {
+      if (!terrain_edits[key] && Object.keys(terrain_edits).length >= 5_000) {
+        setError('地形差异已达到导出上限 5,000 格。');
+        return;
+      }
+      terrain_edits[key] = value;
+    }
     onChange({ ...document, terrain_edits }); setError('');
   };
   const placeObject = (type: MapEditorObject['object_type'], x: number, y: number) => {
