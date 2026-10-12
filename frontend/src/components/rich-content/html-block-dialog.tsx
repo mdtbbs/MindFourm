@@ -6,7 +6,9 @@ import { Dialog } from '@/components/ui/dialog';
 import { RichHtmlBlock } from './rich-html-block';
 import { sanitizeTrustedHtmlClient } from '@/lib/tiptap/trusted-html';
 import { importHtmlDocument, HTML_IMPORT_MAX_LENGTH } from '@/lib/tiptap/import-html-document';
-import { HTML_DOCUMENT_MAX_LENGTH } from '@/lib/tiptap/html-document';
+import { HTML_DOCUMENT_MAX_LENGTH, isHtmlDocument, sanitizeHtmlDocument } from '@/lib/tiptap/html-document';
+
+const sanitizeHtmlBlockDraft = (html: string) => isHtmlDocument(html) ? sanitizeHtmlDocument(html) : sanitizeTrustedHtmlClient(html);
 
 /**
  * Insert / edit panel for one HTML block.
@@ -44,14 +46,14 @@ export function HtmlBlockDialog({ open, initialHtml = '', onOpenChange, onSubmit
 
   const hasEmbeddedImages = /data:image\//i.test(draft);
   const hasRemoteImages = /(?:src\s*=\s*["'](?:https?:)?\/\/|url\(\s*["']?(?:https?:)?\/\/)/i.test(draft);
-  const sanitized = useMemo(() => sanitizeTrustedHtmlClient(draft.replace(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+/gi, '')), [draft]);
+  const sanitized = useMemo(() => sanitizeHtmlBlockDraft(draft.replace(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+/gi, '')), [draft]);
   const dropped = draft.trim().length > 0 && sanitized.trim().length === 0;
   const submit = async () => {
     setBusy(true);
     setError('');
     try {
       const imported = await importHtmlDocument(draft);
-      const safe = sanitizeTrustedHtmlClient(imported);
+      const safe = sanitizeHtmlBlockDraft(imported);
       if (!safe.trim()) throw new Error('HTML 清洗后没有可显示的内容');
       if (safe.length > HTML_DOCUMENT_MAX_LENGTH) throw new Error('HTML 超过 200000 字符，请精简内容');
       onSubmit(safe);

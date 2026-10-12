@@ -1,5 +1,5 @@
 import { uploadImage, importRemoteImage, type UploadImageResult } from './upload-image';
-import { HTML_DOCUMENT_MAX_LENGTH } from '@/lib/tiptap/html-document';
+import { HTML_DOCUMENT_MAX_LENGTH } from '../../../../src/common/utils/html-document-policy';
 
 export const HTML_IMPORT_MAX_LENGTH = 8 * 1024 * 1024;
 export const HTML_IMPORT_MAX_IMAGES = 100;

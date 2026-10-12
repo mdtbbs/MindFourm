@@ -19,6 +19,8 @@ import {
   styleObject,
   trustedHtmlText,
 } from '../../frontend/src/lib/tiptap/trusted-html';
+import { RichHtmlDocument } from '../../frontend/src/components/rich-content/rich-html-document';
+import { sanitizeHtmlDocument } from '../../frontend/src/lib/tiptap/html-document';
 import { RichHtmlBlock } from '../../frontend/src/components/rich-content/rich-html-block';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -50,7 +52,7 @@ describe('trusted HTML block — client parser', () => {
       '<style>body{display:none}</style><p>b</p>',
       '<iframe src="https://evil.example">fallback</iframe><p>b</p>',
     ]) {
-      const result = sanitizeTrustedHtmlClient(html);
+      const result = html.includes('<style>') ? sanitizeHtmlDocument(html) : sanitizeTrustedHtmlClient(html);
       expect(result).not.toContain('alert');
       if (html.includes('<style>')) {
         expect(result).toContain('<style>body{display:none}</style>');
@@ -167,7 +169,7 @@ describe('trusted HTML block — reader rendering', () => {
   const render = (html: string) => renderToStaticMarkup(createElement(RichHtmlBlock, { html }));
 
   it('contains document styles in srcdoc with scripts and forms disabled', () => {
-    const markup = render('<html><style>body{color:red}.card{display:grid}</style><div class="card">正文</div><script>alert(1)</script></html>');
+    const markup = renderToStaticMarkup(createElement(RichHtmlDocument, { html: '<html><style>body{color:red}.card{display:grid}</style><div class="card">正文</div><script>alert(1)</script></html>' }));
     expect(markup).toContain('<iframe');
     expect(markup).toContain('sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"');
     expect(markup).toContain('Content-Security-Policy');

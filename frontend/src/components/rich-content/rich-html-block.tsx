@@ -1,10 +1,11 @@
 'use client';
 
-import { createElement, Fragment } from 'react';
+import { createElement, Fragment, lazy, Suspense } from 'react';
 import { parseTrustedHtml, styleObject, type TrustedHtmlNode } from '@/lib/tiptap/trusted-html';
 import { safeUrl } from '@/lib/tiptap/presentation-url';
-import { isHtmlDocument } from '@/lib/tiptap/html-document';
-import { RichHtmlDocument } from './rich-html-document';
+import { isHtmlDocument } from '../../../../src/common/utils/html-document-policy';
+
+const RichHtmlDocument = lazy(() => import('./rich-html-document').then((module) => ({ default: module.RichHtmlDocument })));
 
 /**
  * Renders one staff-authored HTML block.
@@ -91,7 +92,7 @@ function renderNode(node: TrustedHtmlNode, key: number): React.ReactNode {
 }
 
 export function RichHtmlBlock({ html }: { html: string }) {
-  if (isHtmlDocument(html)) return <RichHtmlDocument html={html} />;
+  if (isHtmlDocument(html)) return <Suspense fallback={<div role="status">正在加载 HTML 内容…</div>}><RichHtmlDocument html={html} /></Suspense>;
   const nodes = parseTrustedHtml(html);
   if (!nodes.length) return null;
   return (

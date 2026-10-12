@@ -1,4 +1,4 @@
-import { isHtmlDocument, sanitizeHtmlDocument } from '@/lib/tiptap/html-document';
+import { isHtmlDocument } from '../../../../src/common/utils/html-document-policy';
 /**
  * Renders legacy staff-authored HTML fragments as a React tree.
  * Full documents use the shared sanitizer and an isolated iframe.
@@ -331,7 +331,6 @@ function serializeNode(node: TrustedHtmlNode): string {
  */
 export function sanitizeTrustedHtmlClient(html: string): string {
   if (typeof html !== 'string' || !html.trim()) return '';
-  if (isHtmlDocument(html)) return sanitizeHtmlDocument(html);
   return parseTrustedHtml(html).map(serializeNode).join('').trim();
 }
 
