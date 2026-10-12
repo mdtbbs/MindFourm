@@ -1268,6 +1268,9 @@ export interface PublicImageUploadResult {
 
 /** Images embedded in editor content exist before their parent record is saved. */
 export const inlineImageApi = {
+  importRemote: (url: string) => request<PublicImageUploadResult>('/api/uploads/images/import', {
+    method: 'POST', body: JSON.stringify({ url }),
+  }),
   upload: (formData: FormData) => request<PublicImageUploadResult>('/api/uploads/images', {
     method: 'POST',
     body: formData,

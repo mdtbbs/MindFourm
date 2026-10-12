@@ -34,14 +34,18 @@
 
 写入权限：只有版主及以上角色（`moderator`、`admin`、`super_admin`）可以提交含 `htmlBlock` 的正文。普通成员提交时返回 `403`，错误码为 `HTML_BLOCK_FORBIDDEN`。权限按**作者角色**判定；服务端在读取、重渲染和回填时不会重新校验，以免历史内容因角色变更而失效。
 
-`attrs.html` 的长度上限为 20000 字符，每篇内容最多 5 个区块；`attrs.text` 是服务端派生字段（清洗后的纯文本），客户端提交的值会被忽略。清洗后为空的区块会被拒绝。
+`attrs.html` 的长度上限为 200000 字符，每篇内容最多 5 个区块；`attrs.text` 是服务端派生字段（清洗后的纯文本），客户端提交的值会被忽略。清洗后为空的区块会被拒绝。
 
-清洗规则（服务端为准，客户端渲染按同一张表）：
+HTML 区块支持两种呈现方式：
 
-- 标签白名单为常见排版标签（`div`、`p`、`h1`–`h6`、`ul`/`ol`/`li`、`table` 系列、`figure`、`details`、`img`、`a`、`span` 等）。`script`、`style`、`iframe`、`object`、`embed`、`template`、`form`、`svg`、`math` 不在白名单内，且其文本内容会一并丢弃。
-- 属性白名单按标签限定（`a` 的 `href`、`img` 的 `src`/`alt`/`width`/`height`、表格单元格的 `colspan`/`rowspan`/`align` 等）。所有事件属性、`id`、`class` 一律丢弃。外链会自动补 `rel="nofollow noopener noreferrer"` 与 `target="_blank"`，图片补 `loading="lazy"`。
-- `style` 只接受属性级白名单内的声明；`position`、`z-index`、`cursor`、自定义属性（`--*`）、`!important`、`url()`、`expression()`、`@import`、视口单位（`vw`/`vh`）都会被丢弃。同一 `style` 里合法的声明不受影响。
-- URL 只接受 `http`、`https`、`mailto` 与站内根相对路径；`javascript:`、`data:`、协议相对地址（`//host`）及实体编码变体都会被拒绝。
+- 旧式 HTML 片段继续使用标签、属性和内联 CSS 白名单渲染。
+- 带 `<!doctype html>`、`<html>` 或 `<style>` 的完整文档在隔离 iframe 中显示。保留样式表、`class`、`id`、CSS 变量、媒体查询和伪元素，支持 Grid/Flex 图文排版及 `details` 折叠。样式只作用于该文档，不影响论坛页面；前端随图片加载、折叠和宽度变化自动调整高度。
+
+文档写入时移除脚本、事件、表单、嵌套 iframe、外部样式表、`base`、跳转 `meta`、SVG 和 MathML。iframe 不启用脚本或表单权限，并强制限制 CSP；不支持需要 JavaScript 的交互、外部字体和外部 CSS 加载。完整文档的图片只允许从站内加载，链接支持 HTTP(S)，文档内部 `#id` 锚点可用。
+
+编辑器支持粘贴源码或导入最大 8MB 的 HTML 文件。内嵌 Base64 PNG/JPEG/GIF/WebP 图片和外站图片在插入时通过现有图片接口上传并替换为 URL（每张最大 2MB，最多 100 张，相同图片只上传一次）。API 正文仍不接受 `data:` 图片 URL，第三方客户端需先上传图片。上传后 HTML 必须满足 200000 字符限制，每篇最多 5 个区块。
+
+`content_html` 对完整文档输出带 CSP 和 sandbox 的 iframe `srcdoc`，旧式片段维持原来的输出。直接消费 HTML 的客户端也必须保留这些隔离属性，不能取出文档样式注入宿主页面。HTML 缓存字段扩容迁移为 `HtmlDocumentProjection1720000370000`，需随部署执行并验收。
 
 清洗是幂等的：同一片段重复清洗结果不变，因此 `content_html` 重新生成不会改写已存内容。Markdown 投影与 `content_text` 使用区块的纯文本（纯图片区块则使用图片 `alt`），保证搜索与摘要有内容可用。
 
@@ -56,3 +60,9 @@
 视频来源由部署使用的站点配置决定。MDTBBS 支持 Bilibili、抖音和 HTTPS MP4/WebM；Mindustry Club 支持 YouTube、Bilibili 和 HTTPS MP4/WebM。第三方播放器只会在读者主动打开视频卡片后加载。
 
 当前 V1 写入接口接受 Schema V2 的结构化正文；新客户端应发送 `content_schema_version: 2` 和 `content_json`。旧 Markdown-only 请求仍通过兼容路径转换为 V2 JSON。已有历史记录的批量回填由 `src/scripts/content-json-backfill.ts` 处理，部署环境是否已执行回填应以该环境的迁移/运维记录为准。
+
+## HTML 图片导入
+
+在 HTML 区块编辑器中插入内容时，外站 `img src` 及样式表/内联样式中的 `url(...)` 图片由服务端下载，内嵌 Base64 图片通过现有上传接口存储；地址统一替换为 `/uploads/public-images/...`。重复地址在一次导入中只下载一次，站内地址不重复下载；支持 HTML 的 `base` 地址和相对图片路径。每张最多 2MB，每次最多导入 100 张，仅支持 PNG、JPEG、GIF、WebP。下载失败阻止插入并显示失败地址，不保留外站回退链接。完整文档 CSP 限制图片只能从站内加载。
+
+服务端远程导入仅向管理团队开放，验证真实图片格式和尺寸，拒绝内网、保留地址、带凭据或非标准端口的 URL，每次重定向重新验证并固定 DNS 解析地址。图片引用清理同时识别结构化正文、HTML 投影和资源版本，避免已保存图片被当作孤立文件删除。

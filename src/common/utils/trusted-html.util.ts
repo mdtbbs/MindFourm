@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import sanitizeHtml from 'sanitize-html';
+import { HTML_DOCUMENT_MAX_LENGTH, isHtmlDocument, sanitizeHtmlDocument } from './html-document.util';
 import { ROLES, RoleName } from './constants';
 
 /**
@@ -19,12 +20,15 @@ import { ROLES, RoleName } from './constants';
  *     construction, so no CSS value can load a remote resource or overlay the
  *     page.
  *
+ * Full documents / stylesheets instead use the shared sandbox policy in
+ * `html-document.util.ts`; none of their CSS enters the host document.
+ *
  * The frontend mirrors these tables in `frontend/src/lib/tiptap/trusted-html.ts`
  * and `tests/frontend/rich-content-html-block.spec.ts` fails when the two drift.
  */
 
 /** Longest fragment accepted for one block. */
-export const TRUSTED_HTML_MAX_LENGTH = 20_000;
+export const TRUSTED_HTML_MAX_LENGTH = HTML_DOCUMENT_MAX_LENGTH;
 /** Blocks accepted per document. */
 export const TRUSTED_HTML_MAX_BLOCKS = 5;
 
@@ -242,6 +246,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
  */
 export function sanitizeTrustedHtml(html: string): string {
   if (typeof html !== 'string' || !html.trim()) return '';
+  if (isHtmlDocument(html)) return sanitizeHtmlDocument(html);
   const bounded = html.length > TRUSTED_HTML_MAX_LENGTH ? html.slice(0, TRUSTED_HTML_MAX_LENGTH) : html;
   return sanitizeHtml(bounded, SANITIZE_OPTIONS).trim();
 }

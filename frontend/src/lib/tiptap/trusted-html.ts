@@ -1,5 +1,7 @@
+import { isHtmlDocument, sanitizeHtmlDocument } from '@/lib/tiptap/html-document';
 /**
- * Renders a staff-authored HTML fragment as a React tree.
+ * Renders legacy staff-authored HTML fragments as a React tree.
+ * Full documents use the shared sanitizer and an isolated iframe.
  *
  * The stored fragment was already bounded by `sanitizeTrustedHtml` in
  * `src/common/utils/trusted-html.util.ts`, so this is the second of two
@@ -329,6 +331,7 @@ function serializeNode(node: TrustedHtmlNode): string {
  */
 export function sanitizeTrustedHtmlClient(html: string): string {
   if (typeof html !== 'string' || !html.trim()) return '';
+  if (isHtmlDocument(html)) return sanitizeHtmlDocument(html);
   return parseTrustedHtml(html).map(serializeNode).join('').trim();
 }
 
@@ -343,7 +346,8 @@ export function trustedHtmlText(html: string): string {
   const collect = (nodes: TrustedHtmlNode[]): string => nodes
     .map((node) => (node.type === 'text' ? node.text : collect(node.children)))
     .join(' ');
-  const text = collect(parseTrustedHtml(html)).replace(/\s+/g, ' ').trim();
+  const prose = isHtmlDocument(html) ? html.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, '') : html;
+  const text = collect(parseTrustedHtml(prose)).replace(/\s+/g, ' ').trim();
   if (text) return text;
   // Mirrors the server: an image-only block projects its alt text, so the two
   // Markdown projections agree and the document is not considered empty.

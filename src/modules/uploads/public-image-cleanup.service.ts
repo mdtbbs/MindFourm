@@ -21,6 +21,15 @@ const PUBLIC_IMAGE_URL_PATTERN = /(?:https?:\/\/[^\s"'<>()[\]]+)?\/uploads\/publ
  * not orphaned just because the current body no longer uses it.
  */
 const REFERENCE_QUERIES = [
+  'SELECT content_json AS value FROM posts WHERE content_json IS NOT NULL',
+  'SELECT content_html AS value FROM posts WHERE content_html IS NOT NULL',
+  'SELECT content_json AS value FROM replies WHERE content_json IS NOT NULL',
+  'SELECT content_html AS value FROM replies WHERE content_html IS NOT NULL',
+  'SELECT content_json AS value FROM resources WHERE content_json IS NOT NULL',
+  'SELECT content_html AS value FROM resources WHERE content_html IS NOT NULL',
+  'SELECT release_notes_html AS value FROM resource_versions WHERE release_notes_html IS NOT NULL',
+  'SELECT content_html AS value FROM resource_versions WHERE content_html IS NOT NULL',
+
   'SELECT content AS value FROM posts WHERE content IS NOT NULL',
   'SELECT content AS value FROM replies WHERE content IS NOT NULL',
   'SELECT content AS value FROM resource_comments WHERE content IS NOT NULL',

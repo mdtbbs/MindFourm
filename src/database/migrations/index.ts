@@ -1,3 +1,4 @@
+import { HtmlDocumentProjection1720000370000 } from './1720000370000-HtmlDocumentProjection';
 import { ForumPerformance1720000190000 } from './1720000190000-ForumPerformance';
 import { ResourceViewsAnalytics1720000200000 } from './1720000200000-ResourceViewsAnalytics';
 import { AddPreferredContentLanguage1720000210000 } from './1720000210000-AddPreferredContentLanguage';
@@ -173,4 +174,5 @@ export const migrations = [
   ResourceDirectUploadDrafts1720000340000,
   ResourcePublishedAt1720000350000,
   GenericBlobApi1720000360000,
+  HtmlDocumentProjection1720000370000,
 ];

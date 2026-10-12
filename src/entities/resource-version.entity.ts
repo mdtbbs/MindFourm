@@ -79,7 +79,7 @@ export class ResourceVersion {
   @Column({ type: 'text', nullable: true })
   release_notes_markdown: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'mediumtext', nullable: true })
   release_notes_html: string | null;
 
   @Column({ type: 'datetime', nullable: true })

@@ -8,6 +8,12 @@ export interface UploadImageResult {
   alt: string;
 }
 
+export async function importRemoteImage(url: string): Promise<UploadImageResult> {
+  const image = await inlineImageApi.importRemote(url);
+  if (!image?.url) throw new Error('图片导入成功但未返回站内链接');
+  return { url: image.url, alt: image.original_name };
+}
+
 /**
  * Upload an image that can be embedded before its parent content is saved.
  *

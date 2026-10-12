@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Post,
   UploadedFile,
@@ -14,6 +15,11 @@ import {
   publicImageUploadInterceptor,
 } from './public-image-upload';
 import { UploadsService } from './uploads.service';
+import { RemoteImageImportService } from './remote-image-import.service';
+import { ImportImageDto } from './dto/import-image.dto';
+import { RolesGuard } from '@common/guards/roles.guard';
+import { Roles } from '@common/decorators/roles.decorator';
+import { RateLimit } from '@common/decorators/rate-limit.decorator';
 
 /**
  * Public URLs are required while a user is composing a post, reply, resource or
@@ -25,7 +31,15 @@ import { UploadsService } from './uploads.service';
 @Controller('uploads')
 @UseGuards(JwtAuthGuard)
 export class UploadsController {
-  constructor(private readonly uploadsService: UploadsService) {}
+  constructor(private readonly uploadsService: UploadsService, private readonly remoteImages: RemoteImageImportService) {}
+
+  @Post('images/import')
+  @UseGuards(RolesGuard)
+  @Roles('moderator')
+  @RateLimit({ max: 120, window: 300 })
+  async importInlineImage(@Body() dto: ImportImageDto) {
+    return this.remoteImages.importImage(dto.url);
+  }
 
   @Post('images')
   @UseInterceptors(publicImageUploadInterceptor)

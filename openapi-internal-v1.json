@@ -30476,6 +30476,19 @@
           "meta"
         ]
       },
+      "ImportImageDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "要导入的公开 HTTP(S) 图片地址",
+            "maxLength": 4096
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
       "BlobUsageDto": {
         "type": "object",
         "properties": {

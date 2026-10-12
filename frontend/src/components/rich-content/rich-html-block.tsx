@@ -3,6 +3,8 @@
 import { createElement, Fragment } from 'react';
 import { parseTrustedHtml, styleObject, type TrustedHtmlNode } from '@/lib/tiptap/trusted-html';
 import { safeUrl } from '@/lib/tiptap/presentation-url';
+import { isHtmlDocument } from '@/lib/tiptap/html-document';
+import { RichHtmlDocument } from './rich-html-document';
 
 /**
  * Renders one staff-authored HTML block.
@@ -89,6 +91,7 @@ function renderNode(node: TrustedHtmlNode, key: number): React.ReactNode {
 }
 
 export function RichHtmlBlock({ html }: { html: string }) {
+  if (isHtmlDocument(html)) return <RichHtmlDocument html={html} />;
   const nodes = parseTrustedHtml(html);
   if (!nodes.length) return null;
   return (

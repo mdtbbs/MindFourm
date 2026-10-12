@@ -1,3 +1,4 @@
+import { isHtmlDocument, htmlDocumentProjection } from './html-document.util';
 import { HttpStatus } from '@nestjs/common';
 import { marked } from 'marked';
 import { ApiV1Exception } from '../exceptions/api-v1.exception';
@@ -513,7 +514,7 @@ function parkHtmlBlocks(raw: Record<string, any>, fragments: string[], token: (i
   const visit = (node: Record<string, any>): Record<string, any> => {
     const parked: Record<string, any> = { ...node, ...(node.content ? { content: node.content.map(visit) } : {}) };
     if (node.type === 'htmlBlock') {
-      fragments.push(node.attrs.html);
+      fragments.push(isHtmlDocument(node.attrs.html) ? htmlDocumentProjection(node.attrs.html) : node.attrs.html);
       parked.attrs = { ...node.attrs, html: token(fragments.length - 1) };
     }
     return parked;

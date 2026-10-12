@@ -79,7 +79,7 @@ export class Resource {
   @Column({ type: 'varchar', length: 16, default: 'unknown' })
   content_language: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'mediumtext', nullable: true })
   content_html: string | null;
 
   /** Canonical allowlisted ProseMirror source for the long-form resource description. */

@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { RichHtmlBlock } from './rich-html-block';
 import { sanitizeTrustedHtmlClient } from '@/lib/tiptap/trusted-html';
+import { importHtmlDocument, HTML_IMPORT_MAX_LENGTH } from '@/lib/tiptap/import-html-document';
+import { HTML_DOCUMENT_MAX_LENGTH } from '@/lib/tiptap/html-document';
 
 /**
  * Insert / edit panel for one HTML block.
@@ -32,31 +34,49 @@ export interface HtmlBlockDialogProps {
 export function HtmlBlockDialog({ open, initialHtml = '', onOpenChange, onSubmit }: HtmlBlockDialogProps) {
   const [draft, setDraft] = useState(initialHtml);
   const [showPreview, setShowPreview] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   // Re-seed on open so an edit starts from the block's current markup.
   useEffect(() => {
-    if (open) setDraft(initialHtml);
+    if (open) { setDraft(initialHtml); setError(''); }
   }, [open, initialHtml]);
 
-  const sanitized = useMemo(() => sanitizeTrustedHtmlClient(draft), [draft]);
+  const hasEmbeddedImages = /data:image\//i.test(draft);
+  const hasRemoteImages = /(?:src\s*=\s*["'](?:https?:)?\/\/|url\(\s*["']?(?:https?:)?\/\/)/i.test(draft);
+  const sanitized = useMemo(() => sanitizeTrustedHtmlClient(draft.replace(/data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+/gi, '')), [draft]);
   const dropped = draft.trim().length > 0 && sanitized.trim().length === 0;
+  const submit = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const imported = await importHtmlDocument(draft);
+      const safe = sanitizeTrustedHtmlClient(imported);
+      if (!safe.trim()) throw new Error('HTML 清洗后没有可显示的内容');
+      if (safe.length > HTML_DOCUMENT_MAX_LENGTH) throw new Error('HTML 超过 200000 字符，请精简内容');
+      onSubmit(safe);
+      onOpenChange(false);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'HTML 导入失败，请重试');
+    } finally { setBusy(false); }
+  };
 
   return (
     <Dialog
       open={open}
-      onOpenChange={onOpenChange}
+      onOpenChange={(value) => { if (!busy) onOpenChange(value); }}
       title={initialHtml ? '编辑 HTML 区块' : '插入 HTML 区块'}
-      description="仅管理团队可用。写入前会按白名单清洗，脚本、事件属性和可覆盖页面的样式会被移除。"
+      description="仅管理团队可用。支持完整 HTML、样式表和响应式排版；内容隔离显示，脚本和事件会被移除。"
       size="lg"
       footer={
         <>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => onOpenChange(false)}>取消</Button>
           <Button
             type="button"
-            disabled={!sanitized.trim()}
-            onClick={() => { onSubmit(sanitized); onOpenChange(false); }}
+            disabled={busy || !draft.trim() || dropped}
+            onClick={() => { void submit(); }}
           >
-            {initialHtml ? '保存区块' : '插入区块'}
+            {busy ? '正在导入图片…' : initialHtml ? '保存区块' : '插入区块'}
           </Button>
         </>
       }
@@ -65,6 +85,18 @@ export function HtmlBlockDialog({ open, initialHtml = '', onOpenChange, onSubmit
         <div className="flex items-center justify-between gap-2">
           <label className="text-sm font-medium" htmlFor="html-block-input">HTML 代码</label>
           <div className="flex gap-2">
+            <label className="cursor-pointer text-sm">
+              导入 HTML 文件
+              <input type="file" accept=".html,.htm,text/html" className="sr-only" disabled={busy}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = '';
+                  if (!file) return;
+                  if (file.size > HTML_IMPORT_MAX_LENGTH) { setError('HTML 文件过大，最大支持 8MB'); return; }
+                  try { setDraft(await file.text()); setError(''); }
+                  catch { setError('无法读取 HTML 文件'); }
+                }} />
+            </label>
             {!draft.trim() && (
               <Button type="button" variant="ghost" size="sm" onClick={() => setDraft(STARTER)}>插入示例</Button>
             )}
@@ -76,12 +108,15 @@ export function HtmlBlockDialog({ open, initialHtml = '', onOpenChange, onSubmit
         <textarea
           id="html-block-input"
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          disabled={busy}
+          onChange={(event) => { setDraft(event.target.value); setError(''); }}
           spellCheck={false}
           rows={12}
           placeholder={'<div style="border:1px solid #ddd;border-radius:12px;padding:16px">\n  <h3>标题</h3>\n  <p>介绍文字</p>\n</div>'}
           className="w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--bg)] p-3 font-mono text-xs leading-relaxed outline-none focus:border-[var(--primary)]"
         />
+        {(hasEmbeddedImages || hasRemoteImages) && <p className="text-sm text-[var(--text-muted)]">内嵌和外站图片将在插入时自动存入站点并替换链接；导入失败会阻止插入。每张最大 2MB，最多导入 100 张。</p>}
+        {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
         {dropped && (
           <p className="text-xs text-amber-600" role="alert">
             这段内容清洗后为空 —— 检查标签是否在白名单内，或改成普通正文。

@@ -68,6 +68,20 @@ describe('PublicImageCleanupService', () => {
     expect(unlink.mock.calls[0][0]).toMatch(/orphan\.png$/);
   });
 
+  it('keeps images referenced only by HTML blocks or immutable version projections', async () => {
+    const query = jest.fn().mockImplementation(async (sql: string) => {
+      if (sql.includes('content_json AS value FROM replies')) return [{ value: { type: 'htmlBlock', attrs: { html: '<style>.card{background:url("/uploads/public-images/css.png")}</style><img src="/uploads/public-images/html.png">' } } }];
+      if (sql.includes('content_html AS value FROM resource_versions')) return [{ value: '<img src="/uploads/public-images/version.png">' }];
+      return [];
+    });
+    const service = new PublicImageCleanupService({ query } as any, { getNumber: jest.fn().mockResolvedValue(7) } as any);
+    readdir.mockResolvedValue(['css.png', 'html.png', 'version.png'].map(file));
+    const result = await service.cleanupOrphanedPublicImages(new Date('2026-10-12'));
+    expect(result.keptReferenced).toBe(3);
+    expect(unlink).not.toHaveBeenCalled();
+    expect(stat).not.toHaveBeenCalled();
+  });
+
   it('does not fail when the upload directory has not been created yet', async () => {
     const service = new PublicImageCleanupService(
       { query: jest.fn().mockResolvedValue([]) } as any,

@@ -39,12 +39,13 @@ describe('sanitizeTrustedHtml', () => {
     expect(result).toContain('<figcaption>图注</figcaption>');
   });
 
-  it('drops script and style elements together with their contents', () => {
+  it('drops scripts and retains styles only as an isolated document', () => {
     const result = sanitizeTrustedHtml('<p>before</p><script>alert(document.cookie)</script><style>body{display:none}</style><p>after</p>');
 
     expect(result).not.toContain('script');
     expect(result).not.toContain('alert');
-    expect(result).not.toContain('display:none');
+    expect(result).toContain('<style>body{display:none}</style>');
+    expect(result).toMatch(/^<!doctype html>/);
     expect(result).toContain('before');
     expect(result).toContain('after');
   });

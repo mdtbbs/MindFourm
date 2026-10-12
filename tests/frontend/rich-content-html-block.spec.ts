@@ -44,7 +44,7 @@ describe('trusted HTML block — client parser', () => {
     expect(sanitizeTrustedHtmlClient(html)).toContain('<li>条目</li>');
   });
 
-  it('drops script, style and embedded documents along with their content', () => {
+  it('drops executable content and routes stylesheets to the isolated document mode', () => {
     for (const html of [
       '<p>a</p><script>alert(document.cookie)</script><p>b</p>',
       '<style>body{display:none}</style><p>b</p>',
@@ -52,7 +52,10 @@ describe('trusted HTML block — client parser', () => {
     ]) {
       const result = sanitizeTrustedHtmlClient(html);
       expect(result).not.toContain('alert');
-      expect(result).not.toContain('display:none');
+      if (html.includes('<style>')) {
+        expect(result).toContain('<style>body{display:none}</style>');
+        expect(result).toMatch(/^<!doctype html>/);
+      }
       expect(result).not.toContain('evil.example');
       expect(result).not.toContain('fallback');
       expect(result).toContain('b');
@@ -162,6 +165,18 @@ describe('trusted HTML block — client parser', () => {
 
 describe('trusted HTML block — reader rendering', () => {
   const render = (html: string) => renderToStaticMarkup(createElement(RichHtmlBlock, { html }));
+
+  it('contains document styles in srcdoc with scripts and forms disabled', () => {
+    const markup = render('<html><style>body{color:red}.card{display:grid}</style><div class="card">正文</div><script>alert(1)</script></html>');
+    expect(markup).toContain('<iframe');
+    expect(markup).toContain('sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"');
+    expect(markup).toContain('Content-Security-Policy');
+    expect(markup).not.toContain('allow-scripts');
+    expect(markup).not.toContain('allow-forms');
+    expect(markup).not.toContain('<style>');
+    expect(markup).not.toContain('alert(1)');
+    expect(markup).toContain('class=&quot;card&quot;');
+  });
 
   it('renders the fragment as elements without ever interpreting markup', () => {
     const markup = render('<div style="color:#123456"><h3>标题</h3><p>文字</p></div>');

@@ -58,7 +58,7 @@ export class Post {
   @Column({ type: 'varchar', length: 16, default: 'unknown' })
   content_language: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'mediumtext', nullable: true })
   content_html: string;
 
   /** Canonical allowlisted ProseMirror source; nullable for legacy imports and staged backfill. */
