@@ -1,4 +1,4 @@
-import { mergeAttributes } from '@tiptap/core';
+import { markPasteRule, mergeAttributes } from '@tiptap/core';
 import { richTableLayout } from './table-presentation';
 import { PresentedTableView } from './table-view';
 import StarterKit from '@tiptap/starter-kit';
@@ -19,8 +19,77 @@ import BlockquoteExt from '@tiptap/extension-blockquote';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { richContentLowlight } from './syntax-highlight';
 import { RICH_CONTENT_EXTENSIONS } from './rich-content-extensions';
+import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state';
+import type { MarkType } from '@tiptap/pm/model';
 import { normalizeEditorLink } from './editor-link';
+import { findPlausibleLinks, MAX_LINKIFY_RUN } from './link-autolink';
 import { BLOCKQUOTE_BLOCKS, CONTAINER_BLOCKS, blockContent, positiveBlockContent } from './schema-content';
+
+/**
+ * The stock `link` extension scans for links without any bound, which turns a
+ * paste of one long unbroken run into a frozen tab (see `link-autolink.ts`).
+ *
+ * Two changes, both keeping the behaviour a user can observe:
+ *
+ *  - The paste rule only looks at runs short enough to *be* a link. Long runs
+ *    gain nothing from the scan: their length is already far past the URL limit
+ *    the rest of the editor enforces.
+ *  - The autolink plugin skips a transaction that came from a paste. The paste
+ *    rule above already handled the pasted text, so rescanning the whole
+ *    inserted range costs the most and adds nothing.
+ *
+ * Typing is untouched: a URL followed by a space still becomes a link, and a
+ * pasted lone URL still becomes one through the paste rule.
+ */
+const AUTOLINK_PLUGIN_PREFIX = 'autolink$';
+
+const BoundedLink = LinkExt.extend({
+  addPasteRules() {
+    const isAllowedUri = this.options.isAllowedUri;
+    const context = { protocols: this.options.protocols, defaultProtocol: this.options.defaultProtocol };
+    return [markPasteRule({
+      find: ((text: string) => findPlausibleLinks(text)
+        .filter((item) => isAllowedUri(item.href, { ...context, defaultValidate: () => true }))
+        .map((item) => ({ text: item.text, data: { href: item.href }, index: item.index }))) as never,
+      type: this.type,
+      getAttributes: (match: { data?: { href?: string } }) => ({ href: match.data?.href }),
+    })];
+  },
+  addProseMirrorPlugins() {
+    const stock = (this.parent?.() ?? []) as Array<{ key?: string }>;
+    const kept = stock.filter((plugin) => typeof plugin.key !== 'string' || !plugin.key.startsWith(AUTOLINK_PLUGIN_PREFIX));
+    if (!this.options.autolink) return kept as never;
+    kept.push(autolinkFromTyping(this.type) as never);
+    return kept as never;
+  },
+});
+
+/** Autolink for the text just typed; bounded, and never run over a pasted range. */
+function autolinkFromTyping(linkType: MarkType) {
+  return new Plugin({
+    key: new PluginKey('autolink'),
+    appendTransaction: (transactions: readonly Transaction[], oldState: EditorState, newState: EditorState) => {
+      const docChanges = transactions.some((transaction) => transaction.docChanged) && !oldState.doc.eq(newState.doc);
+      if (!docChanges) return;
+      if (transactions.some((transaction) => transaction.getMeta('preventAutolink'))) return;
+      // A paste brings its own markup and is already covered by the paste rule;
+      // scanning the inserted range is what makes this quadratic.
+      if (transactions.some((transaction) => transaction.getMeta('paste'))) return;
+      const { $from } = newState.selection;
+      if (!$from.parent.isTextblock) return;
+      const to = newState.selection.from;
+      const from = Math.max($from.start() + 1, to - MAX_LINKIFY_RUN);
+      const text = newState.doc.textBetween(from, to, ' ', ' ');
+      const word = text.split(/\s+/).filter(Boolean).pop();
+      if (!word || word.length > MAX_LINKIFY_RUN) return;
+      const link = findPlausibleLinks(word).find((item) => item.text === word);
+      if (!link || normalizeEditorLink(link.href) === null) return;
+      const tr = newState.tr.addMark(from + text.lastIndexOf(word), to, linkType.create({ href: link.href }));
+      return tr.steps.length ? tr : undefined;
+    },
+  });
+}
+
 
 const TightBulletList = BulletListExt.extend({
   addAttributes() {
@@ -107,7 +176,7 @@ export function createTiptapEditorExtensions(placeholder = '') {
     Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: true }),
     SizedImage.configure({ inline: true, allowBase64: false }),
     Placeholder.configure({ placeholder }),
-    LinkExt.configure({
+    BoundedLink.configure({
       openOnClick: false,
       HTMLAttributes: { class: 'editor-link' },
       isAllowedUri: (url) => normalizeEditorLink(url) !== null,
