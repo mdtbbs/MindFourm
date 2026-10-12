@@ -8,9 +8,10 @@ import { ResourceVersion } from '@entities/resource-version.entity';
 import { ResourcePreviewService } from '../resource-preview.service';
 import { ResourceStorageClientService } from '../resource-storage-client.service';
 import { NotificationsService } from '../../notifications/notifications.service';
+import { ResourceSubscriptionsService } from '../resource-subscriptions.service';
 
 type SqlExecutor = { query(sql: string, parameters?: unknown[]): Promise<any> };
-type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; status?: string; is_public?: number; visibility?: string };
+type ResourceRow = { id: number; public_id: string; user_id: number; resource_kind: string; title?: string; status?: string; is_public?: number; visibility?: string };
 type VersionRow = {
   id: number; public_id: string; status: string; version?: string; release_channel?: string;
   file_path?: string | null; file_name?: string | null; file_size?: number | null;
@@ -35,6 +36,7 @@ export class ResourceV2ReviewService {
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly resClient?: ResourceStorageClientService,
     @Optional() private readonly previews?: ResourcePreviewService,
+    @Optional() private readonly subscriptions?: ResourceSubscriptionsService,
   ) {}
 
   async reviewVersion(resourcePublicId: string, versionPublicId: string, actorId: number, input: {
@@ -194,6 +196,8 @@ export class ResourceV2ReviewService {
          WHERE resource_id=? AND role IN ('owner','maintainer') AND status='active' AND user_id IS NOT NULL`,
         [resource.id],
       ) as Array<{ user_id: number }>;
+      const isPubliclyVisible = Boolean(action === 'approve' && resource.status === 'approved'
+        && Number(resource.is_public) === 1 && resource.visibility !== 'private');
       return {
         resource_public_id: resource.public_id,
         version_public_id: version.public_id,
@@ -201,6 +205,9 @@ export class ResourceV2ReviewService {
         status: nextStatus,
         published_at: action === 'approve' ? new Date().toISOString() : null,
         recommended: Boolean(isRecommended),
+        subscriber_notification: action === 'approve' && isPubliclyVisible
+          ? { id: Number(resource.id), user_id: Number(resource.user_id), title: resource.title }
+          : null,
         notify_user_ids: [...new Set([Number(resource.user_id), ...maintainers.map((member) => Number(member.user_id))])],
       };
     });
@@ -241,7 +248,19 @@ export class ResourceV2ReviewService {
         deduplicationKey: `resource-version-review:${action}:${outcome.version_public_id}:${userId}`,
       }).catch((error) => this.logger.warn(`Failed to notify Resource members after version review: ${(error as Error).message}`))));
     }
-    const { notify_user_ids: _notifyUserIds, ...response } = outcome;
+
+    // Subscribers hear about a version only after the approval transaction committed and the
+    // resource is actually public. Reuse the existing subscription semantics rather than
+    // building a second notification model. The deduplication key makes a retried or
+    // re-approved version idempotent.
+    if (this.subscriptions && outcome.subscriber_notification) {
+      await this.subscriptions.notifyResourceUpdate(
+        outcome.subscriber_notification as Resource,
+        { deduplicationKey: `resource-version-published:${outcome.version_public_id}` },
+      ).catch((error) => this.logger.warn(`Failed to notify Resource subscribers after version review: ${(error as Error).message}`));
+    }
+
+    const { notify_user_ids: _notifyUserIds, subscriber_notification: _subscriberNotification, ...response } = outcome;
     return response;
   }
 

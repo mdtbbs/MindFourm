@@ -60,11 +60,12 @@ function createHarness(options: HarnessOptions = {}) {
       sha256: createHash('sha256').update(payload).digest('hex'), mime_type: 'application/java-archive' }),
     createBinding: jest.fn().mockResolvedValue({ id: 'binding-1' }),
   };
-  const service = new ResourceV2ReviewService(dataSource, storage as any, notifications as any, res as any);
+  const subscriptions = { notifyResourceUpdate: jest.fn().mockResolvedValue(undefined) };
+  const service = new ResourceV2ReviewService(dataSource, storage as any, notifications as any, res as any, undefined, subscriptions as any);
 
   function execute(sql: string, parameters: any[] = []): any {
     if (sql.includes('FROM resources') && sql.includes('WHERE public_id=?')) {
-      return parameters[0] === ids.resource ? [{ id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod', status: 'approved', is_public: options.publicResource === false ? 0 : 1, visibility: 'public' }] : [];
+      return parameters[0] === ids.resource ? [{ id: 7, public_id: ids.resource, user_id: ownerId, resource_kind: options.kind || 'mod', title: 'A Mod Release', status: 'approved', is_public: options.publicResource === false ? 0 : 1, visibility: 'public' }] : [];
     }
     if (sql.includes('FROM resource_members')) {
       return options.memberRole ? [{ role: options.memberRole }] : [];
@@ -110,7 +111,7 @@ function createHarness(options: HarnessOptions = {}) {
     return [];
   }
 
-  return { service, dataSource, managerQuery, outerQuery, storage, notifications, state, res };
+  return { service, dataSource, managerQuery, outerQuery, storage, notifications, subscriptions, state, res };
 }
 
 describe('ResourceV2ReviewService', () => {
@@ -464,6 +465,65 @@ describe('Resource V2 RES review publication', () => {
     const harness = createHarness({ staffRole: 'moderator', versionStatus: 'pending_review', versionFilePath: null, resFile: true, publicResource: false });
     await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
     expect(harness.res.createBinding).toHaveBeenCalledWith('res-object', expect.objectContaining({ visibility: 'private' }));
+  });
+
+  it('notifies subscribers with the published version only after the approval transaction commits', async () => {
+    const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+    harness.subscriptions.notifyResourceUpdate.mockImplementation(async () => {
+      // Subscribers must not be reached before every transactional write has completed.
+      expect(harness.state.versionStatus).toBe('published');
+      expect(harness.state.reviewEvents).toBe(1);
+    });
+
+    await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+      .resolves.toMatchObject({ status: 'published' });
+
+    expect(harness.subscriptions.notifyResourceUpdate).toHaveBeenCalledTimes(1);
+    const [resource, options] = harness.subscriptions.notifyResourceUpdate.mock.calls[0] as [any, any];
+    expect(resource).toMatchObject({ id: 7, user_id: 10, title: 'A Mod Release' });
+    expect(options).toEqual({ deduplicationKey: `resource-version-published:${ids.version}` });
+  });
+
+  it('does not notify subscribers for reject or request_changes', async () => {
+    for (const action of ['reject', 'request_changes'] as const) {
+      const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+      await harness.service.reviewVersion(ids.resource, ids.version, 30, { action, reason: 'Not ready yet.' });
+      expect(harness.subscriptions.notifyResourceUpdate).not.toHaveBeenCalled();
+    }
+  });
+
+  it('does not notify subscribers when an approved resource is not public', async () => {
+    const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator', publicResource: false });
+    await harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    expect(harness.subscriptions.notifyResourceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not notify subscribers when the approval transaction rolls back', async () => {
+    const harness = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator' });
+    harness.managerQuery.mockImplementationOnce(async () => { throw new Error('operation log insert failed'); });
+
+    await expect(harness.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' }))
+      .rejects.toThrow('operation log insert failed');
+    expect(harness.subscriptions.notifyResourceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('keeps subscriber notifications idempotent across retried approvals', async () => {
+    // Two independent approval attempts of the same version, as a retry or a double review would.
+    const first = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator', versionFilePath: null });
+    const retried = createHarness({ versionStatus: 'pending_review', staffRole: 'moderator', versionFilePath: null });
+
+    await first.service.reviewVersion(ids.resource, ids.version, 30, { action: 'approve' });
+    await retried.service.reviewVersion(ids.resource, ids.version, 31, { action: 'approve' });
+
+    const keyFor = (harness: ReturnType<typeof createHarness>) => (
+      harness.subscriptions.notifyResourceUpdate.mock.calls[0] as [unknown, { deduplicationKey: string }]
+    )[1].deduplicationKey;
+
+    expect(first.subscriptions.notifyResourceUpdate).toHaveBeenCalledTimes(1);
+    expect(retried.subscriptions.notifyResourceUpdate).toHaveBeenCalledTimes(1);
+    // The stable dedup key is what makes the retried notification collapse into one per subscriber.
+    expect(keyFor(retried)).toBe(keyFor(first));
+    expect(keyFor(first)).toBe(`resource-version-published:${ids.version}`);
   });
 
   it('fails without publishing when RES binding visibility fails', async () => {

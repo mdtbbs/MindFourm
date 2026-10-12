@@ -29,7 +29,14 @@ export class ResourceSubscriptionsService {
     return { is_subscribed: false };
   }
 
-  async notifyResourceUpdate(resource: Resource): Promise<void> {
+  /**
+   * Notifies subscribers about a newly approved or published resource update.
+   *
+   * The caller must only invoke this after the approval transaction has committed and the
+   * resource/version is actually public. `deduplicationKey` keeps a retried or re-approved
+   * event from notifying the same subscriber twice.
+   */
+  async notifyResourceUpdate(resource: Resource, options: { deduplicationKey?: string } = {}): Promise<void> {
     const subscribers = await this.subscriptions.find({ where: { resource_id: resource.id, notification_level: 'all' } });
     await Promise.all(subscribers
       .filter((subscription) => subscription.user_id !== resource.user_id)
@@ -39,6 +46,7 @@ export class ResourceSubscriptionsService {
         actor_id: resource.user_id,
         content: `你订阅的资源「${resource.title}」已有更新并已通过审核：/resources/${resource.id}`,
         emailEvent: false,
+        ...(options.deduplicationKey ? { deduplicationKey: `${options.deduplicationKey}:${subscription.user_id}` } : {}),
       }).catch(() => undefined)));
   }
 }
