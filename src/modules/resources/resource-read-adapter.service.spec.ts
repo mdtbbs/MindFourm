@@ -266,6 +266,113 @@ describe('ResourceReadAdapterService', () => {
     expect(result?.versions[0].files[0].download_url).toContain('/api/v1/resources/resource-abc/versions/version-abc/files/file-abc/download');
   });
 
+  it('manifest resolves mixed modern/legacy dependencies through the shared projection', async () => {
+    const resource = { id: 1, public_id: 'resource-mixed', is_public: 1, status: 'approved', deleted_at: null, resource_kind: 'mod', title: 'Mixed Mod' };
+    const version = { id: 10, resource_id: 1, public_id: 'version-mixed', version: '1.0.0', release_channel: 'stable', status: 'published', published_at: new Date('2026-01-01T00:00:00Z') };
+    const resourceRepo = { findOne: jest.fn().mockResolvedValue(resource) };
+    const versionRepo = { find: jest.fn().mockResolvedValue([version]) };
+    const fileRepo = { find: jest.fn().mockResolvedValue([]) };
+    const dependencyRead = {
+      collectDependencies: jest.fn(async (versionIds: number[]) => new Map([
+        [10, [
+          { resource_version_id: 10, dependency_type: 'required' as const, target_resource_id: 5, target_public_id: 'public-target', external_identifier: null, upstream_url: null, version_constraint: '^1.0', resolution_status: 'resolved', notes: null, sort_order: 0, source: 'modern' as const },
+          { resource_version_id: 10, dependency_type: 'optional' as const, target_resource_id: 6, target_public_id: null, external_identifier: 'legacy-ext', upstream_url: null, version_constraint: '>=2.0', resolution_status: null, notes: 'uncopied legacy', sort_order: 1, source: 'legacy' as const },
+        ].filter((row) => versionIds.includes(row.resource_version_id))],
+      ])),
+      collectCompatibilities: jest.fn(async () => new Map([
+        [10, [{ resource_version_id: 10, runtime: 'mindustry', game_version: 'v7', min_version: null, max_version: null, channel: 'stable', platform_key: null, status: null, source: 'user_declared', confidence: null, notes: null, origin: 'legacy' as const }]],
+      ])),
+    };
+    const service = new ResourceReadAdapterService(
+      resourceRepo as any, versionRepo as any, {} as any, fileRepo as any,
+      new ResourceLegacyProjectionService(), undefined, undefined, undefined, dependencyRead as any,
+    );
+
+    const result = await service.getManifestByPublicId('resource-mixed');
+
+    expect(result?.versions[0].dependencies).toEqual([
+      { dependency_type: 'required', resource_public_id: 'public-target', external_identifier: null, version_constraint: '^1.0', notes: null },
+      { dependency_type: 'optional', resource_public_id: null, external_identifier: 'legacy-ext', version_constraint: '>=2.0', notes: 'uncopied legacy' },
+    ]);
+    expect(result?.versions[0].compatibility).toEqual([
+      { runtime: 'mindustry', game_series: 'v7', min_version: null, max_version: null, channel: 'stable', platform: null, provenance: 'user_declared', confidence: null },
+    ]);
+  });
+
+  it('maps modern compatibility sources to the V1 provenance vocabulary on both paths', async () => {
+    const resource = { id: 1, public_id: 'resource-prov', is_public: 1, status: 'approved', deleted_at: null, resource_kind: 'mod', title: 'Provenance Mod' };
+    const version = { id: 10, resource_id: 1, public_id: 'version-prov', version: '1.0.0', release_channel: 'stable', status: 'published', published_at: new Date('2026-01-01T00:00:00Z') };
+    const base = (source: string) => ({
+      resource_version_id: 10, runtime: 'mindustry', game_version: null,
+      min_version: '146', max_version: null, channel: null, platform_key: null,
+      status: 'declared', source, confidence: null, notes: null, origin: 'modern' as const,
+    });
+
+    // Main path: rows come from the shared projection and carry modern sources.
+    const projected = new ResourceReadAdapterService(
+      { findOne: jest.fn().mockResolvedValue(resource) } as any,
+      { find: jest.fn().mockResolvedValue([version]) } as any,
+      {} as any, { find: jest.fn().mockResolvedValue([]) } as any,
+      new ResourceLegacyProjectionService(), undefined, undefined, undefined,
+      {
+        collectDependencies: jest.fn(async () => new Map()),
+        collectCompatibilities: jest.fn(async () => new Map([[10, [base('analyzer'), base('author'), base('community')]]])),
+      } as any,
+    );
+    const mainManifest = await projected.getManifestByPublicId('resource-prov');
+
+    expect(mainManifest?.versions[0].compatibility.map((item) => item.provenance))
+      .toEqual(['inferred', 'user_declared', 'user_declared']);
+
+    // Fallback path: the legacy repository speaks the same vocabulary and must
+    // go through the same normalizer (an unknown value degrades to declared).
+    const legacyRepo = {
+      find: jest.fn().mockResolvedValue([
+        { resource_version_id: 10, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: null, platform_key: null, provenance: 'inferred', confidence: null, created_at: new Date() },
+        { resource_version_id: 10, runtime: 'mindustry', game_series: null, min_version_value: '147', max_version_value: null, channel: null, platform_key: null, provenance: 'analyzer', confidence: null, created_at: new Date() },
+        { resource_version_id: 10, runtime: 'mindustry', game_series: null, min_version_value: '148', max_version_value: null, channel: null, platform_key: null, provenance: 'bogus', confidence: null, created_at: new Date() },
+      ]),
+    };
+    const fallback = new ResourceReadAdapterService(
+      { findOne: jest.fn().mockResolvedValue(resource) } as any,
+      { find: jest.fn().mockResolvedValue([version]) } as any,
+      {} as any, { find: jest.fn().mockResolvedValue([]) } as any,
+      new ResourceLegacyProjectionService(), undefined, legacyRepo as any,
+    );
+    const fallbackManifest = await fallback.getManifestByPublicId('resource-prov');
+
+    expect(fallbackManifest?.versions[0].compatibility.map((item) => item.provenance))
+      .toEqual(['inferred', 'inferred', 'user_declared']);
+  });
+
+  it('resolves unlisted dependency targets in the legacy fallback path', async () => {
+    const resource = { id: 1, public_id: 'resource-unlisted', is_public: 1, status: 'approved', deleted_at: null, resource_kind: 'mod', title: 'Unlisted Mod' };
+    const version = { id: 10, resource_id: 1, public_id: 'version-unlisted', version: '1.0.0', release_channel: 'stable', status: 'published', published_at: new Date('2026-01-01T00:00:00Z') };
+    const dependencyRepo = {
+      find: jest.fn().mockResolvedValue([
+        { resource_version_id: 10, target_resource_id: 5, dependency_type: 'required', external_identifier: null, version_constraint: null, notes: null, sort_order: 0 },
+        { resource_version_id: 10, target_resource_id: 6, dependency_type: 'optional', external_identifier: null, version_constraint: null, notes: null, sort_order: 1 },
+      ]),
+    };
+    const resourceRepo = {
+      findOne: jest.fn().mockResolvedValue(resource),
+      find: jest.fn().mockResolvedValue([
+        { id: 5, public_id: 'unlisted-target', is_public: 1, status: 'approved', visibility: 'unlisted', merged_into_resource_id: null, deleted_at: null },
+        { id: 6, public_id: 'private-target', is_public: 1, status: 'approved', visibility: 'private', merged_into_resource_id: null, deleted_at: null },
+      ]),
+    };
+    const service = new ResourceReadAdapterService(
+      resourceRepo as any, { find: jest.fn().mockResolvedValue([version]) } as any, {} as any,
+      { find: jest.fn().mockResolvedValue([]) } as any, new ResourceLegacyProjectionService(),
+      dependencyRepo as any, { find: jest.fn().mockResolvedValue([]) } as any,
+    );
+
+    const result = await service.getManifestByPublicId('resource-unlisted');
+
+    expect(result?.versions[0].dependencies.map((item) => item.resource_public_id))
+      .toEqual(['unlisted-target', null]);
+  });
+
   it('filters nonapproved resources from the public V1 list before pagination', async () => {
     const queryBuilder: any = {
       where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(),

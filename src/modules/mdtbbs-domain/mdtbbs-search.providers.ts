@@ -62,10 +62,23 @@ export class MdtbbsResourceSearchProvider implements SearchProvider, OnModuleIni
       qb.andWhere("JSON_CONTAINS(r.metadata_json, JSON_QUOTE(:resourceTag), '$.tags')", { resourceTag: options.tag.trim() });
     }
     if (options.game_version?.trim()) {
+      // Modern compatibilities win; legacy rows not yet copied into the modern
+      // table are still searchable (mixed-storage safe).
       qb.andWhere(`(EXISTS (
+        SELECT 1 FROM resource_compatibilities search_compatibility
+        INNER JOIN resource_versions search_compatibility_version ON search_compatibility_version.id = search_compatibility.resource_version_id
+        WHERE search_compatibility_version.resource_id = r.id AND search_compatibility_version.status = 'published'
+          AND search_compatibility.runtime = 'mindustry'
+          AND (search_compatibility.game_version = :gameVersion OR
+            ((search_compatibility.min_game_version IS NULL OR search_compatibility.min_game_version <= :gameVersion)
+              AND (search_compatibility.max_game_version IS NULL OR search_compatibility.max_game_version >= :gameVersion)))
+      ) OR EXISTS (
         SELECT 1 FROM resource_version_compatibilities search_compatibility
         INNER JOIN resource_versions search_compatibility_version ON search_compatibility_version.id = search_compatibility.resource_version_id
         WHERE search_compatibility_version.resource_id = r.id AND search_compatibility_version.status = 'published'
+          AND NOT EXISTS (
+            SELECT 1 FROM resource_compatibilities search_compatibility_copied
+            WHERE search_compatibility_copied.legacy_source_id = search_compatibility.id)
           AND search_compatibility.runtime = 'mindustry'
           AND (search_compatibility.game_series = :gameVersion OR
             ((search_compatibility.min_version_value IS NULL OR search_compatibility.min_version_value <= :gameVersion)
@@ -89,18 +102,23 @@ export class MdtbbsResourceSearchProvider implements SearchProvider, OnModuleIni
       const dependency = options.dependency.trim();
       const dependencyId = /^\d+$/.test(dependency) ? Number(dependency) : -1;
       const dependencyLike = `%${escapeLike(dependency)}%`;
+      // Same modern-first policy as compatibilities: skip legacy rows already
+      // copied into the modern table so mixed datasets match exactly once.
       qb.andWhere(`(EXISTS (
-        SELECT 1 FROM resource_version_dependencies search_dependency
-        INNER JOIN resource_versions search_dependency_version ON search_dependency_version.id = search_dependency.resource_version_id
-        WHERE search_dependency_version.resource_id = r.id AND search_dependency_version.status = 'published'
-          AND (search_dependency.external_identifier = :dependency OR search_dependency.external_identifier LIKE :dependencyLike
-            OR search_dependency.target_resource_id = :dependencyId)
-      ) OR EXISTS (
         SELECT 1 FROM resource_dependencies search_dependency_v2
         INNER JOIN resource_versions search_dependency_v2_version ON search_dependency_v2_version.id = search_dependency_v2.resource_version_id
         WHERE search_dependency_v2_version.resource_id = r.id AND search_dependency_v2_version.status = 'published'
           AND (search_dependency_v2.external_identifier = :dependency OR search_dependency_v2.external_identifier LIKE :dependencyLike
             OR search_dependency_v2.target_resource_id = :dependencyId)
+      ) OR EXISTS (
+        SELECT 1 FROM resource_version_dependencies search_dependency
+        INNER JOIN resource_versions search_dependency_version ON search_dependency_version.id = search_dependency.resource_version_id
+        WHERE search_dependency_version.resource_id = r.id AND search_dependency_version.status = 'published'
+          AND NOT EXISTS (
+            SELECT 1 FROM resource_dependencies search_dependency_copied
+            WHERE search_dependency_copied.legacy_source_id = search_dependency.id)
+          AND (search_dependency.external_identifier = :dependency OR search_dependency.external_identifier LIKE :dependencyLike
+            OR search_dependency.target_resource_id = :dependencyId)
       ))`, { dependency, dependencyLike, dependencyId });
     }
     if (options.preferred_content_language) {
