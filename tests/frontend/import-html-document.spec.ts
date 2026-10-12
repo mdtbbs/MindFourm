@@ -38,7 +38,7 @@ describe('HTML remote image import', () => {
     const html = `<html><head><base href="https://external.test/assets/"><style>.card{background:url('./a.png')}</style></head><body><img src="a.png"><img src="https://external.test/assets/a.png#fragment"><img src="https://forum.test/uploads/public-images/local.png"><div class="card" style="background:url(https://external.test/assets/a.png)">排版</div></body></html>`;
     const result = await importHtmlDocument(html, jest.fn(), remote, 'https://forum.test');
     expect(remote).toHaveBeenCalledTimes(1);
-    expect(remote).toHaveBeenCalledWith('https://external.test/assets/a.png');
+    expect(remote).toHaveBeenCalledWith('https://external.test/assets/a.png', undefined);
     expect(result.match(/\/uploads\/public-images\/imported.png/g)).toHaveLength(4);
     expect(result).toContain('src="/uploads/public-images/local.png"');
     expect(result).toContain('class="card"');
@@ -60,5 +60,66 @@ describe('HTML remote image import', () => {
   it('rejects returned external links and non-HTTP image sources', async () => {
     await expect(importHtmlDocument('<img src="https://external.test/a.png">', jest.fn(), jest.fn().mockResolvedValue({ url: 'https://external.test/a.png' }))).rejects.toThrow('站内图片链接');
     await expect(importHtmlDocument('<img src="file:///etc/passwd">', jest.fn(), jest.fn())).rejects.toThrow('HTTP(S)');
+  });
+});
+
+/**
+ * Progress and cancellation of the import run.
+ *
+ * A 5MB document with 58 images used to be one opaque wait with no way out: the
+ * panel showed a static "正在导入图片…" and the dialog could not be closed until
+ * every upload finished. These cases pin the two halves of the fix — the phase
+ * report the panel renders, and the abort that stops the run mid-flight.
+ */
+describe('HTML import progress and abort', () => {
+  const remoteOk = (url: string) => jest.fn().mockResolvedValue({ url: `/uploads/public-images/${url.split('/').pop()}`, alt: '图' });
+
+  it('reports analyzing, then per-image progress, then rewriting', async () => {
+    const events: Array<{ phase: string; current: number; total: number }> = [];
+    const html = '<html><body><img src="https://external.test/a.png"><img src="https://external.test/b.png"></body></html>';
+    await importHtmlDocument(html, jest.fn(), remoteOk('https://external.test/a.png'), 'https://forum.test', {
+      onProgress: (progress) => events.push(progress),
+    });
+
+    expect(events[0]).toEqual({ phase: 'analyzing', current: 0, total: 0 });
+    expect(events[events.length - 1].phase).toBe('rewriting');
+    const uploading = events.filter((event) => event.phase === 'uploading');
+    expect(uploading[0]).toEqual({ phase: 'uploading', current: 0, total: 2 });
+    expect(uploading[uploading.length - 1]).toEqual({ phase: 'uploading', current: 2, total: 2 });
+  });
+
+  it('reports the image total for embedded images too', async () => {
+    const totals: number[] = [];
+    const upload = jest.fn().mockResolvedValue({ url: '/uploads/a.png' });
+    await importHtmlDocument('<img src="data:image/png;base64,YWJj"><img src="data:image/png;base64,ZGVm">', upload, jest.fn(), 'https://forum.test', {
+      onProgress: (progress) => { if (progress.phase === 'uploading') totals.push(progress.total); },
+    });
+    expect(Math.max(...totals)).toBe(2);
+  });
+
+  it('aborts before any upload when the signal is already aborted', async () => {
+    const upload = jest.fn();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(importHtmlDocument('<img src="data:image/png;base64,YWJj">', upload, jest.fn(), 'https://forum.test', {
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('stops remaining uploads once the signal aborts mid-run', async () => {
+    const controller = new AbortController();
+    const upload = jest.fn()
+      .mockImplementationOnce(async () => {
+        controller.abort();
+        return { url: '/uploads/1.png' };
+      })
+      .mockResolvedValue({ url: '/uploads/2.png' });
+    // Four distinct payloads, so nothing dedupes away before the abort lands.
+    const html = ['YWJj', 'ZGVm', 'Z2hp', 'amts'].map((payload) => `<img src="data:image/png;base64,${payload}">`).join('');
+    await expect(importHtmlDocument(html, upload, jest.fn(), 'https://forum.test', {
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(upload).toHaveBeenCalledTimes(1);
   });
 });
