@@ -75,7 +75,7 @@ export default function ResourceFilters({
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filterTrigger = useRef<HTMLButtonElement>(null);
   const mobilePanel = useRef<HTMLElement>(null);
-  const pendingQuery = useRef<string | null>(null);
+  const pendingQueries = useRef<string[]>([]);
   const reduceMotion = useReducedMotion();
 
   const closeMobileFilters = () => {
@@ -113,21 +113,37 @@ export default function ResourceFilters({
   useEffect(() => setLocalMapValues((current) => ({ ...current, height: urlHeight })), [urlHeight]);
 
   /**
-   * A commit chains off the query this component last navigated to, not off the
+   * A commit chains off the last query this component navigated to, not off the
    * `searchParams` of the current render: two commits in a row (a keyboard Tab
    * through two text conditions, no pause) both start from the same render, and
    * the second would otherwise overwrite the first with a stale snapshot.
+   *
+   * The chain is a queue rather than a single slot because navigations are not
+   * rendered in order under load: an in-flight navigation can land *after* a
+   * later one, so a render that is not the newest is evidence of nothing. Only
+   * a render matching queue entry `k` proves entries after it are still ahead,
+   * and those are the ones a later commit must keep chaining onto.
    */
-  const updateFilters = useCallback((updates: Record<string, string | null>) => {
-    const query = mergeResourceQuery(pendingQuery.current ?? searchParams.toString(), updates);
-    pendingQuery.current = query;
+  const commitQuery = useCallback((query: string) => {
+    pendingQueries.current = [...pendingQueries.current.filter((pending) => pending !== query), query];
     router.push(query ? `/resources?${query}` : '/resources');
-  }, [router, searchParams]);
+  }, [router]);
 
-  // The render caught up with the navigation: from here the URL is authority
-  // again, so a later commit need not chain off a pending query.
+  const updateFilters = useCallback((updates: Record<string, string | null>) => {
+    const tail = pendingQueries.current[pendingQueries.current.length - 1] ?? searchParams.toString();
+    commitQuery(mergeResourceQuery(tail, updates));
+  }, [commitQuery, searchParams]);
+
+  // A render either caught up with the newest navigation — the URL is authority
+  // again — or it caught up with an older one that overtook it, which says only
+  // that everything newer is still pending. Matching `k` in the queue therefore
+  // keeps `k+1…` and drops the rest; no match means a back/forward navigation
+  // this component did not make, so the queue is void.
   const renderedQuery = searchParams.toString();
-  useEffect(() => { pendingQuery.current = null; }, [renderedQuery]);
+  useEffect(() => {
+    const position = pendingQueries.current.indexOf(renderedQuery);
+    pendingQueries.current = position < 0 ? [] : pendingQueries.current.slice(position + 1);
+  }, [renderedQuery]);
 
   const removeFilter = (key: string) => {
     if (key === 'search') setLocalSearch('');
@@ -186,12 +202,12 @@ export default function ResourceFilters({
     setLocalSearch('');
     setLocalTag('');
     setLocalMapValues({ block: '', width: '', height: '' });
-    // Same outlet as every other navigation: strip this component's own keys,
-    // then canonicalise, so a stale map condition cannot survive Clear.
+    // Same outlet as every other navigation — it reads and updates the pending
+    // chain too, so a commit in the same render window chains off what Clear
+    // left behind instead of reviving a condition Clear just removed.
     const params = new URLSearchParams(searchParams.toString());
     for (const key of OWNED_FILTER_KEYS) params.delete(key);
-    const query = normalizeResourceFilterParams(params).toString();
-    router.push(query ? `/resources?${query}` : '/resources');
+    commitQuery(normalizeResourceFilterParams(params).toString());
   };
 
   const applyMobileFilters = () => {
