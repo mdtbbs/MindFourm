@@ -8,10 +8,13 @@ import { DataSource } from 'typeorm';
  * Modern tables (resource_dependencies / resource_compatibilities) take
  * precedence; legacy rows (resource_version_dependencies /
  * resource_version_compatibilities) are merged in when the modern table is
- * missing or lacks a copy of that legacy row (matched via legacy_source_id).
- * This keeps modern-only, legacy-only and mixed datasets consistent across
- * V2, V1 Manifest, Search and Pack readers. Read-only: no writes, no schema
- * assumptions beyond the columns already produced by the V2 migration.
+ * missing or lacks a copy of that legacy row. A legacy row counts as copied
+ * either when the V2 migration mirrored it (`legacy_source_id`) or when the
+ * application double-wrote it to both tables with the same content (see
+ * `compatibilityContentKey`). This keeps modern-only, legacy-only and mixed
+ * datasets consistent across V2, V1 Manifest, Search and Pack readers.
+ * Read-only: no writes, no schema assumptions beyond the columns already
+ * produced by the V2 migration.
  */
 
 export type ResourceDependencyKind = 'required' | 'optional' | 'incompatible' | 'embedded';
@@ -48,11 +51,33 @@ export type UnifiedCompatibility = {
 
 const DEPENDENCY_KINDS = new Set<ResourceDependencyKind>(['required', 'optional', 'incompatible', 'embedded']);
 
-const TARGET_PUBLIC_ID_CASE = `CASE WHEN target.is_public = 1 AND target.deleted_at IS NULL
+const TARGET_RESOURCE_JOIN = 'LEFT JOIN resources target ON target.id = d.target_resource_id';
+
+const TARGET_CATEGORY_JOIN = 'LEFT JOIN resource_categories target_category ON target_category.id = target.category_id';
+
+/**
+ * Public visibility of a dependency target.
+ *
+ * `unlisted` stays reachable by public_id in the V1/V2 detail contracts (only
+ * `private` is unreachable), so only `private` suppresses the target here —
+ * matching `ResourcesService.isResourcePubliclyAccessible` and
+ * `ResourceReadAdapterService.getPublicFileByPublicIds`. The Pack manifest
+ * additionally keeps suppressing targets filed under a deactivated category
+ * (`requireActiveTargetCategory`), which mirrors its deactivated-topic filter
+ * for members.
+ */
+function targetPublicIdCase(requireActiveTargetCategory: boolean): string {
+  return `CASE WHEN target.is_public = 1 AND target.deleted_at IS NULL
   AND target.status IN ('approved','published')
-  AND (target.visibility IS NULL OR target.visibility = 'public')
-  AND target.merged_into_resource_id IS NULL
+  AND (target.visibility IS NULL OR target.visibility <> 'private')
+  ${requireActiveTargetCategory ? 'AND (target.category_id IS NULL OR target_category.is_active = 1) ' : ''}AND target.merged_into_resource_id IS NULL
   THEN target.public_id ELSE NULL END AS target_public_id`;
+}
+
+export type ResourceDependencyReadOptions = {
+  /** Pack keeps hiding dependency targets whose category is deactivated. */
+  requireActiveTargetCategory?: boolean;
+};
 
 @Injectable()
 export class ResourceDependencyReadService {
@@ -72,16 +97,23 @@ export class ResourceDependencyReadService {
     return pending;
   }
 
-  async collectDependencies(versionIds: number[]): Promise<Map<number, UnifiedDependency[]>> {
+  async collectDependencies(
+    versionIds: number[],
+    options: ResourceDependencyReadOptions = {},
+  ): Promise<Map<number, UnifiedDependency[]>> {
     const map = new Map<number, UnifiedDependency[]>();
     if (!versionIds.length) return map;
     const placeholders = versionIds.map(() => '?').join(',');
     const rows: UnifiedDependency[] = [];
+    const targetPublicId = targetPublicIdCase(options.requireActiveTargetCategory === true);
+    const targetJoins = options.requireActiveTargetCategory
+      ? `${TARGET_RESOURCE_JOIN}\n         ${TARGET_CATEGORY_JOIN}`
+      : TARGET_RESOURCE_JOIN;
 
     if (await this.tableExists('resource_dependencies')) {
       const modern = await this.dataSource.query(
-        `SELECT d.*, ${TARGET_PUBLIC_ID_CASE} FROM resource_dependencies d
-         LEFT JOIN resources target ON target.id = d.target_resource_id
+        `SELECT d.*, ${targetPublicId} FROM resource_dependencies d
+         ${targetJoins}
          WHERE d.resource_version_id IN (${placeholders}) ORDER BY d.sort_order ASC, d.id ASC`,
         versionIds,
       );
@@ -107,8 +139,8 @@ export class ResourceDependencyReadService {
       // those legacy rows so mixed datasets do not duplicate a relationship.
       const hasModern = await this.tableExists('resource_dependencies');
       const legacy = await this.dataSource.query(
-        `SELECT d.*, ${TARGET_PUBLIC_ID_CASE} FROM resource_version_dependencies d
-         LEFT JOIN resources target ON target.id = d.target_resource_id
+        `SELECT d.*, ${targetPublicId} FROM resource_version_dependencies d
+         ${targetJoins}
          WHERE d.resource_version_id IN (${placeholders})
          ${hasModern ? `AND NOT EXISTS (
            SELECT 1 FROM resource_dependencies copied
@@ -147,14 +179,18 @@ export class ResourceDependencyReadService {
     if (!versionIds.length) return map;
     const placeholders = versionIds.map(() => '?').join(',');
     const rows: UnifiedCompatibility[] = [];
+    // Multiset of modern content keys: a legacy row consumes one match, so a
+    // distinct legacy row sharing the same constraint is never swallowed.
+    const modernKeyCounts = new Map<string, number>();
 
-    if (await this.tableExists('resource_compatibilities')) {
+    const hasModern = await this.tableExists('resource_compatibilities');
+    if (hasModern) {
       const modern = await this.dataSource.query(
         `SELECT * FROM resource_compatibilities WHERE resource_version_id IN (${placeholders}) ORDER BY id ASC`,
         versionIds,
       );
       for (const row of modern as Record<string, unknown>[]) {
-        rows.push({
+        const unified: UnifiedCompatibility = {
           resource_version_id: Number(row.resource_version_id),
           runtime: String(row.runtime || 'mindustry'),
           game_version: (row.game_version as string) || null,
@@ -167,23 +203,29 @@ export class ResourceDependencyReadService {
           confidence: (row.confidence as string) || null,
           notes: (row.notes as string) || null,
           origin: 'modern',
-        });
+        };
+        rows.push(unified);
+        const key = compatibilityContentKey(unified);
+        modernKeyCounts.set(key, (modernKeyCounts.get(key) || 0) + 1);
       }
     }
 
     if (await this.tableExists('resource_version_compatibilities')) {
-      const hasModern = await this.tableExists('resource_compatibilities');
+      // `createInitialV2Aggregate` writes the same declared constraint to both
+      // tables, and that modern row keeps `legacy_source_id` NULL — so the
+      // migration mirror key alone cannot recognise it. `resource_versions`
+      // supplies the release channel the modern writer falls back to, which is
+      // the one column where the two writers legitimately disagree.
       const legacy = await this.dataSource.query(
-        `SELECT * FROM resource_version_compatibilities d
+        `SELECT d.*${hasModern ? ', compat_version.release_channel AS version_release_channel' : ''}
+         FROM resource_version_compatibilities d
+         ${hasModern ? 'LEFT JOIN resource_versions compat_version ON compat_version.id = d.resource_version_id' : ''}
          WHERE d.resource_version_id IN (${placeholders})
-         ${hasModern ? `AND NOT EXISTS (
-           SELECT 1 FROM resource_compatibilities copied
-           WHERE copied.legacy_source_id = d.id)` : ''}
          ORDER BY d.id ASC`,
         versionIds,
       );
       for (const row of legacy as Record<string, unknown>[]) {
-        rows.push({
+        const unified: UnifiedCompatibility = {
           resource_version_id: Number(row.resource_version_id),
           runtime: String(row.runtime || 'mindustry'),
           game_version: (row.game_series as string) || null,
@@ -196,7 +238,22 @@ export class ResourceDependencyReadService {
           confidence: (row.confidence as string) || null,
           notes: (row.notes as string) || null,
           origin: 'legacy',
-        });
+        };
+        // A legacy row whose channel is NULL was declared without one, and the
+        // double-write stored the release channel instead; a legacy row with an
+        // explicit channel still matches that same channel. Everything else is
+        // compared verbatim, so genuinely different constraints survive.
+        const candidates = [compatibilityContentKey(unified)];
+        const releaseChannel = (row.version_release_channel as string) || null;
+        if (unified.channel === null && releaseChannel !== null) {
+          candidates.push(compatibilityContentKey(unified, releaseChannel));
+        }
+        const matched = candidates.find((key) => (modernKeyCounts.get(key) || 0) > 0);
+        if (matched !== undefined) {
+          modernKeyCounts.set(matched, (modernKeyCounts.get(matched) as number) - 1);
+          continue;
+        }
+        rows.push(unified);
       }
     }
 
@@ -217,4 +274,28 @@ export class ResourceDependencyReadService {
     const num = Number(value);
     return Number.isInteger(num) && num > 0 ? num : null;
   }
+}
+
+/**
+ * Content key shared by the two compatibility writers.
+ *
+ * The modern and legacy tables disagree on `source`/`provenance` (analyzer vs
+ * inferred), `status` and `legacy_source_id`, so those are deliberately left
+ * out; every other declared column is compared verbatim (trimmed).
+ */
+function compatibilityContentKey(row: UnifiedCompatibility, channelOverride?: string | null): string {
+  const slot = (value: string | null | undefined) => {
+    const text = value == null ? '' : String(value).trim();
+    return text === '' ? '\u0001' : text;
+  };
+  return [
+    slot(row.runtime),
+    slot(row.game_version),
+    slot(row.min_version),
+    slot(row.max_version),
+    slot(channelOverride === undefined ? row.channel : channelOverride),
+    slot(row.platform_key),
+    slot(row.confidence),
+    slot(row.notes),
+  ].join('\u0000');
 }

@@ -262,7 +262,7 @@ export class ResourceReadAdapterService {
               max_version: item.max_version,
               channel: item.channel,
               platform: item.platform_key,
-              provenance: item.provenance,
+              provenance: this.normalizeProvenance(item.provenance),
               confidence: item.confidence,
             })),
           dependencies: dependencies
@@ -329,7 +329,10 @@ export class ResourceReadAdapterService {
     const publicIds = new Map(targets
       .filter((target) => Number(target.is_public) === 1 && !(target as any).deleted_at
         && ['approved', 'published'].includes(String(target.status || ''))
-        && (target.visibility == null || target.visibility === 'public')
+        // Only `private` targets are unreachable by public_id in the V1/V2
+        // detail contracts; `unlisted` stays resolvable, matching the shared
+        // projection and ResourcesService.isResourcePubliclyAccessible.
+        && target.visibility !== 'private'
         && target.merged_into_resource_id == null)
       .map((target) => [target.id, target.public_id || null]));
     return legacy.map((item) => ({
@@ -381,10 +384,24 @@ export class ResourceReadAdapterService {
     }));
   }
 
+  /**
+   * One mapping for both read paths.
+   *
+   * Legacy rows already speak the V1 vocabulary. Modern rows carry
+   * `resource_compatibilities.source`, which the Resource Center migration
+   * derived by collapsing `inferred|file_metadata` → `analyzer` and everything
+   * else → `author`; mapping it back here keeps `analyzer` evidence visible as
+   * `inferred` instead of silently degrading to `user_declared`.
+   */
   private normalizeProvenance(value: unknown): 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified' {
-    return ['file_metadata', 'inferred', 'user_declared', 'verified', 'admin_verified'].includes(String(value))
-      ? value as 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified'
-      : 'user_declared';
+    switch (String(value)) {
+      case 'file_metadata': return 'file_metadata';
+      case 'inferred':
+      case 'analyzer': return 'inferred';
+      case 'verified': return 'verified';
+      case 'admin_verified': return 'admin_verified';
+      default: return 'user_declared';
+    }
   }
 
   private normalizeConfidence(value: unknown): 'low' | 'medium' | 'high' | null {

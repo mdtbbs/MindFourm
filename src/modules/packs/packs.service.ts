@@ -235,8 +235,12 @@ export class PacksService {
     const [compatibilities, dependencies] = await Promise.all([
       this.dependencyRead.collectCompatibilities([version.id]).then((map) => map.get(version.id) || []),
       items.length
-        ? this.dependencyRead.collectDependencies(items.map((item) => item.version.id))
-            .then((map) => [...map.values()].flat())
+        // Pack keeps suppressing dependency targets filed under a deactivated
+        // topic, just like it does for its pinned members.
+        ? this.dependencyRead.collectDependencies(
+            items.map((item) => item.version.id),
+            { requireActiveTargetCategory: true },
+          ).then((map) => [...map.values()].flat())
         : Promise.resolve([] as UnifiedDependency[]),
     ]);
 

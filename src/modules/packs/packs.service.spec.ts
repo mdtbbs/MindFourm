@@ -221,6 +221,18 @@ describe('PacksService pinned membership', () => {
     ]);
   });
 
+  it('asks the projection to keep hiding targets under a deactivated topic', async () => {
+    const dependencyRead = {
+      collectDependencies: jest.fn(async () => new Map()),
+      collectCompatibilities: jest.fn(async () => new Map()),
+    };
+    const { service } = createService({ dependencyRead });
+
+    await service.getManifest('pack-public', 'pack-version-public');
+
+    expect(dependencyRead.collectDependencies).toHaveBeenCalledWith([22], { requireActiveTargetCategory: true });
+  });
+
   it('issues batch grants only for the Pack-pinned file versions through DownloadGrantService', async () => {
     const { service, downloadGrants } = createService();
     const request = { user: { id: 42 }, headers: { 'user-agent': 'Launcher/1.0' } };
