@@ -4,6 +4,25 @@
 
 每条变更应说明受影响的方法和路径、对客户端的影响、兼容性，以及相关 OAuth scope、请求/响应字段、错误码和限流。破坏性变更还必须给出替代接口和迁移步骤，并链接生命周期公告。接口完整定义以[公开 OpenAPI](/api/openapi/v1.json)为准。
 
+## Public API 1.6.0
+
+本次为富文本正文增加块级对齐与受信 HTML 区块，契约版本从 `1.5.0` 更新为 `1.6.0`。既有路由、必填参数和响应字段不变；新增节点与属性均为兼容性新增，不提交它们的旧客户端不受影响。
+
+### Added
+
+- Rich Content Schema v2 的 `paragraph` 和 `heading` 节点新增可选属性 `align`，取值为 `left`、`center`、`right`、`justify` 或 `null`。`left` 与 `null` 等价，均为默认左对齐。此前只有表格单元格支持对齐，正文段落和标题没有对应的表达能力。约束见[富文本格式 V2](./rich-content-schema-v2.md)。
+- 讨论、回复、资源说明等所有接受 `content_json` 的写入操作同步接受该属性；`content_html` 渲染为 `data-align` 属性并附带 `text-align` 声明，Markdown 投影和 `content_text` 不受影响。
+- 新增块级节点 `htmlBlock`，用于资源介绍、公告一类需要卡片、分栏或图文混排的场景。节点只接受 `attrs.html`（长度上限 20000 字符，每篇内容最多 5 个区块）；`attrs.text` 为服务端派生的纯文本投影，客户端提交的值会被忽略。写入权限限于版主及以上角色。
+- `content_html` 为 `htmlBlock` 输出清洗后的片段；Markdown 投影与 `content_text` 使用其纯文本（纯图片区块使用 `img` 的 `alt`），因此搜索、摘要、通知与 RSS 路径不因新增节点而缺失内容。
+
+### Security
+
+- `htmlBlock` 是唯一的受信 HTML 节点，普通成员提交含该节点的正文时返回 `403 HTML_BLOCK_FORBIDDEN`。片段在服务端按标签、属性与 CSS 声明三张白名单清洗后再入库：`script`/`style`/`iframe`/`object`/`template` 及其文本内容、全部事件属性、`url()`、`expression()`、`@import`、`!important`、`position` 与视口单位一律丢弃；`javascript:`、`data:` 与协议相对 URL 被拒绝。清洗幂等，重新生成 `content_html` 不会改写已存内容。
+- 读者端不解析原始标记：客户端按同一张白名单把片段转成元素树渲染，全程不使用 `innerHTML`。两端白名单由测试逐项比对，任一侧单独改动会导致测试失败。
+- 对齐之外，`content_html` 的样式白名单不因此扩大：普通正文仍然只放行对齐声明。
+
+Ref: #41
+
 ## Public API 1.5.0
 
 本次新增面向任意业务的通用 Blob 存储接口 `/api/v1/blobs`，契约版本从 `1.4.1` 更新为 `1.5.0`。既有操作、路由、必填参数和响应字段均未改动，纯新增，旧客户端不受影响。

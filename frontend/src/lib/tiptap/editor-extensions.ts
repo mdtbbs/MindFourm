@@ -63,23 +63,28 @@ const PresentedTable = TableExtension.extend({
   },
 });
 
+const CELL_ALIGNMENTS = ['left', 'center', 'right'];
+/**
+ * `data-align` is the canonical marker (the API validates it and the reader
+ * renders it), but Word and web pages only ship `style="text-align: …"`, so a
+ * paste has to be readable from either.
+ */
+const cellAlignAttribute = () => ({
+  default: null,
+  parseHTML: (element: HTMLElement) => {
+    const marker = (element.getAttribute('data-align') || '').toLowerCase();
+    return CELL_ALIGNMENTS.includes(marker) ? marker
+      : CELL_ALIGNMENTS.includes(element.style.textAlign) ? element.style.textAlign : null;
+  },
+  renderHTML: ({ align }: { align: string | null }) => align && CELL_ALIGNMENTS.includes(align) ? { style: `text-align: ${align}` } : {},
+});
 const AlignedTableCell = TableCell.extend({
   content: positiveBlockContent(CONTAINER_BLOCKS),
-  addAttributes() {
-    return { ...this.parent?.(), align: { default: null,
-      parseHTML: (element) => ['left', 'center', 'right'].includes(element.style.textAlign) ? element.style.textAlign : null,
-      renderHTML: ({ align }) => ['left', 'center', 'right'].includes(align) ? { style: `text-align: ${align}` } : {},
-    } };
-  },
+  addAttributes() { return { ...this.parent?.(), align: cellAlignAttribute() }; },
 });
 const AlignedTableHeader = TableHeader.extend({
   content: positiveBlockContent(CONTAINER_BLOCKS),
-  addAttributes() {
-    return { ...this.parent?.(), align: { default: null,
-      parseHTML: (element) => ['left', 'center', 'right'].includes(element.style.textAlign) ? element.style.textAlign : null,
-      renderHTML: ({ align }) => ['left', 'center', 'right'].includes(align) ? { style: `text-align: ${align}` } : {},
-    } };
-  },
+  addAttributes() { return { ...this.parent?.(), align: cellAlignAttribute() }; },
 });
 const SizedImage = ImageExt.extend({
   addAttributes() {

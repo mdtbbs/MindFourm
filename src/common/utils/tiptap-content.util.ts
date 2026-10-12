@@ -3,6 +3,7 @@ import { marked } from 'marked';
 import { ApiV1Exception } from '../exceptions/api-v1.exception';
 import { sanitize } from './markdown.util';
 import { mdtbbsSite, mindustryClubSite } from '../../config/site-profile-data';
+import { TRUSTED_HTML_MAX_BLOCKS, TRUSTED_HTML_MAX_LENGTH, sanitizeTrustedHtml, trustedHtmlToText } from './trusted-html.util';
 
 export const RICH_CONTENT_SCHEMA_VERSION = 2 as const;
 export type TiptapDocument = { type: 'doc'; content: Record<string, unknown>[] };
@@ -11,10 +12,10 @@ const BLOCK_NODES = new Set([
   'doc', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList',
   'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'table',
   'tableRow', 'tableHeader', 'tableCell', 'spoiler', 'video', 'attachment',
-  'postQuote', 'replyQuote',
+  'postQuote', 'replyQuote', 'htmlBlock',
 ]);
 const INLINE_NODES = new Set(['text', 'hardBreak', 'image', 'mention', 'customEmoji']);
-const V2_NODES = new Set(['taskList', 'taskItem', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote']);
+const V2_NODES = new Set(['taskList', 'taskItem', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock']);
 const MARKS = new Set(['bold', 'italic', 'strike', 'underline', 'code', 'link', 'textColor', 'highlight', 'fontSize', 'fontFamily', 'superscript', 'subscript']);
 const V2_MARKS = new Set(['textColor', 'highlight', 'fontSize', 'fontFamily', 'superscript', 'subscript']);
 const MAX_NODES = 5000;
@@ -22,6 +23,7 @@ const MAX_TEXT_LENGTH = 500_000;
 const FONT_SIZES = new Set([12, 14, 16, 18, 20, 24, 28, 32]);
 const FONT_FAMILIES = new Set(['default', 'serif-cn', 'sans-cn', 'kai', 'source-serif-cn', 'source-sans-cn', 'monospace']);
 const HIGHLIGHTS = new Set(['yellow', 'green', 'blue', 'pink', 'orange']);
+const BLOCK_ALIGNMENTS = new Set(['left', 'center', 'right', 'justify']);
 const USERNAME_RE = /^[\p{L}\p{N}_-]{1,64}$/u;
 const SHORTCODE_RE = /^[a-z0-9_+-]{1,48}$/;
 
@@ -96,11 +98,21 @@ function normalizeAttrs(type: string, attrs: unknown, path: string, version: num
     if (typeof value !== 'boolean') invalid(path + '.' + key, type, key, version);
     result[key] = value;
   };
+  const alignAttr = () => {
+    if (source.align === undefined || source.align === null) return;
+    if (!BLOCK_ALIGNMENTS.has(String(source.align))) invalid(path + '.align', type, 'align', version);
+    result.align = source.align;
+  };
 
   switch (type) {
     case 'heading':
-      strictKeys(source, ['level'], path, type, version);
+      strictKeys(source, ['level', 'align'], path, type, version);
       intAttr('level', 1, 6);
+      alignAttr();
+      break;
+    case 'paragraph':
+      strictKeys(source, ['align'], path, type, version);
+      alignAttr();
       break;
     case 'bulletList':
       strictKeys(source, ['tight'], path, type, version);
@@ -224,6 +236,17 @@ function normalizeAttrs(type: string, attrs: unknown, path: string, version: num
         result.draftToken = token;
       } else invalid(path, type, 'attrs', version);
       break;
+    case 'htmlBlock': {
+      // `text` is a server projection: whatever a client sends is replaced by the
+      // plain text of the sanitized fragment, so the two can never disagree.
+      strictKeys(source, ['html', 'text'], path, type, version);
+      textAttr('html', TRUSTED_HTML_MAX_LENGTH, true);
+      const safe = sanitizeTrustedHtml(String(result.html));
+      if (!safe) invalid(path + '.html', type, 'html', version);
+      result.html = safe;
+      result.text = trustedHtmlToText(safe).slice(0, 4000);
+      break;
+    }
     case 'postQuote':
       strictKeys(source, ['postId'], path, type, version);
       intAttr('postId');
@@ -240,10 +263,10 @@ function normalizeAttrs(type: string, attrs: unknown, path: string, version: num
 }
 
 function childAllowed(parent: string, child: string): boolean {
-  if (parent === 'doc') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote'].includes(child);
+  if (parent === 'doc') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock'].includes(child);
   if (parent === 'paragraph' || parent === 'heading') return INLINE_NODES.has(child);
-  if (parent === 'blockquote') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler'].includes(child);
-  if (['tableCell', 'tableHeader', 'listItem', 'taskItem', 'spoiler'].includes(parent)) return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote'].includes(child);
+  if (parent === 'blockquote') return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'spoiler', 'htmlBlock'].includes(child);
+  if (['tableCell', 'tableHeader', 'listItem', 'taskItem', 'spoiler'].includes(parent)) return ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList', 'codeBlock', 'horizontalRule', 'table', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock'].includes(child);
   if (parent === 'bulletList' || parent === 'orderedList') return child === 'listItem';
   if (parent === 'taskList') return child === 'taskItem';
   if (parent === 'codeBlock') return child === 'text';
@@ -263,6 +286,7 @@ export function normalizeTiptapDocument(input: unknown, options: NormalizeConten
   if (!Number.isSafeInteger(version) || version < 1 || version > RICH_CONTENT_SCHEMA_VERSION) throw schemaError('UNSUPPORTED_CONTENT_SCHEMA', '不支持的正文 schema 版本', '$', undefined, undefined, version);
   let nodeCount = 0;
   let textLength = 0;
+  let htmlBlocks = 0;
   const mentions = new Set<number>();
   const visit = (value: unknown, depth: number, path: string, parent?: string, inSpoiler = false): Record<string, unknown> => {
     if (!value || typeof value !== 'object' || Array.isArray(value) || depth > 32 || ++nodeCount > MAX_NODES) invalid(path, undefined, undefined, version);
@@ -273,6 +297,7 @@ export function normalizeTiptapDocument(input: unknown, options: NormalizeConten
     if (version < 2 && V2_NODES.has(type)) throw schemaError('UNSUPPORTED_CONTENT_NODE', '此节点需要 Rich Content Schema v2', path + '.type', type, 'type', version);
     if (parent && !childAllowed(parent, type)) invalid(path, type, 'parent', version);
     if (type === 'spoiler' && inSpoiler) invalid(path, type, 'nested spoiler', version);
+    if (type === 'htmlBlock' && ++htmlBlocks > TRUSTED_HTML_MAX_BLOCKS) throw schemaError('HTML_BLOCK_LIMIT_EXCEEDED', 'HTML 区块数量超出限制', path, type, undefined, version);
     strictKeys(node, type === 'text' ? ['type', 'text', 'marks'] : ['type', 'attrs', 'content'], path, type, version);
     const output: Record<string, unknown> = { type };
     if (type === 'text') {
@@ -414,13 +439,22 @@ function renderInlineMarks(text: string, marks: Array<Record<string, any>> = [])
   return output;
 }
 
+/**
+ * Block alignment is emitted twice on purpose: `data-align` is the canonical,
+ * machine-readable marker (the same one table cells use), and the inline style
+ * keeps `content_html` looking right in clients that render it directly.
+ */
+function alignAttributes(align: unknown): string {
+  return typeof align === 'string' && BLOCK_ALIGNMENTS.has(align) ? ' data-align="' + align + '" style="text-align: ' + align + '"' : '';
+}
+
 function renderNode(raw: Record<string, any>): string {
   const children = (raw.content || []).map(renderNode).join('');
   switch (raw.type) {
     case 'doc': return children;
     case 'text': return renderInlineMarks(raw.text, raw.marks);
-    case 'paragraph': return '<p>' + children + '</p>';
-    case 'heading': return '<h' + raw.attrs.level + '>' + children + '</h' + raw.attrs.level + '>';
+    case 'paragraph': return '<p' + alignAttributes(raw.attrs?.align) + '>' + children + '</p>';
+    case 'heading': return '<h' + raw.attrs.level + alignAttributes(raw.attrs?.align) + '>' + children + '</h' + raw.attrs.level + '>';
     case 'blockquote': return '<blockquote>' + children + '</blockquote>';
     case 'bulletList': return '<ul>' + children + '</ul>';
     case 'orderedList': return '<ol' + (raw.attrs?.start && raw.attrs.start !== 1 ? ' start="' + raw.attrs.start + '"' : '') + (raw.attrs?.type ? ' type="' + raw.attrs.type + '"' : '') + '>' + children + '</ol>';
@@ -443,15 +477,48 @@ function renderNode(raw: Record<string, any>): string {
       return '<a data-rich-video-provider="' + escapeHtml(raw.attrs.provider) + '"' + (raw.attrs.videoId ? ' data-rich-video-id="' + escapeHtml(raw.attrs.videoId) + '"' : '') + ' href="' + escapeHtml(href) + '">' + escapeHtml(raw.attrs.title || ('播放 ' + raw.attrs.provider + ' 视频')) + '</a>';
     }
     case 'attachment': return '<a data-attachment-id="' + raw.attrs.attachmentId + '" href="/api/attachments/' + raw.attrs.attachmentId + '/download">附件 #' + raw.attrs.attachmentId + '</a>';
+    case 'htmlBlock': return raw.attrs.html + '\n';
     case 'postQuote': return '<aside data-quote-type="post"><a href="/posts/' + raw.attrs.postId + '">引用帖子 #' + raw.attrs.postId + '</a></aside>';
     case 'replyQuote': return '<aside data-quote-type="reply" data-post-id="' + raw.attrs.postId + '" data-reply-id="' + raw.attrs.replyId + '"><a href="/posts/' + raw.attrs.postId + '#reply-' + raw.attrs.replyId + '">引用回复 #' + raw.attrs.replyId + '</a></aside>';
     default: return '';
   }
 }
 
+/**
+ * The stored HTML projection.
+ *
+ * `htmlBlock` fragments are the one part of a document that the generic
+ * sanitizer must not touch: it allows a narrow structural tag set, so running a
+ * fragment through it would flatten exactly the markup the block exists for.
+ * Instead the fragment is parked behind a token, the rest of the document is
+ * sanitized as usual, and the fragment is restored afterwards. The fragment was
+ * already bounded by `sanitizeTrustedHtml` during normalization, so nothing
+ * unchecked reaches the output — and a document without `htmlBlock` performs no
+ * substitution at all.
+ */
 export function renderTiptapDocument(input: unknown, options: NormalizeContentOptions = { schemaVersion: 2 }): string {
   const document = normalizeTiptapDocument(input, options);
-  return sanitize(renderNode(document as unknown as Record<string, any>));
+  const fragments: string[] = [];
+  // A per-call nonce keeps a token from ever colliding with literal text a
+  // document happens to contain; the token is gone from the output either way.
+  const nonce = Math.random().toString(36).slice(2, 10).toUpperCase();
+  const token = (index: number) => 'MDTBBSHTMLBLOCK' + nonce + index + 'X';
+  const parked = parkHtmlBlocks(document as unknown as Record<string, any>, fragments, token);
+  const rendered = sanitize(renderNode(parked));
+  return fragments.reduce((html, fragment, index) => html.split(token(index)).join(fragment), rendered);
+}
+
+/** Replaces every fragment with its token, in document order. */
+function parkHtmlBlocks(raw: Record<string, any>, fragments: string[], token: (index: number) => string): Record<string, any> {
+  const visit = (node: Record<string, any>): Record<string, any> => {
+    const parked: Record<string, any> = { ...node, ...(node.content ? { content: node.content.map(visit) } : {}) };
+    if (node.type === 'htmlBlock') {
+      fragments.push(node.attrs.html);
+      parked.attrs = { ...node.attrs, html: token(fragments.length - 1) };
+    }
+    return parked;
+  };
+  return visit(raw);
 }
 
 function inlineTokens(tokens: any[] = [], marks: Array<Record<string, unknown>> = []): Record<string, unknown>[] {
@@ -573,6 +640,7 @@ export function serializeTiptapToMarkdown(input: unknown): string {
         const cells = (row.content || []).map((cell: any) => (cell.content || []).map((block: any) => block.type === 'paragraph' ? inlineMarkdown(block.content || []) : renderBlocks([block]).trim()).join(' '));
         return '| ' + cells.join(' | ') + ' |\n' + (rowIndex === 0 ? '| ' + cells.map(() => '---').join(' | ') + ' |\n' : '');
       }).join('') + '\n';
+      case 'htmlBlock': return (node.attrs?.text || '') + '\n\n';
       case 'spoiler': return '> [!SPOILER] ' + node.attrs.title + '\n' + children.trim().split('\n').map((line: string) => '> ' + line).join('\n') + '\n\n';
       case 'video': return (node.attrs.src || '[' + node.attrs.provider + ' video ' + node.attrs.videoId + ']') + '\n\n';
       case 'attachment': return '[Attachment #' + (node.attrs.attachmentId || 'draft') + ']\n\n';
@@ -601,6 +669,7 @@ export function extractTiptapText(input: unknown): string {
     if (node.type === 'postQuote') return '[Quoted post #' + node.attrs.postId + ']';
     if (node.type === 'replyQuote') return '[Quoted reply #' + node.attrs.replyId + ']';
     if (node.type === 'taskItem') return (node.attrs?.checked ? '[x] ' : '[ ] ') + (node.content || []).map(visit).join('\n');
+    if (node.type === 'htmlBlock') return node.attrs?.text || '';
     if (node.type === 'spoiler') return (node.attrs?.title || '剧透内容') + '\n' + (node.content || []).map(visit).join('\n');
     const children = (node.content || []).map(visit);
     const separator = node.type === 'tableRow' ? ' | ' : inlineContainers.has(node.type) ? '' : '\n';

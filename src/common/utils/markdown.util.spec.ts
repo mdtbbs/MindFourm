@@ -69,6 +69,31 @@ describe('markdown.util', () => {
       expect(sanitize('<p style="position:fixed;top:0">x</p>')).not.toContain('position');
     });
 
+    it('keeps block alignment on paragraphs and headings, and nothing else in the style', () => {
+      // The renderer writes both channels, so both have to survive; raw HTML that
+      // only has one keeps whichever it had.
+      const rendered = sanitize('<p data-align="center" style="text-align:center">居中</p>');
+      expect(rendered).toContain('data-align="center"');
+      expect(rendered).toContain('text-align:center');
+      expect(sanitize('<h2 data-align="right">右</h2>')).toContain('data-align="right"');
+      expect(sanitize('<p style="text-align:justify">两端</p>')).toContain('text-align:justify');
+      const mixed = sanitize('<p style="text-align:center;position:fixed;background:url(javascript:alert(1))">x</p>');
+      expect(mixed).toContain('text-align:center');
+      expect(mixed).not.toMatch(/position|javascript|background/);
+    });
+
+    it('drops block alignment values outside the documented set', () => {
+      expect(sanitize('<p data-align="evil">x</p>')).not.toContain('data-align');
+      expect(sanitize('<p data-align="evil" style="text-align:center">x</p>')).not.toContain('data-align="evil"');
+      expect(sanitize('<p style="text-align:middle">x</p>')).not.toContain('text-align');
+      // Blocks are wider than cells: `justify` is legal on a `<p>`, not on a `<td>`.
+      expect(sanitize('<td data-align="justify">x</td>')).not.toContain('data-align="justify"');
+      expect(sanitize('<td data-align="center">x</td>')).toContain('data-align="center"');
+      // Alignment lives on blocks only: a styled `div`/`span` still gets nothing.
+      expect(sanitize('<div style="text-align:center">x</div>')).not.toContain('text-align');
+      expect(sanitize('<span style="text-align:center">x</span>')).not.toContain('text-align');
+    });
+
     it('does not allow svg-based script execution', () => {
       const result = sanitize('<svg><animate onbegin="alert(1)" attributeName="x"></animate></svg>');
 

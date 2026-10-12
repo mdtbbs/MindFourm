@@ -11,10 +11,10 @@ export class TiptapMarkDto {
 
 @ApiExtraModels(TiptapMarkDto)
 export class TiptapNodeDto {
-  @ApiProperty({ enum: ['doc', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'table', 'tableRow', 'tableHeader', 'tableCell', 'text', 'hardBreak', 'image', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote'] })
+  @ApiProperty({ enum: ['doc', 'paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'listItem', 'taskList', 'taskItem', 'codeBlock', 'horizontalRule', 'table', 'tableRow', 'tableHeader', 'tableCell', 'text', 'hardBreak', 'image', 'spoiler', 'mention', 'customEmoji', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock'] })
   type: string;
 
-  @ApiPropertyOptional({ type: 'object', additionalProperties: true, description: 'Only attributes defined by the named node type are accepted. v2 includes bounded image dimensions, list tight flags, task state, safe table alignment, spoiler state, mention IDs, emoji IDs, configured videos, attachment references, and quote IDs.' })
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true, description: 'Only attributes defined by the named node type are accepted. v2 includes bounded image dimensions, list tight flags, task state, safe block and table alignment, spoiler state, mention IDs, emoji IDs, configured videos, attachment references, quote IDs, and staff-only sanitized HTML fragments.' })
   attrs?: Record<string, unknown>;
 
   @ApiPropertyOptional({ type: 'string', description: 'Text for a text node.' })

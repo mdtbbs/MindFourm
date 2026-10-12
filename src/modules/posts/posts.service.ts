@@ -36,6 +36,7 @@ import { QueryPostsDto } from './dto/query-posts.dto';
 import { PostDetailDto, PostDetailService } from './post-detail.service';
 import { PostSummaryDto, PostSummaryService } from './post-summary.service';
 import { collectDraftAttachmentTokens, collectTiptapMentionIds, replaceDraftAttachmentTokens, resolveContentSource } from '@common/utils/tiptap-content.util';
+import { assertHtmlBlockPermission, documentContainsHtmlBlocks } from '@common/utils/trusted-html.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { postDetailCacheKey } from '@common/utils/post-cache.util';
 import { selectPostCards, hydratePostCardExcerpts } from '@common/utils/post-card-query.util';
@@ -149,8 +150,14 @@ export class PostsService {
       ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, false, true)
       : dto.content_json;
     await this.canonicalizeMentionSnapshots(canonicalJson);
+    // The viewer lookup is deferred rather than awaited up front: it reads the user
+    // row, and a write that neither carries an HTML block nor needs quote visibility
+    // (a plain Markdown post) should not pay for it.
+    let viewerPromise: Promise<{ id: number; role: string }> | null = null;
+    const viewer = () => (viewerPromise ??= this.viewerFor(userId));
+    if (documentContainsHtmlBlocks(dto.content_json)) assertHtmlBlockPermission(dto.content_json, (await viewer()).role);
     const contentSource = resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true });
-    if (richJsonWrite) await this.assertDocumentQuoteVisibility(contentSource.content_json, await this.viewerFor(userId));
+    if (richJsonWrite) await this.assertDocumentQuoteVisibility(contentSource.content_json, await viewer());
     const content = contentSource.content;
     dto.content = content;
     dto.content_json = contentSource.content_json as unknown as CreatePostDto['content_json'];
@@ -707,6 +714,7 @@ export class PostsService {
       ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, false, true)
       : dto.content_json;
     await this.canonicalizeMentionSnapshots(canonicalJson);
+    if (documentContainsHtmlBlocks(dto.content_json)) assertHtmlBlockPermission(dto.content_json, userRole);
     const contentSource = dto.content !== undefined || dto.content_json !== undefined
       ? resolveContentSource(dto.content, canonicalJson, dto.content_schema_version, { allowDraftAttachments: true })
       : null;

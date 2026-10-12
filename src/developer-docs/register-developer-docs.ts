@@ -1311,7 +1311,7 @@ const OPENAPI_COPY_ZH: Record<string, string> = {
   'List a Pack version’s fixed resource-version membership': '列出资源包版本固定的资源版本成员。',
   'Replace a Pack version’s fixed resource-version membership': '替换资源包版本固定的资源版本成员。',
   'Attributes are strictly validated per mark. Color accepts canonical HEX; highlight, font size, and font family use fixed enums.': '每种标记的属性都会严格校验。颜色须使用规范 HEX 值；高亮、字号和字体须使用固定枚举值。',
-  'Only attributes defined by the named node type are accepted. v2 includes bounded image dimensions, list tight flags, task state, safe table alignment, spoiler state, mention IDs, emoji IDs, configured videos, attachment references, and quote IDs.': '只接受对应节点类型声明的属性。v2 支持受限的图片尺寸、列表紧凑标记、任务状态、安全的表格对齐、剧透状态、提及 ID、表情 ID、已配置的视频、附件引用和引用 ID。',
+  'Only attributes defined by the named node type are accepted. v2 includes bounded image dimensions, list tight flags, task state, safe block and table alignment, spoiler state, mention IDs, emoji IDs, configured videos, attachment references, and quote IDs.': '只接受对应节点类型声明的属性。v2 支持受限的图片尺寸、列表紧凑标记、任务状态、安全的块级与表格对齐、剧透状态、提及 ID、表情 ID、已配置的视频、附件引用和引用 ID。',
   'Text for a text node.': '文本节点的文字内容。',
   'Child nodes in Rich Content Schema v2. Unknown nodes and attrs are rejected with a path-specific error.': '富文本格式 v2 中的子节点。未知节点和属性会返回指出具体路径的错误。',
   'Canonical Rich Content Schema v2 document. Markdown is a compatibility/search projection, not the source of truth.': '规范的富文本格式 v2 文档。Markdown 仅用于兼容和搜索，不是数据源。',

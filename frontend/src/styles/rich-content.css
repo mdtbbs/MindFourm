@@ -113,3 +113,17 @@
 /* Boundary spacing applies after card rules in every renderer. */
 .mdtbbs-rich-content > :first-child { margin-top: 0; }
 .mdtbbs-rich-content > :last-child { margin-bottom: 0; }
+
+/* HTML block (staff-authored, sanitized twice — see lib/tiptap/trusted-html.ts).
+ * The fragment brings its own presentation, so this layer only constrains what a
+ * fragment must not do to the page around it: a block can size itself, but never
+ * wider than the reading column, and its content stays inside its own box. */
+.rich-html-block { width: 100%; max-width: 100%; min-width: 0; }
+.rich-html-block img { max-width: 100%; height: auto; }
+.rich-html-block table { width: 100%; max-width: 100%; border-collapse: collapse; }
+.rich-html-block pre { max-width: 100%; overflow-x: auto; }
+/* A fragment may ask for a fixed width; the column is still the ceiling. */
+.rich-html-block [style*="width"] { max-width: 100%; }
+.rich-html-block--empty { padding: .75rem 1rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-size: .8125rem; }
+/* The editor shows the same rendering; the frame marks where the block begins. */
+.mdtbbs-rich-content--editor .rich-html-block { padding: .5rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }

@@ -27,6 +27,7 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
     const paragraph = (text: string, marks?: Record<string, unknown>[]) => ({
       type: 'paragraph', content: [{ type: 'text', text, ...(marks ? { marks } : {}) }],
     });
+    const aligned = (align: string) => ({ type: 'paragraph', attrs: { align }, content: [{ type: 'text', text: align }] });
     const input = {
       type: 'doc',
       content: [
@@ -50,6 +51,9 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
         { type: 'spoiler', attrs: { title: '答案', open: false }, content: [paragraph('hidden'), { type: 'video', attrs: { provider: 'bilibili', videoId: 'BV1xx411c7mD', title: '' } }, { type: 'attachment', attrs: { draftToken: 'A'.repeat(43) } }] },
         { type: 'postQuote', attrs: { postId: 13 } },
         { type: 'replyQuote', attrs: { postId: 13, replyId: 14 } },
+        // Block alignment: the editor's BlockAlign extension and the API validator
+        // both have to accept the same set.
+        ...['center', 'right', 'justify'].map(aligned),
       ],
     };
     const dom = new JSDOM('<!doctype html><html><body><div id="editor"></div></body></html>', { pretendToBeVisual: true });
@@ -109,7 +113,9 @@ describe('Rich Content Schema v2 editor/backend contract', () => {
     expect(canonical.content.find((node) => node.type === 'table')?.content?.[0]).toMatchObject({
       type: 'tableRow', content: [{ type: 'tableHeader', content: [{ type: 'paragraph' }] }, { type: 'tableCell', content: [{ type: 'paragraph' }] }],
     });
-    expect(renderTiptapDocument(canonical, { schemaVersion: 2, allowDraftAttachments: true })).toContain('<details');
+    const rendered = renderTiptapDocument(canonical, { schemaVersion: 2, allowDraftAttachments: true });
+    expect(rendered).toContain('<details');
+    expect(rendered).toContain('<p data-align="center" style="text-align:center">');
   });
 
   it('round-trips Markdown task lists and tables through block-shaped table cells', () => {
@@ -153,6 +159,7 @@ describe('editor schema is no wider than the API schema', () => {
     attachment: () => ({ type: 'attachment', attrs: { attachmentId: 1 } }),
     postQuote: () => ({ type: 'postQuote', attrs: { postId: 1 } }),
     replyQuote: () => ({ type: 'replyQuote', attrs: { postId: 1, replyId: 2 } }),
+    htmlBlock: () => ({ type: 'htmlBlock', attrs: { html: '<p>block</p>' } }),
     image: () => ({ type: 'image', attrs: { src: 'https://cdn.example.org/x.png', alt: 'x' } }),
     mention: () => ({ type: 'mention', attrs: { userId: 1, username: 'alice' } }),
     customEmoji: () => ({ type: 'customEmoji', attrs: { id: 1, name: 'emoji', shortcode: 'sun' } }),
@@ -162,7 +169,7 @@ describe('editor schema is no wider than the API schema', () => {
   const WRAPPERS: Record<string, (node: Record<string, unknown>) => Record<string, unknown>> = {
     bulletList: (n) => n, orderedList: (n) => n, blockquote: (n) => n, table: (n) => n, taskList: (n) => n,
     paragraph: (n) => n, heading: (n) => n, codeBlock: (n) => n, horizontalRule: (n) => n, spoiler: (n) => n,
-    video: (n) => n, attachment: (n) => n, postQuote: (n) => n, replyQuote: (n) => n,
+    video: (n) => n, attachment: (n) => n, postQuote: (n) => n, replyQuote: (n) => n, htmlBlock: (n) => n,
     listItem: (n) => ({ type: 'bulletList', content: [n] }),
     taskItem: (n) => ({ type: 'taskList', content: [n] }),
     tableRow: (n) => ({ type: 'table', content: [n] }),
@@ -205,7 +212,7 @@ describe('editor schema is no wider than the API schema', () => {
    * after some prefix the expression allows, the editor can really produce it.
    */
   const BLOCK_PREFIXES = ['paragraph', 'heading', 'blockquote', 'bulletList', 'orderedList', 'taskList',
-    'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote'];
+    'codeBlock', 'horizontalRule', 'table', 'spoiler', 'video', 'attachment', 'postQuote', 'replyQuote', 'htmlBlock'];
 
   function allowsChild(schema: ReturnType<typeof getSchema>, parent: string, child: string): boolean {
     let match = schema.nodes[parent].contentMatch;

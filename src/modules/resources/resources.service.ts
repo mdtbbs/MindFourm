@@ -22,6 +22,7 @@ import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto } from './dto/update-resource.dto';
 import { QueryResourcesDto } from './dto/query-resources.dto';
 import { resolveOptionalContentSource } from '@common/utils/tiptap-content.util';
+import { assertHtmlBlockPermission, documentContainsHtmlBlocks } from '@common/utils/trusted-html.util';
 import { encodeCursor, decodeCursor } from '@common/utils/cursor.util';
 import { escapeLike } from '@common/utils/search.util';
 import { PUBLIC_RESOURCE_STATUSES, RESOURCE_STATUS } from '@common/utils/constants';
@@ -411,6 +412,7 @@ export class ResourcesService {
     const createdResBindings: Array<{ objectId: string; bindingId: string }> = [];
     let rendererDraft: ConsumedResourcePreviewDraft | undefined;
     let previewStored = false;
+    if (documentContainsHtmlBlocks(dto.content_json)) assertHtmlBlockPermission(dto.content_json, input.actor.role);
     try {
       const preparedMod = await this.prepareInitialModArchive(resource.resource_kind || 'other', resource.resource_type, dto, input.file, false);
       const contentSource = resolveOptionalContentSource(dto.content, dto.content_json, dto.content_schema_version);
@@ -613,6 +615,9 @@ export class ResourcesService {
     }
     const preparedMod = await this.prepareInitialModArchive(resourceKind, resourceType, dto, file, Boolean(provenance.directUploadDraft));
 
+    if (documentContainsHtmlBlocks(dto.content_json)) {
+      assertHtmlBlockPermission(dto.content_json, (await this.userRepository.findOne({ where: { id: userId }, select: { role: true } }))?.role);
+    }
     const canonicalJson = dto.content_json && this.customEmojis
       ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, true)
       : dto.content_json;
@@ -2388,6 +2393,7 @@ export class ResourcesService {
     provenance: { ipAddress?: string } = {},
   ): Promise<any> {
     const hasContentUpdate = dto.content !== undefined || dto.content_json !== undefined;
+    if (documentContainsHtmlBlocks(dto.content_json)) assertHtmlBlockPermission(dto.content_json, userRole);
     const canonicalJson = dto.content_json && this.customEmojis
       ? await this.customEmojis.canonicalizeDocument(dto.content_json, dto.content_schema_version || 1, true)
       : dto.content_json;
