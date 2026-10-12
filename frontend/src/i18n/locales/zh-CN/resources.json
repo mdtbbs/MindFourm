@@ -149,7 +149,7 @@
     "loading": "正在加载版本变化摘要…",
     "loadFailed": "无法加载版本变化摘要。",
     "retry": "重试",
-    "range": "{from} 相较 {to}",
+    "range": "{to} 相较 {from}",
     "firstVersion": "这是该资源的首个公开版本，暂无上一版本可比较。",
     "unavailable": "此版本暂无可展示的结构化变化摘要，作者更新说明如下。",
     "noChanges": "未发现结构化差异。",
