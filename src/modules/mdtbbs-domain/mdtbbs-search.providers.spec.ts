@@ -63,3 +63,48 @@ describe('MdtbbsResourceSearchProvider content-language relevance', () => {
     expect(result.items[0]).toMatchObject({ content_language: 'ru', description: 'Map pack summary' });
   });
 });
+
+describe('MdtbbsResourceSearchProvider unified dependency/compatibility filters', () => {
+  function captureQueryBuilder() {
+    const calls: string[] = [];
+    const qb: any = new Proxy({}, {
+      get(_target, prop) {
+        if (prop === 'getRawAndEntities') return jest.fn(async () => ({ entities: [], raw: [] }));
+        if (prop === 'getCount') return jest.fn(async () => 0);
+        return (...args: any[]) => {
+          if (prop === 'andWhere' && typeof args[0] === 'string') calls.push(args[0]);
+          return qb;
+        };
+      },
+    });
+    return { qb, calls };
+  }
+
+  it('dependency filter queries modern table first and guards legacy rows by legacy_source_id', async () => {
+    const { qb, calls } = captureQueryBuilder();
+    const repository = { createQueryBuilder: jest.fn(() => qb) };
+    const provider = new MdtbbsResourceSearchProvider(repository as any, { register: jest.fn() } as any);
+
+    await provider.search('anything', { limit: 10, page: 1, dependency: 'some-mod' } as any);
+
+    const filter = calls.find((sql) => sql.includes('search_dependency'));
+    expect(filter).toBeDefined();
+    expect(filter).toContain('FROM resource_dependencies search_dependency_v2');
+    expect(filter).toContain('FROM resource_version_dependencies search_dependency');
+    expect(filter).toContain('search_dependency_copied.legacy_source_id = search_dependency.id');
+  });
+
+  it('game_version filter includes modern compatibilities and dedupes copied legacy rows', async () => {
+    const { qb, calls } = captureQueryBuilder();
+    const repository = { createQueryBuilder: jest.fn(() => qb) };
+    const provider = new MdtbbsResourceSearchProvider(repository as any, { register: jest.fn() } as any);
+
+    await provider.search('anything', { limit: 10, page: 1, game_version: '146' } as any);
+
+    const filter = calls.find((sql) => sql.includes('search_compatibility'));
+    expect(filter).toBeDefined();
+    expect(filter).toContain('FROM resource_compatibilities search_compatibility');
+    expect(filter).toContain('FROM resource_version_compatibilities search_compatibility');
+    expect(filter).toContain('search_compatibility_copied.legacy_source_id = search_compatibility.id');
+  });
+});

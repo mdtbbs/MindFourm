@@ -266,6 +266,39 @@ describe('ResourceReadAdapterService', () => {
     expect(result?.versions[0].files[0].download_url).toContain('/api/v1/resources/resource-abc/versions/version-abc/files/file-abc/download');
   });
 
+  it('manifest resolves mixed modern/legacy dependencies through the shared projection', async () => {
+    const resource = { id: 1, public_id: 'resource-mixed', is_public: 1, status: 'approved', deleted_at: null, resource_kind: 'mod', title: 'Mixed Mod' };
+    const version = { id: 10, resource_id: 1, public_id: 'version-mixed', version: '1.0.0', release_channel: 'stable', status: 'published', published_at: new Date('2026-01-01T00:00:00Z') };
+    const resourceRepo = { findOne: jest.fn().mockResolvedValue(resource) };
+    const versionRepo = { find: jest.fn().mockResolvedValue([version]) };
+    const fileRepo = { find: jest.fn().mockResolvedValue([]) };
+    const dependencyRead = {
+      collectDependencies: jest.fn(async (versionIds: number[]) => new Map([
+        [10, [
+          { resource_version_id: 10, dependency_type: 'required' as const, target_resource_id: 5, target_public_id: 'public-target', external_identifier: null, upstream_url: null, version_constraint: '^1.0', resolution_status: 'resolved', notes: null, sort_order: 0, source: 'modern' as const },
+          { resource_version_id: 10, dependency_type: 'optional' as const, target_resource_id: 6, target_public_id: null, external_identifier: 'legacy-ext', upstream_url: null, version_constraint: '>=2.0', resolution_status: null, notes: 'uncopied legacy', sort_order: 1, source: 'legacy' as const },
+        ].filter((row) => versionIds.includes(row.resource_version_id))],
+      ])),
+      collectCompatibilities: jest.fn(async () => new Map([
+        [10, [{ resource_version_id: 10, runtime: 'mindustry', game_version: 'v7', min_version: null, max_version: null, channel: 'stable', platform_key: null, status: null, source: 'user_declared', confidence: null, notes: null, origin: 'legacy' as const }]],
+      ])),
+    };
+    const service = new ResourceReadAdapterService(
+      resourceRepo as any, versionRepo as any, {} as any, fileRepo as any,
+      new ResourceLegacyProjectionService(), undefined, undefined, undefined, dependencyRead as any,
+    );
+
+    const result = await service.getManifestByPublicId('resource-mixed');
+
+    expect(result?.versions[0].dependencies).toEqual([
+      { dependency_type: 'required', resource_public_id: 'public-target', external_identifier: null, version_constraint: '^1.0', notes: null },
+      { dependency_type: 'optional', resource_public_id: null, external_identifier: 'legacy-ext', version_constraint: '>=2.0', notes: 'uncopied legacy' },
+    ]);
+    expect(result?.versions[0].compatibility).toEqual([
+      { runtime: 'mindustry', game_series: 'v7', min_version: null, max_version: null, channel: 'stable', platform: null, provenance: 'user_declared', confidence: null },
+    ]);
+  });
+
   it('filters nonapproved resources from the public V1 list before pagination', async () => {
     const queryBuilder: any = {
       where: jest.fn().mockReturnThis(), andWhere: jest.fn().mockReturnThis(), orderBy: jest.fn().mockReturnThis(),

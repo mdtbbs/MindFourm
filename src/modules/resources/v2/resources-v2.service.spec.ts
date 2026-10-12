@@ -4,7 +4,7 @@ import { ResourcesV2Service } from './resources-v2.service';
 
 describe('ResourcesV2Service relation projection', () => {
   it('does not advertise a Resource preview before any binary version is published', () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     const resource = {
       id: 7, public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', resource_kind: 'map',
       status: 'approved', is_public: 1, latest_published_version_id: null,
@@ -16,7 +16,7 @@ describe('ResourcesV2Service relation projection', () => {
   });
 
   it('preserves the recommended_for context and defaults unknown contexts to general', async () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     const resource = { id: 7 } as Resource;
     const contexts = ['opening', 'production', 'defense', 'logistics', 'general', 'unexpected'];
     jest.spyOn(service as any, 'rowsFrom').mockResolvedValue(contexts.map((relation_context, index) => ({
@@ -45,7 +45,7 @@ describe('ResourcesV2Service relation projection', () => {
   });
 
   it('returns a published peer version label alongside its public UUID', async () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     jest.spyOn(service as any, 'rowsFrom').mockResolvedValue([{
       id: 1, relation_type: 'fork_of', relation_direction: 'outgoing', relation_context: 'general',
       created_at: new Date('2026-10-05T00:00:00.000Z'), peer_public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240',
@@ -62,7 +62,7 @@ describe('ResourcesV2Service relation projection', () => {
 
 describe('ResourcesV2Service reviewer workbench access', () => {
   it('lets moderators inspect pending releases on private Resources without granting edit permissions', async () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     const resource = {
       id: 7, public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', is_public: 0,
       status: 'pending', renderer: null,
@@ -85,7 +85,7 @@ describe('ResourcesV2Service reviewer workbench access', () => {
 
 describe('ResourcesV2Service dependency resolution', () => {
   it('resolves public catalog releases, retains unresolved upstream dependencies, and returns a bounded tree', async () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     const root = { id: 7, resource_kind: 'mod', title: 'Root', is_public: 1, status: 'published' } as Resource;
     jest.spyOn(service as any, 'getPublicResource').mockResolvedValue({ entity: root });
     jest.spyOn(service as any, 'selectedVersion').mockResolvedValue({ id: 70, version: '1.0.0' });
@@ -113,7 +113,7 @@ describe('ResourcesV2Service dependency resolution', () => {
 
 describe('ResourcesV2Service community reads', () => {
   it('returns paginated public issue fields without numeric database identifiers or attachment metadata', async () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     jest.spyOn(service as any, 'getPublicResource').mockResolvedValue({ entity: { id: 7, resource_kind: 'mod' } });
     jest.spyOn(service as any, 'rowsFrom').mockResolvedValue([{
       id: 120, public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', version_public_id: '84b37577-d086-4897-a866-658e29e0bd09',
@@ -136,7 +136,7 @@ describe('ResourcesV2Service community reads', () => {
 
 describe('ResourcesV2Service map analysis projection', () => {
   it('includes bounded structured wave summaries for the workbench wave viewer', async () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     jest.spyOn(service as any, 'rowsFrom').mockImplementation(async (_table: string, sql: string) => {
       if (sql.includes('FROM map_analyses')) return [{
         difficulty_confidence: 'low', estimated_difficulty: 38,
@@ -159,7 +159,7 @@ describe('ResourcesV2Service map analysis projection', () => {
   });
 
   it('returns wave rows when a map analysis summary is not available', async () => {
-    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, {} as any, {} as any);
     jest.spyOn(service as any, 'rowsFrom').mockImplementation(async (_table: string, sql: string) => sql.includes('FROM map_wave_summaries')
       ? [{ wave_start: 2, wave_end: 2, enemy_count: null, estimated_health: null, air_ratio: null, boss_count: 0, strength: null, is_spike: 0 }]
       : []);
@@ -175,7 +175,7 @@ describe('ResourcesV2Service map analysis projection', () => {
 describe('ResourcesV2Service RES version previews', () => {
   it('advertises the selected version RES preview rather than the root renderer path', async () => {
     const previews = { getVersionResPreviewUrl: jest.fn().mockResolvedValue('https://res.example/o/version-preview/preview.png') };
-    const service = new ResourcesV2Service({} as DataSource, {} as any, previews as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, previews as any, {} as any);
     const resource = { id: 7, public_id: '4ab5d671-8af6-4d16-8238-7b6fd4b0a240', resource_kind: 'map', status: 'approved', is_public: 1 } as Resource;
     for (const collector of ['collectFiles', 'collectCompatibility', 'collectDependencies', 'collectVersionPreviewKeys']) {
       jest.spyOn(service as any, collector).mockResolvedValue(new Map());
@@ -189,7 +189,7 @@ describe('ResourcesV2Service RES version previews', () => {
 
   it('rejects an unpublished selection before resolving a version RES URL', async () => {
     const previews = { getVersionResPreviewUrl: jest.fn() };
-    const service = new ResourcesV2Service({} as DataSource, {} as any, previews as any);
+    const service = new ResourcesV2Service({} as DataSource, {} as any, previews as any, {} as any);
     jest.spyOn(service as any, 'getPublicResource').mockResolvedValue({ entity: { id: 7 } });
     jest.spyOn(service as any, 'selectedVersion').mockResolvedValue(null);
     await expect(service.getVersionPreviewUrl('resource-uuid', 'version-uuid')).rejects.toThrow();

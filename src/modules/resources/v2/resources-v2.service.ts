@@ -5,6 +5,7 @@ import { Resource } from '@entities/resource.entity';
 import { ResourceVersion } from '@entities/resource-version.entity';
 import { ApiV1Exception } from '@common/exceptions/api-v1.exception';
 import { escapeLike } from '@common/utils/search.util';
+import { ResourceDependencyReadService } from '../resource-dependency-read.service';
 import { ResourceReadAdapterService } from '../resource-read-adapter.service';
 import { ResourcesV2WriteService } from './resources-v2-write.service';
 import { ResourcePreviewService } from '../resource-preview.service';
@@ -54,6 +55,7 @@ export class ResourcesV2Service {
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly resourceReadAdapter: ResourceReadAdapterService,
     private readonly resourcePreview: ResourcePreviewService,
+    private readonly dependencyRead: ResourceDependencyReadService,
     @Optional() private readonly editorReads?: ResourcesV2WriteService,
   ) {}
 
@@ -387,64 +389,42 @@ export class ResourcesV2Service {
       || this.resourcePreviewUrl(resource);
   }
 
+  // Both projections delegate to the shared modern-first read service so V2,
+  // V1 Manifest, Search and Pack resolve identical results on modern-only,
+  // legacy-only and mixed datasets.
   private async collectCompatibility(versionIds: number[]): Promise<Map<number, ResourceV2CompatibilityDto[]>> {
-    if (!versionIds.length) return new Map();
-    const placeholders = versionIds.map(() => '?').join(',');
-    const modern = await this.tableExists('resource_compatibilities');
-    const rows = modern
-      ? await this.rows(`SELECT * FROM resource_compatibilities WHERE resource_version_id IN (${placeholders}) ORDER BY id ASC`, versionIds)
-      : await this.rowsFrom('resource_version_compatibilities', `SELECT * FROM resource_version_compatibilities WHERE resource_version_id IN (${placeholders}) ORDER BY id ASC`, versionIds);
+    const unified = await this.dependencyRead.collectCompatibilities(versionIds);
     const map = new Map<number, ResourceV2CompatibilityDto[]>();
-    for (const row of rows) {
-      const versionId = this.numberValue(row.resource_version_id);
-      const dto: ResourceV2CompatibilityDto = {
-        runtime: String(row.runtime || 'mindustry'),
-        game_version: row.game_version || row.game_series || null,
-        min_game_version: row.min_game_version || row.min_version_value || null,
-        max_game_version: row.max_game_version || row.max_version_value || null,
-        platform: row.platform_key || null,
-        status: row.status || null,
-        source: row.source || row.provenance || null,
-        confidence: row.confidence || null,
-        channel: row.channel || null,
-        notes: row.notes || null,
-      };
-      const list = map.get(versionId) || [];
-      list.push(dto);
-      map.set(versionId, list);
+    for (const [versionId, rows] of unified) {
+      map.set(versionId, rows.map((row) => ({
+        runtime: row.runtime,
+        game_version: row.game_version,
+        min_game_version: row.min_version,
+        max_game_version: row.max_version,
+        platform: row.platform_key,
+        status: row.status,
+        source: row.source,
+        confidence: row.confidence,
+        channel: row.channel,
+        notes: row.notes,
+      })));
     }
     return map;
   }
 
   private async collectDependencies(versionIds: number[]): Promise<Map<number, ResourceV2DependencyDto[]>> {
-    if (!versionIds.length) return new Map();
-    const placeholders = versionIds.map(() => '?').join(',');
-    const modern = await this.tableExists('resource_dependencies');
-    const rows = modern
-      ? await this.rows(
-        `SELECT d.*, CASE WHEN target.is_public = 1 AND target.deleted_at IS NULL AND target.status IN ('approved','published') THEN target.public_id ELSE NULL END AS target_public_id FROM resource_dependencies d LEFT JOIN resources target ON target.id = d.target_resource_id WHERE d.resource_version_id IN (${placeholders}) ORDER BY d.sort_order ASC, d.id ASC`,
-        versionIds,
-      )
-      : await this.rowsFrom(
-        'resource_version_dependencies',
-        `SELECT d.*, CASE WHEN target.is_public = 1 AND target.deleted_at IS NULL AND target.status IN ('approved','published') THEN target.public_id ELSE NULL END AS target_public_id FROM resource_version_dependencies d LEFT JOIN resources target ON target.id = d.target_resource_id WHERE d.resource_version_id IN (${placeholders}) ORDER BY d.sort_order ASC, d.id ASC`,
-        versionIds,
-      );
+    const unified = await this.dependencyRead.collectDependencies(versionIds);
     const map = new Map<number, ResourceV2DependencyDto[]>();
-    for (const row of rows) {
-      const versionId = this.numberValue(row.resource_version_id);
-      const dto: ResourceV2DependencyDto = {
-        dependency_type: String(row.dependency_type || 'required'),
-        resource_public_id: this.isUuid(row.target_public_id) ? String(row.target_public_id) : null,
-        external_identifier: row.external_identifier || null,
-        upstream_url: row.upstream_url || null,
-        version_constraint: row.version_constraint || null,
-        resolution_status: row.resolution_status || null,
-        sort_order: this.numberValue(row.sort_order),
-      };
-      const list = map.get(versionId) || [];
-      list.push(dto);
-      map.set(versionId, list);
+    for (const [versionId, rows] of unified) {
+      map.set(versionId, rows.map((row) => ({
+        dependency_type: row.dependency_type,
+        resource_public_id: this.isUuid(row.target_public_id) ? row.target_public_id : null,
+        external_identifier: row.external_identifier,
+        upstream_url: row.upstream_url,
+        version_constraint: row.version_constraint,
+        resolution_status: row.resolution_status,
+        sort_order: row.sort_order,
+      })));
     }
     return map;
   }

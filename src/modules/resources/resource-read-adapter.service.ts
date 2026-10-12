@@ -9,6 +9,7 @@ import { ResourceVersionDependency } from '@entities/resource-version-dependency
 import { ResourceVersionCompatibility } from '@entities/resource-version-compatibility.entity';
 import { ResourceMember } from '@entities/resource-center-v2.entity';
 import { ResourceLegacyProjectionService } from './resource-legacy-projection.service';
+import { ResourceDependencyReadService } from './resource-dependency-read.service';
 import { escapeLike } from '@common/utils/search.util';
 import {
   V1MapMetadata,
@@ -99,6 +100,8 @@ export class ResourceReadAdapterService {
     @Optional()
     @InjectRepository(ResourceMember)
     private readonly memberRepo?: Repository<ResourceMember>,
+    @Optional()
+    private readonly dependencyRead?: ResourceDependencyReadService,
   ) {}
 
   /**
@@ -228,14 +231,13 @@ export class ResourceReadAdapterService {
       };
     }
 
+    // Unified modern-first projection: modern rows win; legacy rows not yet
+    // copied into the modern tables are merged in (mixed-storage safe).
     const [files, dependencies, compatibilities] = await Promise.all([
       this.fileRepo.find({ where: { resource_version_id: In(versionIds) }, order: { sort_order: 'ASC' } }),
-      this.dependencyRepo?.find({ where: { resource_version_id: In(versionIds) }, order: { sort_order: 'ASC' } }) || Promise.resolve([]),
-      this.compatibilityRepo?.find({ where: { resource_version_id: In(versionIds) }, order: { created_at: 'ASC' } }) || Promise.resolve([]),
+      this.loadManifestDependencies(versionIds),
+      this.loadManifestCompatibilities(versionIds),
     ]);
-    const targetIds = dependencies.map((dependency) => dependency.target_resource_id).filter((id): id is number => Number.isInteger(id));
-    const targetResources = targetIds.length ? await this.resourceRepo.find({ where: { id: In(targetIds) } }) : [];
-    const targetPublicIds = new Map(targetResources.map((target) => [target.id, target.public_id || null]));
 
     return {
       schema_version: 1,
@@ -256,8 +258,8 @@ export class ResourceReadAdapterService {
             .map((item) => ({
               runtime: item.runtime,
               game_series: item.game_series,
-              min_version: item.min_version_value,
-              max_version: item.max_version_value,
+              min_version: item.min_version,
+              max_version: item.max_version,
               channel: item.channel,
               platform: item.platform_key,
               provenance: item.provenance,
@@ -267,7 +269,7 @@ export class ResourceReadAdapterService {
             .filter((item) => item.resource_version_id === version.id)
             .map((item): V1ManifestDependency => ({
               dependency_type: item.dependency_type,
-              resource_public_id: item.target_resource_id ? targetPublicIds.get(item.target_resource_id) || null : null,
+              resource_public_id: item.target_public_id,
               external_identifier: item.external_identifier,
               version_constraint: item.version_constraint,
               notes: item.notes,
@@ -295,6 +297,98 @@ export class ResourceReadAdapterService {
             })),
         })),
     };
+  }
+
+  private get manifestDependencyRead(): ResourceDependencyReadService | undefined {
+    return typeof this.dependencyRead?.collectDependencies === 'function' ? this.dependencyRead : undefined;
+  }
+
+  private async loadManifestDependencies(versionIds: number[]): Promise<Array<{
+    resource_version_id: number;
+    dependency_type: string;
+    target_public_id: string | null;
+    external_identifier: string | null;
+    version_constraint: string | null;
+    notes: string | null;
+  }>> {
+    if (this.manifestDependencyRead) {
+      const grouped = await this.manifestDependencyRead.collectDependencies(versionIds);
+      return [...grouped.values()].flat().map((item) => ({
+        resource_version_id: item.resource_version_id,
+        dependency_type: item.dependency_type,
+        target_public_id: item.target_public_id,
+        external_identifier: item.external_identifier,
+        version_constraint: item.version_constraint,
+        notes: item.notes,
+      }));
+    }
+    // Legacy-only fallback when the read projection service is unavailable.
+    const legacy = await this.dependencyRepo?.find({ where: { resource_version_id: In(versionIds) }, order: { sort_order: 'ASC' } }) || [];
+    const targetIds = legacy.map((item) => item.target_resource_id).filter((id): id is number => Number.isInteger(id));
+    const targets = targetIds.length ? await this.resourceRepo.find({ where: { id: In(targetIds) } }) : [];
+    const publicIds = new Map(targets
+      .filter((target) => Number(target.is_public) === 1 && !(target as any).deleted_at
+        && ['approved', 'published'].includes(String(target.status || ''))
+        && (target.visibility == null || target.visibility === 'public')
+        && target.merged_into_resource_id == null)
+      .map((target) => [target.id, target.public_id || null]));
+    return legacy.map((item) => ({
+      resource_version_id: item.resource_version_id,
+      dependency_type: item.dependency_type,
+      target_public_id: item.target_resource_id ? publicIds.get(item.target_resource_id) || null : null,
+      external_identifier: item.external_identifier,
+      version_constraint: item.version_constraint,
+      notes: item.notes,
+    }));
+  }
+
+  private async loadManifestCompatibilities(versionIds: number[]): Promise<Array<{
+    resource_version_id: number;
+    runtime: string;
+    game_series: string | null;
+    min_version: string | null;
+    max_version: string | null;
+    channel: string | null;
+    platform_key: string | null;
+    provenance: 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified';
+    confidence: 'low' | 'medium' | 'high' | null;
+  }>> {
+    if (this.manifestDependencyRead) {
+      const grouped = await this.manifestDependencyRead.collectCompatibilities(versionIds);
+      return [...grouped.values()].flat().map((item) => ({
+        resource_version_id: item.resource_version_id,
+        runtime: item.runtime,
+        game_series: item.game_version,
+        min_version: item.min_version,
+        max_version: item.max_version,
+        channel: item.channel,
+        platform_key: item.platform_key,
+        provenance: this.normalizeProvenance(item.source),
+        confidence: this.normalizeConfidence(item.confidence),
+      }));
+    }
+    const legacy = await this.compatibilityRepo?.find({ where: { resource_version_id: In(versionIds) }, order: { created_at: 'ASC' } }) || [];
+    return legacy.map((item) => ({
+      resource_version_id: item.resource_version_id,
+      runtime: item.runtime,
+      game_series: item.game_series,
+      min_version: item.min_version_value,
+      max_version: item.max_version_value,
+      channel: item.channel,
+      platform_key: item.platform_key,
+      provenance: this.normalizeProvenance(item.provenance),
+      confidence: this.normalizeConfidence(item.confidence),
+    }));
+  }
+
+  private normalizeProvenance(value: unknown): 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified' {
+    return ['file_metadata', 'inferred', 'user_declared', 'verified', 'admin_verified'].includes(String(value))
+      ? value as 'file_metadata' | 'inferred' | 'user_declared' | 'verified' | 'admin_verified'
+      : 'user_declared';
+  }
+
+  private normalizeConfidence(value: unknown): 'low' | 'medium' | 'high' | null {
+    return ['low', 'medium', 'high'].includes(String(value)) ? value as 'low' | 'medium' | 'high' : null;
   }
 
   async getPublicFileByPublicIds(resourcePublicId: string, versionPublicId: string, filePublicId: string, viewer?: { id: number; role?: string }) {

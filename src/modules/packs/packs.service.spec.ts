@@ -27,6 +27,7 @@ describe('PacksService pinned membership', () => {
     downloadResult?: boolean;
     dependencies?: any[];
     dependencyResources?: any[];
+    dependencyRead?: any;
   } = {}) {
     const itemRepo = {
       find: jest.fn(async () => [{ id: 44, pack_version_id: 11, member_resource_version_id: 22, sort_order: 0 }]),
@@ -54,12 +55,41 @@ describe('PacksService pinned membership', () => {
     const dataSource = { transaction: jest.fn(async (callback: any) => callback(manager)) };
     const capabilities = { getCapabilities: jest.fn(async () => ({ resources: { read: true, download: true, upload: true } })) };
     const downloadGrants = { recordGrant: jest.fn(async () => options.downloadResult ?? true) };
+    const dependencyRead = options.dependencyRead ?? {
+      // Default projection mirrors legacy rows with visibility-aware public ids.
+      collectDependencies: jest.fn(async (versionIds: number[]) => {
+        const rows = (options.dependencies || [])
+          .filter((dep: any) => versionIds.includes(dep.resource_version_id))
+          .map((dep: any) => {
+            const targetResource = (options.dependencyResources || []).find((r: any) => r.id === dep.target_resource_id);
+            const visible = targetResource && Number(targetResource.is_public) === 1
+              && ['approved', 'published'].includes(String(targetResource.status || ''))
+              && (targetResource.visibility == null || targetResource.visibility === 'public')
+              && targetResource.merged_into_resource_id == null;
+            return {
+              resource_version_id: dep.resource_version_id,
+              dependency_type: dep.dependency_type,
+              target_resource_id: dep.target_resource_id ?? null,
+              target_public_id: visible ? targetResource.public_id || null : null,
+              external_identifier: dep.external_identifier ?? null,
+              upstream_url: dep.upstream_url ?? null,
+              version_constraint: dep.version_constraint ?? null,
+              resolution_status: dep.resolution_status ?? null,
+              notes: dep.notes ?? null,
+              sort_order: dep.sort_order ?? 0,
+              source: 'legacy' as const,
+            };
+          });
+        return new Map(rows.map((row: any) => [row.resource_version_id, [row]]));
+      }),
+      collectCompatibilities: jest.fn(async () => new Map()),
+    };
     const service = new PacksService(
       itemRepo as any, resourceRepo, categoryRepo as any, versionRepo as any,
-      fileRepo as any, dependencyRepo as any, compatibilityRepo as any,
+      fileRepo as any, dependencyRead as any,
       dataSource as any, capabilities as any, downloadGrants as any,
     );
-    return { service, itemRepo, resourceRepo, categoryRepo, versionRepo, fileRepo, dependencyRepo, compatibilityRepo, dataSource, manager, capabilities, downloadGrants };
+    return { service, itemRepo, resourceRepo, categoryRepo, versionRepo, fileRepo, dependencyRepo, compatibilityRepo, dependencyRead, dataSource, manager, capabilities, downloadGrants };
   }
 
   it('requires an exact published version when replacing Pack membership', async () => {
@@ -147,9 +177,13 @@ describe('PacksService pinned membership', () => {
     const dependencyRepo = { find: jest.fn(async () => []) };
     const compatibilityRepo = { find: jest.fn(async () => []) };
     const capabilities = { getCapabilities: jest.fn(async () => ({ resources: { read: true, download: true, upload: true } })) };
+    const dependencyRead = {
+      collectDependencies: jest.fn(async () => new Map()),
+      collectCompatibilities: jest.fn(async () => new Map()),
+    };
     const service = new PacksService(
       itemRepo as any, resourceRepo, categoryRepo as any, versionRepo as any, fileRepo as any,
-      dependencyRepo as any, compatibilityRepo as any, {} as any, capabilities as any, {} as any,
+      dependencyRead as any, {} as any, capabilities as any, {} as any,
     );
 
     const manifest = await service.getManifest('pack-public', 'pack-version-public');
@@ -162,6 +196,29 @@ describe('PacksService pinned membership', () => {
     expect(manifest.members[0].name).toBe('Map 0');
     expect(manifest.members[99].name).toBe('Map 99');
     expect(JSON.stringify(manifest)).not.toMatch(/"(?:id|resource_id|version_id|file_id)"\s*:/);
+  });
+
+  it('merges modern and uncopied legacy dependencies in the Pack manifest (mixed storage)', async () => {
+    const dependencyRead = {
+      collectDependencies: jest.fn(async (versionIds: number[]) => new Map([
+        [22, [
+          { resource_version_id: 22, dependency_type: 'required' as const, target_resource_id: 3, target_public_id: null, external_identifier: null, upstream_url: null, version_constraint: '^1.0', resolution_status: 'resolved', notes: null, sort_order: 0, source: 'modern' as const },
+          { resource_version_id: 22, dependency_type: 'optional' as const, target_resource_id: null, target_public_id: null, external_identifier: 'legacy-only-mod', upstream_url: null, version_constraint: '>=2.0', resolution_status: null, notes: 'uncopied', sort_order: 1, source: 'legacy' as const },
+        ].filter((row) => versionIds.includes(row.resource_version_id))],
+      ])),
+      collectCompatibilities: jest.fn(async () => new Map([
+        [11, [{ resource_version_id: 11, runtime: 'mindustry', game_version: null, min_version: '146', max_version: '146', channel: null, platform_key: null, status: null, source: 'analyzer', confidence: 'high', notes: null, origin: 'modern' as const }]],
+      ])),
+    };
+    const { service } = createService({ dependencyRead });
+
+    const manifest = await service.getManifest('pack-public', 'pack-version-public');
+
+    expect(manifest.pack.game_version).toBe('146');
+    expect(manifest.members[0].dependencies).toEqual([
+      { type: 'required', resource_public_id: null, external_identifier: null, version_constraint: '^1.0', notes: null },
+      { type: 'optional', resource_public_id: null, external_identifier: 'legacy-only-mod', version_constraint: '>=2.0', notes: 'uncopied' },
+    ]);
   });
 
   it('issues batch grants only for the Pack-pinned file versions through DownloadGrantService', async () => {
