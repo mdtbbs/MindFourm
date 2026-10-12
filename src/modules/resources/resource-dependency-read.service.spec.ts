@@ -18,7 +18,6 @@ function mockDataSource(opts: {
   modernCompatibilities?: Record<string, unknown>[];
   legacyCompatibilities?: Record<string, unknown>[];
   releaseChannels?: Array<[number, string | null]>;
-  resources?: Record<string, unknown>[];
 }) {
   return createService((sql: string, params?: unknown[]) => {
     if (sql.includes(TABLE_SQL)) {
@@ -249,6 +248,67 @@ describe('ResourceDependencyReadService unified projection', () => {
 
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ origin: 'modern', source: 'analyzer', status: 'compatible' });
+    });
+
+    it('scopes the content-key multiset per version so a batch never loses a sibling version row', async () => {
+      const { service } = mockDataSource({
+        tables: ['resource_compatibilities', 'resource_version_compatibilities'],
+        releaseChannels: [[80, 'release'], [81, null]],
+        // Version 80 is modern-only (its legacy twin was consumed by the
+        // migration), version 81 is legacy-only (written before/during the
+        // direct-draft path, which skips the modern table). Both declare the
+        // very same constraint, so a batch-wide multiset would let the modern
+        // row of 80 swallow the legacy row of 81.
+        modernCompatibilities: [{
+          id: 320, resource_version_id: 80, runtime: 'mindustry', game_version: null,
+          min_game_version: '146', max_game_version: null, channel: 'release', platform_key: null,
+          status: 'declared', source: 'analyzer', confidence: null, notes: null, legacy_source_id: null,
+        }],
+        legacyCompatibilities: [{
+          id: 70, resource_version_id: 81, runtime: 'mindustry', game_series: null,
+          min_version_value: '146', max_version_value: null, channel: 'release', platform_key: null,
+          provenance: 'inferred', confidence: null, notes: null,
+        }],
+      });
+
+      const batch = await service.collectCompatibilities([80, 81]);
+
+      expect(batch.get(80)!.map((row) => row.origin)).toEqual(['modern']);
+      expect(batch.get(81)!.map((row) => row.origin)).toEqual(['legacy']);
+
+      // Regression: the same row read alone behaves exactly as before.
+      const single = await service.collectCompatibilities([81]);
+      expect(single.get(81)!.map((row) => row.origin)).toEqual(['legacy']);
+    });
+
+    it('still deduplicates a same-version double write inside a batch', async () => {
+      const { service } = mockDataSource({
+        tables: ['resource_compatibilities', 'resource_version_compatibilities'],
+        releaseChannels: [[82, 'release'], [83, 'release']],
+        modernCompatibilities: [
+          {
+            id: 330, resource_version_id: 82, runtime: 'mindustry', game_version: null,
+            min_game_version: '146', max_game_version: null, channel: 'release', platform_key: null,
+            status: 'declared', source: 'author', confidence: null, notes: null, legacy_source_id: null,
+          },
+          {
+            id: 331, resource_version_id: 83, runtime: 'mindustry', game_version: null,
+            min_game_version: '147', max_game_version: null, channel: 'release', platform_key: null,
+            status: 'declared', source: 'author', confidence: null, notes: null, legacy_source_id: null,
+          },
+        ],
+        legacyCompatibilities: [
+          { id: 71, resource_version_id: 82, runtime: 'mindustry', game_series: null, min_version_value: '146', max_version_value: null, channel: null, platform_key: null, provenance: 'user_declared', confidence: null, notes: null },
+          { id: 72, resource_version_id: 83, runtime: 'mindustry', game_series: null, min_version_value: '147', max_version_value: null, channel: null, platform_key: null, provenance: 'user_declared', confidence: null, notes: null },
+        ],
+      });
+
+      const batch = await service.collectCompatibilities([82, 83]);
+
+      expect(batch.get(82)).toHaveLength(1);
+      expect(batch.get(82)![0]).toMatchObject({ min_version: '146', origin: 'modern' });
+      expect(batch.get(83)).toHaveLength(1);
+      expect(batch.get(83)![0]).toMatchObject({ min_version: '147', origin: 'modern' });
     });
 
     it('does not deduplicate dependency rows by content (no app double-write on the dependency side)', async () => {

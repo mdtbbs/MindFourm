@@ -180,8 +180,13 @@ export class ResourceDependencyReadService {
     const placeholders = versionIds.map(() => '?').join(',');
     const rows: UnifiedCompatibility[] = [];
     // Multiset of modern content keys: a legacy row consumes one match, so a
-    // distinct legacy row sharing the same constraint is never swallowed.
+    // distinct legacy row sharing the same constraint is never swallowed. The
+    // multiset is scoped per version because this is a batch entry point: two
+    // versions of one resource may declare an identical constraint, and a
+    // legacy-only version must not have its row consumed by a modern row that
+    // belongs to a sibling version.
     const modernKeyCounts = new Map<string, number>();
+    const scopedKey = (versionId: number, contentKey: string) => `${versionId}\u0000${contentKey}`;
 
     const hasModern = await this.tableExists('resource_compatibilities');
     if (hasModern) {
@@ -205,7 +210,7 @@ export class ResourceDependencyReadService {
           origin: 'modern',
         };
         rows.push(unified);
-        const key = compatibilityContentKey(unified);
+        const key = scopedKey(unified.resource_version_id, compatibilityContentKey(unified));
         modernKeyCounts.set(key, (modernKeyCounts.get(key) || 0) + 1);
       }
     }
@@ -248,7 +253,8 @@ export class ResourceDependencyReadService {
         if (unified.channel === null && releaseChannel !== null) {
           candidates.push(compatibilityContentKey(unified, releaseChannel));
         }
-        const matched = candidates.find((key) => (modernKeyCounts.get(key) || 0) > 0);
+        const scopedCandidates = candidates.map((key) => scopedKey(unified.resource_version_id, key));
+        const matched = scopedCandidates.find((key) => (modernKeyCounts.get(key) || 0) > 0);
         if (matched !== undefined) {
           modernKeyCounts.set(matched, (modernKeyCounts.get(matched) as number) - 1);
           continue;
@@ -282,6 +288,10 @@ export class ResourceDependencyReadService {
  * The modern and legacy tables disagree on `source`/`provenance` (analyzer vs
  * inferred), `status` and `legacy_source_id`, so those are deliberately left
  * out; every other declared column is compared verbatim (trimmed).
+ *
+ * The caller prefixes the returned key with the owning `resource_version_id`:
+ * the key itself stays version-agnostic, so the same declared constraint stays
+ * comparable across the two writers.
  */
 function compatibilityContentKey(row: UnifiedCompatibility, channelOverride?: string | null): string {
   const slot = (value: string | null | undefined) => {
