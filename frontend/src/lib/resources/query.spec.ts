@@ -61,6 +61,20 @@ test('a direct link drops the conditions its kind cannot answer, exactly once', 
   expect(schematic.toString()).toBe('resource_kind=schematic&block=router&width=64&height=64');
 });
 
+test('canonicalization never touches an unrelated condition', () => {
+  const requested = new URLSearchParams(
+    'resource_kind=schematic&planet=erekir&block=router&width=64&height=64&tag=campaign&category_id=3&search=reactor&sort=download_count&supported_version=V8&compatibility=Linux',
+  );
+  const kept = normalizeResourceFilterParams(requested);
+  expect(kept.has('planet')).toBe(false);
+  for (const key of ['tag', 'category_id', 'search', 'sort', 'supported_version', 'compatibility', 'resource_kind', 'block', 'width', 'height']) {
+    expect(kept.has(key)).toBe(true);
+  }
+  expect(kept.get('tag')).toBe('campaign');
+  expect(kept.get('sort')).toBe('download_count');
+  expect(normalizeResourceFilterParams(kept).toString()).toBe(kept.toString());
+});
+
 test('resource filter updates preserve every unrelated URL condition', () => {
   const result = new URLSearchParams(mergeResourceQuery(
     'category_id=4&sort=download_count&tag=campaign&supported_version=V8&compatibility=Linux&resource_kind=mod',
@@ -210,6 +224,29 @@ test('SSR canonicalization keeps blueprint conditions and drops the rest from a 
   expect(kept.has('planet')).toBe(false);
   // A URL that is already canonical must not be redirected again.
   expect(kept.toString()).toBe('resource_kind=schematic&block=router&width=64&height=64&category_id=3');
+});
+
+test('a direct link reaches the API with only the conditions its kind can answer', () => {
+  // The SSR module is the whole chain: canonicalise the URL, then read the
+  // conditions the page hands to the list request and to Load More.
+  const apiParams = (href: string) => {
+    const canonical = normalizeResourceFilterParams(new URLSearchParams(href));
+    const kind = canonical.get('resource_kind');
+    return {
+      resource_kind: kind,
+      ...parseMapFilters(kind, {
+        planet: canonical.get('planet'),
+        block: canonical.get('block'),
+        width: canonical.get('width'),
+        height: canonical.get('height'),
+      }),
+    };
+  };
+
+  expect(apiParams('resource_kind=map&planet=serpulo&block=router&width=128&height=128'))
+    .toEqual({ resource_kind: 'map', planet: 'serpulo', width: 128, height: 128 });
+  expect(apiParams('resource_kind=schematic&planet=erekir&block=router&width=64&height=64'))
+    .toEqual({ resource_kind: 'schematic', block: 'router', width: 64, height: 64 });
 });
 
 test('SSR canonicalization strips block from a map URL exactly once', () => {

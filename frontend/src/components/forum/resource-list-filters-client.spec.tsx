@@ -59,6 +59,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
     if (!button) throw new Error(`missing chip for ${key}`);
     return button;
   };
+  const trigger = () => container.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!;
   const mount = async (query: string, kind: string) => {
     mockCurrentQuery = query;
     await act(async () => {
@@ -129,6 +130,24 @@ describe('ResourceFilters map and blueprint conditions', () => {
     for (const key of ['block', 'width', 'height']) expect(container.querySelector(`#resource-desktop-map-${key}`)).not.toBeNull();
     expect(container.querySelector('#resource-desktop-map-planet')).toBeNull();
     await unmount();
+  });
+
+  it('shows the same conditions in the mobile sheet as in the desktop menu', async () => {
+    // The sheet shares `mapFilterFields`, so a blueprint must not show a planet
+    // control there either — and a map must not show a block one.
+    const openSheet = async () => { await act(async () => { trigger().click(); }); };
+    const sheetField = (key: string) => container.querySelector(`#resource-mobile-map-${key}`);
+
+    await mount('resource_kind=schematic&block=router', 'schematic');
+    await openSheet();
+    for (const key of ['block', 'width', 'height']) expect(sheetField(key)).not.toBeNull();
+    expect(sheetField('planet')).toBeNull();
+    await unmount();
+
+    await mount('resource_kind=map&planet=serpulo', 'map');
+    await openSheet();
+    for (const key of ['planet', 'width', 'height']) expect(sheetField(key)).not.toBeNull();
+    expect(sheetField('block')).toBeNull();
   });
 
   it('drops a blueprint planet condition from the URL when the first condition is committed', async () => {
