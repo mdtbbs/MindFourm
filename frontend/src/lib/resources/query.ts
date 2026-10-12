@@ -1,12 +1,20 @@
 /**
  * Structured map/blueprint filters. The backend `QueryResourcesDto` owns the
  * values (`planet` string, `block` string, `width`/`height` integers 1..4096);
- * this module owns the single rule the UI and SSR share: these four conditions
- * only exist while the list is filtered to maps or blueprints, so a URL can
- * never carry a condition the filter UI cannot show or remove.
+ * this module owns the two rules the UI and SSR share, so a URL can never carry
+ * a condition the filter UI cannot show or remove.
+ *
+ * `planet`/`width`/`height` exist for maps and blueprints. `block` exists for
+ * blueprints only: the backend matches it against
+ * `renderer_metadata_json.block_types[*].name`, and the map renderer emits no
+ * `block_types`, so a map URL carrying `block` can only ever return empty
+ * results. Maps therefore drop it instead of offering a control that cannot hit.
  */
 export const MAP_FILTER_KEYS = ['planet', 'block', 'width', 'height'] as const;
+/** Kinds that own `planet`/`width`/`height`. */
 export const MAP_FILTER_KINDS = ['map', 'schematic'] as const;
+/** Kinds that additionally own `block`. */
+export const BLOCK_FILTER_KINDS = ['schematic'] as const;
 export const MIN_MAP_DIMENSION = 1;
 export const MAX_MAP_DIMENSION = 4096;
 
@@ -17,8 +25,16 @@ export type MapFilterValues = {
   height?: number;
 };
 
+function isKindIn(kinds: readonly string[], kind?: string | null): boolean {
+  return Boolean(kind) && kinds.includes(kind as string);
+}
+
 export function isMapFilterKind(kind?: string | null): boolean {
-  return Boolean(kind) && (MAP_FILTER_KINDS as readonly string[]).includes(kind as string);
+  return isKindIn(MAP_FILTER_KINDS, kind);
+}
+
+export function isBlockFilterKind(kind?: string | null): boolean {
+  return isKindIn(BLOCK_FILTER_KINDS, kind);
 }
 
 /** Digits only: an empty, signed, fractional or out-of-range value is not a query. */
@@ -43,7 +59,9 @@ export function parseMapFilters(
   const result: MapFilterValues = {};
   const planet = values.planet?.trim();
   if (planet) result.planet = planet;
-  const block = values.block?.trim();
+  // `block` is blueprint-only: keeping it for a map would send a condition the
+  // renderer metadata can never satisfy.
+  const block = isBlockFilterKind(kind) ? values.block?.trim() : '';
   if (block) result.block = block;
   const width = parseMapDimension(values.width);
   if (width !== null) result.width = width;

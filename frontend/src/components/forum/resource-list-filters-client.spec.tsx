@@ -115,15 +115,51 @@ describe('ResourceFilters map and blueprint conditions', () => {
 
   afterAll(() => { dom.window.close(); });
 
-  it('shows planet, block, width and height while a map or blueprint kind is selected', async () => {
-    for (const kind of ['map', 'schematic']) {
-      await mount(`resource_kind=${kind}`, kind);
-      expect(container.querySelector('#resource-desktop-map-planet')).not.toBeNull();
-      expect(container.querySelector('#resource-desktop-map-block')).not.toBeNull();
-      expect(container.querySelector('#resource-desktop-map-width')).not.toBeNull();
-      expect(container.querySelector('#resource-desktop-map-height')).not.toBeNull();
-      await unmount();
-    }
+  it('shows planet, width and height for a map and adds block for a blueprint', async () => {
+    // Map renderer metadata has no block_types, so a map block control would
+    // only ever produce an empty list.
+    await mount('resource_kind=map', 'map');
+    for (const key of ['planet', 'width', 'height']) expect(container.querySelector(`#resource-desktop-map-${key}`)).not.toBeNull();
+    expect(container.querySelector('#resource-desktop-map-block')).toBeNull();
+    expect(container.textContent).not.toContain('resourceList.blockChip');
+    await unmount();
+
+    await mount('resource_kind=schematic', 'schematic');
+    for (const key of ['planet', 'block', 'width', 'height']) expect(container.querySelector(`#resource-desktop-map-${key}`)).not.toBeNull();
+    await unmount();
+  });
+
+  it('strips block from the URL when a blueprint becomes a map', async () => {
+    await mount('resource_kind=schematic&planet=erekir&block=router&width=64&height=64', 'schematic');
+    await act(async () => { kindButton('map').click(); });
+    const pushed = pushQuery();
+    expect(pushed.get('resource_kind')).toBe('map');
+    expect(pushed.has('block')).toBe(false);
+    expect(pushed.get('planet')).toBe('erekir');
+    expect(pushed.get('width')).toBe('64');
+    expect(pushed.get('height')).toBe('64');
+  });
+
+  it('drops a hand-edited map block condition as soon as any condition is committed', async () => {
+    // SSR already canonicalises this URL; the client must not re-introduce it.
+    await mount('resource_kind=map&block=router&planet=serpulo', 'map');
+    expect(container.querySelector('#resource-desktop-map-block')).toBeNull();
+    await setValue(field('desktop', 'width'), '128');
+    await commit(field('desktop', 'width'));
+    const pushed = pushQuery();
+    expect(pushed.has('block')).toBe(false);
+    expect(pushed.get('planet')).toBe('serpulo');
+    expect(pushed.get('width')).toBe('128');
+    expect(pushed.get('resource_kind')).toBe('map');
+  });
+
+  it('offers no block chip for a map, while a blueprint still shows one', async () => {
+    await mount('resource_kind=map&planet=serpulo&width=128', 'map');
+    expect(container.textContent).not.toContain('resourceList.blockChip');
+    await unmount();
+
+    await mount('resource_kind=schematic&block=router', 'schematic');
+    expect(chipFor('block').textContent).toContain('resourceList.blockChip');
   });
 
   it('hides the map controls and their chips for every other kind', async () => {
@@ -136,7 +172,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
   });
 
   it('drops hidden map conditions when the kind switches away from map', async () => {
-    await mount('resource_kind=map&planet=serpulo&block=router&width=128&height=128&tag=campaign', 'map');
+    await mount('resource_kind=map&planet=serpulo&width=128&height=128&tag=campaign', 'map');
     await act(async () => { kindButton('mod').click(); });
     const pushed = pushQuery();
     expect(pushed.get('resource_kind')).toBe('mod');
@@ -144,15 +180,25 @@ describe('ResourceFilters map and blueprint conditions', () => {
     for (const key of ['planet', 'block', 'width', 'height']) expect(pushed.has(key)).toBe(false);
   });
 
-  it('keeps valid map conditions when switching between map and schematic', async () => {
-    await mount('resource_kind=map&planet=serpulo&block=router&width=128&height=128', 'map');
+  it('keeps the shared conditions when switching between map and schematic', async () => {
+    await mount('resource_kind=map&planet=serpulo&width=128&height=128', 'map');
     await act(async () => { kindButton('schematic').click(); });
     const pushed = pushQuery();
     expect(pushed.get('resource_kind')).toBe('schematic');
     expect(pushed.get('planet')).toBe('serpulo');
-    expect(pushed.get('block')).toBe('router');
     expect(pushed.get('width')).toBe('128');
     expect(pushed.get('height')).toBe('128');
+    expect(pushed.has('block')).toBe(false);
+
+    await unmount();
+    await mount('resource_kind=schematic&planet=erekir&block=router&width=64&height=64', 'schematic');
+    await act(async () => { kindButton('map').click(); });
+    const backToMap = pushQuery();
+    expect(backToMap.get('resource_kind')).toBe('map');
+    expect(backToMap.get('planet')).toBe('erekir');
+    expect(backToMap.get('width')).toBe('64');
+    expect(backToMap.get('height')).toBe('64');
+    expect(backToMap.has('block')).toBe(false);
   });
 
   it('never sends an empty, zero, fractional or out-of-range dimension', async () => {
@@ -169,18 +215,18 @@ describe('ResourceFilters map and blueprint conditions', () => {
   });
 
   it('commits a valid dimension and keeps the sibling conditions in the same query', async () => {
-    await mount('resource_kind=map&planet=serpulo&block=router', 'map');
+    await mount('resource_kind=schematic&planet=serpulo&block=router', 'schematic');
     await setValue(field('desktop', 'width'), '128');
     await commit(field('desktop', 'width'));
     const pushed = pushQuery();
     expect(pushed.get('width')).toBe('128');
     expect(pushed.get('planet')).toBe('serpulo');
     expect(pushed.get('block')).toBe('router');
-    expect(pushed.get('resource_kind')).toBe('map');
+    expect(pushed.get('resource_kind')).toBe('schematic');
   });
 
   it('removes only the matching condition when a chip is dismissed', async () => {
-    await mount('resource_kind=map&planet=serpulo&block=router&width=128&category_id=3', 'map');
+    await mount('resource_kind=schematic&planet=serpulo&block=router&width=128&category_id=3', 'schematic');
     await act(async () => { chipFor('width').click(); });
     const pushed = pushQuery();
     expect(pushed.has('width')).toBe(false);
@@ -188,7 +234,7 @@ describe('ResourceFilters map and blueprint conditions', () => {
   });
 
   it('clears every resource filter from the clear action', async () => {
-    await mount('resource_kind=map&planet=serpulo&block=router&width=128&height=64&tag=campaign', 'map');
+    await mount('resource_kind=schematic&planet=serpulo&block=router&width=128&height=64&tag=campaign', 'schematic');
     const clear = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
       .find((button) => button.textContent === 'resourceList.clear')!;
     await act(async () => { clear.click(); });

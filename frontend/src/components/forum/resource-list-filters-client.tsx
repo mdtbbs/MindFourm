@@ -10,6 +10,7 @@ import { RESOURCE_KINDS } from '@/lib/display-labels';
 import {
   MAX_MAP_DIMENSION,
   MIN_MAP_DIMENSION,
+  isBlockFilterKind,
   isMapFilterKind,
   mapDimensionInvalid,
   mergeResourceQuery,
@@ -26,6 +27,8 @@ interface ResourceFiltersProps {
 /** Text conditions kept local while typing; the URL only ever holds committed values. */
 const MAP_TEXT_KEYS = ['block', 'width', 'height'] as const;
 type MapTextKey = (typeof MAP_TEXT_KEYS)[number];
+/** `block` is blueprint-only, so a map commits planets and dimensions alone. */
+const MAP_TEXT_KEYS_WITHOUT_BLOCK: readonly MapTextKey[] = ['width', 'height'];
 
 export default function ResourceFilters({
   categories, initialCategory, initialSearch, initialSort, initialTag, initialSupportedVersion,
@@ -45,10 +48,15 @@ export default function ResourceFilters({
   // Map conditions are read and rendered only for map/schematic: the URL is
   // canonicalised on the server, so anything hidden here is already gone.
   const showMapFilters = isMapFilterKind(resourceKind);
+  // `block` is blueprint-only: the backend matches it against
+  // `renderer_metadata_json.block_types[*].name`, and the map renderer emits no
+  // `block_types`, so a map control could only ever return an empty list.
+  const showBlockFilter = isBlockFilterKind(resourceKind);
   const planet = showMapFilters ? searchParams.get('planet') || initialPlanet || '' : '';
-  const urlBlock = showMapFilters ? searchParams.get('block') || initialBlock || '' : '';
+  const urlBlock = showBlockFilter ? searchParams.get('block') || initialBlock || '' : '';
   const urlWidth = showMapFilters ? searchParams.get('width') || initialWidth || '' : '';
   const urlHeight = showMapFilters ? searchParams.get('height') || initialHeight || '' : '';
+  const visibleMapTextKeys = showBlockFilter ? MAP_TEXT_KEYS : MAP_TEXT_KEYS_WITHOUT_BLOCK;
   const [localSearch, setLocalSearch] = useState(urlSearch);
   const [localTag, setLocalTag] = useState(tag);
   const [localMapValues, setLocalMapValues] = useState<Record<MapTextKey, string>>({ block: urlBlock, width: urlWidth, height: urlHeight });
@@ -133,7 +141,7 @@ export default function ResourceFilters({
   };
 
   const applyMobileFilters = () => {
-    if (showMapFilters) commitMapFields(MAP_TEXT_KEYS);
+    if (showMapFilters) commitMapFields(visibleMapTextKeys);
     closeMobileFilters();
   };
 
@@ -169,7 +177,7 @@ export default function ResourceFilters({
         <option value="">{t('resourceList.allPlanets')}</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}
       </select>
     </label>
-    <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'block')}>{t('resourceList.block')}
+    {showBlockFilter && <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'block')}>{t('resourceList.block')}
       <input
         id={fieldId(scope, 'block')}
         value={localMapValues.block}
@@ -180,7 +188,7 @@ export default function ResourceFilters({
         placeholder={t('resourceList.blockPlaceholder')}
         className={inputClass}
       />
-    </label>
+    </label>}
     {(['width', 'height'] as const).map((key) => {
       const invalid = mapDimensionInvalid(localMapValues[key]);
       const errorId = `${fieldId(scope, key)}-message`;
@@ -260,7 +268,7 @@ export default function ResourceFilters({
       {supportedVersion && removableChip('supported_version', t('resourceList.versionChip', { value: supportedVersion }))}
       {compatibility && removableChip('compatibility', t('resourceList.platformChip', { value: compatibility }))}
       {showMapFilters && planet && removableChip('planet', t('resourceList.planetChip', { value: planet }))}
-      {showMapFilters && urlBlock && removableChip('block', t('resourceList.blockChip', { value: urlBlock }))}
+      {showBlockFilter && urlBlock && removableChip('block', t('resourceList.blockChip', { value: urlBlock }))}
       {showMapFilters && urlWidth && removableChip('width', t('resourceList.widthChip', { value: urlWidth }))}
       {showMapFilters && urlHeight && removableChip('height', t('resourceList.heightChip', { value: urlHeight }))}
       {sort !== 'created_at' && removableChip('sort', t('resourceList.sortChip', { value: sortLabel }))}

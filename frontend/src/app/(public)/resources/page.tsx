@@ -14,7 +14,7 @@ import { generatePageMetadata } from "@/lib/metadata";
 import { Resource, ResourceCategory } from "@/types";
 import { getRequestLocale } from "@/i18n/server";
 import { translate } from "@/i18n";
-import { MAP_FILTER_KEYS, isMapFilterKind, normalizeResourceFilterParams, parseMapDimension } from "@/lib/resources/query";
+import { MAP_FILTER_KEYS, normalizeResourceFilterParams, parseMapFilters } from "@/lib/resources/query";
 
 export const revalidate = 60;
 
@@ -130,10 +130,16 @@ export default async function ResourcesPage({
   }
 
   const resourceKind = params.get('resource_kind') || undefined;
-  const planet = params.get('planet') || undefined;
-  const block = params.get('block') || undefined;
-  const width = parseMapDimension(params.get('width')) ?? undefined;
-  const height = parseMapDimension(params.get('height')) ?? undefined;
+  // One rule, one reader: `planet`/`width`/`height` exist for maps and
+  // blueprints, `block` only while the blueprint renderer metadata that
+  // answers it is in play.
+  const mapFilters = parseMapFilters(resourceKind, {
+    planet: params.get('planet'),
+    block: params.get('block'),
+    width: params.get('width'),
+    height: params.get('height'),
+  });
+  const { planet, block, width, height } = mapFilters;
   const supportedVersion = params.get('supported_version') || undefined;
   const compatibility = params.get('compatibility') || undefined;
   const tag = params.get('tag') || undefined;
@@ -183,8 +189,8 @@ export default async function ResourcesPage({
           initialResourceKind={resourceKind}
           initialPlanet={planet}
           initialBlock={block}
-          initialWidth={params.get('width') || undefined}
-          initialHeight={params.get('height') || undefined}
+          initialWidth={width ? String(width) : undefined}
+          initialHeight={height ? String(height) : undefined}
           supportedVersions={filterOptions.supported_versions}
           compatibilityOptions={filterOptions.compatibility}
           planets={filterOptions.planets}
@@ -206,7 +212,7 @@ export default async function ResourcesPage({
           supportedVersion={supportedVersion}
           compatibility={compatibility}
           resourceKind={resourceKind}
-          mapFilters={isMapFilterKind(resourceKind) ? { planet, block, width, height } : {}}
+          mapFilters={mapFilters}
         />}
       </section>
     </main>
