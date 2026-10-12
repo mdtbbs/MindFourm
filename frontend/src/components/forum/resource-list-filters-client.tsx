@@ -8,13 +8,18 @@ import type { ResourceCategory } from '@/types';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { RESOURCE_KINDS } from '@/lib/display-labels';
 import {
+  MAP_FILTER_KEYS,
+  MAX_BLOCK_LENGTH,
   MAX_MAP_DIMENSION,
   MIN_MAP_DIMENSION,
+  blockInvalid,
   isBlockFilterKind,
   isMapFilterKind,
   mapDimensionInvalid,
   mapFilterKeys,
+  mapTextFilterKeys,
   mergeResourceQuery,
+  normalizeResourceFilterParams,
 } from '@/lib/resources/query';
 import { useI18n } from '@/i18n/provider';
 
@@ -26,10 +31,14 @@ interface ResourceFiltersProps {
 }
 
 /** Text conditions kept local while typing; the URL only ever holds committed values. */
-const MAP_TEXT_KEYS = ['block', 'width', 'height'] as const;
-type MapTextKey = (typeof MAP_TEXT_KEYS)[number];
-/** `block` is blueprint-only, so a map commits planets and dimensions alone. */
-const MAP_TEXT_KEYS_WITHOUT_BLOCK: readonly MapTextKey[] = ['width', 'height'];
+const ALL_MAP_TEXT_KEYS = ['block', 'width', 'height'] as const;
+type MapTextKey = (typeof ALL_MAP_TEXT_KEYS)[number];
+
+/** Every URL condition this component owns; Clear removes exactly these. */
+const OWNED_FILTER_KEYS = [
+  'category_id', 'search', 'sort', 'tag', 'supported_version', 'compatibility', 'resource_kind',
+  ...MAP_FILTER_KEYS,
+] as const;
 
 export default function ResourceFilters({
   categories, initialCategory, initialSearch, initialSort, initialTag, initialSupportedVersion,
@@ -56,7 +65,10 @@ export default function ResourceFilters({
   const urlBlock = showBlockFilter ? searchParams.get('block') || initialBlock || '' : '';
   const urlWidth = showMapFilters ? searchParams.get('width') || initialWidth || '' : '';
   const urlHeight = showMapFilters ? searchParams.get('height') || initialHeight || '' : '';
-  const visibleMapTextKeys = showBlockFilter ? MAP_TEXT_KEYS : MAP_TEXT_KEYS_WITHOUT_BLOCK;
+  // The submit path reads the same rule as the render path (`mapTextFilterKeys`
+  // is `mapFilterKeys` filtered to text values), so a kind that stops rendering
+  // a field also stops committing it.
+  const mapTextKeys = mapTextFilterKeys(resourceKind);
   const [localSearch, setLocalSearch] = useState(urlSearch);
   const [localTag, setLocalTag] = useState(tag);
   const [localMapValues, setLocalMapValues] = useState<Record<MapTextKey, string>>({ block: urlBlock, width: urlWidth, height: urlHeight });
@@ -107,7 +119,7 @@ export default function ResourceFilters({
   const removeFilter = (key: string) => {
     if (key === 'search') setLocalSearch('');
     if (key === 'tag') setLocalTag('');
-    if ((MAP_TEXT_KEYS as readonly string[]).includes(key)) setLocalMapValues((current) => ({ ...current, [key]: '' }));
+    if ((ALL_MAP_TEXT_KEYS as readonly string[]).includes(key)) setLocalMapValues((current) => ({ ...current, [key]: '' }));
     updateFilters({ [key]: null });
   };
 
@@ -126,6 +138,7 @@ export default function ResourceFilters({
     for (const key of keys) {
       const value = localMapValues[key].trim();
       if (key !== 'block' && mapDimensionInvalid(value)) continue;
+      if (key === 'block' && blockInvalid(value)) continue;
       const committed = key === 'block' ? urlBlock : key === 'width' ? urlWidth : urlHeight;
       if (value !== committed) updates[key] = value || null;
     }
@@ -133,15 +146,43 @@ export default function ResourceFilters({
     updateFilters(updates);
   };
 
+  /**
+   * A rejected value stays visible while the user is in the field (so the
+   * message explains itself), but must not survive as a value the URL never
+   * accepted. Returning to the field — or reopening the sheet — restores the
+   * committed URL value.
+   */
+  const resyncRejectedFields = () => {
+    setLocalMapValues((current) => {
+      const next = { ...current };
+      for (const key of ALL_MAP_TEXT_KEYS) {
+        const invalid = key === 'block' ? blockInvalid(current[key]) : mapDimensionInvalid(current[key]);
+        if (invalid) next[key] = key === 'block' ? urlBlock : key === 'width' ? urlWidth : urlHeight;
+      }
+      return next;
+    });
+  };
+
+  const openMobileFilters = () => {
+    // Reopening the sheet starts from the URL, never from a rejected draft.
+    setLocalMapValues({ block: urlBlock, width: urlWidth, height: urlHeight });
+    setMobileFiltersOpen(true);
+  };
+
   const clearAll = () => {
     setLocalSearch('');
     setLocalTag('');
     setLocalMapValues({ block: '', width: '', height: '' });
-    router.push('/resources');
+    // Same outlet as every other navigation: strip this component's own keys,
+    // then canonicalise, so a stale map condition cannot survive Clear.
+    const params = new URLSearchParams(searchParams.toString());
+    for (const key of OWNED_FILTER_KEYS) params.delete(key);
+    const query = normalizeResourceFilterParams(params).toString();
+    router.push(query ? `/resources?${query}` : '/resources');
   };
 
   const applyMobileFilters = () => {
-    if (showMapFilters) commitMapFields(visibleMapTextKeys);
+    if (showMapFilters) commitMapFields(mapTextKeys);
     closeMobileFilters();
   };
 
@@ -177,18 +218,28 @@ export default function ResourceFilters({
         <option value="">{t('resourceList.allPlanets')}</option>{planets.map((value) => <option key={value} value={value}>{value}</option>)}
       </select>
     </label>}
-    {showBlockFilter && <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'block')}>{t('resourceList.block')}
+    {showBlockFilter && (() => {
+      const invalid = blockInvalid(localMapValues.block);
+      const errorId = `${fieldId(scope, 'block')}-message`;
+      return <label className="grid gap-1 text-xs text-[var(--text-muted)]" htmlFor={fieldId(scope, 'block')}>{t('resourceList.block')}
       <input
         id={fieldId(scope, 'block')}
         value={localMapValues.block}
         autoComplete="off"
+        aria-invalid={invalid || undefined}
+        aria-describedby={errorId}
         onChange={(event) => setLocalMapValues((current) => ({ ...current, block: event.target.value }))}
+        onFocus={resyncRejectedFields}
         onBlur={() => commitMapFields(['block'])}
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitMapFields(['block']); } }}
         placeholder={t('resourceList.blockPlaceholder')}
-        className={inputClass}
+        className={`${inputClass} ${invalid ? 'input-error' : ''}`}
       />
-    </label>}
+      <span id={errorId} role={invalid ? 'alert' : undefined} className={`text-[11px] ${invalid ? 'input-error-message' : 'text-[var(--text-muted)]'}`}>
+        {invalid ? t('resourceList.blockTooLong', { max: MAX_BLOCK_LENGTH }) : t('resourceList.blockHint', { max: MAX_BLOCK_LENGTH })}
+      </span>
+    </label>;
+    })()}
     {(['width', 'height'] as const).map((key) => {
       const invalid = mapDimensionInvalid(localMapValues[key]);
       const errorId = `${fieldId(scope, key)}-message`;
@@ -202,6 +253,7 @@ export default function ResourceFilters({
           aria-invalid={invalid || undefined}
           aria-describedby={errorId}
           onChange={(event) => setLocalMapValues((current) => ({ ...current, [key]: event.target.value }))}
+          onFocus={resyncRejectedFields}
           onBlur={() => commitMapFields([key])}
           onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitMapFields([key]); } }}
           placeholder={t('resourceList.dimensionPlaceholder')}
@@ -228,7 +280,7 @@ export default function ResourceFilters({
         <label className="sr-only" htmlFor="resource-sort">{t('resourceList.sort')}</label><select id="resource-sort" value={sort} onChange={(event) => updateFilters({ sort: event.target.value || null })} className={inputClass}>
           <option value="created_at">{t('resourceList.latest')}</option><option value="updated_at">{t('resourceList.recentlyUpdated')}</option><option value="download_count">{t('resourceList.mostDownloaded')}</option><option value="rating_average">{t('resourceList.highestRated')}</option><option value="rating_count">{t('resourceList.mostRated')}</option>
         </select>
-        <button ref={filterTrigger} type="button" className={`${inputClass} inline-flex min-h-11 items-center gap-2 sm:hidden`} onClick={() => setMobileFiltersOpen(true)} aria-haspopup="dialog" aria-controls="resource-mobile-filters"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</button>
+        <button ref={filterTrigger} type="button" className={`${inputClass} inline-flex min-h-11 items-center gap-2 sm:hidden`} onClick={openMobileFilters} aria-haspopup="dialog" aria-controls="resource-mobile-filters"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</button>
         <details className="relative hidden sm:block">
           <summary className="flex h-full cursor-pointer list-none items-center gap-2 rounded-md border border-[var(--border)] px-3 text-sm text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"><SlidersHorizontal className="h-4 w-4" />{t('resourceList.filter')}{activeFilters > 0 && <span className="rounded-full bg-[var(--primary-soft)] px-1.5 text-xs text-[var(--primary-text)]">{activeFilters}</span>}</summary>
           <div className="absolute right-0 z-20 mt-2 grid w-[min(90vw,34rem)] gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-card)] p-4 shadow-md sm:grid-cols-2">

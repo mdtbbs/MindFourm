@@ -1,13 +1,17 @@
 import {
+  MAX_BLOCK_LENGTH,
   MAX_MAP_DIMENSION,
+  blockInvalid,
   isBlockFilterKind,
   isMapFilterKind,
   mapDimensionInvalid,
   mapFilterKeys,
+  mapTextFilterKeys,
   mergeResourceQuery,
   normalizeResourceFilterParams,
   parseMapDimension,
   parseMapFilters,
+  resourceListQuery,
 } from './query';
 import { RESOURCE_KINDS as resourceKinds } from '../display-labels';
 
@@ -128,6 +132,34 @@ test('a map/blueprint switch keeps only the conditions both kinds can answer', (
   expect(backToMap.get('width')).toBe('64');
   expect(backToMap.get('height')).toBe('64');
   expect(backToMap.has('block')).toBe(false);
+});
+
+test('a kind switch keeps the target kind conditions and never resurrects the other kind ones', () => {
+  // blueprint -> map: the map keeps planet (a condition it can answer) and
+  // loses block; map -> blueprint: planet does not come back and block appears.
+  const toMap = new URLSearchParams(mergeResourceQuery(
+    'resource_kind=schematic&planet=serpulo&block=router&width=64&height=64',
+    { resource_kind: 'map' },
+  ));
+  expect(toMap.get('resource_kind')).toBe('map');
+  expect(toMap.get('planet')).toBe('serpulo');
+  expect(toMap.get('width')).toBe('64');
+  expect(toMap.get('height')).toBe('64');
+  expect(toMap.has('block')).toBe(false);
+
+  const toBlueprint = new URLSearchParams(mergeResourceQuery(
+    'resource_kind=map&planet=serpulo&width=128&height=128',
+    { resource_kind: 'schematic' },
+  ));
+  expect(toBlueprint.get('resource_kind')).toBe('schematic');
+  expect(toBlueprint.get('width')).toBe('128');
+  expect(toBlueprint.get('height')).toBe('128');
+  // planet belongs to map only: switching to a blueprint drops it for good.
+  expect(toBlueprint.has('planet')).toBe(false);
+
+  const withBlock = new URLSearchParams(mergeResourceQuery(toBlueprint.toString(), { block: 'router' }));
+  expect(withBlock.get('block')).toBe('router');
+  expect(withBlock.has('planet')).toBe(false);
 });
 
 test('switching to a non-map kind clears all four conditions instead of hiding them', () => {
@@ -270,4 +302,49 @@ test('SSR canonicalization removes hidden and invalid map conditions exactly onc
   expect(invalid.has('block')).toBe(false);
   expect(invalid.has('width')).toBe(false);
   expect(invalid.has('height')).toBe(false);
+});
+
+test('only the list API whitelist leaves SSR, so a share link cannot 400 the page', () => {
+  // The backend validates the list query with whitelist + forbidNonWhitelisted,
+  // so an unknown key is a 400 and the whole page becomes its error state.
+  const forwarded = resourceListQuery(new URLSearchParams(
+    'utm_source=weibo&resource_kind=map&planet=serpulo&gclid=1&utm_medium=link&width=128',
+  ));
+  expect(forwarded.get('resource_kind')).toBe('map');
+  expect(forwarded.get('planet')).toBe('serpulo');
+  expect(forwarded.get('width')).toBe('128');
+  for (const key of ['utm_source', 'utm_medium', 'gclid']) expect(forwarded.has(key)).toBe(false);
+
+  // A campaign tag alone forwards nothing at all.
+  expect(resourceListQuery(new URLSearchParams('utm_source=weibo')).toString()).toBe('');
+
+  // Every real list condition still survives the copy.
+  const full = resourceListQuery(new URLSearchParams(
+    'category_id=3&search=reactor&sort=download_count&tag=campaign&supported_version=V8&compatibility=Linux&resource_kind=schematic&block=router&width=64&height=64',
+  ));
+  for (const key of ['category_id', 'search', 'sort', 'tag', 'supported_version', 'compatibility', 'resource_kind', 'block', 'width', 'height']) {
+    expect(full.has(key)).toBe(true);
+  }
+});
+
+test('an over-long block name never reaches the query', () => {
+  const tooLong = 'b'.repeat(MAX_BLOCK_LENGTH + 1);
+  const exact = 'b'.repeat(MAX_BLOCK_LENGTH);
+  expect(blockInvalid(tooLong)).toBe(true);
+  expect(blockInvalid(exact)).toBe(false);
+  expect(blockInvalid('')).toBe(false);
+
+  // Never truncated: the backend would 400 on the full value, so it is dropped.
+  const kept = parseMapFilters('schematic', { block: tooLong, width: '64' });
+  expect(kept.block).toBeUndefined();
+  expect(kept.width).toBe(64);
+  expect(parseMapFilters('schematic', { block: exact }).block).toBe(exact);
+  expect(normalizeResourceFilterParams(new URLSearchParams(`resource_kind=schematic&block=${tooLong}`)).get('block')).toBeNull();
+});
+
+test('the submit path reads the same key set as the render path', () => {
+  // map: planet is a select and is not a text key; block is not committed at all.
+  expect(mapTextFilterKeys('map')).toEqual(['width', 'height']);
+  expect(mapTextFilterKeys('schematic')).toEqual(['block', 'width', 'height']);
+  for (const kind of ['mod', 'pack', '', undefined, null]) expect(mapTextFilterKeys(kind)).toEqual([]);
 });

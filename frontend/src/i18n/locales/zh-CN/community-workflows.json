@@ -78,6 +78,8 @@
     "allPlanets": "全部星球",
     "block": "方块",
     "blockPlaceholder": "输入方块名称",
+    "blockHint": "最多 {max} 个字符",
+    "blockTooLong": "方块名称不能超过 {max} 个字符",
     "width": "宽度",
     "height": "高度",
     "dimensionPlaceholder": "格数",

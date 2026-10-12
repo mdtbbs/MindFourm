@@ -78,6 +78,8 @@
     "allPlanets": "すべての惑星",
     "block": "ブロック",
     "blockPlaceholder": "ブロック名を入力",
+    "blockHint": "{max} 文字まで",
+    "blockTooLong": "ブロック名は {max} 文字以内で入力してください",
     "width": "幅",
     "height": "高さ",
     "dimensionPlaceholder": "マス数",

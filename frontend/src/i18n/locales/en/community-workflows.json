@@ -78,6 +78,8 @@
     "allPlanets": "All planets",
     "block": "Block",
     "blockPlaceholder": "Block name",
+    "blockHint": "Up to {max} characters",
+    "blockTooLong": "Block name cannot exceed {max} characters",
     "width": "Width",
     "height": "Height",
     "dimensionPlaceholder": "Tiles",

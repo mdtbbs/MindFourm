@@ -14,7 +14,7 @@ import { generatePageMetadata } from "@/lib/metadata";
 import { Resource, ResourceCategory } from "@/types";
 import { getRequestLocale } from "@/i18n/server";
 import { translate } from "@/i18n";
-import { MAP_FILTER_KEYS, normalizeResourceFilterParams, parseMapFilters } from "@/lib/resources/query";
+import { MAP_FILTER_KEYS, normalizeResourceFilterParams, parseMapFilters, resourceListQuery } from "@/lib/resources/query";
 
 export const revalidate = 60;
 
@@ -59,7 +59,10 @@ export async function generateMetadata({
 }
 
 async function fetchData(params: URLSearchParams) {
-  const qs = new URLSearchParams(params);
+  // The list API validates with `whitelist + forbidNonWhitelisted`, so a share
+  // link carrying `utm_source` (or any typo) must not reach it: forward only the
+  // keys the DTO accepts, exactly once, from the whitelist in `lib/resources/query`.
+  const qs = resourceListQuery(params);
   qs.set("limit", "30");
 
   const [resourcesResult, resourceCategories, filterOptions] = await Promise.all([

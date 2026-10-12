@@ -80,6 +80,11 @@ describe('ResourceFilters map and blueprint conditions', () => {
   const commit = async (input: HTMLInputElement) => {
     await act(async () => { input.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })); });
   };
+  // React maps onFocus to the bubbling focusin event, so a bare 'focus'
+  // dispatch is ignored; focus() is what a user coming back to the field does.
+  const focusField = async (input: HTMLInputElement) => {
+    await act(async () => { input.focus(); });
+  };
 
   beforeAll(() => {
     const { JSDOM } = require('jsdom');
@@ -265,6 +270,60 @@ describe('ResourceFilters map and blueprint conditions', () => {
     const pushed = pushQuery();
     expect(pushed.has('width')).toBe(false);
     for (const key of ['block', 'category_id', 'resource_kind']) expect(pushed.has(key)).toBe(true);
+  });
+
+  it('refuses a block name past the backend limit and never sends it', async () => {
+    // The backend caps block at 100 characters; a longer value is a 400 and the
+    // whole list would render its error state.
+    await mount('resource_kind=schematic', 'schematic');
+    const block = field('desktop', 'block');
+    await setValue(block, 'b'.repeat(101));
+    await commit(block);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(block.getAttribute('aria-invalid')).toBe('true');
+    expect(container.textContent).toContain('resourceList.blockTooLong');
+
+    await setValue(block, 'b'.repeat(100));
+    await commit(block);
+    expect(pushQuery().get('block')).toBe('b'.repeat(100));
+  });
+
+  it('restores the committed value when a rejected field is revisited', async () => {
+    await mount('resource_kind=map&width=128', 'map');
+    const width = field('desktop', 'width');
+    await setValue(width, '0');
+    await commit(width);
+    // The message stays visible right after the rejection...
+    expect(width.getAttribute('aria-invalid')).toBe('true');
+    expect(mockPush).not.toHaveBeenCalled();
+    // ...but coming back to the field shows the value the URL actually holds.
+    await focusField(width);
+    expect(width.value).toBe('128');
+    expect(width.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('reopens the mobile sheet from the URL instead of a rejected draft', async () => {
+    await mount('resource_kind=map&width=128', 'map');
+    await act(async () => { trigger().click(); });
+    const sheetWidth = container.querySelector<HTMLInputElement>('#resource-mobile-map-width')!;
+    await setValue(sheetWidth, '0');
+    await act(async () => { container.querySelector<HTMLButtonElement>('#resource-mobile-filters button[type="button"]:last-child')!.click(); });
+    // Apply was called with a rejected value: the URL is untouched.
+    expect(mockPush).not.toHaveBeenCalled();
+    await act(async () => { trigger().click(); });
+    expect(container.querySelector<HTMLInputElement>('#resource-mobile-map-width')!.value).toBe('128');
+  });
+
+  it('clears every owned filter through the shared canonical outlet', async () => {
+    // Clear keeps its "back to /resources" meaning, but now reads the same key
+    // set as the field renderers instead of pushing a literal path.
+    await mount('resource_kind=map&planet=serpulo&width=128&height=64&tag=campaign&sort=download_count', 'map');
+    const clear = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === 'resourceList.clear')!;
+    await act(async () => { clear.click(); });
+    expect(mockPush).toHaveBeenLastCalledWith('/resources');
+    const pushed = pushQuery();
+    for (const key of ['resource_kind', 'planet', 'width', 'height', 'tag', 'sort']) expect(pushed.has(key)).toBe(false);
   });
 
   it('clears every resource filter from the clear action', async () => {

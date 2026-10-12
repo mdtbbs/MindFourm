@@ -16,6 +16,10 @@
 export const MAP_FILTER_KEYS = ['planet', 'block', 'width', 'height'] as const;
 export type MapFilterKey = (typeof MAP_FILTER_KEYS)[number];
 
+/** The text-valued subset of MAP_FILTER_KEYS; planet is a select, not text. */
+export const MAP_TEXT_FILTER_KEYS = ['block', 'width', 'height'] as const;
+export type MapTextFilterKey = (typeof MAP_TEXT_FILTER_KEYS)[number];
+
 /** The conditions each resource kind can actually answer. */
 const KIND_FILTER_KEYS: Record<string, readonly MapFilterKey[]> = {
   map: ['planet', 'width', 'height'],
@@ -30,8 +34,19 @@ export function mapFilterKeys(kind?: string | null): readonly MapFilterKey[] {
   return (kind && KIND_FILTER_KEYS[kind]) || [];
 }
 
+/**
+ * The text conditions a kind can commit, read from the same source as
+ * `mapFilterKeys` so the submit path and the render path cannot drift apart.
+ */
+export function mapTextFilterKeys(kind?: string | null): readonly MapTextFilterKey[] {
+  const allowed = mapFilterKeys(kind);
+  return MAP_TEXT_FILTER_KEYS.filter((key) => allowed.includes(key));
+}
+
 export const MIN_MAP_DIMENSION = 1;
 export const MAX_MAP_DIMENSION = 4096;
+/** Mirrors `QueryResourcesDto`'s `@MaxLength(100)` on `block`. */
+export const MAX_BLOCK_LENGTH = 100;
 
 export type MapFilterValues = {
   planet?: string;
@@ -64,6 +79,11 @@ export function mapDimensionInvalid(value?: string | null): boolean {
   return value !== undefined && value !== null && String(value).trim() !== '' && parseMapDimension(value) === null;
 }
 
+/** A block name past the backend limit is rejected before it leaves the client. */
+export function blockInvalid(value?: string | null): boolean {
+  return value !== undefined && value !== null && String(value).trim().length > MAX_BLOCK_LENGTH;
+}
+
 export function parseMapFilters(
   kind: string | null | undefined,
   values: { planet?: string | null; block?: string | null; width?: string | null; height?: string | null },
@@ -79,7 +99,9 @@ export function parseMapFilters(
   }
   if (allowed.includes('block')) {
     const block = values.block?.trim();
-    if (block) result.block = block;
+    // Over-long is dropped, not truncated: the backend answers 400 and the
+    // whole page would render its error state.
+    if (block && !blockInvalid(block)) result.block = block;
   }
   const width = parseMapDimension(values.width);
   if (width !== null) result.width = width;
@@ -112,4 +134,26 @@ export function mergeResourceQuery(search: string, updates: Record<string, strin
     else params.delete(key);
   }
   return normalizeResourceFilterParams(params).toString();
+}
+
+/**
+ * The query keys the backend's `QueryResourcesDto` accepts. The API validates
+ * with `whitelist + forbidNonWhitelisted` (`main.ts`), so forwarding a key from
+ * outside this list — a share link's `utm_source`, a typo — turns the whole page
+ * into a 400 error state. Only these keys ever leave SSR.
+ */
+export const RESOURCE_LIST_QUERY_KEYS = [
+  'page', 'limit', 'cursor', 'category_id', 'search', 'content_language', 'status',
+  'sort', 'order', 'tag', 'tags', 'author', 'supported_version', 'compatibility',
+  'resource_kind', 'planet', 'block', 'width', 'height',
+] as const;
+
+/** Copies just the keys the list API understands; unknown keys are left in the URL. */
+export function resourceListQuery(input: URLSearchParams): URLSearchParams {
+  const params = new URLSearchParams();
+  for (const key of RESOURCE_LIST_QUERY_KEYS) {
+    const value = input.get(key);
+    if (value) params.set(key, value);
+  }
+  return params;
 }

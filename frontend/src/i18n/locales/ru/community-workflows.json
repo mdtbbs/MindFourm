@@ -78,6 +78,8 @@
     "allPlanets": "Все планеты",
     "block": "Блок",
     "blockPlaceholder": "Название блока",
+    "blockHint": "До {max} символов",
+    "blockTooLong": "Название блока не длиннее {max} символов",
     "width": "Ширина",
     "height": "Высота",
     "dimensionPlaceholder": "Клетки",
