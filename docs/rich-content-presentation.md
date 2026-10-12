@@ -40,6 +40,8 @@ git diff --check
 
 独立 suite 使用真实 `/posts/new`、`/posts/{id}` 页面和生产组件，比对编辑 / 预览 / fixture 发布页的 computed styles、内容宽度、JSON / Markdown 无损切换和实际提交 payload，并检查 1280px 桌面及 390×844、360×800、412×915 页面溢出和键盘工具栏。每个尺寸保存 editor / preview / published PNG 与 style JSON；目前为 screenshot artifact，尚未建立 golden snapshot。
 
+同一 config 还包含 `tests/e2e/html-block-stopgap.spec.ts`：HTML 区块面板的输入 / 预览 / 导入进度与取消，同样只使用 fixture API。
+
 两套 Playwright suite 不应并发启动在相同端口，或与 frontend build 共享 `.next`。fixture suite 不连接数据库且没有数据库 teardown，不能证明真实后端行为、安全授权或数据持久化。
 
 ## 当前环境限制

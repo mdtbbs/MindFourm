@@ -347,6 +347,9 @@ async function request<T>(
       credentials: 'include',
     }, String(method));
   } catch (err) {
+    // An aborted request is a decision, not a network failure: keep it intact so
+    // callers can tell the two apart and stay quiet about the cancellation.
+    if ((err as { name?: string } | null)?.name === 'AbortError') throw err;
     throw new Error(err instanceof Error ? err.message : 'Network error');
   }
 
@@ -1268,12 +1271,14 @@ export interface PublicImageUploadResult {
 
 /** Images embedded in editor content exist before their parent record is saved. */
 export const inlineImageApi = {
-  importRemote: (url: string) => request<PublicImageUploadResult>('/api/uploads/images/import', {
-    method: 'POST', body: JSON.stringify({ url }),
+  // The signal lets a multi-image import be cancelled while a request is in flight.
+  importRemote: (url: string, signal?: AbortSignal) => request<PublicImageUploadResult>('/api/uploads/images/import', {
+    method: 'POST', body: JSON.stringify({ url }), signal,
   }),
-  upload: (formData: FormData) => request<PublicImageUploadResult>('/api/uploads/images', {
+  upload: (formData: FormData, signal?: AbortSignal) => request<PublicImageUploadResult>('/api/uploads/images', {
     method: 'POST',
     body: formData,
+    signal,
   }),
 };
 

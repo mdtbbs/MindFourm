@@ -3,7 +3,8 @@ import { defineConfig } from '@playwright/test';
 /** Isolated browser presentation tests; no global DB teardown or real authentication. */
 export default defineConfig({
   testDir: './tests/e2e',
-  testMatch: 'rich-content.presentation.spec.ts',
+  // Both suites drive production components against the same fixture API.
+  testMatch: ['rich-content.presentation.spec.ts', 'html-block-stopgap.spec.ts'],
   workers: 1,
   timeout: 120000,
   expect: { timeout: 20000 },

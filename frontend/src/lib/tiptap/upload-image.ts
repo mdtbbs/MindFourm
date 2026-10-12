@@ -8,8 +8,8 @@ export interface UploadImageResult {
   alt: string;
 }
 
-export async function importRemoteImage(url: string): Promise<UploadImageResult> {
-  const image = await inlineImageApi.importRemote(url);
+export async function importRemoteImage(url: string, signal?: AbortSignal): Promise<UploadImageResult> {
+  const image = await inlineImageApi.importRemote(url, signal);
   if (!image?.url) throw new Error('图片导入成功但未返回站内链接');
   return { url: image.url, alt: image.original_name };
 }
@@ -18,9 +18,10 @@ export async function importRemoteImage(url: string): Promise<UploadImageResult>
  * Upload an image that can be embedded before its parent content is saved.
  *
  * Validates file type and size client-side before uploading. Throws on invalid
- * files or upload failure so the caller can show an error state.
+ * files or upload failure so the caller can show an error state. The signal is
+ * for callers that import many images at once and let the author cancel the run.
  */
-export async function uploadImage(file: File): Promise<UploadImageResult> {
+export async function uploadImage(file: File, signal?: AbortSignal): Promise<UploadImageResult> {
   if (!IMAGE_TYPES.has(file.type)) {
     throw new Error(`不支持的图片格式：${file.type || '未知'}。支持 PNG、JPG、GIF、WebP`);
   }
@@ -30,7 +31,7 @@ export async function uploadImage(file: File): Promise<UploadImageResult> {
 
   const formData = new FormData();
   formData.append('image', file);
-  const image = await inlineImageApi.upload(formData);
+  const image = await inlineImageApi.upload(formData, signal);
 
   if (!image?.url) {
     throw new Error('上传成功但未返回文件信息');

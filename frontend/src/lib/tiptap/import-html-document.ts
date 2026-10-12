@@ -9,14 +9,33 @@ const cssUrlValue = (a: string, b: string, c: string) => (a ?? b ?? c ?? '').tri
 
 type ImageTask = { key: string; remote?: string; file?: File };
 
+export interface HtmlImportProgress {
+  phase: 'analyzing' | 'uploading' | 'rewriting';
+  current: number;
+  total: number;
+}
+
+export interface HtmlImportOptions {
+  signal?: AbortSignal;
+  onProgress?: (progress: HtmlImportProgress) => void;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw new DOMException('导入已取消', 'AbortError');
+}
+
 /** Import external and embedded images before saving, preserving their HTML/CSS layout. */
 export async function importHtmlDocument(
   html: string,
   upload = uploadImage,
   importRemote = importRemoteImage,
   siteOrigin = globalThis.location?.origin || 'https://html-import.invalid',
+  options: HtmlImportOptions = {},
 ): Promise<string> {
+  const { signal, onProgress } = options;
+  throwIfAborted(signal);
   if (html.length > HTML_IMPORT_MAX_LENGTH) throw new Error('HTML 文件过大，最大支持 8MB');
+  onProgress?.({ phase: 'analyzing', current: 0, total: 0 });
   const doc = new DOMParser().parseFromString(html, 'text/html');
   let base = siteOrigin + '/';
   const declaredBase = doc.querySelector('base[href]')?.getAttribute('href');
@@ -78,21 +97,32 @@ export async function importHtmlDocument(
   const queue = Array.from(tasks.values());
   const imported = new Map<string, string>();
   let cursor = 0;
+  let done = 0;
   let failure: Error | undefined;
+  onProgress?.({ phase: 'uploading', current: 0, total: queue.length });
   await Promise.all(Array.from({ length: Math.min(3, queue.length) }, async () => {
     while (!failure && cursor < queue.length) {
+      if (signal?.aborted) { failure = new DOMException('导入已取消', 'AbortError'); break; }
       const task = queue[cursor++];
       try {
-        const result: UploadImageResult = task.file ? await upload(task.file) : await importRemote(task.remote!);
+        const result: UploadImageResult = task.remote
+          ? await importRemote(task.remote, signal)
+          : await upload(task.file!, signal);
         if (!result.url.startsWith('/') || result.url.startsWith('//')) throw new Error('导入接口未返回站内图片链接');
         imported.set(task.key, result.url);
       } catch (error) {
+        // `name` rather than `instanceof`: the throw can originate in another realm.
+        if ((error as { name?: string } | null)?.name === 'AbortError') { failure = error as Error; break; }
         const detail = error instanceof Error ? error.message : '请重试';
         failure ||= new Error(`图片导入失败${task.remote ? `（${task.remote}）` : ''}：${detail}`);
       }
+      done += 1;
+      onProgress?.({ phase: 'uploading', current: done, total: queue.length });
     }
   }));
   if (failure) throw failure;
+  throwIfAborted(signal);
+  onProgress?.({ phase: 'rewriting', current: done, total: queue.length });
   rewrite(imported);
   const changed = tasks.size > 0 || Array.from(sources).some(([src, target]) => src !== target);
   return changed ? '<!doctype html>\n' + doc.documentElement.outerHTML : html;
